@@ -7,7 +7,7 @@
  * can quickly understand each session.
  */
 
-import { Cause, Context, Deferred, Effect, Exit, Fiber } from 'effect';
+import { Cause, Context, Effect, Exit, Fiber } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { helperCall } from '@agent/runtime/helperModel';
@@ -20,7 +20,7 @@ import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
 import { descriptionRow } from '@shared/session/runFacts';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import type { RouteRetries } from './run/invocation';
+import type { RouteRetries } from './ModelRetryGate';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SessionDescription';
@@ -205,20 +205,18 @@ export const generateSessionDescription = Effect.fn(
  * committed after `run.end` reads as a fact of a run that has already ended.
  */
 export const settleDescriptionOnExit =
-  (description: Fiber.Fiber<void>, opened: Deferred.Deferred<void>) =>
+  (description: Fiber.Fiber<void>) =>
   <A extends { readonly outcome: RunOutcome }, E, R>(
     flow: Effect.Effect<A, E, R>,
   ) =>
     Effect.onExit(flow, (exit) =>
-      Effect.flatMap(Deferred.isDone(opened), (exists) =>
-        // A run that never opened has no row to describe.
-        !exists ||
-        (Exit.isSuccess(exit)
+      (
+        Exit.isSuccess(exit)
           ? exit.value.outcome === RUN_OUTCOME.CANCELLED
-          : Cause.hasInterrupts(exit.cause))
-          ? Fiber.interrupt(description)
-          : Fiber.join(description),
-      ),
+          : Cause.hasInterrupts(exit.cause)
+      )
+        ? Fiber.interrupt(description)
+        : Fiber.join(description),
     );
 
 function warnFailure(cause: unknown): Effect.Effect<void> {

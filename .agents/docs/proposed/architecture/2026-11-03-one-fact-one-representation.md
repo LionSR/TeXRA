@@ -134,8 +134,9 @@ What the code does today, against O1's description:
 - The desktop and the extension attach: with a service, a window holds
   `serviceSession` and `serviceProjectState` and opens no store. Since
   2026-11-05 (#14738) the CLI does the same: `initCliPlatform` links to the
-  running service and takes the project's state and reads from it
-  (`runReads.ts`); the chat starts one before its platform comes up. Headless
+  running service and takes the project's state and its session from it
+  (`serviceSession.ts`, whose `records` the history reads); the chat starts
+  one before its platform comes up. Headless
   `texra run`, `team run` and a document resume still run in process, as
   the guide states (`executeCli.ts`).
 - The service (`texra serve`) is one per storage root, found through its
@@ -189,7 +190,7 @@ The mechanism, then:
    `claimOwner`, `claimAll`, `reclaimable`, `provingOwners`, `DeletionMode`
    (whose only reader is `claimAll`), `DatabaseClaimRefused`,
    `heldElsewhereBy`, `claimStanding`, `NotOwner` and the `not-owner`
-   refusal; `DatabaseNotOwner` narrowed to its `closed` case; the liveness
+   refusal; `DatabaseAggregateClosed` narrowed to its `closed` case; the liveness
    machinery (`ownerLiveness.ts`, `leaseOwnerLiveness.ts`,
    `ProcessIdentity.owners`, `ProcessProbe`); `LocalRuntimeState.self` and
    `dead` replaced by `runsHere`, the registry's activation map that

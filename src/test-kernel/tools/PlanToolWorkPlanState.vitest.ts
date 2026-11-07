@@ -12,7 +12,7 @@ import {
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { Approvals } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';

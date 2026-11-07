@@ -9,24 +9,19 @@
  * the parent as one follow-up (`createScriptRunStrategy`), and a resume
  * replays it from its own rows.
  */
-import { Clock, Deferred, Effect, Schema, SynchronizedRef } from 'effect';
+import { Effect, Schema, ScopedRef } from 'effect';
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
-import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import {
   agentChildRunId,
   earlierChild,
 } from '@agent/runtime/delegation/agentChild';
 import { childRunDescription } from '@agent/runtime/delegation/childRun';
-import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
+import { startChildRun } from '@agent/runtime/delegation/childLaunch';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
-import {
-  AgentConfigSchema,
-  type CommitOrdinal,
-  type RunId,
-} from '@shared/schemas';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
 /** What the model reads for a script sent to the background. */
@@ -61,7 +56,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   const { runId: parentRunId } = run;
   const earlier = yield* earlierChild(call);
   if (earlier !== null) return receipt(title, earlier, true);
-  const bound = yield* SynchronizedRef.get(run.model);
+  const bound = yield* ScopedRef.get(run.model);
   const runId = agentChildRunId(call);
   const workingDirectory =
     call.env.workingDirectory ?? run.config.workingDirectory;
@@ -96,31 +91,14 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       },
     }),
   });
-  const opened = yield* Deferred.make<CommitOrdinal>();
-  // The script launches under the session's runs the engine door holds.
-  yield* startDetachedChildRunLoop({
-    runId,
+  // The script's opening commits here, under the session's runs; a launch
+  // that fails before it fails this call.
+  yield* startChildRun(runId, definition, {
+    identity: { kind: 'script', title },
     parentRunId,
-    agentName: title,
-    strategy: createScriptRunStrategy({
-      definition,
-      // Registered with its opening, which its run commits.
-      registration: {
-        identity: { kind: 'script', title },
-        parentRunId,
-        parentCall: { callId: call.callId, card: call.logId },
-        description: childRunDescription(title),
-        ...(grants !== undefined && { grants }),
-      },
-      runId,
-      startedAt: yield* Clock.currentTimeMillis,
-      ...(workingDirectory != null && { workingDirectory }),
-      title,
-      onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
-    }),
-    // The receipt names a run that exists: the start waits for its
-    // opening, and a launch that fails before it fails this call.
-    opened,
+    parentCall: { callId: call.callId, card: call.logId, awaited: false },
+    description: childRunDescription(title),
+    ...(grants !== undefined && { grants }),
   });
   return receipt(title, runId, false);
 });

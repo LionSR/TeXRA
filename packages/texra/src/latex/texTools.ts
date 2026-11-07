@@ -6,6 +6,7 @@ import { Config, Effect, FileSystem, Option, Schema } from 'effect';
 
 // Local imports
 import { withLogChannel, WorkspaceFs, Settings } from '@texra-ai/harness/host';
+import { absentReason } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   splitContentLines,
@@ -22,17 +23,15 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 // caller gets the same last-N-lines excerpt an LLM or a human can read as-is.
 const LOG_TAIL_LINES = 200;
 
-/**
- * Options for LaTeX compilation, used by {@link compileLatex2Pdf}.
- */
-const LaTeXCompileOptionsSchema = Schema.Struct({
-  channel: Schema.optional(Schema.String),
-  outputDirectory: Schema.optional(Schema.String),
-  compiler: Schema.Literals(SUPPORTED_LATEX_COMPILERS).pipe(
-    Schema.withDecodingDefaultType(Effect.succeed('latexmk')),
-  ),
+/** Options for {@link compileLatex2Pdf}; every caller is TypeScript, so the
+ *  type is the check. */
+interface LaTeXCompileOptions {
+  readonly channel?: string;
+  readonly outputDirectory?: string;
+  /** The engine to drive: latexmk unless named. */
+  readonly compiler?: (typeof SUPPORTED_LATEX_COMPILERS)[number];
   /** Millisecond timeout per compiler invocation. Kills the child on expiry. */
-  timeout: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+  readonly timeout?: number;
   /**
    * Extra directories to prepend onto the kpathsea search path (TEXINPUTS /
    * BIBINPUTS / BSTINPUTS), after the main file's own directory and before the
@@ -41,13 +40,8 @@ const LaTeXCompileOptionsSchema = Schema.Struct({
    * (e.g. `figures/fig.tex`, `library.bib`) still resolve against the original
    * source directory.
    */
-  extraInputDirs: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefaultType(Effect.succeed([])),
-  ),
-});
-
-/** Input type - compiler optional with default applied by schema.parse() */
-type LaTeXCompileOptions = typeof LaTeXCompileOptionsSchema.Encoded;
+  readonly extraInputDirs?: readonly string[];
+}
 
 /**
  * Read the tail of the `.log` file a LaTeX engine drops next to its output.
@@ -154,9 +148,10 @@ function buildLatexSearchParts(input: {
  * Result of a {@link compileLatex2Pdf} attempt. A discriminated union on `ok`
  * so the type system guarantees {@link LOG_TAIL_LINES}'s worth of the
  * engine's `.log` file tail is present whenever compilation fails, and the
- * path the engine wrote its PDF to whenever it succeeds — instead of every
- * caller re-deriving that path from the source name with its own extension
- * rule.
+ * path of a non-empty PDF where the engine writes whenever it succeeds —
+ * instead of every caller re-deriving that path, or checking the file, its
+ * own way. The file is not proven to be this run's: an earlier build's PDF
+ * in a reused output directory also reads as success.
  */
 export type CompileLatex2PdfResult =
   | { ok: true; pdfPath: string }
@@ -177,7 +172,9 @@ export type CompileLatex2PdfResult =
  * @param roots The session's setting slots
  * @param options Compilation options (channel defaults to module CHANNEL)
  * @returns `{ ok: true, pdfPath } | { ok: false, logTail }` -- `pdfPath` is the
- * absolute path the engine wrote to; `logTail` is always populated on failure.
+ * absolute path of a non-empty PDF where the engine writes (an earlier
+ * build's in a reused output directory counts); `logTail` is always
+ * populated on failure, including an exit 0 that left no PDF.
  * Fails with `ToolMissing` when no engine it drives is installed: a missing
  * latexmk falls back to pdflatex, and a missing pdflatex is that failure.
  */
@@ -190,10 +187,13 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   ToolMissing,
   FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
 > {
-  // Schema provides compiler default; channel defaults to module constant
-  const parsed = Schema.decodeUnknownSync(LaTeXCompileOptionsSchema)(options);
-  const channel = parsed.channel ?? CHANNEL;
-  const { outputDirectory, compiler, timeout, extraInputDirs } = parsed;
+  const {
+    channel = CHANNEL,
+    outputDirectory,
+    compiler = 'latexmk',
+    timeout,
+    extraInputDirs = [],
+  } = options;
   const fs = yield* FileSystem.FileSystem;
   const workspacePath = (yield* WorkspaceFs).root;
   const latexFile = latexLocation.absolutePath;
@@ -293,10 +293,22 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
         : yield* pdflatex;
 
     if (result.success) {
-      yield* Effect.logDebug(`Successfully compiled ${latexFile}`).pipe(
-        withLogChannel(channel),
-      );
-      return { ok: true, pdfPath: `${outputStem}.pdf` } as const;
+      // The exit code is not the PDF: a document with no pages exits 0 and
+      // writes none, so success is a non-empty file where the engine writes.
+      const pdfPath = `${outputStem}.pdf`;
+      const written = yield* fs
+        .stat(pdfPath)
+        .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
+      if (written?.type === 'File' && Number(written.size) > 0) {
+        yield* Effect.logDebug(`Successfully compiled ${latexFile}`).pipe(
+          withLogChannel(channel),
+        );
+        return { ok: true, pdfPath } as const;
+      }
+      return {
+        ok: false,
+        logTail: `The LaTeX engine finished but wrote no PDF at ${pdfPath}.\n\n${yield* readCompileLogTail(`${outputStem}.log`)}`,
+      } as const;
     }
     return {
       ok: false,

@@ -83,7 +83,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     // A detached child still owned by this terminal keeps its approval
     // path even after the root conversation has been cleared.
     const detachedView = viewWith(
-      [makeRunView({ id: RUN_A, ownedHere: true }), makeRunView({ id: RUN_B })],
+      [makeRunView({ id: RUN_A, runsHere: true }), makeRunView({ id: RUN_B })],
       { requests: view.requests },
     );
     seedView(detachedView);

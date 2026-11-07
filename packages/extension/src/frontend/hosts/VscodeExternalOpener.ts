@@ -17,7 +17,6 @@ export class VscodeExternalOpener implements ExternalOpener {
       try: () => vscode.env.openExternal(vscode.Uri.parse(url)),
       catch: (cause) =>
         new ExternalOpenFailed({
-          kind: 'url',
           target: url,
           message: 'VS Code would not open the URL in the default browser.',
           cause,
@@ -31,7 +30,6 @@ export class VscodeExternalOpener implements ExternalOpener {
         (opened) => opened,
         () =>
           new ExternalOpenFailed({
-            kind: 'url',
             target: url,
             message: 'VS Code declined to open the URL: no handler took it.',
             // The refusal is the answer itself; there is no underlying fault.

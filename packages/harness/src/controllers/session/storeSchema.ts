@@ -44,9 +44,10 @@ const APPLICATION_ID = 0x54655852;
  *
  * `event_sequence` is one aggregate: a local integer surrogate `id` (never
  * outside the file), the `(kind, logical_id)` the codec maps an
- * `AggregateId` to, the durable `uid`, its sequence counter, its claim, its
- * parent edge, and two lifecycle facts written by the transaction that
- * makes them: `start_commit` (the commit of seq 1) and `closed_by` (the
+ * `AggregateId` to, the durable `uid`, its sequence counter, its parent
+ * edge, and two lifecycle facts written by the transaction that makes
+ * them (`owner_id` is unused: one process holds a store, so no writer is
+ * recorded per run; the column stays so stamp 101 keeps opening): `start_commit` (the commit of seq 1) and `closed_by` (the
  * deletion marker's commit, `NULL` while open). The foreign keys are the
  * collection mechanism: deleting an aggregate cascades to its dependents,
  * its events, its projections and their projected rows.
@@ -108,9 +109,10 @@ const TABLES = [
  * open): the projection tables, which carry their own versions in
  * `projection_state` (`projections.ts`), the indexes, each serving one
  * lookup the reads make, named for the columns it keys, and the change
- * record: each aggregate's last insert, claim, release, close or collection
- * (a claim and a collection leave no row of their own) under an ordinal
- * AUTOINCREMENT never reuses, kept by triggers for every writer.
+ * record: each aggregate's last insert, close or collection (a collection
+ * leaves no row of its own) under an ordinal AUTOINCREMENT never reuses,
+ * kept by triggers for every writer (the `claimed` trigger keeps its name:
+ * stamp 101 stores hold it, and it fires on `closed_by` as it always has).
  */
 const ADDITIVE = [
   `CREATE TABLE IF NOT EXISTS aggregate_change (change INTEGER PRIMARY KEY

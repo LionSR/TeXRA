@@ -5,8 +5,6 @@ import { Cause, Effect, Schema, type Scope } from 'effect';
 import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-  formatIssuesForDiagnostics,
   ToolError,
   type ToolDefinition,
   type ToolResult,
@@ -121,10 +119,6 @@ export function defineTool<T, R = never, const Name extends string = string>(
               return Effect.succeed<ToolResult>({
                 status: 'error',
                 error: `Invalid input:\n${error.message}`,
-                diagnostics: {
-                  type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-                  formatted: formatIssuesForDiagnostics(error),
-                },
               });
             }
             const result = Effect.succeed<ToolResult>({
@@ -132,9 +126,6 @@ export function defineTool<T, R = never, const Name extends string = string>(
               error: toErrorMessage(error).trim() || 'Tool execution failed.',
               ...(error instanceof ToolError &&
                 error.summary !== undefined && { summary: error.summary }),
-              ...(error instanceof Error && {
-                diagnostics: { name: error.name },
-              }),
             });
             // A defect that is not the tool's own failure is a bug in the
             // tool: the model reads it as a failed call, so the log keeps

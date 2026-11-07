@@ -1,38 +1,28 @@
 /**
- * One completed model call outside a turn: a compaction summary, on its
- * run's binding, or a helper call (a session description, a draft polish),
- * on its own. It runs the one retry loop (`invocation.ts`) and keeps its
- * invocation in memory, folded from the rows it records, since no loop
- * continues from them: a summary records its attempts on its run's history,
- * a helper call belongs to none and records nothing.
+ * One completed model call off a run's rows: a compaction summary on its
+ * run's binding, or a helper call (a session description, a draft polish)
+ * on a binding of its own. No row records it, so no resume continues it: a
+ * call cut short is made anew. Like a turn it is sent under the process's
+ * route gate, priced and reported to the usage log; unlike a turn it asks
+ * nobody, so it is resent only while llm says the same request can succeed,
+ * up to the binding's automatic retries, and a subscription token the
+ * provider rejects before its stored expiry is renewed once.
  */
-import { Clock, Effect, Ref, Result } from 'effect';
+import { Clock, Effect } from 'effect';
 import {
   completedTurn,
-  type ResolvedTurn,
+  ModelError,
   type TurnRequest,
   type TurnResult,
 } from '@texra-ai/llm';
 
-import type { AgentTrace } from '@agent/trace/AgentTrace';
-import {
-  failureInfo,
-  type CallFailure,
-} from '@agent/runtime/modelAccess/failureInfo';
+import type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import { AgentError } from '@common/errors/agentErrors';
-import type {
-  FailedNext,
-  InvocationRef,
-  NormalizedUsage,
-  RetryErrorInfo,
-} from '@shared/schemas';
-import { invocationAfter, type Invocation } from '@shared/session/inFlight';
-import { UsageLog } from '@shared/usageLog';
+import { resendDelayMs, RouteRetries } from '@agent/runtime/ModelRetryGate';
 import type { SettingsStores } from '@shared/config/settings';
-import { sha256 } from '@utils/core/idHash';
+import type { NormalizedUsage } from '@shared/schemas';
+import { UsageLog } from '@shared/usageLog';
 
-import { runInvocation, type RouteRetries } from './invocation';
 import { priceTurnUsage, reportUsage, type UsageAttribution } from './pricing';
 
 /** A completed call and its priced usage (`null`: none reported). */
@@ -41,18 +31,15 @@ export interface CallResult {
   readonly usage: NormalizedUsage | null;
 }
 
-interface ModelCall<R = never> {
-  /** Why the call is made; a turn is `ModelInvoker.invoke`, not this path. */
-  readonly purpose: 'compaction' | 'helper';
+interface ModelCall<R> {
   /** The binding in force, read again before every attempt. */
   readonly binding: Effect.Effect<BoundModel>;
-  /** Replace a binding a failure killed, or one whose subscription token
-   *  must be `renew`ed; a failure ends the call (`runInvocation`'s
-   *  `rebound`). */
-  readonly reacquire: (
+  /** Rebind on a refreshed subscription session after the provider
+   *  rejected `failed`'s token; a failure here ends the call with it, so
+   *  the person reads "sign in again" and nothing resends the token. */
+  readonly renew: (
     failed: BoundModel,
-    renew: boolean,
-  ) => Effect.Effect<Result.Result<unknown, CallFailure>, never, R>;
+  ) => Effect.Effect<unknown, CallFailure, R>;
   /** A foreground request; each attempt prepares it on its binding. */
   readonly request: TurnRequest;
   /** The session's settings: usage consent reads them. */
@@ -60,139 +47,71 @@ interface ModelCall<R = never> {
   readonly attribution: UsageAttribution;
   /** Automatic retries; the binding's when absent. */
   readonly retries?: number;
-  /** A run's trace; without one, diagnostics go to the Effect logger. */
-  readonly logger: Pick<AgentTrace, 'warn' | 'debug'> | null;
-  /** Where the attempt rows go: a summary's onto its run's history. A
-   *  helper call belongs to no history and records nothing. */
-  readonly record: {
-    /** Record the attempt before it is billed; the address of the request
-     *  it recorded. */
-    readonly attempt: (
-      ref: InvocationRef,
-      bound: BoundModel,
-      resolved: ResolvedTurn,
-    ) => Effect.Effect<string, Error>;
-    readonly failed: (
-      ref: InvocationRef,
-      error: RetryErrorInfo,
-      next: FailedNext,
-    ) => Effect.Effect<void, Error>;
-  } | null;
+  /** Where a wait before a resend is said: a run's trace, else the logger. */
+  readonly debug: (message: string) => Effect.Effect<void>;
 }
 
 /**
- * One completed call outside a turn, through {@link runInvocation}: prepared
- * in the foreground, streamed to its completed result, priced and reported.
- * Its invocation is folded here from the same rows `record` writes, since no
- * loop continues from them: a summary cut short by a crash is made anew.
+ * One completed call off a run's rows: prepared in the foreground, streamed
+ * to its completed result under the route gate, priced and reported.
  */
 export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
   call: ModelCall<R>,
 ): Effect.fn.Return<
   CallResult,
   CallFailure | Error,
-  UsageLog | R | RouteRetries
+  UsageLog | RouteRetries | R
 > {
   const usageLog = yield* UsageLog;
-  // The trace's sinks are synchronous; with no trace, lines queue here and
-  // leave through the Effect logger at the next step.
-  const queued: Effect.Effect<void>[] = [];
-  const logger = call.logger ?? {
-    warn: (message: string) => void queued.push(Effect.logWarning(message)),
-    debug: (message: string) => void queued.push(Effect.logDebug(message)),
-  };
-  const flush = Effect.suspend(() =>
-    Effect.all(queued.splice(0), { discard: true }),
-  );
-  const held = yield* Ref.make<Invocation | null>(null);
-  const fold = (
-    payload: Parameters<typeof invocationAfter>[1],
-  ): Effect.Effect<void> =>
-    Ref.modify(held, (invocation) => {
-      const next = invocationAfter(invocation, payload);
-      return typeof next === 'string' ? [next, invocation] : [null, next];
-    }).pipe(
-      Effect.flatMap((refused) =>
-        refused === null
-          ? Effect.void
-          : Effect.die(
-              new Error(`A ${call.purpose} call's attempt: ${refused}`),
-            ),
-      ),
-    );
-  const ended = yield* runInvocation<CallResult, Error, R | UsageLog>({
-    read: Effect.map(Ref.get(held), (invocation) => ({
-      invocation,
-      requests: {},
-    })),
-    binding: call.binding,
-    rebind: (credentials, failed) =>
-      call.reacquire(failed, credentials === 'renewed'),
-    attempt: Effect.fn('modelCall.attempt')(function* (bound, ref) {
-      const prepared = yield* bound.model.prepareTurn(call.request);
-      if (prepared.mode !== 'foreground') {
-        return yield* Effect.die(
-          new Error(`A ${call.purpose} call prepared as background work.`),
-        );
-      }
-      yield* fold({
-        kind: 'attempt',
-        invocation: ref,
-        purpose: 'summary',
-        // A helper's request is recorded nowhere: its address is the
-        // prepared turn's own.
-        request:
-          call.record === null
-            ? sha256(prepared)
-            : yield* call.record.attempt(ref, bound, prepared),
-        origin: bound.origin,
-      });
-      const started = yield* Clock.currentTimeMillis;
-      const turn = yield* completedTurn(bound.model.streamTurn(prepared));
-      const usage = priceTurnUsage(
-        bound,
-        turn.usage,
-        (yield* Clock.currentTimeMillis) - started,
+  const gate = yield* RouteRetries;
+  // The binding the latest attempt went out on: a renewal names that one,
+  // not a replacement the run may have bound since.
+  let sent = yield* call.binding;
+  const retries = call.retries ?? sent.automaticRetries;
+  let resent = 0;
+  let renewed = false;
+  const attempt = Effect.fn('modelCall.attempt')(function* (bound: BoundModel) {
+    const prepared = yield* bound.model.prepareTurn(call.request);
+    if (prepared.mode !== 'foreground')
+      return yield* Effect.die(
+        new Error('A call off a run prepared as background work.'),
       );
-      yield* reportUsage(
-        usageLog,
-        bound,
-        usage,
-        call.attribution,
-        call.settings,
-      );
-      return { turn, usage };
-    }),
-    failed: Effect.fn('modelCall.failed')(function* (
-      ref,
-      { error },
-      next,
+    const started = yield* Clock.currentTimeMillis;
+    const turn = yield* completedTurn(bound.model.streamTurn(prepared));
+    const usage = priceTurnUsage(
       bound,
-    ) {
-      const info = failureInfo(error, bound.config.provider);
-      if (call.record !== null) yield* call.record.failed(ref, info, next);
-      yield* fold({
-        kind: 'failed',
-        invocation: ref,
-        purpose: 'summary',
-        error: info,
-        next,
-      });
-      return info;
-    }),
-    asker: null,
-    retries: call.retries ?? (yield* call.binding).automaticRetries,
-    logger,
-  }).pipe(Effect.ensuring(flush));
-  if ('turn' in ended) return ended;
-  if (ended.kind === 'cancelled')
-    return yield* Effect.fail(
-      new Error(`The ${call.purpose} call was cancelled.`),
+      turn.usage,
+      (yield* Clock.currentTimeMillis) - started,
     );
-  // The failure as recorded, which every formatter reads off the error.
-  return yield* new AgentError({
-    message: ended.error.message,
-    cause: ended.cause ?? undefined,
-    failure: ended.error,
+    yield* reportUsage(usageLog, bound, usage, call.attribution, call.settings);
+    return { turn, usage };
   });
+  return yield* Effect.flatMap(call.binding, (bound) => {
+    sent = bound;
+    return gate.withRoutes(bound.routes)(attempt(bound));
+  }).pipe(
+    Effect.retry({
+      while: (error: CallFailure | Error) =>
+        Effect.gen(function* () {
+          if (!(error instanceof ModelError)) return false;
+          if (
+            !renewed &&
+            error.kind === 'authentication' &&
+            sent.subscriptionToken !== undefined
+          ) {
+            // A renewed token's resend pauses and spends a retry, as a
+            // turn's does.
+            renewed = true;
+            yield* call.renew(sent);
+          } else if (!error.retryable || resent >= retries) return false;
+          resent += 1;
+          const delayMs = resendDelayMs(error);
+          yield* call.debug(
+            `Model request failed; automatic retry in ${delayMs}ms.`,
+          );
+          if (delayMs > 0) yield* Effect.sleep(delayMs);
+          return true;
+        }),
+    }),
+  );
 });

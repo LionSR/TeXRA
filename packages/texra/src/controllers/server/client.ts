@@ -2,8 +2,11 @@
  * A window's side of the service: connect over the socket, say hello, and
  * start the service when none answers. Starting is the host's (each host
  * runs the service entry with its own Node), so {@link ensureService}
- * takes it as a program. A service speaking an older protocol is retired:
- * it drains its running tasks while a new one starts. One speaking a newer
+ * takes it as a program. One service serves a storage root at a time: a
+ * service of an older build, or of another protocol and no newer build, is
+ * retired (it drains its running tasks and exits), and the caller waits
+ * for its socket to close before starting its own; one already draining
+ * is waited for the same way. One of a newer build speaking another
  * protocol is left running and refused, and the caller stays in process.
  */
 import { spawn } from 'node:child_process';
@@ -16,6 +19,8 @@ import {
   Effect,
   Exit,
   Layer,
+  Option,
+  Predicate,
   Ref,
   Schedule,
   Schema,
@@ -23,7 +28,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { lt as semverLt, valid as semverValid } from 'semver';
+import { gt as semverGt, lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { isOutcomeOf, Rejected } from '@texra-ai/harness';
@@ -32,6 +37,7 @@ import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
   readServiceRecord,
+  serviceRecordChanges,
   servicePaths,
 } from './discovery';
 
@@ -82,9 +88,17 @@ export class ServiceUnavailable extends Schema.TaggedError<ServiceUnavailable>()
   {
     reason: Schema.String,
 
-    /** The running service speaks a newer protocol than this client: it
+    /** The running service is a newer build speaking another protocol: it
      *  stays until it exits, so waiting does not bring this client back. */
     newer: Schema.optional(Schema.Literal(true)),
+    /** The running service answered the hello with something this build
+     *  cannot read, or refused the hello itself: a build from before the
+     *  digest. Its socket, for the one procedure every build keeps,
+     *  `service.stop`. */
+    unspoken: Schema.optional(Schema.String),
+    /** The running service accepted the connection and did not answer the
+     *  hello within its deadline. */
+    unanswered: Schema.optional(Schema.Literal(true)),
   },
 ) {
   override get message(): string {
@@ -105,17 +119,31 @@ const NOT_YET_UP = 'not yet up';
 /** How long a service that accepts the connection may take to say hello. */
 const HELLO_TIMEOUT = '10 seconds';
 
-/** A service the caller should retire: an older protocol, or an older
- *  build ({@link BUILD_VERSION}; a development build, `unknown`, never is). */
-export function isOlder(info: ServiceInfo): boolean {
-  if (info.protocol !== PROTOCOL.version)
-    return info.protocol < PROTOCOL.version;
-  return (
-    semverValid(info.version) !== null &&
-    semverValid(BUILD_VERSION) !== null &&
-    semverLt(info.version, BUILD_VERSION)
-  );
-}
+/** Whether the service speaks this build's protocol ({@link PROTOCOL}). */
+export const compatible = (info: ServiceInfo): boolean =>
+  info.protocol === PROTOCOL.digest;
+
+/** Whether both builds are released ones, and `order` holds between the
+ *  service's and this one ({@link BUILD_VERSION}; a development build,
+ *  `unknown`, is neither older nor newer). */
+const builds = (
+  info: ServiceInfo,
+  order: (service: string, own: string) => boolean,
+): boolean =>
+  semverValid(info.version) !== null &&
+  semverValid(BUILD_VERSION) !== null &&
+  order(info.version, BUILD_VERSION);
+
+/** A service of a newer build speaking another protocol: left running,
+ *  and this client refused. */
+export const isNewer = (info: ServiceInfo): boolean =>
+  !compatible(info) && builds(info, semverGt);
+
+/** A service the caller should retire: an older build, or one of another
+ *  protocol that is not a newer build (a development build restarts the
+ *  service it cannot speak to). */
+export const isOlder = (info: ServiceInfo): boolean =>
+  builds(info, semverLt) || (!compatible(info) && !isNewer(info));
 
 /** A client over `socket`, held for the caller's scope. `onDisconnect`
  *  runs whenever the connection ends, or an attempt to open it fails. */
@@ -160,7 +188,7 @@ export function probeService(
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
   return Effect.scoped(
     Effect.flatMap(connectService(socket), (client) =>
-      client['service.hello']({ protocol: PROTOCOL.version }),
+      client['service.hello']({ protocol: PROTOCOL.digest }),
     ),
   ).pipe(
     Effect.timeout(HELLO_TIMEOUT),
@@ -168,11 +196,19 @@ export function probeService(
     Effect.catch((error) =>
       nobodyListens(error)
         ? Effect.succeed(null)
-        : Effect.fail(
-            new ServiceUnavailable({
-              reason: `The TeXRA service on ${socket} accepts connections but did not answer (${error.message}). Stop it with \`texra service stop\`, or end its process.`,
-            }),
-          ),
+        : error._tag === 'TimeoutError'
+          ? Effect.fail(
+              new ServiceUnavailable({
+                reason: `The TeXRA service on ${socket} accepts connections but did not answer (${error.message}). Stop it with \`texra service stop\`, or end its process.`,
+                unanswered: true,
+              }),
+            )
+          : Effect.fail(
+              new ServiceUnavailable({
+                reason: `The TeXRA service on ${socket} speaks a protocol this build cannot read (${error.message}).`,
+                unspoken: socket,
+              }),
+            ),
     ),
   );
 }
@@ -251,43 +287,42 @@ export function spawnService(
 }
 
 /**
- * Ask the service on `socket` to stop now, or to drain (`drain`). It skips
- * the protocol check `ensureService` makes, so an older client can still
- * stop a newer service: `service.stop` keeps its shape across protocols.
+ * Ask the service on `socket` to stop (now, or once its running tasks end
+ * with `drain`) and wait until it is gone. The answer is the socket closing
+ * under this connection: the service exits ahead of any response, so the
+ * ask is sent without awaiting one (`discard`: it completes as the handler
+ * starts). A socket nobody accepts on is a service already gone.
  */
-export function askServiceToStop(
+export const stopService = (
   socket: string,
   drain: boolean,
-): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> {
-  return Effect.scoped(
-    Effect.flatMap(connectService(socket), (client) =>
-      client['service.stop']({ drain }),
-    ),
-  );
-}
+): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const gone = yield* Deferred.make<void>();
+      const client = yield* connectService(
+        socket,
+        Effect.asVoid(Deferred.succeed(gone, undefined)),
+      );
+      yield* client['service.stop']({ drain }, { discard: true });
+      yield* Deferred.await(gone);
+    }),
+  ).pipe(Effect.catchIf(nobodyListens, () => Effect.void));
 
-/** Ask the service on `socket` to drain: it exits once its running tasks
- *  end. One that exited already is retired. */
-function retireService(
-  socket: string,
-): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> {
-  return askServiceToStop(socket, true).pipe(
-    Effect.catchIf(nobodyListens, () => Effect.void),
-  );
-}
-
-/** The refusal of a running service that speaks a newer protocol. */
+/** The refusal of a running service of a newer build that speaks another
+ *  protocol. */
 const newerService = (info: ServiceInfo) =>
   new ServiceUnavailable({
-    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL.version}. Update TeXRA, or stop the service with \`texra service stop\`.`,
+    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) is newer than this TeXRA (${BUILD_VERSION}) and speaks another protocol. Update TeXRA, or stop the service with \`texra service stop\`.`,
     newer: true,
   });
 
 /**
  * Connect to this storage root's service, starting it with `start` (which
- * spawns the service detached and returns) when none answers, and retiring
- * one that speaks an older protocol or runs an older build than this one
- * first.
+ * spawns the service detached and returns) when none answers. One that
+ * speaks an older protocol or runs an older build than this one is retired
+ * first, and one already draining waited for: either exits once its tasks
+ * end, and its socket's close is the signal to start.
  */
 export const ensureService = Effect.fn('server.ensureService')(function* (
   storageRoot: string,
@@ -303,21 +338,44 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
 > {
   if (process.platform === 'win32')
     return yield* new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED });
-  let info = yield* probeRecordedService;
-  if (info !== null && info.protocol > PROTOCOL.version)
+  // A service from before the digest cannot read this hello: it is older
+  // by construction, and `service.stop` is the one procedure it shares.
+  let info = yield* probeRecordedService.pipe(
+    Effect.catchIf(
+      (error) => error.unspoken !== undefined,
+      (error) =>
+        Effect.logInfo(
+          "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
+        ).pipe(
+          Effect.andThen(
+            stopService(error.unspoken ?? '', true).pipe(
+              Effect.mapError(
+                (failure) =>
+                  new ServiceUnavailable({
+                    reason: `The older TeXRA service could not be asked to retire: ${failure.message}`,
+                  }),
+              ),
+            ),
+          ),
+          Effect.as(null),
+        ),
+    ),
+  );
+  if (info !== null && isNewer(info))
     return yield* Effect.fail(newerService(info));
-  let retired: number | null = null;
-  if (info !== null && isOlder(info)) {
-    const retiring = info;
-    retired = info.pid;
+  if (info !== null && (isOlder(info) || info.draining)) {
+    const leaving = info;
+    const tasks = `${leaving.running} running task${leaving.running === 1 ? '' : 's'}`;
     yield* Effect.logInfo(
-      `Retiring the TeXRA service ${info.version} (protocol ${info.protocol}): it finishes its running tasks and exits.`,
+      leaving.draining
+        ? `The TeXRA service ${leaving.version} (pid ${leaving.pid}) is finishing its ${tasks} before it exits; waiting for it.`
+        : `Retiring the TeXRA service ${leaving.version} (protocol ${leaving.protocol}): it finishes its ${tasks} and exits, then this build's starts.`,
     );
-    yield* retireService(retiring.socket).pipe(
+    yield* stopService(leaving.socket, true).pipe(
       Effect.mapError(
         (error) =>
           new ServiceUnavailable({
-            reason: `The older TeXRA service (pid ${retiring.pid}) could not be asked to retire: ${error.message}`,
+            reason: `The older TeXRA service (pid ${leaving.pid}) could not be asked to retire: ${error.message}`,
           }),
       ),
     );
@@ -332,31 +390,41 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
           }),
       ),
     );
-    // Not listening yet, listening but still starting, or still the
-    // retiring service: all wait for this protocol's own service.
-    // A newer protocol's service that came up meanwhile (a newer build
-    // replaced the one this window spoke to) refuses this one at once: no
-    // wait for a service of this protocol that will not come. Past the
-    // deadline, which interrupts a probe still in flight (a record read on
-    // a stalled mount has no timeout of its own), the last completed
-    // probe's reason stands; only "not yet up" reads as the service not
-    // answering.
+    // The service claims the record once it listens, so the record's
+    // changes are the signal to probe on: not claimed yet waits for the
+    // next change, a claimed one whose hello is not answered in time (a
+    // service still coming up under load) is asked again while the start
+    // window lasts, and a newer build's service that came up meanwhile
+    // refuses this one at once. Past the deadline, the last probe's reason
+    // stands; only "not yet up" reads as the service not answering.
     const lastRefusal = yield* Ref.make(
       new ServiceUnavailable({ reason: NOT_YET_UP }),
     );
-    info = yield* probeRecordedService.pipe(
+    const probed = probeRecordedService.pipe(
+      Effect.retry({ while: (error) => error.unanswered === true }),
       Effect.flatMap((answer) => {
-        if (answer !== null && answer.protocol > PROTOCOL.version)
+        if (answer !== null && isNewer(answer))
           return Effect.fail(newerService(answer));
-        return answer?.protocol === PROTOCOL.version && answer.pid !== retired
+        return answer !== null && compatible(answer) && !answer.draining
           ? Effect.succeed(answer)
           : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
       }),
       Effect.tapError((refusal) => Ref.set(lastRefusal, refusal)),
-      Effect.retry({
-        schedule: Schedule.spaced('200 millis'),
-        while: (error) => error.newer !== true,
-      }),
+      Effect.catchIf(
+        (error) => error.newer !== true,
+        () => Effect.succeed(null),
+      ),
+    );
+    info = yield* serviceRecordChanges.pipe(
+      Stream.mapEffect(() => probed),
+      Stream.filter(Predicate.isNotNull),
+      Stream.runHead,
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.flatMap(Ref.get(lastRefusal), Effect.fail),
+          onSome: Effect.succeed,
+        }),
+      ),
       Effect.timeoutOrElse({
         duration: START_TIMEOUT,
         orElse: () => Effect.flatMap(Ref.get(lastRefusal), Effect.fail),
@@ -391,13 +459,29 @@ const SERVICE_OFFLINE =
 export const WINDOW_OUTDATED =
   'This window is older than the running TeXRA service; reload or update TeXRA.';
 
+/** A value as its readers follow it: what it is now, and each value from
+ *  the current one on. */
+export interface Followed<A> {
+  readonly get: Effect.Effect<A>;
+  readonly changes: Stream.Stream<A>;
+}
+
+/** `ref` as its readers follow it; only its holder sets it. */
+export const followed = <A>(
+  ref: SubscriptionRef.SubscriptionRef<A>,
+): Followed<A> => ({
+  get: SubscriptionRef.get(ref),
+  changes: SubscriptionRef.changes(ref),
+});
+
 /** A window's lasting hold on the service: the client it is connected
  *  through, or null while the service is away and the link reaches it
  *  again; and, while it is null, why. A window of a session its own
  *  process opened holds a link to that process (`HostWindows.localLink`),
- *  whose client is only what a window attaches through. */
+ *  whose client is only what a window attaches through: a link to the
+ *  service is one of those too. */
 export interface ServiceLink<Client = ServiceClient> {
-  readonly client: SubscriptionRef.SubscriptionRef<Client | null>;
+  readonly client: Followed<Client | null>;
   /** Why `client` is null, as a window says it: reconnecting
    *  ({@link SERVICE_OFFLINE}), or refused by a newer service
    *  ({@link WINDOW_OUTDATED}). */
@@ -409,17 +493,13 @@ export interface ServiceLink<Client = ServiceClient> {
 
 /** Why `link` holds no service now, at each change: its `away` while its
  *  client is null, null while it holds one. What a window's banner says. */
-export const linkOutage = (link: ServiceLink): Stream.Stream<string | null> =>
-  Stream.merge(
-    SubscriptionRef.changes(link.client),
-    SubscriptionRef.changes(link.away),
-  ).pipe(
+export const linkOutage = (
+  link: ServiceLink<unknown>,
+): Stream.Stream<string | null> =>
+  Stream.merge(link.client.changes, SubscriptionRef.changes(link.away)).pipe(
     Stream.mapEffect(() =>
       Effect.map(
-        Effect.all([
-          SubscriptionRef.get(link.client),
-          SubscriptionRef.get(link.away),
-        ]),
+        Effect.all([link.client.get, SubscriptionRef.get(link.away)]),
         ([client, away]) => (client === null ? away : null),
       ),
     ),
@@ -520,5 +600,5 @@ export const linkService = Effect.fn('server.linkService')(function* (
       }),
     ),
   );
-  return { client, away, refusalTold };
+  return { client: followed(client), away, refusalTold };
 });

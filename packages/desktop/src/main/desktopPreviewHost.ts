@@ -162,7 +162,6 @@ export function createDesktopPreviewHost(
       try: () => options.shell.openExternal(url),
       catch: (cause) =>
         new ExternalOpenFailed({
-          kind: 'url',
           target: url,
           message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
           cause,
@@ -248,12 +247,9 @@ export function createDesktopPreviewHost(
       return;
     }
 
-    // Confirm the PDF is on disk before rendering it (the iframe will
-    // load nothing and present a blank surface otherwise). Every build
-    // gets its own number, so its tab reloads however close in time two
-    // builds land.
+    // A successful build names a PDF on disk. Every build gets its own
+    // number, so its tab reloads however close in time two builds land.
     const { pdfPath } = built;
-    yield* ensurePathExists(pdfPath);
     const build = ++builds;
 
     if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath), build))

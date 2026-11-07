@@ -11,17 +11,16 @@
  */
 
 // Third-party imports
-import { Effect, Result, Schema, SynchronizedRef } from 'effect';
+import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
-import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runRecords';
-import { RunCall, requireToolRun } from '@agent/runtime/RunCall';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { RunCall, noLaterTurn, requireToolRun } from '@agent/runtime/RunCall';
+import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
@@ -61,7 +60,7 @@ import {
   treeCostOf,
 } from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import { executeSubagentInBand } from './inBandSubagentRun';
+import { executeSubagentInBand } from './childLaunch';
 import {
   memoriesField,
   personaField,
@@ -202,10 +201,9 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(
     const from = (yield* SessionLog).now();
     const state = yield* (yield* RunHistory).load(runId);
     const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
-    const requests = yield* SessionRequests;
     if (own?.request.decision === null)
       // A session that closes first decides nothing: the next resume asks.
-      return yield* requests.decision(runId, own.requestId, from).pipe(
+      return yield* decisionOf(runId, own.requestId, from).pipe(
         Effect.map((row) => row.decision),
         Effect.catch((cause) =>
           Effect.logWarning(
@@ -258,7 +256,6 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       {
         name: 'Skipped',
         summary: `Skipped '${agentName}'`,
-        diagnostics: { reason: 'user', runId },
       },
     );
   if (result.outcome !== 'completed')
@@ -291,16 +288,12 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
   };
 });
 
-/** One call: a script's awaited calls within {@link scriptChildBudget}. */
+/** One call, launched over its call's session. */
 export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
   launch: ChildLaunch,
 ) {
   const call = yield* requireToolRun(launch.tool);
-  // The child launches over its call's session.
-  const child = agentCall(call, launch).pipe(Effect.provide(call.session));
-  if (call.script === null || launch.background === true) return yield* child;
-  const budget = yield* scriptChildBudget(call.env.roots, call.script);
-  return yield* budget.withPermits(1)(child);
+  return yield* agentCall(call, launch).pipe(Effect.provide(call.session));
 });
 
 /** A child's run failed the call: timed out, or ended without an answer. */
@@ -380,7 +373,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
 
   // Awaited in a script unless sent to the background, and always in a
   // one-shot run, which has no later turn for a follow-up to reach.
-  const oneShot = run.toolPolicy.stopAfterCycle === true;
+  const oneShot = noLaterTurn(run);
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
   // A task, a structured call and a trusted script's call reach the child
@@ -462,7 +455,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const selected = yield* Effect.result(
     selectAvailableDelegationModel({
       requestedModel: launch.model,
-      parentModel: (yield* SynchronizedRef.get(run.model)).modelId,
+      parentModel: (yield* ScopedRef.get(run.model)).modelId,
       settings: call.env.roots,
     }),
   );

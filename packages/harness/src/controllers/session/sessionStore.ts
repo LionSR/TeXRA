@@ -1,5 +1,5 @@
 /** One session's store-facing owner: the log (`SessionLog`, the one
- *  transaction door with its reads, claims and each run's trace), over the
+ *  transaction door with its reads and each run's trace), over the
  *  root's publisher and database.
  *
  *  "Published" means folded: a transaction returns once the session's tail
@@ -22,20 +22,17 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   qualifyAggregateId,
   aggregateTarget,
-  type AggregateId,
   type CommitOrdinal,
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
 import {
   Database,
-  type DatabaseNotOwner,
+  type DatabaseAggregateClosed,
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
-  ProcessIdentity,
-  afterCommit,
   SessionEvents,
   tailFrom,
   type Append,
@@ -136,122 +133,28 @@ function settlement(
   return { cursor, changes, to };
 }
 
-/** This process's holds on run claims: one count per run, whoever holds (a
- *  publisher job or not). Each holder is counted before it takes, in its own
- *  transaction (a job's, inside it): the first proves any prior owner dead
- *  and takes the claim, later ones find it this process's. Only the last to
- *  go decides the claim (`Scope.addFinalizer` keeps no context: in its
- *  closer's transaction): given back to how the holders found it, or
- *  released when a hold `ends` it, unless a holder here holds it by the
- *  time that release takes its write lock. Close decides what is left. */
-const claimHolds = (database: Context.Service.Shape<typeof Database>) => {
-  type Hold = { count: number; taken: boolean; ended: boolean };
-  const holds = new Map<AggregateId, Hold>();
-  const decide = (id: AggregateId, hold: Hold) =>
-    hold.taken || hold.ended
-      ? database
-          .releaseClaims([id], () => (holds.get(id)?.count ?? 0) > 0)
-          .pipe(
-            Effect.catch(
-              logFailure(
-                `The claim on ${id} was not released; the next process proves this one dead before it takes the claim.`,
-              ),
-            ),
-          )
-      : Effect.void;
-  /** Drop an entry once its release ran, unless it is held again: kept till
-   *  then, a holder that comes back meanwhile keeps its `taken`. */
-  const forget = (id: AggregateId, hold: Hold) =>
-    hold.count === 0 && holds.get(id) === hold && holds.delete(id);
-  const letGo = (id: AggregateId, hold: Hold) =>
-    Effect.suspend(() => {
-      hold.count -= 1;
-      if (hold.count > 0 || holds.get(id) !== hold) return Effect.void;
-      return decide(id, hold).pipe(
-        Effect.ensuring(Effect.sync(() => forget(id, hold))),
-      );
-    });
-  const close = Effect.suspend(() => {
-    const held = [...holds];
-    holds.clear();
-    return Effect.forEach(held, ([id, hold]) => decide(id, hold));
-  });
-  const hold: SessionLogShape['hold'] = (runId, options = {}) => {
-    const id = qualifyAggregateId('run', runId);
-    // One step, so an interrupt cannot leave a claim taken and unrecorded.
-    return Effect.uninterruptible(
-      Effect.gen(function* () {
-        const held = holds.get(id) ?? { count: 0, taken: false, ended: false };
-        holds.set(id, held);
-        held.count += 1;
-        yield* Effect.addFinalizer(() => letGo(id, held));
-        if ((yield* database.acquireClaims([id])).length > 0) held.taken = true;
-        if (options.ends === true) held.ended = true;
-      }),
-    );
-  };
-  return Effect.as(
-    Effect.addFinalizer(() => close),
-    hold,
-  );
-};
-
 /** One transaction on the publisher, settled against its own last commit,
- *  never another job's: one that appended nothing returns at once. A run the
- *  job claimed or gave birth to is given back if the job fails, or if what
- *  it committed never reaches the view. */
+ *  never another job's: one that appended nothing returns at once. */
 const transaction =
   (
     events: SessionEventsShape,
-    database: Context.Service.Shape<typeof Database>,
     settleTo: (commit: CommitOrdinal) => Effect.Effect<void>,
   ) =>
   <A, E>(
     job: (tx: SessionTransaction) => Effect.Effect<A, E>,
-  ): Effect.Effect<A, E | DatabaseNotOwner | DatabaseWriteFailed> =>
+  ): Effect.Effect<A, E | DatabaseAggregateClosed | DatabaseWriteFailed> =>
     Effect.gen(function* () {
       let committed: CommitOrdinal | null = null;
-      const owned: AggregateId[] = [];
-      const release = Effect.suspend(() =>
-        database
-          .releaseClaims(owned)
-          .pipe(
-            Effect.catch(
-              logFailure(
-                'Claims a refused transaction took were not released; the next process proves this one dead before it takes them.',
-              ),
-            ),
-          ),
-      );
       const tx = (append: Append): SessionTransaction => ({
         append: (drafts) =>
           Effect.tap(append(drafts), (rows) =>
             Effect.sync(() => {
               committed = rows.at(-1)?.commit ?? committed;
-              for (const row of rows)
-                if (row.type === 'run.start') owned.push(row.aggregateId);
             }),
           ),
-        claim: (runId) =>
-          // Only what this call took: a claim the process already held is
-          // not this transaction's to give back.
-          Effect.tap(
-            database.acquireClaims([qualifyAggregateId('run', runId)]),
-            (taken) => Effect.sync(() => owned.push(...taken)),
-          ),
-        release: (runId) =>
-          database.releaseClaims([qualifyAggregateId('run', runId)]),
       });
-      const value = yield* events
-        .transact((append) => {
-          // An attempt that rolled back committed nothing and took nothing.
-          committed = null;
-          owned.length = 0;
-          return job(tx(append));
-        })
-        .pipe(Effect.onError(() => release));
-      if (committed !== null)
-        yield* settleTo(committed).pipe(Effect.onError(() => release));
+      const value = yield* events.transact((append) => job(tx(append)));
+      if (committed !== null) yield* settleTo(committed);
       return value;
     });
 
@@ -268,13 +171,11 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
     | Scope.Scope
     | SessionEvents
     | Database
-    | ProcessIdentity
     | SessionViewService
     | TextChunkSource
   > {
     const events = yield* SessionEvents;
     const database = yield* Database;
-    const { ownerId } = yield* ProcessIdentity;
     const view = yield* SessionViewService;
     const chunks = yield* TextChunkSource;
     // Captured before anything can publish: the tails' first reads cover
@@ -289,7 +190,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       Stream.interruptWhen(Deferred.await(foldedEnded)),
     );
     const readPast = (commit: CommitOrdinal) => settle.to(commit, foldedLevel);
-    const transact = transaction(events, database, settle.to);
+    const transact = transaction(events, settle.to);
     let doorsShut = false;
     const closed = () => doorsShut;
     /** Jobs before it ran, `folded` read past them; its end fails only this. */
@@ -319,7 +220,6 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       lost: trace.lost,
       closure: trace.closure,
       settled,
-      afterCommit,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
       history: (id, fromSeq = 1, types = RUN_STATE_ROW_TYPES) =>
         database.readAggregate(id, fromSeq, types),
@@ -340,16 +240,6 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
         ),
       tail: events.all,
       listing: events.listing,
-      hold: yield* claimHolds(database),
-      owns: (runId) =>
-        Effect.map(
-          database.aggregateState([qualifyAggregateId('run', runId)]),
-          ([state]) =>
-            state?.startCommit != null &&
-            !state.closed &&
-            state.ownerId === ownerId,
-        ),
-      owner: (runId) => database.claimOwner(qualifyAggregateId('run', runId)),
       movedAside: database.movedAside,
     };
     return {

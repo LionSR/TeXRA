@@ -111,9 +111,9 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
   const parks = (yield* log.runRows(aggregate, 'positions')).positions.filter(
     (row) =>
       before === undefined
-        ? row.payload.at === 'waiting' || row.payload.at === 'halted'
+        ? row.payload.at === 'waiting'
         : row.commit < before &&
-          ['waiting', 'halted', 'turn.begin'].includes(row.payload.at),
+          ['waiting', 'turn.begin'].includes(row.payload.at),
   );
   const settledAt = (seq: number) =>
     Effect.map(runHistory.load(from, seq), (state) =>
@@ -263,16 +263,6 @@ export const forkRun = Effect.fn('forkRun')(function* (
         ]),
     positionRow(runId, state, 'waiting'),
   ]);
-  // And unclaimed: the host's to resume, as any waiting conversation is.
-  // The rows are durable whatever happens to the claim, so a release that
-  // fails only says so; the next process proves this one dead first.
-  yield* Effect.scoped((yield* SessionLog).hold(runId, { ends: true })).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `Run ${runId} was forked, but its claim was not released: this process cannot resume it`,
-      ).pipe(Effect.annotateLogs({ data: error })),
-    ),
-  );
   return runId;
 });
 

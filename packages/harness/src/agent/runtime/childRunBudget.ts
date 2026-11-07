@@ -1,40 +1,34 @@
 import * as os from 'node:os';
-import { Context, type Deferred, Effect, Semaphore } from 'effect';
+import { Context, Effect, Semaphore } from 'effect';
 /**
  * One child-run concurrency budget per session: the cap on concurrently live
- * native child model conversations, one semaphore held by the session's runs
- * (`RunRegistry.childRunBudget`). Design and rulings (what is budgeted,
- * what inherits, why the child-run loop is the single acquisition boundary):
+ * native child model conversations, one semaphore the session layer
+ * provides ({@link ChildRunBudget}). Design and rulings (what is budgeted,
+ * what inherits):
  * `.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`.
  *
- * Root runs, agent-CLI children, and in-band children (which run while their
+ * Root runs, process children, and awaited children (which run while their
  * parent is blocked awaiting them, so physical concurrency is unchanged)
- * never acquire. Acquisition queues rather than rejects: a launch beyond the
- * budget starts as soon as a slot frees, and a queued turn cancelled before
- * its slot never starts fresh model work.
+ * never acquire; a run's awaited calls are bounded by its own semaphore of
+ * the same size (`AgentRun.awaitedCalls`). Acquisition queues rather than
+ * rejects: a launch beyond the budget starts as soon as a slot frees, and a
+ * queued run cancelled before its slot never starts model work.
  */
 
-import {
-  Settings,
-  type SettingsStores,
-  type StateReadFailed,
-} from '@shared/config/settings';
+import { Settings, type SettingsStores } from '@shared/config/settings';
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
 
-import type { ScriptScope } from './RunCall';
-
 /**
  * The configured budget with the `auto` sentinel resolved to this machine's
  * core count, clamped to the schema range. Model conversations are network
  * bound, so the core count is a floor for useful parallelism rather than a
- * ceiling — which is why the setting stays overridable up to `max`. This is
- * the one host-side owner of the number: the session's semaphore
- * (re-pinned by the child-run loop) and the `agent` tool's per-script
- * semaphore both read it here. Resolved host-side because `src/shared` is loaded by the settings
- * webview and must stay free of `node:os`.
+ * ceiling, which is why the setting stays overridable up to `max`. This is
+ * the one host-side owner of the number: the session layer sizes its
+ * semaphore here. Resolved host-side because `src/shared` is loaded by the
+ * settings webview and must stay free of `node:os`.
  */
 export const resolveChildRunConcurrencyBudget = Effect.fn(
   'resolveChildRunConcurrencyBudget',
@@ -52,25 +46,15 @@ export const resolveChildRunConcurrencyBudget = Effect.fn(
   );
 });
 
-/** The key of a script's child-run budget (`ScriptScope.shared`). */
-const AgentBudget =
-  Context.Service<Deferred.Deferred<Semaphore.Semaphore, StateReadFailed>>(
-    'agent:budget',
-  );
-
 /**
- * The budget as one script's awaited child calls share it (`agent()`,
- * `self()`): each holds one for its whole call, taken first thing, so they
- * start in the order the script issued them and at most the budget run at
- * once.
+ * The session's child-run budget: the permits background children of the
+ * session's runs take around their loops, one each, so a swarm of
+ * delegations runs at most this many model conversations at once. The
+ * session layer sizes it from the setting at open
+ * (`resolveChildRunConcurrencyBudget`); with none provided, it is
+ * unlimited.
  */
-export const scriptChildBudget = (
-  stores: SettingsStores,
-  script: ScriptScope,
-): Effect.Effect<Semaphore.Semaphore, StateReadFailed> =>
-  script.shared(
-    AgentBudget,
-    Effect.flatMap(resolveChildRunConcurrencyBudget(stores), (permits) =>
-      Semaphore.make(permits),
-    ),
-  );
+export const ChildRunBudget = Context.Reference<Semaphore.Semaphore>(
+  '@texra-ai/harness/session/ChildRunBudget',
+  { defaultValue: () => Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER) },
+);

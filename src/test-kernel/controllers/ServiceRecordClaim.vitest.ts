@@ -17,8 +17,6 @@ import type { ServiceRecord } from '@texra/controllers/server/protocol';
 
 const record = (pid: number): ServiceRecord => ({
   pid,
-  protocol: 1,
-  version: '1.0.0',
   socket: `/tmp/serve-${pid}.sock`,
   startedAt: pid,
 });

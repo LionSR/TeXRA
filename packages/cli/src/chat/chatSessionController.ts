@@ -207,9 +207,6 @@ export interface ChatSessionControllerInit {
   /** The chat is a client of the background service, whose view also holds
    *  other terminals' conversations. */
   readonly served: boolean;
-  /** A run's records (its saved setup, whether it exists), read where the
-   *  project's runs are held: this process's store, or the service's. */
-  readonly records: (runId: RunId) => ChatRunRecords;
 
   /** The chat session's {@link CliContext}: the controller attaches one
    *  interaction host for the session's lifetime. */
@@ -239,13 +236,6 @@ export interface ChatSessionControllerInit {
    *  which each launch carries (`launchApproval`); none follows the
    *  project's. */
   readonly approvalPolicy: () => ApprovalPolicy | undefined;
-}
-
-/** What the chat reads of a run's records: its saved setup, and whether
- *  it exists. */
-interface ChatRunRecords {
-  readonly readConfig: () => Effect.Effect<AgentConfig | null, Error>;
-  readonly exists: () => Effect.Effect<boolean, Error>;
 }
 
 /** How a submitted message ends, once: sent (or handed to a fresh run), or
@@ -578,7 +568,7 @@ export function createChatSessionController(
       };
       const attemptResume = Effect.gen(function* () {
         // The durable record carries the config the TUI adopts before the run.
-        const store = init.records(id);
+        const store = init.runSession.records(id);
         const [config, exists] = yield* Effect.all(
           [store.readConfig(), store.exists()],
           { concurrency: 2 },
@@ -621,7 +611,9 @@ export function createChatSessionController(
           resumed: RunId,
         ) {
           const adoptedConfig =
-            resumed === id ? config : yield* init.records(resumed).readConfig();
+            resumed === id
+              ? config
+              : yield* init.runSession.records(resumed).readConfig();
           if (adoptedConfig === null)
             return yield* Effect.fail(
               new Error(`Run ${resumed} has no configuration to resume`),
@@ -690,7 +682,7 @@ export function createChatSessionController(
    *  chat's model and settings may not be the run's. */
   const adoptRunRecord = (runId: RunId) =>
     Effect.gen(function* () {
-      const config = yield* init.records(runId).readConfig();
+      const config = yield* init.runSession.records(runId).readConfig();
       if (!config)
         return yield* Effect.fail(new Error('it has no stored configuration'));
       yield* adoptRunConfig(config, 'history');
@@ -933,8 +925,7 @@ export function createChatSessionController(
         // to it rather than starting a second root beside it.
         if (
           continuing &&
-          (stoppedClaim === undefined || outcome.value.status === 'queued') &&
-          outcome.value.wake == null
+          (stoppedClaim === undefined || outcome.value.status === 'queued')
         )
           yield* Effect.forkIn(
             Effect.ignoreCause(stoppedClaim ?? Effect.void).pipe(

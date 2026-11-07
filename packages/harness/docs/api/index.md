@@ -95,8 +95,8 @@ A host's answer to each request a run of the session waits on: an
 approval, a denial with its reason, or for a retry, `retry` or `cancel`.
 The session records it as the request's `request.decided`, through the
 same `request.decide` a {@link Session.request} sends. A handler that
-fails, throws, answers with a decision the request's kind does not take,
-or has not answered within ten minutes is a denial, with the cause logged.
+fails, throws, or answers with a decision the request's kind does not
+take is a denial, with the cause logged; it may take as long as it needs.
 
 ```ts
 type ApprovalHandler = (
@@ -246,7 +246,7 @@ new name. `position` is load order, not the database's commit ordinal: a
 rebuilt store renumbers it.
 
 ```ts
-const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call_position", "kind", "name", "model", "description", "started_at", "status", "outcome", "cost", "input_tokens", "output_tokens", "calls_unreadable"]; run_tree: readonly ["ancestor_id", "id", "depth"]; tool_calls: readonly ["position", "run_id", "call_id", "script_call_id", "tool", "input", "attempt", "status", "output", "value", "error", "issued_at", "started_at", "ended_at"]; model_calls: readonly ["position", "run_id", "invocation_id", "attempt", "purpose", "model", "status", "output", "error", "input_tokens", "output_tokens", "cost", "started_at", "ended_at"]; }>
+const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call_position", "kind", "name", "model", "description", "started_at", "status", "outcome", "cost", "input_tokens", "output_tokens", "calls_unreadable"]; run_tree: readonly ["ancestor_id", "id", "depth"]; tool_calls: readonly ["position", "run_id", "call_id", "script_call_id", "tool", "input", "attempt", "status", "output", "value", "error", "issued_at", "started_at", "ended_at"]; model_calls: readonly ["position", "run_id", "invocation_id", "attempt", "model", "status", "output", "error", "input_tokens", "output_tokens", "cost", "started_at", "ended_at"]; }>
 ```
 
 ## HostRequestFailure
@@ -282,7 +282,7 @@ Whether `outcome` answers a request of `kind`: how a client reads an
 answer that crossed a process boundary.
 
 ```ts
-const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; readonly wake?: "failed" | null | undefined; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
+const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
 ```
 
 ## isRequestRefusal
@@ -398,8 +398,8 @@ type LaunchError = AgentNotFound | ToolsRefused;
 ## LocalSession
 
 A session this process holds, as `Sessions.open` returns it: everything
-a {@link Session} has, plus direct reads of its store (run listing,
-records, deletion) and of the runs this process is running.
+a {@link Session} has, plus the runs this process is running, its store's
+positions and its notices.
 
 ```ts
 interface LocalSession extends Session {
@@ -412,9 +412,6 @@ interface LocalSession extends Session {
     readonly subscribe: (
       set: readonly TranscriptSubscription[],
     ) => Effect.Effect<void, never, Scope.Scope>;
-    /** A one-off snapshot built from the store: every run's summary, and
-     *  the full transcript of the runs named. */
-    readonly read: (runIds: readonly RunId[]) => Effect.Effect<SessionView>;
     /** The position of the store's latest write. Pass it to
      *  {@link events} to see only what is written from now on. */
     readonly head: () => CommitOrdinal;
@@ -436,26 +433,16 @@ interface LocalSession extends Session {
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
   };
-  /** One run's stored records. */
-  readonly records: (runId: RunId) => RunRecords;
-  /** The runs a person started (not child runs), newest first, each with
-   *  its saved setup. */
-  readonly listRuns: () => Effect.Effect<AgentRunListingEntry[], Error>;
+  /** The {@link Run} of `runId`'s activation at `activation`, as `start`
+   *  or `resume` handed it out: a host that carries a handle across a
+   *  process boundary answers its members from here. */
+  readonly run: (runId: RunId, activation: CommitOrdinal) => Run;
   /** The run `runId` if this process is running it, or every run it is
    *  running. */
   readonly held: {
     (runId: RunId): HeldRun | undefined;
     (): readonly HeldRun[];
   };
-  /**
-   * Delete one run, or every stored run (`'all'`). A run another live
-   * process is running is skipped and reported as `active`. Deleting a
-   * single run may take it from a process that cannot be proved alive or
-   * dead; `'all'` never does.
-   */
-  readonly deleteRuns: (
-    target: RunId | 'all',
-  ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
   /** Show a notice through the attached host; a notice raised while no
    *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];
@@ -483,16 +470,6 @@ run's project.
 class ModelFetch extends Context.Service<ModelFetch, typeof fetch>()(
   '@texra-ai/harness/ModelFetch',
 )
-```
-
-## NotOwner
-
-Another live owner holds the run this request would act on.
-
-```ts
-class NotOwner extends Schema.TaggedError<NotOwner>()('NotOwner', {
-  runId: RunIdSchema,
-})
 ```
 
 ## OpenOptions
@@ -682,10 +659,11 @@ const responseText: <E, R>(events: Stream<AgentEvent, E, R>) => Stream<string, E
 ## ResumeInput
 
 What a resume takes besides the run's id: the same custom tools the
-run was started with, and whether it stays open for follow-ups.
+run was started with, whether it stays open for follow-ups, and the
+provider keys of the environment it resumes from.
 
 ```ts
-type ResumeInput = Pick<StartInput, 'tools' | 'interactive'>;
+type ResumeInput = Pick<StartInput, 'tools' | 'interactive' | 'apiKeys'>;
 ```
 
 ## ResumeRefused
@@ -712,6 +690,10 @@ One run of an agent, from the moment it exists in its session.
 interface Run {
   /** The run's id, known before its first model call. */
   readonly runId: RunId;
+  /** The commit of the activation this handle is for: the one `start` or
+   *  `resume` opened, or the running one a resume of a live run answers.
+   *  {@link LocalSession.run} rebuilds the handle from it. */
+  readonly activation: CommitOrdinal;
   /** Set when you resumed a child run that its parent was still waiting
    *  on: the parent resumes instead (this handle is the parent's), and
    *  this names the child you asked for. */
@@ -745,9 +727,19 @@ interface Run {
 }
 ```
 
+## RunActive
+
+A launch here holds the run this request would act on.
+
+```ts
+class RunActive extends Schema.TaggedError<RunActive>()('RunActive', {
+  runId: RunIdSchema,
+})
+```
+
 ## RunDeletion
 
-What {@link LocalSession.deleteRuns} did with the runs it was asked for.
+What `Session.deleteRuns` did with the runs it was asked for.
 
 ```ts
 interface RunDeletion {
@@ -789,51 +781,44 @@ type RunId = typeof RunIdSchema.Type;
 
 ## RunRecords
 
-One run's committed records ({@link LocalSession.records}), read from the
-session's store as of each call. A run that never existed or was removed
-reads as absent: no config, no end, nothing to resume.
+One run's committed records (`Session.records`), read from the session's
+store as of each call. A run that never existed or was removed reads as
+absent: no config, no end, nothing to resume. A read fails with the
+store's error, or, on a session another process holds, with why that
+process did not answer.
 
 ```ts
 interface RunRecords {
   /** Its `run.start` is still listed. */
-  readonly exists: () => Effect.Effect<boolean, DatabaseReadFailed>;
+  readonly exists: () => Effect.Effect<boolean, Error>;
   /** Its saved setup; null for a run that saved none (not an agent's). */
-  readonly readConfig: () => Effect.Effect<
-    AgentConfig | null,
-    DatabaseReadFailed
-  >;
+  readonly readConfig: () => Effect.Effect<AgentConfig | null, Error>;
   /** The report its agent wrote, or null. */
-  readonly readReport: () => Effect.Effect<string | null, DatabaseReadFailed>;
+  readonly readReport: () => Effect.Effect<string | null, Error>;
   /** Its terminal fact (outcome, error, output, usage), or null while it
    *  has not ended. */
-  readonly readRunEnd: () => Effect.Effect<RunEnd | null, DatabaseReadFailed>;
+  readonly readRunEnd: () => Effect.Effect<RunEnd | null, Error>;
   /** Its result as delivered: the terminal fact with the output its
    *  delivery reported, or a background command's own record. */
-  readonly readResult: () => Effect.Effect<
-    RunResult | null,
-    DatabaseReadFailed
-  >;
+  readonly readResult: () => Effect.Effect<RunResult | null, Error>;
   /** The workspace files its settled calls edited that are still there,
    *  under its working directory, by path. */
   readonly readWorkspaceFiles: () => Effect.Effect<
-    RunWorkspaceFile[],
-    DatabaseReadFailed | PlatformError.PlatformError
+    readonly RunWorkspaceFile[],
+    Error
   >;
   /** The skills its latest step listed. */
-  readonly readSkills: () => Effect.Effect<
-    readonly string[],
-    DatabaseReadFailed
-  >;
+  readonly readSkills: () => Effect.Effect<readonly string[], Error>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
-  readonly readResumable: () => Effect.Effect<boolean>;
+  readonly readResumable: () => Effect.Effect<boolean, Error>;
   /** Why a resume of it here is refused before its agent is checked
-   *  (`finished`, `ownedElsewhere`, `earlierBuild`, `unusableCheckpoint` or
+   *  (`finished`, `earlierBuild`, `unusableCheckpoint` or
    *  `pluginUnavailable`), or null when it may go ahead; a fact that could
    *  not be read right now fails. */
   readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
-  readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
+  readonly readConversation: () => Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
   readonly readTrace: () => Effect.Effect<AssembleTraceResult, Error>;
 }
@@ -865,9 +850,10 @@ type RuntimeRequest = typeof RuntimeRequestSchema.Type;
 
 ## Session
 
-One workspace's runs, the view of them, and the hosts attached to it.
-`Sessions.open` gives the {@link LocalSession} this process holds; a
-window connected to a background process holds a plain `Session`.
+One workspace's runs, the view of them, its store's records, and the
+hosts attached to it. `Sessions.open` gives the {@link LocalSession}
+this process holds; a window connected to a background process holds a
+plain `Session`, whose members that process answers.
 
 ```ts
 interface Session {
@@ -888,7 +874,29 @@ interface Session {
       set: readonly TranscriptSubscription[],
       from: { readonly cursor: CommitOrdinal; readonly debug: boolean },
     ) => Stream.Stream<readonly SessionViewInput[]>;
+    /** A one-off snapshot built from the store: every run's summary, and
+     *  the full transcript of the runs named. */
+    readonly read: (
+      runIds: readonly RunId[],
+    ) => Effect.Effect<SessionView, Error>;
   };
+  /** One run's stored records. */
+  readonly records: (runId: RunId) => RunRecords;
+  /** The runs a person started (not child runs), newest first, each with
+   *  its saved setup. */
+  readonly listRuns: () => Effect.Effect<
+    readonly AgentRunListingEntry[],
+    Error
+  >;
+  /**
+   * Delete one run, or every stored run (`'all'`). A run another live
+   * process is running is skipped and reported as `active`. Deleting a
+   * single run may take it from a process that cannot be proved alive or
+   * dead; `'all'` never does.
+   */
+  readonly deleteRuns: (
+    target: RunId | 'all',
+  ) => Effect.Effect<RunDeletion, Error>;
   /**
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has
@@ -903,9 +911,11 @@ interface Session {
   /**
    * Continue a stored run from where its history stops, with the same kind
    * of handle {@link start} gives. Pass the custom `tools` it was started
-   * with. Resuming a run already resuming here returns the same handle; a
-   * run that cannot continue fails with {@link ResumeRefused}, whose
-   * `reason` says why.
+   * with. A run already running or resuming here is not started again: the
+   * handle of its running activation is answered, and `input` is not read.
+   * A child an open call of its parent owns resumes the parent, whose
+   * handle names the child (`redirectedFrom`). A run that cannot continue
+   * fails with {@link ResumeRefused}, whose `reason` says why.
    */
   readonly resume: (
     runId: RunId,

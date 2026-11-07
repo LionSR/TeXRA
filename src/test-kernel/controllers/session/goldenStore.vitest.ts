@@ -82,6 +82,7 @@ import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/texraApp';
 import {
   persistentTestSession,
+  readStoreSnapshot,
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
@@ -111,26 +112,26 @@ const PARENT = Schema.decodeUnknownSync(RunIdSchema)('a00000000001');
 const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000008');
 /** The goal script the chat's plan launched, named by the plan call, and
  *  its one round, named by the script's `self()` call. */
-const GOAL = Schema.decodeUnknownSync(RunIdSchema)('a286c3e6ac6ffc44325e54fe');
-const ROUND = '2b49f9193d96636ca02a91b4';
+const GOAL = Schema.decodeUnknownSync(RunIdSchema)('644d1e4fe35654071fa5afb7');
+const ROUND = '38638341d36bf19292935f83';
 /** The chat's Codex child, detached by the user's stop. */
 const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
 const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
 /** The agent the script defined (`persona`), named by its `agent()` call. */
-const DEFINED = '6d8096657d434c473cddf020';
+const DEFINED = '58828038326e436881c70921';
 /** A headless run, and the fork `texra resume --fork` made of it. */
 const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
 const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
-/** The service's task, and the background command it sent, whose input the
- *  service's resume closed. */
+/** The service's task; the background command it sent, whose input the
+ *  service's resume closed, is a finished shell the deletion's open swept
+ *  (its rows stay, under its deletion marker, for the next open to collect). */
 const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
-const BACKGROUND = Schema.decodeUnknownSync(RunIdSchema)('a00000000013');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
-const REVISIONS = ['c7f87768952686e0f3507090', '07786de16152981e0bb228d2'];
+const REVISIONS = ['14528522ea16213a4126fb3d', '7a442cb2049485ed76de69bc'];
 
 const roots: string[] = [];
 afterAll(() => {
@@ -296,7 +297,7 @@ describe('the golden 1.0 store', () => {
         // The durable harness's row shapes: a fork's start names its
         // source, and its first history row seeds the source's view; an
         // awaited child names the call
-        // that owns it, and a Codex child, which nobody awaits, names none.
+        // that owns it; a process child names the call that launched it.
         const forked = qualifyAggregateId('run', FORKED);
         expect(
           events.flatMap((event) =>
@@ -332,10 +333,10 @@ describe('the golden 1.0 store', () => {
           // The goal is the plan call's child; its round, its program's.
           [CHAT, 'validation-plan-1'],
           [GOAL, 'script/0'],
-          [CHAT, null],
+          [CHAT, 'validation-codex-4'],
           // The agent the script defined is its `agent()` call's child.
           [SCRIPTED, 'validation-script-1/4'],
-          [SERVICE_TASK, null],
+          [SERVICE_TASK, 'validation-bash-1'],
         ]);
         // It asked for `executions`, and a child is offered what it declares,
         // whatever its parent was offered.
@@ -418,7 +419,7 @@ describe('the golden 1.0 store', () => {
           run(id, 'polish', { parent: DOCUMENT_TASK }),
         ),
         // The user stopped its held turn with Ctrl-C, which detached its
-        // parked Codex child, then exited, which ended the child.
+        // running Codex child; the child's turn then ended it as a root.
         run(CHAT, 'golden_chat', {
           status: 'cancelled',
           outcome: 'cancelled',
@@ -426,7 +427,7 @@ describe('the golden 1.0 store', () => {
         }),
         run(GOAL, 'Goal', { parent: CHAT, children: [ROUND] }),
         run(ROUND, 'golden_chat', { parent: GOAL }),
-        run(CODEX, 'codex', { status: 'cancelled', outcome: 'cancelled' }),
+        run(CODEX, 'codex'),
         run(SCRIPTED, 'golden_script', { children: [DEFINED] }),
         run(DEFINED, 'golden_reader', { parent: SCRIPTED }),
         run(FORK_SOURCE, 'golden_fork'),
@@ -438,22 +439,20 @@ describe('the golden 1.0 store', () => {
         // Killed while its command's result was uncommitted: it still reads
         // as running, its owner dead.
         run(KILLED, 'golden_effect', { status: 'running', outcome: null }),
-        // Stopped with `texra tasks stop` once its command reported back.
+        // Stopped with `texra tasks stop` once its command reported back;
+        // the command itself was swept with the deletion's open.
         run(SERVICE_TASK, 'golden_script', {
           status: 'cancelled',
           outcome: 'cancelled',
-          children: [BACKGROUND],
         }),
-        run(BACKGROUND, 'bash', { parent: SERVICE_TASK }),
       ]);
       expect(folded.requests).toEqual([]);
-      // The Codex turn's result and the message typed behind the stopped
-      // turn stay queued for a resume to join. The headless parent holds
-      // none: its child's message was refused, since a one-shot run never
-      // reads one.
+      // The message typed behind the stopped turn stays queued for a resume
+      // to join; the detached Codex child delivered nothing. The headless
+      // parent holds none: its child's message joined its one cycle.
       expect(
         [...folded.queuedFollowUps].map(([id, queued]) => [id, queued.length]),
-      ).toEqual([[CHAT, 2]]);
+      ).toEqual([[CHAT, 1]]);
       const runHistory = makeRunHistory((yield* makeSessionStore(storage)).log);
       const stateOf = (id: RunId) =>
         Effect.map(runHistory.load(id), (state) => ({
@@ -464,6 +463,8 @@ describe('the golden 1.0 store', () => {
           openAttempt: state?.invocation != null,
         }));
       // The stop kept where the loop stood: a halt records only the outcome.
+      // The child's note to its parent was refused (a one-shot parent reads
+      // no message), so no user message joined the cycle.
       expect(yield* stateOf(PARENT)).toEqual({
         at: 'waiting',
         phase: 'waiting',
@@ -590,13 +591,6 @@ describe('the golden run killed after its effect', () => {
          WHERE type IN ('run.start', 'run.config') AND aggregate =
            (SELECT id FROM event_sequence WHERE logical_id = ?)`,
         ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
-        // The kill, on this host: an owner whose process is gone.
-        db.prepare(
-          'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
-        ).run(
-          JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
-          KILLED,
-        );
       });
       writeFileSync(flag, 'texra-cli-run-validation\n');
       yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
@@ -715,7 +709,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
     return { sent, process: SessionGraph.with([], model) };
   };
   /** The chat's last model response. */
-  const RESPONSE = 605;
+  const RESPONSE = 582;
   /** The golden store, with `rewrite` applied, and a session over it. */
   const goldenSession = (rewrite?: string) =>
     Effect.gen(function* () {
@@ -729,7 +723,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
     });
   /** The chat's stored rows. */
   const chatRows = (storage: string) =>
-    raw(storage, (db) =>
+    readStoreSnapshot(storage, (db) =>
       db
         .prepare(
           `SELECT e.* FROM event e JOIN event_sequence s ON s.id = e.aggregate

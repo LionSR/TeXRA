@@ -33,6 +33,7 @@ export function createTestLaunchContext({
     config,
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     runId,
+    startedAt: 0,
     logger,
     parentStage: logger.openStage(`Run: ${config.agent}`),
     opening: {
@@ -43,6 +44,7 @@ export function createTestLaunchContext({
     },
     entry: {
       parent: null,
+      awaited: false,
       registration: null,
       opening: Effect.succeed([]),
       entered: () => Effect.void,

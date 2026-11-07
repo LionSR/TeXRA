@@ -31,7 +31,11 @@ import {
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { decodeToolUseLog } from '@shared/toolUse';
 
-import { recordLogRow, STREAMING_TEXT_ROW_KIND } from './transcriptLogRows';
+import {
+  recordLogRow,
+  recordProcessOutputRow,
+  STREAMING_TEXT_ROW_KIND,
+} from './transcriptLogRows';
 import {
   emptyTranscript,
   emptyTranscriptIndexes,
@@ -91,6 +95,9 @@ function record(d: Draft, event: TranscriptEvent): void {
   switch (event.type) {
     case 'log':
       recordLogRow(d, event);
+      return;
+    case 'process.output':
+      recordProcessOutputRow(d, event);
       return;
 
     case 'stage.start': {
@@ -333,10 +340,7 @@ export function applyTranscriptEvent(
     written: [],
     touched: false,
   };
-  if (
-    event.type === 'run.position' &&
-    (event.payload.at === 'waiting' || event.payload.at === 'halted')
-  )
+  if (event.type === 'run.position' && event.payload.at === 'waiting')
     d.ix.lastWait = event.seq;
   const phase = phaseMoveOf(event);
   if (phase !== null) moveBoundary(d, phase);

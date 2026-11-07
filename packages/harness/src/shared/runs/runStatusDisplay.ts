@@ -35,8 +35,6 @@ const RUN_STATUS_TONE_OF = {
   [RUN_LIFECYCLE_READY]: 'neutral',
   [RUN_PHASE.WAITING]: 'neutral',
   [RUN_SUBSTATE.RESUMING]: 'running',
-  [RUN_SUBSTATE.PAUSED]: 'warning',
-  [RUN_SUBSTATE.RESULT_WAITING]: 'warning',
   interrupted: 'warning',
   waitingOnUser: 'warning',
 } as const satisfies Record<string, RunStatusTone>;

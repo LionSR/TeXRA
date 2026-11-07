@@ -7,7 +7,6 @@ import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Interactions } from '@agent/runtime/HostInteractions';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import { SessionLog, Approvals } from '@shared/session/runHistory';
 import {
@@ -73,12 +72,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
             const runId = generateRunId();
-            let policyDenials = 0;
-            yield* Context.get(session, Interactions).use({
-              approvalDenied: () => {
-                policyDenials += 1;
-              },
-            });
             setTestApprovalPolicy('never');
             publishTestRunStart(session, runId);
             yield* Context.get(session, Approvals).change(
@@ -97,14 +90,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               action: 'deny',
               reason: 'Denied by the approval policy.',
             });
-            expect(policyDenials).toBe(1);
             expect(requests.opened).toEqual([]);
           }),
         ),
     );
 
     it.effect(
-      'auto-approves a queued request once the run is bypassed while it waits',
+      'a command grant turned on answers the open request it covers',
       () =>
         Effect.scoped(
           Effect.gen(function* () {
@@ -124,22 +116,21 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               );
 
             const first = yield* Effect.forkScoped(request('echo first'));
-            const second = yield* Effect.forkScoped(request('echo second'));
             yield* requests.firstOpened;
             expect(requests.opened.map(({ command }) => command)).toEqual([
               'echo first',
             ]);
 
+            // The grant's transaction decides the open request; the next
+            // command runs under the grant without asking.
             yield* Context.get(session, Approvals).change(
               runId,
               humanGrant(['bash'], true),
             );
-            requests.approve(0);
-
             expect(yield* Fiber.join(first)).toMatchObject({
               status: 'executed',
             });
-            expect(yield* Fiber.join(second)).toMatchObject({
+            expect(yield* request('echo second')).toMatchObject({
               status: 'executed',
             });
             expect(requests.opened).toHaveLength(1);

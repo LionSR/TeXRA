@@ -142,7 +142,7 @@ export function configurationFor(spec: BindSpec): {
   const protocol = PROTOCOL_OF[config.provider];
   if (protocol === undefined) {
     throw new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message: `No protocol serves ${config.provider} models.`,
     });
   }

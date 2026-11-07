@@ -169,20 +169,12 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
           }),
           withLogChannel(CHANNEL),
         );
+        continue;
       }
-
-      // Derive PDF location from tex location
-      const pdfLocation = pathToLocationIn(
-        roots.workspace,
-        texLocation.absolutePath.replace(/\.tex$/, '.pdf'),
+      compiledFiles.push(pathToLocationIn(roots.workspace, compiled.pdfPath));
+      yield* Effect.logDebug(`Successfully compiled: ${compiled.pdfPath}`).pipe(
+        withLogChannel(CHANNEL),
       );
-
-      if (yield* fs.exists(pdfLocation.absolutePath)) {
-        compiledFiles.push(pdfLocation);
-        yield* Effect.logDebug(
-          `Successfully compiled: ${pdfLocation.absolutePath}`,
-        ).pipe(withLogChannel(CHANNEL));
-      }
     }
   }
 

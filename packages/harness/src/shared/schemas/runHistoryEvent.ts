@@ -52,12 +52,6 @@ const InvocationRefSchema = Schema.Struct({
 });
 export type InvocationRef = typeof InvocationRefSchema.Type;
 
-/** Why an invocation is made: a run's turn, or a compaction's summary,
- *  whose rows record its billed calls and nothing the loop continues from. */
-const InvocationPurposeSchema = Schema.Literals(['turn', 'summary']);
-/** Why an invocation is made, as its attempt rows record it. */
-export type InvocationPurpose = typeof InvocationPurposeSchema.Type;
-
 /**
  * What follows a failed attempt: another attempt (`retry`, or `unchain`,
  * which also drops the provider continuation the vendor no longer holds),
@@ -90,7 +84,6 @@ const PositionAtSchema = Schema.Literals([
   'response.ready',
   'results.ready',
   'waiting',
-  'halted',
 ]);
 export type PositionAt = typeof PositionAtSchema.Type;
 
@@ -103,19 +96,15 @@ export const RunPositionPayloadSchema = Schema.Struct({
   turn: Schema.optional(
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
   ),
-  /** A halt's: the loop's own terminal word (the canonical terminal fact
-   *  stays `run.end`, which also covers failures before the runtime
-   *  starts). A `turn.end`'s: how the turn ended, `completed` with its
-   *  answer or `failed` without one, which a follow-up's receipt reads. */
+  /** A `turn.end`'s: how the turn ended, `completed` with its answer or
+   *  `failed` without one, which a follow-up's receipt reads. The run's
+   *  own end is its `run.end` row. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
 }).check(
-  Schema.makeFilter(
-    (p) => (p.at === 'halted' || p.at === 'turn.end') === (p.outcome != null),
-    {
-      message:
-        'Only a halted or turn.end position carries an outcome, and it always carries one.',
-    },
-  ),
+  Schema.makeFilter((p) => (p.at === 'turn.end') === (p.outcome != null), {
+    message:
+      'Only a turn.end position carries an outcome, and it always carries one.',
+  }),
 );
 
 /* ---------------------------------------------------------- model.message */
@@ -147,7 +136,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('attempt'),
     invocation: InvocationRefSchema,
-    purpose: InvocationPurposeSchema,
     request: Sha256Schema,
     origin: StoredOriginSchema,
   }),
@@ -163,7 +151,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('failed'),
     invocation: InvocationRefSchema,
-    purpose: InvocationPurposeSchema,
     error: RetryErrorInfoSchema,
     next: FailedNextSchema,
     /** The priced usage of a response the provider billed before refusing

@@ -133,7 +133,7 @@ const connect = Effect.fnUntraced(function* (
     if (phase !== 'reading')
       invalidate(
         new ModelError({
-          kind: 'malformed-output',
+          kind: 'provider-rejection',
           message:
             'The Responses connection received data without an active turn.',
         }),
@@ -284,7 +284,7 @@ const connect = Effect.fnUntraced(function* (
             if (event.kind === 'identified') {
               if (event.providerResponseId === latestResponseId)
                 return yield* new ModelError({
-                  kind: 'malformed-output',
+                  kind: 'provider-rejection',
                   message:
                     'The Responses connection repeated its preceding response identity.',
                 });
@@ -295,7 +295,7 @@ const connect = Effect.fnUntraced(function* (
             phase = 'draining';
             if (reader.readableLength > 0)
               return yield* new ModelError({
-                kind: 'malformed-output',
+                kind: 'provider-rejection',
                 message:
                   'The Responses connection buffered data beyond its terminal event.',
               });
@@ -341,7 +341,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   const endpoint = new URL(config.deployment.endpoint);
   if (endpoint.username || endpoint.password)
     return yield* new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message:
         'Responses endpoint credentials cannot override the selected authentication.',
     });
@@ -350,7 +350,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   else if (endpoint.protocol === 'http:') endpoint.protocol = 'ws:';
   else
     return yield* new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message: 'The Responses endpoint must use HTTP or HTTPS.',
     });
   // A turn prepared on this model streams on whichever connection it holds.

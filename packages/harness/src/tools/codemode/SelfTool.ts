@@ -9,9 +9,8 @@
  * the same tools, so nothing is proposed: the user approved the script.
  * The default goal strategy is this function in a loop (`builtIn:goal`).
  */
-import { Effect, Result, Schema, SynchronizedRef } from 'effect';
+import { Effect, Result, Schema, ScopedRef } from 'effect';
 
-import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { forkSeed } from '@agent/runtime/forkRun';
 import {
   requireToolRun,
@@ -25,7 +24,7 @@ import {
   countLaunch,
   recoverAgentChild,
 } from '@agent/runtime/delegation/agentChild';
-import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
+import { executeSubagentInBand } from '@agent/runtime/delegation/childLaunch';
 import { describeSubagentProgress } from '@agent/runtime/delegation/subagentRun';
 import {
   AgentConfigSchema,
@@ -164,7 +163,7 @@ const runSelf = Effect.fn('self.call')(function* (
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
           ...(forked?.record ?? {
             ...launch,
-            model: (yield* SynchronizedRef.get(run.model)).modelId,
+            model: (yield* ScopedRef.get(run.model)).modelId,
             instruction: task,
             displayInstruction: input.prompt,
             outputFiles: [],
@@ -205,7 +204,7 @@ export const SelfTool = defineTool({
   // A resumed call finds the child its earlier attempt launched and takes
   // its result, or resumes it under its own id: it never launches a second one.
   replay: 'safe',
-  // A script's calls run beside each other, held to the child-run budget.
+  // A script's calls run beside each other.
   lane: 'own',
   // Offered with the script tool: only a script calls it.
   scriptGlobal: { positional: 'prompt', withScript: true },
@@ -221,10 +220,9 @@ Forked (the default), the child continues this conversation as it stood when the
     const { script } = call;
     if (script === null)
       return errorResult('self() runs only inside a script.');
-    const budget = yield* scriptChildBudget(call.env.roots, script);
     // The child launches under the session's runs the engine door holds.
-    return yield* budget.withPermits(1)(
-      runSelf(call, input, script).pipe(Effect.provide(call.session)),
+    return yield* runSelf(call, input, script).pipe(
+      Effect.provide(call.session),
     );
   }),
 });

@@ -18,6 +18,7 @@ import {
 import {
   cleanupDirectory,
   createIsolatedProfile,
+  withStoreCopy,
 } from './workspaceStorageFixture.js';
 
 // One id per run: the aggregate's logical id is the run id, and the agent
@@ -127,11 +128,6 @@ async function writeCanonicalRunFixtures(
       // These rows belong to a stopped writer. The next process must derive
       // interrupted presentation from the recorded loop position, without
       // rewriting a single row.
-      yield* database.releaseClaims(
-        fixtures.map((runFixture) =>
-          fixture.qualifyAggregateId('run', runFixture.runId),
-        ),
-      );
       return yield* canonicalRows(fixture);
     }),
   );
@@ -205,10 +201,9 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
           { runId: ORPHAN_RUN, status: 'running', group: 'interrupted' },
         ]),
       );
-    const reloaded = await inEventDatabase(
-      fixture,
-      storagePath,
-      canonicalRows(fixture),
+    // The running app holds the store: its rows are read from a copy.
+    const reloaded = await withStoreCopy(storagePath, (copy) =>
+      inEventDatabase(fixture, copy, canonicalRows(fixture)),
     );
     expect(reloaded).toEqual(persisted);
   } finally {

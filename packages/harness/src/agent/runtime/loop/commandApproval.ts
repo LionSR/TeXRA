@@ -13,7 +13,6 @@ import type {
   ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
-import type { SessionApprovals } from '@shared/session/sessionApprovals';
 import { errorResult } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 
@@ -22,17 +21,15 @@ const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Continue without running it, use a non-shell method, or explain what approval would be needed.';
 
 /**
- * Ask the person about `command`: a `request.opened` on the run, serialized
- * behind the run's other prompts, answered by a surface's `request.decide`.
- * `grant` is the standing grant that answers the call instead once it
- * reaches the head of the run's lane, so one turned on while another call
- * waited answers it: `'bash'`, the run's command grant, which the prompt
- * offers to turn on; `'superYolo'`, the delegated-work grant, which it does
- * not offer; `null`, a `PreToolUse` hook asked, so only a person answers.
+ * Ask the person about `command`: a `request.opened` on the run, answered
+ * by a surface's `request.decide`, or by the command grant turned on
+ * meanwhile, which answers every open request it covers. `grant` is the
+ * grant the prompt may offer to turn on: `'bash'`, the run's command grant;
+ * `'superYolo'`, the delegated-work grant, which it does not offer; `null`,
+ * a `PreToolUse` hook asked, so only a person answers.
  */
 export const askCommandApproval = Effect.fn('askCommandApproval')(function* (
   runId: RunId,
-  approvals: Pick<SessionApprovals, 'enqueue'>,
   requests: CallRequests,
   ask: {
     readonly command: string;
@@ -43,24 +40,18 @@ export const askCommandApproval = Effect.fn('askCommandApproval')(function* (
   // The payload every host lists: a blank directory is dropped, so no
   // renderer decides what an empty `cwd` means.
   const cwd = ask.cwd?.trim();
-  const prompt = requests
-    .open({
-      kind: 'bash',
-      data: {
-        requestId: requests.nextId('bash'),
-        command: ask.command,
-        ...(cwd && { cwd }),
-        // The policy asked, so the command grant is off.
-        allowBypass: ask.grant === 'bash',
-        runId,
-      },
-    })
-    .pipe(Effect.map(({ decision }) => decision));
-  return yield* approvals.enqueue('bash', runId, {
-    grant: ask.grant,
-    prompt,
-    bypassed: Effect.succeed<DecisionOf<'bash'>>({ action: 'approve' }),
+  const { decision } = yield* requests.open({
+    kind: 'bash',
+    data: {
+      requestId: requests.nextId('bash'),
+      command: ask.command,
+      ...(cwd && { cwd }),
+      // The policy asked, so the command grant is off.
+      allowBypass: ask.grant === 'bash',
+      runId,
+    },
   });
+  return decision;
 });
 
 /** What the model is told when the person refuses `command`. */

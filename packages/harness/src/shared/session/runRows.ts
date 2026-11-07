@@ -121,19 +121,17 @@ export const freshRunRows = (): RunRows => ({
   parent: null,
   activation: null,
   end: null,
+  stop: null,
   removed: null,
   inputClosed: false,
-  heldParks: [],
-  park: null,
   report: null,
-  result: null,
+  exit: null,
   config: null,
   position: null,
   title: null,
   label: null,
   grants: null,
   facts: {},
-  childTurn: { active: null, lastCompleted: null },
   lifecycles: [],
   positions: [],
   results: [],
@@ -197,12 +195,10 @@ export function applyRunRow(
           detail: `turn ${p.turn} is below ${rows.turn}`,
         };
       }
-      // A halt records its outcome where the loop stood; `at` keeps that spot.
       return applied({
         family: p.family,
-        at: p.at === 'halted' ? rows.at : p.at,
+        at: p.at,
         turn: p.turn ?? rows.turn,
-        outcome: p.at === 'halted' ? (p.outcome ?? null) : rows.outcome,
       });
     }
     case 'request.opened': {

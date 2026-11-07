@@ -53,7 +53,7 @@ export function traceDisplayName(trace: TraceDocument): string {
  * shell renders nothing until a host snapshot arrives, and a trace's one
  * frame is the only one it ever gets.
  */
-function traceHost(trace: TraceDocument): HostSnapshot {
+export function traceHost(trace: TraceDocument): HostSnapshot {
   return emptyHostSnapshot({
     key: trace.runId,
     name: traceDisplayName(trace),
@@ -63,8 +63,8 @@ function traceHost(trace: TraceDocument): HostSnapshot {
 /**
  * The one frame that answers a `Subscribe` over an exported trace: the
  * listing facts, the whole aggregate when the subscriber named the run, the
- * marker, an empty local snapshot, and the trace's host snapshot. A trace has
- * no tail.
+ * marker, an empty local snapshot. The trace's host snapshot is its own
+ * message ({@link traceHost}). A trace has no tail.
  *
  * `cut` is the scrubber's position: the index of the `run.position` the view is
  * read at, `null` for the whole document. A cut is a commit — the prefix the
@@ -100,12 +100,17 @@ export function traceFrame(
     session,
     generation: subscribe.generation,
     cursor: events.at(-1)?.commit ?? 0,
-    events: [
+    // The reader's order: the policy, the local snapshot, the listing, the
+    // transcript set, the aggregates, the marker.
+    inputs: [
+      { _tag: 'debug', enabled: subscribe.debug },
+      { _tag: 'local', local: { runsHere: [] } },
       ...listing.map((event) => ({
         _tag: 'event' as const,
         read: 'listing' as const,
         event,
       })),
+      { _tag: 'subscriptions', set: [...subscribe.aggregates] },
       ...(named
         ? events.map((event) => ({
             _tag: 'event' as const,
@@ -113,18 +118,14 @@ export function traceFrame(
             event,
           }))
         : []),
+      {
+        _tag: 'replay.complete',
+        existence: {
+          checkedAggregateIds,
+          present: checkedAggregateIds,
+          unreadable: [],
+        },
+      },
     ],
-    chunks: [],
-    local: { self: [], dead: [], unreadable: [] },
-    host: traceHost(trace),
-    debug: subscribe.debug,
-    replayComplete: true,
-    existence: {
-      checkedAggregateIds,
-      claims: checkedAggregateIds.map((aggregateId) => ({
-        aggregateId,
-        ownerId: null,
-      })),
-    },
   };
 }

@@ -8,9 +8,8 @@
 import path from 'node:path';
 
 import { Effect, Schema } from 'effect';
-import { Cancelled, Rejected, type RunEnd } from '@texra-ai/harness';
+import { Cancelled, type RunEnd } from '@texra-ai/harness';
 import {
-  AgentDirectories,
   AppSignals,
   withProcessServices,
   type ProcessRuntime,
@@ -33,9 +32,10 @@ import {
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
-  OwnHostRequest,
+  OwnHostArms,
   SharedHostRequestBindings,
 } from '@texra/controllers/session/openGuiWindow';
+import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import { instructionActions } from '@ui/copy/instructionActions';
@@ -161,17 +161,12 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal
       // prompt.
-      setApiKey: Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'models/keys'),
-      ),
+      setApiKey: () =>
+        Effect.sync(() =>
+          postDesktopSettingsView(options.postToRenderer, 'models/keys'),
+        ),
       openGuide: (page, anchor) =>
         options.openExternalUrl(texraGuideUrl(page, anchor)),
-      openCustomAgentDirectory: Effect.gen(function* () {
-        const directory = yield* AgentDirectories.use((directories) =>
-          directories.custom(),
-        );
-        yield* host.openPath(directory);
-      }),
       recheckDependencies: Effect.suspend(() => options.recheckTools()),
       openInstallGuide: Effect.sync(() =>
         postDesktopSettingsView(options.postToRenderer, 'plugins'),
@@ -191,35 +186,21 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       },
     };
 
-    const notOnDesktop = (what: string) =>
-      new Rejected({ reason: `${what} is not available in the desktop app.` });
-
     /** The arms this window performs its own way. A capability's failure is
      *  named through `hostFailure`, so the failure channel is the value the
      *  arm failed with. */
-    const own = Effect.fn('own')(function* (request: OwnHostRequest) {
-      switch (request.kind) {
-        case 'popOut':
-        case 'popBack':
-          return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
-        case 'pickFiles': {
-          const paths = yield* options.files
-            .pickFiles(request.fileType)
-            .pipe(
-              Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
-            );
-          if (paths === null) return yield* new Cancelled();
-          return { kind: 'files' as const, paths };
-        }
-        case 'useCurrentFile':
-        case 'addOpenedFiles':
-          return yield* Effect.fail(notOnDesktop("The editor's current file"));
-        case 'gettingStarted':
-          return yield* Effect.fail(notOnDesktop('Starting a project'));
-        case 'workspaceFile':
-          return yield* options.workspaceFile(request.action);
-      }
-    });
+    const own: OwnHostArms = {
+      pickFiles: (request) =>
+        options.files.pickFiles(request.fileType).pipe(
+          Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
+          Effect.flatMap((paths) =>
+            paths === null
+              ? Effect.fail(new Cancelled())
+              : Effect.succeed<HostOutcome>({ kind: 'files', paths }),
+          ),
+        ),
+      workspaceFile: (request) => options.workspaceFile(request.action),
+    };
 
     return {
       bindings,
@@ -242,19 +223,10 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         // Desktop has no editor integration to preview through, so the
         // output goes to the preview-with-fallback host directly.
         openFinalOutput: (config: AgentConfig, result: RunEnd) =>
-          withProcessServices(
-            runtime,
-            selectAutoOpenFinalOutput(roots, config, result),
-          ).pipe(
+          selectAutoOpenFinalOutput(roots, config, result).pipe(
             Effect.flatMap((output) =>
               output ? host.openPath(output.absolutePath) : Effect.void,
             ),
-          ),
-        // The desktop asks for a key in its Models tab; the shared retry
-        // re-reads the secret store and says when none was added.
-        promptForApiKey: () =>
-          Effect.sync(() =>
-            postDesktopSettingsView(options.postToRenderer, 'models/keys'),
           ),
       },
       files: {
@@ -294,7 +266,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
             Effect.mapError(
               (cause) =>
                 new ExternalOpenFailed({
-                  kind: 'path',
                   target: filePath,
                   message: toErrorMessage(cause),
                   cause,

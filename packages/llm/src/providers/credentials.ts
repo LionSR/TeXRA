@@ -28,13 +28,6 @@ export type SecretsOperation = typeof SecretsOperationSchema.Type;
 export class SecretsFailed extends Schema.TaggedError<SecretsFailed>()(
   'SecretsFailed',
   {
-    /**
-     * Why it failed, as the host stores can actually fail:
-     * `store-unavailable` — the host has no store to write to at all (an
-     * embedder that persists nothing; only {@link CredentialStore.set} raises
-     * it); `io` — the backing file or host API failed.
-     */
-    reason: Schema.Literals(['store-unavailable', 'io']),
     operation: SecretsOperationSchema,
     message: Schema.String,
     key: Schema.optional(Schema.String),

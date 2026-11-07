@@ -29,7 +29,6 @@ import type { SessionViewInput } from '@texra-ai/harness/transcript';
 
 /** A process identity, never a lease token. */
 export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
-export const OTHER_OWNER = '["test-host",4343,"2026-09-04T00:00:00.000Z"]';
 export const ROOT = Schema.decodeUnknownSync(RunIdSchema)('aaaaaaaaaaaa');
 export const CHILD = Schema.decodeUnknownSync(RunIdSchema)('bbbbbbbbbbbb');
 export const GRANDCHILD = Schema.decodeUnknownSync(RunIdSchema)('dddddddddddd');
@@ -130,14 +129,15 @@ export class Log {
     return { id, uid, call: null };
   }
 
-  /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
+  /** Finite-read marker for this fixture log: every aggregate its first
+   *  facts created exists until its removal. */
   drained(through = this.events.length): SessionViewInput {
-    const claims = new Map<DisplaySessionEvent['aggregateId'], string | null>();
+    const present = new Set<DisplaySessionEvent['aggregateId']>();
     const removed = new Set<DisplaySessionEvent['aggregateId']>();
     for (const event of this.events.slice(0, through)) {
-      if (event.seq === 1) claims.set(event.aggregateId, event.origin);
+      if (event.seq === 1) present.add(event.aggregateId);
       if (event.type === 'run.removed') {
-        claims.delete(event.aggregateId);
+        present.delete(event.aggregateId);
         removed.add(event.aggregateId);
       }
     }
@@ -145,11 +145,9 @@ export class Log {
       _tag: 'drained',
       cursor: this.events[through - 1]?.commit ?? 0,
       existence: {
-        checkedAggregateIds: [...claims.keys(), ...removed],
-        claims: [...claims].map(([aggregateId, ownerId]) => ({
-          aggregateId,
-          ownerId,
-        })),
+        checkedAggregateIds: [...present, ...removed],
+        present: [...present],
+        unreadable: [],
       },
     };
   }
@@ -166,11 +164,11 @@ export const subscribe = (...ids: RunId[]): SessionViewInput => ({
   set: ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
 });
 
+/** Every run of the scenario, as launched here. */
+export const ALL_RUNS: readonly RunId[] = [ROOT, CHILD, GRANDCHILD, PROCESS];
+
 export function local(state: Partial<LocalRuntimeState>): SessionViewInput {
-  return {
-    _tag: 'local',
-    local: { self: [], dead: [], unreadable: [], ...state },
-  };
+  return { _tag: 'local', local: { runsHere: [], ...state } };
 }
 
 /** `updater`'s view (by default a fresh one of session `paper`) after
@@ -231,7 +229,10 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.start',
     identity: CHILD_IDENTITY,
-    parent: { ...log.parent(ROOT), call: { callId: 'call-1', card: 'call-1' } },
+    parent: {
+      ...log.parent(ROOT),
+      call: { callId: 'call-1', card: 'call-1', awaited: false },
+    },
     provenance: null,
     userFollowUpSupport: 'nativeInteractive',
   });
@@ -451,31 +452,7 @@ export function buildScenario({ proposal = false } = {}) {
  * the `bash` process run leading the order.
  */
 export function fanOutView(): SessionView {
-  return viewOf([...buildScenario().pending, local({ self: [OWNER] })]);
-}
-
-/** Every recorded event of one aggregate re-owned: what the log holds when
- *  another process ran that run. */
-function ownedBy(
-  inputs: readonly SessionViewInput[],
-  aggregateId: RunId,
-  ownerId: string,
-): SessionViewInput[] {
-  const key = qualifyAggregateId('run', aggregateId);
-  return inputs.map((input) => {
-    if (input._tag === 'drained' || input._tag === 'replay.complete') {
-      return {
-        ...input,
-        existence: {
-          ...input.existence,
-          claims: input.existence.claims.map((claim) =>
-            claim.aggregateId === key ? { ...claim, ownerId } : claim,
-          ),
-        },
-      };
-    }
-    return input;
-  });
+  return viewOf([...buildScenario().pending, local({ runsHere: ALL_RUNS })]);
 }
 
 /** `fanOutView` with no approval pending: nothing forces the tree open, so
@@ -486,16 +463,16 @@ export function withoutApproval(): SessionView {
       (input) =>
         !(input._tag === 'event' && input.event.type === 'request.opened'),
     ),
-    local({ self: [OWNER] }),
+    local({ runsHere: ALL_RUNS }),
   ]);
 }
 
-/** `fanOutView` with `search` run by a process nobody holds any more: an
- *  in-flight run whose owner is gone reads as interrupted. */
+/** `fanOutView` with `search` run by nothing any more: an in-flight run
+ *  no launch here holds reads as interrupted. */
 export function withInterruptedChild(): SessionView {
   return viewOf([
-    ...ownedBy(buildScenario().pending, CHILD, OTHER_OWNER),
-    local({ self: [OWNER], dead: [OTHER_OWNER] }),
+    ...buildScenario().pending,
+    local({ runsHere: ALL_RUNS.filter((id) => id !== CHILD) }),
   ]);
 }
 
@@ -527,13 +504,17 @@ export function withWaitingGrandchild(): SessionView {
       },
     },
   });
-  return viewOf([...inputs, ...log.events.map(tail), local({ self: [OWNER] })]);
+  return viewOf([
+    ...inputs,
+    ...log.events.map(tail),
+    local({ runsHere: ALL_RUNS }),
+  ]);
 }
 
 /** `fanOutView` plus its script's agent request pending on the root. */
 export function withProposal(): SessionView {
   return viewOf([
     ...buildScenario({ proposal: true }).pending,
-    local({ self: [OWNER] }),
+    local({ runsHere: ALL_RUNS }),
   ]);
 }

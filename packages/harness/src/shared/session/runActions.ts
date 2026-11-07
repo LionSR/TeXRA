@@ -22,8 +22,7 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
 
 /**
  * The one rule for which actions a run's state licenses, applied by the fold
- * into `RunView.actions`. A run another process holds is inspect-only. One
- * no live process holds whose rows this build cannot read (`stranded`:
+ * into `RunView.actions`. One whose rows this build cannot read (`stranded`:
  * damaged, or an earlier build's) never becomes readable,
  * so it offers delete beside inspection, the one way to clear it. A live
  * run (`live`: working, waiting, or spawned and not started yet) can
@@ -43,7 +42,6 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
 export function runActions(
   run: Pick<
     RunView,
-    | 'readOnly'
     | 'group'
     | 'live'
     | 'status'
@@ -55,7 +53,6 @@ export function runActions(
   stranded: boolean,
 ): RunAction[] {
   if (stranded) return ['delete', ...inspectActions()];
-  if (run.readOnly) return inspectActions();
   if (run.live) {
     const inFlight = run.group === 'running' || run.group === 'waiting';
     const agent = inFlight && run.identity.kind === 'agent';
@@ -105,12 +102,10 @@ const forkable = (
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(
-  run: Pick<ReadonlyRunView, 'readOnly' | 'live' | 'label'>,
+  run: Pick<ReadonlyRunView, 'live' | 'label'>,
   action: RunAction,
 ): string {
   const what = ACTION_LABEL[action];
-  if (run.readOnly)
-    return `${what} is not available: this process cannot act on “${run.label}”.`;
   if (run.live)
     return `${what} is not available while “${run.label}” is running; stop it first.`;
   return `${what} is not available for “${run.label}” in its current state.`;

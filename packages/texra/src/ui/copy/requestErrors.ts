@@ -9,7 +9,7 @@ export function requestErrorText(error: RequestError): string {
   switch (error._tag) {
     case 'Cancelled':
       return 'The request was cancelled.';
-    case 'NotOwner':
+    case 'RunActive':
       return 'Another TeXRA window or process controls this task.';
     case 'Unavailable':
     case 'Rejected':

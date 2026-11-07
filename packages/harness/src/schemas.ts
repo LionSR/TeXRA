@@ -40,12 +40,14 @@ export {
 // the session is, where each run stands, what `acceptsFollowUp` reads.
 export {
   acceptsFollowUp,
+  isUnreadable,
   attentionOf,
   descendantRuns,
   requestAnswerability,
   rollupOf,
   RunViewSchema,
   sessionActivity,
+  SessionViewSchema,
   type Attention,
   type RequestAnswerability,
   type SessionTitleState,
@@ -61,16 +63,12 @@ export type {
 export { runActionRefusal } from '@shared/session/runActions';
 // What makes the views read-only all the way down.
 export type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-// What a session store's reads and claims answer with: an aggregate's claim
-// and state, a deletion's mode, a CLI input-history row, the refusals, and
-// the notice of a store moved aside on open.
+// What a session store's reads answer with: an aggregate's state, a CLI
+// input-history row, the refusals, and the notice of a store moved aside
+// on open.
 export type {
-  AggregateClaim,
   AggregateState,
-  DatabaseClaimError,
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-  DeletionMode,
+  DatabaseAggregateClosed,
   InputHistoryRecord,
   SessionStoreMovedAside,
 } from '@shared/session/database';
@@ -103,6 +101,7 @@ export type {
   JsonValue,
   LoadedMediaMetadata,
   LocalRuntimeState,
+  UnreadableRun,
   LogicalId,
   LogLevel,
   MediaAttachmentKind,
@@ -111,7 +110,6 @@ export type {
   ModelBackend,
   NormalizedToolUse,
   OwnerId,
-  OwnerLiveness,
   PermissionPayload,
   Persona,
   ProposalFileGroup,
@@ -120,7 +118,6 @@ export type {
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
   ResponseCut,
-  ResultMeta,
   ResumeRefusal,
   RunAction,
   RunId,
@@ -145,6 +142,7 @@ export type {
   UsageRoute,
   WorkspaceFileLocation,
 } from '@shared/schemas';
+export { ResumeRefusalSchema } from '@shared/schemas';
 // Where a run's lifecycle status stands: in flight (running, or waiting for
 // its next input), ended, or settled enough for its transcript. Whether a
 // run is working right now is the view's `working`, never read off the phase.
@@ -168,7 +166,6 @@ export {
   ApprovalPolicySchema,
   parseApprovalPolicy,
   type ApprovalPolicy,
-  type ApprovalPolicyDenial,
   type HumanInputDecision,
   type RetryApprovalDecision,
 } from '@shared/approvalPolicy';
@@ -340,6 +337,7 @@ export {
   RunRecordFieldsSchema,
   RunOutcomeSchema,
   RunResultSchema,
+  type ProcessExit,
   type RunResult,
   RunWorkspaceFileSchema,
   type RunWorkspaceFile,

@@ -273,7 +273,7 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
     Effect.mapError(
       (error) =>
         new McpStartError({
-          message: `Failed to spawn ${config.command}: ${toErrorMessage(error.reason.cause ?? error)}`,
+          message: `Failed to spawn ${config.command}: ${toErrorMessage(error)}`,
         }),
     ),
   );

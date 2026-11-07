@@ -33,6 +33,7 @@ import {
   DownMessageSchema,
   type DownMessage,
   type EventsFrame,
+  type HostFrame,
   type HostOutcome,
   type Response,
   type Subscribe,
@@ -108,7 +109,7 @@ interface OpenSession extends WebviewSession {
   readonly pending: Map<string, Deferred.Deferred<Response['result']>>;
   /** The frames the host sent, in arrival order; one fiber of the session's
    *  scope feeds them to the frames service. */
-  readonly inbox: Queue.Queue<EventsFrame>;
+  readonly inbox: Queue.Queue<EventsFrame | HostFrame>;
 }
 
 /** The routing fields of a down-message that failed its schema: enough to
@@ -140,7 +141,7 @@ export function installWebviewTransport(
    *  service in arrival order; the frames service drops a frame of another
    *  generation. A frame for a session that is not open is the host's
    *  defect, dropped loudly. */
-  const deliver = (frame: EventsFrame): void => {
+  const deliver = (frame: EventsFrame | HostFrame): void => {
     const session = sessions.get(frame.session);
     if (!session) {
       console.warn(
@@ -193,6 +194,7 @@ export function installWebviewTransport(
     const message = parsed.success;
     switch (message.kind) {
       case 'events':
+      case 'host':
         deliver(message);
         return;
       case 'response': {
@@ -292,7 +294,7 @@ export function installWebviewTransport(
               });
             }),
           );
-          const inbox = yield* Queue.unbounded<EventsFrame>();
+          const inbox = yield* Queue.unbounded<EventsFrame | HostFrame>();
           yield* Effect.forkIn(
             Stream.runForEach(Stream.fromQueue(inbox), graph.frames.feed),
             scope,

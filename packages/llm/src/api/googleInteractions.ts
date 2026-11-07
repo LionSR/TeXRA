@@ -56,7 +56,7 @@ const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
   const mimeType = part.mimeType.split(';', 1)[0].trim().toLowerCase();
   if (part.kind !== 'document' && !mimeType.startsWith(`${part.kind}/`)) {
     return yield* new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message: 'Google media kind disagrees with its MIME type.',
     });
   }
@@ -74,7 +74,7 @@ const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
     case 'audio':
       if (['audio/l16', 'audio/alaw', 'audio/mulaw'].includes(mimeType)) {
         return yield* new ModelError({
-          kind: 'unsupported',
+          kind: 'invalid-request',
           message:
             'Raw Google audio requires channel and sample-rate metadata outside the implemented input vocabulary.',
         });
@@ -151,7 +151,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
               part.content.some((child) => child.kind !== 'text')
             ) {
               return yield* new ModelError({
-                kind: 'unsupported',
+                kind: 'invalid-request',
                 message:
                   'Google requires ordinary text message groups without foreign item evidence.',
               });
@@ -171,7 +171,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
                 part.evidence.kind !== 'google-interactions-thought-signature')
             ) {
               return yield* new ModelError({
-                kind: 'unsupported',
+                kind: 'invalid-request',
                 message: 'Google reasoning needs supported thought evidence.',
               });
             }
@@ -184,7 +184,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
           case 'local-call':
             if (ids.has(part.providerCallId) || part.evidence !== undefined) {
               return yield* new ModelError({
-                kind: 'unsupported',
+                kind: 'invalid-request',
                 message:
                   'Google calls require distinct original IDs without foreign item evidence.',
               });
@@ -200,7 +200,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
             break;
           default:
             return yield* new ModelError({
-              kind: 'unsupported',
+              kind: 'invalid-request',
               message:
                 'Google Interactions cannot encode this canonical content.',
             });
@@ -271,7 +271,7 @@ const invocationInput = Effect.fn('llm.google.invocationInput')(function* (
       .some((message) => message.role === 'assistant')
   ) {
     return yield* new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message:
         'The Google continuation does not cover this exact history and system input.',
     });
@@ -340,7 +340,7 @@ const stepPart = Effect.fn('llm.google.stepPart')(function* (
     case 'model_output':
       if ((step.content?.length ?? 0) > 1)
         return yield* new ModelError({
-          kind: 'unsupported',
+          kind: 'invalid-request',
           message: 'Google returned unsupported assistant content.',
         });
       return {
@@ -466,7 +466,7 @@ function googleWire(store: boolean) {
           if (interaction.steps !== undefined)
             return yield* fail(
               'Google terminal step snapshots are not supported by this streaming codec.',
-              'unsupported',
+              'invalid-request',
             );
           if (event.event_type === 'interaction.created')
             return [
@@ -578,7 +578,7 @@ export function googleInteractionsModel(
         return input.mode === 'background' && !store
           ? Effect.fail(
               new ModelError({
-                kind: 'unsupported',
+                kind: 'invalid-request',
                 message: 'Google background execution requires store:true.',
               }),
             )
@@ -650,14 +650,7 @@ export function googleInteractionsModel(
     function* (interaction: typeof WireInteractionSchema.Type) {
       if (!COMPLETED_STATUSES.includes(interaction.status)) {
         return yield* new ModelError({
-          kind: [
-            'failed',
-            'cancelled',
-            'incomplete',
-            'budget_exceeded',
-          ].includes(interaction.status)
-            ? 'provider-rejection'
-            : 'malformed-output',
+          kind: 'provider-rejection',
           message: `Google background interaction ended with status ${interaction.status}.`,
         });
       }
@@ -700,7 +693,7 @@ export function googleInteractionsModel(
     submit: Effect.fnUntraced(function* (turn, learned) {
       if (!turn.controls.store)
         return yield* new ModelError({
-          kind: 'unsupported',
+          kind: 'invalid-request',
           message:
             'Google background execution requires an enabled route and store:true.',
         });
@@ -745,7 +738,7 @@ export function googleInteractionsModel(
           model !== interaction.model
         )
           return yield* new ModelError({
-            kind: 'malformed-output',
+            kind: 'provider-rejection',
             message:
               'Google changed the returned model for an accepted interaction.',
           });

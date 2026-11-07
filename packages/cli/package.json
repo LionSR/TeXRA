@@ -40,7 +40,7 @@
     "access": "public"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit --checkers 8 -p tsconfig.json && tsc --noEmit --checkers 8 -p tsconfig.scripts.json",
+    "typecheck": "tsc --noEmit --checkers 8",
     "bundle": "node scripts/build-bundle.mjs",
     "prepare:trace-viewer-assets": "corepack pnpm --filter @texra/trace-viewer run build",
     "copy:resources": "node scripts/copy-resources.mjs",

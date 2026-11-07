@@ -22,7 +22,6 @@ import {
 } from '@texra-ai/harness/host';
 import { isRequestRefusal } from '@texra-ai/harness';
 import { toErrorMessage, type PendingRequest } from '@texra-ai/harness/schemas';
-import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
@@ -194,8 +193,6 @@ export function createTuiHostInteractions(
   const releaseCapability = useHostCapability(performHostCapability);
 
   return {
-    approvalDenied: (denial, runId) =>
-      warnApprovalDenied(context, denial, runId),
     // The CLI host renders the notice itself and says whether it rendered a
     // user-visible record; there is no program for the session to fork.
     emit: (event, payload) => {

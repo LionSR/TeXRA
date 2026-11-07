@@ -65,8 +65,8 @@ export interface Composition {
  * approval, a denial with its reason, or for a retry, `retry` or `cancel`.
  * The session records it as the request's `request.decided`, through the
  * same `request.decide` a {@link Session.request} sends. A handler that
- * fails, throws, answers with a decision the request's kind does not take,
- * or has not answered within ten minutes is a denial, with the cause logged.
+ * fails, throws, or answers with a decision the request's kind does not
+ * take is a denial, with the cause logged; it may take as long as it needs.
  */
 export type ApprovalHandler = (
   request: PendingRequest,
@@ -116,13 +116,18 @@ export type StartInput = typeof StartRequestSchema.Type & {
 };
 
 /** What a resume takes besides the run's id: the same custom tools the
- *  run was started with, and whether it stays open for follow-ups. */
-export type ResumeInput = Pick<StartInput, 'tools' | 'interactive'>;
+ *  run was started with, whether it stays open for follow-ups, and the
+ *  provider keys of the environment it resumes from. */
+export type ResumeInput = Pick<StartInput, 'tools' | 'interactive' | 'apiKeys'>;
 
 /** One run of an agent, from the moment it exists in its session. */
 export interface Run {
   /** The run's id, known before its first model call. */
   readonly runId: RunId;
+  /** The commit of the activation this handle is for: the one `start` or
+   *  `resume` opened, or the running one a resume of a live run answers.
+   *  {@link LocalSession.run} rebuilds the handle from it. */
+  readonly activation: CommitOrdinal;
   /** Set when you resumed a child run that its parent was still waiting
    *  on: the parent resumes instead (this handle is the parent's), and
    *  this names the child you asked for. */
@@ -155,9 +160,10 @@ export interface Run {
   readonly interrupt: Effect.Effect<void>;
 }
 
-/** One workspace's runs, the view of them, and the hosts attached to it.
- *  `Sessions.open` gives the {@link LocalSession} this process holds; a
- *  window connected to a background process holds a plain `Session`. */
+/** One workspace's runs, the view of them, its store's records, and the
+ *  hosts attached to it. `Sessions.open` gives the {@link LocalSession}
+ *  this process holds; a window connected to a background process holds a
+ *  plain `Session`, whose members that process answers. */
 export interface Session {
   readonly roots: WorkspaceRoots;
   /** The session's state as immutable snapshots: its runs, their status,
@@ -176,7 +182,29 @@ export interface Session {
       set: readonly TranscriptSubscription[],
       from: { readonly cursor: CommitOrdinal; readonly debug: boolean },
     ) => Stream.Stream<readonly SessionViewInput[]>;
+    /** A one-off snapshot built from the store: every run's summary, and
+     *  the full transcript of the runs named. */
+    readonly read: (
+      runIds: readonly RunId[],
+    ) => Effect.Effect<SessionView, Error>;
   };
+  /** One run's stored records. */
+  readonly records: (runId: RunId) => RunRecords;
+  /** The runs a person started (not child runs), newest first, each with
+   *  its saved setup. */
+  readonly listRuns: () => Effect.Effect<
+    readonly AgentRunListingEntry[],
+    Error
+  >;
+  /**
+   * Delete one run, or every stored run (`'all'`). A run another live
+   * process is running is skipped and reported as `active`. Deleting a
+   * single run may take it from a process that cannot be proved alive or
+   * dead; `'all'` never does.
+   */
+  readonly deleteRuns: (
+    target: RunId | 'all',
+  ) => Effect.Effect<RunDeletion, Error>;
   /**
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has
@@ -191,9 +219,11 @@ export interface Session {
   /**
    * Continue a stored run from where its history stops, with the same kind
    * of handle {@link start} gives. Pass the custom `tools` it was started
-   * with. Resuming a run already resuming here returns the same handle; a
-   * run that cannot continue fails with {@link ResumeRefused}, whose
-   * `reason` says why.
+   * with. A run already running or resuming here is not started again: the
+   * handle of its running activation is answered, and `input` is not read.
+   * A child an open call of its parent owns resumes the parent, whose
+   * handle names the child (`redirectedFrom`). A run that cannot continue
+   * fails with {@link ResumeRefused}, whose `reason` says why.
    */
   readonly resume: (
     runId: RunId,
@@ -218,8 +248,8 @@ export interface Session {
 
 /**
  * A session this process holds, as `Sessions.open` returns it: everything
- * a {@link Session} has, plus direct reads of its store (run listing,
- * records, deletion) and of the runs this process is running.
+ * a {@link Session} has, plus the runs this process is running, its store's
+ * positions and its notices.
  */
 export interface LocalSession extends Session {
   /** Set when opening found a store from an older build, or a damaged one,
@@ -231,9 +261,6 @@ export interface LocalSession extends Session {
     readonly subscribe: (
       set: readonly TranscriptSubscription[],
     ) => Effect.Effect<void, never, Scope.Scope>;
-    /** A one-off snapshot built from the store: every run's summary, and
-     *  the full transcript of the runs named. */
-    readonly read: (runIds: readonly RunId[]) => Effect.Effect<SessionView>;
     /** The position of the store's latest write. Pass it to
      *  {@link events} to see only what is written from now on. */
     readonly head: () => CommitOrdinal;
@@ -255,26 +282,16 @@ export interface LocalSession extends Session {
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
   };
-  /** One run's stored records. */
-  readonly records: (runId: RunId) => RunRecords;
-  /** The runs a person started (not child runs), newest first, each with
-   *  its saved setup. */
-  readonly listRuns: () => Effect.Effect<AgentRunListingEntry[], Error>;
+  /** The {@link Run} of `runId`'s activation at `activation`, as `start`
+   *  or `resume` handed it out: a host that carries a handle across a
+   *  process boundary answers its members from here. */
+  readonly run: (runId: RunId, activation: CommitOrdinal) => Run;
   /** The run `runId` if this process is running it, or every run it is
    *  running. */
   readonly held: {
     (runId: RunId): HeldRun | undefined;
     (): readonly HeldRun[];
   };
-  /**
-   * Delete one run, or every stored run (`'all'`). A run another live
-   * process is running is skipped and reported as `active`. Deleting a
-   * single run may take it from a process that cannot be proved alive or
-   * dead; `'all'` never does.
-   */
-  readonly deleteRuns: (
-    target: RunId | 'all',
-  ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
   /** Show a notice through the attached host; a notice raised while no
    *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];

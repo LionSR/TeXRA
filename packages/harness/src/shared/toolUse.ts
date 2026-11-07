@@ -167,31 +167,13 @@ export function decodeToolUseLog(data: Record<string, unknown>): ToolUseLog {
 export const BASH_TOOL_DEFAULT_TIMEOUT_MS = 120_000;
 
 /**
- * Max chars a background `bash` run logs to its child stream before it stops
- * logging and writes a single truncation notice. Lives here because the writer
- * (`tools/bash.ts`) and the reader (`/executions/{id}/output`) must agree on
- * the figure the output header reports.
+ * Max chars a background `bash` run records as `process.output` rows before
+ * it stops recording and writes a single truncation notice. Lives here
+ * because the writer (`tools/bash.ts`) and the reader
+ * (`/executions/{id}/output`) must agree on the figure the output header
+ * reports.
  */
 export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
-
-const BASH_BACKGROUND_OUTPUT_SOURCE_KEY = 'backgroundBashOutputSource';
-export type BackgroundBashOutputSource = 'stdout' | 'stderr';
-
-/** Metadata attached only to stdout/stderr chunks from background `bash`. */
-export function backgroundBashOutputData(
-  source: BackgroundBashOutputSource,
-): Record<string, BackgroundBashOutputSource> {
-  return { [BASH_BACKGROUND_OUTPUT_SOURCE_KEY]: source };
-}
-
-/** Identify persisted LOG rows written from background command output chunks. */
-export function getBackgroundBashOutputSource(
-  data: unknown,
-): BackgroundBashOutputSource | undefined {
-  if (!Predicate.isObject(data)) return undefined;
-  const source = data[BASH_BACKGROUND_OUTPUT_SOURCE_KEY];
-  return source === 'stdout' || source === 'stderr' ? source : undefined;
-}
 
 /** Default `executions wait` timeout (seconds) when the model omits `timeout`. */
 export const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS = 300;

@@ -17,7 +17,6 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   JsonValueSchema,
-  OwnerIdSchema,
   PermissionPayloadSchema,
   PluginFactDraftSchema,
   blocksCaller,
@@ -28,7 +27,6 @@ import {
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
   RUN_PHASE,
-  RUN_SUBSTATE,
   RunPhaseSchema,
   RunSubstateSchema,
   RunIdSchema,
@@ -93,10 +91,6 @@ export const RunViewSchema = Schema.Struct({
   id: RunIdSchema,
   /** From `run.start`; every run has one. */
   identity: RunIdentitySchema,
-  /** Current sequence-row owner; null when unclaimed. */
-  ownerId: Schema.NullOr(OwnerIdSchema),
-  /** The current claim belongs to this process, independently of parentage. */
-  ownedHere: Schema.Boolean,
   /** The run identity's display name: agent, tool, or workflow name. */
   label: Schema.String,
   /** The run's title: the user's rename, else the AI one-liner. */
@@ -118,11 +112,10 @@ export const RunViewSchema = Schema.Struct({
   facts: Schema.Record(Schema.String, JsonValueSchema),
   worktree: Schema.NullOr(WorktreeInfoSchema),
   /** The durable phase, from `run.activate` (running), `run.position`
-   *  (`waiting` waits, any other step runs), `child.park` (an agent-CLI
-   *  child's own wait row, which has no loop to step), and `run.end` (the
-   *  outcome); `ready` before the first activation. An interrupted run
-   *  keeps it and reads as interrupted through the copy; unavailability is
-   *  `readOnly`, never a status. */
+   *  (`waiting` waits, any other step runs), and `run.end` (the outcome);
+   *  `ready` before the first activation. An interrupted run
+   *  keeps it and reads as interrupted through the copy; unreadable rows
+   *  are a notice, never a status. */
   status: Schema.Union([RunPhaseSchema, Schema.Literal(RUN_LIFECYCLE_READY)]),
   /** Derived from the activation's position: a first activation is
    *  starting, a later one resuming, cleared by the first step. Only a run
@@ -172,8 +165,8 @@ export const RunViewSchema = Schema.Struct({
   lastTimestamp: Schema.Number,
   /** The run's one-based turn, from its latest `run.position` (the loop
    *  commits `state.turn + 1`; the row's `round` counts model calls). Null
-   *  before the first position, after every activation, and for a run with
-   *  no loop of its own (an agent-CLI child waits through `child.park`). */
+   *  before the first position, after every activation, and for a process
+   *  run, which has no loop of its own. */
   turn: Schema.NullOr(Count),
   followUpSupport: UserFollowUpSupportSchema,
   /** Latest `context.state`. */
@@ -184,9 +177,9 @@ export const RunViewSchema = Schema.Struct({
   /** The task this one was forked from and the settled point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
   forkedFrom: Schema.NullOr(Schema.Struct({ id: RunIdSchema, at: Positive })),
-  /** The `seq` of the run's newest wait (a `run.position` at `waiting` or
-   *  `halted`): the settled point a whole-task fork cuts at; null before
-   *  its first turn ends, when there is nothing to fork. */
+  /** The `seq` of the run's newest wait (a `run.position` at `waiting`):
+   *  the point a whole-task fork cuts at; null before its first turn ends,
+   *  when there is nothing to fork. */
   forkPoint: Schema.NullOr(Positive),
   /** The parent's tool card that launched this run (`run.start.parent.call.card`). */
   parentCard: Schema.NullOr(Schema.String),
@@ -202,8 +195,6 @@ export const RunViewSchema = Schema.Struct({
    *  expansion, so a collapsed parent never hides a row that needs the user. */
   rollup: Schema.Struct({ total: Count, running: Count, finished: Count }),
   approval: Schema.Literals(['none', 'own', 'descendant']),
-  /** This process cannot act on it: another live owner, or unreadable. */
-  readOnly: Schema.Boolean,
   /** What a host may offer on the run now (`runActions`). */
   actions: Schema.Array(RunActionSchema),
   /** This run or a descendant needs the user; outranks the surface's
@@ -249,8 +240,7 @@ export function rollupOf(
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
     const idle =
-      child.status === RUN_PHASE.WAITING &&
-      (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
+      child.status === RUN_PHASE.WAITING && child.group === 'running';
     const under = below(child);
     rollup.total += 1 + under.total;
     rollup.running += (child.live && !idle ? 1 : 0) + under.running;
@@ -260,17 +250,20 @@ export function rollupOf(
   return rollup;
 }
 
+/** Whether this build cannot read the run's rows (`RunNoticeSchema`). */
+export const isUnreadable = (run: Pick<ReadRunView, 'statusNotice'>): boolean =>
+  run.statusNotice?.kind === 'damaged' ||
+  run.statusNotice?.kind === 'earlierBuild';
+
 /**
  * Whether a run takes a follow-up at all, the one rule every host reads (it
  * decides whether the composer shows). A run with no follow-up support and a
- * run this process may not act on take none; a run still going or waiting
- * takes one, as does a stopped native one with saved steps, which admission
- * resumes from its history. A terminal-backed run (an agent CLI such as
- * codex) reads its messages from the same inbox as any other run, so every
- * host delivers to it alike.
+ * run whose rows this build cannot read take none; a run still going or
+ * waiting takes one, as does a stopped native one with saved steps, which
+ * a resume continues from its history.
  */
 export function acceptsFollowUp(run: ReadRunView): boolean {
-  if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
+  if (run.followUpSupport === 'unsupported' || isUnreadable(run)) return false;
   if (run.group === 'running' || run.group === 'waiting') return true;
   return (
     run.followUpSupport === 'nativeInteractive' &&
@@ -284,17 +277,15 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
 /**
  * Whether this window can answer a pending request: the one rule the host's
  * attention badge and the request card both read, matching what
- * `SessionRequests.decide` accepts. A run this process may not act on
- * (`readOnly`) takes no answer here. A request that blocks its caller is
+ * `SessionRequests.decide` accepts. A request that blocks its caller is
  * answered by the fiber waiting on it, so only while its run waits here; an
  * interrupted run has to be resumed first. One that does not, at any time.
  */
-export type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
+export type RequestAnswerability = 'answerable' | 'resume';
 export function requestAnswerability(
   run: ReadRunView,
   payload: PermissionPayload,
 ): RequestAnswerability {
-  if (run.readOnly) return 'readOnly';
   if (run.approval === 'own' || !blocksCaller(payload)) return 'answerable';
   return 'resume';
 }

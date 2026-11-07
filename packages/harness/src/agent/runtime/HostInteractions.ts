@@ -1,4 +1,4 @@
-import { Cause, Context, Effect, Layer, Predicate } from 'effect';
+import { Cause, Context, Effect, Predicate } from 'effect';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -6,12 +6,9 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
-import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
   aggregateTarget,
   type LaunchNotice,
-  type LocalRuntimeState,
-  type RunId,
   type SessionEvent,
 } from '@shared/schemas';
 import { recordOf } from '@shared/session/runRowReads';
@@ -61,19 +58,20 @@ export interface HostInteractions {
    * and when it withholds approval-gated tools from a run.
    */
   readonly approvalPromptsUnavailable?: boolean;
-  /**
-   * The session's approval policy closed a gate on `runId` (a command, edit,
-   * plan, delegation, retry or question) or withheld tools from it. Told
-   * after the fact, so a host can say why nothing was asked; it answers
-   * nothing.
-   */
-  approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
   dispose?(): void;
 }
 
+/** A host that presents: one with `emit`. A host without it (a headless
+ *  process, a service session before a window attaches) presents nothing,
+ *  and a notice raised on it waits for the next host that does. */
+type Presenter = HostInteractions & Required<Pick<HostInteractions, 'emit'>>;
+
+const isPresenter = (host: HostInteractions | undefined): host is Presenter =>
+  host?.emit !== undefined;
+
 /** A queued or live presentation, bound to the host it presents on. */
 type PresentationProgram = (
-  interactions: HostInteractions,
+  interactions: Presenter,
 ) => Effect.Effect<void, HostPresentationFailed>;
 
 /**
@@ -83,12 +81,12 @@ type PresentationProgram = (
  * throws synchronously reaches the caller as {@link HostPresentationFailed}.
  */
 function presentOn<K extends RuntimePresentationEvent>(
-  interactions: HostInteractions,
+  interactions: Presenter,
   event: K,
   payload: RuntimePresentationEventPayloads[K],
 ): Effect.Effect<void, HostPresentationFailed> {
   return Effect.suspend(() => {
-    const presented = interactions.emit?.(event, payload);
+    const presented = interactions.emit(event, payload);
     if (presented === undefined) return Effect.void;
     return Effect.forkDetach(
       presented.pipe(
@@ -111,9 +109,10 @@ function presentOn<K extends RuntimePresentationEvent>(
 
 /**
  * Stable per-session presentation owner. The session serves this object
- * once (`Interactions`), while one host at a time attaches and detaches; the host the
- * session was opened with answers while none is, and notices raised while
- * none is are replayed to the next one.
+ * once (`Interactions`), while one host at a time attaches and detaches;
+ * the host the session was opened with answers while none is. Notices
+ * raised while no attached or opened host presents (none, or none with
+ * `emit`) are replayed to the next host that does.
  */
 export class SessionHostInteractions implements HostInteractions {
   /** The attached host, while one is. */
@@ -155,9 +154,11 @@ export class SessionHostInteractions implements HostInteractions {
         if (this.attached === interactions) this.attached = undefined;
         interactions.dispose?.();
       };
-      return this.replayPendingPresentations(interactions).pipe(
-        Effect.as(detach),
-      );
+      return (
+        isPresenter(interactions)
+          ? this.replayPendingPresentations(interactions)
+          : Effect.void
+      ).pipe(Effect.as(detach));
     });
   }
 
@@ -187,7 +188,7 @@ export class SessionHostInteractions implements HostInteractions {
         ),
       );
     return Effect.suspend(() => {
-      const active = this.attached ?? this.opened;
+      const active = [this.attached, this.opened].find(isPresenter);
       if (active) {
         return present(active).pipe(
           Effect.catch((failure) =>
@@ -207,10 +208,6 @@ export class SessionHostInteractions implements HostInteractions {
 
   get approvalPromptsUnavailable(): boolean {
     return (this.attached ?? this.opened)?.approvalPromptsUnavailable === true;
-  }
-
-  approvalDenied(denial: ApprovalPolicyDenial, runId: RunId): void {
-    (this.attached ?? this.opened)?.approvalDenied?.(denial, runId);
   }
 
   /**
@@ -258,7 +255,7 @@ export class SessionHostInteractions implements HostInteractions {
     'SessionHostInteractions.replayPendingPresentations',
   )(
     { self: this },
-    function* (interactions: HostInteractions): Effect.fn.Return<void> {
+    function* (interactions: Presenter): Effect.fn.Return<void> {
       while (
         this.attached === interactions &&
         this.pendingPresentationReplays.length > 0
@@ -297,20 +294,18 @@ function presentAgentFailure(
 
 /**
  * The session's one terminal-result presenter, run over each folded row:
- * a `run.end` this process (`self`) authored presents a root run's failure
- * to the attached host, or replays it to the next one. A child's (its
- * attached parent is the view's, which has the run's `run.start` once it
- * ended) is its parent's to report; any other row presents nothing.
+ * a `run.end` presents a root run's failure to the attached host, or
+ * replays it to the next one. A child's (its attached parent is the view's,
+ * which has the run's `run.start` once it ended) is its parent's to report;
+ * any other row presents nothing.
  */
 export const presentTerminalResult = Effect.fn('presentTerminalResult')(
   function* (
     row: SessionEvent,
-    self: LocalRuntimeState['self'],
   ): Effect.fn.Return<void, never, SessionViewAccess | Interactions> {
     const target = aggregateTarget(row.aggregateId);
     const { end } = recordOf(row);
     if (target.kind !== 'run' || end === null || !end.error) return;
-    if (end.origin == null || !self.includes(end.origin)) return;
     if ((yield* SessionViewAccess).run(target.id)?.parentId != null) return;
     yield* presentAgentFailure(yield* Interactions, end.error);
   },
@@ -321,19 +316,7 @@ export const presentTerminalResult = Effect.fn('presentTerminalResult')(
 export class Interactions extends Context.Service<
   Interactions,
   SessionHostInteractions
->()('@texra-ai/harness/session/Interactions') {
-  /** Over the host the session was opened with; disposed with the layer. */
-  static readonly layer = (
-    opened?: HostInteractions,
-  ): Layer.Layer<Interactions> =>
-    Layer.effect(
-      Interactions,
-      Effect.acquireRelease(
-        Effect.sync(() => new SessionHostInteractions(opened)),
-        (interactions) => interactions.dispose(),
-      ),
-    );
-}
+>()('@texra-ai/harness/session/Interactions') {}
 
 /** The failure a run's raw error stands for: a `Session` start's
  *  `RunFailure` by the failure it carries, an aggregate by its first. */

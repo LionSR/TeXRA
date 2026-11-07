@@ -210,10 +210,7 @@ export function openaiResponsesModel(
         !['queued', 'in_progress'].includes(response.status)
       )
         return yield* new ModelError({
-          kind:
-            response.status === 'failed'
-              ? 'provider-rejection'
-              : 'malformed-output',
+          kind: 'provider-rejection',
           message:
             response.error?.message ??
             'The provider did not acknowledge background work.',

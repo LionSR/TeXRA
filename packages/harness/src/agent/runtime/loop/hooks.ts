@@ -16,6 +16,7 @@ import {
   FileSystem,
   Result,
   Schema,
+  ScopedRef,
   SynchronizedRef,
 } from 'effect';
 
@@ -42,7 +43,7 @@ import {
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
 import { type RunCell, SessionViewAccess } from '@shared/session/runHistory';
-import { workAutoApproved } from '../requestPolicy';
+import { workAutoApproved } from '../requests';
 import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
@@ -301,7 +302,7 @@ export const openingHooks = Effect.fn('Hooks.opening')(function* (
   if ((yield* rootOf(run)) !== run.runId) return { rows: [], parts: [] };
   const hooks = yield* currentHooks(run);
   const base = yield* inputBase(run);
-  const model = (yield* SynchronizedRef.get(run.model)).modelId;
+  const model = (yield* ScopedRef.get(run.model)).modelId;
   const start = yield* hooksAt(
     run,
     state,

@@ -37,7 +37,7 @@ The rule "a lost trace row makes the run FAILED unless it was stopped" is comput
 
 - `session.log.hold(` has 13 call sites in 7 files.
 - The "hold, write an end, let go" sequence (`{ ends: true }`) is repeated at 6 sites in 5 files: `forkRun.ts:222`, `runLaunchGuard.ts:45`, `runRegistry.ts:497,656,674` and `runLifecycle.ts:309`.
-- The fact "another process holds the run" has three representations: the errors `DatabaseNotOwner`/`DatabaseClaimRefused`; the predicate `heldElsewhereBy` (`shared/session/database.ts:146`, exported to hosts at `host.ts:93`); and the string `'owned_elsewhere'` in two different result types (`followUp/Inbox.ts:81`, `resumeRun.ts:252`).
+- The fact "another process holds the run" has three representations: the errors `DatabaseAggregateClosed`/`DatabaseClaimRefused`; the predicate `heldElsewhereBy` (`shared/session/database.ts:146`, exported to hosts at `host.ts:93`); and the string `'owned_elsewhere'` in two different result types (`followUp/Inbox.ts:81`, `resumeRun.ts:252`).
 - The CLI interprets the raw form twice: `packages/cli/src/chat/chatSessionController.ts:422` and `packages/cli/src/runtime/executeCli.ts:559-566`.
 
 **- `followup.consumed` carries no disposition (information leakage into context).** The row is `{ followUpId }` only (`shared/schemas/sessionEvent.ts:298-300`). It is written at 8 sites in 7 files, with at least five meanings:
@@ -115,7 +115,7 @@ Ranked by how much decided-elsewhere knowledge each change removes.
 **2. Let the end writer own the claim it needs, and give "held elsewhere" one representation.** _Red flag:_ information leakage and overexposure.
 
 - _Change:_ `finalizeRun({ ownerless: true })` takes and releases the `{ ends: true }` claim itself. That removes the caller-side handling at `runRegistry.ts:672-677`, `runLifecycle.ts:308-315` and `runLaunchGuard.ts:36-49`.
-- The public session API reports `owned_elsewhere` as a typed refusal, as `resumeRun.ts:252` already does. Then `chatSessionController.ts:419-424` and `executeCli.ts:559-566` stop decoding `DatabaseNotOwner`, and `heldElsewhereBy` leaves `host.ts:93`.
+- The public session API reports `owned_elsewhere` as a typed refusal, as `resumeRun.ts:252` already does. Then `chatSessionController.ts:419-424` and `executeCli.ts:559-566` stop decoding `DatabaseAggregateClosed`, and `heldElsewhereBy` leaves `host.ts:93`.
 - _Estimate:_ -30 to -45 lines, from the cited ranges.
 - _Peer:_ DeepSeek's lease has a single consumer outside persistence.
 - _Status:_ the claim half is ALREADY QUEUED (row 4, S4 "activation holds the claim"); the host-facing refusal is NEW.

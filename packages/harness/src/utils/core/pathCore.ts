@@ -7,6 +7,9 @@ import * as path from 'node:path';
 
 import { normalize } from 'pathe';
 
+// Local imports - path basics
+import { normalizeFilePath } from './index.js';
+
 /**
  * Get path segments as an array.
  * Only converts backslashes — does NOT resolve '..' so callers can detect
@@ -20,7 +23,7 @@ export function getPathSegments(input: string): string[] {
   if (!input || input === '.') {
     return [];
   }
-  return input.trim().replaceAll('\\', '/').split('/').filter(Boolean);
+  return normalizeFilePath(input.trim()).split('/').filter(Boolean);
 }
 
 /** Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`). */

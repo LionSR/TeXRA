@@ -64,18 +64,21 @@ export type BillingRoute = PlanRoute | 'api-key';
 
 /** A model failure's fields as data: what {@link ModelError} carries. */
 const ModelErrorFieldsSchema = Schema.Struct({
+  /** The class of failure, each one a decision some reader makes: a
+   *  request this route cannot carry (nothing to repeat), a credential the
+   *  provider refused (renewed once), an overflowed window (compacted and
+   *  resent), a chained response the provider no longer holds (resent
+   *  unchained), the network (the route's), or the provider's own
+   *  rejection, a reply it ended or could not be read included. What else
+   *  a failure says is its `message`, its `status`, its `quota` and its
+   *  `retryAfterMs`. */
   kind: Schema.Literals([
     'invalid-request',
-    'unsupported',
     'authentication',
-    'rate-limited',
-    'quota-exhausted',
     'context-overflow',
     'continuation-gone',
     'transport',
     'provider-rejection',
-    'malformed-output',
-    'observation-deadline',
   ]),
   message: Schema.String,
   /** Text emitted before this attempt failed, when the caller observed it. */
@@ -105,7 +108,9 @@ const ModelErrorFieldsSchema = Schema.Struct({
   retryAfterMs: Schema.optional(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   ),
-  /** What a `quota-exhausted` failure used up: a plan, or the account's credit (`plan: null`). */
+  /** What a failure that used up a quota used up: a plan, or the account's
+   *  credit (`plan: null`). Such a failure is not retryable as it is: a
+   *  retry carries the route's switch. */
   quota: Schema.optional(
     Schema.Struct({
       plan: Schema.NullOr(PlanRouteSchema),
@@ -134,16 +139,11 @@ function retryableByDefault(
 ): boolean {
   switch (kind) {
     case 'transport':
-    case 'rate-limited':
-    case 'observation-deadline':
       return true;
     case 'provider-rejection':
-    case 'malformed-output':
       return status === undefined || isRetryableStatus(status);
     case 'invalid-request':
-    case 'unsupported':
     case 'authentication':
-    case 'quota-exhausted':
     case 'context-overflow':
     case 'continuation-gone':
       return false;
@@ -253,10 +253,11 @@ interface SdkHttpFailure {
 }
 
 /**
- * The one classification of a provider SDK failure. A `SyntaxError` is
- * malformed output, a failure with an HTTP reply is an authentication or
- * provider rejection by its status, and anything else is transport. Each
- * protocol only extracts `http` from its own SDK's error type.
+ * The one classification of a provider SDK failure. A `SyntaxError` is a
+ * reply that could not be read (the provider's rejection, as its message
+ * says), a failure with an HTTP reply is an authentication or provider
+ * rejection by its status, and anything else is transport. Each protocol
+ * only extracts `http` from its own SDK's error type.
  */
 export function sdkModelError(
   cause: unknown,
@@ -265,7 +266,7 @@ export function sdkModelError(
 ): ModelError {
   const retryAfterMs = retryAfterMsOf(http?.headers);
   let kind: ModelError['kind'] = 'transport';
-  if (cause instanceof SyntaxError) kind = 'malformed-output';
+  if (cause instanceof SyntaxError) kind = 'provider-rejection';
   else if (http) kind = authOrRejectionKind(http.status);
   return new ModelError({
     kind,

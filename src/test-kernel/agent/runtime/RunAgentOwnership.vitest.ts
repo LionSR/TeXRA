@@ -1,15 +1,11 @@
 /**
- * A root launch's ownership of its run, over a real store on the
- * validation model: the launch is the run's one owner here, holds its claim
- * for the run's life and lets it go when the run ends.
+ * A root launch's hold on its run, over a real store on the validation
+ * model: the launch is the run's one launch here for the run's life.
  *
  * Failure modes:
  * - a second launch of a running run starts it twice;
- * - a run is born without the identity of the agent it runs, or keeps its
- *   claim after its launch ends;
- * - a launch whose opening is refused leaves a run or a claim;
- * - a run whose claim the store refuses after its opening goes on as if it
- *   held it, and the refusal is a warning nobody reads.
+ * - a run is born without the identity of the agent it runs;
+ * - a launch whose opening is refused leaves a run.
  */
 import { layer } from '@effect/vitest';
 import { Effect, Fiber, Schema, Context } from 'effect';
@@ -23,7 +19,6 @@ import {
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
-  claimHolder,
   parkedAfter,
   persistentTestSession,
   sessionStoreFaults,
@@ -68,9 +63,7 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(yield* Effect.flip(launch(session, runId))).toMatchObject({
               message: `Run is already running: ${runId}`,
             });
-            yield* Context.get(session, Runs)
-              .stop(runId, 'user')
-              .settlement.pipe(Effect.provide(session));
+            yield* Context.get(session, Runs).stop(runId, 'user');
             yield* Fiber.await(first);
             expect(
               storedRows(roots.storage).filter(
@@ -81,7 +74,7 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
       );
 
       it.effect(
-        'a launch whose opening is refused fails as itself and leaves no run or claim',
+        'a launch whose opening is refused fails as itself and leaves no run',
         () =>
           Effect.gen(function* () {
             const roots = testWorkspaceRoots();
@@ -92,38 +85,9 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
 
             const error = yield* Effect.flip(launch(session, runId));
             expect(error.message).toContain('injected appendAll fault');
-            expect(claimHolder(roots.storage, runId)).toBeNull();
             expect(
               storedRows(roots.storage).filter((row) => row.run === runId),
             ).toEqual([]);
-          }),
-      );
-
-      it.effect(
-        'a run whose claim the store refuses after its opening ends failed, naming the refusal',
-        () =>
-          Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            const session = yield* persistentTestSession();
-            const runId = generateRunId();
-            const faults = yield* sessionStoreFaults(roots.storage);
-            // The opening's append claims the run; the hold the run takes on
-            // its claim right after is the launch's first `acquireClaims`.
-            yield* faults.failNext('acquireClaims');
-
-            const error = yield* Effect.flip(launch(session, runId));
-            expect(error.message).toContain('injected acquireClaims fault');
-            const end = storedRows(roots.storage).findLast(
-              (row) => row.run === runId && row.type === 'run.end',
-            );
-            expect(end && JSON.parse(end.data)).toMatchObject({
-              outcome: 'failed',
-              error: {
-                message: expect.stringContaining(
-                  'injected acquireClaims fault',
-                ),
-              },
-            });
           }),
       );
     });

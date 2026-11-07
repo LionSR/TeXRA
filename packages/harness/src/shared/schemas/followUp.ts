@@ -6,7 +6,7 @@
  */
 import { Schema } from 'effect';
 
-import { OwnerIdSchema, RunIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { StoredMediaSchema } from './storedTurn';
 
 /**
@@ -158,22 +158,16 @@ export type ResumeBlocked = typeof ResumeBlockedSchema.Type;
 /**
  * Why a persisted run is not continued here: the one answer a resume, a
  * message to a run with no loop here, a run's records and its view give.
- * `finished` (nothing left to continue from), `ownedElsewhere` (a live
- * owner, or one not provably dead, holds its claim), `blocked`
+ * `finished` (nothing left to continue from), `blocked`
  * ({@link ResumeBlockedSchema}), `unusableCheckpoint` (its saved state is
  * there but cannot be continued: never `finished`, which would say it ended
  * normally), `earlierBuild` (an earlier build wrote its rows),
  * `pluginUnavailable` (it holds a fact of `plugin`, which this process does
  * not load, `cause` the fact's reason: it continues once a process loads
- * it), or `notResumable` (it is
- * running here, it was deleted, or its input is closed).
+ * it), or `notResumable` (it was deleted, or its input is closed).
  */
 export const ResumeRefusalSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('finished') }),
-  Schema.Struct({
-    kind: Schema.Literal('ownedElsewhere'),
-    owner: OwnerIdSchema,
-  }),
   ResumeBlockedSchema,
   Schema.Struct({ kind: Schema.Literal('unusableCheckpoint') }),
   Schema.Struct({ kind: Schema.Literal('earlierBuild'), cause: Schema.String }),

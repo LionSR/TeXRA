@@ -14,6 +14,7 @@ import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
+  holdTestRun,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
@@ -147,6 +148,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                       .attachRunProgressRenderer(session, runId)
                       .pipe(Scope.provide(scope));
                     publishRun(handle, runId);
+                    yield* holdTestRun(handle, runId);
                     // Painted once the renderer's fiber sees the running
                     // view, as many event-loop turns later as Effect's
                     // scheduling takes.
@@ -195,6 +197,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     provenance: null,
                   },
                 ]);
+                yield* holdTestRun(handle, childRunId);
                 yield* Effect.promise(() => settle());
                 yield* detach;
               }),

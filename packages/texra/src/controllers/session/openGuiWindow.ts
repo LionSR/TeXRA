@@ -20,7 +20,6 @@ import {
   Exit,
   FiberSet,
   Layer,
-  Option,
   Scope,
   Stream,
   SubscriptionRef,
@@ -31,16 +30,14 @@ import {
   Rejected,
   Unavailable,
   type HostRequestFailure,
-  type LocalSession,
-  type Run,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
+  AgentDirectories,
   Secrets,
   SessionHostInteractions,
   sessionFsLayer,
-  withLogChannel,
   workspaceEnvironmentLayer,
   type ProcessServices,
   type StorageFs,
@@ -73,10 +70,11 @@ import {
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
-import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
+import {
+  ApiKeyPromptFailed,
+  ProgressApiKeyRetryController,
+} from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
-import { serviceRecords } from '@texra/controllers/server/serviceSession';
-import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import {
   attachWindowHost,
   type WindowClient,
@@ -97,17 +95,16 @@ import {
 } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
 import type { RunId } from '@texra-ai/harness/schemas';
+import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
 
-/** Where a window's runs run: this process's own session, whose windows
- *  attach through `link`, or the service's. */
-export type GuiSession =
-  | {
-      readonly session: LocalSession;
-      readonly service?: undefined;
-      readonly link: ServiceLink<WindowClient>;
-    }
-  | { readonly session: Session; readonly service: ServiceLink };
+/** A window's runs: its project's session, wherever its runs run (here,
+ *  or in the background service), and the link the window attaches
+ *  through (this process's windows, or the service's). */
+export interface GuiSession {
+  readonly session: Session;
+  readonly link: ServiceLink<WindowClient>;
+}
 
 /** The kinds the shared body answers. */
 const SHARED_HOST_REQUEST_KINDS = [
@@ -150,6 +147,26 @@ type SharedHostRequest = Extract<
 /** The requests a host answers its own way. */
 export type OwnHostRequest = Exclude<HostRequest, SharedHostRequest>;
 
+/** The arms a host answers its own way, by kind. A kind a host leaves
+ *  out is refused by the shared router, worded once for both hosts. */
+export type OwnHostArms = {
+  readonly [K in OwnHostRequest['kind']]?: (
+    request: Extract<OwnHostRequest, { kind: K }>,
+    port: string,
+  ) => HostVerb<HostOutcome>;
+};
+
+/** What the refusal of an own kind a host lacks names. */
+const OWN_REQUEST_LABEL: Readonly<Record<OwnHostRequest['kind'], string>> = {
+  popOut: 'Pop-out to editor',
+  popBack: 'Pop-out to editor',
+  pickFiles: 'The file picker',
+  useCurrentFile: "The editor's current file",
+  addOpenedFiles: "The editor's open files",
+  gettingStarted: 'Starting a project',
+  workspaceFile: 'The file editor',
+};
+
 const sharedHostRequestKinds: ReadonlySet<HostRequest['kind']> = new Set(
   SHARED_HOST_REQUEST_KINDS,
 );
@@ -187,13 +204,13 @@ export interface SharedHostRequestBindings {
   readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
   openSettings(target: SettingsTarget | undefined): HostVerb<void>;
-  /** Ask for a provider API key: a prompt on one host, the Models tab on the
-   *  other. The caller re-reads the secret store after this returns. */
-  readonly setApiKey: HostVerb<void>;
+  /** Ask for a provider API key, `provider`'s when a retry names one: a
+   *  prompt on one host, the Models tab on the other. The caller re-reads
+   *  the secret store after this returns. */
+  setApiKey(provider?: ApiKeyProviderId): HostVerb<void>;
   /** Open the guide's `page` in the browser, at its section `anchor` when
    *  one is named (`texraGuideUrl`). */
   openGuide(page: string, anchor?: string): HostVerb<void>;
-  readonly openCustomAgentDirectory: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
   readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
@@ -221,17 +238,10 @@ interface GuiWindowHost extends Pick<
   'showInfoMessage' | 'showWarningMessage'
 > {
   readonly bindings: SharedHostRequestBindings;
-  own(request: OwnHostRequest, port: string): HostVerb<HostOutcome>;
+  readonly own: OwnHostArms;
   /** What the window does for its project's runs, here or in the service. */
   readonly window: WindowHost;
-  readonly runs: Pick<
-    HostRunActionPorts,
-    'openFinalOutput' | 'revealProgress'
-  > &
-    Pick<
-      ConstructorParameters<typeof ProgressApiKeyRetryController>[0],
-      'promptForApiKey'
-    >;
+  readonly runs: Pick<HostRunActionPorts, 'openFinalOutput' | 'revealProgress'>;
   readonly files: Omit<
     ConstructorParameters<
       typeof ProgressWorkflowFileActionsController
@@ -271,13 +281,7 @@ interface GuiWindowPorts {
   ): Effect.Effect<GuiWindowHost, never, Scope.Scope | ProcessServices>;
 }
 
-const CHANNEL = 'GuiWindow';
-
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
-
-/** How long a run this window started may take to reach the window's view
- *  before the window stops waiting to show it. */
-const SHOW_LAUNCHED_WITHIN = '10 seconds';
 
 /** What the window tells the user after a pack or clean, at which severity
  *  (the latexdiff pack's counterpart is `latexdiffPackMessage`). */
@@ -368,52 +372,21 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
 
   // The window is its project's window wherever its runs run: here,
   // through this process's own windows, or in the service, whose runs ask
-  // it for the same. Its own failures before a run opens it presents
-  // itself when its runs run in the service.
+  // it for the same. Its own failures before a run opens, it presents
+  // itself.
   const workspace = roots.workspace ?? roots.storage;
-  const { present, readConfig, exportRecords } = yield* runs.service ===
-  undefined
-    ? Effect.gen(function* () {
-        yield* Effect.forkScoped(
-          attachWindowHost(runs.link, workspace, host.window, ports.focused),
-        );
-        const local = runs.session;
-        return {
-          present: local,
-          readConfig: (runId: RunId) => local.records(runId).readConfig(),
-          exportRecords: {
-            input: (runId: RunId) => loadChatExportInput(runId, local),
-            trace: (runId: RunId) => local.records(runId).readTrace(),
-          },
-        };
-      })
-    : Effect.gen(function* () {
-        const windowPresent = new SessionHostInteractions();
-        yield* Effect.addFinalizer(() => windowPresent.dispose());
-        yield* Effect.acquireRelease(windowPresent.use(host.window), (detach) =>
-          Effect.sync(detach),
-        );
-        yield* Effect.forkScoped(
-          attachWindowHost(runs.service, workspace, host.window, ports.focused),
-        );
-        // While the link holds no service, the banner says why (reaching it
-        // again, or refused by a newer TeXRA), so the view never sits frozen
-        // without saying so.
-        yield* Effect.forkScoped(
-          Stream.runForEach(linkOutage(runs.service), (reason) =>
-            snapshot.setServiceOffline(reason),
-          ),
-        );
-        const remote = serviceRecords(runs.service, roots.workspace ?? '');
-        return {
-          present: windowPresent,
-          readConfig: remote.readConfig,
-          exportRecords: {
-            input: remote.exportInput,
-            trace: remote.exportTrace,
-          },
-        };
-      });
+  const present = new SessionHostInteractions(host.window);
+  yield* Effect.forkScoped(
+    attachWindowHost(runs.link, workspace, host.window, ports.focused),
+  );
+  // While the link holds no service, the banner says why (reaching it
+  // again, or refused by a newer TeXRA), so the view never sits frozen
+  // without saying so; a link to this process is never away.
+  yield* Effect.forkScoped(
+    Stream.runForEach(linkOutage(runs.link), (reason) =>
+      snapshot.setServiceOffline(reason),
+    ),
+  );
 
   const toolEditApprovals = new ToolEditApprovalController({
     host: ports.toolEdits,
@@ -422,50 +395,26 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   });
   yield* Effect.forkScoped(toolEditApprovals.follow);
 
-  /** A run this window started is in the window's view before it is in a
-   *  surface's, whose frames are cut from the session after it, so each
-   *  surface selects the run once its own view holds it, told the commit of
-   *  the first level here that held it. A run the window's view does not
-   *  hold in time is not selected, and the window says so. */
-  const showLaunched = (run: Run) =>
-    Stream.runHead(run.view).pipe(
-      Effect.timeoutOption(SHOW_LAUNCHED_WITHIN),
-      Effect.map(Option.flatten),
-      Effect.flatMap(
-        Option.match({
-          onSome: (level) =>
-            Effect.sync(() =>
-              bridge.surfaceAction({
-                kind: 'selectOnArrival',
-                runId: run.runId,
-                cursor: level.cursor,
-              }),
-            ),
-          onNone: () =>
-            Effect.logWarning(
-              `Run ${run.runId} started, but this window's view did not hold it within ${SHOW_LAUNCHED_WITHIN}`,
-            ).pipe(
-              withLogChannel(CHANNEL),
-              Effect.andThen(
-                host.showWarningMessage(
-                  'The task started, but this window could not show it. Find it in the task list.',
-                ),
-              ),
-              Effect.ignore({ log: 'Warn' }),
-            ),
-        }),
-      ),
-    );
+  /** One program per request, over this session's rooted filesystems and
+   *  its project's `.env`: the root a request writes under is chosen here,
+   *  at the window's edge, once for the whole dispatch. */
+  const requestLayer = Layer.merge(sessionFsLayer(roots), env);
   const runActions = yield* createHostRunActions({
     ...host.runs,
-    // The wait outlives the launch request; the missing-agent warning the
-    // run's agent resolved goes at once.
+    // A run this window started is in the window's view before it is in a
+    // surface's, whose frames are cut from the session after it: each
+    // surface selects the run once its own view holds its activation. The
+    // missing-agent warning the run's agent resolved goes at once.
     launched: (run) =>
-      Effect.forkIn(showLaunched(run), scope).pipe(
-        Effect.andThen(snapshot.clearAgentConfigBanner),
-      ),
+      Effect.sync(() =>
+        bridge.surfaceAction({
+          kind: 'selectOnArrival',
+          runId: run.runId,
+          cursor: run.activation,
+        }),
+      ).pipe(Effect.andThen(snapshot.clearAgentConfigBanner)),
     roots,
-    readConfig,
+    readConfig: (runId: RunId) => session.records(runId).readConfig(),
     present,
     session,
     scope,
@@ -484,12 +433,24 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     runs: runActions,
   });
 
+  const { bindings } = host;
   const apiKeyRetry = new ProgressApiKeyRetryController({
-    promptForApiKey: host.runs.promptForApiKey,
+    // The set-key verb either runs or faults, so its failure is the one
+    // failure, as `ApiKeyPromptFailed`.
+    promptForApiKey: (provider) =>
+      bindings.setApiKey(provider).pipe(
+        Effect.provide(requestLayer),
+        Effect.mapError(
+          (failure) =>
+            new ApiKeyPromptFailed({
+              provider,
+              message: 'The host could not ask for a provider API key.',
+              cause: failure,
+            }),
+        ),
+      ),
     session,
   });
-
-  const { bindings } = host;
   const latexdiff = latexdiffVerbs({
     host: bindings.latexdiff,
     roots,
@@ -510,6 +471,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       bindings,
       latexdiff,
       showInfo: host.showInfoMessage,
+      openDirectory: host.files.openDirectory,
       exportTranscript: (runId) =>
         exportRunTranscript(runId, {
           pickFormat: host.export.pickFormat,
@@ -517,23 +479,35 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           showInfo: host.showInfoMessage,
           showWarning: host.showWarningMessage,
           roots,
-          records: exportRecords,
+          session,
           latexPreamble: host.export.latexPreamble,
           templatePath: traceViewerTemplatePath(host.export.resourcesPath),
         }),
     });
-  /** One program per request, over this session's rooted filesystems and
-   *  its project's `.env`: the root a request writes under is chosen here,
-   *  at the window's edge, once for the whole dispatch. */
-  const requestLayer = Layer.merge(sessionFsLayer(roots), env);
+  /** An own kind the host binds runs its arm; one it leaves out is
+   *  refused, worded here for both hosts. */
+  const own = (
+    request: OwnHostRequest,
+    port: string,
+  ): HostVerb<HostOutcome> => {
+    const arm = host.own[request.kind];
+    if (arm === undefined)
+      return Effect.fail(
+        new Rejected({
+          reason: `${OWN_REQUEST_LABEL[request.kind]} is not available in this app.`,
+        }),
+      );
+    // cast: the arm bound under `request.kind` takes a request of that kind.
+    return (
+      arm as (request: OwnHostRequest, port: string) => HostVerb<HostOutcome>
+    )(request, port);
+  };
   function handle(
     request: HostRequest,
     port: string,
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
     return Effect.provide(
-      isSharedHostRequest(request)
-        ? shared(request, port)
-        : host.own(request, port),
+      isSharedHostRequest(request) ? shared(request, port) : own(request, port),
       requestLayer,
     );
   }
@@ -555,6 +529,8 @@ interface SharedParts extends GuiWindowParts {
   readonly bindings: SharedHostRequestBindings;
   readonly latexdiff: ReturnType<typeof latexdiffVerbs>;
   readonly showInfo: MessageHost['showInfoMessage'];
+  /** Reveal a directory in the host's file manager. */
+  readonly openDirectory: GuiWindowHost['files']['openDirectory'];
   exportTranscript(runId: RunId): HostVerb<void>;
 }
 
@@ -739,18 +715,16 @@ function answerShared(
           });
         yield* parts.exportTranscript(request.runId);
         return done;
-      case 'latexdiff': {
-        const diff = yield* parts.runActions.workflowDiffRequest(request.runId);
-        if (diff) yield* parts.latexdiff.run(diff.runId);
+      case 'latexdiff':
+        yield* parts.runActions.workflowDiffRequest(request.runId);
+        yield* parts.latexdiff.run(request.runId);
         return done;
-      }
       case 'pack':
       case 'clean': {
         const files = yield* parts.runActions.workflowFileOperation(
           request.runId,
           request.kind,
         );
-        if (!files) return done;
         // An info result is shown; an error result rejects the request,
         // which the surface presents.
         const message = fileOpResultMessage(
@@ -771,7 +745,7 @@ function answerShared(
         return done;
       case 'apiKeyBanner':
         yield* request.action === 'set'
-          ? host.setApiKey
+          ? host.setApiKey()
           : host.openGuide('installation', 'setting-up-api-keys');
         return done;
       case 'agentConfigBanner':
@@ -779,13 +753,21 @@ function answerShared(
           case 'edit':
             yield* host.openSettings('agents/library');
             return done;
-          case 'dir':
+          case 'dir': {
             // Without a custom directory there is nothing to reveal, so the
             // banner's link is the agent settings instead.
-            yield* request.customDirSet === true
-              ? host.openCustomAgentDirectory
-              : host.openSettings('agents/library');
+            if (request.customDirSet !== true) {
+              yield* host.openSettings('agents/library');
+              return done;
+            }
+            const directory = yield* (yield* AgentDirectories).custom();
+            if (!directory)
+              return yield* new Rejected({
+                reason: 'No custom agent directory is set.',
+              });
+            yield* parts.openDirectory(directory);
             return done;
+          }
           case 'docs':
             yield* host.openGuide('custom-agents');
             return done;
@@ -803,7 +785,7 @@ function answerShared(
             yield* host.onboarding.signInChatGpt;
             return done;
           case 'setApiKey':
-            yield* host.setApiKey;
+            yield* host.setApiKey();
             return done;
           case 'skip':
             yield* host.onboarding.skip;

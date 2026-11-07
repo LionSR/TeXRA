@@ -85,7 +85,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       (turn.controls.toolChoice !== 'auto' && !config.supportsForcedToolChoice)
     )
       return yield* new ModelError({
-        kind: 'unsupported',
+        kind: 'invalid-request',
         message:
           'The prepared transport or controls are unsupported by the selected route.',
       });
@@ -215,7 +215,7 @@ export function responseAuthentication(
 ) {
   if (process.env.OPENAI_CUSTOM_HEADERS)
     throw new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message:
         'Ambient OpenAI headers cannot override the selected deployment.',
     });

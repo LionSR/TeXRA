@@ -73,8 +73,8 @@ function diffEdit(original: string, proposed: string): DiffHunks {
  * that names the proposal's content (the original and proposed text with
  * their diff) by its address in the session's blob store, stored with the
  * row, so every process the request reaches shows the same diff
- * (`request.preview`); serialized behind the run's other prompts, answered
- * by a surface's `request.decide`. An approve applies the file as the
+ * (`request.preview`); answered by a surface's `request.decide`, or by the
+ * edit grant turned on meanwhile. An approve applies the file as the
  * person left it: the decision's content, else the proposal.
  */
 export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
@@ -121,7 +121,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       removedLines: lines.removed,
       content: address,
     };
-    const review = requests
+    return yield* requests
       .open({ kind: 'toolEdit', data: permission }, [{ digest: address, text }])
       .pipe(
         Effect.flatMap(
@@ -143,13 +143,6 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
                 ),
         ),
       );
-    // An edit grant turned on while it waited answers it, unless a hook
-    // asked.
-    return yield* approvals.enqueue('toolEdit', runId, {
-      grant: hook === 'ask' ? null : 'toolEdit',
-      prompt: review,
-      bypassed: Effect.suspend(acceptProposedAsIs),
-    });
   },
 );
 

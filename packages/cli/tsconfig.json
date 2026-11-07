@@ -11,8 +11,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "../harness/src/**/*.d.ts",
-    "../texra/src/types/**/*.d.ts"
+    "scripts/**/*.ts",
+    "scripts/**/*.tsx"
   ],
   "exclude": []
 }

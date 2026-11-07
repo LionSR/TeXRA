@@ -6,7 +6,6 @@ import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import type { RunId, ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { Session } from '@texra-ai/harness';
-import type { CliRunReads } from '@cli/runtime/runReads';
 import type {
   ProcessRuntime,
   ProcessServices,
@@ -26,11 +25,9 @@ export type SlashCommandEffect = Effect.Effect<void, Error, ProcessServices>;
 export interface SlashCommandContext {
   readonly cliContext: CliContext;
   readonly session: TuiSession;
-  /** The project's stored runs, which `/status` reads (a run's offered
-   *  skills) and `/resume` lists, where they are held. */
-  readonly reads: CliRunReads;
-  /** Where run requests and resumes land: the chat's session, here or in
-   *  the background service. */
+  /** Where run requests and resumes land, and the project's stored runs
+   *  are read (`/status` a run's offered skills, `/resume` the listing):
+   *  the chat's session, here or in the background service. */
   readonly runSession: Session;
   /**
    * The three setting slots the account, model-access and model-selection

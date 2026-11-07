@@ -1,17 +1,15 @@
 /**
- * The detached launch of an `agent` call's child: its result is delivered
- * later through the follow-up queue, driven by the shared `childRunLoop`
- * over a native strategy. An awaited call runs its child in band instead
- * (`inBandSubagentRun.ts`).
+ * The background launch of an `agent` call's child: its end delivers its
+ * report through the parent's follow-up queue. An awaited call runs its
+ * child and reads its end instead (`childLaunch.ts`).
  */
 
 // Third-party imports
-import { Clock, Deferred, Effect, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import {
   NO_APPROVAL_GRANTS,
@@ -19,14 +17,13 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
-  type CommitOrdinal,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
 // Local file imports
-import { startDetachedChildRunLoop } from './detachedChildRun';
+import { startChildRun } from './childLaunch';
 
 /**
  * One compact line per child progress update, for an awaited child: the
@@ -91,11 +88,11 @@ export interface ApprovalMeta {
 }
 
 /**
- * Launch one detached child under `runId` and return the receipt the model
- * reads: the child's result arrives later as a follow-up. The receipt names
- * a child that exists: the call waits for the child's opening to commit,
- * and a launch that fails before it fails the call, which the parent reads
- * as the call's result.
+ * Launch one background child under `runId` and return the receipt the
+ * model reads: the child's report arrives later as a follow-up. The
+ * receipt names a child that exists: the child's opening commits in this
+ * fiber, and a launch that fails before it fails the call, which the
+ * parent reads as the call's result.
  */
 export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   function* (
@@ -110,33 +107,20 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   ) {
     const { runId, grants } = launch;
     const { runId: parentRunId } = parent.run;
-    const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
     const agentName = childConfigPayload.agent;
-    const startedAt = yield* Clock.currentTimeMillis;
+    // One cycle: the child ends with its reply, and a follow-up to it is a
+    // resume with a message.
     const definition = yield* prepareAgentDefinition({
       config: Schema.decodeUnknownSync(AgentConfigSchema)(childConfigPayload),
+      stopAfterCycle: true,
     });
     const { config } = definition;
-    const opened = yield* Deferred.make<CommitOrdinal>();
-    yield* startDetachedChildRunLoop({
-      runId,
+    // The child registers with its opening, which commits here.
+    yield* startChildRun(runId, definition, {
+      identity: { kind: 'agent', agent: config.agent },
       parentRunId,
-      agentName,
-      strategy: createNativeSubagentStrategy({
-        definition,
-        // The child registers with its opening, which its run commits.
-        registration: {
-          identity: { kind: 'agent', agent: config.agent },
-          parentRunId,
-          parentCall: { callId: parent.callId, card: parent.logId },
-          grants,
-        },
-        runId,
-        startedAt,
-        workingDirectory,
-        onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
-      }),
-      opened,
+      parentCall: { callId: parent.callId, card: parent.logId, awaited: false },
+      grants,
     });
 
     const meta = launch.approvalMeta;
@@ -158,13 +142,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         `Run ID: ${runId}`,
         ...metaLines,
         `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
-        // A run opened on a script (a document task) ends with its script,
-        // so only a conversation takes follow-ups.
-        ...(definition.stopAfterCycle
-          ? []
-          : [
-              `To send follow-up instructions: executions tool, action=send, path=/executions/${runId}.`,
-            ]),
+        `To send follow-up instructions once it has reported: executions tool, action=send, path=/executions/${runId}; it continues from where it ended and reports again.`,
       ].join('\n'),
       `Launched '${agentName}' (async)`,
     );

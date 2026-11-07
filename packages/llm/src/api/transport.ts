@@ -109,8 +109,8 @@ export const parseOutboundToolArguments = (
 
 /**
  * Parses a tool call's argument text as a provider just returned it. The
- * model authored this output, so a malformed payload reports as
- * `malformed-output`; `provider` names the source in the surfaced message.
+ * model authored this output, so a malformed payload is the provider's
+ * rejection; `provider` names the source in the surfaced message.
  */
 export const parseInboundToolArguments = (
   argumentsText: string,
@@ -120,7 +120,7 @@ export const parseInboundToolArguments = (
     Effect.mapError(
       (cause) =>
         new ModelError({
-          kind: 'malformed-output',
+          kind: 'provider-rejection',
           message: `${provider} returned tool call arguments that are not a JSON object.`,
           cause,
         }),
@@ -130,18 +130,18 @@ export const parseInboundToolArguments = (
 /**
  * A wire parser's failure shorthand: an `Effect.fail` carrying a `ModelError`.
  * A provider's streamed output is the model's, so an event we cannot explain
- * defaults to `malformed-output`; a recognized-but-unsupported one passes
- * `unsupported`.
+ * defaults to the provider's rejection; a recognized one this route cannot
+ * carry passes `invalid-request`.
  */
 export const wireFail = (
   message: string,
-  kind: ModelError['kind'] = 'malformed-output',
+  kind: ModelError['kind'] = 'provider-rejection',
 ): Effect.Effect<never, ModelError> =>
   Effect.fail(new ModelError({ kind, message }));
 
 /**
- * Decodes one raw wire value with `schema`, failing as `malformed-output`
- * with `message` when it does not match. The process did not author provider
+ * Decodes one raw wire value with `schema`, failing as the provider's
+ * rejection with `message` when it does not match. The process did not author provider
  * output, so a mismatch is the model's; the parse failure rides along as the
  * surfaced error's cause.
  */
@@ -155,7 +155,7 @@ export const decodeWireOrFail = <A>(
     ? Effect.succeed(decoded.success)
     : Effect.fail(
         new ModelError({
-          kind: 'malformed-output',
+          kind: 'provider-rejection',
           message,
           cause: decoded.failure,
         }),

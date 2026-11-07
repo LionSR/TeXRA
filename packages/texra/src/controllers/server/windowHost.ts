@@ -49,9 +49,7 @@ export interface WindowClient {
 /** What a window does for its project's tasks; a capability it leaves out
  *  is one it does not offer. */
 export interface WindowHost
-  extends
-    Pick<HostInteractions, 'emit' | 'approvalDenied'>,
-    EditorCapabilities {
+  extends Pick<HostInteractions, 'emit'>, EditorCapabilities {
   /** Files a task of the project wrote past the editor's own write path,
    *  as the service's announcer heard them: the host tells its own
    *  listeners (a file tree, decorations), as a task here would. */
@@ -63,9 +61,8 @@ function capabilitiesOf(host: WindowHost): HostCapability[] {
     ...(host.readDiagnostics ? (['readDiagnostics'] as const) : []),
     ...(host.addCriticism ? (['addCriticism'] as const) : []),
     ...(host.openPdf ? (['openPdf'] as const) : []),
-    ...(host.emit || host.approvalDenied || host.filesWritten
-      ? (['notices'] as const)
-      : []),
+    ...(host.emit ? (['notices'] as const) : []),
+    ...(host.filesWritten ? (['filesWritten'] as const) : []),
   ];
 }
 
@@ -89,20 +86,20 @@ function perform(
           .pipe(Effect.as(null)) ?? unoffered(call)
       );
     case 'notice':
-      return Effect.suspend(() => {
-        const presented = host.emit?.(call.notice.event, call.notice.payload);
-        return presented ?? Effect.void;
-      }).pipe(Effect.as(null));
+      return host.emit === undefined
+        ? unoffered(call)
+        : Effect.suspend(
+            () =>
+              host.emit?.(call.notice.event, call.notice.payload) ??
+              Effect.void,
+          ).pipe(Effect.as(null));
     case 'filesWritten':
-      return Effect.sync(() => {
-        host.filesWritten?.(call.absolutePaths);
-        return null;
-      });
-    case 'approvalDenied':
-      return Effect.sync(() => {
-        host.approvalDenied?.(call.denial, call.runId);
-        return null;
-      });
+      return host.filesWritten === undefined
+        ? unoffered(call)
+        : Effect.sync(() => {
+            host.filesWritten?.(call.absolutePaths);
+            return null;
+          });
   }
 }
 
@@ -160,7 +157,7 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
     ),
   );
   yield* Effect.forkScoped(
-    Stream.runForEach(SubscriptionRef.changes(link.client), (client) =>
+    Stream.runForEach(link.client.changes, (client) =>
       client === null
         ? FiberHandle.clear(attachment)
         : FiberHandle.run(
@@ -184,20 +181,27 @@ function attachTo(
   const send = (id: string, answer: HostAnswer) =>
     client['host.answer']({ id, answer });
   return Effect.gen(function* () {
-    const answer = (id: string, call: HostCall) =>
+    /** Carry out a call; an awaited one is answered however it ends, a
+     *  defect included, so the service never waits on a call that died
+     *  here; one nothing waits on says here when it could not be done. */
+    const answer = (id: string, call: HostCall, awaited: boolean) =>
       perform(host, call).pipe(
-        // Any end but an interrupt is answered, a defect included, so the
-        // service never waits on a call that died here.
         Effect.matchCauseEffect({
           onSuccess: (value) =>
-            send(id, { ok: true, value: toJsonValue(value) }),
+            awaited
+              ? send(id, { ok: true, value: toJsonValue(value) })
+              : Effect.void,
           onFailure: (cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.failCause(cause)
-              : send(id, {
-                  ok: false,
-                  message: toErrorMessage(Cause.squash(cause)),
-                }),
+              : awaited
+                ? send(id, {
+                    ok: false,
+                    message: toErrorMessage(Cause.squash(cause)),
+                  })
+                : Effect.logWarning(
+                    `This window could not carry out a host call (${call.kind})`,
+                  ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
         }),
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
@@ -227,7 +231,7 @@ function attachTo(
             ),
           );
         // Each call on its own fiber: a slow build never holds the next.
-        return Effect.forkScoped(answer(frame.id, frame.call));
+        return Effect.forkScoped(answer(frame.id, frame.call, frame.awaited));
       }),
     );
   }).pipe(

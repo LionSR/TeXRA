@@ -21,8 +21,7 @@ import {
 } from '@shared/schemas';
 import { causeChain } from '@utils/errors/errorMessage';
 import {
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
+  DatabaseAggregateClosed,
   type DatabaseReadFailed,
   DatabaseRowCorrupt,
   DatabaseRowEarlier,
@@ -40,17 +39,13 @@ import type { SessionViewAccessShape } from './sessionViewAccess';
 
 /**
  * A refusal the run history itself decided. Database failures are kept OUT of
- * this type: reporting a disk error as a stolen claim is the silent-
+ * this type: reporting a disk error as a refused run is the silent-
  * degradation defect in a different costume, so `open` and `load` keep
  * them in their error channel beside it.
  *
  * Which arms are reachable, and from where:
- * - `not-owner`: from a resume's `open`, where the claim proves prior owners
- *   dead before moving and a live foreign owner is the
- *   `DatabaseClaimRefused` verdict it fails with (a claim taken after that
- *   proof is `DatabaseNotOwner`); and from `RunCell.append`,
- *   where the session's log refuses a target this process no longer
- *   holds open as `DatabaseNotOwner`, nothing written. It is never
+ * - `not-owner`: from `RunCell.append`, where the session's log refuses a
+ *   closed target as `DatabaseAggregateClosed`, nothing written. It is never
  *   synthesised from any other write failure: a disk error stays a
  *   `DatabaseWriteFailed`. A loop that meets it mid-turn stops with it,
  *   no retry and no second write.
@@ -89,14 +84,12 @@ export class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
   }
 }
 
-/** A write the store refused: the disk, the run history, or a claim this
- *  process does not hold (a write outside the run history raises the
- *  claim's own refusal). */
+/** A write the store refused: the disk, the run history, or a closed
+ *  aggregate. */
 type StorageRefusal =
   | DatabaseWriteFailed
   | RunHistoryRefused
-  | DatabaseNotOwner
-  | DatabaseClaimRefused;
+  | DatabaseAggregateClosed;
 
 /**
  * The store's refusal anywhere in `cause`, failure or defect. A refused write
@@ -112,8 +105,7 @@ export function findStorageRefusal(
     if (
       error instanceof DatabaseWriteFailed ||
       error instanceof RunHistoryRefused ||
-      error instanceof DatabaseNotOwner ||
-      error instanceof DatabaseClaimRefused
+      error instanceof DatabaseAggregateClosed
     )
       return error;
   }
@@ -121,13 +113,12 @@ export function findStorageRefusal(
 }
 
 /**
- * `refusal` as run `runId` ends with it: a claim it lost, or one another
- * process holds, is the run history's `not-owner` refusal, worded from the
- * refusing row; a disk or history refusal is itself.
+ * `refusal` as run `runId` ends with it: a closed aggregate is the run
+ * history's `not-owner` refusal; a disk or history refusal is itself.
  */
 export function runRefusal(
   runId: RunId,
-  refusal: DatabaseNotOwner | DatabaseClaimRefused,
+  refusal: DatabaseAggregateClosed,
 ): RunHistoryRefused;
 export function runRefusal(
   runId: RunId,
@@ -137,14 +128,8 @@ export function runRefusal(
   runId: RunId,
   refusal: StorageRefusal,
 ): DatabaseWriteFailed | RunHistoryRefused {
-  if (refusal instanceof DatabaseClaimRefused) {
-    const detail = `held by ${refusal.ownerId} (${refusal.verdict})`;
-    return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
-  }
-  if (!(refusal instanceof DatabaseNotOwner)) return refusal;
-  let detail = `held by ${refusal.ownerId}`;
-  if (refusal.ownerId === null) detail = 'the claim is unheld';
-  if (refusal.closed) detail = 'the run aggregate is closed';
+  if (!(refusal instanceof DatabaseAggregateClosed)) return refusal;
+  const detail = 'the run aggregate is closed';
   return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
 }
 
@@ -158,8 +143,8 @@ export const runStateAppend = (
 
 /**
  * Why `error`, anywhere down its cause chain, says a run's stored rows
- * cannot be used, or undefined for a failure that may pass (the disk, a
- * claim): `earlierBuild`, a row an earlier build wrote; `damaged`, a row
+ * cannot be used, or undefined for a failure that may pass (the disk):
+ * `earlierBuild`, a row an earlier build wrote; `damaged`, a row
  * that does not decode; `unusable`, rows that decode but cannot be
  * continued (they cannot be applied, the history's rules refuse them, or
  * their turns were recorded on a protocol the run's binding no longer
@@ -257,14 +242,13 @@ export interface RunOpening<E = never> {
   /**
    * A new run's registration (`run.start` first), decided inside the job
    * of the cell's first append, which it rides: the run exists with what
-   * that append writes or not at all. The birth takes the run's claim.
+   * that append writes or not at all.
    */
   readonly registration?: Effect.Effect<readonly SessionEventDraft[]>;
   /**
-   * A resume: take the run's claim (proving a prior owner dead) and commit,
-   * in one batch, the cancellation of every request the previous owner left
-   * unbound and the rows this decides from the stored state (its
-   * `run.activate`, the grants it ends, a changed configuration).
+   * A resume: commit, in one batch, the cancellation of every request the
+   * previous launch left unbound and the rows this decides from the stored
+   * state (its `run.activate`, the grants it ends, a changed configuration).
    */
   readonly activation?: (
     state: RunState | null,
@@ -272,8 +256,7 @@ export interface RunOpening<E = never> {
   /**
    * The publisher job the caller is inside: the cell reads the run's rows
    * in that job and appends through its transaction, never a nested one,
-   * and takes no claim, so the job's other rows and the cell's commit
-   * together.
+   * so the job's other rows and the cell's commit together.
    */
   readonly within?: Append;
 }
@@ -297,9 +280,8 @@ export class RunHistory extends Context.Service<
     ) => Effect.Effect<RunState | null, RunHistoryRefused | DatabaseReadFailed>;
     /**
      * The run's cell, seeded with its stored state (a fresh state when it
-     * has none). A resume (`activation`) is the claim gate, taken before any
-     * resume side effect: a second process learns it never had the run
-     * before it re-dispatches anything.
+     * has none). A resume (`activation`) decides from the stored state
+     * before any resume side effect, in the transaction that activates it.
      */
     readonly open: <E = never>(
       run: RunId,

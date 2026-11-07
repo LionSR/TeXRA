@@ -7,7 +7,7 @@
 import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
-import { AggregateIdSchema, OwnerIdSchema } from './identifiers';
+import { AggregateIdSchema } from './identifiers';
 import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
 
 /**
@@ -44,27 +44,29 @@ const RunUnreadableSchema = Schema.Literals(['damaged', 'earlierBuild']);
 /**
  * Why a run's banner speaks, as a key and the data its words need; the
  * app's `@ui/copy/runStatus` words it. In priority order: its rows cannot
- * be read here, its process stopped before it finished, another process
- * (by pid) holds it, its end lost its result.
+ * be read here, its process stopped before it finished, its end lost its
+ * result.
  */
 export const RunNoticeSchema = Schema.Union([
   Schema.Struct({ kind: RunUnreadableSchema }),
   Schema.Struct({ kind: Schema.Literal('interrupted') }),
-  Schema.Struct({ kind: Schema.Literal('held'), pid: Schema.Int }),
   Schema.Struct({ kind: Schema.Literal('lost'), message: Schema.String }),
 ]);
 
+/** A run this build cannot open, and why. */
+export const UnreadableRunSchema = Schema.Struct({
+  runId: RunIdSchema,
+  reason: RunUnreadableSchema,
+});
+export type UnreadableRun = typeof UnreadableRunSchema.Type;
+
 /**
- * Process-local liveness evidence: self, explicitly proved-dead owners, and
- * unreadable runs. A current claimant absent from these verdicts is
- * unprovable and remains held until a probe establishes otherwise.
+ * What this process knows that the rows cannot say: the runs a launch here
+ * holds (`runsHere`), written by the session's run registry. A run that
+ * has not ended and is not among them is interrupted.
  */
 export const LocalRuntimeStateSchema = Schema.Struct({
-  self: Schema.Array(OwnerIdSchema),
-  dead: Schema.Array(OwnerIdSchema),
-  unreadable: Schema.Array(
-    Schema.Struct({ runId: RunIdSchema, reason: RunUnreadableSchema }),
-  ),
+  runsHere: Schema.Array(RunIdSchema),
 });
 export type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;
 
@@ -82,22 +84,21 @@ export type TranscriptSubscription =
   (typeof TranscriptSubscriptionSchema)['Type'];
 
 /**
- * Current ownership for exactly the scope a finite read checked: a checked
- * aggregate with no claim entry no longer exists.
+ * Existence for exactly the scope a finite read checked: a checked
+ * aggregate absent from `present` no longer exists. `unreadable` names the
+ * runs the same read found this build cannot open.
  */
 export const ExistenceReconciliationSchema = Schema.Struct({
   checkedAggregateIds: Schema.Array(AggregateIdSchema),
-  claims: Schema.Array(
-    Schema.Struct({
-      aggregateId: AggregateIdSchema,
-      ownerId: Schema.NullOr(OwnerIdSchema),
-    }),
-  ),
+  present: Schema.Array(AggregateIdSchema),
+  unreadable: Schema.Array(UnreadableRunSchema),
 });
 export type ExistenceReconciliation =
   (typeof ExistenceReconciliationSchema)['Type'];
 
-const SessionViewInputSchema = Schema.Union([
+/** One input of the session view, as the reader orders them: what a frame
+ *  carries across a wire. */
+export const SessionViewInputSchema = Schema.Union([
   EventInputSchema,
   TextChunkSchema,
   Schema.TaggedStruct('debug', { enabled: Schema.Boolean }),
@@ -107,7 +108,7 @@ const SessionViewInputSchema = Schema.Union([
   Schema.TaggedStruct('subscriptions', {
     set: Schema.Array(TranscriptSubscriptionSchema),
   }),
-  /** Cold reads have completed; apply current claims without adopting a later cursor. */
+  /** Cold reads have completed; reconcile existence without adopting a later cursor. */
   Schema.TaggedStruct('replay.complete', {
     existence: ExistenceReconciliationSchema,
   }),

@@ -509,7 +509,7 @@ export const completedTurn = Effect.fn('llm.generateTurn')(function* (
   );
   if (result === null)
     return yield* new ModelError({
-      kind: 'malformed-output',
+      kind: 'provider-rejection',
       message: 'The model stream produced no completed result.',
     });
   return result;

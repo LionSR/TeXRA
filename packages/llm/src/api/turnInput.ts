@@ -47,12 +47,12 @@ export const resolveTurn = Effect.fn('llm.resolveTurn')(function* (
     input.continuation.origin.protocol !== origin.protocol
   )
     return yield* new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message: 'The continuation belongs to another protocol.',
     });
   if (input.mode === 'background' && background === undefined)
     return yield* new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message: 'The model does not run background turns.',
     });
   const toolChoice = input.toolChoice ?? 'auto';
@@ -104,7 +104,7 @@ export function boundTurn<
     ? Effect.succeed(turn)
     : Effect.fail(
         new ModelError({
-          kind: 'unsupported',
+          kind: 'invalid-request',
           message:
             'The prepared turn belongs to another model binding or execution mode.',
         }),

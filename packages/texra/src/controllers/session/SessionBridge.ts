@@ -32,6 +32,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  Predicate,
   Result,
   Schema,
   Scope,
@@ -260,12 +261,23 @@ export class SessionBridge {
       // Nothing joins this fiber: a failed replay or tail read would stop the
       // port's transcript with no trace, so its death is logged here.
       const frames = Stream.runForEach(
-        frameSubscription(
-          { key: this.key, view: this.options.session.view },
-          this.options.host,
-          subscribe,
+        Stream.merge(
+          frameSubscription(
+            { key: this.key, view: this.options.session.view },
+            subscribe,
+          ),
+          // What the host renders but does not own, as its producers write
+          // it: its own message beside the frames.
+          SubscriptionRef.changes(this.options.host).pipe(
+            Stream.filter(Predicate.isNotNull),
+            Stream.map((host): DownMessage => ({
+              kind: 'host',
+              session: this.key,
+              host,
+            })),
+          ),
         ),
-        (frame) => Effect.sync(() => entry.port.send(frame)),
+        (message) => Effect.sync(() => entry.port.send(message)),
       ).pipe(
         Effect.tapCause((cause) =>
           Cause.hasInterruptsOnly(cause)

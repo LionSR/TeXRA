@@ -6,9 +6,10 @@
  *    child opens a persistent session and starts a run whose script awaits
  *    `Promise.all([self(...), tools.hold()])`: the `self()` child finishes,
  *    `hold` never returns there, so the script is still waiting when its
- *    child's result is committed.
- * 2. This process opens the same store, sees the child run's stored outcome
- *    in its own session view, and kills the child process with SIGKILL.
+ *    child's result is committed, which the process reports on stdout.
+ * 2. This process kills the child process there with SIGKILL, then opens
+ *    the store (a project store is held by one process at a time) and sees
+ *    the child run's stored outcome in its own session view.
  * 3. It resumes the run here. The finished child is not run again, its
  *    result reaches the replayed script once, the script runs on to its
  *    second `self()` from its saved source, and the run completes.
@@ -23,7 +24,7 @@ import {
   executed,
   harnessBuiltins,
 } from '@texra-ai/harness/plugins';
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
 
 import {
   makeExampleWorkspace,
@@ -94,6 +95,7 @@ const crashProgram = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots, {
     persistent: true,
   });
+  const from = session.view.head();
   const run = yield* session.start({
     agent: {
       name: 'reviewer',
@@ -104,37 +106,8 @@ const crashProgram = Effect.gen(function* () {
     model: route.model,
   });
   process.stdout.write(`started ${run.runId}\n`);
-  const end = yield* run.result;
-  throw new Error(
-    `The run ended where it was to be killed: ${JSON.stringify(end)}`,
-  );
-}).pipe(Effect.scoped, Effect.provide(layer));
-
-const resumeProgram = Effect.gen(function* () {
-  // Open the store first, so its event stream starts before the other
-  // process writes anything.
-  const session = yield* (yield* Sessions).open(platform.roots, {
-    persistent: true,
-  });
-  const from = session.view.head();
-  const child = spawn(
-    process.execPath,
-    [process.argv[1] ?? '', 'crash', workspace],
-    { stdio: ['ignore', 'pipe', 'inherit'] },
-  );
-  const exited = new Promise<NodeJS.Signals | null>((resolve) =>
-    child.once('exit', (_code, signal) => resolve(signal)),
-  );
-  const runId = yield* Effect.promise(async () => {
-    for await (const line of createInterface({ input: child.stdout }))
-      if (line.startsWith('started '))
-        return Schema.decodeUnknownSync(RunIdSchema)(line.slice(8));
-    throw new Error('The crash process exited before it started a run.');
-  });
-
-  // The other process's commits reach this session's event stream: the
-  // `self()` card closes in the batch that commits its result. Kill the
-  // process there, while the script still awaits `hold`.
+  // The `self()` card closes in the batch that commits its result: the
+  // parent kills this process there, while the script still awaits `hold`.
   const selfCards = new Set<string>();
   yield* Stream.runHead(
     Stream.filter(session.view.events(from), (event) => {
@@ -143,10 +116,43 @@ const resumeProgram = Effect.gen(function* () {
       return event.type === 'tool.end' && selfCards.has(event.logId);
     }),
   );
-  child.kill('SIGKILL');
-  const signal = yield* Effect.promise(() => exited);
-  // The view applies the other process's commits on its next poll of the
-  // store, after the event stream has read them.
+  process.stdout.write('committed\n');
+  const end = yield* run.result;
+  throw new Error(
+    `The run ended where it was to be killed: ${JSON.stringify(end)}`,
+  );
+}).pipe(Effect.scoped, Effect.provide(layer));
+
+const resumeProgram = Effect.gen(function* () {
+  const child = spawn(
+    process.execPath,
+    [process.argv[1] ?? '', 'crash', workspace],
+    { stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+  const exited = new Promise<NodeJS.Signals | null>((resolve) =>
+    child.once('exit', (_code, signal) => resolve(signal)),
+  );
+  const { runId, signal } = yield* Effect.promise(async () => {
+    let runId: RunId | undefined;
+    for await (const line of createInterface({ input: child.stdout })) {
+      if (line.startsWith('started '))
+        runId = Schema.decodeUnknownSync(RunIdSchema)(line.slice(8));
+      if (line === 'committed' && runId !== undefined) {
+        child.kill('SIGKILL');
+        return { runId, signal: await exited };
+      }
+    }
+    throw new Error(
+      runId === undefined
+        ? 'The crash process exited before it started a run.'
+        : 'The crash process exited before its child finished.',
+    );
+  });
+  // The store is free once the killed process is gone: this process holds
+  // it from here, and its view reads what the other committed.
+  const session = yield* (yield* Sessions).open(platform.roots, {
+    persistent: true,
+  });
   const childrenOf = (view: ReturnType<typeof session.view.current>) =>
     [...view.runs.values()].filter((run) => run.parentId === runId);
   const finished = yield* Stream.runHead(

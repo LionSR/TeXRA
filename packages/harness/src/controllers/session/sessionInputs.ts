@@ -16,10 +16,10 @@ import {
   referencedAggregates,
   isDisplaySessionEvent,
   type AggregateId,
-  type LocalRuntimeState,
   type ExistenceReconciliation,
   type SessionViewInput,
   type TextChunk,
+  type UnreadableRun,
 } from '@shared/schemas';
 import {
   Database,
@@ -120,13 +120,16 @@ export const sessionInputsLayer = Layer.effect(
                 [...checked],
               ),
             );
-            yield* markDamaged(local.ref, replayState.damaged);
             const replayExistence = reconcileExistence(replayState);
+            // The local snapshot goes before the rows it describes: a run
+            // folded before it reads as held by nothing, and the transcript
+            // rows an unheld run settles stay settled once it is known held.
             const initialLocal = yield* SubscriptionRef.get(local.ref);
-            replay.push(
-              { _tag: 'local', local: initialLocal },
-              { _tag: 'replay.complete', existence: replayExistence },
-            );
+            replay.splice(1, 0, { _tag: 'local', local: initialLocal });
+            replay.push({
+              _tag: 'replay.complete',
+              existence: replayExistence,
+            });
             // Every level replays on subscribe; changes during the cold read
             // are therefore covered by the first finite tail read.
             const wakes = Stream.mergeAll<unknown, never, never>(
@@ -149,7 +152,6 @@ export const sessionInputsLayer = Layer.effect(
                   change,
                 ),
               ).pipe(
-                Effect.tap((read) => markDamaged(local.ref, read.damaged)),
                 Effect.map((read) => ({
                   cursor: read.cursor,
                   change: read.change,
@@ -173,8 +175,8 @@ export const sessionInputsLayer = Layer.effect(
                     text,
                     local: initialLocal,
                     // Every change the record holds: an aggregate that started
-                    // or moved its claim during the cold read is checked again
-                    // once its rows are in the view, not only by the replay.
+                    // during the cold read is checked again once its rows are
+                    // in the view, not only by the replay.
                     change: 0,
                   };
                 },
@@ -192,17 +194,27 @@ export const sessionInputsLayer = Layer.effect(
                           cursor: previous.cursor,
                           change: previous.change,
                           rows: [],
-                          existence: { checkedAggregateIds: [], claims: [] },
+                          existence: {
+                            checkedAggregateIds: [],
+                            present: [],
+                            unreadable: [],
+                          },
                         }
                       : yield* readDurable(previous.cursor, previous.change);
+                  // The snapshot was read before the rows: it goes before
+                  // them, as in the replay.
+                  const changed: SessionViewInput[] = isDeepStrictEqual(
+                    previous.local,
+                    snapshot,
+                  )
+                    ? []
+                    : [{ _tag: 'local', local: snapshot }];
                   const inputs: SessionViewInput[] = textChunks(
                     previous.text,
                     nextText,
                   );
-                  if (!isDeepStrictEqual(previous.local, snapshot)) {
-                    inputs.push({ _tag: 'local', local: snapshot });
-                  }
                   if (
+                    changed.length > 0 ||
                     inputs.length > 0 ||
                     rows.length > 0 ||
                     cursor !== previous.cursor ||
@@ -216,6 +228,7 @@ export const sessionInputsLayer = Layer.effect(
                     inputs.push({ _tag: 'drained', cursor, existence });
                   }
                   const batch: SessionViewInput[] = [
+                    ...changed,
                     ...rows
                       .filter(isDisplaySessionEvent)
                       .map((event): SessionViewInput => ({
@@ -245,37 +258,20 @@ export const sessionInputsLayer = Layer.effect(
   }),
 );
 
-/** Show each run that cannot open read-only with why (`unreadable`): a
- *  row of it does not decode, or an earlier build wrote one. */
-const markDamaged = (
-  ref: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-  damaged: LocalRuntimeState['unreadable'],
-) =>
-  // One atomic update against the other writer of this ref (the liveness
-  // prober's `dead`).
-  SubscriptionRef.update(ref, (local) => {
-    const known = new Set(local.unreadable.map(({ runId }) => runId));
-    const fresh = damaged.filter(({ runId }) => !known.has(runId));
-    // Only a new damaged run moves the level: an unchanged one would wake
-    // this reader again for nothing, forever.
-    return fresh.length > 0
-      ? { ...local, unreadable: [...local.unreadable, ...fresh] }
-      : local;
-  });
-
 /** An aggregate a removal closed no longer exists, even while the
- *  `run.removed` row is still stored. */
+ *  `run.removed` row is still stored; the runs the read found this build
+ *  cannot open (`damaged`) ride beside. */
 function reconcileExistence(read: {
   readonly checkedAggregateIds: readonly AggregateId[];
   readonly state: readonly AggregateState[];
+  readonly damaged: readonly UnreadableRun[];
 }): ExistenceReconciliation {
-  const surviving = read.state.filter((state) => !state.closed);
   return {
     checkedAggregateIds: [...read.checkedAggregateIds],
-    claims: surviving.map(({ aggregateId, ownerId }) => ({
-      aggregateId,
-      ownerId,
-    })),
+    present: read.state
+      .filter((state) => !state.closed)
+      .map(({ aggregateId }) => aggregateId),
+    unreadable: [...read.damaged],
   };
 }
 

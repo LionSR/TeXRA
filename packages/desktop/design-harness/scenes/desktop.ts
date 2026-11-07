@@ -27,7 +27,7 @@ import {
   fanOutView,
   viewOf,
   local,
-  OWNER,
+  ALL_RUNS,
   tail,
 } from '@test/shared/session/fanOutScenario';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
@@ -45,7 +45,7 @@ function runningOnlyView(): SessionView {
       (input) =>
         !(input._tag === 'event' && input.event.type === 'request.opened'),
     ),
-    local({ self: [OWNER] }),
+    local({ runsHere: ALL_RUNS }),
   ]);
 }
 
@@ -102,7 +102,7 @@ function withConversation(): SessionView {
       'since it blocks the resubmission.',
   });
   const chat = log.events.slice(before).map(tail);
-  return viewOf([...scenario.pending, ...chat, local({ self: [OWNER] })]);
+  return viewOf([...scenario.pending, ...chat, local({ runsHere: ALL_RUNS })]);
 }
 
 const display = (key: string, name: string): ProjectDisplay => ({

@@ -13,7 +13,6 @@ import {
 import { type CliContext } from '@cli/runtime/cliContext';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { localRunReads } from '@cli/runtime/runReads';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
 import {
   SessionGraph,
@@ -32,9 +31,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
 }));
-// The command starts the service a conversation continues in; none here.
+// The platform links the service a conversation continues in; none here.
 vi.mock('@cli/runtime/cliService', () => ({
-  startCliService: () => Effect.void,
+  isLinked: (link: { readonly none?: string }) => !('none' in link),
 }));
 
 vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
@@ -62,8 +61,7 @@ const seedRunRecord = (config: AgentConfig | null) =>
         runtime: yield* SessionGraph.runtime,
         session: Effect.succeed(session),
         runSession: Effect.succeed(session),
-        reads: localRunReads(Effect.succeed(session)),
-        service: undefined,
+        service: { none: 'no service in this test' },
       }),
     );
     yield* Context.get(handle, SessionLog).transact([
@@ -88,12 +86,6 @@ const seedRunRecord = (config: AgentConfig | null) =>
         payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
     ]);
-    // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
-    // to be resumed is one nobody holds, so the seed gives the claim back: a
-    // hold taken and let go releases it.
-    yield* Effect.scoped(
-      Context.get(handle, SessionLog).hold(RUN_ID, { ends: true }),
-    );
     return handle;
   });
 

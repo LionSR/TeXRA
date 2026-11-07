@@ -289,7 +289,7 @@ export ANTHROPIC_API_KEY=sk-…
 texra doctor
 ```
 
-A project's `.env` file works here too: every task of the project reads it, in every TeXRA app. A key you set only in this terminal (`OPENAI_API_KEY=… texra chat`) does not reach a task that runs in the TeXRA service, which keeps running when the terminal closes; the CLI says so when that happens. Save the key with `texra setup`, put it in the project's `.env`, or run with `TEXRA_NO_SERVICE=1` to keep the task in this terminal.
+A project's `.env` file works here too: every task of the project reads it, in every TeXRA app. A key you set only in this terminal (`OPENAI_API_KEY=… texra chat`) travels with the tasks this terminal starts, so it reaches them in the TeXRA service too, which keeps running when the terminal closes. To keep a key for every terminal, save it with `texra setup` or put it in the project's `.env`.
 
 If you prefer not to manage keys, connect a provider subscription instead. A ChatGPT subscription unlocks the OpenAI models, and a Grok (xAI SuperGrok) subscription unlocks the xAI models:
 

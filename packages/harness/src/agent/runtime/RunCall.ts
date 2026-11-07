@@ -15,7 +15,7 @@ import {
   Effect,
   Schema,
   type Scope,
-  type SynchronizedRef,
+  type ScopedRef,
 } from 'effect';
 
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
@@ -32,6 +32,7 @@ import type { RunFileService } from '@common/storage/runStorage';
 import {
   ToolError,
   type PluginRequest,
+  type RunId,
   type ToolResult,
   type ToolDefinition,
   type ToolResultPayload,
@@ -156,8 +157,18 @@ export interface ScriptScope extends ScriptSource {
 declare module '../core/tools/ToolTypes.js' {
   interface ToolRun {
     readonly toolPolicy: ToolPolicy;
+    /** The parent this activation runs under (null for a root), and
+     *  whether the parent's call awaits it: with the policy, what
+     *  {@link noLaterTurn} reads. */
+    readonly entry: {
+      readonly parent: RunId | null;
+      readonly awaited: boolean;
+    };
     readonly config: AgentConfig;
-    readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
+    /** The provider API-key variables the run's launch brought
+     *  (`StartOptions.apiKeys`), which a child it launches takes too. */
+    readonly apiKeys?: Readonly<Record<string, string>>;
+    readonly model: ScopedRef.ScopedRef<BoundModel>;
     readonly scope: Scope.Scope;
     readonly opening: TemplateOpening | null;
     readonly logger: AgentTrace;
@@ -189,9 +200,11 @@ declare module '../core/tools/ToolTypes.js' {
 }
 
 /** The run as the harness's built-in tools read it: what a plugin's tool
- *  sees (`ToolRun`), with its open step and its host callbacks. A built-in
- *  reads its session's owners from its run's context. */
-type BuiltinRun = ToolRun & Pick<AgentRunShape, 'steps' | 'callbacks'>;
+ *  sees (`ToolRun`), with its open step, its host callbacks and the bound
+ *  on the calls it awaits children in. A built-in reads its session's
+ *  owners from its run's context. */
+type BuiltinRun = ToolRun &
+  Pick<AgentRunShape, 'steps' | 'callbacks' | 'awaitedCalls'>;
 
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {
@@ -233,6 +246,18 @@ export interface RunCallShape {
    *  opens (an edit, a plan, a delegation proposal); absent: no answer. */
   readonly hook?: 'allow' | 'ask';
 }
+
+/**
+ * Whether no later turn reaches `run`: a root that stops after its cycle,
+ * or a child its parent's call awaits (the call reads its end and goes
+ * on). A background child stops after its cycle too, but a delivery or a
+ * message resumes it, so a result sent to it as a follow-up arrives.
+ */
+export const noLaterTurn = (
+  run: Pick<ToolRun, 'toolPolicy' | 'entry'>,
+): boolean =>
+  run.toolPolicy.stopAfterCycle === true &&
+  (run.entry.parent === null || run.entry.awaited);
 
 /** The current call's place in its run, which the run loop provides beside
  *  each call; null outside a run (a standalone host invocation), which is
@@ -312,7 +337,6 @@ export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
       {
         // Not "Read …": the card would read as a read_file call.
         summary: `Not edited: ${path} was not read first`,
-        diagnostics: { reason: 'unread-file', path },
       },
     );
   },

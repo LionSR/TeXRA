@@ -29,7 +29,8 @@ npm run gate              # the static CI jobs: lint + invariants, typecheck + f
 npm run test:watch        # while editing: reruns what a save reaches
 npm run test:changed      # before a commit: suites reachable from uncommitted edits
 npm run test:pure         # before a push (~30s): the host-free tier
-npm test                  # before opening a PR: the full suite, minutes long
+npm test                  # before opening a PR: the full suite, with the crash
+                          # conformance replays the two loops above leave out
 npm run format
 npm run lint
 pre-commit install        # optional hooks (needs `pip install pre-commit`)
@@ -37,9 +38,9 @@ pre-commit install        # optional hooks (needs `pip install pre-commit`)
 
 **Builds don't type check.** esbuild and Vite only strip types. Run
 `npm run typecheck` before committing; this is the most common way a change lands
-broken. It runs `tsc` over the root and test configs, then each package's own
-check; the harness's is its full build, which regenerates
-`packages/harness/dist/`.
+broken. It runs `tsc` over the root and test configs and each package's own
+`typecheck` script at once, the harness's being its full build, which
+regenerates `packages/harness/dist/`.
 
 The pre-commit hook runs oxfmt on the staged paths; when it rewrites a file
 the commit stops, and you stage the output and commit again. CI runs
@@ -139,8 +140,8 @@ are no baseline files and no architecture tests. `.agents/docs/refuted-candidate
 investigated and refused; landing one on new evidence rewrites its entry in
 the same PR. The open work is the public surface in
 `.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`,
-not another lint rule. Publishing the harness and llm packages is the owner's
-manual step (`releasing` skill).
+not another lint rule. The harness and llm packages publish together, on
+their own version, from an `sdk-v` release (`releasing` skill).
 
 Where things go:
 

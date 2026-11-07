@@ -32,9 +32,8 @@ type RequestState = {
  */
 export type RunPosition = {
   readonly family: RunFamily | null;
-  /** Where the loop stands, or stood when it halted: a halt row changes
-   *  `outcome`, not this. */
-  readonly at: Exclude<PositionAt, 'halted'> | null;
+  /** Where the loop stands. */
+  readonly at: PositionAt | null;
   readonly outcome: RunOutcome | null;
   readonly turn: number;
   /** By request id, in the order the rows opened them. */
@@ -75,20 +74,18 @@ export type RunRows = RunPosition & {
    *  began (null until it ends): a resumed run never carries an old end. */
   readonly activation: RowOf<'run.activate'> | null;
   readonly end: RowOf<'run.end'> | null;
+  /** The stop asked of this lifecycle (`run.stop`), null until one is:
+   *  why the run stopped, or is stopping. */
+  readonly stop: RowOf<'run.stop'> | null;
   /** Its deletion marker (`run.removed`), once one landed. */
   readonly removed: RowOf<'run.removed'> | null;
   /** Its input is closed: the latest of `run.activate`, `followup.closed`
    *  and `run.removed` is not an activation. */
   readonly inputClosed: boolean;
-  /** Its `child.park`s in a lifecycle not ended, each with the text of the
-   *  latest `run.report` before it. */
-  readonly heldParks: readonly { park: RowOf<'child.park'>; text: string }[];
-  /** Its latest `child.park`: the pause a process child's launch may
-   *  reactivate (`resumeId`). */
-  readonly park: RowOf<'child.park'> | null;
-  /** Its latest `run.report`, `run.result`, `run.config` and `run.position`. */
+  /** Its latest `run.report`, `process.exit`, `run.config` and
+   *  `run.position`. */
   readonly report: string | null;
-  readonly result: RowOf<'run.result'>['result'] | null;
+  readonly exit: RowOf<'process.exit'> | null;
   readonly config: RowOf<'run.config'>['config'] | null;
   readonly position: RowOf<'run.position'> | null;
   /** Its title: the latest user `run.description`, else the latest one. */
@@ -102,13 +99,6 @@ export type RunRows = RunPosition & {
   /** Each plugin row kind's latest row, by `plugin/kind` (`plugin.fact`):
    *  read through its plugin's own reader. */
   readonly facts: Readonly<Record<string, RowOf<'plugin.fact'>>>;
-  /** Its child turns (`child.turn`), for the report and result slots: the
-   *  turn running (or cut short before its delivery ran) and the latest
-   *  delivered one, both null before the loop accepted a turn. */
-  readonly childTurn: {
-    readonly active: AttemptKey | null;
-    readonly lastCompleted: AttemptKey | null;
-  };
   /** The rows a read keeps whole, in seq order, each empty unless the read
    *  selected its kind (`RUN_ROW_READS`): its `run.activate` and `run.end`
    *  rows, its positions, its calls' results, and the calls its scripts
@@ -123,13 +113,6 @@ export type RunRows = RunPosition & {
 interface TakenFollowUp {
   readonly disposition: FollowUpDisposition;
   readonly commit: CommitOrdinal;
-}
-
-/** One child turn's identity: `key` names the child-run attempt that
- *  accepted it and `index` its position in that attempt. */
-export interface AttemptKey {
-  readonly key: string;
-  readonly index: number;
 }
 
 /** What `applyRunRow` makes of one row. */

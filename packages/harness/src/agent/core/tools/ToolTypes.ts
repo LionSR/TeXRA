@@ -18,7 +18,7 @@ import type {
   ToolDefinition,
   ToolResult,
 } from '@shared/schemas';
-import type { DatabaseNotOwner } from '@shared/session/database';
+import type { DatabaseAggregateClosed } from '@shared/session/database';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { CellError } from '@shared/session/runHistory';
 import type { StepRoot } from '@utils/files/externalRoots';
@@ -177,7 +177,7 @@ export interface CallRequests {
       readonly payload: Extract<PermissionPayload, { kind: P['kind'] }>;
       readonly decision: DecisionOf<P['kind']>;
     },
-    DatabaseNotOwner | CellError
+    DatabaseAggregateClosed | CellError
   >;
 }
 

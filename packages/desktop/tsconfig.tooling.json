@@ -7,8 +7,6 @@
   "include": [
     "design-harness/**/*.ts",
     "tests/e2e/**/*.ts",
-    "src/renderer/**/*.d.ts",
-    "../harness/src/types/**/*.d.ts",
-    "../texra/src/types/**/*.d.ts"
+    "src/renderer/**/*.d.ts"
   ]
 }

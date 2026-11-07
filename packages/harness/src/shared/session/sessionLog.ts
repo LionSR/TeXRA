@@ -15,12 +15,10 @@ import type {
   SessionEvent,
   SessionEventDraft,
 } from '@shared/schemas';
-import type { Effect, Scope, Stream, SubscriptionRef } from 'effect';
+import type { Effect, Stream, SubscriptionRef } from 'effect';
 import type { AgentEvent } from './agentEvent';
 import type {
-  AggregateClaim,
-  DatabaseClaimError,
-  DatabaseNotOwner,
+  DatabaseAggregateClosed,
   DatabaseReadFailed,
   DatabaseWriteFailed,
   SessionStoreMovedAside,
@@ -40,24 +38,13 @@ export type ClosureFact =
   | Extract<SessionEventDraft, { type: 'stage.end' }>;
 
 /** A write the store refused: nothing was written. */
-export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
-
-/** A claim the store would not give this process. */
-export type ClaimError = DatabaseReadFailed | DatabaseClaimError;
+export type LogWriteError = DatabaseAggregateClosed | DatabaseWriteFailed;
 
 /** What one transaction's job holds: the ordered append (each in this
- *  transaction's order) and a registration's claim take-over. What must run
- *  only once it commits goes through {@link SessionLogShape.afterCommit}. */
+ *  transaction's order). What must run only once it commits runs after
+ *  the transaction returns. */
 export interface SessionTransaction {
   readonly append: Append;
-  /** Take `runId`'s claim for this process (a dead owner's, proved dead,
-   *  or its own) and leave it for the run's driver; given back if the job
-   *  fails, or if what it committed never reaches the view. */
-  readonly claim: (runId: RunId) => Effect.Effect<void, ClaimError>;
-  /** Let `runId`'s claim go with this job's commit: a child whose last turn
-   *  waits for a parent another process holds, so whoever delivers it
-   *  takes the claim with no owner to prove dead. */
-  readonly release: (runId: RunId) => Effect.Effect<void, DatabaseWriteFailed>;
 }
 
 /**
@@ -92,9 +79,6 @@ export interface SessionLogShape {
    *  the terminal-result presenter read the view's tail past it. A refused
    *  detached row is heard by its writer. */
   readonly settled: Effect.Effect<void>;
-  /** Run `action` once the job this fiber runs (inside {@link transact})
-   *  commits, never if it rolls back; outside a job, now. */
-  afterCommit(action: Effect.Effect<void>): Effect.Effect<void>;
   /** The current commit ordinal: where a new reader starts its {@link tail}. */
   now(): CommitOrdinal;
   /** A run's history rows, the kinds its state reads, in seq order; with
@@ -136,20 +120,6 @@ export interface SessionLogShape {
   /** The cold listing: the latest row per aggregate and listing type, plus
    *  the outstanding approvals; completes. */
   listing(): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
-  /** Hold `runId`'s claim for the caller's scope. Holds are counted: the
-   *  first takes the claim (proving a prior owner dead), later ones share
-   *  it, and the last to go returns it to how the first found it, unless a
-   *  hold `ends` it (the run's driver), when it is released. */
-  hold(
-    runId: RunId,
-    options?: { readonly ends?: boolean },
-  ): Effect.Effect<void, ClaimError, Scope.Scope>;
-  /** Whether this process holds `runId` open in the database: the durable
-   *  claim, read from SQLite rather than from the view, which lags. */
-  owns(runId: RunId): Effect.Effect<boolean, DatabaseReadFailed>;
-  /** Who holds `runId` now, with the owner's liveness proved in the call:
-   *  what a resume gate and the run listing word a refusal from. */
-  owner(runId: RunId): Effect.Effect<AggregateClaim, DatabaseReadFailed>;
   /** Set when opening the store moved an older build's rows aside; the
    *  host that opened the session presents it once. */
   readonly movedAside: SessionStoreMovedAside | null;

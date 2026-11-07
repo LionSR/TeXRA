@@ -14,15 +14,7 @@
 
 import path from 'node:path';
 
-import {
-  Effect,
-  Layer,
-  Option,
-  Predicate,
-  Schema,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Layer, Option, Predicate, Schema, Stream } from 'effect';
 
 import { GlobalValues } from '@texra-ai/harness/host';
 import { nodePlatformServices } from '@texra-ai/harness/node';
@@ -64,7 +56,7 @@ const approve = (link: ServiceLink) => {
   const [runId, requestId, content] = rest;
   if (runId === undefined || requestId === undefined)
     throw new Error('usage: approve <runId> <requestId> [content]');
-  return SubscriptionRef.changes(link.client).pipe(
+  return link.client.changes.pipe(
     Stream.filter(Predicate.isNotNull),
     Stream.runHead,
     Effect.map(Option.getOrThrow),
@@ -100,7 +92,7 @@ await Effect.runPromise(
       );
       if (mode === 'approve') return yield* approve(link);
       yield* Effect.forkScoped(
-        Stream.runForEach(SubscriptionRef.changes(link.client), (client) =>
+        Stream.runForEach(link.client.changes, (client) =>
           client === null ? Effect.void : say('LINKED'),
         ),
       );

@@ -127,8 +127,6 @@ class VscodeUiHost implements MessageHost, PromptHost {
       Effect.mapError(
         (failure) =>
           new PromptFailed({
-            reason: 'presentation-failed',
-            member: 'confirm',
             message: 'VS Code would not show the confirmation dialog.',
             cause: failure.cause,
           }),
@@ -147,8 +145,6 @@ class VscodeUiHost implements MessageHost, PromptHost {
         vscode.window.showInputBox({ ...options, ignoreFocusOut: true }, token),
       (cause) =>
         new PromptFailed({
-          reason: 'presentation-failed',
-          member: 'input',
           message: 'VS Code would not show the input box.',
           cause,
         }),

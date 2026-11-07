@@ -67,21 +67,13 @@ const copyArtifactFile = Effect.fn('publishCompiledPdfArtifact.copy')(
 
 /**
  * Publish a compiled PDF under the run's `output/r<round>/` and
- * `output/latest/` directories. A compile that wrote no PDF — or wrote
- * something that is not a file — publishes nothing and reports `null`; every
- * other filesystem failure is the caller's to report.
+ * `output/latest/` directories. `compiledPdfPath` is a successful
+ * `compileLatex2Pdf`'s, so a PDF is there; a failed copy is the caller's to
+ * report.
  */
 export const publishCompiledPdfArtifact = Effect.fn(
   'publishCompiledPdfArtifact',
 )(function* (options: PublishCompiledPdfOptions) {
-  const fs = yield* FileSystem.FileSystem;
-  const stats = yield* fs
-    .stat(options.compiledPdfPath)
-    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
-  if (stats === undefined || stats.type !== 'File') {
-    return null;
-  }
-
   const pdfRelativePath = toPdfRelativePath(options);
   const roundRelativePath = path.posix.join(
     'output',

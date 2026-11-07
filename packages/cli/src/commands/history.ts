@@ -45,7 +45,7 @@ const runHistoryList = Effect.fn('runHistoryList')(function* (
   options: { limit?: number },
 ) {
   const stores = yield* initCliPlatform(context);
-  const entries = yield* listCliHistoryEntries(stores.reads);
+  const entries = yield* listCliHistoryEntries(yield* stores.runSession);
   const visibleEntries =
     options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
@@ -66,7 +66,7 @@ const runHistoryShow = Effect.fn('runHistoryShow')(function* (
 ) {
   const stores = yield* initCliPlatform(context);
   const details = yield* readCliHistoryDetails(
-    stores.reads,
+    yield* stores.runSession,
     stores.roots.storage,
     id,
     { includeFullConversation: options.full === true },
@@ -104,7 +104,10 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
 ) {
   const stores = yield* initCliPlatform(context);
   if (format === 'md') {
-    const exportResult = yield* readCliHistoryExportInput(stores.reads, id);
+    const exportResult = yield* readCliHistoryExportInput(
+      yield* stores.runSession,
+      id,
+    );
     if (exportResult.status === 'not_found') {
       writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
       return CliExitCode.Usage;
@@ -120,7 +123,7 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
     return CliExitCode.Success;
   }
 
-  const traceResult = yield* stores.reads.trace(id);
+  const traceResult = yield* (yield* stores.runSession).records(id).readTrace();
   if (traceResult.status !== 'ok') {
     switch (traceResult.status) {
       case 'config_missing':
@@ -171,7 +174,7 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   // every other refusal on this command does; a defect reaches the crash
   // handler.
   const result: CliHistoryDeleteResult | null = yield* deleteCliHistory(
-    stores.reads,
+    yield* stores.runSession,
     options.target,
   ).pipe(
     Effect.catch((error) =>

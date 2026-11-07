@@ -18,8 +18,7 @@
  *   [`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
  *   ([`xaiCoordinator`](#xaicoordinator),
  *   [`xaiLoginWithLoopback`](#xailoginwithloopback),
- *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows, plus
- *   [`SharedAttempt`](#sharedattempt) for coalescing concurrent refreshes.
+ *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows.
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError, type BillingRoute } from './errors.js';
@@ -113,7 +112,7 @@ const bearer = (credential: ModelCredential, protocol: string) =>
     ? Effect.succeed(credential.apiKey)
     : Effect.fail(
         new ModelError({
-          kind: 'unsupported',
+          kind: 'invalid-request',
           message: `A ChatGPT session token cannot authenticate the ${protocol} protocol.`,
         }),
       );
@@ -228,7 +227,6 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
 });
 
 export { SubscriptionOAuthError } from './oauth/subscriptionOAuthError.js';
-export { SharedAttempt } from './oauth/sharedAttempt.js';
 export type {
   DeviceLoginOptions,
   SubscriptionDeviceCodePrompt,

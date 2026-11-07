@@ -144,6 +144,22 @@ _Done 2026-11-05: `ScriptLimitExceeded` replaces the three script-limit
 classes, and the Lean read raises `LeanFileUnreadable` itself
 (`LeanFileReadError` is gone)._
 
+_Done 2026-11-06: `ModelError.kind` is six values, each with a reader
+(`unsupported` is `invalid-request`; `rate-limited`, `quota-exhausted`,
+`malformed-output` and `observation-deadline` are their status, `quota`
+and the kind they defaulted like; `authentication` stays, read by the
+once-per-invocation token renewal). `RouteUnavailable.reason` is a
+`missingApiKey` flag, the one fact read; `SecretsFailed.reason` and
+`PromptFailed.reason` are gone (no reader; one value). `userRetryable`
+went with #14655. Checked and kept, each with a reader:
+`HistoryQueryRefused.reason` (`rejected` branched in the executions
+query), `AgentCustomizeRefused.reason` (`exists` in the settings
+commands), `WindowCallFailed.reason` (mapped onto the diagnostics read's
+own), `RunHistoryInconsistent.reason` (`mismatched-delivery` through
+`RowRejection`), `SubscriptionOAuthError.kind` (`needsReauth`); and
+`isTransientHttpStatus` beside `isRetryableStatus`, whose 409 difference
+is documented at the first._
+
 **Give up.** Catching a failure by a name nobody catches it by.
 
 ## 4. Errors: one classifier per question
@@ -168,6 +184,18 @@ imports llm's `toErrorMessage` and `causeChain` once llm has a browser-safe
 entry (the harness depends on `@texra-ai/llm`, so llm cannot import the
 harness's), not both; the plan wording has one owner, the
 UI's, and the harness copies go.
+
+_Done 2026-11-06 (first part): `toErrorMessage` walks a `PlatformError`'s
+and a `SqlError`'s `reason.cause`, and the nine hand unwraps are gone;
+the three `NotFound`-only catches and the housekeeping `BadResource`
+catch read `absentReason`; the ChatGPT revoke retries by llm's
+`isRetryableStatus`. Kept with their reasons: `isTransientHttpStatus`
+beside `isRetryableStatus` (the 409 difference is documented); the plan
+wording in the harness (`ProviderError.message`, stored on the run's
+rows and read by an embedder and a child's parent) beside the app's
+copy, which words the same facts for its surfaces; llm's own
+`causeChain` and `toErrorMessage`, since the harness's browser-safe
+entries cannot take llm's._
 
 **Give up.** Nothing observable.
 
@@ -289,6 +317,13 @@ two (done). The gate owns every wait, the no-route failure's included: `pauseBef
 sleep goes and `retryAfterMs` is honoured. One thrown-to-result converter; a non-`ToolError` defect is
 logged at `warn` before it becomes a result; one skip signal; `diagnostics`
 values get a reader or go.
+
+_Done 2026-11-06: the loop waits once before a resend, as long as the
+provider asked (`retryAfterMs`) else the base backoff, and nothing for a
+failure the route gate cooled; `ToolResult.diagnostics` is gone with its
+schema, its sanitizer and twelve producers (nothing read it: not the
+model's text, not a surface, not a row reader), and a schema failure
+reaches the model as its rendered issue tree in the one error text._
 
 **Give up.** A silent success on truncation, which is the defect.
 

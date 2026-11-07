@@ -225,14 +225,11 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
     return executed(NO_DIAGNOSTICS_HELP, '✓ No diagnostics');
   }
 
-  const baseDiagnostics = { ...counts, total: diagnostics.length };
-
   if (command === 'count') {
     return {
       status: 'executed',
       summary: countsStr,
       output: `${file}: ${countsStr}`,
-      diagnostics: baseDiagnostics,
     } satisfies ToolResult;
   }
 
@@ -240,7 +237,6 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
     status: 'executed',
     summary: countsStr,
     output: formatGroupedSections(diagnostics),
-    diagnostics: { ...baseDiagnostics, details: diagnostics },
   } satisfies ToolResult;
 });
 

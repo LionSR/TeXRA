@@ -7,7 +7,15 @@
  * replaces. Nothing here is threaded through node fields or a services bag;
  * the loop and the invoker take it from context.
  */
-import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Layer,
+  Scope,
+  ScopedRef,
+  Semaphore,
+  SynchronizedRef,
+} from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -25,6 +33,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import { RunFileService } from '@common/storage/runStorage';
+import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import {
@@ -41,7 +50,6 @@ import type {
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
-import type { ClaimError } from '@shared/session/sessionLog';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { ProjectTools, type OpenStep } from '../loop/step';
 import type { ModelConfig } from '@texra-ai/llm';
@@ -66,11 +74,15 @@ interface LaunchEntry {
    *  fresh run's launch, else its rows' edge): a child detached mid-run
    *  keeps child behaviour until its next activation. */
   readonly parent: RunId | null;
+  /** The parent's call awaits the child and reads its end itself: the
+   *  end delivers nothing to the parent's input, and the run takes no
+   *  permit of the child-run budget (it rides its parent's). */
+  readonly awaited: boolean;
   readonly registration: Registration | null;
   readonly seed?: RegisterRunOptions['seed'] | null;
   readonly opening: Alongside;
   /** Fails when a fresh run's claim, its birth's, cannot be held. */
-  readonly entered: (state: RunState) => Effect.Effect<void, ClaimError>;
+  readonly entered: (state: RunState) => Effect.Effect<void>;
   readonly initialUserMessage: string | undefined;
 }
 
@@ -82,7 +94,9 @@ interface LaunchEntry {
  * anywhere beneath it — the property an SDK embedder wants.
  */
 export interface ToolPolicy {
-  /** Stop a tool-use run after one model/tool cycle instead of waiting. */
+  /** Stop a tool-use run after one model/tool cycle instead of waiting.
+   *  Whether a later turn can still reach the run is `noLaterTurn`
+   *  (`RunCall.ts`), read off this and the launch's parent edge. */
   readonly stopAfterCycle?: boolean;
 }
 
@@ -98,7 +112,12 @@ const SCRIPT_TOOL = 'script';
  *  the run's `AgentRun` carries whole. */
 export interface RunLaunch {
   readonly runId: RunId;
+  /** When this launch or resume of the run started (its opening). */
+  readonly startedAt: number;
   readonly config: AgentConfig;
+  /** The provider API-key variables the launch brought (`StartOptions.apiKeys`):
+   *  the run's environment holds them, and a child it launches takes them. */
+  readonly apiKeys?: Readonly<Record<string, string>>;
   /** The persona the run is, with the tools it declares. */
   readonly persona: Persona;
   readonly logger: AgentTrace;
@@ -130,24 +149,15 @@ export interface AgentRunShape extends RunLaunch {
   readonly finalToolName: string | null;
   /**
    * The binding in force, this activation's resource (its route, socket,
-   * ping fiber and uploads), replaced only through `swapModel`. The run's
-   * model is a row fact, its newest `run.config`, read from the run state;
-   * the binding says only what was bound for it, and is read for what the
-   * bound model can do.
+   * ping fiber and uploads), in a scope of its own under the run's. A
+   * `ScopedRef.set` binds the next one into a fresh scope and closes the
+   * retired binding's at once; a bind that fails or is interrupted leaves
+   * the binding as it was. Its writers are a switch at the loop's model
+   * boundary and a rebind after a failure. The run's model is a row fact,
+   * its newest `run.config`, read from the run state; the binding says only
+   * what was bound for it, and is read for what the bound model can do.
    */
-  readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
-  /**
-   * Replace the binding: `next` binds into a scope of its own, forked from
-   * the run's, and the binding it returns goes into force; the retired
-   * binding's scope closes at once, releasing its socket, ping fiber and
-   * uploads. `next` returning the binding it was handed keeps it, and a
-   * failure or interruption closes the fork and leaves the binding as it
-   * was. The one writer of `model`: a switch, a manual retry's rebind and a
-   * reacquired connection all come through here.
-   */
-  readonly swapModel: <E, R>(
-    next: (current: BoundModel) => Effect.Effect<BoundModel, E, R>,
-  ) => Effect.Effect<BoundModel, E, Exclude<R, Scope.Scope>>;
+  readonly model: ScopedRef.ScopedRef<BoundModel>;
   /**
    * The run's scope: a parallel-strategy child of the layer's, closed when
    * the run's layer is released. What the run holds for its whole life (its
@@ -156,6 +166,15 @@ export interface AgentRunShape extends RunLaunch {
    */
   readonly scope: Scope.Scope;
   readonly callbacks: RunCallbacks;
+  /**
+   * The calls this run awaits children in, at most the child-run budget of
+   * them at once (`childRunConcurrencyBudget`). An awaited child rides its
+   * parent's slot in the session's budget (`ChildRunBudget`), so this is
+   * the one bound on a script's parallel `agent()` and `self()` calls. One
+   * semaphore per run: a child's own awaited calls never wait on its
+   * parent's, so nested delegation cannot deadlock.
+   */
+  readonly awaitedCalls: Semaphore.Semaphore;
 }
 
 export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
@@ -277,41 +296,20 @@ export const agentRunLayer = (
       // user's stored preferences.
       const declinedRoutes: readonly DeclinableUsageRoute[] =
         persisted?.declinedRoutes ?? [];
-      // Each binding owns a scope forked from the run's; only the one in
-      // force is open. `bindingScope` is written only inside the ref's
-      // update, which serializes every swap.
-      let bindingScope = yield* Scope.fork(scope);
-      const bound = yield* (yield* ModelAccess)
-        .bind({
-          modelId,
-          config: modelConfig,
-          backend,
-          declinedRoutes,
-          textOnly,
-          temperature: persona.temperature,
-        })
-        .pipe(Scope.provide(bindingScope));
-      const model = yield* SynchronizedRef.make(bound);
-      const swapModel: AgentRunShape['swapModel'] = (next) =>
-        SynchronizedRef.updateAndGetEffect(
-          model,
-          Effect.fnUntraced(function* (current) {
-            const fork = yield* Scope.fork(scope);
-            const replacement = yield* next(current).pipe(
-              Scope.provide(fork),
-              Effect.onExit((exit) =>
-                Exit.isSuccess(exit) && exit.value !== current
-                  ? Effect.void
-                  : Scope.close(fork, Exit.void),
-              ),
-            );
-            if (replacement === current) return current;
-            const retired = bindingScope;
-            bindingScope = fork;
-            yield* Scope.close(retired, Exit.void);
-            return replacement;
-          }),
-        );
+      // The ref masks its acquisition; a stop must still cut a bind in
+      // progress.
+      const model = yield* ScopedRef.fromAcquire(
+        (yield* ModelAccess)
+          .bind({
+            modelId,
+            config: modelConfig,
+            backend,
+            declinedRoutes,
+            textOnly,
+            temperature: persona.temperature,
+          })
+          .pipe(Effect.interruptible),
+      ).pipe(Scope.provide(scope));
 
       return {
         ...launch,
@@ -320,9 +318,11 @@ export const agentRunLayer = (
         steps: yield* SynchronizedRef.make<OpenStep | null>(null),
         finalToolName,
         model,
-        swapModel,
         scope,
         callbacks: input.callbacks,
+        awaitedCalls: Semaphore.makeUnsafe(
+          yield* resolveChildRunConcurrencyBudget(roots),
+        ),
       };
     }),
   ).pipe(Layer.provideMerge(sessionModelAccess));

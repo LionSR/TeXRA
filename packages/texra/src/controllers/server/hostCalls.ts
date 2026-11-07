@@ -11,7 +11,6 @@ import { Schema } from 'effect';
 
 import {
   ApprovalPolicySchema,
-  type ApprovalPolicyDenial,
   FileLocationSchema,
   LaunchNoticeSchema,
   RequestShowErrorPayloadSchema,
@@ -22,12 +21,15 @@ import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 
 /** What a window can do for a run. `notices` covers the runtime's notices
- *  and its approval-policy denials. */
+ *  and its approval-policy denials, which a window with `emit` presents;
+ *  `filesWritten` the files a task wrote, which a window with a file tree
+ *  follows. */
 const HOST_CAPABILITIES = [
   'readDiagnostics',
   'addCriticism',
   'openPdf',
   'notices',
+  'filesWritten',
 ] as const;
 export const HostCapabilitySchema = Schema.Literals(HOST_CAPABILITIES);
 export type HostCapability = typeof HostCapabilitySchema.Type;
@@ -51,34 +53,6 @@ const ManualCriticismEntrySchema = Schema.Struct({
   severity: Schema.Int,
   confidence: Schema.Int,
 }) satisfies Schema.Codec<ManualCriticismEntry, unknown>;
-
-/** The policy that closed a gate, as the window names it. */
-const policy = ApprovalPolicySchema;
-const ApprovalPolicyDenialSchema = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal('executable'), policy }),
-  Schema.Struct({ kind: Schema.Literal('plan'), policy }),
-  Schema.Struct({ kind: Schema.Literal('proposal'), policy }),
-  Schema.Struct({
-    kind: Schema.Literal('withheldTools'),
-    tools: Schema.Array(Schema.String),
-    policy,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('retry'),
-    deny: Schema.Literals([
-      'yolo-retry',
-      'credential',
-      'policy',
-      'unpresentable',
-    ]),
-    policy,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('humanInput'),
-    deny: Schema.Literals(['yolo-no-human', 'policy', 'unpresentable']),
-    policy,
-  }),
-]) satisfies Schema.Codec<ApprovalPolicyDenial, unknown>;
 
 /** The runtime's notices, by event, as a window presents them: the two a
  *  refused launch carries among them. */
@@ -120,11 +94,6 @@ const HostCallSchema = Schema.Union([
     kind: Schema.Literal('filesWritten'),
     absolutePaths: Schema.Array(Schema.String),
   }),
-  Schema.Struct({
-    kind: Schema.Literal('approvalDenied'),
-    denial: ApprovalPolicyDenialSchema,
-    runId: RunIdSchema,
-  }),
 ]);
 export type HostCall = typeof HostCallSchema.Type;
 
@@ -136,8 +105,7 @@ export const CALL_CAPABILITY: Readonly<
   addCriticism: 'addCriticism',
   openPdf: 'openPdf',
   notice: 'notices',
-  filesWritten: 'notices',
-  approvalDenied: 'notices',
+  filesWritten: 'filesWritten',
 };
 
 /** What each call answers with, when it answers with a value. */
@@ -156,6 +124,9 @@ export const HostFrameSchema = Schema.Union([
     kind: Schema.Literal('call'),
     id: Schema.String,
     call: HostCallSchema,
+    /** Whether a run waits for the answer: a notice or a file notification
+     *  is told and not answered. */
+    awaited: Schema.Boolean,
   }),
 ]);
 export type HostFrame = typeof HostFrameSchema.Type;

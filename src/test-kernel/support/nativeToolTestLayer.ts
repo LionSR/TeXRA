@@ -1,9 +1,18 @@
 /** Explicit call capabilities over the calling fiber's process services. */
-import { Context, Effect, Layer, Schema, Scope, SynchronizedRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Layer,
+  Schema,
+  Scope,
+  ScopedRef,
+  Semaphore,
+  SynchronizedRef,
+} from 'effect';
 
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { openRequest } from '@agent/runtime/requests';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
@@ -23,7 +32,11 @@ import {
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { sessionFsLayer } from '@platform/rootedFs';
 import type { DraftBlob } from '@shared/session/historyTurns';
-import { RunHistory } from '@shared/session/runHistory';
+import {
+  RunHistory,
+  runStateAppend,
+  SessionLog,
+} from '@shared/session/runHistory';
 import { NO_FACTS } from '@shared/session/runFacts';
 import {
   AgentConfigSchema,
@@ -44,8 +57,12 @@ type TestCallRun = Pick<RunCallShape['run'], 'runId' | 'toolPolicy'> &
 
 /** A run's live model cell holding only the id a tool reads off it. */
 export const testModelCell = (modelId: string) =>
-  // cast: a tool reads only the id off the run's model cell.
-  SynchronizedRef.makeUnsafe({ modelId } as BoundModel);
+  Effect.runSync(
+    // cast: a tool reads only the id off the run's model cell.
+    ScopedRef.make(() => ({ modelId }) as BoundModel).pipe(
+      Scope.provide(Scope.makeUnsafe()),
+    ),
+  );
 
 /** A run that has opened no step yet. */
 const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
@@ -99,6 +116,9 @@ export function nativeToolTestLayer(
     opening: null,
     fileService: new RunFileService(run.runId, roots),
     callbacks: {},
+    awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
+    // A root unless the fixture names its parent edge.
+    entry: { parent: null, awaited: false },
     ...runFields,
     runId: run.runId,
     toolPolicy: run.toolPolicy,
@@ -160,20 +180,23 @@ export function nativeToolTestLayer(
               payload: P,
               blobs?: readonly DraftBlob[],
             ) =>
-              Context.get(session, SessionRequests)
-                .ask(toolRun.runId, payload, {
-                  ...(blobs && { blobs }),
-                })
-                .pipe(
-                  Effect.map((decision) => ({
-                    // cast: the answer is to the request supplied, of its kind.
-                    payload: payload as Extract<
-                      PermissionPayload,
-                      { kind: P['kind'] }
-                    >,
-                    decision,
-                  })),
-                ),
+              openRequest(toolRun.runId, payload, {
+                ...(blobs && { blobs }),
+                commit: (rows) =>
+                  Context.get(session, SessionLog)
+                    .transact((tx) => runStateAppend(tx.append)(rows))
+                    .pipe(Effect.as(Context.get(session, SessionLog).now())),
+              }).pipe(
+                Effect.provide(session),
+                Effect.map((decision) => ({
+                  // cast: the answer is to the request supplied, of its kind.
+                  payload: payload as Extract<
+                    PermissionPayload,
+                    { kind: P['kind'] }
+                  >,
+                  decision,
+                })),
+              ),
             post: (requestId: string, payload: PermissionPayload) =>
               Context.get(session, RunHistory)
                 .open(toolRun.runId)

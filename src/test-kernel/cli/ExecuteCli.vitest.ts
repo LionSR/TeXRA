@@ -25,7 +25,7 @@ import {
   type RuntimeRequest,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { liveToolGates } from '@agent/runtime/requestPolicy';
+import { liveToolGates } from '@agent/runtime/requests';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -95,6 +95,7 @@ function runSessionFake(session: LocalSession): LocalSession {
         Effect.map((): Run => ({
           runId:
             input.runId ?? assert.fail('the CLI mints the id of every run'),
+          activation: 0,
           result: Effect.tryPromise({
             try: () =>
               // cast: each case's `rootLaunch` stub resolves with the run's end.
@@ -249,14 +250,10 @@ function stubExecuteCliDeps(): void {
   // The host answers the session's approval question the way the headless
   // adapter does: whether this context can answer a prompt.
   mocks.createHeadlessCliHostInteractions.mockImplementation(
-    (_session: unknown, context: CliContext) =>
-      Effect.succeed({
-        emit: mocks.emit,
-        pending: vi.fn(() => []),
-        resolve: vi.fn(() => false),
-        cancel: vi.fn(),
-        approvalPromptsUnavailable: context.mode !== 'interactive',
-      }),
+    (_session: unknown, context: CliContext) => ({
+      emit: mocks.emit,
+      approvalPromptsUnavailable: context.mode !== 'interactive',
+    }),
   );
   mocks.createCliRuntimeHost.mockReturnValue({
     emit: mocks.emit,

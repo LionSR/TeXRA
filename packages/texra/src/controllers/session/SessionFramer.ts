@@ -1,52 +1,34 @@
 /**
- * The transport framer: one per
- * transport port, answering each Subscribe with the same ordered input
- * reader the runtime view uses: listing, named histories, local state,
- * completion marker, then durable events before live text. Host snapshots
- * are merged beside those inputs. A cold mount starts from the runtime
- * view's cursor; a resubscribe starts from the cursor it supplies.
- * Rows are tagged with their read, transcript rows and text chunks of
- * aggregates the subscriber did not name are left out of the tail, and every frame
- * carries the commit the framer had drained when it cut it, left-out rows
- * included, so the subscriber's cursor moves past them.
- *
- * Framing is `Stream.groupedWithin(rows, 16 millis)` then
- * `Stream.buffer({ strategy: 'suspend' })`: durable rows must not drop, and
- * suspension pauses the framer, never the publisher. Text chunks ride the
- * same buffer, merged to one per streaming row per frame where adjacent,
- * which the offsets make lossless. A later `Subscribe` on the port
- * supersedes the replay in flight; its frames echo its generation and the
- * decoder drops the superseded one's; `SessionBridge` owns the fiber per
- * port and forks the next `Subscribe`'s stream after interrupting it.
+ * The transport framer: one per transport port, answering each
+ * `Subscribe` with the session's own ordered input reader
+ * (`Session.view.watch`): a replay whole, then each tail read, each batch
+ * one frame. A cold mount starts from the runtime view's cursor; a
+ * resubscribe starts from the cursor it supplies. Of a tail read, the
+ * transcript rows and text chunks of aggregates the subscriber did not
+ * name are left out (the listing rows stay), and adjacent text chunks of
+ * one row are merged, which the offsets make lossless; every frame
+ * carries the commit the reader had drained, left-out rows included, so
+ * the subscriber's cursor moves past them. The buffer suspends the framer
+ * when the port falls behind, never the publisher. A later `Subscribe` on
+ * the port supersedes the replay in flight; its frames echo its
+ * generation and the receiver drops the superseded one's.
  *
  * Rows are framed as committed: secrets never enter the event table, so no
  * framer redacts.
  */
-import { Effect, Predicate, Stream, SubscriptionRef } from 'effect';
+import { Stream } from 'effect';
 
-import {
-  qualifyAggregateId,
-  listingTypeOf,
-  type LocalRuntimeState,
-} from '@texra-ai/harness/schemas';
-import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import { qualifyAggregateId, listingTypeOf } from '@texra-ai/harness/schemas';
 import type {
   EventsFrame,
-  EventInput,
   Subscribe,
 } from '@texra/shared/session/sessionFrames';
 import type {
   CommitOrdinal,
-  ExistenceReconciliation,
   SessionViewInput,
-  TextChunk,
 } from '@texra-ai/harness/transcript';
 import type { Session } from '@texra-ai/harness';
 
-/** Rows per frame before the window cuts it. */
-const FRAME_ROWS = 256;
-/** The framing window: the 16 ms cadence of the old delta batches. */
-const FRAME_WINDOW = '16 millis';
 /** Frames buffered ahead of the port before the framer suspends. */
 const FRAME_BUFFER = 64;
 
@@ -57,162 +39,82 @@ interface FramerSource {
   readonly view: Pick<Session['view'], 'current' | 'watch'>;
 }
 
-type FrameItem =
-  | Exclude<SessionViewInput, { _tag: 'subscriptions' }>
-  | { readonly _tag: 'host'; readonly host: HostSnapshot };
-
-/** One frame from the items of one window: chunks merged per row where
- *  adjacent, the last local and host snapshots, the marker, and the drained
- *  commit advanced by every tail row, framed or left out. */
-function cutFrame(
-  key: string,
-  subscribe: Subscribe,
+/** One batch as the subscriber takes it: the rows and chunks of aggregates
+ *  it did not name left out, adjacent chunks of one row merged. */
+function framed(
   named: ReadonlySet<string>,
-  drainedBefore: CommitOrdinal,
-  items: readonly FrameItem[],
-): EventsFrame {
-  const events: EventInput[] = [];
-  const chunks = new Map<string, TextChunk>();
-  let local: LocalRuntimeState | null = null;
-  let host: HostSnapshot | null = null;
-  let debug: boolean | null = null;
-  let replayComplete = false;
-  let existence: ExistenceReconciliation | null = null;
-  let drained = drainedBefore;
-  for (const item of items) {
-    switch (item._tag) {
-      case 'event': {
-        const { event } = item;
-        if (item.read === 'all') {
-          if (listingTypeOf(event) === null && !named.has(event.aggregateId)) {
-            continue;
-          }
-        }
-        events.push(item);
-        break;
+  batch: readonly SessionViewInput[],
+): SessionViewInput[] {
+  const inputs: SessionViewInput[] = [];
+  for (const input of batch) {
+    if (
+      input._tag === 'event' &&
+      input.read === 'all' &&
+      listingTypeOf(input.event) === null &&
+      !named.has(input.event.aggregateId)
+    )
+      continue;
+    if (input._tag === 'chunk') {
+      if (!named.has(qualifyAggregateId('run', input.runId))) continue;
+      const last = inputs.at(-1);
+      if (
+        last?._tag === 'chunk' &&
+        last.runId === input.runId &&
+        last.rowId === input.rowId &&
+        last.to === input.from
+      ) {
+        inputs[inputs.length - 1] = {
+          ...last,
+          to: input.to,
+          text: last.text + input.text,
+        };
+        continue;
       }
-      case 'chunk': {
-        if (!named.has(qualifyAggregateId('run', item.runId))) continue;
-        const rowKey = `${item.runId}/${item.rowId}`;
-        const held = chunks.get(rowKey);
-        chunks.set(
-          rowKey,
-          held && held.to === item.from
-            ? { ...held, to: item.to, text: held.text + item.text }
-            : item,
-        );
-        break;
-      }
-      case 'local':
-        local = item.local;
-        break;
-      case 'host':
-        host = item.host;
-        break;
-      case 'debug':
-        debug = item.enabled;
-        break;
-      case 'replay.complete':
-        replayComplete = true;
-        existence = item.existence;
-        break;
-      case 'drained':
-        drained = item.cursor;
-        existence = item.existence;
-        break;
     }
+    inputs.push(input);
   }
-  return {
-    kind: 'events',
-    session: key,
-    generation: subscribe.generation,
-    cursor: drained,
-    events,
-    chunks: [...chunks.values()],
-    local,
-    host,
-    debug,
-    replayComplete,
-    existence,
-  };
+  return inputs;
 }
 
 /**
- * The frames that answer one `Subscribe`: a stream that replays, marks,
- * then tails until interrupted. Pure over its sources, so a test drives it
- * under `TestClock`.
+ * The frames that answer one `Subscribe`: a stream that replays, then
+ * tails until interrupted. Pure over its source, so a test drives it under
+ * `TestClock`.
  */
 export function frameSubscription(
   source: FramerSource,
-  host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>,
   subscribe: Subscribe,
 ): Stream.Stream<EventsFrame> {
-  const named = new Set(subscribe.aggregates.map((s) => s.id));
-  return Stream.unwrap(
-    Effect.sync(() => {
-      // The tail position: the session view's cursor, read before the
-      // reads below, on a cold mount; the subscriber's own on a resubscribe.
-      // The watch holds the subscriber's transcript set while it runs.
-      const tailFrom =
-        subscribe.cursor === 0
-          ? source.view.current().cursor
-          : subscribe.cursor;
-      const inputs = source.view
-        .watch(subscribe.aggregates, {
-          cursor: tailFrom,
-          debug: subscribe.debug,
-        })
-        .pipe(
-          Stream.flatMap((batch) =>
-            Stream.fromIterable(batch).pipe(
-              Stream.filter(
-                (
-                  input,
-                ): input is Exclude<
-                  SessionViewInput,
-                  { _tag: 'subscriptions' }
-                > => input._tag !== 'subscriptions',
-              ),
-            ),
-          ),
-        );
-      const hosts = SubscriptionRef.changes(host).pipe(
-        Stream.filter(Predicate.isNotNull),
-        Stream.map((value): FrameItem => ({ _tag: 'host', host: value })),
-      );
-      return Stream.merge(inputs, hosts).pipe(
-        Stream.groupedWithin(FRAME_ROWS, FRAME_WINDOW),
-        Stream.buffer({ capacity: FRAME_BUFFER, strategy: 'suspend' }),
+  const named = new Set(subscribe.aggregates.map((entry) => entry.id));
+  return Stream.suspend(() => {
+    // The tail position: the session view's cursor, read before the
+    // reads below, on a cold mount; the subscriber's own on a resubscribe.
+    // The watch holds the subscriber's transcript set while it runs.
+    const tailFrom =
+      subscribe.cursor === 0 ? source.view.current().cursor : subscribe.cursor;
+    return source.view
+      .watch(subscribe.aggregates, {
+        cursor: tailFrom,
+        debug: subscribe.debug,
+      })
+      .pipe(
         Stream.mapAccum(
           () => tailFrom,
-          (drained, items: readonly FrameItem[]) => {
-            const groups: FrameItem[][] = [];
-            let pending: FrameItem[] = [];
-            for (const item of items) {
-              pending.push(item);
-              if (item._tag === 'drained' || item._tag === 'replay.complete') {
-                groups.push(pending);
-                pending = [];
-              }
-            }
-            if (pending.length > 0) groups.push(pending);
-            const frames: EventsFrame[] = [];
-            let cursor = drained;
-            for (const group of groups) {
-              const frame = cutFrame(
-                source.key,
-                subscribe,
-                named,
-                cursor,
-                group,
-              );
-              cursor = frame.cursor;
-              frames.push(frame);
-            }
-            return [cursor, frames] as const;
+          (drained: CommitOrdinal, batch) => {
+            const cursor =
+              batch.findLast((input) => input._tag === 'drained')?.cursor ??
+              drained;
+            const frame: EventsFrame = {
+              kind: 'events',
+              session: source.key,
+              generation: subscribe.generation,
+              cursor,
+              inputs: framed(named, batch),
+            };
+            return [cursor, [frame]] as const;
           },
         ),
+        Stream.buffer({ capacity: FRAME_BUFFER, strategy: 'suspend' }),
       );
-    }),
-  );
+  });
 }

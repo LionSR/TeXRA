@@ -15,9 +15,14 @@
 
 // The process every host composes: one `processLayer`, built once.
 export { processLayer } from './effect/processLayer.js';
-// A run's trace read back from a session's rows, for a session whose runs
-// run elsewhere (a window over the background service).
+// A run's trace and its activation's view read back from a session's rows,
+// for a session whose runs run elsewhere (a window over the background
+// service).
 export { replayTrace } from '@controllers/session/runTrace';
+export {
+  activationView,
+  type ActivationViewSource,
+} from './effect/runHandle.js';
 // A project's view read cold from its store, for a multi-project listing.
 export { readSessionView } from '@controllers/session/readSessionView';
 export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
@@ -91,6 +96,7 @@ export {
   readStorageInventory,
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
+export { storeHeld } from '@controllers/session/Database';
 // Follow-up delivery helpers hosts share.
 export {
   describeFollowUpFailure,
@@ -165,7 +171,7 @@ export { SubscriptionPreference } from '@model/subscriptionAccess';
 export type { RouteReasoning, SentReasoning } from '@model/reasoningLevel';
 export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
 // The process's retry gate every model call (a helper call's too) waits on.
-export type { RouteRetries } from '@agent/runtime/run/invocation';
+export type { RouteRetries } from '@agent/runtime/ModelRetryGate';
 // Who a helper call's usage is billed to, and why a model call can fail.
 export type { UsageAttribution } from '@agent/runtime/run/pricing';
 export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';

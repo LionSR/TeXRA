@@ -19,15 +19,10 @@ import { compileLatex2Pdf } from '@latex/texTools';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
 import { generateExportFilename } from '@texra/agent/export/chatExport/filenames';
-import type {
-  ChatExportInputUnreadable,
-  ChatExportLoadResult,
-} from '@texra/agent/export/loadChatExportInput';
-import type { TaskRecordsFailed } from '@texra/controllers/server/protocol';
+import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
 import { TranscriptExportFailed } from './transcriptExportFailure';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { AssembleTraceResult } from '@texra-ai/harness/host';
+import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The host-supplied trace-viewer bundle is unusable. Preserve its own
@@ -37,7 +32,6 @@ function bundleFailure(
 ): Effect.Effect<never, TranscriptExportFailed> {
   return Effect.fail(
     new TranscriptExportFailed({
-      step: 'traceViewerBundle',
       message,
       cause: new Error(message),
     }),
@@ -73,31 +67,24 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     /** The preamble is a host asset, independent of its installation path. */
     readonly latexPreamble: string;
     readonly templatePath: string;
-    /** Records come from the local session or the service that owns it. */
-    readonly records: {
-      readonly input: (
-        runId: RunId,
-      ) => Effect.Effect<
-        Pick<ChatExportLoadResult, 'config' | 'exportInput'>,
-        ChatExportInputUnreadable | TaskRecordsFailed
-      >;
-      readonly trace: (
-        runId: RunId,
-      ) => Effect.Effect<AssembleTraceResult, Error>;
-    };
+    /** The run's session, whose records the export reads: this process's
+     *  own, or the service's. */
+    readonly session: Session;
   },
 ) {
   if (format === 'html') {
-    const traceResult = yield* options.records.trace(runId).pipe(
-      Effect.mapError(
-        (cause) =>
-          new TranscriptExportFailed({
-            step: 'assembleTrace',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      ),
-    );
+    const traceResult = yield* options.session
+      .records(runId)
+      .readTrace()
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new TranscriptExportFailed({
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        ),
+      );
     if (traceResult.status !== 'ok')
       return yield* new Rejected({
         reason: {
@@ -113,7 +100,6 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     if (firstEvent === undefined) {
       const cause = new Error(`The assembled trace of run ${runId} is empty.`);
       return yield* new TranscriptExportFailed({
-        step: 'assembleTrace',
         message: cause.message,
         cause,
       });
@@ -145,7 +131,10 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     return { ...(yield* writeExport(runId, filename, html)), format };
   }
 
-  const { config, exportInput } = yield* options.records.input(runId);
+  const { config, exportInput } = yield* loadChatExportInput(
+    runId,
+    options.session,
+  );
   if (!config)
     return yield* new Rejected({
       reason: 'This run has no saved data to export.',

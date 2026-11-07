@@ -6,7 +6,7 @@ import { describe, expect } from 'vitest';
 // Local imports
 import { qualifyAggregateId, RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
-import { runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -35,7 +35,10 @@ interface LoopInit extends ScriptedRunInit {
 /** Run one scripted tool-use run to completion, with what it asked for. */
 const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
-  const result = yield* runToolUse({ resume: false }).pipe(
+  const result = yield* Effect.flatMap(
+    openToolUse({ resume: false }),
+    (opened) => runToolUse({ resume: false }, opened),
+  ).pipe(
     Effect.provide(
       Layer.mergeAll(
         scriptedInvokerLayer(init.script, requests),

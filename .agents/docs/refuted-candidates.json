@@ -189,6 +189,47 @@
           "signature": "export const makeSessionViewAccess = Effect.fn( 'SessionView.makeSessionViewAccess', )(function* ( storage: string, closed: () => boolean, ): Effect.fn.Return< SessionViewAccessShape, DatabaseReadFailed, | Scope.Scope | SessionViewService | SessionInputs | TranscriptSubscriptions | LocalRuntimeSource > {…});"
         }
       ]
+    },
+    {
+      "id": "RT-child-environment-one-owner",
+      "candidate": "one owner for the environment a child process starts from, with the machine git helper on the project's .env",
+      "why": "The three builders are three policies, not one spelled three times. Every name in API_KEY_ENV_NAMES already matches the MCP server's credential regex, so no credential the harness reads reaches an MCP server; shell commands keep their credential-shaped names by the owner's decision; and the machine git helper reads process.env on purpose, since it runs at plugin install and Overleaf clone outside any approval, where a project's .env GIT_SSH_COMMAND would run an arbitrary command.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#m3-refused-on-investigation",
+      "symbols": [
+        {
+          "file": "packages/harness/src/utils/system/envFlags.ts",
+          "symbol": "inheritedEnv",
+          "signature": "export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* ( keep?: ApiKeyProviderId, ): Effect.fn.Return<Record<string, string>> {…});"
+        },
+        {
+          "file": "packages/harness/src/utils/system/gitEnv.ts",
+          "symbol": "makeMachineGitEnv",
+          "signature": "export const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv> = Effect.suspend(() => {…});"
+        },
+        {
+          "file": "packages/harness/src/tools/mcp/mcpServer.ts",
+          "symbol": "serverEnv",
+          "signature": "const serverEnv = Effect.fn('serverEnv')(function* (config: McpServerConfig) {…});"
+        }
+      ]
+    },
+    {
+      "id": "RT-tool-edit-staging-one-owner",
+      "candidate": "the tool-edit approval's staging in the controller, with each host reduced to its diff verbs",
+      "why": "The hosts differ where the flow matters: where the two copies live (a per-request temp directory, the extension's storage directory), where the user's edits are read from (the saved file, the unsaved editor buffer) and what survives an unapplied edit (the proposed file on disk, an untitled editor). Writing the copies is already one function, writeApprovalTempFiles; a controller-owned staging would have to know which files each host removes. What remains duplicated is two path getters and two spellings of the diff title.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
+      "symbols": [
+        {
+          "file": "packages/desktop/src/main/desktopToolEditApproval.ts",
+          "symbol": "DesktopToolEditApprovalHost",
+          "signature": "export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {…}"
+        },
+        {
+          "file": "packages/extension/src/frontend/approval/VscodeToolEditApprovalHost.ts",
+          "symbol": "VscodeToolEditApprovalHost",
+          "signature": "export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {…}"
+        }
+      ]
     }
   ]
 }

@@ -16,7 +16,7 @@ import {
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
-import { runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
 import {
   AgentRun,
   agentRunLayer,
@@ -155,7 +155,9 @@ layer(
           workingDirectory: process.cwd(),
         });
         const ctx = validationLaunch({ runId }, config);
-        yield* runToolUse({ resume: false }).pipe(
+        yield* Effect.flatMap(openToolUse({ resume: false }), (opened) =>
+          runToolUse({ resume: false }, opened),
+        ).pipe(
           Effect.provide(runLayer(session, ctx, [tool('gone'), tool('kept')])),
           Effect.orDie,
         );

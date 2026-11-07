@@ -146,28 +146,12 @@ layer(texraHosted, { excludeTestServices: true })(
             yield* Context.get(session, SessionLog).settled;
 
             // The resumed launch stops before it enters the run (no provider key
-            // binds its model): it writes nothing and lets the claim go.
+            // binds its model): it writes nothing.
             expect(
               (yield* Effect.flip(
                 resumeRun(runId, {}).pipe(Effect.provide(session)),
               )).message,
             ).toContain('Missing API key');
-
-            expect(
-              (yield* Effect.exit(
-                Context.get(session, SessionLog).transact([
-                  {
-                    type: 'log',
-                    aggregateId: qualifyAggregateId('run', runId),
-                    level: 'info',
-                    message: 'late stream write',
-                  },
-                ]),
-              ))._tag,
-            ).toBe('Failure');
-            expect(yield* Context.get(session, SessionLog).owns(runId)).toBe(
-              false,
-            );
 
             const archived = yield* readCompletedRunConversationEffect(
               runId,

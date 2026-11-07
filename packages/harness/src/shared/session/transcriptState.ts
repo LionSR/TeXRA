@@ -121,8 +121,8 @@ export interface TranscriptIndexes {
   readonly cursors: Map<string, TranscriptText>;
   /** The newest thinking row, for `thinkingActive`. */
   thinkingRowId: string | undefined;
-  /** The `seq` of the run's newest wait (a `run.position` at `waiting` or
-   *  `halted`): the point a user message that follows forks at. */
+  /** The `seq` of the run's newest wait (a `run.position` at `waiting`):
+   *  the point a user message that follows forks at. */
   lastWait: number | null;
   /** A user message has been taken: a wait before the first one (a fork's
    *  seed) cuts before nothing. */

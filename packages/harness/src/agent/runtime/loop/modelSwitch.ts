@@ -3,10 +3,10 @@
  * model boundary: the rows that record it are appended by the one fiber that
  * holds the run's state.
  */
-import { Effect, SynchronizedRef } from 'effect';
+import { Effect, ScopedRef } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
-import type { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runState';
@@ -17,7 +17,7 @@ import { configRow, consumedRows } from './rows';
 
 /** Apply the model switches the run's input queues (the latest wins): the
  *  `run.config` naming the new model and the requests' `followup.consumed`,
- *  committed inside the swap, so the new binding goes into force only once
+ *  committed inside the rebind, so the new binding goes into force only once
  *  its rows have. The newest `run.config` is the run's one model fact; the
  *  fold drops the old model's continuation with it. */
 export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
@@ -44,7 +44,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
         requests(controls, { kind: 'dropped', reason: 'noop' }),
       );
     const consumed = requests(controls, { kind: 'applied' });
-    const current = yield* SynchronizedRef.get(run.model);
+    const current = yield* ScopedRef.get(run.model);
     const selected = selectModel(model);
     // A switch that cannot apply fails the run: its `run.end` consumes the
     // request, so no resume meets it again.
@@ -53,8 +53,12 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     }
     const state = yield* beforeSwap(cell);
     let switched = state;
-    yield* run.swapModel(
-      Effect.fnUntraced(function* () {
+    // The ref masks its acquisition; a stop must still cut a bind in
+    // progress. The rows commit inside it, so the new binding goes into
+    // force only once they have.
+    yield* ScopedRef.set(
+      run.model,
+      Effect.gen(function* () {
         const next = yield* access.bind({
           modelId: model,
           config: selected.config,
@@ -71,7 +75,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
           }),
         ]);
         return next;
-      }),
+      }).pipe(Effect.interruptible),
     );
     return switched;
   },
@@ -94,7 +98,7 @@ export function modelSwitchPort(
       Effect.flatMap(cell.current, (state) =>
         access.admit(
           model,
-          SynchronizedRef.getUnsafe(run.model),
+          ScopedRef.getUnsafe(run.model),
           state.declinedRoutes,
         ),
       ),

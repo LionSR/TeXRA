@@ -7,7 +7,10 @@
  * projects. A step (`pin`) reads the switches and installed plugins once
  * and builds its tools from that read alone, so a run's tools change only
  * there. Each resource is an `RcMap` entry: one build per key, stopped by
- * its last release; a failed or interrupted build is dropped.
+ * its last release. An interrupted build is dropped; a failed one answers
+ * its failure to every holder until its last release. An MCP server's
+ * failed start is held as a value instead, so the project's next root run
+ * can retry it (`projectServers`).
  */
 import {
   Context,

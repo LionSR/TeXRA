@@ -11,7 +11,8 @@
  * they are; a procedure's error is the error class the handler fails with,
  * which the client receives as that class. The procedures:
  *
- * - `service.hello`: the handshake; a client compares `protocol` with its own.
+ * - `service.hello`: the handshake; a client compares `protocol` (the
+ *   digest of every procedure's shapes, {@link PROTOCOL}) with its own.
  * - `service.stop`: stop now (`drain: false`), or stop taking new work and
  *   exit once the running tasks end (`drain: true`, the upgrade path).
  * - `tasks.list`: every task in every project this storage root holds.
@@ -19,42 +20,44 @@
  *   for one `Subscribe`, the frames the webview bridge already carries.
  * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, a
  *   model switch, a pending tool edit's preview, …).
- * - `task.start` / `task.resume`: launch or continue a task in the service;
- *   `task.ended`: the outcome it ends with.
- * - `task.config` / `task.exportInput` / `task.exportTrace`: a task's saved
- *   setup, and what its transcript exports read, from the service's own
- *   records; `tasks.history`, `task.detail`, `task.skills` and
- *   `tasks.delete`: what the CLI's history and status read and delete.
+ * - `task.start` / `task.resume`: launch or continue a task in the service,
+ *   answered with the run and the activation the window's handle is for;
+ *   `task.result`: that activation's stored end (`Run.result`).
+ * - `session.view` / `session.listRuns` / `session.deleteRuns` and the
+ *   `records.*` procedures: `Session`'s store reads and deletion, one
+ *   procedure per member, answered from the service's own session.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  * - `state.get` / `state.set`: the project's state store, which a window
  *   reads and writes here rather than opening the project's store itself.
  */
+import { hash } from 'node:crypto';
+
 import { Schema, Struct } from 'effect';
-import { Rpc, RpcGroup } from 'effect/rpc';
+import { Rpc, RpcGroup, RpcSchema } from 'effect/rpc';
 
 import {
   AgentConfigSchema,
   AgentRunListingEntrySchema,
   JsonValueSchema,
   LaunchNoticeSchema,
+  ResumeRefusalSchema,
   RunEndSchema,
   RunIdSchema,
   RunRecordFieldsSchema,
   RunResultSchema,
-  RunViewSchema,
   RunWorkspaceFileSchema,
   RUN_STATUS_KEYS,
   OutcomeSchema,
   RequestErrorSchema,
   RuntimeRequestSchema,
+  SessionViewSchema,
   StartRequestSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
 } from '@texra-ai/harness/transcript';
-import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 
 import {
   EventsFrameSchema,
@@ -66,8 +69,6 @@ import {
   HostFrameSchema,
 } from './hostCalls';
 import { ExportNodeSchema, type ValueFamily } from '@texra-ai/harness/host';
-
-import { RUN_LAUNCH_FACT_FIELDS } from './taskList';
 
 /**
  * The build every TeXRA bundle carries: the workspace version, stamped by
@@ -81,46 +82,10 @@ import { RUN_LAUNCH_FACT_FIELDS } from './taskList';
 export const BUILD_VERSION: string =
   process.env.TEXRA_BUILD_VERSION || 'unknown';
 
-/** The protocol's version and the shapes it versions. `version` is bumped
- *  whenever a procedure or a payload changes shape: a client newer than the
- *  running service retires it, an older one stays in process. `shapes` holds
- *  each procedure's hash of its payload, success and error JSON Schemas at
- *  that version. `protocolVersion.vitest.ts` fails when one moves, and
- *  `npm run protocol:bump` advances the version and rewrites the hashes
- *  together. A hash sees what JSON Schema shows: an opaque `Schema.declare`
- *  or a `Schema.Json` field moves none. */
-export const PROTOCOL: {
-  readonly version: number;
-  readonly shapes: Readonly<Record<string, string>>;
-} = Object.freeze({
-  version: 61,
-  shapes: Object.freeze({
-    'service.hello': 'b883cf64d52c',
-    'service.stop': '8d19317aa364',
-    'tasks.list': 'f53aa5564aa8',
-    'task.watch': '82082a7324f2',
-    'task.request': '96bc304e28f8',
-    'task.start': 'bd10b36a735a',
-    'task.resume': 'ac37fb4d0261',
-    'task.ended': 'b8a10423576c',
-    'task.config': 'ee42ee67ab23',
-    'task.exportTrace': '7899739d717e',
-    'task.exportInput': 'fefc9f82f1e2',
-    'tasks.history': '9de0043e6a9e',
-    'task.detail': '5a78e8b493e2',
-    'task.skills': 'b842fcc8e960',
-    'tasks.delete': 'c7fc69cb1d9c',
-    'host.attach': '153808303ff7',
-    'state.get': '221cc7263384',
-    'state.set': 'e377b902a4e3',
-    'host.focus': 'fd20627c2222',
-    'host.answer': 'cc171cdead15',
-  }),
-});
-
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
-  protocol: Schema.Int.check(Schema.isGreaterThan(0)),
+  /** The protocol the service speaks: {@link PROTOCOL}'s digest. */
+  protocol: Schema.String.check(Schema.isMinLength(1)),
   /** The build that is serving: the package version. */
   version: Schema.String,
   pid: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -135,10 +100,11 @@ export const ServiceInfoSchema = Schema.Struct({
 });
 export type ServiceInfo = typeof ServiceInfoSchema.Type;
 
-/** The running service's record, claimed once it listens: where a client
- *  finds it. */
+/** The record a storage root's service claims once it listens, where a
+ *  client finds it: a pointer to its socket.
+ *  Its protocol and build are the hello's, read from the socket. */
 const ServiceRecordSchema = ServiceInfoSchema.mapFields(
-  Struct.pick(['pid', 'protocol', 'version', 'startedAt']),
+  Struct.pick(['pid', 'startedAt']),
 ).mapFields(
   Struct.assign({ socket: Schema.String.check(Schema.isMinLength(1)) }),
 );
@@ -166,9 +132,9 @@ const TaskSummarySchema = Schema.Struct({
 });
 export type TaskSummary = typeof TaskSummarySchema.Type;
 
-/** The run a `task.start` or `task.resume` reached, and a commit inside the
- *  activation it reached: a window's handle reads that activation's events
- *  from the rows up to it, whatever later activation the run has by then. */
+/** The run a `task.start` or `task.resume` reached, and the commit of the
+ *  activation it reached (`Run.activation`): a window's handle is for that
+ *  activation, whatever later activation the run has by then. */
 const TaskAdmitted = Schema.Struct({
   runId: RunIdSchema,
   activation: CommitOrdinalSchema,
@@ -183,16 +149,11 @@ export class TaskFailed extends Schema.TaggedError<TaskFailed>()('TaskFailed', {
   notice: Schema.optional(LaunchNoticeSchema),
 }) {}
 
-/** Why a task's records have no answer: the service holds no such run in
- *  the project, its records would not read, or (on the client side only) the
- *  service is offline or did not answer. */
+/** Why a run's records have no answer: the service could not open the
+ *  project, or its store refused the read. */
 export class TaskRecordsFailed extends Schema.TaggedError<TaskRecordsFailed>()(
   'TaskRecordsFailed',
-  {
-    runId: RunIdSchema,
-    reason: Schema.Literals(['offline', 'unknownRun', 'unreadable']),
-    message: Schema.String,
-  },
+  { runId: RunIdSchema, message: Schema.String },
 ) {}
 
 /** Why the project's state has no answer: the service could not open the
@@ -213,7 +174,7 @@ const workspace = Schema.String;
 /** The procedures, in one group. */
 export const TexraRpcs = RpcGroup.make(
   Rpc.make('service.hello', {
-    payload: { protocol: Schema.Number },
+    payload: { protocol: Schema.String },
     success: ServiceInfoSchema,
   }),
   Rpc.make('service.stop', { payload: { drain: Schema.Boolean } }),
@@ -223,7 +184,11 @@ export const TexraRpcs = RpcGroup.make(
     success: Schema.Array(TaskSummarySchema),
   }),
   Rpc.make('task.watch', {
-    payload: { workspace, subscribe: SubscribeSchema },
+    // `workspace` names the project; the frames name the session.
+    payload: {
+      workspace,
+      subscribe: SubscribeSchema.mapFields(Struct.omit(['session'])),
+    },
     success: EventsFrameSchema,
     error: TaskFailed,
     stream: true,
@@ -243,29 +208,113 @@ export const TexraRpcs = RpcGroup.make(
     error: TaskFailed,
   }),
   Rpc.make('task.resume', {
-    payload: { workspace, runId: RunIdSchema },
+    /** `apiKeys`: as a start carries them (`StartOptions.apiKeys`). */
+    payload: {
+      workspace,
+      runId: RunIdSchema,
+      apiKeys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+    },
     /** The run that resumed: the asked one, or the parent that owns it. */
     success: TaskAdmitted,
     error: TaskFailed,
   }),
-  /** What a task's current activation ends with, once it ends: its
-   *  stored end; and `at`, the service's view position where it saw the
-   *  end, so a window's view at or past it shows the end (or the run's
-   *  removal) too. */
-  Rpc.make('task.ended', {
-    payload: { workspace, runId: RunIdSchema },
+  /** What the task's activation at `activation` ends with, once it ends:
+   *  its stored end (`Run.result`, which fails when none was stored or it
+   *  cannot be read); and `at`, the service's log position once its view
+   *  showed the end, so a window's view at or past it shows the end (or the
+   *  run's removal) too. */
+  Rpc.make('task.result', {
+    payload: TaskAdmitted.mapFields(Struct.assign({ workspace })),
     success: RunEndSchema.mapFields(Struct.assign({ at: CommitOrdinalSchema })),
     error: TaskFailed,
   }),
-  /** The run's saved setup; null when it saved none. */
-  Rpc.make('task.config', {
+  /** `Session.view.read`: a snapshot built from the store, with the full
+   *  transcript of the runs named. */
+  Rpc.make('session.view', {
+    payload: { workspace, runIds: Schema.Array(RunIdSchema) },
+    success: SessionViewSchema,
+    error: TaskFailed,
+  }),
+  /** `Session.listRuns`: the runs a person started in the project, newest
+   *  first. */
+  Rpc.make('session.listRuns', {
+    payload: { workspace },
+    success: Schema.Array(AgentRunListingEntrySchema),
+    error: TaskFailed,
+  }),
+  /** `Session.deleteRuns`: delete one stored run, or every one; a run the
+   *  service still runs is skipped and reported as `active`. */
+  Rpc.make('session.deleteRuns', {
+    payload: {
+      workspace,
+      target: Schema.Union([RunIdSchema, Schema.Literal('all')]),
+    },
+    success: Schema.Struct({
+      listed: Schema.Int,
+      deleted: Schema.Array(RunIdSchema),
+      active: Schema.Array(RunIdSchema),
+      failed: Schema.Array(
+        Schema.Struct({ runId: RunIdSchema, error: RequestErrorSchema }),
+      ),
+    }),
+    error: TaskFailed,
+  }),
+  // `Session.records(runId)`, a procedure per member: a run the store does
+  // not hold reads as absent, as it does there.
+  Rpc.make('records.exists', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Boolean,
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.config', {
     payload: { workspace, runId: RunIdSchema },
     success: Schema.NullOr(AgentConfigSchema),
     error: TaskRecordsFailed,
   }),
+  Rpc.make('records.report', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.NullOr(Schema.String),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.runEnd', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.NullOr(RunEndSchema),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.result', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.NullOr(RunResultSchema),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.workspaceFiles', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Array(RunWorkspaceFileSchema),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.skills', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Array(Schema.String),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.resumable', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Boolean,
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.rejection', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.NullOr(ResumeRefusalSchema),
+    error: TaskRecordsFailed,
+  }),
+  /** The run's conversation as every conversation view renders it. */
+  Rpc.make('records.conversation', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Array(ExportNodeSchema),
+    error: TaskRecordsFailed,
+  }),
   /** What the HTML transcript export reads: the run's display rows and its
    *  record (`assembleTrace`), or why it has none. */
-  Rpc.make('task.exportTrace', {
+  Rpc.make('records.trace', {
     payload: { workspace, runId: RunIdSchema },
     success: Schema.Union([
       Schema.Struct({
@@ -282,66 +331,6 @@ export const TexraRpcs = RpcGroup.make(
       }),
     ]),
     error: TaskRecordsFailed,
-  }),
-  /** What the transcript export reads: the run's setup and the assembled
-   *  input, each null when the run has none (`loadChatExportInput`). */
-  Rpc.make('task.exportInput', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Struct({
-      config: Schema.NullOr(AgentConfigSchema),
-      exportInput: Schema.NullOr(ChatExportInputSchema),
-    }),
-    error: TaskRecordsFailed,
-  }),
-  /** The runs a person started in the project, newest first, as a history
-   *  list shows them (`LocalSession.listRuns`). */
-  Rpc.make('tasks.history', {
-    payload: { workspace },
-    success: Schema.Array(AgentRunListingEntrySchema),
-    error: TaskFailed,
-  }),
-  /** What a history detail reads of a run beyond its setup and its
-   *  conversation: the launch facts its view holds (null for a run the
-   *  view no longer lists), its result, its report, the workspace files it
-   *  edited that are still there, and whether its rows hold a point to
-   *  continue from. */
-  Rpc.make('task.detail', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Struct({
-      run: Schema.NullOr(
-        RunViewSchema.mapFields(Struct.pick(RUN_LAUNCH_FACT_FIELDS)),
-      ),
-      result: Schema.NullOr(RunResultSchema),
-      report: Schema.NullOr(Schema.String),
-      /** Its conversation as every conversation view renders it. */
-      conversation: Schema.Array(ExportNodeSchema),
-      workspaceFiles: Schema.Array(RunWorkspaceFileSchema),
-      resumable: Schema.Boolean,
-    }),
-    error: TaskRecordsFailed,
-  }),
-  /** The skills the run's latest step listed. */
-  Rpc.make('task.skills', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Array(Schema.String),
-    error: TaskRecordsFailed,
-  }),
-  /** Delete one stored run, or every one (`LocalSession.deleteRuns`): a run
-   *  the service still runs is skipped and reported as `active`. */
-  Rpc.make('tasks.delete', {
-    payload: {
-      workspace,
-      target: Schema.Union([RunIdSchema, Schema.Literal('all')]),
-    },
-    success: Schema.Struct({
-      listed: Schema.Int,
-      deleted: Schema.Array(RunIdSchema),
-      active: Schema.Array(RunIdSchema),
-      failed: Schema.Array(
-        Schema.Struct({ runId: RunIdSchema, error: RequestErrorSchema }),
-      ),
-    }),
-    error: TaskFailed,
   }),
   Rpc.make('host.attach', {
     payload: {
@@ -376,3 +365,44 @@ export const TexraRpcs = RpcGroup.make(
     payload: { id: Schema.String, answer: HostAnswerSchema },
   }),
 );
+
+/** First 12 hex digits of the sha256 of a value's JSON text. */
+const digest12 = (value: unknown): string =>
+  hash('sha256', JSON.stringify(value), 'hex').slice(0, 12);
+
+/** A procedure's shape: its payload, success and error schemas as JSON
+ *  Schema, digested. A stream's success is its element and its error. What
+ *  JSON Schema does not show (an opaque `Schema.declare`, a `Schema.Json`
+ *  field) is not in the shape. */
+const shapeOf = (rpc: Rpc.AnyWithProps): string => {
+  const success = rpc.successSchema;
+  const schemas = RpcSchema.isStreamSchema(success)
+    ? [rpc.payloadSchema, success.success, success.error, rpc.errorSchema]
+    : [rpc.payloadSchema, success, rpc.errorSchema];
+  return digest12(schemas.map((schema) => Schema.toJsonSchemaDocument(schema)));
+};
+
+const shapes: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(
+    [...TexraRpcs.requests].map(([tag, rpc]) => [tag, shapeOf(rpc)]),
+  ),
+);
+
+/**
+ * The protocol's identity: `shapes`, each procedure's shape as the module
+ * loads, and `digest`, the digest of all of them. A client and a service
+ * with one digest speak the same protocol; with two, the newer build
+ * retires the older (`isOlder`, `client.ts`), and a build that is neither
+ * (a development build) restarts the service. `service.hello` and
+ * `service.stop` keep their shapes across versions, so an older client can
+ * still stop a newer service (`protocolStability.vitest.ts` pins them).
+ */
+export const PROTOCOL: {
+  readonly digest: string;
+  readonly shapes: Readonly<Record<string, string>>;
+} = Object.freeze({
+  digest: digest12(
+    Object.entries(shapes).toSorted(([a], [b]) => a.localeCompare(b)),
+  ),
+  shapes,
+});

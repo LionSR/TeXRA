@@ -1,10 +1,11 @@
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, FileSystem, Layer, Schema } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 import { AppSignals } from '@texra-ai/harness/host';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import { SessionGraph } from '@test/support/testKernel';
 
 const RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 
@@ -48,7 +49,7 @@ function createDeps(
   };
 }
 
-describe('ProgressWorkflowFileActionsController', () => {
+layer(SessionGraph.hosted)('ProgressWorkflowFileActionsController', (it) => {
   it.effect(
     'sends no accept follow-up when the host cancels acceptance, and one when it accepts',
     () =>

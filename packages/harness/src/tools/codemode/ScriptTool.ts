@@ -18,6 +18,7 @@ import {
 import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
+  noLaterTurn,
   requireToolRun,
   RunCall,
   type ScriptDoor,
@@ -173,7 +174,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   if (
     input.run_in_background === true &&
     run !== undefined &&
-    run.toolPolicy.stopAfterCycle !== true
+    !noLaterTurn(run)
   )
     return yield* Effect.flatMap(
       requireToolRun('script run_in_background'),

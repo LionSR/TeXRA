@@ -195,7 +195,6 @@ export function createDesktopDiffHost(
             Effect.mapError(
               (cause) =>
                 new ExternalOpenFailed({
-                  kind: 'path',
                   target: diffPath,
                   message: 'The patch file could not be opened.',
                   cause,

@@ -188,7 +188,6 @@ export class FileSecrets implements PlatformSecrets {
     key?: string,
   ): SecretsFailed {
     return new SecretsFailed({
-      reason: 'io',
       operation,
       ...(key !== undefined && { key }),
       message: `Could not ${operation === 'get' || operation === 'listStoredKeys' ? 'read' : 'write'} the credential store at ${this.directory}: ${toErrorMessage(cause)}`,

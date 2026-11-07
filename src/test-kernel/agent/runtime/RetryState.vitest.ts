@@ -10,20 +10,20 @@
 
 // Third-party imports
 import {
+  Context,
   Deferred,
   Effect,
   Fiber,
   Layer,
   Schema,
   Scope,
+  ScopedRef,
   Stream,
-  SynchronizedRef,
-  Context,
 } from 'effect';
 import { TestClock } from 'effect/testing';
 import { layer } from '@effect/vitest';
 
-import { expect, vi } from 'vitest';
+import { expect } from 'vitest';
 import {
   type Model,
   MODEL_CONFIGS,
@@ -42,6 +42,7 @@ import {
   RunIdSchema,
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  qualifyAggregateId,
   RUN_PHASE,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -52,15 +53,16 @@ import {
   UsageLog,
 } from '@texra-ai/harness/host';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import { RouteRetries } from '@agent/runtime/run/invocation';
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
+import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
+import {
+  ModelAccess,
+  modelAccessLayer,
+} from '@agent/runtime/modelAccess/ModelAccess';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   RunHistory,
@@ -73,6 +75,7 @@ import { freshRunState, type RunState } from '@shared/session/runState';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { noopTrace } from '@test/support/noopTrace';
@@ -96,7 +99,7 @@ import type { BoundModel } from '@texra-ai/harness/plugins';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
 
-/** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
+/** The gate's base backoff (`RETRY_BACKOFF_MS` in `ModelRetryGate.ts`). */
 const RETRY_BACKOFF_MS = 1000;
 
 /** One macrotask: lets the fiber under test reach its park. */
@@ -274,22 +277,15 @@ const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   model: GPT54,
 });
 
-/**
- * The run service the invoker reads: identity, session, trace, binding. A
- * rebind keeps the stub (a fresh copy of the binding).
- */
+/** The run service the invoker reads: identity, session, trace, binding. */
 function agentRun(
   runId: RunId,
   session: Context.Context<SessionServices>,
-  model: SynchronizedRef.SynchronizedRef<BoundModel>,
+  model: ScopedRef.ScopedRef<BoundModel>,
 ): AgentRunShape {
   return testAgentRun(
     { runId, session, logger: noopTrace, model, scope: Scope.makeUnsafe() },
-    {
-      config: CONFIG,
-      swapModel: () =>
-        SynchronizedRef.updateAndGet(model, (current) => ({ ...current })),
-    },
+    { config: CONFIG },
   );
 }
 
@@ -342,24 +338,41 @@ const openRun = Effect.fn('openRun')(function* (
     Context.get(session, SessionRoots),
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
   ).pipe(Effect.orDie);
-  const bound = yield* SynchronizedRef.make(
+  const bound = yield* ScopedRef.make(() =>
     boundModel(model, { automaticRetries, ...binding }),
+  ).pipe(Scope.provide(Scope.makeUnsafe()));
+  // Model access as the host serves it, but a rebind keeps the stub (a
+  // fresh copy of the binding).
+  const access = Layer.effect(
+    ModelAccess,
+    Effect.gen(function* () {
+      const served = yield* ModelAccess;
+      return {
+        ...served,
+        bind: () =>
+          Effect.map(ScopedRef.get(bound), (current) => ({ ...current })),
+      };
+    }),
+  ).pipe(
+    Layer.provide(
+      modelAccessLayer(installedHost().roots).pipe(
+        Layer.provide(
+          Layer.merge(testHttpClientLayer, Secrets.layer(fakeHostSecrets)),
+        ),
+      ),
+    ),
   );
   const layer = modelInvokerLayer().pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(AgentRun, agentRun(runId, session, bound)),
         UsageLog.disabled,
-        modelAccessLayer(installedHost().roots).pipe(
-          Layer.provide(
-            Layer.merge(testHttpClientLayer, Secrets.layer(fakeHostSecrets)),
-          ),
-        ),
+        access,
       ),
     ),
     Layer.merge(Layer.succeed(RunHistory, Context.get(session, RunHistory))),
     // The process's route gate, as `processLayer` serves it.
-    Layer.provideMerge(Layer.effect(RouteRetries, ModelRetryGate.make)),
+    Layer.provideMerge(Layer.sync(RouteRetries, makeRetryGate)),
     Layer.provideMerge(Layer.succeedContext(session)),
   );
   return { runId, cell, layer };
@@ -634,13 +647,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
-            const stopped = new Map<RunId, 'user' | 'shutdown'>();
-            const runs = Context.get(session, Runs);
-            const stopCause = runs.stopCause;
-            // The run's stop, whether or not this registry holds it.
-            vi.spyOn(runs, 'stopCause').mockImplementation(
-              (runId) => stopped.get(runId) ?? stopCause(runId),
-            );
             const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
               origin: ORIGIN,
               providerResponseId: PROVIDER_RESPONSE_ID,
@@ -688,7 +694,16 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               const kit = yield* openRun(session, model);
               const fiber = yield* Effect.forkChild(invokeOn(kit));
               yield* Deferred.await(observing);
-              stopped.set(kit.runId, reason);
+              // The stop's `run.stop` row, committed before the fiber is
+              // interrupted, as `RunsShape.stop` commits it: what the
+              // interrupted invocation reads its reason from.
+              yield* seedRows(Context.get(session, SessionLog))([
+                {
+                  type: 'run.stop',
+                  aggregateId: qualifyAggregateId('run', kit.runId),
+                  reason,
+                },
+              ]);
               yield* Fiber.interrupt(fiber);
               const state = yield* Context.get(session, RunHistory).load(
                 kit.runId,

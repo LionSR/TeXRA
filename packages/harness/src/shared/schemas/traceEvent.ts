@@ -34,6 +34,12 @@ export const TranscriptEventSchema = Schema.Union([
     data: Schema.optional(JsonValueSchema),
     messageType: Schema.optional(MessageTypeSchema),
   }),
+  /** A chunk of a process run's output (a background command's), on the
+   *  stream it came from: the run's transcript, and what `/output` reads. */
+  trace('process.output', {
+    stream: Schema.Literals(['stdout', 'stderr']),
+    text: Schema.String,
+  }),
   trace('stage.start', {
     id: Schema.String,
     label: Schema.String,

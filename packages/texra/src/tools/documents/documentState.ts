@@ -15,7 +15,7 @@
  */
 import { dirname } from 'node:path';
 
-import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, FileSystem, ScopedRef } from 'effect';
 
 import {
   ChildRuns,
@@ -322,7 +322,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   files: readonly FileLocation[],
 ) {
   const { run, deps } = docs;
-  const bound = yield* SynchronizedRef.get(run.model);
+  const bound = yield* ScopedRef.get(run.model);
   // The launch's media, as absolute paths: the revision's agent run reads
   // them from wherever the launch named them.
   const configuredLocations = run.config.mediaFiles.map((file) =>

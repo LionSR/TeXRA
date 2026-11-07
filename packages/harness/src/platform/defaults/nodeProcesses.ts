@@ -55,7 +55,7 @@ const readTextFile = (
       (error) =>
         new ProcessIdentityUnreadable({
           pid,
-          detail: toErrorMessage(error.reason.cause ?? error),
+          detail: toErrorMessage(error),
         }),
     ),
   );

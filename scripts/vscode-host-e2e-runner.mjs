@@ -144,7 +144,7 @@ try {
   throw error;
 } finally {
   clearTimeout(watchdog);
-  stopService();
+  await stopService();
   rmSync(root, { recursive: true, force: true });
 }
 
@@ -165,13 +165,32 @@ function servicePid() {
 }
 
 /** Stop the service a run started, when one started. */
-function stopService() {
+/** Stop the service the window started and wait until its process is
+ *  gone: it closes its sessions and stores as it exits, so its files are
+ *  removed only once it has. */
+async function stopService() {
   const pid = servicePid();
   if (pid === undefined) return;
   try {
     process.kill(pid, 'SIGTERM');
   } catch {
     // It is gone already.
+    return;
+  }
+  const deadline = Date.now() + 15_000;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+    if (Date.now() > deadline) {
+      console.warn(
+        `the service (pid ${pid}) is still exiting; removing its files anyway`,
+      );
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
 

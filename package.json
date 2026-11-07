@@ -9,10 +9,10 @@
   "scripts": {
     "lint": "oxlint packages src",
     "test": "vitest run --config vitest.config.mjs",
-    "test:changed": "vitest run --config vitest.config.mjs --changed",
+    "test:changed": "vitest run --config vitest.config.mjs --changed --exclude '**/crashConformance*.vitest.ts'",
     "test:pure": "vitest run --config vitest.config.mjs --project pure",
     "test:live": "vitest run --config packages/llm/vitest.live.config.mjs",
-    "test:watch": "vitest --config vitest.config.mjs",
+    "test:watch": "vitest --config vitest.config.mjs --exclude '**/crashConformance*.vitest.ts'",
     "desktop:build": "corepack pnpm --filter @texra/trace-viewer run build && corepack pnpm --filter @texra/desktop build && node packages/extension/scripts/build-serve.mjs",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
@@ -21,7 +21,10 @@
     "gate:typecheck": "corepack pnpm --filter @texra-ai/cli smoke:react-compiler && npm run format:check && npm run typecheck",
     "test:vscode": "node scripts/vscode-host-e2e-runner.mjs",
     "smoke:webviews": "corepack pnpm --filter texra vite:webviews && node scripts/verify-desktop.mjs smoke-webviews",
-    "typecheck": "tsc --noEmit --checkers 8 && tsc --noEmit --checkers 8 -p tsconfig.test-kernel.json && corepack pnpm --filter @texra-ai/harness build && corepack pnpm --filter @texra-ai/llm typecheck && corepack pnpm --filter @texra-ai/cli typecheck && corepack pnpm --filter @texra/trace-viewer run typecheck && corepack pnpm --filter @texra/desktop typecheck",
+    "typecheck": "corepack pnpm run --parallel --include-workspace-root \"/^typecheck:/\"",
+    "typecheck:root": "tsc --noEmit --checkers 8",
+    "typecheck:test-kernel": "tsc --noEmit --checkers 8 -p tsconfig.test-kernel.json",
+    "typecheck:packages": "corepack pnpm -r --parallel run typecheck",
     "compile:fast": "corepack pnpm --filter texra compile:fast",
     "watch:fast": "corepack pnpm --filter texra watch:fast",
     "package:fast": "corepack pnpm --filter texra package:fast",
@@ -34,8 +37,7 @@
     "texra-local:build": "corepack pnpm --filter @texra-ai/cli run prepare:trace-viewer-assets && corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
     "texra-local:link": "node scripts/link-texra-local.mjs",
     "sync:notice": "node scripts/sync-notice-files.mjs",
-    "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts",
-    "protocol:bump": "vitest run --config vitest.config.mjs --mode bump src/test-kernel/schemas/protocolVersion.vitest.ts"
+    "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts"
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.5",

@@ -16,7 +16,7 @@ import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { modelOutputCopyPath } from '@texra/shared/constants/workflowOutput';
-import type { AppSignals } from '@texra-ai/harness/host';
+import type { AppSignals, ProcessServices } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
@@ -33,7 +33,7 @@ const CHANNEL = 'ProgressWorkflowFileActions';
 type FileAction<A> = Effect.Effect<
   A,
   HostRequestFailure,
-  FileSystem.FileSystem | AppSignals
+  FileSystem.FileSystem | AppSignals | ProcessServices
 >;
 
 type FileActionRequest = Extract<HostRequest, { kind: 'fileAction' }>;

@@ -1,9 +1,9 @@
 /**
  * A session's view read cold, from its store alone, for a host that lists
  * the projects under a storage root without opening a session on each: the
- * listing replayed through the session's own input reader and applied once,
- * with the owners its unfinished runs name probed for liveness the way an
- * open session's prober does (`./ownerLiveness`).
+ * listing replayed through the session's own input reader and applied once.
+ * A store another process holds exclusively does not open: the read fails
+ * with the holder's refusal (`STORE_HELD_MESSAGE`).
  */
 import {
   Cause,
@@ -32,18 +32,13 @@ import type { ToolRegistry } from '@tools/toolTable';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 import { databaseLayer } from './Database';
-import { deadOwners } from './ownerLiveness';
 import { cannotOpen } from './storeAside';
 import { sessionInputsLayer } from './sessionInputs';
 import { LocalRuntimeSource, TextChunkSource } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
-/** No owner of this process: a cold read holds no run. */
-const NO_LOCAL_STATE: LocalRuntimeState = {
-  self: [],
-  dead: [],
-  unreadable: [],
-};
+/** A cold read holds no run. */
+const NO_LOCAL_STATE: LocalRuntimeState = { runsHere: [] };
 
 /** Whether this cold read failed because no store is there: its directory
  *  is gone, or SQLite could not open a file that does not exist. SQLite's
@@ -68,8 +63,8 @@ const absent = (
 };
 
 /**
- * The view of the session stored at `storage`, built from its listing, with
- * its probed owners' deaths applied beside it; none when no store is there.
+ * The view of the session stored at `storage`, built from its listing;
+ * none when no store is there.
  * A connection this process already holds (`ProjectDatabases`) is shared;
  * otherwise the read opens the store for itself without ever creating one,
  * so a store a prune just removed is read as gone, never made again.
@@ -111,11 +106,7 @@ export const readSessionView = Effect.fn('readSessionView')(function* (
     );
     const replay = yield* Stream.runHead(inputs.read([], 0, false));
     const updater = makeSessionViewUpdater(storage);
-    const view = updater.apply(Option.getOrElse(replay, () => []));
-    const dead = yield* deadOwners(view, null);
-    return Option.some(
-      updater.apply({ _tag: 'local', local: { ...NO_LOCAL_STATE, dead } }),
-    );
+    return Option.some(updater.apply(Option.getOrElse(replay, () => [])));
   });
   return yield* Effect.scoped(read).pipe(
     Effect.catch((error) =>

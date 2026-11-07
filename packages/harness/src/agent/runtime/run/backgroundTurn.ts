@@ -17,8 +17,7 @@ import {
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { qualifyAggregateId, type InvocationRef } from '@shared/schemas';
 
-import type { RunCell } from '@shared/session/runHistory';
-import { Runs } from '../runRegistry';
+import { type RunCell, SessionLog } from '@shared/session/runHistory';
 import type { InvokeError } from '../ModelInvoker';
 import type { AgentRunShape } from './AgentRun';
 
@@ -97,9 +96,10 @@ export const observeBackground = <E>(
     onEvent,
   ).pipe(
     Effect.onInterrupt(() =>
-      Effect.flatMap(Runs, (runs) =>
-        runs.stopCause(run.runId) === 'user' ? cancel : Effect.void,
-      ),
+      Effect.flatMap(
+        Effect.flatMap(SessionLog, (log) => log.facts(run.runId)),
+        (facts) => (facts?.stop?.reason === 'user' ? cancel : Effect.void),
+      ).pipe(Effect.orDie),
     ),
   );
 };
@@ -118,11 +118,11 @@ export const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
   bound: BoundModel,
   onEvent: (event: TurnEvent) => Effect.Effect<void, InvokeError>,
   completed: { value: TurnResult | null },
-): Effect.fn.Return<void, ModelError | InvokeError, Runs> {
+): Effect.fn.Return<void, ModelError | InvokeError, SessionLog> {
   const background = bound.model.background;
   if (background === undefined) {
     return yield* new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message: 'The bound model resolved a background turn it cannot submit.',
     });
   }

@@ -105,14 +105,14 @@ A `Model` fails with exactly one error type, `ModelError` (`_tag:
 'ModelError'`). Fiber interruption stays outside it. Branch on its fields,
 never on its message:
 
-| Field                                        | What it says                                                                                                                                                                                                                        |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kind`                                       | the class of failure: `invalid-request`, `unsupported`, `authentication`, `rate-limited`, `quota-exhausted`, `context-overflow`, `continuation-gone`, `transport`, `provider-rejection`, `malformed-output`, `observation-deadline` |
-| `retryable`                                  | whether repeating the request unchanged can succeed. It defaults from `kind` and `status`; the binding overrides it where the vendor's reply says more                                                                              |
-| `scope`                                      | what the failure is evidence about beyond this request: `model` (a limit on one model) or `route` (the provider, credential and endpoint)                                                                                           |
-| `retryAfterMs`                               | the provider's own "come back in" delay, when its reply stated one                                                                                                                                                                  |
-| `quota`                                      | for `quota-exhausted`: the `plan` used up (a `PlanRoute`, or `null` for the account's credit), and when it resets                                                                                                                   |
-| `status`, `requestId`, `responseId`, `model` | the HTTP facts, when the failure had a reply                                                                                                                                                                                        |
+| Field                                        | What it says                                                                                                                                                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `kind`                                       | the class of failure, each one a reader decides on: `invalid-request`, `authentication`, `context-overflow`, `continuation-gone`, `transport`, `provider-rejection` (a rate limit is `status` 429, a used-up quota is `quota`) |
+| `retryable`                                  | whether repeating the request unchanged can succeed. It defaults from `kind` and `status`; the binding overrides it where the vendor's reply says more                                                                         |
+| `scope`                                      | what the failure is evidence about beyond this request: `model` (a limit on one model) or `route` (the provider, credential and endpoint)                                                                                      |
+| `retryAfterMs`                               | the provider's own "come back in" delay, when its reply stated one                                                                                                                                                             |
+| `quota`                                      | for a failure that used up a quota: the `plan` used up (a `PlanRoute`, or `null` for the account's credit), and when it resets                                                                                                 |
+| `status`, `requestId`, `responseId`, `model` | the HTTP facts, when the failure had a reply                                                                                                                                                                                   |
 
 The package itself retries nothing. Retry,
 pricing and persistence belong to the caller
@@ -137,7 +137,7 @@ The package is split by where its code runs, not by topic.
 | Entry    | What it holds                                                                                                                                                                                                                                         | Runs in      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | `.`      | the turn contract (`Model`, the request, result and event schemas, `completedTurn`), `ModelError`, the provider catalog and API-key lookup over `CredentialStore`, model selection, the route decision and endpoint, the reasoning choice, `turnCost` | browser-safe |
-| `./node` | `bindModel(spec) → Binding`, the ChatGPT and Grok sign-in flows and their `SubscriptionCoordinator`s, `SharedAttempt`                                                                                                                                 | Node         |
+| `./node` | `bindModel(spec) → Binding`, the ChatGPT and Grok sign-in flows and their `SubscriptionCoordinator`s                                                                                                                                                  | Node         |
 
 Every type a public signature names is exported from one of the two entries.
 Each entry's exports, with their TSDoc and declarations, are listed in

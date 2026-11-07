@@ -116,7 +116,9 @@ describe(
               yield* faults.failNext('appendAll', 'run.start');
               const runId = generateRunId();
 
-              const ended = yield* prepareAgentDefinition({
+              // The opening fails in the caller's fiber: the launch's
+              // failure, which the parent's call reads, and no run behind it.
+              const refused = yield* prepareAgentDefinition({
                 config: config('Refused.'),
               }).pipe(
                 Effect.flatMap((definition) =>
@@ -128,13 +130,9 @@ describe(
                   }),
                 ),
                 Effect.provide(session),
+                Effect.flip,
               );
-              expect(ended).toMatchObject({
-                outcome: 'failed',
-                failure: {
-                  message: expect.stringContaining('injected appendAll'),
-                },
-              });
+              expect(refused.message).toContain('injected appendAll');
               expect(
                 storedRows(roots.storage).filter((row) => row.run === runId),
               ).toEqual([]);

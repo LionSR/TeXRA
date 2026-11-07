@@ -1,11 +1,8 @@
 import { Context, Effect, Schema, type Scope } from 'effect';
-import type { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { AgentCatalog } from '@agent/index/agentCatalog';
-import {
-  Inbox,
-  runInbox,
-  type RunInbox,
-} from '@agent/followUp/ToolUseFollowUp';
+import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
   launchChildAgent,
@@ -14,7 +11,7 @@ import {
 import {
   launchProcessChild,
   type ProcessChildLaunch,
-} from '@agent/runtime/delegation/detachedChildRun';
+} from '@agent/runtime/processRun';
 import type { PlatformServices } from '@platform/processRuntime';
 import { SessionRoots, StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
@@ -36,9 +33,9 @@ import type { ToolRegistry } from '@tools/toolTable';
 import { Runs } from './runRegistry';
 import { Interactions } from './HostInteractions';
 import { ProjectTools } from './loop/step';
-import { SessionRequests, workAutoApproved } from './requestPolicy';
+import { SessionRequests, workAutoApproved } from './requests';
 import type { RunCallShape } from './RunCall';
-import type { RouteRetries } from './run/invocation';
+import type { RouteRetries } from './ModelRetryGate';
 import type { SessionServices } from './rootLaunch';
 
 /**
@@ -73,10 +70,10 @@ export type PluginToolServices =
 
 /**
  * A plugin tool's one door to the session's runs. It launches children of
- * its call's run: an agent's (`launch`: the child's settled result, or its
- * receipt for a background launch, within the issuing script's concurrency
- * budget) or an external process's (`launchProcess`: its run id, outside
- * the budget); a plugin's tool reaches no other launch. And it reaches a
+ * its call's run: an agent's (`launch`: the child's result, or its receipt
+ * for a background launch) or an external process's (`launchProcess`: its
+ * run id, outside the child-run budget); a plugin's tool reaches no other
+ * launch. And it reaches a
  * run of the session by id: its input, live parent edge, records, whether
  * it holds a request, and the plugin's own facts on it. Each needs the
  * call's run; a standalone host call has none.
@@ -85,9 +82,9 @@ export interface ChildRunsShape {
   readonly launch: (
     launch: ChildLaunch,
   ) => Effect.Effect<ToolResult, Error, PluginToolServices>;
-  readonly launchProcess: <TTurn>(
-    launch: ProcessChildLaunch<TTurn>,
-  ) => Effect.Effect<RunId, Error>;
+  readonly launchProcess: (
+    launch: ProcessChildLaunch,
+  ) => Effect.Effect<RunId, Error, ToolContext | RunServices>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
   /** Its attached parent as the rows record it (`run.start`, then a
@@ -180,7 +177,8 @@ export const childRuns = (call: RunCallShape): ChildRunsShape => {
     Effect.provide(effect, session);
   return {
     launch: (launch) => inSession(launchChildAgent(launch)),
-    launchProcess: (launch) => inSession(launchProcessChild(runId, launch)),
+    launchProcess: (launch) =>
+      inSession(launchProcessChild({ runId, logId: call.logId }, launch)),
     inbox: (id) => Effect.succeed(runInbox(id, session)),
     parent: (id) =>
       Effect.map(

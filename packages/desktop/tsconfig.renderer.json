@@ -4,10 +4,5 @@
     "lib": ["ES2024", "DOM"],
     "types": ["vite/client"]
   },
-  "include": [
-    "src/renderer/**/*.ts",
-    "src/renderer/**/*.d.ts",
-    "../harness/src/types/**/*.d.ts",
-    "../texra/src/types/**/*.d.ts"
-  ]
+  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.d.ts"]
 }
