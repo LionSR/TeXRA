@@ -14,8 +14,18 @@ import {
   transientNotice as transientNoticeSignal,
   selectedRunId as selectedRunIdSignal,
   sessionMeta as sessionMetaSignal,
+  childListFocused as childListFocusedSignal,
+  childListHighlight,
+  sessionListRunIds,
 } from '../state/cliState';
-import { sessionView, runViewOf } from '../state/sessionView';
+import {
+  killableRunId,
+  resumableRunId,
+  runningChildCount,
+  runViewOf,
+  sessionView,
+} from '../state/sessionView';
+import { resolveChildListTarget } from '../state/childControls';
 import {
   chatTuiCanStopVisibleRun,
   runStopFacts as runStopFactsSignal,
@@ -60,14 +70,8 @@ interface StatusBarProps {
    * this component owns no runtime of its own.
    */
   readonly runtime: ProcessRuntime;
-  readonly childListFocused?: boolean;
-  readonly childListSelectionKillable?: boolean;
-  readonly childListSelectionResumable?: boolean;
-  readonly runningSessions?: number;
-  readonly childNavigationAvailable: boolean;
   readonly commandName?: string;
   readonly foregroundInputActive?: boolean;
-  readonly transcriptAvailable?: boolean;
   /** The active run's transcript holds a script's calls (Ctrl-O). */
   readonly scriptAvailable?: boolean;
 }
@@ -117,6 +121,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const sessionMeta = useSignal(sessionMetaSignal);
   const transientNotice = useSignal(transientNoticeSignal);
   const modelConnectionNeeded = useSignal(modelConnectionNeededSignal);
+  const childListFocused = useSignal(childListFocusedSignal);
+  const highlightedChild = runViewOf(view, useSignal(childListHighlight));
+  const listedRuns = useSignal(sessionListRunIds);
   const { columns } = useWindowSize();
   // The Ctrl-C stop/exit hint derives from the run-claim signal, never from
   // impure session closures: memoized renders cache a closure's result on the
@@ -222,7 +229,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         ? { kind: 'message', text: 'No model connected · /login' }
         : undefined),
     commandName: props.commandName,
-    runningSessions: props.runningSessions ?? 0,
+    runningSessions: runningChildCount(
+      view,
+      runViewOf(view, resolveChildListTarget(view, activeRunId)),
+    ),
     approvalDepth: attention.length,
     approvalKind: approvalQueueStatusKind(
       attention.map((request) => request.kind),
@@ -238,16 +248,17 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       inputActive: props.foregroundInputActive,
     },
     childList: {
-      focused: props.childListFocused,
-      selectionKillable: props.childListSelectionKillable,
-      selectionResumable: props.childListSelectionResumable,
+      focused: childListFocused,
+      selectionKillable: killableRunId(highlightedChild) !== undefined,
+      selectionResumable: resumableRunId(highlightedChild) !== undefined,
     },
     shortcuts: {
       chatInputAvailable: props.chatInputAvailable,
       holdAvailable: props.chatInputAvailable && displayRun?.working === true,
-      childNavigationAvailable: props.childNavigationAvailable,
+      childNavigationAvailable: listedRuns.length > 0,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
-      transcriptAvailable: props.transcriptAvailable,
+      transcriptAvailable:
+        (runViewOf(view, activeRunId)?.transcript.rows.length ?? 0) > 0,
       scriptAvailable: props.scriptAvailable,
     },
   });
@@ -273,8 +284,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
               <Text
                 key={`${segment.text}-${index}`}
                 aria-hidden={segment.decorative}
-                color={segment.color === 'dim' ? undefined : segment.color}
-                dimColor={segment.color === 'dim'}
+                color={segment.color}
+                dimColor={segment.dim === true}
               >
                 {segment.text}
               </Text>

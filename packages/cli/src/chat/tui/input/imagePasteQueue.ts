@@ -3,7 +3,7 @@
 // submit, both in a scope the bar's mount owns, so unmounting interrupts them.
 
 // Third-party imports
-import { Cause, Effect, FiberHandle, FiberSet, Scope } from 'effect';
+import { Effect, FiberHandle, FiberSet, Scope } from 'effect';
 import { useState } from 'react';
 
 // Local imports
@@ -59,7 +59,7 @@ export function useImagePastes(runtime: ProcessRuntime): ImagePastes {
             // The submit runs in a fiber, where a throw would vanish.
             Effect.catchDefect((defect) =>
               Effect.logWarning('The deferred image-paste action failed.').pipe(
-                Effect.annotateLogs({ data: Cause.squash(Cause.die(defect)) }),
+                Effect.annotateLogs({ data: defect }),
                 withLogChannel('cli.tui'),
               ),
             ),

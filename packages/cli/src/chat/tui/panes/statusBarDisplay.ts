@@ -84,13 +84,10 @@ export function approvalQueueStatusKind(
 
 const STATUS_BAR_HORIZONTAL_PADDING = 2;
 
-// 'dim' is not an Ink color name — it is a sentinel this file's own renderer
-// (`StatusBar.tsx`) reads to apply `dimColor` instead of an explicit `color`.
 type StatusBarColor =
   | typeof COLOR_HINT
   | typeof COLOR_WARNING
-  | typeof COLOR_ERROR
-  | 'dim';
+  | typeof COLOR_ERROR;
 type CtrlCAction = 'exit' | 'stop' | 'stop root';
 
 /** Choose the quota owner, preferring the route of completed usage. */
@@ -104,14 +101,25 @@ export function subscriptionUsageProviderForStatus({
   return codingPlanForUsageRoute(usageRoute ?? prospectiveRoute)?.usageProvider;
 }
 
+/**
+ * How a segment yields when the row is narrower than the bar: a `drop`
+ * segment is removed, a `truncate` one is shortened into the width the
+ * segments above it leave, and a `keep` one stays whole or goes. Lower
+ * priorities yield first.
+ */
+type StatusBarFitPolicy = 'drop' | 'truncate' | 'keep';
+
 interface StatusBarSegment {
   readonly text: string;
+  /** An explicit colour; without one, `dim` paints the terminal's dim. */
   readonly color?: StatusBarColor;
+  readonly dim?: boolean;
   readonly badge?: boolean;
   readonly badgeColor?: typeof COLOR_ERROR | typeof COLOR_WARNING;
-  readonly compactPriority?: number;
-  /** Shorter replacement text tried (in priority order) before the segment
-   *  is removed outright when the bar overflows the terminal width. */
+  readonly priority: number;
+  readonly policy: StatusBarFitPolicy;
+  /** Shorter replacement text tried (in priority order) before any segment
+   *  yields when the bar overflows the terminal width. */
   readonly compactText?: string;
   /** Purely visual glyphs hidden from screen readers (`aria-hidden`). */
   readonly decorative?: boolean;
@@ -211,7 +219,8 @@ function accessModeSegment(
         text: 'subscription',
         color: COLOR_HINT,
         compactText: 'sub',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
+        priority: STATUS_BAR_PRIORITY.accessMode,
+        policy: 'drop',
       }
     : undefined;
 }
@@ -225,14 +234,15 @@ function subscriptionQuotaSegment(
   )[0];
   if (!limitingWindow) return undefined;
   const remaining = Math.max(0, Math.round(limitingWindow.percentRemaining));
-  let color: StatusBarColor = 'dim';
+  let color: StatusBarColor | undefined;
   if (remaining === 0) color = COLOR_ERROR;
   else if (remaining <= 20) color = COLOR_WARNING;
   return {
     text: `${snapshot.planName} ${remaining}% left`,
     compactText: `${remaining}% left`,
-    color,
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.subscriptionQuota,
+    ...(color === undefined ? { dim: true } : { color }),
+    priority: STATUS_BAR_PRIORITY.subscriptionQuota,
+    policy: 'drop',
   };
 }
 
@@ -246,11 +256,14 @@ function formatUsage(
   contextState: ContextStateData | undefined,
   usage: TokenUsageStats | undefined,
 ): StatusBarSegment | undefined {
-  const base = { compactPriority: STATUS_BAR_COMPACT_PRIORITY.usage };
+  const base = {
+    priority: STATUS_BAR_PRIORITY.usage,
+    policy: 'drop',
+  } as const;
   if (!contextState) {
     const reported = usage?.inputTokens ?? 0;
     if (reported <= 0) return undefined;
-    return { ...base, text: formatCompactTokenCount(reported), color: 'dim' };
+    return { ...base, text: formatCompactTokenCount(reported), dim: true };
   }
 
   // Occupancy is the run's `contextTokens` (the last response's input plus
@@ -261,7 +274,7 @@ function formatUsage(
   // Reads the run's own `utilizationPercent`, not a used/contextWindow
   // re-derivation (drifts); shared bands/rounding with UsagePanel's gauge.
   const band = contextGaugeBand(utilizationPercent);
-  let color: StatusBarColor = 'dim';
+  let color: StatusBarColor | undefined;
   if (band === 'error') color = COLOR_ERROR;
   else if (band === 'warning') color = COLOR_WARNING;
   return {
@@ -272,7 +285,7 @@ function formatUsage(
     // Keep context visibility on narrow terminals: degrade to the bare
     // percentage instead of dropping the segment entirely.
     compactText: `${percent}%`,
-    color,
+    ...(color === undefined ? { dim: true } : { color }),
   };
 }
 
@@ -289,13 +302,14 @@ function taskCostSegment(
   if (cost <= 0) return undefined;
   return {
     text: formatCostUsd(cost),
-    color: 'dim',
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.taskCost,
+    dim: true,
+    priority: STATUS_BAR_PRIORITY.taskCost,
+    policy: 'drop',
   };
 }
 
-// Lower values are removed first when the left status group exceeds the row.
-const STATUS_BAR_COMPACT_PRIORITY = {
+// Lower values yield first when the left status group exceeds the row.
+const STATUS_BAR_PRIORITY = {
   // The task's total is also in `/status` and the exit summary: on a narrow
   // bar it gives way first.
   taskCost: 15,
@@ -307,19 +321,22 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   rootActive: 65,
   subscriptionQuota: 67,
   elapsed: 70,
-  // Durable session status: outlives the transient counts above but must
-  // still be compactable — a priority-less segment breaks narrow bars (see
-  // bypassBadge below).
   accessMode: 72,
   location: 74,
   thinking: 75,
   compacting: 80,
-  // Bypass badges announce active auto-approval — the one thing the bar must
-  // not silently drop, so they compact dead last. Every segment carries SOME
-  // priority: the fitting sweeps only visit prioritized segments, and a
-  // priority-less segment is unfittable — the row then soft-wraps and breaks
-  // the 2-row chrome budget on narrow terminals.
+  // A notice is the focal text: it takes whatever width the segments above
+  // it leave.
+  notice: 82,
+  // Bypass badges announce active auto-approval: the one thing the bar must
+  // not silently drop, so they go only when nothing below them is left.
   bypassBadge: 85,
+  // A notice must not hide the only indication that an active run is alive.
+  liveness: 88,
+  // Exiting drops queued follow-ups silently: the warning outlasts the rest.
+  discardWarning: 95,
+  // The diamond and the run's status word.
+  chrome: 100,
 } as const;
 
 function statusBarSegmentWidth(segment: StatusBarSegment): number {
@@ -343,146 +360,13 @@ function statusBarInnerWidth(width: number | undefined): number | undefined {
     : Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
 }
 
-// Shrink `segment` (always the untruncated original, so repeated fits never
-// compound) into whatever room the rest of the row leaves at `index`.
-function truncateSegmentIntoRemainingWidth(
-  fitted: readonly StatusBarSegment[],
-  index: number,
-  segment: StatusBarSegment,
-  innerWidth: number,
-): StatusBarSegment {
-  const fixedWidth = fitted.reduce(
-    (total, other, otherIndex) =>
-      otherIndex === index ? total : total + statusBarSegmentWidth(other),
-    fitted.length - 1,
-  );
-  return {
-    ...segment,
-    text: truncateSummaryToWidth(
-      segment.text,
-      Math.max(0, innerWidth - fixedWidth),
-    ),
-  };
-}
-
-function fitTransientNoticeStatusBarLeftSegments(
-  segments: readonly StatusBarSegment[],
-  noticeIndex: number,
-  livenessIndex: number | undefined,
-  discardWarningIndex: number | undefined,
-  width: number | undefined,
-): readonly StatusBarSegment[] {
-  const innerWidth = statusBarInnerWidth(width);
-  if (innerWidth === undefined) return segments;
-
-  const fitted = [...segments];
-  const notice = fitted[noticeIndex];
-  let fittedNotice = notice;
-  let liveness =
-    livenessIndex === undefined ? undefined : fitted[livenessIndex];
-  const discardWarning =
-    discardWarningIndex === undefined ? undefined : fitted[discardWarningIndex];
-  // Bypass badges announce active auto-approval and must not be silently
-  // dropped by the trailing-removal sweep below (see
-  // STATUS_BAR_COMPACT_PRIORITY.bypassBadge) — they are exempt here the same
-  // way discardWarning is, and only give way to the final fallback sweep.
-  const isBypassBadge = (segment: StatusBarSegment): boolean =>
-    segment.compactPriority === STATUS_BAR_COMPACT_PRIORITY.bypassBadge;
-
-  // Compact liveness before removing content. In particular, the queued-input
-  // discard warning is safety-critical and must not be displaced by the wider
-  // animated form of the running marker.
-  if (liveness?.compactText && statusBarSegmentsWidth(fitted) > innerWidth) {
-    const index = fitted.indexOf(liveness);
-    liveness = { ...liveness, text: liveness.compactText };
-    fitted[index] = liveness;
-  }
-
-  // Remove trailing segments after the notice (excluding the discard warning
-  // and bypass badges).
-  while (statusBarSegmentsWidth(fitted) > innerWidth) {
-    const removableIndex = fitted.findLastIndex(
-      (segment, index) =>
-        index > noticeIndex &&
-        segment !== discardWarning &&
-        !isBypassBadge(segment),
-    );
-    if (removableIndex < 0) break;
-    fitted.splice(removableIndex, 1);
-  }
-
-  // Remove segments before the notice (except liveness).
-  if (statusBarSegmentsWidth(fitted) > innerWidth) {
-    for (let index = noticeIndex - 1; index > 0; index -= 1) {
-      if (fitted[index] !== liveness) fitted.splice(index, 1);
-    }
-  }
-
-  const fitNotice = (): void => {
-    const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
-    if (fittedNoticeIndex < 0 || statusBarSegmentsWidth(fitted) <= innerWidth) {
-      return;
-    }
-    fittedNotice = truncateSegmentIntoRemainingWidth(
-      fitted,
-      fittedNoticeIndex,
-      notice,
-      innerWidth,
-    );
-    fitted[fittedNoticeIndex] = fittedNotice;
-  };
-
-  fitNotice();
-
-  // At widths where the safety warning and liveness cannot coexist, the
-  // destructive-action warning wins. Refit the notice into the released room.
-  if (
-    discardWarning &&
-    liveness &&
-    statusBarSegmentsWidth(fitted) > innerWidth
-  ) {
-    fitted.splice(fitted.indexOf(liveness), 1);
-    fitNotice();
-  }
-
-  const sacrificeBypassBadgesUntilFit = (): void => {
-    while (statusBarSegmentsWidth(fitted) > innerWidth) {
-      const badgeIndex = fitted.findLastIndex(isBypassBadge);
-      if (badgeIndex < 0) break;
-      fitted.splice(badgeIndex, 1);
-      fitNotice();
-    }
-  };
-
-  // Preserve the destructive-action warning before retaining auto-approval
-  // badges. Otherwise warning truncation can reduce it to empty text, making
-  // the row fit while hiding that queued input will be discarded.
-  if (discardWarning) sacrificeBypassBadgesUntilFit();
-
-  // Extremely narrow terminals may not fit even the full discard warning.
-  // Drop the lower-priority confirmation text and truncate the warning so the
-  // status row never exceeds its layout budget.
-  if (discardWarning && statusBarSegmentsWidth(fitted) > innerWidth) {
-    const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
-    if (fittedNoticeIndex >= 0) fitted.splice(fittedNoticeIndex, 1);
-    const fittedWarningIndex = fitted.indexOf(discardWarning);
-    fitted[fittedWarningIndex] = truncateSegmentIntoRemainingWidth(
-      fitted,
-      fittedWarningIndex,
-      discardWarning,
-      innerWidth,
-    );
-  }
-
-  // Last resort: a bypass badge wider than innerWidth is unfittable above and
-  // would soft-wrap the row, breaking the 2-row chrome budget. Sacrifice
-  // badges from the tail — mirroring how liveness is sacrificed above — only
-  // while the row still overflows.
-  sacrificeBypassBadgesUntilFit();
-
-  return fitted;
-}
-
+/**
+ * The left group fitted into the row. Every segment with a shorter form
+ * takes it first, lowest priority first; then `drop` segments go, lowest
+ * first; then the rest are given the row in priority order, highest first:
+ * a `keep` segment whole or not at all, a `truncate` one shortened into what
+ * is left. The segments keep their order on the row.
+ */
 function fitStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
   width: number | undefined,
@@ -495,47 +379,41 @@ function fitStatusBarLeftSegments(
     return segments;
   }
 
-  const compacted = [...segments];
-  const priorities = [
-    ...new Set(
-      compacted
-        .map((segment) => segment.compactPriority)
-        .filter(Predicate.isNotNullish),
-    ),
-  ].sort((a, b) => a - b);
-
-  // Lowest-priority segments compact first; returns as soon as the row fits.
-  const sweep = (
-    apply: (index: number, segment: StatusBarSegment) => boolean,
-  ): readonly StatusBarSegment[] | undefined => {
-    for (const priority of priorities) {
-      for (let index = compacted.length - 1; index >= 0; index -= 1) {
-        const segment = compacted[index];
-        if (segment?.compactPriority !== priority || !apply(index, segment)) {
-          continue;
-        }
-        if (statusBarSegmentsWidth(compacted) <= innerWidth) return compacted;
-      }
-    }
-    return undefined;
-  };
-
-  return (
-    // Shrink segments to their compactText before removing anything — a
-    // narrowed segment beats a missing one.
-    sweep((index, segment) => {
-      if (!segment.compactText || segment.compactText === segment.text) {
-        return false;
-      }
-      compacted[index] = { ...segment, text: segment.compactText };
-      return true;
-    }) ??
-    sweep((index) => {
-      compacted.splice(index, 1);
-      return true;
-    }) ??
-    compacted
+  // Lowest priority first, the later of two equals first.
+  const yieldOrder = [...segments.keys()].sort(
+    (a, b) => segments[a].priority - segments[b].priority || b - a,
   );
+  const fitted: Array<StatusBarSegment | undefined> = [...segments];
+  const row = (): StatusBarSegment[] => fitted.filter(Predicate.isNotNullish);
+  for (const index of yieldOrder) {
+    const segment = segments[index];
+    if (segment.compactText === undefined) continue;
+    fitted[index] = { ...segment, text: segment.compactText };
+    if (statusBarSegmentsWidth(row()) <= innerWidth) return row();
+  }
+  for (const index of yieldOrder) {
+    if (segments[index].policy !== 'drop') continue;
+    fitted[index] = undefined;
+    if (statusBarSegmentsWidth(row()) <= innerWidth) return row();
+  }
+
+  const given: Array<StatusBarSegment | undefined> = segments.map(
+    () => undefined,
+  );
+  for (const index of yieldOrder.toReversed()) {
+    const segment = fitted[index];
+    if (segment === undefined) continue;
+    given[index] = segment;
+    const over =
+      statusBarSegmentsWidth(given.filter(Predicate.isNotNullish)) - innerWidth;
+    if (over <= 0) continue;
+    const room = textDisplayWidth(segment.text) - over;
+    given[index] =
+      segment.policy === 'truncate' && room > 0
+        ? { ...segment, text: truncateSummaryToWidth(segment.text, room) }
+        : undefined;
+  }
+  return given.filter(Predicate.isNotNullish);
 }
 
 // Bindings use the shared KeyHints vocabulary (`key action` joined with
@@ -688,7 +566,8 @@ function approvalPolicySegment(
   return {
     text: approvalPolicyLabel(policy),
     color,
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
+    priority: STATUS_BAR_PRIORITY.approvalPolicy,
+    policy: 'drop',
   };
 }
 
@@ -785,7 +664,13 @@ export function buildStatusBarDisplay(
   input: StatusBarChrome,
 ): StatusBarDisplay {
   const left: StatusBarSegment[] = [
-    { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
+    {
+      text: STATUS_DIAMOND,
+      color: COLOR_HINT,
+      decorative: true,
+      priority: STATUS_BAR_PRIORITY.chrome,
+      policy: 'keep',
+    },
   ];
   const turn = input.turn;
   const active = run?.working === true;
@@ -799,33 +684,36 @@ export function buildStatusBarDisplay(
 
   // A notice must not hide the only indication that an active run is still
   // alive. Keep that liveness compact so the notice remains the focal text.
-  let transientLivenessIndex: number | undefined;
   if (input.transientNotice) {
     if (active) {
       const elapsed =
         turn?.elapsedMs === undefined
           ? ''
           : ` ${formatCompactDuration(turn.elapsedMs)}`;
-      transientLivenessIndex = left.length;
       left.push({
         text: `${spinPrefix}${statusLabel}${elapsed}`,
         compactText:
           turn?.elapsedMs === undefined
             ? 'run'
             : `run ${formatCompactDuration(turn.elapsedMs)}`,
-        color: 'dim',
+        dim: true,
+        priority: STATUS_BAR_PRIORITY.liveness,
+        policy: 'keep',
       });
     }
   } else {
     left.push({
       text: `${spinPrefix}${statusLabel}`,
-      color: 'dim',
+      dim: true,
+      priority: STATUS_BAR_PRIORITY.chrome,
+      policy: 'keep',
     });
     if (active && turn?.elapsedMs !== undefined) {
       left.push({
         text: formatCompactDuration(turn.elapsedMs),
-        color: 'dim',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
+        dim: true,
+        priority: STATUS_BAR_PRIORITY.elapsed,
+        policy: 'drop',
       });
     }
   }
@@ -835,29 +723,34 @@ export function buildStatusBarDisplay(
   if (run?.compactingActive === true) {
     left.push({
       text: 'compacting...',
-      color: 'dim',
-      compactPriority: STATUS_BAR_COMPACT_PRIORITY.compacting,
+      dim: true,
+      priority: STATUS_BAR_PRIORITY.compacting,
+      policy: 'drop',
     });
   } else if (run?.thinkingActive === true) {
     left.push({
       text: 'thinking...',
-      color: 'dim',
-      compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
+      dim: true,
+      priority: STATUS_BAR_PRIORITY.thinking,
+      policy: 'drop',
     });
   }
 
-  let transientNoticeIndex: number | undefined;
-  let discardWarningIndex: number | undefined;
   if (input.transientNotice) {
-    transientNoticeIndex = left.length;
-    left.push({ text: input.transientNotice.text, color: COLOR_WARNING });
+    left.push({
+      text: input.transientNotice.text,
+      color: COLOR_WARNING,
+      priority: STATUS_BAR_PRIORITY.notice,
+      policy: 'truncate',
+    });
     if (input.transientNotice.kind === 'exit' && queuedCount > 0) {
       // Exiting drops queued follow-ups silently — warn before the user
       // confirms with the second Ctrl-C.
-      discardWarningIndex = left.length;
       left.push({
         text: `${formatResultCount(queuedCount, 'queued follow-up')} will be discarded`,
         color: COLOR_ERROR,
+        priority: STATUS_BAR_PRIORITY.discardWarning,
+        policy: 'truncate',
       });
     }
   }
@@ -871,7 +764,8 @@ export function buildStatusBarDisplay(
           ? {
               text: 'root active',
               color: COLOR_WARNING,
-              compactPriority: STATUS_BAR_COMPACT_PRIORITY.rootActive,
+              priority: STATUS_BAR_PRIORITY.rootActive,
+              policy: 'drop',
             }
           : undefined,
         input.subscriptionProbeFailed
@@ -879,7 +773,8 @@ export function buildStatusBarDisplay(
               text: 'subscription status unavailable',
               compactText: 'sub unknown',
               color: COLOR_WARNING,
-              compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
+              priority: STATUS_BAR_PRIORITY.accessMode,
+              policy: 'drop',
             }
           : accessModeSegment(input.modelAccess),
         subscriptionQuotaSegment(input.subscriptionQuota),
@@ -887,8 +782,9 @@ export function buildStatusBarDisplay(
         input.location
           ? {
               text: input.location.label,
-              color: 'dim',
-              compactPriority: STATUS_BAR_COMPACT_PRIORITY.location,
+              dim: true,
+              priority: STATUS_BAR_PRIORITY.location,
+              policy: 'drop',
             }
           : undefined,
         formatUsage(run?.context ?? undefined, run?.usage),
@@ -897,23 +793,26 @@ export function buildStatusBarDisplay(
           ? {
               text: `queued ${queuedCount}`,
               color: COLOR_WARNING,
-              compactPriority: STATUS_BAR_COMPACT_PRIORITY.queuedFollowUp,
+              priority: STATUS_BAR_PRIORITY.queuedFollowUp,
+              policy: 'drop',
             }
           : undefined,
         subagents > 0
           ? {
               text: formatResultCount(subagents, 'agent'),
               compactText: `${subagents} ${NESTED_AGENT.compactCountSuffix}`,
-              color: 'dim',
-              compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
+              dim: true,
+              priority: STATUS_BAR_PRIORITY.activeSubagent,
+              policy: 'drop',
             }
           : undefined,
         input.runningSessions > 0
           ? {
               text: `${input.runningSessions} active`,
               compactText: `${input.runningSessions} ${NESTED_AGENT.compactLiveSuffix}`,
-              color: 'dim',
-              compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
+              dim: true,
+              priority: STATUS_BAR_PRIORITY.activeSubagent,
+              policy: 'drop',
             }
           : undefined,
         input.approvalDepth > 0
@@ -923,7 +822,8 @@ export function buildStatusBarDisplay(
                 input.approvalKind ?? 'approval',
               ),
               color: COLOR_WARNING,
-              compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
+              priority: STATUS_BAR_PRIORITY.approvalDepth,
+              policy: 'drop',
             }
           : undefined,
       ] satisfies (StatusBarSegment | undefined)[]
@@ -936,20 +836,12 @@ export function buildStatusBarDisplay(
         text: badge.text,
         badge: true,
         badgeColor: badge.badgeColor,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.bypassBadge,
+        priority: STATUS_BAR_PRIORITY.bypassBadge,
+        policy: 'keep',
       });
     }
   }
-  const fittedLeft =
-    transientNoticeIndex !== undefined
-      ? fitTransientNoticeStatusBarLeftSegments(
-          left,
-          transientNoticeIndex,
-          transientLivenessIndex,
-          discardWarningIndex,
-          input.width,
-        )
-      : fitStatusBarLeftSegments(left, input.width);
+  const fittedLeft = fitStatusBarLeftSegments(left, input.width);
 
   return {
     left: fittedLeft,

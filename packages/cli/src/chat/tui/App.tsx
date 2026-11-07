@@ -48,7 +48,6 @@ import {
   ActiveDraftScope,
   createActiveDraftRegistry,
 } from './input/activeDraft';
-import { resolveChildListTarget } from './state/childControls';
 import { activeForm, closeActiveForm } from './state/formSlot';
 import {
   selectedRunId as selectedRunIdSignal,
@@ -67,7 +66,6 @@ import {
   sessionListRunIds,
   focusRun,
   childListFocused as childListFocusedSignal,
-  childListHighlight,
   focusChildList,
   highlightChildListRun,
 } from './state/cliState';
@@ -77,12 +75,10 @@ import {
 } from './state/transcript';
 import {
   currentView,
-  killableRunId,
   resumableRunId,
   sessionView,
   runLabelOf,
   runViewOf,
-  runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
 import type { Session } from '@texra-ai/harness';
@@ -141,7 +137,6 @@ export function App(props: AppProps): React.JSX.Element {
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const formBusy = formProgress?.status === 'running';
   const childListFocused = useSignal(childListFocusedSignal);
-  const selectedChildValue = useSignal(childListHighlight);
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const activeRun = runViewOf(view, activeRunId);
@@ -150,7 +145,6 @@ export function App(props: AppProps): React.JSX.Element {
     selectedRunId: activeRunId,
     view,
   });
-  const childListTarget = resolveChildListTarget(view, activeRunId);
   // One owner of "a foreground surface is up": the surface kind itself.
   // `undefined` is exactly the no-surface case (every reader target carries a
   // `kind`), so nothing derives that fact a second time and the two can never
@@ -196,19 +190,11 @@ export function App(props: AppProps): React.JSX.Element {
     (!childInputHidden || childListFocused || unavailableDetail !== undefined);
 
   const sessions = useSignal(sessionListRunIds);
-  const childRunningCount = runningChildCount(
-    view,
-    runViewOf(view, childListTarget),
-  );
   const scriptPopup = useSignal(scriptPopupViewSignal);
   // The active run's transcript holds a script's calls: Ctrl-O shows them.
   const scriptAvailable =
     activeRun?.transcript.taskGroups.some((group) => group.kind === 'script') ??
     false;
-  const childListValues = sessions;
-  const childListAvailable = childListValues.length > 0;
-  const selectedChild = runViewOf(view, selectedChildValue);
-  const selectedChildKillable = killableRunId(selectedChild) !== undefined;
   // Kill, skip and retry; a refusal (a finished call) reads into the transcript.
   const request = (req: RuntimeRequest): void => {
     props.runtime.runFork(
@@ -592,14 +578,6 @@ export function App(props: AppProps): React.JSX.Element {
               foregroundInputActive={
                 foregroundOpen || reverseSearchOpen || slashPaletteOpen
               }
-              childListFocused={childListFocused}
-              childListSelectionKillable={selectedChildKillable}
-              childListSelectionResumable={
-                resumableRunId(selectedChild) !== undefined
-              }
-              childNavigationAvailable={childListAvailable}
-              runningSessions={childRunningCount}
-              transcriptAvailable={(activeRun?.transcript.rows.length ?? 0) > 0}
               scriptAvailable={scriptAvailable}
             />
           </>
