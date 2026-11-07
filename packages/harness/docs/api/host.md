@@ -1013,7 +1013,7 @@ Result of running a single external tool check.
 interface ExternalToolCheckResult {
   readonly id: string;
   readonly tools: readonly string[];
-  readonly status: 'available' | 'not-found' | 'unknown';
+  readonly status: ToolDependencyStatus;
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
   /** Human-readable explanation from the plugin's check, if any. */

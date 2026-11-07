@@ -1,3 +1,5 @@
+import { Record as EffectRecord } from 'effect';
+
 import type {
   ApprovalBypassKind,
   InlinePersona,
@@ -8,18 +10,19 @@ import type {
  * commands, agent work. The approval cards' Approve ▾ menu, the header's
  * grant chips and the CLI's `/status` name the same grant with the same noun.
  */
-/** The one order grants are listed in, on every surface. */
-export const RUN_GRANT_ORDER = [
-  'toolEdit',
-  'bash',
-  'superYolo',
-] as const satisfies readonly ApprovalBypassKind[];
-
+/** Each grant's noun, declared in the one order grants are listed in on
+ *  every surface. */
 export const RUN_GRANT_NOUN = Object.freeze({
   toolEdit: 'edits',
   bash: 'commands',
   superYolo: 'agent work',
 } as const satisfies Record<ApprovalBypassKind, string>);
+
+/** The one order grants are listed in, read off {@link RUN_GRANT_NOUN}, so a
+ *  new grant kind cannot compile without it. */
+export const RUN_GRANT_ORDER: readonly ApprovalBypassKind[] = Object.freeze(
+  EffectRecord.keys(RUN_GRANT_NOUN),
+);
 
 /** The approval card's grant item, e.g. "Approve all edits in this task". */
 export const RUN_GRANT_LABEL = Object.freeze({

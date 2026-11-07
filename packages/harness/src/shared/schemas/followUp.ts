@@ -7,6 +7,7 @@
 import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
+import { RunOutcomeSchema } from './run';
 import { StoredMediaSchema } from './storedTurn';
 
 /**
@@ -130,13 +131,11 @@ export const FollowUpReceiptSchema = Schema.Union([
   Schema.Struct({
     state: Schema.Literal('unanswered'),
     turn: Schema.optional(TurnSchema),
-    reason: Schema.Literals([
-      'failed',
-      'cancelled',
-      'completed',
-      'noop',
-      'ended',
-      'closed',
+    /** How the run ended, when its end is why; else the input was a no-op,
+     *  or the run ended or closed its input before answering it. */
+    reason: Schema.Union([
+      RunOutcomeSchema,
+      Schema.Literals(['noop', 'ended', 'closed']),
     ]),
     error: Schema.optional(Schema.String),
   }),

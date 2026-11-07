@@ -1285,7 +1285,7 @@ interface OpenFilePayload {
 What the runtime answers with: a typed value the host renders.
 
 ```ts
-const OutcomeSchema: Union<readonly [Struct<{ readonly kind: Literal<"done">; }>, Struct<{ readonly kind: Literal<"followUp">; readonly id: String; readonly status: Literals<readonly ["sent", "queued"]>; readonly receipt: Union<readonly [Struct<{ readonly state: Literal<"accepted">; }>, Struct<{ readonly state: Literal<"incorporated">; readonly turn: Int; }>, Struct<{ readonly state: Literal<"answered">; readonly turn: optional<Int>; readonly answer: Int; }>, Struct<{ readonly state: Literal<"unanswered">; readonly turn: optional<Int>; readonly reason: Literals<readonly ["failed", "cancelled", "completed", "noop", "ended", "closed"]>; readonly error: optional<String>; }>]>; }>, Struct<{ readonly kind: Literal<"receipt">; readonly receipt: Union<readonly [Struct<{ readonly state: Literal<"accepted">; }>, Struct<{ readonly state: Literal<"incorporated">; readonly turn: Int; }>, Struct<{ readonly state: Literal<"answered">; readonly turn: optional<Int>; readonly answer: Int; }>, Struct<{ readonly state: Literal<"unanswered">; readonly turn: optional<Int>; readonly reason: Literals<readonly ["failed", "cancelled", "completed", "noop", "ended", "closed"]>; readonly error: optional<String>; }>]>; }>, Struct<{ readonly kind: Literal<"forked">; readonly runId: brand<String, "RunId">; }>, Struct<{ readonly kind: Literal<"preview">; readonly preview: NullOr<Struct<{ readonly originalContent: String; readonly proposedContent: String; readonly hunks: $Array<Struct<{ readonly oldStart: Int; readonly oldLines: Int; readonly newStart: Int; readonly newLines: Int; readonly lines: $Array<String>; }>>; readonly firstChangedLine: NullOr<Int>; }>>; }>, Struct<{ readonly kind: Literal<"runFiles">; readonly result: Union<readonly [Struct<{ readonly status: Literal<"done">; readonly to: optional<String>; }>, Struct<{ readonly status: Literal<"noFiles">; }>, Struct<{ readonly status: Literal<"error">; readonly error: String; }>]>; }>]>
+const OutcomeSchema: Union<readonly [Struct<{ readonly kind: Literal<"done">; }>, Struct<{ readonly kind: Literal<"followUp">; readonly id: String; readonly status: Literals<readonly ["sent", "queued"]>; readonly receipt: Union<readonly [Struct<{ readonly state: Literal<"accepted">; }>, Struct<{ readonly state: Literal<"incorporated">; readonly turn: Int; }>, Struct<{ readonly state: Literal<"answered">; readonly turn: optional<Int>; readonly answer: Int; }>, Struct<{ readonly state: Literal<"unanswered">; readonly turn: optional<Int>; readonly reason: Union<readonly [Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>, Literals<readonly ["noop", "ended", "closed"]>]>; readonly error: optional<String>; }>]>; }>, Struct<{ readonly kind: Literal<"receipt">; readonly receipt: Union<readonly [Struct<{ readonly state: Literal<"accepted">; }>, Struct<{ readonly state: Literal<"incorporated">; readonly turn: Int; }>, Struct<{ readonly state: Literal<"answered">; readonly turn: optional<Int>; readonly answer: Int; }>, Struct<{ readonly state: Literal<"unanswered">; readonly turn: optional<Int>; readonly reason: Union<readonly [Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>, Literals<readonly ["noop", "ended", "closed"]>]>; readonly error: optional<String>; }>]>; }>, Struct<{ readonly kind: Literal<"forked">; readonly runId: brand<String, "RunId">; }>, Struct<{ readonly kind: Literal<"preview">; readonly preview: NullOr<Struct<{ readonly originalContent: String; readonly proposedContent: String; readonly hunks: $Array<Struct<{ readonly oldStart: Int; readonly oldLines: Int; readonly newStart: Int; readonly newLines: Int; readonly lines: $Array<String>; }>>; readonly firstChangedLine: NullOr<Int>; }>>; }>, Struct<{ readonly kind: Literal<"runFiles">; readonly result: Union<readonly [Struct<{ readonly status: Literal<"done">; readonly to: optional<String>; }>, Struct<{ readonly status: Literal<"noFiles">; }>, Struct<{ readonly status: Literal<"error">; readonly error: String; }>]>; }>]>
 ```
 
 ## OwnerId
@@ -2307,6 +2307,21 @@ Tool definition type - derived from schema
 
 ```ts
 type ToolDefinition = typeof ToolDefinitionSchema.Type;
+```
+
+## ToolDependencyStatus
+
+```ts
+type ToolDependencyStatus = typeof ToolDependencyStatusSchema.Type;
+```
+
+## ToolDependencyStatusSchema
+
+Whether a tool plugin's external dependency is there, as the
+availability probes find it (not a tool call's `ToolCallStatus`).
+
+```ts
+const ToolDependencyStatusSchema: Literals<readonly ["available", "not-found", "unknown"]>
 ```
 
 ## ToolEditContent

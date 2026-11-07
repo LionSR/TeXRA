@@ -40,6 +40,7 @@ export * from './plan';
 export * from './subagentProgress';
 export * from './prompts';
 export * from './request';
+export * from './toolDependencyStatus';
 
 // Layer 4: model availability
 export * from './modelAvailability';
