@@ -180,9 +180,9 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       configRow(runId, run.config, bound.modelId, binding),
       positionRow(runId, opening, 'turn.ready'),
     ];
-    const state = yield* cell
-      .append(born, run.entry.opening)
-      .pipe(Effect.tap(run.entry.entered), Effect.uninterruptible);
+    const state = yield* run.entry.enter((alongside) =>
+      cell.append(born, alongside),
+    );
     run.callbacks.onProgress?.({ kind: 'started' });
     return { cell, activation: state.commit };
   }
@@ -250,9 +250,9 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
     positionRow(runId, opening, 'turn.ready'),
     ...handed,
   ];
-  const state = yield* cell
-    .append(rows, run.entry.opening)
-    .pipe(Effect.tap(run.entry.entered), Effect.uninterruptible);
+  const state = yield* run.entry.enter((alongside) =>
+    cell.append(rows, alongside),
+  );
   run.callbacks.onProgress?.({ kind: 'started' });
   return { cell, activation: state.commit };
 });

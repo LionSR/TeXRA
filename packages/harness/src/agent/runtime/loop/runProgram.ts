@@ -90,40 +90,36 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
     SessionRoots,
     Approvals,
   )(yield* Effect.context<ActivationServices>());
-  const cell = yield* runHistory
-    .open(
-      runId,
-      resume
-        ? {
-            activation: Effect.fn('activation')(function* (
-              state: RunState | null,
-            ) {
-              if (state?.phase == null)
-                return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
-              const refused = foreignProtocol(
-                runId,
-                state,
-                yield* ScopedRef.get(run.model),
-              );
-              if (refused !== null) return yield* refused;
-              return yield* activationRows(runId, run.config).pipe(
-                Effect.provide(owners),
-              );
-            }),
-          }
-        : {
-            registration: Effect.succeed(run.entry.registration?.rows ?? []),
-          },
-    )
-    .pipe(
-      // A resume enters once its activation settled, with the state it
-      // opened on (a fresh run, with its opening batch); a stop lands before
-      // both or after both.
-      Effect.tap((cell) =>
-        resume ? run.entry.entered(cell.opened) : Effect.void,
-      ),
-      Effect.uninterruptible,
-    );
+  const opened = runHistory.open(
+    runId,
+    resume
+      ? {
+          activation: Effect.fn('activation')(function* (
+            state: RunState | null,
+          ) {
+            if (state?.phase == null)
+              return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
+            const refused = foreignProtocol(
+              runId,
+              state,
+              yield* ScopedRef.get(run.model),
+            );
+            if (refused !== null) return yield* refused;
+            return yield* activationRows(runId, run.config).pipe(
+              Effect.provide(owners),
+            );
+          }),
+        }
+      : {
+          registration: Effect.succeed(run.entry.registration?.rows ?? []),
+        },
+  );
+  // A resume enters with its activation, with no alongside: its held
+  // trace publishes once the activation commits. A fresh run enters with
+  // its opening batch later (`openToolUse`); a stop lands before or after.
+  const cell = yield* resume
+    ? run.entry.enter(() => opened)
+    : Effect.uninterruptible(opened);
   if (!resume && (yield* cell.current).phase !== null)
     return yield* Effect.fail(
       new Error(
