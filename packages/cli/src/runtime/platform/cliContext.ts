@@ -242,8 +242,13 @@ const decodeCliPackageManifest = Schema.decodeUnknownResult(
  * face to keep in step with.
  */
 function readCliPackageManifest(): CliPackageManifest | undefined {
+  // The bundled `dist/bin` entry reaches the manifest two levels up, this
+  // module run from source (`src/runtime/platform/`) three; the one-level
+  // candidate is for build layouts that place runtime files just below the
+  // package root.
   const candidates = [
     new URL('../../package.json', import.meta.url),
+    new URL('../../../package.json', import.meta.url),
     new URL('../package.json', import.meta.url),
   ];
   for (const candidate of candidates) {
@@ -257,9 +262,6 @@ function readCliPackageManifest(): CliPackageManifest | undefined {
       continue;
     }
     const pkg = decodeCliPackageManifest(text);
-    // Source and bundled `dist/bin` layouts both reach the CLI manifest via
-    // `../../`; keep the fallback for build layouts that place runtime files
-    // one level below the package root.
     if (Result.isSuccess(pkg)) return pkg.success;
   }
   return undefined;
