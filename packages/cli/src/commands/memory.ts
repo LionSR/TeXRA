@@ -15,18 +15,16 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
-import type { CliContext } from '../runtime/cliContext';
+import { CliInvocation } from '../runtime/cliContext';
 
-const runMemoryList = Effect.fn('runMemoryList')(function* (
-  context: CliContext,
-) {
-  const services = yield* initCliPlatform(context);
+const runMemoryList = Effect.fn('runMemoryList')(function* () {
+  const services = yield* initCliPlatform((yield* CliInvocation).context);
   // Pass the full list to `formatCliMemoryList`; it owns truncation (the
   // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
   // consumers should see every memory, not a capped slice.
   const items = yield* withSessionFs(services.roots, MemoryStore.list);
 
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: items,
     ndjson: items.map((memory) => ({ kind: 'memory', memory })),
     text: formatCliMemoryList(items),
@@ -34,16 +32,13 @@ const runMemoryList = Effect.fn('runMemoryList')(function* (
   return CliExitCode.Success;
 });
 
-const runMemoryShow = Effect.fn('runMemoryShow')(function* (
-  context: CliContext,
-  inputPath: string,
-) {
-  const services = yield* initCliPlatform(context);
+const runMemoryShow = Effect.fn('runMemoryShow')(function* (inputPath: string) {
+  const services = yield* initCliPlatform((yield* CliInvocation).context);
   const record = yield* withSessionFs(
     services.roots,
     loadCliMemoryDetail(inputPath),
   );
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: record,
     ndjson: { kind: 'memory-detail', ...record },
     text: formatCliMemoryPreview(record),
@@ -70,7 +65,7 @@ const memoryShowCommand = defineCliCommand({
     },
   },
   catchExitCode: CliExitCode.Usage,
-  run: (context, ctx) => runMemoryShow(context, ctx.args.path),
+  run: (_, ctx) => runMemoryShow(ctx.args.path),
 });
 
 export const memoryCommand = defineCommand({

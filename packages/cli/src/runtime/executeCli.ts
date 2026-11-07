@@ -18,13 +18,13 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
+  LaunchRefused,
   RunFailure,
   type Run,
   type Session,
   type StartInput,
 } from '@texra-ai/harness';
 import {
-  launchNoticeOf,
   normalizeProviderError,
   withProcessServices,
   type ProcessRuntime,
@@ -52,6 +52,7 @@ import {
   launchApprovalNotice,
   projectApprovalPolicy,
   type CliContext,
+  type CliInvocation,
 } from './cliContext';
 import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
 
@@ -128,16 +129,7 @@ export const executeCliToolUseConfig = Effect.fn('executeCliToolUseConfig')(
         : undefined,
     });
     if (!run.ok) return run;
-
-    const { result } = run;
-    return {
-      ok: true as const,
-      result: {
-        ...result,
-        workingDirectory: runContext.cwd,
-      },
-      exitCode: runOutcomeExitCode(result.outcome),
-    };
+    return { ...run, exitCode: runOutcomeExitCode(run.result.outcome) };
   },
 );
 
@@ -188,9 +180,11 @@ export const executeCliConfig: (
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliExecuteOptions,
-) => Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> = Effect.fn(
-  'executeCliConfig',
-)(
+) => Effect.Effect<
+  CliConfigExecuteResult,
+  Error,
+  ProcessServices | CliInvocation
+> = Effect.fn('executeCliConfig')(
   function* (
     config: AgentConfigPayload,
     runContext: CliContext,
@@ -230,7 +224,7 @@ export const executeCliConfig: (
     yield* presentationHost
       .attachRunProgressRenderer(session, request.runId)
       .pipe(Scope.provide(presentationScope));
-    const host = createHeadlessCliHostInteractions(session, runContext, {
+    const host = yield* createHeadlessCliHostInteractions(session, {
       prompting: () => presentationHost.holdForPrompt?.(),
       emit: (event, payload) => {
         if (event === 'requestShowError') failurePresented = true;
@@ -323,9 +317,13 @@ export const executeCliConfig: (
           Effect.uninterruptible(
             Effect.suspend(() => {
               accepted = true;
+              // The run's whole result, built once: what the command emits
+              // and what its `afterRun` finalizes.
               return Effect.map(run.result, (end) => ({
                 ...end,
                 runId: run.runId,
+                plugins,
+                workingDirectory: runContext.cwd,
               }));
             }),
           ),
@@ -410,13 +408,13 @@ export const executeCliConfig: (
       runResult = { ok: true as const, result: exit.value };
     } else if (!interrupted) {
       const failure = Cause.squash(exit.cause);
-      // The session words a launch's failure as a `RunFailure`; what it
-      // failed with is its cause.
+      // The session words a launch's failure as a `RunFailure` (what it
+      // failed with is its cause), or a refused one as `LaunchRefused`.
       const err = failure instanceof RunFailure ? failure.cause : failure;
-      // Only a classified, already-handled AgentError resolves to a non-zero
-      // exit code here; anything else (e.g. registerRun disk I/O,
-      // workspaceState.update failures) is unexpected and must keep
-      // propagating to bin/texra.ts's crash handler.
+      // Only a refused launch or a classified, already-handled AgentError
+      // resolves to a non-zero exit code here; anything else (e.g.
+      // registerRun disk I/O, workspaceState.update failures) is unexpected
+      // and must keep propagating to bin/texra.ts's crash handler.
       if (err instanceof CliUsageError) {
         refusal = err; // a refused resume: the caller's usage exit
       } else {
@@ -425,9 +423,10 @@ export const executeCliConfig: (
         // notice it carries, any other by its message and classification,
         // which the host words. A run that opened never fails its launch:
         // its end is its `run.end` row's.
-        if (!(err instanceof AgentError)) primaryRunFailure = { error: err };
+        const notice = err instanceof LaunchRefused ? err.notice : undefined;
+        if (!(err instanceof AgentError || err instanceof LaunchRefused))
+          primaryRunFailure = { error: err };
         else if (!failurePresented) {
-          const notice = launchNoticeOf(err);
           if (notice !== undefined)
             presentationHost.emit(notice.event, notice.payload);
           else {
@@ -497,7 +496,7 @@ export const executeCliConfig: (
     }
 
     yield* detachPresentation;
-    return { ok: true as const, result: { ...runResult.result, plugins } };
+    return runResult;
   },
   Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
 );

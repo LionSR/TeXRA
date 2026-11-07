@@ -18,7 +18,7 @@ import {
 import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import { HostFailed, type MessageHost } from '@texra/hosts/uiHosts';
+import { HostFailed } from '@texra/hosts/uiHosts';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 
 import {
@@ -47,19 +47,9 @@ interface DesktopShellAdapter {
  * own so a build outlives the preview program whose settle race interrupts it.
  */
 interface DesktopPreviewHost {
-  /**
-   * The window shows its own "could not open" dialog and the caller reads
-   * {@link PreviewUnavailable}.
-   */
-  openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
-  /**
-   * `reportFailure: false` leaves the dialog out and hands the caller the
-   * shell's rejection as {@link HostFailed}.
-   */
-  openExternal(
-    url: string,
-    options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, PreviewUnavailable | HostFailed>;
+  /** Open a URL in the default browser. The shell's rejection is
+   *  {@link HostFailed}; the caller presents it. */
+  openExternal(url: string): Effect.Effect<void, HostFailed>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
@@ -75,13 +65,11 @@ interface DesktopPreviewHostOptions extends DesktopRenderer {
   /** The process runtime the window was handed. It only supplies the
    *  filesystem `openPath` probes through; nothing settles on it. */
   runtime: ProcessRuntime;
-  showErrorMessage?: MessageHost['showErrorMessage'];
 }
 
 /**
- * A preview step that could not run: the message the desktop already showed
- * in its dialog and the rejection its caller sees. The message is the whole
- * sentence the user reads, never a prefix over another one.
+ * A preview step that could not run, which its caller presents. The message
+ * is the whole sentence the user reads, never a prefix over another one.
  */
 export class PreviewUnavailable extends Schema.TaggedError<PreviewUnavailable>()(
   'PreviewUnavailable',
@@ -95,25 +83,8 @@ export function createDesktopPreviewHost(
 ): DesktopPreviewHost {
   /** The builds this host has shown: each tab reload names the newest. */
   let builds = 0;
-  /**
-   * Show the failure, then carry it out through the error channel. The dialog
-   * is host I/O like every other call here, so a rejection from it is a typed
-   * failure carrying that rejection's own text, never a fiber defect.
-   */
-  function fail(message: string): Effect.Effect<never, PreviewUnavailable> {
-    return Effect.suspend(() =>
-      options.showErrorMessage === undefined
-        ? Effect.fail(new PreviewUnavailable({ message }))
-        : options.showErrorMessage(message).pipe(
-            Effect.catchTag('HostFailed', (error) =>
-              Effect.fail(new PreviewUnavailable({ message: error.message })),
-            ),
-            Effect.flatMap(() =>
-              Effect.fail(new PreviewUnavailable({ message })),
-            ),
-          ),
-    );
-  }
+  const fail = (message: string): Effect.Effect<never, PreviewUnavailable> =>
+    Effect.fail(new PreviewUnavailable({ message }));
 
   function ensurePathExists(
     filePath: string,
@@ -144,18 +115,8 @@ export function createDesktopPreviewHost(
     }
   });
 
-  /** The reported form is the default; only the unreported one carries the
-   *  shell's rejection. */
-  function openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
-  function openExternal(
-    url: string,
-    options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, PreviewUnavailable | HostFailed>;
-  function openExternal(
-    url: string,
-    { reportFailure = true }: { readonly reportFailure?: boolean } = {},
-  ): Effect.Effect<void, PreviewUnavailable | HostFailed> {
-    return Effect.tryPromise({
+  const openExternal = (url: string): Effect.Effect<void, HostFailed> =>
+    Effect.tryPromise({
       try: () => options.shell.openExternal(url),
       catch: (cause) =>
         new HostFailed({
@@ -163,17 +124,7 @@ export function createDesktopPreviewHost(
           message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
           cause,
         }),
-    }).pipe(
-      // Unreported, an OAuth flow decides for itself whether a missing
-      // browser handler is worth a dialog.
-      Effect.catch((error) =>
-        reportFailure
-          ? fail(`Failed to open URL ${url}: ${toErrorMessage(error.cause)}`)
-          : Effect.fail<PreviewUnavailable | HostFailed>(error),
-      ),
-      Effect.asVoid,
-    );
-  }
+    });
 
   const buildDisplayProgram = Effect.fn('buildDisplayProgram')(function* (
     roots: WorkspaceRoots,
@@ -208,8 +159,8 @@ export function createDesktopPreviewHost(
     );
     if (!built.ok) {
       // The full engine log (up to 200 lines) goes to the app log, not the
-      // dialog message -- fail() surfaces the message via a blocking native
-      // `dialog.showMessageBox` modal (see desktopWindowHost.ts's showErrorMessage),
+      // failure's message -- its caller presents it in a blocking native
+      // `dialog.showMessageBox` modal (desktopWindowHost.ts's `presented`),
       // which has no scrolling affordance and would render as an oversized,
       // unreadable dialog for a multi-hundred-line raw compiler log.
       // In the message, not a `data` annotation: the sink bounds an

@@ -135,7 +135,7 @@ interface AgentCatalogShape {
   /**
    * The agent a launch runs, over a settled catalog: the entry an explicit
    * `source` pins, else a visible one, else any. A miss reloads once, then
-   * fails with what the load said.
+   * refuses the launch with what the load said.
    */
   readonly forLaunch: (
     stores: WorkspaceAgentsStores,
@@ -143,7 +143,7 @@ interface AgentCatalogShape {
     source?: AgentSource | null,
   ) => Effect.Effect<
     AgentEntry,
-    AgentNotFound | AgentCatalogLoadError | StateReadFailed
+    LaunchRefused | AgentCatalogLoadError | StateReadFailed
   >;
   /** The workspace's agent selection, over this catalog. */
   readonly workspaceAgents: (
@@ -347,8 +347,8 @@ interface AgentEntry {
 
 ## AgentError
 
-A runtime failure of the agent layer: a launch it refuses, a run that
-ended failed, or a model call that failed as its rows record it.
+A runtime failure of the agent layer: a run that ended failed, a launch
+that could not be built, or a model call that failed as its rows record it.
 
 Host-neutral, so any host can reference it.
 A more specific error should be added only when a concrete thrower and
@@ -359,9 +359,6 @@ catcher exist for it — anything else duplicates the existing
 class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
-  /** A refused launch's notice (an unknown model, an unknown agent), which
-   *  the launch's caller shows in place of the generic error. */
-  notice: Schema.optional(LaunchNoticeSchema),
   /** A model failure as the run's rows record it (the run ended on it, or a
    *  helper call raised it), which a host reads in place of this message's
    *  words. */
@@ -1014,7 +1011,7 @@ Result of running a single external tool check.
 interface ExternalToolCheckResult {
   readonly id: string;
   readonly tools: readonly string[];
-  readonly status: 'available' | 'not-found' | 'unknown';
+  readonly status: ToolDependencyStatus;
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
   /** Human-readable explanation from the plugin's check, if any. */
@@ -1304,16 +1301,6 @@ True if `target` is a strict descendant of `base` (excludes `target === base`).
 
 ```ts
 function isStrictlyWithin(base: string, target: string): boolean
-```
-
-## launchNoticeOf
-
-The notice a refused launch carries for its caller to show
-(`AgentError.notice`), read through a `Session` start's `RunFailure`;
-undefined for any other failure, which its caller words itself.
-
-```ts
-function launchNoticeOf(error: unknown): LaunchNotice | undefined
 ```
 
 ## listRunGeneratedFiles
@@ -1733,7 +1720,7 @@ function presentFollowUpResult(
 ## presentRunFailure
 
 Present a failed run from its raw error, replayed to a surface that
-attaches later: a refused launch's notice ({@link launchNoticeOf}), or
+attaches later: a refused launch's notice (`LaunchRefused.notice`), or
 else the primary failure as `prefix` plus its text (a `Rejected`
 request's reason). With no prefix, a model failure is shown as its run
 would record it, its classification beside, which a host may word in its

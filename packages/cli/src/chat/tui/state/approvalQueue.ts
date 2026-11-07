@@ -15,8 +15,8 @@ import { Cause, Effect, absurd } from 'effect';
 import { withLogChannel } from '@texra-ai/harness/host';
 import {
   attentionOf,
-  type PermissionPayload,
-  type ProgressPermissionKind,
+  type RequestPayload,
+  type RequestKind,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import {
@@ -50,34 +50,31 @@ interface TuiApprovalAdornments {
  * in a shared session is answered from its thread rather than from a modal
  * here, so {@link attentionRequests} leaves plugin requests out of this queue.
  */
-export type PendingApprovalKind = Exclude<ProgressPermissionKind, 'plugin'>;
+export type PendingRequestKind = Exclude<RequestKind, 'plugin'>;
 
 /**
- * The presented payload IS the wire {@link PermissionPayload}, with the
+ * The presented payload IS the wire {@link RequestPayload}, with the
  * TUI-only adornments above carried beside its `data`. Derivation is the
  * point: a kind added to the wire union appears here without an edit, so
  * every `switch` below and in the modal dispatcher stops compiling until the
  * TUI handles it.
  */
-export type ApprovalPayload = {
-  [K in PendingApprovalKind]: Extract<PermissionPayload, { kind: K }> &
+export type TuiRequest = {
+  [K in PendingRequestKind]: Extract<RequestPayload, { kind: K }> &
     (K extends keyof TuiApprovalAdornments
       ? { readonly tui: TuiApprovalAdornments[K] }
       : { readonly tui?: never });
-}[PendingApprovalKind];
+}[PendingRequestKind];
 
 /** The two kinds their modals read by name. */
-export type ToolEditApprovalPayload = Extract<
-  ApprovalPayload,
-  { kind: 'toolEdit' }
->;
-export type RetryApprovalPayload = Extract<ApprovalPayload, { kind: 'retry' }>;
+export type ToolEditTuiRequest = Extract<TuiRequest, { kind: 'toolEdit' }>;
+export type RetryTuiRequest = Extract<TuiRequest, { kind: 'retry' }>;
 
 /** Where a decision lands: the chat's session, here or in the service. */
 export type SessionRequests = Pick<Session, 'request'>;
 
 export interface PendingApproval {
-  readonly payload: ApprovalPayload;
+  readonly payload: TuiRequest;
   /** Answer this request. Where requests land and the runtime come from the
    *  surface that renders the modal: this entry is a level of a module-level
    *  computed, so it has neither of its own to close over. */
@@ -88,9 +85,9 @@ export interface PendingApproval {
   ) => void;
 }
 
-/** A pending `request.opened` fact, typed to {@link PendingApprovalKind}. */
+/** A pending `request.opened` fact, typed to {@link PendingRequestKind}. */
 export type PendingApprovalFact = SessionView['requests'][number] & {
-  readonly payload: Extract<PermissionPayload, { kind: PendingApprovalKind }>;
+  readonly payload: Extract<RequestPayload, { kind: PendingRequestKind }>;
 };
 
 /** Each run's pending request kinds in commit order: the badge the session
@@ -109,7 +106,7 @@ export const pendingApprovalKindsByRun = computed(
 interface AttentionRequest {
   readonly requestId: string;
   readonly runId: RunId;
-  readonly kind: PendingApprovalKind;
+  readonly kind: PendingRequestKind;
   /** The fact's payload; a staged presentation replaces it when there is one. */
   readonly payload: PendingApprovalFact['payload'];
 }
@@ -119,9 +116,7 @@ interface AttentionRequest {
  * presents, a tool edit with its preview, which keeps the card off the
  * screen until the preview is read.
  */
-const stagedPresentations = signal<ReadonlyMap<string, ApprovalPayload>>(
-  new Map(),
-);
+const stagedPresentations = signal<ReadonlyMap<string, TuiRequest>>(new Map());
 
 /** Decided on this surface; hidden until the session view drops the fact. */
 const decided = signal<ReadonlySet<string>>(new Set());
@@ -195,8 +190,8 @@ export const attentionRequests = computed((): readonly AttentionRequest[] => {
  *  fact's, for the kinds that need nothing staged. */
 function presentedPayload(
   request: AttentionRequest,
-  staged: ReadonlyMap<string, ApprovalPayload>,
-): ApprovalPayload | undefined {
+  staged: ReadonlyMap<string, TuiRequest>,
+): TuiRequest | undefined {
   const entry = staged.get(request.requestId);
   if (entry) return entry;
   const payload = request.payload;
@@ -228,7 +223,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   const done = decided.get();
   const candidates: Array<{
     readonly request: AttentionRequest;
-    readonly payload: ApprovalPayload;
+    readonly payload: TuiRequest;
   }> = [];
   for (const request of attentionRequests.get()) {
     if (done.has(request.requestId)) continue;
@@ -277,7 +272,7 @@ function markDecided(requestId: string): void {
  * Publish the presentation a host prepared for one listed request: the
  * payload the modal renders from here on, until the host drops it.
  */
-export function stagePresentation(payload: ApprovalPayload): void {
+export function stagePresentation(payload: TuiRequest): void {
   stagedPresentations.set(
     new Map(stagedPresentations.get()).set(payload.data.requestId, payload),
   );
@@ -352,7 +347,7 @@ function decideRequest(
   requests: SessionRequests,
   runtime: ProcessRuntime,
   request: AttentionRequest,
-  payload: PermissionPayload,
+  payload: RequestPayload,
   decision: SurfaceDecision,
 ): void {
   markDecided(request.requestId);

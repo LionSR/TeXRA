@@ -30,7 +30,7 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
-import type { CliContext } from '../runtime/cliContext';
+import { CliInvocation, type CliContext } from '../runtime/cliContext';
 
 /**
  * The report every model command gives when its platform cannot come up: one
@@ -76,7 +76,7 @@ const listModels = Effect.fn('listModels')(function* (
     writeTextStderr(formatNoListableModelsMessage(options));
   }
   const records = listedModels.map(({ model }) => cliModelRecord(model));
-  yield* emitPagedCliResult(context, {
+  yield* emitPagedCliResult({
     json: records,
     ndjson: records.map((model) => ({ kind: 'model', model })),
     text: listedModels
@@ -86,10 +86,8 @@ const listModels = Effect.fn('listModels')(function* (
   return CliExitCode.Success;
 });
 
-const showModel = Effect.fn('showModel')(function* (
-  context: CliContext,
-  id: string,
-) {
+const showModel = Effect.fn('showModel')(function* (id: string) {
+  const { context } = yield* CliInvocation;
   const outcome = yield* Effect.exit(
     Effect.gen(function* () {
       const services = yield* initCliPlatform(context);
@@ -107,7 +105,7 @@ const showModel = Effect.fn('showModel')(function* (
   }
 
   const record = cliModelRecord(entry.model);
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: record,
     ndjson: { kind: 'model', model: record },
     text: formatCliModelDetails(entry),
@@ -139,7 +137,7 @@ const modelsShowCommand = defineCliCommand({
       description: 'Model id from `texra models list` (case-insensitive)',
     },
   },
-  run: (context, ctx) => showModel(context, ctx.args.id),
+  run: (_, ctx) => showModel(ctx.args.id),
   catchExitCode: reportModelPlatformFailure,
 });
 
@@ -149,26 +147,26 @@ const modelsShowCommand = defineCliCommand({
  * defects and interruption included, exactly as the rejection this replaces
  * reached the caller.
  */
-function initModelCommandPlatform(
-  context: CliContext,
-): Effect.Effect<CliPlatformServices | { readonly exitCode: number }> {
-  return initCliPlatform(context).pipe(
+const initModelCommandPlatform: Effect.Effect<
+  CliPlatformServices | { readonly exitCode: number },
+  never,
+  CliInvocation
+> = CliInvocation.use(({ context }) =>
+  initCliPlatform(context).pipe(
     Effect.catchCause((cause) =>
       Effect.sync(() => ({
         exitCode: reportModelPlatformFailure(Cause.squash(cause)),
       })),
     ),
-  );
-}
+  ),
+);
 
-const listEnabledModels = Effect.fn('listEnabledModels')(function* (
-  context: CliContext,
-) {
-  const services = yield* initModelCommandPlatform(context);
+const listEnabledModels = Effect.fn('listEnabledModels')(function* () {
+  const services = yield* initModelCommandPlatform;
   if ('exitCode' in services) return services.exitCode;
   const catalog = yield* listCliEnabledModelCatalog(services.globalState);
   const enabled = yield* getEnabledModels(services.globalState);
-  yield* emitPagedCliResult(context, {
+  yield* emitPagedCliResult({
     json: { enabled, catalog },
     ndjson: [
       { kind: 'models-enabled' as const, models: enabled },
@@ -188,15 +186,14 @@ const listEnabledModels = Effect.fn('listEnabledModels')(function* (
 });
 
 const setModelEnabled = Effect.fn('setModelEnabled')(function* (
-  context: CliContext,
   id: string,
   enabled: boolean,
 ) {
-  const services = yield* initModelCommandPlatform(context);
+  const services = yield* initModelCommandPlatform;
   if ('exitCode' in services) return services.exitCode;
   return yield* setCliModelEnabled(services.globalState, id, enabled).pipe(
-    Effect.map((result) => {
-      emitCliResult(context, {
+    Effect.flatMap((result) =>
+      emitCliResult({
         json: result,
         ndjson: {
           kind: 'model-enabled',
@@ -209,9 +206,8 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
         text: result.enabled
           ? `Enabled ${result.model} in the model picker.`
           : `Disabled ${result.model} in the model picker.`,
-      });
-      return CliExitCode.Success;
-    }),
+      }).pipe(Effect.as(CliExitCode.Success)),
+    ),
     Effect.catchCause((cause) =>
       Effect.sync(() => {
         writeTextStderr(toErrorMessage(Cause.squash(cause)));
@@ -245,7 +241,7 @@ const modelsEnableCommand = defineCliCommand({
       description: 'Model id (e.g. grok47, deepseekproT)',
     },
   },
-  run: (context, ctx) => setModelEnabled(context, ctx.args.id, true),
+  run: (_, ctx) => setModelEnabled(ctx.args.id, true),
   catchExitCode: reportModelPlatformFailure,
 });
 
@@ -262,7 +258,7 @@ const modelsDisableCommand = defineCliCommand({
       description: 'Model id currently shown by `texra models enabled`',
     },
   },
-  run: (context, ctx) => setModelEnabled(context, ctx.args.id, false),
+  run: (_, ctx) => setModelEnabled(ctx.args.id, false),
   catchExitCode: reportModelPlatformFailure,
 });
 

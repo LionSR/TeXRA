@@ -129,10 +129,13 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         // reaches the settings body's own report, so the opener shows no
         // dialog of its own: one failed open, one dialog.
         externalOpener: {
-          openExternal: (url) => host.openExternalProgram(url, false),
+          openExternal: host.openExternalUrl,
         },
         openPath: (filePath) =>
-          openAgentDocument(filePath, previewHost.openPath(filePath)),
+          openAgentDocument(
+            filePath,
+            host.presented(previewHost.openPath(filePath)),
+          ),
         revealPath: (filePath) =>
           Effect.sync(() => shell.showItemInFolder(filePath)),
         showReadOnlyYaml: (filePath) =>
@@ -219,14 +222,11 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
       settings = yield* createDesktopSettingsIpc({
         bindings: settingsBindingsFor(project, owner),
         signInPresentation: {
-          // The sign-in variant is the same program with the window's own
-          // "could not open" dialog suppressed: the sign-in flow reports a
-          // missing browser itself and falls back to a device code.
-          openSubscriptionSignInUrl: (url) =>
-            host.openExternalProgram(url, false),
-          ...desktopSignInPresenters(
-            host.window,
-            host.previewHost.openExternal,
+          // The sign-in flow reports a missing browser itself and falls back
+          // to a device code, so the window shows no dialog of its own.
+          openSubscriptionSignInUrl: host.openExternalUrl,
+          ...desktopSignInPresenters(host.window, (url) =>
+            host.presented(host.openExternalUrl(url)),
           ),
         },
         roots: project.roots,

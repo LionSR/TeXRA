@@ -16,7 +16,11 @@ import {
   REQUEST_ACTIONS,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
-import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
+import {
+  RUN_GRANT_CLI_ACTION,
+  RUN_GRANT_ORDER,
+} from '@ui/copy/delegationApproval';
+import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 
 const APPROVAL_PULSE_FRAMES = [STATUS_DOT, HOLLOW_DOT] as const;
 
@@ -43,9 +47,9 @@ export interface ConfirmCardHintOptions<Extra extends KeyHint = KeyHint> {
   /** Omitted labels are resolved by `confirmCardKeyRows`. */
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
-  /** Label of the `a` session-bypass action; omitted where the request kind
-   *  offers none. */
-  readonly alwaysAllowLabel?: string;
+  /** The run grant the `a` row turns on (`offeredGrant`); none where the
+   *  request offers none. */
+  readonly grant?: ApprovalBypassKind | null;
   readonly extraActions?: readonly Extra[];
 }
 
@@ -82,7 +86,7 @@ export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
   kind,
   approveLabel = 'approve',
   rejectLabel,
-  alwaysAllowLabel,
+  grant,
   extraActions = [],
 }: ConfirmCardHintOptions<Extra>): (ConfirmCardKeyRow | Extra)[] {
   const feedback = takesNote(kind);
@@ -93,12 +97,12 @@ export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
       action: rejectLabel ?? (feedback ? 'reject & note' : 'reject'),
       decision: feedback ? 'feedback' : declineDecision(kind),
     },
-    ...(alwaysAllowLabel == null
+    ...(grant == null
       ? []
       : [
           {
             key: 'a',
-            action: alwaysAllowLabel,
+            action: RUN_GRANT_CLI_ACTION(grant).full,
             // Surface-only (ruling A9-6): `approvalDecisionArm` sends it as
             // a plain approve that grants the request's own session bypass.
             decision: { action: APPROVE_SESSION_ACTION },
@@ -141,10 +145,12 @@ export function confirmCardFeedbackHints(): KeyHint[] {
 
 const COMPACT_HINT_ACTIONS: Readonly<Record<string, string>> = {
   'reject & note': 'reject',
-  'approve commands for session': 'all commands',
-  'approve edits for session': 'all edits',
-  [DELEGATION_APPROVAL_COPY.cliAction]:
-    DELEGATION_APPROVAL_COPY.cliCompactAction,
+  ...Object.fromEntries(
+    RUN_GRANT_ORDER.map((kind) => {
+      const { full, compact } = RUN_GRANT_CLI_ACTION(kind);
+      return [full, compact];
+    }),
+  ),
   // The plan card's two goal keys, so both fit beside y and n.
   'run as goal': 'goal',
   'goal, approve all': 'all work',

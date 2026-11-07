@@ -14,7 +14,7 @@ import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
 import type { RunTone } from '@ui/copy/runStatus';
 
 // Local imports - TUI state
-import type { PendingApprovalKind } from '../state/approvalQueue';
+import type { PendingRequestKind } from '../state/approvalQueue';
 
 /** The app's copy owns status meaning; terminal colors express only its tone. */
 export const CHILD_TONE_COLOR: Readonly<Record<RunTone, string>> =
@@ -29,7 +29,7 @@ export const CHILD_TONE_COLOR: Readonly<Record<RunTone, string>> =
 /** A steady marker, so list updates never animate the whole live region. */
 export const CHILD_STATUS_MARKER = `${STATUS_DOT} `;
 
-const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
+const PENDING_APPROVAL_ROW_LABELS: Record<PendingRequestKind, string> = {
   bash: 'bash',
   toolEdit: 'edit',
   planApproval: 'plan',
@@ -73,7 +73,7 @@ export function childRowMetadataText({
  * count are separate so narrow layouts can preserve the actionable kind while
  * allowing the informational count to yield. */
 export function pendingApprovalRowDisplay(
-  kinds: readonly PendingApprovalKind[] | undefined,
+  kinds: readonly PendingRequestKind[] | undefined,
 ):
   | { readonly label: string; readonly overflow: string | undefined }
   | undefined {

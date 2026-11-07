@@ -4,7 +4,7 @@
 import {
   getBasename,
   getProposalFileGroups,
-  type AgentProposalPermission,
+  type AgentProposalRequest,
   getModelLabel,
 } from '@texra-ai/harness/schemas';
 import { Record as Rec, Result, Schema } from 'effect';
@@ -32,7 +32,6 @@ import {
 import {
   DEFINED_AGENT_COPY,
   DELEGATION_APPROVAL_COPY,
-  RUN_GRANT_LABEL,
 } from '@ui/copy/delegationApproval';
 
 // Local imports - shared utils
@@ -94,15 +93,17 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     this.emitAction({ action: 'approve', ...this.modelChange });
   }
 
-  protected override get grant(): RunGrant {
-    return {
-      label: RUN_GRANT_LABEL.superYolo,
-      scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
-      decision: {
-        action: APPROVE_SESSION_ACTION,
-        ...this.modelChange,
-      },
-    };
+  // The grant carries the launch form's model change, and its scope names
+  // the edits and commands the delegated-work grant also turns on.
+  protected override get grant(): RunGrant | null {
+    const offered = super.grant;
+    return (
+      offered && {
+        ...offered,
+        scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
+        decision: { action: APPROVE_SESSION_ACTION, ...this.modelChange },
+      }
+    );
   }
 
   /** What the agent wants to start: the agent and the model. */
@@ -217,8 +218,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
    * issued before it asked.
    */
   private renderScriptSummary(
-    data: AgentProposalPermission,
-    script: NonNullable<AgentProposalPermission['script']>,
+    data: AgentProposalRequest,
+    script: NonNullable<AgentProposalRequest['script']>,
   ): TemplateResult {
     return html`
       <div class="proposal-card__lede">
@@ -260,7 +261,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /** An agent the call defines, while it stays the pick: its name and
    *  tools, and, open, its prompt. */
   private renderDefinedAgent(
-    data: AgentProposalPermission,
+    data: AgentProposalRequest,
   ): TemplateResult | typeof nothing {
     const { persona } = data;
     if (!persona) return nothing;
@@ -286,7 +287,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   }
 
   private renderWorkingDirectory(
-    data: AgentProposalPermission,
+    data: AgentProposalRequest,
   ): TemplateResult | typeof nothing {
     const workingDirectory = data.workingDirectory;
     if (!workingDirectory) return nothing;
@@ -303,7 +304,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   }
 
   private renderProposalFiles(
-    data: AgentProposalPermission,
+    data: AgentProposalRequest,
   ): TemplateResult | typeof nothing {
     // Only a document task revises files; a chat delegation names none.
     const groups = data.task ? getProposalFileGroups(data) : [];
@@ -321,7 +322,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   }
 
   private renderOptionBadges(
-    data: AgentProposalPermission,
+    data: AgentProposalRequest,
   ): TemplateResult | typeof nothing {
     // Options the documents plugin cannot read show no flags.
     const options = Result.getOrUndefined(

@@ -1,3 +1,5 @@
+import { Record as EffectRecord } from 'effect';
+
 import type {
   ApprovalBypassKind,
   InlinePersona,
@@ -8,18 +10,19 @@ import type {
  * commands, agent work. The approval cards' Approve ▾ menu, the header's
  * grant chips and the CLI's `/status` name the same grant with the same noun.
  */
-/** The one order grants are listed in, on every surface. */
-export const RUN_GRANT_ORDER = [
-  'toolEdit',
-  'bash',
-  'superYolo',
-] as const satisfies readonly ApprovalBypassKind[];
-
+/** Each grant's noun, declared in the one order grants are listed in on
+ *  every surface. */
 export const RUN_GRANT_NOUN = Object.freeze({
   toolEdit: 'edits',
   bash: 'commands',
   superYolo: 'agent work',
 } as const satisfies Record<ApprovalBypassKind, string>);
+
+/** The one order grants are listed in, read off {@link RUN_GRANT_NOUN}, so a
+ *  new grant kind cannot compile without it. */
+export const RUN_GRANT_ORDER: readonly ApprovalBypassKind[] = Object.freeze(
+  EffectRecord.keys(RUN_GRANT_NOUN),
+);
 
 /** The approval card's grant item, e.g. "Approve all edits in this task". */
 export const RUN_GRANT_LABEL = Object.freeze({
@@ -27,6 +30,13 @@ export const RUN_GRANT_LABEL = Object.freeze({
   bash: `Approve all ${RUN_GRANT_NOUN.bash} in this task`,
   superYolo: `Approve all ${RUN_GRANT_NOUN.superYolo} in this task`,
 } as const satisfies Record<ApprovalBypassKind, string>);
+
+/** The CLI card's `a` row for a grant, in full and where the card is
+ *  compact. */
+export const RUN_GRANT_CLI_ACTION = (kind: ApprovalBypassKind) => ({
+  full: `approve ${RUN_GRANT_NOUN[kind]} for this task`,
+  compact: `all ${RUN_GRANT_NOUN[kind]}`,
+});
 
 /**
  * A grant once given: granting has one home (the approval card's Approve ▾,
@@ -45,8 +55,6 @@ export const RUN_GRANT_COPY = Object.freeze({
 
 /** Host-specific user copy for the delegated-work approval grant. */
 export const DELEGATION_APPROVAL_COPY = Object.freeze({
-  cliAction: 'approve agent work for this task',
-  cliCompactAction: 'all agent work',
   cliExplanation:
     'Press y to approve only this agent. Press a to approve agent work, file edits, and commands for this task. Other prompts still ask.',
   progressViewToggle:

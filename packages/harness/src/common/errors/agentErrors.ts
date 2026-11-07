@@ -7,8 +7,8 @@ import {
 } from '@shared/schemas';
 
 /**
- * A runtime failure of the agent layer: a launch it refuses, a run that
- * ended failed, or a model call that failed as its rows record it.
+ * A runtime failure of the agent layer: a run that ended failed, a launch
+ * that could not be built, or a model call that failed as its rows record it.
  *
  * Host-neutral, so any host can reference it.
  * A more specific error should be added only when a concrete thrower and
@@ -18,14 +18,25 @@ import {
 export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
-  /** A refused launch's notice (an unknown model, an unknown agent), which
-   *  the launch's caller shows in place of the generic error. */
-  notice: Schema.optional(LaunchNoticeSchema),
   /** A model failure as the run's rows record it (the run ended on it, or a
    *  helper call raised it), which a host reads in place of this message's
    *  words. */
   failure: Schema.optional(RetryErrorInfoSchema),
 }) {}
+
+/**
+ * A launch refused before its run exists, for an input its caller supplied:
+ * an unknown agent or model (each with the `notice` a host shows in place of
+ * the message), a persona or configuration its schema rejects, or a run id
+ * already in use.
+ */
+export class LaunchRefused extends Schema.TaggedError<LaunchRefused>()(
+  'LaunchRefused',
+  {
+    message: Schema.String,
+    notice: Schema.optional(LaunchNoticeSchema),
+  },
+) {}
 
 /**
  * No route can carry a model call now: its credential is missing or cannot

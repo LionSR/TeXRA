@@ -50,7 +50,7 @@ The known exceptions: the settings-reading system helper in `utils/` (`execUtils
   2. `MANIFEST` and `BACKEND_PROTOCOLS` in `packages/llm/src/providers/providerPlugins.ts` (its `AssertNever` gates).
   3. Its row in `RESPONSES_ROUTES` (`packages/llm/src/api/responsesConfiguration.ts`), where its quirks go; a provider on a new protocol is a `CONFIGURE` case in `api/configuration.ts` instead.
   4. Its key shapes in `packages/harness/src/logger/redaction.ts`.
-  5. The stored provider list `MODEL_PROVIDERS` (`shared/schemas/runInput.ts`), which `ModelBackendSchema` (gated in `model/reasoningLevel.ts`) and `ApiKeyProviderIdSchema` (`shared/schemas/prompts.ts`, checked by assignment in `routeDecision.ts`) both read.
+  5. The stored provider list `MODEL_PROVIDERS` (`shared/schemas/runInput.ts`), which `ModelBackendSchema` (gated in `model/reasoningLevel.ts`) and `ApiKeyProviderIdSchema` (`shared/schemas/requestPayloads.ts`, checked by assignment in `routeDecision.ts`) both read.
   6. Its endpoint row and region toggle in `shared/state/providerSettings.ts` (gated in `model/modelSettings.ts`); the toggle's placement in `packages/texra/src/shared/settingsView/settingSurfaces.ts` is checked when the catalog loads (`placeRows`), not by the compiler.
   7. The app's key page (`KEY_PAGES`, `packages/texra/src/model/providerPresentation.ts`) and setup probe model (`SETUP_MODEL_BY_PROVIDER`, `packages/texra/src/model/setupModelDefaults.ts`); the Models tab's source order is `API_KEY_PROVIDER_IDS` itself.
 

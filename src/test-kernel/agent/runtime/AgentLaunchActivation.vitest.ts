@@ -149,7 +149,7 @@ describe(
               const launch = (
                 session: Context.Context<SessionServices>,
                 agent: typeof FILE_AGENT | typeof INLINE_AGENT,
-                approval: { readonly delegated?: boolean } | undefined,
+                approval: 'autoApprove' | undefined,
                 ready: (
                   permissions: ReturnType<typeof permissionsOf>,
                 ) => boolean,
@@ -192,13 +192,13 @@ describe(
                 yield* launch(
                   answered,
                   FILE_AGENT,
-                  { delegated: true },
+                  'autoApprove',
                   (p) => p.ran.length > 0,
                 ),
                 yield* launch(
                   answered,
                   INLINE_AGENT,
-                  { delegated: true },
+                  'autoApprove',
                   (p) => p.ran.length > 0,
                 ),
               ];
