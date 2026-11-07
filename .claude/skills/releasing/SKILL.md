@@ -10,8 +10,8 @@ user-facing notes. Publishing is CI-driven
 (`.github/workflows/release.yml`, fired by `release: published`) — the manual
 steps are only: update the changelog, cut two tags, and create two GitHub
 Releases. No local `vsce` / `ovsx` / `npm publish` invocation and no OTP. The
-SDK packages are the exception: they publish by hand, on their own versions
-(see "npm packages" below).
+SDK packages are released apart from the app, on their own version and their
+own `sdk-v` tag, by the same workflow (see "npm packages" below).
 Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
 "Preview releases" further down and never touches the stable channel.
 
@@ -74,54 +74,64 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
 
 ## npm packages: `@texra-ai/llm` and `@texra-ai/harness`
 
-The SDK pair is published by hand, not by `release.yml`, and not with the app's
-tags. Both are releasable at 0.x. Publishing is the owner's manual step (npm
-asks for the OTP): llm first, then harness, by the steps below.
+The SDK pair is released apart from the app: its own version, its own tag
+(`sdk-vX.Y.Z`), cut only when what the two packages ship changed. The
+`publish-sdk` job in `release.yml` publishes it over npm Trusted Publishing,
+like the CLI. Both are releasable at 0.x.
 
-- **Versions are their own.** `bump-workspace-version.mjs` leaves both
-  manifests alone. Bump `version` in `packages/llm/package.json` and/or
-  `packages/harness/package.json` by hand when what they ship changed since
-  the last publish. The harness names `@texra-ai/llm` as a peer with
-  `workspace:^`, which the pack writes as a caret range on the workspace
-  version (`^0.1.0` admits `0.1.x` only). That version is the range's floor,
-  so it must be on npm before the harness that names it.
+- **One version for both.** `packages/llm/package.json` and
+  `packages/harness/package.json` carry the same `version`;
+  `packages/harness/scripts/publish-npm.mjs` refuses to publish when they
+  differ. `bump-workspace-version.mjs` leaves both alone: set both by hand.
+  The harness names `@texra-ai/llm` as a peer with `workspace:^`, which the
+  pack writes as a caret range on that shared version, so llm publishes
+  first.
 - **Effect peers.** `effect`, `@effect/platform-node` and
   `@effect/sql-sqlite-node` are peers whose ranges come from the `peers`
   catalog in `pnpm-workspace.yaml`; its floor must equal the `catalog`
   versions the workspace builds against. Effect releases in patch lockstep,
   so an Effect bump raises both.
+- **What the tarballs hold:** `dist/`, `docs/` (the API reference),
+  `LICENSE.txt`, `NOTICE.txt`, `README.md` and `package.json`, with no
+  `workspace:` or `catalog:` specifier left (the publish script checks the
+  last).
 
-Steps, from a clean checkout of the commit on `main` whose CI is green:
+Steps:
 
-1. **Packed example.** `corepack pnpm --filter @texra-ai/harness run
-   example:packed` builds both, packs both, installs the tarballs into
-   `packages/harness/example` with plain npm (a fresh consumer resolution, no
-   lockfile) and runs it. It must end with `done`. CI's `packed example` job
-   runs the same on every change to either package and nightly; a red run
-   there blocks the publish.
-2. **Inspect and dry-run.** Step 1 leaves the packs in
-   `packages/harness/example` (`llm.tgz`, `harness.tgz`): `tar -tzf` shows
-   only `dist/`, `LICENSE.txt`, `NOTICE.txt`, `README.md` and
-   `package.json`, and `tar -xOzf <pack> package/package.json` shows no
-   `workspace:` or `catalog:` specifier. Then `corepack pnpm --filter
-   @texra-ai/llm publish --dry-run`, and the same for `@texra-ai/harness`,
-   names the version and registry each would publish.
-3. **Publish llm first, then harness**, with pnpm only (each package's
-   `prepack` refuses npm, since only pnpm applies `publishConfig.exports` and
-   resolves `workspace:`/`catalog:` versions):
+1. Set `version` in both manifests to `X.Y.Z` (or `X.Y.Z-preview.N`) and
+   land it on `main`.
+2. Tag the commit `sdk-vX.Y.Z` once its push-to-`main` CI is green, push the
+   tag, and create the release (with `--prerelease` for a preview, which
+   publishes under the npm dist-tag `preview`):
 
    ```bash
-   corepack pnpm --filter @texra-ai/llm publish --access public
-   corepack pnpm --filter @texra-ai/harness publish --access public
+   git tag sdk-vX.Y.Z <sha> && git push origin sdk-vX.Y.Z
+   gh release create sdk-vX.Y.Z --title sdk-vX.Y.Z --notes-file <notes>
    ```
 
-   Skip llm when its version is already on npm. npm asks for the OTP. A
-   version is permanent once published (`npm deprecate` is the only way
-   back), so a wrong publish costs a version number.
+3. `publish-sdk` checks the green CI, resolves the dist-tag, runs
+   `example:packed` (both packs installed into a fresh consumer and run),
+   dry-runs, then publishes llm and then harness. A version already on npm
+   is skipped, so a failed job can be re-run as is. A version is permanent
+   once published (`npm deprecate` is the only way back).
 4. **Verify from the registry.** In an empty directory, `npm install
-   @texra-ai/harness @effect/platform-node @effect/sql-sqlite-node effect`
-   and import `@texra-ai/harness`, `@texra-ai/harness/node` and
-   `@texra-ai/harness/plugins`.
+   @texra-ai/harness @texra-ai/llm @effect/platform-node
+   @effect/sql-sqlite-node effect` and import `@texra-ai/harness`,
+   `@texra-ai/harness/node` and `@texra-ai/harness/plugins`.
+
+**First publish, once per package.** npm attaches a Trusted Publisher only to
+a package that exists, so the owner publishes the first version by hand,
+then configures it:
+
+1. `corepack pnpm --filter @texra-ai/harness run example:packed` must end
+   with `done`; `node packages/harness/scripts/publish-npm.mjs --tag latest
+   --dry-run` names both packages and the version.
+2. `npm login`, then `node packages/harness/scripts/publish-npm.mjs --tag
+   latest` (npm asks for the OTP).
+3. On npmjs.com, for each of `@texra-ai/llm` and `@texra-ai/harness`:
+   Settings, Trusted Publisher, GitHub Actions, with this repository and the
+   workflow `release.yml`, as for `@texra-ai/cli`. From then on, releases
+   go through the tag.
 
 ## Preview releases
 

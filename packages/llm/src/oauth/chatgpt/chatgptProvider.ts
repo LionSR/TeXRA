@@ -267,8 +267,9 @@ const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
 });
 
 /** Revoke the refresh token (RFC 7009) before sign-out deletes it, retrying a
- *  network failure or a 5xx; an unconfirmed revocation tells the user how to
- *  end the session in ChatGPT, after sign-out deletes the tokens anyway. */
+ *  network failure or a status `isRetryableStatus` calls transient; an
+ *  unconfirmed revocation tells the user how to end the session in ChatGPT,
+ *  after sign-out deletes the tokens anyway. */
 const revokeSession = Effect.fn('chatgpt.revokeSession')(function* (
   session: ChatgptSession,
 ) {
