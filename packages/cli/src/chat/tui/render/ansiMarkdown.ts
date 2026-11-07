@@ -95,9 +95,6 @@ function columnAlign(style: string | null): ColumnAlign {
 }
 
 const TABLE_MIN_COL_WIDTH = 5;
-// Fallback table width when the caller renders without a known terminal width
-// (the live region and Markdown component both pass one, so this is rare).
-const TABLE_FALLBACK_WIDTH = 80;
 
 // cli-table3 pads every cell with one space on each side, so a column's total
 // width is its content width + 2.
@@ -114,9 +111,9 @@ function tableColWidths(
   head: readonly string[],
   rows: readonly (readonly string[])[],
   numCols: number,
-  width: number | undefined,
+  width: number,
 ): number[] | undefined {
-  const total = Math.floor(width ?? TABLE_FALLBACK_WIDTH);
+  const total = Math.floor(width);
   const usable = total - (numCols + 1);
   if (usable < numCols * TABLE_MIN_COL_WIDTH) return undefined;
 
@@ -165,7 +162,7 @@ function renderAnsiTable(
   head: readonly string[],
   rows: readonly (readonly string[])[],
   aligns: readonly ColumnAlign[],
-  width: number | undefined,
+  width: number,
   style: AnsiMarkdownStyle,
 ): string {
   const numCols = Math.max(head.length, ...rows.map((row) => row.length), 1);
@@ -201,7 +198,7 @@ function restoreProtectedLatexInCell(cell: string, env: unknown): string {
 
 function configureAnsi(
   md: MarkdownItInstance,
-  width: number | undefined,
+  width: number,
   style: AnsiMarkdownStyle,
 ): void {
   const r = md.renderer.rules;
@@ -351,7 +348,7 @@ function configureAnsi(
 
   r.hr = (tokens, idx) =>
     `${quoteBlockStart(tokens, idx)}${style.dim(
-      '─'.repeat(Num.clamp(width ?? 40, { minimum: 1, maximum: 40 })),
+      '─'.repeat(Num.clamp(width, { minimum: 1, maximum: 40 })),
     )}\n`;
 
   // Emit raw SGR codes so the styling stays open across the link body. The
@@ -494,10 +491,10 @@ function configureAnsi(
 const processorCache = new LRUCache<string, MarkdownProcessor>({ max: 4 });
 
 function processorFor(
-  width: number | undefined,
+  width: number,
   colorEnabled = isTuiColorEnabled(),
 ): MarkdownProcessor {
-  const key = `${width ?? 'auto'}:${colorEnabled ? 'color' : 'plain'}`;
+  const key = `${width}:${colorEnabled ? 'color' : 'plain'}`;
   const cached = processorCache.get(key);
   if (cached) return cached;
 
@@ -523,7 +520,8 @@ function processorFor(
 }
 
 interface RenderAnsiMarkdownOptions {
-  readonly width?: number;
+  /** Terminal columns the text wraps to; tables and rules fit inside it. */
+  readonly width: number;
   /** Default: the TUI session mode, so measurers and painters agree. */
   readonly colorEnabled?: boolean;
 }
@@ -536,7 +534,7 @@ interface RenderAnsiMarkdownOptions {
  */
 export function renderAnsiMarkdown(
   content: string,
-  options: RenderAnsiMarkdownOptions = {},
+  options: RenderAnsiMarkdownOptions,
 ): string {
   const processor = processorFor(options.width, options.colorEnabled);
   return wrapAnsiToWidth(processor(content), options.width, true).trimEnd();

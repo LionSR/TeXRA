@@ -54,7 +54,7 @@ export interface ConfirmCardHintOptions<Extra extends KeyHint = KeyHint> {
 }
 
 interface ConfirmCardHintWidthOptions extends ConfirmCardHintOptions {
-  readonly maxColumns?: number;
+  readonly maxColumns: number;
 }
 
 interface ConfirmCardCompactHintLayoutOptions extends ConfirmCardHintOptions {

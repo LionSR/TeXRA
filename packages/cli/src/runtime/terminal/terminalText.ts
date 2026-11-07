@@ -48,8 +48,7 @@ export function truncateSummaryToWidth(
  * Widest-first layout cascade: the first candidate whose measured width fits
  * `maxColumns` wins, `fallback` when none does. `false`/`undefined` entries are
  * inapplicable layouts left in place, so a candidate list still reads top to
- * bottom as "this layout, else this one". An undefined `maxColumns` — an
- * unknown terminal width, as in tests and headless runs — fits everything.
+ * bottom as "this layout, else this one".
  */
 export function firstFittingCandidate<T>({
   candidates,
@@ -59,12 +58,12 @@ export function firstFittingCandidate<T>({
 }: {
   readonly candidates: readonly (T | false | undefined)[];
   readonly fallback: T;
-  readonly maxColumns: number | undefined;
+  readonly maxColumns: number;
   readonly measure: (candidate: T) => number;
 }): T {
   for (const candidate of candidates) {
     if (candidate === false || candidate === undefined) continue;
-    if (maxColumns === undefined || measure(candidate) <= maxColumns) {
+    if (measure(candidate) <= maxColumns) {
       return candidate;
     }
   }
