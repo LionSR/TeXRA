@@ -2,14 +2,13 @@
 
 Generated from `packages/harness/src/plugins.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 125
+Exports: 124
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: Schema.Codec<A, unknown>; readonly result?: AgentBlockResult<R>; files?(block: A): readonly string[]; }`
 - `agentBlockOf` — `function agentBlockOf: <A>(entry: Pick<AgentEntry, "blocks">, block: AgentBlock<A, unknown>) => A | undefined`
 - `AgentBlockResult` — `interface AgentBlockResult<R = unknown> { readonly fact: { readonly plugin: string; readonly kind: string; readonly schema: Schema.Codec<R, unknown>; }; delivery(value: R, runId: RunId): readonly string[]; changes(value: R, roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>): readonly RecipeChange[]; }`
 - `AgentTrace` — `interface AgentTrace { emit(event: AgentEvent): void; debug(message: string, options?: LogOptions): void; info(message: string, options?: LogOptions): void; warn(message: string, options?: LogOptions): void; error(message: string, options?: LogOptions): void; output(stream: 'stdout' | 'stderr', text: string): void; openStage(label: string, options?: StageOptions): StageHandle; openRun(kind: MessageType, options?: StreamOptions): StreamHandle; openToolCard(log: ToolUseLog): ToolCardHandle; }`
-- `ALWAYS_AVAILABLE` — `const ALWAYS_AVAILABLE: ToolAvailabilityChecks<ToolProbeServices>`
 - `ApprovedEditConflictError` — `class ApprovedEditConflictError { constructor: new (path: string) => ApprovedEditConflictError; static: captureStackTrace: (targetObject: object, constructorOpt?: Function | undefined) => void; prepareStackTrace: (err: Error, stackTraces: CallSite[]) => any; stackTraceLimit: number; instance: cause: unknown; message: string; name: string; stack: string | undefined; summary: string | undefined; ~effect/ErrorReporter/attributes: ReadonlyRecord<string, unknown> | undefined; ~effect/ErrorReporter/ignore: boolean | undefined; ~effect/ErrorReporter/severity: Severity | undefined; ~effect/Runtime/errorExitCode: number | undefined; ~effect/Runtime/errorReported: boolean | undefined }`
 - `approvedWriteConflict` — `function approvedWriteConflict: (path: string, original: null | string, finalContent: string) => Effect<ApprovedEditConflictError | undefined, never, FileSystem | WorkspaceFs>`
 - `assertNoParentTraversal` — `const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, never>`

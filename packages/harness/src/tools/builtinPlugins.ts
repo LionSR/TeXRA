@@ -23,7 +23,6 @@ import { GOAL_MODULE } from '@tools/plan/goalScript';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { definePlugin, type Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
-import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
 import { writeFileTool, type WriteFilter } from '@tools/WriteTool';
@@ -94,7 +93,6 @@ export const goal: Plugin = definePlugin({
   requires: ['codemode'],
   injectedWhen: { plan: true },
   toggle: 'on',
-  availability: ALWAYS_AVAILABLE,
 });
 
 /** Child agents: the `agent` tool. */
@@ -103,7 +101,6 @@ export const multiAgent: Plugin = definePlugin({
   tools: [agentTool()],
   // The one delegation tool: the built-in orchestrators need it.
   toggle: 'on',
-  availability: ALWAYS_AVAILABLE,
 });
 
 /**

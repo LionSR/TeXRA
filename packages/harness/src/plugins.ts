@@ -25,7 +25,7 @@
  *   [`callerRun`](#callerrun), [`ChildRuns`](#childruns), and
  *   [`RunInbox`](#runinbox).
  * - **Lifetimes, prompt sections & durable rows**:
- *   [`ALWAYS_AVAILABLE`](#always_available), [`PromptSection`](#promptsection),
+ *   [`PromptSection`](#promptsection),
  *   [`ProcessPluginLayer`](#processpluginlayer),
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
  *   [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
@@ -66,10 +66,8 @@ export {
   type ToolTable,
 } from '@tools/toolTable';
 export type { DefineToolOptions } from '@tools/core/definition';
-// A plugin's availability: the check of one that needs nothing installed,
-// and the one failure a probe raises.
+// A plugin's availability check, and the one failure a probe raises.
 export {
-  ALWAYS_AVAILABLE,
   ToolProbeFailed,
   type ToolAvailabilityChecks,
   type ToolProbeError,

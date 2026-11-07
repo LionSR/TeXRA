@@ -169,21 +169,13 @@ export function withForkFailureReporting<R, ER>(
 /**
  * The logger of a view's runtime, which builds no process diagnostics layer:
  * each entry takes the log sink's write path, redacted unless a host marked
- * the sink trusted, instead of Effect's default console logger.
- *
- * ERROR/FATAL are written as WARN: a view has no host log channel, and
- * Electron's smoke harness treats `console.error` (the console sink's ERROR
- * path) as a failed view. Fork-failure reports and fold defects still show
- * in DevTools after redaction.
+ * the sink trusted, instead of Effect's default console logger. An entry
+ * keeps its level: fork-failure reports and fold defects show in DevTools
+ * as the errors they are.
  */
 export const viewDiagnosticsLayer: Layer.Layer<never> = Logger.layer([
   Logger.make((options) => {
     if (options.logLevel === 'None') return;
-    const entry = Logger.formatStructured.log(options);
-    writeLogEntry(
-      entry.level === 'ERROR' || entry.level === 'FATAL'
-        ? { ...entry, level: 'WARN' }
-        : entry,
-    );
+    writeLogEntry(Logger.formatStructured.log(options));
   }),
 ]);

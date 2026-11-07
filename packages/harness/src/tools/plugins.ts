@@ -117,9 +117,9 @@ export interface Plugin {
    */
   readonly availability?: ToolAvailabilityChecks;
   /** The plugin has a user switch, which a fresh install sets to this
-   *  position; while off, its tools are withheld from every agent. It must
-   *  be probed (`availability`, `ALWAYS_AVAILABLE` when it needs nothing
-   *  installed). Without one the plugin is always on. */
+   *  position; while off, its tools are withheld from every agent. A
+   *  switched plugin with no `availability` is probed as needing nothing.
+   *  Without a switch the plugin is always on. */
   readonly toggle?: 'on' | 'off';
   /** Tools of this plugin offered to every agent with tools, declared or not,
    *  while the plugin is on and a boolean catalog setting is on: tool name to
