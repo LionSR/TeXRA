@@ -300,6 +300,19 @@
           "signature": "export const ownFactRow = ( { aggregate, ...fact }: ToolFact & { readonly aggregate: string }, runId: RunId, ): OwnFactRow => ({…});"
         }
       ]
+    },
+    {
+      "id": "RT-cli-exit-code-one-function",
+      "candidate": "the CLI's exit code decided by one function at the process edge (exitCodeOf(outcome) in packages/cli/src/bin/texra.ts), deleting setExitCode, settleExitCode, CliConfigExecuteResult.exitCode and ChatExit.signal's code",
+      "why": "citty 0.2.2's runCommand discards a nested subcommand's run() result and passes no data down, and every command, root's direct subcommands included, runs nested, so no return value reaches texra.ts. The other names are not edge decisions: defineCliCommand already turns every command's result into the code (only doctor, which cannot use it, and help, which re-enters runCli as the non-interactive default, set it themselves); settleExitCode is the chat's run-claim code returned through runChat; CliConfigExecuteResult.exitCode is a headless run's program result; and a signal exit with a waiting run calls process.exit because that run holds the event loop open. runOutcomeExitCode is already the one outcome-to-code mapping. What landed instead: runCli and texraServe share runCommandForExitCode.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md",
+      "symbols": [
+        {
+          "file": "packages/cli/src/commands/_helpers/exitCode.ts",
+          "symbol": "setExitCode",
+          "signature": "export function setExitCode(code: number): void {…}"
+        }
+      ]
     }
   ]
 }
