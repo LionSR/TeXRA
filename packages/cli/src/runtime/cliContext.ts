@@ -9,16 +9,15 @@ import {
   Config,
   Option,
   Schema,
+  Semaphore,
   type LogLevel,
 } from 'effect';
 
 import { DatabaseOpenFailed } from '@texra-ai/harness';
 import {
   type ConfigProvider,
-  type PerKeyLane,
   type SkillSourceOptions,
   Settings,
-  withPerKeyLane,
 } from '@texra-ai/harness/host';
 import { modelConfig } from '@texra-ai/llm';
 import {
@@ -128,7 +127,7 @@ export class CliInvocation extends Context.Service<
 export const provideCliInvocation = (context: CliContext) =>
   Effect.provideService(CliInvocation, {
     context,
-    onPromptLane: withPerKeyLane(new Map<'stdin', PerKeyLane>(), 'stdin'),
+    onPromptLane: Semaphore.makeUnsafe(1).withPermit,
   });
 
 export class CliUsageError extends Schema.TaggedError<CliUsageError>()(
