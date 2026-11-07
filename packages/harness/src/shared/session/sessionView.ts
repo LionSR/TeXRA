@@ -25,10 +25,7 @@ import {
   RunIdentitySchema,
   RunNoticeSchema,
   RunOutcomeSchema,
-  RUN_LIFECYCLE_READY,
-  RUN_PHASE,
-  RunPhaseSchema,
-  RunSubstateSchema,
+  RunPositionSchema,
   RunIdSchema,
   TaskGroupSchema,
   TokenUsageStatsSchema,
@@ -37,11 +34,6 @@ import {
   type PermissionPayload,
   type RunId,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import {
-  RUN_STATUS_KEYS,
-  RUN_STATUS_TONE,
-} from '@shared/runs/runStatusDisplay';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import type {
   RunView as ReadRunView,
@@ -76,15 +68,6 @@ const TranscriptViewSchema = Schema.Struct({
 });
 export type TranscriptView = typeof TranscriptViewSchema.Type;
 
-/** The section a run sorts into. Its labels and section order are one
- *  table in the app's `@ui/copy/runStatus`, not a per-host switch. */
-const RunGroupSchema = Schema.Literals([
-  'running',
-  'waiting',
-  'interrupted',
-  'recent',
-]);
-
 /** One run as every renderer reads it; `SessionView.runs` holds them. */
 export const RunViewSchema = Schema.Struct({
   /** The run id: the aggregate's logical id, minted once at launch. */
@@ -111,30 +94,23 @@ export const RunViewSchema = Schema.Struct({
    *  undecoded here, read through its plugin's reader. */
   facts: Schema.Record(Schema.String, JsonValueSchema),
   worktree: Schema.NullOr(WorktreeInfoSchema),
-  /** The durable phase, from `run.activate` (running), `run.position`
-   *  (`waiting` waits, any other step runs), and `run.end` (the outcome);
-   *  `ready` before the first activation. An interrupted run
-   *  keeps it and reads as interrupted through the copy; unreadable rows
-   *  are a notice, never a status. */
-  status: Schema.Union([RunPhaseSchema, Schema.Literal(RUN_LIFECYCLE_READY)]),
-  /** Derived from the activation's position: a first activation is
-   *  starting, a later one resuming, cleared by the first step. Only a run
-   *  whose loop steps carries one. */
-  substate: Schema.NullOr(RunSubstateSchema),
+  /** Where its loop stands (`phaseMoveOf`): `ready` before its first
+   *  activation and after an end, `running` inside a turn, `waiting`
+   *  between turns. */
+  position: RunPositionSchema,
   /** The outcome `run.end` wrote; null until the run ends, and again once a
-   *  follow-up's `run.activate` restarts it. Lets a host paint an open group
-   *  as interrupted and the session release the run's sidecar record. */
-  durableOutcome: Schema.NullOr(RunOutcomeSchema),
+   *  follow-up's `run.activate` restarts it. */
+  outcome: Schema.NullOr(RunOutcomeSchema),
+  /** Whether a launch in this process drives it: `here` from its
+   *  activation until its end. A run with no outcome that nobody here
+   *  holds is interrupted (its process stopped before it finished). */
+  holder: Schema.Literals(['here', 'none']),
   /** What `run.end` stored as the run's output; `run.activate` clears it. */
   output: Schema.NullOr(RunEndSchema.fields.output),
   /** What the run's banner says (`RunNoticeSchema`); null: nothing. */
   statusNotice: Schema.NullOr(RunNoticeSchema),
   /** The result its end lost (a `result-lost` error), whatever its outcome. */
   lost: Schema.NullOr(Schema.String),
-  // One table (`runStatusDisplay`) keys both, through the status and
-  // substate or the interrupted reading; `@ui/copy/runStatus` words the key.
-  statusKey: Schema.Literals(RUN_STATUS_KEYS),
-  tone: Schema.Enum(RUN_STATUS_TONE),
   /** Immutable: the commit ordinal of this run's `run.start`; the
    *  ordering key. */
   createdAt: CommitOrdinalSchema,
@@ -147,21 +123,6 @@ export const RunViewSchema = Schema.Struct({
   /** The clock a host shows: the turn's start while the run is busy on it;
    *  null while it waits on a person, is interrupted, paused or between turns. */
   runStartedAt: Schema.NullOr(Positive),
-  /** Inside a turn: held, not paused, not ended. A pending approval or
-   *  question is still the turn's (Ctrl-C stops it, the tail stays live). */
-  working: Schema.Boolean,
-  /** Its current turn is over: it waits between turns (a paused child
-   *  included), has ended, or nobody holds it any more. Its transcript rows
-   *  are then final: `settledRows` covers them and nothing reads as thinking
-   *  or compacting. */
-  turnOver: Schema.Boolean,
-  /** Somebody holds it and it has neither ended nor come to rest: working,
-   *  waiting between turns, or spawned and not started yet. The one reading
-   *  of "live" every host shares. Not `group` alone: a spawned child not
-   *  yet activated is `ready`, yet live. */
-  live: Schema.Boolean,
-  /** Live and held by this process: it runs here. */
-  runsHere: Schema.Boolean,
   lastTimestamp: Schema.Number,
   /** The run's one-based turn, from its latest `run.position` (the loop
    *  commits `state.turn + 1`; the row's `round` counts model calls). Null
@@ -189,18 +150,15 @@ export const RunViewSchema = Schema.Struct({
   ),
   /** `runOrdering` rule. */
   childIds: Schema.Array(RunIdSchema),
-  /** Descendants by status: `running` counts the live ones (`live`)
-   *  still working a turn, `finished` the ended ones and those waiting idle
-   *  between turns. No separate waiting or interrupted count: both force
-   *  expansion, so a collapsed parent never hides a row that needs the user. */
+  /** Descendants by status: `running` counts the held ones still inside a
+   *  turn or not started, `finished` the ended ones and those waiting idle
+   *  between turns. No separate waiting or interrupted count: both
+   *  outrank a collapsed parent (`needsUser`), so it never hides a row that
+   *  needs the user. */
   rollup: Schema.Struct({ total: Count, running: Count, finished: Count }),
   approval: Schema.Literals(['none', 'own', 'descendant']),
   /** What a host may offer on the run now (`runActions`). */
   actions: Schema.Array(RunActionSchema),
-  /** This run or a descendant needs the user; outranks the surface's
-   *  collapsed choice. */
-  forceExpanded: Schema.Boolean,
-  group: RunGroupSchema,
   /** The run's metered total. A `usage` row is one priced turn and the view
    *  sums them; a cold listing read delivers the store's per-run sum as one
    *  row instead, which the view takes as the total, so both reads leave the
@@ -240,14 +198,45 @@ export function rollupOf(
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
     const idle =
-      child.status === RUN_PHASE.WAITING && child.group === 'running';
+      child.holder === 'here' &&
+      child.position === 'waiting' &&
+      child.approval !== 'own';
     const under = below(child);
     rollup.total += 1 + under.total;
-    rollup.running += (child.live && !idle ? 1 : 0) + under.running;
+    rollup.running +=
+      (child.holder === 'here' && !idle ? 1 : 0) + under.running;
     rollup.finished +=
-      (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) + under.finished;
+      (child.outcome !== null || idle ? 1 : 0) + under.finished;
   }
   return rollup;
+}
+
+/** Whether nobody drives the run although it has not ended: its process
+ *  stopped before it finished, and a resume continues it. */
+export const isInterrupted = (
+  run: Pick<ReadRunView, 'holder' | 'outcome'>,
+): boolean => run.holder === 'none' && run.outcome === null;
+
+/** Whether the run is working a turn in this process right now (a pending
+ *  approval or question is still the turn's). */
+export const isWorking = (
+  run: Pick<ReadRunView, 'holder' | 'position'>,
+): boolean => run.holder === 'here' && run.position === 'running';
+
+/**
+ * Whether the run or a run under it needs the user: a request of its own
+ * waits here, it is interrupted, or a descendant needs the user. Outranks a
+ * surface's collapsed choice.
+ */
+export function needsUser(
+  run: ReadRunView,
+  runs: ReadonlyMap<RunId, ReadRunView>,
+): boolean {
+  if (run.approval !== 'none' || isInterrupted(run)) return true;
+  return run.childIds.some((id) => {
+    const child = runs.get(id);
+    return child !== undefined && needsUser(child, runs);
+  });
 }
 
 /** Whether this build cannot read the run's rows (`RunNoticeSchema`). */
@@ -264,7 +253,7 @@ export const isUnreadable = (run: Pick<ReadRunView, 'statusNotice'>): boolean =>
  */
 export function acceptsFollowUp(run: ReadRunView): boolean {
   if (run.followUpSupport === 'unsupported' || isUnreadable(run)) return false;
-  if (run.group === 'running' || run.group === 'waiting') return true;
+  if (run.holder === 'here' && run.position !== 'ready') return true;
   return (
     run.followUpSupport === 'nativeInteractive' &&
     run.identity.kind === 'agent' &&
@@ -372,8 +361,8 @@ export function attentionOf<View extends ReadSessionView>(
     requests,
     arrived: requests.filter((request) => !known.has(request.requestId)),
     finished: [...view.runs.values()].filter(
-      ({ id, durableOutcome: outcome }) =>
-        outcome !== null && previous.runs.get(id)?.durableOutcome === null,
+      ({ id, outcome }) =>
+        outcome !== null && previous.runs.get(id)?.outcome === null,
     ),
   };
 }
@@ -387,7 +376,7 @@ export type SessionTitleState = 'idle' | 'running' | 'approval';
  */
 export function sessionActivity(view: ReadSessionView): SessionTitleState {
   if (answerableRequests(view).length > 0) return 'approval';
-  for (const run of view.runs.values()) if (run.working) return 'running';
+  for (const run of view.runs.values()) if (isWorking(run)) return 'running';
   return 'idle';
 }
 

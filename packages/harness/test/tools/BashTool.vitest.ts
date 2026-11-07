@@ -14,7 +14,6 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   qualifyAggregateId,
   RUN_OUTCOME,
-  RUN_PHASE,
   type RunId,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
@@ -81,8 +80,8 @@ async function parkRunWaiting(
   ]);
   await vi.waitFor(() => {
     assert.equal(
-      Context.get(session, SessionViewAccess).run(runId)?.status,
-      RUN_PHASE.WAITING,
+      Context.get(session, SessionViewAccess).run(runId)?.position,
+      'waiting',
     );
   });
 }

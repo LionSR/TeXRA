@@ -36,10 +36,12 @@ const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
 
 /**
  * The reasoning controls `config` has on `route`; without a route, the
- * model's own. Each provider serves one protocol (`BACKEND_PROTOCOLS`):
- * Gemini's Interactions request and Kimi's Responses request have no switch
- * that turns thinking off, DashScope's has none that turns Qwen's thinking
- * on, and the Codex subscription serves {@link CODEX_ROUTE_EFFORTS} only.
+ * model's own. The one owner of what a route's request can say: the wire
+ * rows derive from it. Each provider serves one protocol
+ * (`BACKEND_PROTOCOLS`): Gemini's Interactions request and Kimi's Responses
+ * request have no switch that turns thinking off, DashScope's has none that
+ * turns Qwen's thinking on, MiniMax's names `high` as its one effort, and the
+ * Codex subscription serves {@link CODEX_ROUTE_EFFORTS} only.
  */
 function routeControls(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
@@ -53,6 +55,8 @@ function routeControls(
     case ModelProvider.GOOGLE:
     case ModelProvider.MOONSHOT:
       return { ...reasoning, off: undefined };
+    case ModelProvider.MINIMAX:
+      return { ...reasoning, efforts: [ReasoningEffort.HIGH] };
     default:
       return route.kind === 'chatgpt-subscription'
         ? {
@@ -211,9 +215,13 @@ export function chooseReasoning(
         options.routeEfforts?.includes(effort),
       )
     : reasoning.efforts;
-  // A model with no levels of its own thinks without one; a route ceiling
-  // that leaves it none refuses the level instead (`snapped`).
-  if (config.reasoning?.efforts.length === 0) {
+  // A model with no levels of its own, on a route that adds none, thinks
+  // without one; a route ceiling that leaves it none refuses the level
+  // instead (`snapped`).
+  if (
+    reasoning.efforts.length === 0 &&
+    config.reasoning?.efforts.length === 0
+  ) {
     if (explicit === undefined && options.userEffort === undefined)
       return { thinking: true, effort: null, mode };
     return {
@@ -244,12 +252,16 @@ export function acceptedEfforts(
   ];
 }
 
-/** The effort a route sends: the chosen level, or `none` when thinking is off and `none` is how the route says so. */
+/**
+ * The effort `route` sends for `config`: the chosen level, or `none` when
+ * thinking is off and `none` is how the route says so.
+ */
 export function wireEffort(
-  config: ModelConfig,
+  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
+  route: Pick<ModelRoute, 'kind'> | undefined,
   reasoning: ReasoningChoice,
 ): ReasoningEffort | null {
-  if (reasoning.thinking || config.reasoning?.off === undefined) {
+  if (reasoning.thinking || routeControls(config, route)?.off === undefined) {
     return reasoning.effort;
   }
   return reasoning.effort ?? ReasoningEffort.NONE;

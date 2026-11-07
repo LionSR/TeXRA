@@ -9,7 +9,7 @@ import {
 import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
 import { HttpClientError } from 'effect/http';
 
-import { lookupApiKey } from '@texra-ai/llm';
+import { apiKey } from '@texra-ai/llm';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
@@ -35,7 +35,9 @@ const CHANNEL = 'SubscriptionUsage';
 
 /** A coding plan's stored key, from the process `Secrets`. */
 const lookupStoredKey = (provider: 'kimiCode' | 'glm') =>
-  Effect.flatMap(Secrets, (secrets) => lookupApiKey(secrets, provider));
+  Effect.flatMap(Secrets, (secrets) =>
+    Effect.map(apiKey(secrets, provider), (key) => key.value),
+  );
 
 const CACHE_TTL = Duration.seconds(30);
 /** The one deadline over a usage request and its body read. */

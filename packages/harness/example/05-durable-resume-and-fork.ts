@@ -43,7 +43,7 @@ const program = Effect.gen(function* () {
   yield* Stream.runHead(
     Stream.filter(
       run1.view,
-      (view) => view.runs.get(run1.runId)?.status === 'waiting',
+      (view) => view.runs.get(run1.runId)?.position === 'waiting',
     ),
   );
 
@@ -95,7 +95,7 @@ const program = Effect.gen(function* () {
   yield* Stream.runHead(
     Stream.filter(
       resumed.view,
-      (view) => view.runs.get(run1.runId)?.status === 'waiting',
+      (view) => view.runs.get(run1.runId)?.position === 'waiting',
     ),
   );
   // The first handle still reads its own activation, and its read ends

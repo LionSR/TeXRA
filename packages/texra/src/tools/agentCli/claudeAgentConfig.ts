@@ -10,7 +10,7 @@ import { Effect } from 'effect';
 import {
   apiKeyEnvName,
   exposeApiKey,
-  lookupApiKey,
+  apiKey,
   type SecretsFailed,
 } from '@texra-ai/llm';
 import { Secrets, withLogChannel } from '@texra-ai/harness/host';
@@ -194,7 +194,7 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(
     //    fails as itself: launching with no credential would surface it as an
     //    opaque "Invalid API key" from Claude Code.
     const secrets = yield* Secrets;
-    const managed = yield* lookupApiKey(secrets, 'anthropic');
+    const { value: managed } = yield* apiKey(secrets, 'anthropic');
     if (managed) {
       env[apiKeyVar] = exposeApiKey(managed);
     }

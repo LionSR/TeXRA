@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 
 import {
   listCliHistoryEntries,
+  historyStanding,
   listResumableCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
@@ -43,7 +44,7 @@ function resumeEntryLabel(entry: CliHistoryEntry): string {
 }
 
 function resumeEntryDescription(entry: CliHistoryEntry): string {
-  const standing = `${entry.timestamp} · ${entry.status} · ${formatCliHistoryAgentLabel(entry)}`;
+  const standing = `${entry.timestamp} · ${historyStanding(entry)} · ${formatCliHistoryAgentLabel(entry)}`;
   return entry.resumable || entry.resumeBlocked === undefined
     ? standing
     : `${standing} · cannot resume: ${entry.resumeBlocked}`;

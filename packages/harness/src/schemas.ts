@@ -40,9 +40,12 @@ export {
 // the session is, where each run stands, what `acceptsFollowUp` reads.
 export {
   acceptsFollowUp,
+  isInterrupted,
   isUnreadable,
+  isWorking,
   attentionOf,
   descendantRuns,
+  needsUser,
   requestAnswerability,
   rollupOf,
   RunViewSchema,
@@ -122,9 +125,8 @@ export type {
   RunAction,
   RunId,
   RunIdentity,
-  RunLifecycleStatus,
   RunOutcome,
-  RunPhase,
+  RunPosition,
   RunStorageFileLocation,
   ScriptDeliverySummary,
   SessionEvent,
@@ -143,18 +145,6 @@ export type {
   WorkspaceFileLocation,
 } from '@shared/schemas';
 export { ResumeRefusalSchema } from '@shared/schemas';
-// Where a run's lifecycle status stands: in flight (running, or waiting for
-// its next input), ended, or settled enough for its transcript. Whether a
-// run is working right now is the view's `working`, never read off the phase.
-export {
-  RUN_STATUS_KEYS,
-  type RunStatusKey,
-} from '@shared/runs/runStatusDisplay';
-export {
-  isInFlightPhase,
-  isTerminalOutcomePhase,
-  isTranscriptSettlementPhase,
-} from '@shared/runs/runStatus';
 // The approval policy: its values, default, persisted key and tolerant
 // parse, and the denial a run that may not ask reports.
 export {
@@ -298,6 +288,7 @@ export {
   isModelOptionAvailable,
   isPackagedAgentSource,
   isRunId,
+  isPlainAgentIdentity,
   isTaskConfig,
   JsonValueSchema,
   type LaunchNotice,
@@ -325,10 +316,7 @@ export {
   type RequestDecision,
   RequestShowErrorPayloadSchema,
   type RetryPermission,
-  RUN_LIFECYCLE_READY,
   RUN_OUTCOME,
-  RUN_PHASE,
-  RUN_SUBSTATE,
   type RunEndOutput,
   RunEndSchema,
   runIdentityDisplayName,

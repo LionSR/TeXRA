@@ -9,7 +9,6 @@ import {
   decideModelRoute,
   MODEL_CONFIGS,
   type ModelConfig,
-  resolveRouteEndpoint,
 } from '@texra-ai/llm';
 import {
   type DeclinableUsageRoute,
@@ -38,7 +37,7 @@ const boundEndpoint = (
     if (route.kind !== 'api-key') {
       throw new Error(`unexpected ${route.kind} route`);
     }
-    const baseUrl = resolveRouteEndpoint(config, route, facts);
+    const baseUrl = route.endpoint;
     return route.usageRoute !== 'api-key'
       ? { baseUrl, usageRoute: route.usageRoute }
       : { baseUrl };

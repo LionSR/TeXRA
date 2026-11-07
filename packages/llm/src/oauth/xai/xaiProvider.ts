@@ -7,8 +7,8 @@
  * Rides a public Grok-CLI OAuth client registration. xAI can change or revoke
  * that registration without notice — never present this as an xAI-sanctioned
  * TeXRA integration. Keep every sign-in magic value here so an upstream change
- * is a one-file edit; the API endpoint the subscription bills is the xAI
- * provider plugin's, which `resolveRouteEndpoint` reads.
+ * is a one-file edit; the API endpoint the subscription bills is xAI's own
+ * (`XAI_DEFAULT_ENDPOINT`), which the route decision names.
  *
  * Sources (read from source, not blog posts):
  * - OpenCode: packages/opencode/src/plugin/xai.ts (anomalyco/opencode)

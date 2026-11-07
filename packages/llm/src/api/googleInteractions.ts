@@ -443,7 +443,11 @@ function deltaPart(
   }
 }
 
-function googleWire(store: boolean) {
+/**
+ * One interaction's events as parts. Whether a stored interaction named its
+ * id is the assembly's to refuse (`allowMissingResponseId`).
+ */
+function googleWire() {
   let done = false;
   return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
@@ -460,8 +464,6 @@ function googleWire(store: boolean) {
         case 'interaction.created':
         case 'interaction.completed': {
           const interaction = event.interaction;
-          if (store && !interaction.id)
-            return yield* fail('Google omitted a stored interaction ID.');
           // The stream takes content only from complete start/delta/stop cycles.
           if (interaction.steps !== undefined)
             return yield* fail(
@@ -485,8 +487,6 @@ function googleWire(store: boolean) {
           return interactionEnd(event.interaction);
         }
         case 'interaction.status_update':
-          if (store && !event.interaction_id)
-            return yield* fail('Google omitted a stored interaction ID.');
           return [
             { kind: 'identity', id: event.interaction_id || null, model: null },
           ];
@@ -621,7 +621,7 @@ export function googleInteractionsModel(
         const body = reader;
         return assembleTurn(
           pullStream(() => body.read(), sdkFailure).pipe(
-            Stream.mapEffect(googleWire(turn.controls.store)),
+            Stream.mapEffect(googleWire()),
           ),
           {
             origin,

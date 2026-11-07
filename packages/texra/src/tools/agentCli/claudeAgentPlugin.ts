@@ -5,7 +5,7 @@
 import { Config, Effect, Option } from 'effect';
 
 // Local imports
-import { apiKeyEnvName, lookupApiKeyOrigin } from '@texra-ai/llm';
+import { apiKey, apiKeyEnvName } from '@texra-ai/llm';
 import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { definePlugin } from '@texra-ai/harness/plugins';
 import { CLAUDE_AGENT_SETTINGS } from '@texra/shared/settingsView/integrationSettings';
@@ -51,8 +51,8 @@ export const claudeAgent: TexraPlugin = {
         // A secret store that will not answer is not the same fact as an
         // unset key. An environment key is still known (the launch uses it
         // first); without one the origin is unknown, and the detail says why.
-        const key = yield* lookupApiKeyOrigin(yield* Secrets, 'anthropic').pipe(
-          Effect.map((origin) => ({ origin, failure: null })),
+        const key = yield* apiKey(yield* Secrets, 'anthropic').pipe(
+          Effect.map(({ origin }) => ({ origin, failure: null })),
           Effect.catchTag('SecretsFailed', (failure) =>
             Effect.logWarning(
               `Reading the Anthropic API key failed: ${failure.message}`,

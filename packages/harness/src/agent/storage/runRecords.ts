@@ -21,7 +21,7 @@ import {
 } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
 import type { RunRows } from '@shared/session/runRowsShape';
-import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
+import { recordsOf } from '@shared/session/runFacts';
 import {
   addTurnUsage,
   type CommitOrdinal,
@@ -187,14 +187,9 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   DatabaseReadFailed,
   SessionLog | SessionViewAccess
 > {
-  const end = runEndFromEvents(lifecycles, runId);
+  // The activation's own rows begin at its `run.activate`, or with the run.
+  const { end, activation: start } = recordsOf(lifecycles, runId);
   if (!end) return null;
-  // The activation's own rows begin at the lifecycle row before its end
-  // (its `run.activate`), or with the run.
-  const start = lastLifecycleRow(
-    lifecycles.filter((row) => row.seq < end.seq),
-    runId,
-  );
   const from = start?.seq ?? -1;
   const during = (commit: CommitOrdinal) =>
     commit > (start?.commit ?? -1) && commit <= end.commit;

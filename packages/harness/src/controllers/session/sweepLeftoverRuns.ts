@@ -3,7 +3,6 @@ import { SessionRequests } from '@agent/runtime/requests';
 import { closeLeftoverRun, cutShort } from '@agent/runtime/leftoverChildren';
 import { withLogChannel } from '@logger/effectLog';
 import { isLoopDriven, type RunId } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 
 const CHANNEL = 'LeftoverRunSweep';
@@ -34,7 +33,7 @@ export const sweepLeftoverRuns = Effect.gen(function* () {
   const { runs } = yield* (yield* SessionViewAccess).read([]);
   for (const run of runs.values()) {
     if (isLoopDriven(run.identity)) continue;
-    if (!isTerminalOutcomePhase(run.status)) {
+    if (run.outcome === null) {
       if (run.parentId === null)
         yield* closeLeftoverRun(null, run).pipe(
           Effect.catch(

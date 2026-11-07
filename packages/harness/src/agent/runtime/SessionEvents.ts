@@ -49,8 +49,8 @@ export const SESSION_CLOSE_DEADLINE_MS = 5_000;
  *  a park, an end or a host exit reads no rows. Streams close at a phase
  *  move that rests or ends the run, stages only on their own rows. An
  *  earlier process's work is not here: its streams close at that same move,
- *  and a stage it left open reads as settled once the run is durably final
- *  (`taskGroupDisplayStatus`). */
+ *  and a stage it left open closes on the run's outcome when the view's
+ *  transcript applies its `run.end`. */
 type OpenWorkByAggregate = Map<AggregateId, Map<string, OpenWork>>;
 
 /** One unit of the publisher's work, bound to its append and built when

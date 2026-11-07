@@ -30,7 +30,6 @@ import {
   Layer,
   Result,
   ScopedRef,
-  Semaphore,
   Stream,
   SynchronizedRef,
 } from 'effect';
@@ -50,6 +49,7 @@ import {
 } from '@agent/trace/helpers';
 import {
   failureInfo,
+  routeFailureOf,
   type CallFailure,
 } from '@agent/runtime/modelAccess/failureInfo';
 import {
@@ -217,9 +217,6 @@ export const modelInvokerLayer = (): Layer.Layer<
       const attemptStarts = new WeakMap<InvocationRef, number>();
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
-      /** Held across a rebind's check and its replacement: a turn's retry
-       *  and a background compaction's renewal may both rebind the run. */
-      const rebinding = Semaphore.makeUnsafe(1);
       const attribution = {
         agentName: usageAgentName(run.config.agent, run.config.agentSource),
         runId,
@@ -560,54 +557,47 @@ export const modelInvokerLayer = (): Layer.Layer<
         },
       );
 
-      /** Rebind on `selection`, retiring the failed binding, on the routes
-       *  the run declines as its rows now stand; a failure keeps it, loudly.
-       *  A renew names the token the provider rejected. A binding that
-       *  already replaced `failed` (a switch, another call's rebind onto a
-       *  personal key) stands: rebinding from `failed` would bring back its
-       *  route's overlay. */
+      /** Rebind on a person's retry answer, `selection`, retiring the
+       *  failed binding, on the routes the run declines as its rows now
+       *  stand; a failure keeps it, loudly. The turn's loop is the binding's
+       *  one writer while it runs, the switch at its model boundary the
+       *  other, so a binding that already replaced `failed` is one the loop
+       *  bound itself, and stands. */
       const rebind = (
         cell: RunCell,
-        selection: RetryCredentials | 'renewed',
+        selection: RetryCredentials,
         failed: BoundModel,
       ): Effect.Effect<void, CallFailure> =>
-        rebinding
-          .withPermit(
-            Effect.flatMap(cell.current, ({ declinedRoutes }) =>
-              ScopedRef.getUnsafe(run.model) !== failed
-                ? Effect.void
-                : ScopedRef.set(
-                    run.model,
-                    access
-                      .bind({
-                        modelId: failed.modelId,
-                        // A personal-key retry drops the route's overlay (window,
-                        // prices, PDF admission, Kimi endpoint) for the catalog's.
-                        config:
-                          selection === 'personal' ? undefined : failed.config,
-                        backend: failed.backend,
-                        declinedRoutes,
-                        textOnly: failed.textOnly,
-                        temperature: run.persona.temperature,
-                        ...(selection === 'renewed' && {
-                          rejected: failed.subscriptionToken,
-                        }),
-                      })
-                      // The ref masks its acquisition; a stop must still cut
-                      // a bind in progress.
-                      .pipe(Effect.interruptible),
-                  ),
-            ),
-          )
-          .pipe(
-            Effect.tapError((error) =>
-              Effect.sync(() =>
-                logger.warn('Failed to refresh the model binding', {
-                  data: error,
-                }),
+        Effect.flatMap(cell.current, ({ declinedRoutes }) =>
+          ScopedRef.getUnsafe(run.model) !== failed
+            ? Effect.void
+            : ScopedRef.set(
+                run.model,
+                access
+                  .bind({
+                    modelId: failed.modelId,
+                    // A personal-key retry drops the route's overlay (window,
+                    // prices, PDF admission, Kimi endpoint) for the catalog's.
+                    config:
+                      selection === 'personal' ? undefined : failed.config,
+                    backend: failed.backend,
+                    declinedRoutes,
+                    textOnly: failed.textOnly,
+                    temperature: run.persona.temperature,
+                  })
+                  // The ref masks its acquisition; a stop must still cut a
+                  // bind in progress.
+                  .pipe(Effect.interruptible),
               ),
+        ).pipe(
+          Effect.tapError((error) =>
+            Effect.sync(() =>
+              logger.warn('Failed to refresh the model binding', {
+                data: error,
+              }),
             ),
-          );
+          ),
+        );
 
       /**
        * The batch that ends attempt `ref` as `failed` with `error`. One that
@@ -793,7 +783,10 @@ export const modelInvokerLayer = (): Layer.Layer<
                 return Effect.die(Cause.squash(exit.cause));
               const error = found.success;
               return isCallFailure(error)
-                ? Effect.succeed({ error, unsent: false })
+                ? Effect.succeed({
+                    error: routeFailureOf(error),
+                    unsent: false,
+                  })
                 : Effect.fail(error);
             },
           ),
@@ -873,20 +866,9 @@ export const modelInvokerLayer = (): Layer.Layer<
         request: InvokeRequest,
       ): Effect.fn.Return<InvocationOutcome, InvokeError, AttemptServices> {
         const retries = (yield* ScopedRef.get(run.model)).automaticRetries;
-        // Once per invocation, a subscription access token the provider
-        // rejects before its stored expiry (revoked, or expired server-side)
-        // is renewed: the binding rebound on a refreshed session and the
-        // attempt made again on it, an observation unrecorded. A renewal
-        // that fails takes the rejection's place as an unsent failure, so
-        // the user reads the "sign in again" instruction rather than "token
-        // is expired", and no retry resends the rejected token.
-        let renewed = false;
-        let again: NextAttempt | null = null;
         for (;;) {
           const { invocation, requests } = yield* cell.current;
-          const move: NextAttempt =
-            again ?? nextAttempt(invocation, requests, retries);
-          again = null;
+          const move = nextAttempt(invocation, requests, retries);
           if (move.kind === 'fail') return yield* endedAs(cell, 'failed');
           if (move.kind === 'cancel') return yield* endedAs(cell, 'cancelled');
           if (move.kind === 'await') {
@@ -918,28 +900,14 @@ export const modelInvokerLayer = (): Layer.Layer<
           const bound = yield* ScopedRef.get(run.model);
           const tried = yield* tryAttempt(cell, request, move, ref, bound);
           if ('ok' in tried) return tried.ok;
-          const observed = move.kind === 'observe';
-          let failure: AttemptFailure = tried;
-          let next: FailedNext | null = null;
-          if (
-            !renewed &&
-            tried.error instanceof ModelError &&
-            tried.error.kind === 'authentication' &&
-            bound.subscriptionToken !== undefined
-          ) {
-            renewed = true;
-            const rebound = yield* Effect.result(
-              rebind(cell, 'renewed', bound),
-            );
-            if (Result.isSuccess(rebound)) {
-              if (observed) {
-                again = move;
-                continue;
-              }
-              next = { kind: 'retry' };
-            } else failure = { error: rebound.failure, unsent: true };
-          }
-          next ??= yield* moveAfter(cell, failure, ref, observed, retries);
+          const failure = tried;
+          const next = yield* moveAfter(
+            cell,
+            failure,
+            ref,
+            move.kind === 'observe',
+            retries,
+          );
           yield* recordFailure(cell, ref, failure, next, bound);
           if (next.kind === 'stop') return yield* endedAs(cell, 'failed');
           if (next.kind !== 'retry' && next.kind !== 'unchain') continue;
@@ -965,7 +933,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           (messages) =>
             callModel({
               binding: ScopedRef.get(run.model),
-              renew: (failed) => rebind(cell, 'renewed', failed),
               request: { ...request, messages },
               settings: roots,
               attribution,

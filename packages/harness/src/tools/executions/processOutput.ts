@@ -15,7 +15,6 @@ import {
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { executed } from '@tools/core/result';
@@ -139,10 +138,11 @@ export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   // the fold: "no handle in this process" alone never justifies calling a
   // command finished, and a run whose owner is gone reads as interrupted
   // rather than as one that recorded how it ended.
-  const lead = isTerminalOutcomePhase(run.status)
-    ? 'finished:'
-    : (describeRunNotice(run) ??
-      `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
+  const lead =
+    run.outcome !== null
+      ? 'finished:'
+      : (describeRunNotice(run) ??
+        `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
   const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
   const out: string[] = [
     `Output for ${runId} (process, ${formatRunStatus(run)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,

@@ -57,7 +57,6 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
-  RUN_PHASE,
   TOOL_CALL_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
@@ -72,7 +71,6 @@ import {
   type RequestDecision,
   type RetryPermission,
   type RunOutcome,
-  type RunPhase,
   type RunId,
   type SessionEventDraft,
   type UserQuestionPermission,
@@ -81,10 +79,6 @@ import {
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  isInFlightPhase,
-  isTerminalOutcomePhase,
-} from '@shared/runs/runStatus';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import {
   ALL_RUNS,
@@ -101,7 +95,7 @@ import {
   countLineChanges,
   firstChangedLine,
 } from '@tools/unifiedDiff';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runStatus } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { blobAddress } from '@utils/core/idHash';
 import { nodeFileServices } from '@utils/files/fsDurability';
@@ -135,6 +129,7 @@ import {
   runningChildCount,
   sessionView,
   runViewOf,
+  type RunPhase,
 } from '../src/chat/tui/state/sessionView';
 import {
   chatTuiCanStartRootRun,
@@ -638,18 +633,18 @@ function releaseRun(runId: RunId): void {
  */
 function seedPhase(runId: RunId, phase: RunPhase): void {
   seedRun(runId);
-  if (isTerminalOutcomePhase(phase)) {
+  if (phase !== 'running' && phase !== 'waiting') {
     seedRunEnd(runId, phase);
     return;
   }
   const run = runViewOf(currentView(), runId);
-  if (run?.status !== RUN_PHASE.RUNNING) {
+  if (run?.position !== 'running') {
     publish({
       type: 'run.activate',
       aggregateId: qualifyAggregateId('run', runId),
     });
   }
-  if (phase === RUN_PHASE.WAITING) {
+  if (phase === 'waiting') {
     publish({
       type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
@@ -1250,7 +1245,7 @@ async function appendHarnessPlanDecision(
   if (result.action === 'approve_and_goal') {
     // A plan run as a goal launches a goal run beside the chat; the chat's
     // own grants stay as they were.
-    seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
+    seedPhase(HARNESS_RUN_ID, 'running');
     appendHarnessAssistantTranscript(
       result.autoApproveAll ? 'PLAN-GOAL-ALL' : 'PLAN-GOAL',
     );
@@ -1273,8 +1268,8 @@ const HARNESS_RUN_IDLE =
   (SHOW_PLAN && SHOW_IDLE_PLAN) || process.env.HARNESS_ROOT_WAITING === '1';
 
 function harnessInitialRunStatus(): RunPhase | undefined {
-  if (HARNESS_RUN_ACTIVE) return RUN_PHASE.RUNNING;
-  if (HARNESS_RUN_IDLE) return RUN_PHASE.WAITING;
+  if (HARNESS_RUN_ACTIVE) return 'running';
+  if (HARNESS_RUN_IDLE) return 'waiting';
   return undefined;
 }
 
@@ -1345,7 +1340,7 @@ function seedRunningScript(): void {
     parentRunId: HARNESS_RUN_ID,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
-  seedPhase(scriptRunId, RUN_PHASE.RUNNING);
+  seedPhase(scriptRunId, 'running');
   for (const agentRunId of [
     RUNNING_SCRIPT_FIRST_AGENT_RUN_ID,
     harnessRunId('aaaa000bf10e'),
@@ -1355,7 +1350,7 @@ function seedRunningScript(): void {
       parentRunId: scriptRunId,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     });
-    seedPhase(agentRunId, RUN_PHASE.RUNNING);
+    seedPhase(agentRunId, 'running');
   }
 }
 
@@ -1367,7 +1362,7 @@ function seedRunningProcessChild(): void {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedDescription(childRunId, 'sleep 30');
-  seedPhase(childRunId, RUN_PHASE.RUNNING);
+  seedPhase(childRunId, 'running');
   focusRun(childRunId);
 }
 
@@ -1376,35 +1371,35 @@ if (SHOW_CHILDREN) {
     runId: harnessRunId('aaaa0004f10e'),
     identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
-    status: RUN_PHASE.RUNNING,
+    status: 'running',
   };
   const childRuns = [
     {
       runId: harnessRunId('aaaa0005f10e'),
       identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
-      status: RUN_PHASE.RUNNING,
+      status: 'running' as RunPhase,
     },
     {
       runId: harnessRunId('aaaa0006f10e'),
       identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
-      status: RUN_PHASE.WAITING,
+      status: 'waiting' as RunPhase,
     },
     {
       runId: harnessRunId('aaaa0007f10e'),
       identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
-      status: RUN_PHASE.RUNNING,
+      status: 'running' as RunPhase,
     },
   ].map((child) =>
     child.agentName === FAILED_CHILD_AGENT
-      ? { ...child, status: RUN_PHASE.FAILED }
+      ? { ...child, status: 'failed' as RunPhase }
       : child,
   );
   // One run window across every later active phase: an activation on a run
   // already running would re-open it, so `seedPhase` keeps the first one.
-  seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
+  seedPhase(HARNESS_RUN_ID, 'running');
   for (const child of childRuns) {
     const runId = child.runId;
     seedRun(runId, {
@@ -1435,7 +1430,7 @@ if (SHOW_CHILDREN) {
       nestedRunId,
       makeChildEntries('localChecker', 'nested proof check'),
     );
-    seedPhase(nestedRunId, RUN_PHASE.RUNNING);
+    seedPhase(nestedRunId, 'running');
   }
 }
 
@@ -1602,7 +1597,7 @@ function markHarnessInterrupted(): void {
     includeRoot: true,
   })) {
     const run = runViewOf(currentView(), runId);
-    if (run && isInFlightPhase(run.status)) {
+    if (run && run.outcome === null && run.position !== 'ready') {
       seedRunEnd(runId, RUN_OUTCOME.CANCELLED);
     }
   }
@@ -1700,7 +1695,7 @@ function appendHarnessStatus(): void {
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
-      statusLabel: run && runStatusLabel(run.statusKey),
+      statusLabel: run && runStatus(run).word,
       activeChildSessions: runningChildCount(view, run),
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
@@ -1962,7 +1957,7 @@ if (SHOW_STREAMING_TOOL_OUTPUT) {
   const fiber = harnessRuntime.runFork(
     Effect.gen(function* () {
       yield* Effect.sleep('1 second');
-      seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
+      seedPhase(HARNESS_RUN_ID, 'running');
       session().log.publish(HARNESS_RUN_ID, {
         type: 'stream.start',
         id: 'streaming-thinking',

@@ -15,7 +15,6 @@
  * - **Model & provider catalogs**: [`selectModel`](#selectmodel),
  *   [`MODEL_PROVIDER_PLUGINS`](#model_provider_plugins),
  *   [`decideModelRoute`](#decidemodelroute),
- *   [`resolveRouteEndpoint`](#resolverouteendpoint),
  *   [`RouteFacts`](#routefacts) ([`OWN_KEY_ROUTE_FACTS`](#own_key_route_facts)),
  *   [`chooseReasoning`](#choosereasoning), and [`turnCost`](#turncost).
  * - **Structured failures & credentials**: [`ModelError`](#modelerror),
@@ -112,16 +111,15 @@ export {
   providerDisplayName,
 } from './providers/providers.js';
 export {
+  apiKey,
   apiKeySecretName,
   apiProviderOfSecretName,
   exposeApiKey,
   hasUsableApiKey,
   isApiProvider,
   loadApiKeyStatusMap,
-  lookupApiKey,
-  lookupApiKeyOrigin,
 } from './providers/apiProviders.js';
-export type { ApiKeyStatus } from './providers/apiProviders.js';
+export type { ApiKeyStatus, ResolvedApiKey } from './providers/apiProviders.js';
 
 // Choosing a model: selection, the route decision, reasoning and pricing.
 export {
@@ -144,10 +142,8 @@ export type {
   ApiKeyUsageRoute,
   CredentialRoute,
   ModelRoute,
-  RouteDecisionFacts,
   RouteFacts,
 } from './models/modelRoute.js';
-export { resolveRouteEndpoint } from './models/routeEndpoint.js';
 export {
   acceptedEfforts,
   chooseReasoning,

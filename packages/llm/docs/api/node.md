@@ -63,15 +63,14 @@ const bindModel: (spec: BindSpec) => Effect<Binding, ModelError, Scope>
 
 One model on one decided route, and what the caller asks of it. The
 protocol is the model's provider's, and the route fixes the config it runs
-(`routeConfig`), the credential scope stamped on its origin and the plan
-it bills.
+(`routeConfig`), the endpoint it sends to, the credential scope stamped on
+its origin and the plan it bills.
 
 ```ts
 interface BindSpec {
   /** The llm-zoo entry, before its route's overrides. */
   readonly model: ModelConfig;
   readonly route: CredentialRoute;
-  readonly endpoint: string;
   readonly credential: ModelCredential;
   /** Each option has a default; the booleans default to `false`. */
   readonly options?: {
@@ -208,12 +207,28 @@ class LoopbackTransportUnavailableError extends Schema.TaggedError<LoopbackTrans
 
 The credential a binding sends: an API key (or any bearer token the
 endpoint takes as one), or a ChatGPT plan's access token, which the
-Responses protocol alone serves, under that plan's request rules.
+Responses protocol alone serves, under that plan's request rules. Either
+is a fixed string or a {@link SessionToken}.
 
 ```ts
 type ModelCredential =
-  | { readonly kind: 'api-key'; readonly apiKey: string }
-  | { readonly kind: 'chatgpt'; readonly accessToken: string };
+  | { readonly kind: 'api-key'; readonly apiKey: string | SessionToken }
+  | { readonly kind: 'chatgpt'; readonly accessToken: string | SessionToken };
+```
+
+## SessionToken
+
+A subscription session's token, which the caller renews: read before
+every request, and, when the provider rejects the one sent (a 401 before
+its stored expiry), handed back as `rejected` once, after which the
+request goes again on the next `current`. A rejected request was not
+billed. The Responses protocol alone takes one.
+
+```ts
+interface SessionToken {
+  readonly current: Effect.Effect<string, ModelError>;
+  readonly rejected: (token: string) => Effect.Effect<void, ModelError>;
+}
 ```
 
 ## SubscriptionAuthorizeRequest

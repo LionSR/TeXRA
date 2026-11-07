@@ -85,7 +85,12 @@ function testBoundModel({
     declinedRoutes: [],
     model: unusedModel,
     origin: TEST_ORIGIN,
-    route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
+    route: {
+      kind: 'api-key',
+      endpoint: 'https://api.deepseek.com',
+      provider: 'deepseek',
+      usageRoute: 'api-key',
+    },
     forcedToolChoice: true,
     billing: 'api-key',
     maxOutputTokens: null,

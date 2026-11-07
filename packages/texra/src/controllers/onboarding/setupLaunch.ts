@@ -39,7 +39,7 @@ export const launchSetup = Effect.fn('launchSetup')(function* <E, R>(options: {
   // first one's installs and config writes.
   const live = [...options.session.view.current().runs.values()].some(
     (run) =>
-      run.live &&
+      run.holder === 'here' &&
       run.identity.kind === 'agent' &&
       agentName(run.identity.agent) === SETUP_AGENT_NAME,
   );

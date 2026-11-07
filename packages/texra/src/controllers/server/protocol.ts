@@ -47,13 +47,13 @@ import {
   RunRecordFieldsSchema,
   RunResultSchema,
   RunWorkspaceFileSchema,
-  RUN_STATUS_KEYS,
   OutcomeSchema,
   RequestErrorSchema,
   RuntimeRequestSchema,
   SessionViewSchema,
   StartRequestSchema,
 } from '@texra-ai/harness/schemas';
+import { RUN_STATUS_KEYS } from '@ui/copy/runStatus';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,

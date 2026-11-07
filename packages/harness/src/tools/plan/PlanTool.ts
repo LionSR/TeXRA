@@ -128,7 +128,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
     const run = runs.get(id);
     return (
       run !== undefined &&
-      (run.durableOutcome === null || run.childIds.some(stillRunning))
+      (run.outcome === null || run.childIds.some(stillRunning))
     );
   };
   const running = results
