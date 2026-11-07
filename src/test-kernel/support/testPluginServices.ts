@@ -15,21 +15,27 @@ import { PluginHold } from '@tools/toolTable';
 export const noPluginHold = () => Effect.void;
 
 /**
- * The GitHub plugin's subscription tables, unread. A registry is a live
- * ownership table over a polling source, so the harness serves none: a suite
- * that exercises one provides `gitHubSubscriptionsLayer` innermost, and a
- * read here is a test wiring error rather than an empty answer. Reaching for
- * the real layer instead would load the follow-up module in the support
- * files, ahead of the suites that mock it.
+ * The GitHub plugin's subscriptions, unread. They are live bindings with
+ * polling fibers, so the harness serves none: a suite that exercises them
+ * provides `gitHubSubscriptionsLayer` innermost, and a read here is a test
+ * wiring error rather than an empty answer. Reaching for the real layer
+ * instead would load the follow-up module in the support files, ahead of the
+ * suites that mock it.
  */
+const BINDING_MEMBERS: ReadonlySet<PropertyKey> = new Set([
+  'bind',
+  'unbind',
+  'unbindAll',
+  'list',
+]);
 const unreadGitHubSubscriptions = new Proxy(
-  // cast: the three tables throw when read, and nothing else is read.
+  // cast: the binding members throw when read, and nothing else is read.
   {} as GitHubSubscriptions['Service'],
   {
     get: (target, member) => {
-      if (member === 'pr' || member === 'repo' || member === 'issue') {
+      if (BINDING_MEMBERS.has(member)) {
         throw new Error(
-          `No GitHub subscriptions in this test: provide gitHubSubscriptionsLayer to read '${member}'.`,
+          `No GitHub subscriptions in this test: provide gitHubSubscriptionsLayer to read '${String(member)}'.`,
         );
       }
       return Reflect.get(target, member);

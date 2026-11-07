@@ -1,5 +1,5 @@
 /**
- * Coarse-grained formatters for `RepoPollingSource`.
+ * Coarse-grained formatters for the repository poll (`repoPoller.ts`).
  *
  * Each event is a one-line `<github-webhook-activity>` notification suitable
  * for an orchestrator agent: enough to decide whether to delegate a worker,
@@ -28,7 +28,7 @@ import {
   sections,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
-import { issueRef, prRef } from './githubPaths';
+import { targetPath, type RepoTarget } from './subscriptionTarget';
 import type {
   GhIssueComment,
   GhPullsListEntry,
@@ -39,53 +39,63 @@ const MAX_BODY = 200;
 
 const truncate = makeTruncator(MAX_BODY);
 
-export function formatRepoPROpened(slug: string, pr: GhPullsListEntry): string {
+/** The path of pull request `number` in `repo`. */
+function pullPath(repo: RepoTarget, number: number): string {
+  return targetPath({ ...repo, _tag: 'pull', number });
+}
+
+export function formatRepoPROpened(
+  repo: RepoTarget,
+  pr: GhPullsListEntry,
+): string {
   return wrap(
-    `New pull request ${prRef(slug, pr.number)} opened by ${authorOf(pr.user)}: "${truncate(pr.title)}"\n${pr.html_url}`,
+    `New pull request ${pullPath(repo, pr.number)} opened by ${authorOf(pr.user)}: "${truncate(pr.title)}"\n${pr.html_url}`,
   );
 }
 
 export function formatRepoPRClosed(
-  slug: string,
+  repo: RepoTarget,
   prNumber: number,
   merged: boolean,
 ): string {
-  return wrap(`${prRef(slug, prNumber)} was ${merged ? 'merged' : 'closed'}.`);
+  return wrap(
+    `${pullPath(repo, prNumber)} was ${merged ? 'merged' : 'closed'}.`,
+  );
 }
 
 export function formatRepoIssueComment(
-  slug: string,
+  repo: RepoTarget,
   number: number,
   c: GhIssueComment,
 ): string {
   return wrap(
-    `New comment on ${issueRef(slug, number)} by ${authorOf(c.user)}: "${truncate(c.body)}"\n${c.html_url}`,
+    `New comment on ${targetPath({ ...repo, _tag: 'issue', number })} by ${authorOf(c.user)}: "${truncate(c.body)}"\n${c.html_url}`,
   );
 }
 
 export function formatRepoReviewComment(
-  slug: string,
+  repo: RepoTarget,
   prNumber: number,
   c: GhReviewComment,
 ): string {
   return wrap(
-    `New ${c.in_reply_to_id != null ? 'review reply' : 'inline review comment'} on ${prRef(slug, prNumber)} by ${authorOf(c.user)} (${c.path}): "${truncate(c.body)}"\n${c.html_url}`,
+    `New ${c.in_reply_to_id != null ? 'review reply' : 'inline review comment'} on ${pullPath(repo, prNumber)} by ${authorOf(c.user)} (${c.path}): "${truncate(c.body)}"\n${c.html_url}`,
   );
 }
 
 /**
  * Single-PR merge-conflict notification, mirroring the per-PR formatter but
  * keyed under the repo subscription. Triggered by the holistic probe in
- * `RepoPollingSource` when an open PR's `mergeable_state` flips to `dirty`.
+ * the repository poll when an open PR's `mergeable_state` flips to `dirty`.
  */
 export function formatRepoMergeConflictDetected(
-  slug: string,
+  repo: RepoTarget,
   prNumber: number,
   prevState: string | undefined,
 ): string {
   return wrap(
-    `Merge conflict detected on ${prRef(slug, prNumber)}: mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
-      `Subscribe to ${prRef(slug, prNumber)} for detailed events, or rebase / merge the base back in to resolve.`,
+    `Merge conflict detected on ${pullPath(repo, prNumber)}: mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
+      `Subscribe to ${pullPath(repo, prNumber)} for detailed events, or rebase / merge the base back in to resolve.`,
   );
 }
 
@@ -96,20 +106,13 @@ export function formatRepoMergeConflictDetected(
  * per PR after a base-branch update invalidates many PRs at once.
  */
 export function formatRepoMergeConflictSummary(
-  slug: string,
+  repo: RepoTarget,
   prNumbers: readonly number[],
 ): string {
   return wrap(
     sections(
-      `Merge conflicts detected on ${prNumbers.length} PRs in ${slug} (mergeable_state="dirty"). Likely caused by a recent base-branch update: subscribe per-PR for detailed events, or rebase / merge the base back in.`,
-      prNumbers.map((n) => prRef(slug, n)).join('\n'),
+      `Merge conflicts detected on ${prNumbers.length} PRs in ${targetPath(repo)} (mergeable_state="dirty"). Likely caused by a recent base-branch update: subscribe per-PR for detailed events, or rebase / merge the base back in.`,
+      prNumbers.map((n) => pullPath(repo, n)).join('\n'),
     ),
   );
-}
-
-export function formatRepoSubscriptionError(
-  slug: string,
-  detail: string,
-): string {
-  return wrap(`Repo subscription to ${slug} halted: ${detail}`);
 }

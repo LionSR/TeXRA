@@ -61,7 +61,7 @@ function fullWarningPage(): GhCheckAnnotation[] {
   );
 }
 
-describe('PRPollingSource annotation pagination', () => {
+describe('check-run annotation pagination', () => {
   beforeEach(() => {
     mocks.ghGet.mockReset();
   });

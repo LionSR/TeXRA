@@ -243,6 +243,19 @@
           "signature": "export const runLakeCommand = ( options: LakeCommandOptions, ): Effect.Effect<LakeCommandResult, never, ChildProcessSpawner> => Effect.suspend(() => executeLake(options).pipe( withPerKeyLane(workspaceLanes, path.resolve(options.workspaceRoot)), ), );"
         }
       ]
+    },
+    {
+      "id": "GH-subscriptions-rcmap-pubsub",
+      "candidate": "GitHub subscriptions as an RcMap keyed by target, with a PubSub per entry each binding consumes through Stream.fromPubSub, and the poll fiber forked in the entry's scope",
+      "why": "Three facts the design does not survive. (1) A processLayer may require only PluginLayerServices (packages/harness/src/tools/toolTable.ts), which lack Secrets and HttpClient, so an RcMap made there cannot type a lookup that starts the poll; RcMap merges the getter's context into the lookup at run time (node_modules/effect/dist/RcMap.js get), so it would work only behind a cast that hides the requirement. (2) The run bindings are needed anyway (list, unbind, unbindAll, the per-run annotation level), so the RcMap's reference count would be a second count of the same fact; a target that ends itself (a closed PR, a rejected token) then has to leave both, and RcMap.invalidate plus releases from another fiber leave a window where a new bind reuses the dying entry, whose FiberHandle still holds the finishing poller. (3) A PubSub subscriber takes events on its own fiber, so an event published but not yet taken is outside the FiberSet the shutdown drain awaits, and is lost at shutdown. What landed instead: one Map from target path to its runs, the poll fibers in one FiberMap keyed by the same path (the last unbind removes the key; a poller that ends removes its subscription in its own step), and deliveries forked into one FiberSet at publish time.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/H-app-tools.md#finding-1-run-r-is-subscribed-to-target-k-is-held-in-two-tables-joined-by-a-hand-off-protocol",
+      "symbols": [
+        {
+          "file": "packages/texra/src/tools/github/subscriptionsLayer.ts",
+          "symbol": "gitHubSubscriptionsLayer",
+          "signature": "export const gitHubSubscriptionsLayer: Layer.Layer< GitHubSubscriptions, never, AppSignals > = Layer.effect(…);"
+        }
+      ]
     }
   ]
 }

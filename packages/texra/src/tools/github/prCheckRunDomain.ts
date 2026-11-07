@@ -5,8 +5,8 @@
  * transformation over plain check-run data, so the CI-status semantics (what
  * counts as a failure, when CI is "complete"/"passed", which runs are newly
  * failed, which annotated runs to enqueue) can be reasoned about and unit
- * tested in isolation. `PRPollingSource` calls these and commits the results
- * to its mutable per-subscription state.
+ * tested in isolation. The pull request poll (`pullPoller.ts`) folds their
+ * results into its next state.
  */
 
 import type { GhCheckRun } from './prTypes';
@@ -68,7 +68,7 @@ export function ciTerminalStatus(
  */
 export function computeNewCheckFailures(
   runs: ReadonlyArray<GhCheckRun>,
-  lastFailedCheckKeys: Set<string>,
+  lastFailedCheckKeys: ReadonlySet<string>,
 ): { newFailures: GhCheckRun[]; currentFailureKeys: Set<string> } {
   const newFailures: GhCheckRun[] = [];
   const currentFailureKeys = new Set<string>();
@@ -109,7 +109,7 @@ interface AnnotationQueuePlan {
  */
 export function planAnnotationCandidates(
   runs: ReadonlyArray<GhCheckRun>,
-  lastAnnotationKeys: Set<string>,
+  lastAnnotationKeys: ReadonlySet<string>,
   currentPendingRuns: ReadonlyArray<GhCheckRun>,
 ): AnnotationQueuePlan {
   const pendingIndexById = new Map<number, number>();
