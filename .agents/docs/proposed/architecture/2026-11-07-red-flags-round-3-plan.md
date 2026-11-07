@@ -153,9 +153,37 @@ type. 14 names are exported twice.
 
 A compromise made because of ordering, ownership or PR size was a tactical
 decision. Now that those reasons are gone, it should be decided again on
-its design alone. Audit V lists every compromise, with its reason and
-whether that reason still holds; its "revisit now" items join the packages
-below.
+its design alone. Audit V (`V-compromises.md`) found 86 compromises. 32 of
+them, in 24 rows (R1 to R24), should be revisited now; 54 still stand,
+each with its reason. 26 of the 38 accepted for ownership, order or scope
+have lost their reason, and 5 of the design compromises have a better
+design today. By owner:
+
+- **A:** R1, the accept race left by #14713. It is smaller than the review
+  reply said: the shared `acceptEditedFileReplace` already reads what it
+  writes, so it returns that content and the diff uses it. R5, the orphaned
+  R6 leftovers: C7's string error channel becomes a `Result`, and the
+  listing's `actions`. R14, one `HostFailed`. R22, the headless denial
+  notice. Drop "one view tag" from R8's second half: the refusal
+  `SESSION-one-view-service` still holds.
+- **B:** R15, the diff title as one string; R16, the desktop window as one
+  state value; R17, one preview host; R18, N8 then J3, J4 and J2; R19, G7's
+  request mask. All are in the window and bridge files 3.3 opens.
+- **C:** R6, the user's edit recorded on the task's own revision record;
+  R7, `LatexDiffManager` as one `Effect.fn`. Both go in 4.3.
+- **E:**
+  - R2: one storage-format PR. The verdict row, E4's `handedDown`, the
+    awaited child's stop reason, the skip signal and `attemptStarts` share
+    one golden-store regeneration.
+  - R3 + R4: O3 as one `Layer.effect` account service, and `ApiKeyStatus`
+    folded into `CredentialOrigin`.
+  - R13, the llm §6 tail.
+  - R23, `joinOpening`'s silent refusal.
+  - R24, R9's unclaimed D3 and D7.
+- **F:** R8, the dead `allSettledVoid`. R9, an interrupted model resolution
+  written as an error (`Effect.catchCauseIf`). R20, the stale refusal
+  records. R21, 8.1 for the CLI outside A's files. Then R10 (M1, which the
+  sliding buffer of one from #14791 now answers), R11 (M6) and R12 (G9).
 
 ### Comments and names (ch. 12–14)
 
