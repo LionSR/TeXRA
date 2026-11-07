@@ -1,8 +1,9 @@
 /**
  * The session's history: the run history, the only reader of
- * run-history-private payloads and the only writer of the rows a run's state
- * is rebuilt from, each through one run's {@link RunCell} (`load` reads,
- * `open` hands out the cell every write of the run goes through); the
+ * run-history-private payloads and the writer of a run's own rows, each
+ * through one run's {@link RunCell} (`load` reads, `open` hands out the cell
+ * the run's writes go through; a request's decision is appended by the
+ * session's requests, `runStateAppend`); the
  * session log it commits through; the view folded from that log; and the
  * history query, the model's SQL over the session's display rows. Beside
  * them, the session's approvals, which every run's gated call reads.
@@ -174,11 +175,13 @@ export type CellError =
   | DatabaseReadFailed;
 
 /**
- * One run's state holder and the only writer of the rows its state is
- * rebuilt from: the opening, every step, tool result and delivery, the input
- * it consumes, a compaction's edit, a model switch and its end all commit
- * through {@link RunCell.append}, and nothing sets the state it holds but
- * what that returns. One exception: a run whose stored rows cannot be used
+ * One run's state holder and the writer of the run's own rows: the opening,
+ * every step, tool result and delivery, the input it consumes, a
+ * compaction's edit, a model switch and its end all commit through
+ * {@link RunCell.append}, and nothing sets the state it holds but what that
+ * returns. A request's decision (`request.decided`) is the other writer's:
+ * the session's requests append it, and the cell's `refresh` takes it in.
+ * One exception to the rest: a run whose stored rows cannot be used
  * ({@link runReadRefusal}) opens no cell, so `endIn`
  * (`agent/storage/runLifecycle.ts`) appends its `run.end` and closing rows
  * straight to the ending transaction, without the halt a cell would write.

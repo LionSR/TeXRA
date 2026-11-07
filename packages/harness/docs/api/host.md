@@ -458,7 +458,7 @@ interface AppSignalPayloads {
    * and direct the user to token settings.
    *
    * Consumed by: extension (modal error + jump to Git settings), desktop
-   * (error dialog + re-post of the Git tab's token status). Not the CLI: a
+   * (an error dialog). Not the CLI: a
    * poller rejection arrives with no chat turn to attach it to, and the TUI
    * has no out-of-band notice surface — the rejection is logged instead.
    */
@@ -519,15 +519,14 @@ interface AppSignalPayloads {
    *
    * Emitted, in every process sharing the global store, when the default
    * team changes (`apply_team`, which the setup agent runs mid-conversation,
-   * even in a background service task; `agentCatalogFollower`); and by the tool
-   * registry (`pluginCatalogLayer`) once it has reloaded the agent catalog
-   * after a tool switch or the plugin install record changed, in this
-   * process or another.
-   * Settings-originated changes repaint through their own handler and do not
-   * emit.
+   * even in a background service task), and when the agent catalog is
+   * reloaded after a tool switch, a plugin install or an agent file's edit:
+   * `agentCatalogFollower` emits both, in this process or another. A team
+   * change from the settings view emits too, through the same follower.
    *
    * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list and team presets. Not the CLI: it reads the agent list per command
+   * agent list and team presets, and the extension's launcher. Not the CLI:
+   * it reads the agent list per command
    * and has no persistent panel that could go stale.
    */
   workspaceAgentsChanged: undefined;
@@ -1784,15 +1783,15 @@ own global dispatcher: its model traffic carries the transport anyway.
 
 A plugin list the harness cannot compose (the defects `toolTable`
 refuses: an id that is not lowercase letters, digits and dashes, an id or
-tool name listed twice, a second plugin continuing waiting runs or
-recording one request kind's decisions, a switch on a plugin with no
-availability probe) fails the build with {@link PluginsRefused} before
+tool name listed twice, a switch on a plugin with no availability probe,
+a `requires` naming a plugin not listed, an agent-file block owned twice or keyed by a persona key,
+two script modules of one name) fails the build with {@link PluginsRefused} before
 anything is built, so the refusal names the plugin rather than failing
 the first session open. A global store the process builds itself is
 seeded with the first-install tool switches; a store handed in is left as
 it is. Every root run is labelled with a short title from the helper model
-(its `run.description`): an extra model request per root run, outside the
-run's usage, which every host's run list shows.
+(its `run.description`): an extra model request per root run, counted in
+the run's usage, which every host's run list shows.
 
 ```ts
 function processLayer(
@@ -2805,9 +2804,8 @@ had to re-check the map after `Queue.unbounded` and claim in the same
 synchronous step as the insert, because a lane whose count drops to zero
 ends its queue and a ticket offered to an ended queue waits forever. Its
 interruption handling was the same single `ensuring` as here, with the
-body still on the caller's fiber, and it measured 84 lines against these
-65 while adding two lifecycle cases (raced creation, ended queue) that the
-chain does not have.
+body still on the caller's fiber, and it was longer while adding two
+lifecycle cases (raced creation, ended queue) that the chain does not have.
 
 `refuseClaim` makes the claim conditional: it reads the lane's current
 occupant in the same synchronous step that would install the caller's own

@@ -37,7 +37,7 @@ is the module map by concern. Run-loop rules are in
   terminal);
   `AgentRunLifecycle` (the end: `endRun`, the terminal's classification of
   an exit, and `endActivation`, the one end of an activation, through
-  `agent/storage/runLifecycle`'s `finalizeRun`); `runReport` (a run's
+  `agent/storage/runLifecycle`'s `endRunRows`); `runReport` (a run's
   unclassified report to its terminal); `resumeRun` (the cross-host resume entry, root or recovered child: the
   run's activation from the call, joined by a second resume);
   `forkRun` (a new root seeded from another run's view); `resumeBlocker` (a
