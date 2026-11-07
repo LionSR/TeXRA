@@ -638,64 +638,64 @@ driver's (package E): coordinate before touching them.
 ## Finding 8. Smaller items, batched
 
 a. **Proposal fields restate the agent config's.** `BaseProposalFieldsSchema`
-   (`shared/schemas/proposalFields.ts:7-42`) restates seven fields of
-   `AgentConfigObjectSchema` (`agentConfig.ts:50-89`), with the comment
-   "Mirrors `agentSource` on the agent config payload" (`:13`) standing in
-   for a derivation, and `ProposalFileFields` (`:60-66`) restates the four
-   file lists by hand. `AgentConfigObjectSchema.mapFields(Struct.pick([...]))`
-   with the required overrides would state each once; it borders G11d's
-   launch schema and R7's request payloads.
+(`shared/schemas/proposalFields.ts:7-42`) restates seven fields of
+`AgentConfigObjectSchema` (`agentConfig.ts:50-89`), with the comment
+"Mirrors `agentSource` on the agent config payload" (`:13`) standing in
+for a derivation, and `ProposalFileFields` (`:60-66`) restates the four
+file lists by hand. `AgentConfigObjectSchema.mapFields(Struct.pick([...]))`
+with the required overrides would state each once; it borders G11d's
+launch schema and R7's request payloads.
 b. **Enum copy as parallel arrays.** `enumLabels` and `enumDescriptions` are
-   "aligned 1:1 with the schema's enum options" (`stateSettings.ts:97-104`)
-   by index, unchecked: a missing label falls back to the value, an extra
-   one is ignored, a reordered schema relabels silently
-   (`packages/texra/src/shared/settingsView/settingRows.ts:58-71`). A
-   `Record<typeof schema.Type, { label, description? }>` is total by type.
-   Five rows.
+"aligned 1:1 with the schema's enum options" (`stateSettings.ts:97-104`)
+by index, unchecked: a missing label falls back to the value, an extra
+one is ignored, a reordered schema relabels silently
+(`packages/texra/src/shared/settingsView/settingRows.ts:58-71`). A
+`Record<typeof schema.Type, { label, description? }>` is total by type.
+Five rows.
 c. **Copy that restates llm-zoo.** `CHATGPT_CODEX_CONTEXT_WINDOW_SETTING`'s
-   description names per-model windows ("500 for GPT-6.1 Sol, 272 for the
-   others", `coreSettings.ts:71`) that llm-zoo's `codexSubscription.contextWindow`
-   owns, and `max: 872` (`:68`) is a constant beside them; the region
-   toggles' descriptions spell the endpoint hosts
-   (`shared/state/providerSettings.ts:47-74`) that `providerPlugins.ts:103-132`
-   holds. Each llm-zoo bump can make the copy false. Word the copy without
-   the numbers, or derive them. (O9a covers the rows themselves.)
+description names per-model windows ("500 for GPT-6.1 Sol, 272 for the
+others", `coreSettings.ts:71`) that llm-zoo's `codexSubscription.contextWindow`
+owns, and `max: 872` (`:68`) is a constant beside them; the region
+toggles' descriptions spell the endpoint hosts
+(`shared/state/providerSettings.ts:47-74`) that `providerPlugins.ts:103-132`
+holds. Each llm-zoo bump can make the copy false. Word the copy without
+the numbers, or derive them. (O9a covers the rows themselves.)
 d. **A pure decision that throws, wrapped twice.** `chooseReasoning`
-   throws `ReasoningChoiceError` (`packages/llm/src/models/reasoningChoice.ts:129,174,184,206`);
-   the harness catches it with `Result.try` and `ensureError`, dropping the
-   tag (`model/reasoningLevel.ts:93-104`), and `decideReasoning` re-lifts it
-   with `Effect.fromResult` (`:113-120`). If llm returns
-   `Result.Result<ReasoningChoice, ReasoningChoiceError>`, `chooseOnRoute`
-   goes and `decideReasoning` is `Effect.fromResult` at the bind. In llm's
-   file, so lane 7 (O2) with the R9 driver.
+throws `ReasoningChoiceError` (`packages/llm/src/models/reasoningChoice.ts:129,174,184,206`);
+the harness catches it with `Result.try` and `ensureError`, dropping the
+tag (`model/reasoningLevel.ts:93-104`), and `decideReasoning` re-lifts it
+with `Effect.fromResult` (`:113-120`). If llm returns
+`Result.Result<ReasoningChoice, ReasoningChoiceError>`, `chooseOnRoute`
+goes and `decideReasoning` is `Effect.fromResult` at the bind. In llm's
+file, so lane 7 (O2) with the R9 driver.
 e. **`ModelAvailabilityKind` splits by subscription what `usageRoute`
-   already says.** `'subscription-access'` and `'xai-subscription-access'`
-   (`shared/schemas/modelAvailability.ts:18-21`) differ only by the route
-   each option also carries (`computeModelOptions.ts:151-154`); their two
-   readers switch on both (`packages/cli/src/runtime/modelAccess.ts:260-261`,
-   `packages/texra/src/ui/copy/modelAccess.ts:32-33`), and the label could
-   come from the plan copy keyed by route in the same file. The
-   `requiresKey` column is true for exactly the `missing-key` row
-   (`modelAvailability.ts:41-49`; 1 reader, `ModelSelectionList.ts:186-190`):
-   a derivable column. The `unknown-model` builder is unreachable by its own
-   comment and restates `optionOf`'s sentence (`computeModelOptions.ts:83-85`, `:504`).
+already says.** `'subscription-access'` and `'xai-subscription-access'`
+(`shared/schemas/modelAvailability.ts:18-21`) differ only by the route
+each option also carries (`computeModelOptions.ts:151-154`); their two
+readers switch on both (`packages/cli/src/runtime/modelAccess.ts:260-261`,
+`packages/texra/src/ui/copy/modelAccess.ts:32-33`), and the label could
+come from the plan copy keyed by route in the same file. The
+`requiresKey` column is true for exactly the `missing-key` row
+(`modelAvailability.ts:41-49`; 1 reader, `ModelSelectionList.ts:186-190`):
+a derivable column. The `unknown-model` builder is unreachable by its own
+comment and restates `optionOf`'s sentence (`computeModelOptions.ts:83-85`, `:504`).
 f. **A stage protocol held by a throw.** "A provider absent from the map was
-   never read" (`computeModelOptions.ts:92-99`) and its defect throw
-   (`:163-168`): if stage 2 wrote each routed model's key status into its
-   `RoutedModel`, the absent case could not be expressed.
+never read" (`computeModelOptions.ts:92-99`) and its defect throw
+(`:163-168`): if stage 2 wrote each routed model's key status into its
+`RoutedModel`, the absent case could not be expressed.
 g. **Two copies of one copy.** The Google server-state Models-tab control
-   restates the row's title as its `label` and paraphrases its description
-   (`settingSurfaces.ts:126-136`), though `label` defaults to the title
-   (`:28-31`).
+restates the row's title as its `label` and paraphrases its description
+(`settingSurfaces.ts:126-136`), though `label` defaults to the title
+(`:28-31`).
 h. **`agentSkills.ts` is two topics:** the skills switch's key, default and
-   schema (`:6-10`) and installed-plugin trust (`:26-71`). The first goes
-   with finding 3.
+schema (`:6-10`) and installed-plugin trust (`:26-71`). The first goes
+with finding 3.
 i. **A write decodes twice.** `applyStateSettingUpdate` decodes the value
-   (`packages/texra/src/shared/settingsView/handlers/stateSettingWrite.ts:80-84`)
-   and `Settings.set` decodes it again and throws on failure
-   (`settings.ts:348-355`). Harmless while every row's type equals its
-   encoded form; `set` should encode what it stores (`Schema.encodeSync`,
-   `Schema.d.ts:1902`) once a row's two forms differ.
+(`packages/texra/src/shared/settingsView/handlers/stateSettingWrite.ts:80-84`)
+and `Settings.set` decodes it again and throws on failure
+(`settings.ts:348-355`). Harmless while every row's type equals its
+encoded form; `set` should encode what it stores (`Schema.encodeSync`,
+`Schema.d.ts:1902`) once a row's two forms differ.
 
 ---
 
@@ -776,18 +776,18 @@ findings here are data and schemas: AGENTS.md keeps pure computation plain
 TypeScript, and a `Schema` is the Effect-native form of a refused case, so
 several rows name no fiber primitive on purpose.
 
-| Finding | Hand-rolled today | The primitive or structure that answers it | Declaration checked |
-| ------- | ----------------- | ------------------------------------------ | ------------------- |
-| 1 | the CLI's `withoutInvalid` store wrapper; telemetry's `typeof` check; five readings of an invalid value | one decode in `Settings` (`Schema.decodeUnknownResult` into `StoredSetting`), `Settings.inspect` as the fail-closed read | `Schema.decodeUnknownResult`, `Schema.d.ts:1402`; `Result.isSuccess`, `Result.d.ts:691` |
-| 2 | `rawConfigValue`'s `global` branch restating `projectValueIgnored` | none: `projectValueIgnored` is the one tier rule (plain TypeScript) | — (deletion) |
-| 3 | `Settings.get<T>(stores, key: string)` and 94 call-site type arguments; `*_SETTING` bounds beside the schema | `SettingRow<A>` with `schema: Schema.Codec<A, unknown>`, assignable to the catalog's `Codec<unknown, unknown>` because `T` is covariant; bounds by `Schema.isBetween`, read back with `Schema.toJsonSchemaDocument` | `interface Codec<out T, out E = T, …>`, `Schema.d.ts:856`; `isBetween`, `:6117` (emits `minimum`/`maximum`, `Schema.js:4572-4573`); `toJsonSchemaDocument`, `:12272`; `withDecodingDefault`, `:4996` |
-| 4 | `Settings.state(store, key, schema)` with the schema per call; two rows read around the catalog | `StateKey<A> = { key, slot, schema }`, read by `Settings.state(store, key)`; writes through the existing `StateStore.modify` | `Schema.Codec`, `Schema.d.ts:856` |
-| 5 | optional copy, `placeRows`' inference, `titledRow`'s throw; `category` on the harness row | required `title`/`description`; `category` as `Schema.Literals` on the app's placement; `Record<HarnessRowKey, Placement \| null>` | `Schema.Literals`, `Schema.d.ts:4188` (and `.pick`, `:4164`) |
-| 6 | `RunUsageTotalsSchema`, `addTurnUsage`, `sumRunUsageTotals`, `EMPTY_RUN_USAGE_TOTALS` | one `Schema.Struct` of counters summed over `Struct.keys`; per-call shape by `mapFields(Struct.assign)` (already so) | `Struct.keys`, `Struct.d.ts:228`; `Struct.assign`, `Struct.d.ts:418`; `mapFields`, `Schema.d.ts:2987` |
-| 7 | `Effect.try` over a non-throwing read; `StateReadFailed` for a sign-in; `hostFact`'s `Effect.mapError` into a tag nothing reads | the typed channel as the reads produce it; `Effect.catchTag('SubscriptionOAuthError', …)` once at the bind, through `subscriptionUnavailable` | `Effect.catchTag`, `Effect.d.ts:4392`; `Effect.mapError`, `:6112` (removed); `Schema.TaggedError`, `Schema.d.ts:11985` |
-| 8d | `Result.try(chooseReasoning)` with `ensureError`, then `Effect.fromResult` | llm's decision returns `Result.Result<ReasoningChoice, ReasoningChoiceError>`; `Effect.fromResult` at the bind | `Effect.fromResult`, `Effect.d.ts:2470` |
-| 8b | `enumLabels`/`enumDescriptions` aligned by index | `Record<typeof schema.Type, Choice>`, total by type | — (types) |
-| 8i | `Settings.set` stores the decoded value | encode what is stored | `Schema.encodeSync`, `Schema.d.ts:1902` |
+| Finding | Hand-rolled today                                                                                                               | The primitive or structure that answers it                                                                                                                                                                          | Declaration checked                                                                                                                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1       | the CLI's `withoutInvalid` store wrapper; telemetry's `typeof` check; five readings of an invalid value                         | one decode in `Settings` (`Schema.decodeUnknownResult` into `StoredSetting`), `Settings.inspect` as the fail-closed read                                                                                            | `Schema.decodeUnknownResult`, `Schema.d.ts:1402`; `Result.isSuccess`, `Result.d.ts:691`                                                                                                              |
+| 2       | `rawConfigValue`'s `global` branch restating `projectValueIgnored`                                                              | none: `projectValueIgnored` is the one tier rule (plain TypeScript)                                                                                                                                                 | — (deletion)                                                                                                                                                                                         |
+| 3       | `Settings.get<T>(stores, key: string)` and 94 call-site type arguments; `*_SETTING` bounds beside the schema                    | `SettingRow<A>` with `schema: Schema.Codec<A, unknown>`, assignable to the catalog's `Codec<unknown, unknown>` because `T` is covariant; bounds by `Schema.isBetween`, read back with `Schema.toJsonSchemaDocument` | `interface Codec<out T, out E = T, …>`, `Schema.d.ts:856`; `isBetween`, `:6117` (emits `minimum`/`maximum`, `Schema.js:4572-4573`); `toJsonSchemaDocument`, `:12272`; `withDecodingDefault`, `:4996` |
+| 4       | `Settings.state(store, key, schema)` with the schema per call; two rows read around the catalog                                 | `StateKey<A> = { key, slot, schema }`, read by `Settings.state(store, key)`; writes through the existing `StateStore.modify`                                                                                        | `Schema.Codec`, `Schema.d.ts:856`                                                                                                                                                                    |
+| 5       | optional copy, `placeRows`' inference, `titledRow`'s throw; `category` on the harness row                                       | required `title`/`description`; `category` as `Schema.Literals` on the app's placement; `Record<HarnessRowKey, Placement \| null>`                                                                                  | `Schema.Literals`, `Schema.d.ts:4188` (and `.pick`, `:4164`)                                                                                                                                         |
+| 6       | `RunUsageTotalsSchema`, `addTurnUsage`, `sumRunUsageTotals`, `EMPTY_RUN_USAGE_TOTALS`                                           | one `Schema.Struct` of counters summed over `Struct.keys`; per-call shape by `mapFields(Struct.assign)` (already so)                                                                                                | `Struct.keys`, `Struct.d.ts:228`; `Struct.assign`, `Struct.d.ts:418`; `mapFields`, `Schema.d.ts:2987`                                                                                                |
+| 7       | `Effect.try` over a non-throwing read; `StateReadFailed` for a sign-in; `hostFact`'s `Effect.mapError` into a tag nothing reads | the typed channel as the reads produce it; `Effect.catchTag('SubscriptionOAuthError', …)` once at the bind, through `subscriptionUnavailable`                                                                       | `Effect.catchTag`, `Effect.d.ts:4392`; `Effect.mapError`, `:6112` (removed); `Schema.TaggedError`, `Schema.d.ts:11985`                                                                               |
+| 8d      | `Result.try(chooseReasoning)` with `ensureError`, then `Effect.fromResult`                                                      | llm's decision returns `Result.Result<ReasoningChoice, ReasoningChoiceError>`; `Effect.fromResult` at the bind                                                                                                      | `Effect.fromResult`, `Effect.d.ts:2470`                                                                                                                                                              |
+| 8b      | `enumLabels`/`enumDescriptions` aligned by index                                                                                | `Record<typeof schema.Type, Choice>`, total by type                                                                                                                                                                 | — (types)                                                                                                                                                                                            |
+| 8i      | `Settings.set` stores the decoded value                                                                                         | encode what is stored                                                                                                                                                                                               | `Schema.encodeSync`, `Schema.d.ts:1902`                                                                                                                                                              |
 
 There is no `Layer.scoped` in 4.1.2 and none is needed here: nothing in
 this area holds a resource.
