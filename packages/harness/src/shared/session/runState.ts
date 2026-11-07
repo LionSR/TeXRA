@@ -127,11 +127,13 @@ export type RunState = RunPosition &
      *  `lastTurn`, whose count measures a history it no longer holds. */
     readonly countStale: boolean;
     readonly pendingResponse: PendingResponse | null;
-    /** Request ids answered since the latest `run.activate`, when this
-     *  process took over the run; nothing waiting has seen them yet. */
-    readonly decidedSinceActivation: ReadonlySet<string>;
-    /** True after a `run.activate` until the loop writes its next position. */
-    readonly resuming: boolean;
+    /** The `seq` of the latest `run.activate`, when a process last took
+     *  the run: a decision after it (`RequestState.decidedAt`) is one
+     *  nothing waiting has seen yet. Null before the first activation. */
+    readonly activatedAt: number | null;
+    /** The `seq` of the latest `run.position`: a position before the
+     *  activation leaves the loop resuming ({@link isResuming}). */
+    readonly steppedAt: number | null;
     /** The priced usage summed from its `response` and `context.edit` rows. */
     readonly usage: RunUsageTotals;
     /** The latest `context.edit`'s `seq`: the next edit's `base`. */
@@ -194,8 +196,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   lastTurn: null,
   countStale: false,
   pendingResponse: null,
-  decidedSinceActivation: new Set(),
-  resuming: false,
+  activatedAt: null,
+  steppedAt: null,
   usage: EMPTY_RUN_USAGE_TOTALS,
   ...NO_FACTS,
   lastEdit: null,
@@ -317,16 +319,12 @@ const applySharedRow = (
   return Result.succeed({
     ...state,
     ...(row.type === 'request.decided' && {
-      decidedSinceActivation: new Set([
-        ...state.decidedSinceActivation,
-        row.requestId,
-      ]),
       declinedRoutes: declinedBy(state, row),
     }),
     ...verdict.rows,
     ...(row.type === 'run.position' &&
       row.payload.at === 'turn.begin' && { answer: '' }),
-    ...(row.type === 'run.position' && { resuming: false }),
+    ...(row.type === 'run.position' && { steppedAt: row.seq }),
     phase: phaseAfter(state.phase, verdict.rows.at),
   });
 };
@@ -357,12 +355,7 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
   'run.end': { requires: 'existing', apply: (state) => Result.succeed(state) },
   'run.activate': {
     requires: 'existing',
-    apply: (state) =>
-      Result.succeed({
-        ...state,
-        decidedSinceActivation: new Set(),
-        resuming: true,
-      }),
+    apply: (state, row) => Result.succeed({ ...state, activatedAt: row.seq }),
   },
   'run.config': {
     // What the run runs on: its model, and once it binds, its backend and
@@ -560,3 +553,10 @@ export function applyRunRows(
   }
   return Result.succeed(current);
 }
+
+/** Whether the loop has written no position since its latest activation:
+ *  a process took the run and has not stepped it yet. */
+export const isResuming = (
+  state: Pick<RunState, 'activatedAt' | 'steppedAt'>,
+): boolean =>
+  state.activatedAt !== null && (state.steppedAt ?? -1) < state.activatedAt;

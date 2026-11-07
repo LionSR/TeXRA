@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **`texra history` reports a run's outcome, not a status word.** The
+  `history-entry` and `history-detail` NDJSON records carry `outcome`
+  (`completed`, `cancelled`, `failed`, or `null`) beside `resumable`, in
+  place of the `status` field (`completed`, `interrupted`, `error`,
+  `resumable`, `unknown`); the text listing prints the outcome and marks a
+  run `texra resume` continues. SDK: a `RunView` states where a run stands
+  as `position`, `outcome` and `holder` (with `isInterrupted`, `isWorking`
+  and `needsUser`), in place of `status`, `substate`, `group`, `statusKey`,
+  `tone`, `live`, `working`, `turnOver`, `runsHere`, `durableOutcome` and
+  `forceExpanded`; `RUN_PHASE` and the phase predicates are gone.
 - **The CLI and the SDK packages need Node.js 22.22.2 or 24.15.** The
   terminal client, `@texra-ai/harness` and `@texra-ai/llm` support Node.js
   22.22.2 or later in 22.x, or 24.15 or later; `texra doctor` reports an

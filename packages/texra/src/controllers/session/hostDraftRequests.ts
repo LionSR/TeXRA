@@ -252,7 +252,6 @@ export class HostDraftRequests {
         const credential = yield* ownKeyCredential(
           take.roots,
           MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
-          'openai',
         ).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );

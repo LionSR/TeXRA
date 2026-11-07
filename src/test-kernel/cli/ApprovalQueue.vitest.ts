@@ -51,7 +51,8 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
       [
         makeRunView({ id: ROOT }),
         makeRunView({ id: RUN_A, parentId: ROOT }),
-        makeRunView({ id: RUN_B }),
+        // Another chat's run, which nothing in this terminal holds.
+        makeRunView({ id: RUN_B, holder: 'none' }),
       ],
       {
         requests: [foreign, local].map((payload) => ({
@@ -66,24 +67,17 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     expect(attentionRequests.get().map((request) => request.runId)).toEqual([
       RUN_A,
     ]);
-    expect(sessionListRunIds.get()).toEqual([ROOT]);
-
-    rootRunId.set(RUN_B);
-    expect(currentApproval.get()?.payload).toEqual(foreign);
-    expect(attentionRequests.get().map((request) => request.runId)).toEqual([
-      RUN_B,
-    ]);
-    expect(sessionListRunIds.get()).toEqual([RUN_B]);
-
-    rootRunId.set(undefined);
-    expect(currentApproval.get()).toBeUndefined();
-    expect(attentionRequests.get()).toEqual([]);
-    expect(sessionListRunIds.get()).toEqual([]);
+    // The child's request holds its parent open.
+    expect(sessionListRunIds.get()).toEqual([ROOT, RUN_A]);
 
     // A detached child still owned by this terminal keeps its approval
     // path even after the root conversation has been cleared.
+    rootRunId.set(undefined);
     const detachedView = viewWith(
-      [makeRunView({ id: RUN_A, runsHere: true }), makeRunView({ id: RUN_B })],
+      [
+        makeRunView({ id: RUN_A, holder: 'here' }),
+        makeRunView({ id: RUN_B, holder: 'none' }),
+      ],
       { requests: view.requests },
     );
     seedView(detachedView);

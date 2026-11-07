@@ -195,7 +195,7 @@ export interface Surface {
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
   /** The user's expansion choice per stream in the tree, absent until they
-   *  make one; `forceExpanded` outranks it. */
+   *  make one; a run that needs the user (`needsUser`) outranks it. */
   readonly expanded: ReadonlyMap<RunId, boolean>;
   /** Task groups inside a transcript, per stream. */
   readonly groups: ReadonlyMap<RunId, ReadonlyMap<string, boolean>>;

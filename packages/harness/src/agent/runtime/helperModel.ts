@@ -7,7 +7,7 @@
  * A helper call is gated, priced and reported to the usage log like every
  * model call; it writes no run history row, because it belongs to no run's history.
  */
-import { Effect, ScopedRef, type Scope } from 'effect';
+import { Effect, type Scope } from 'effect';
 
 import type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 import {
@@ -64,23 +64,9 @@ export const helperCall = Effect.fn('helperCall')(
     Scope.Scope | HttpClient.HttpClient | UsageLog | RouteRetries | Secrets
   > {
     const access = yield* Effect.provide(ModelAccess, modelAccessLayer(stores));
-    // ScopedRef masks its acquisition; a caller's deadline must still
-    // cancel a bind in progress.
-    const acquire = (rejected?: string) =>
-      access
-        .bind({ purpose: 'helper', runModel, rejected })
-        .pipe(Effect.interruptible);
-    const held = yield* ScopedRef.fromAcquire(acquire());
+    const bound = yield* access.bind({ purpose: 'helper', runModel });
     const { turn, usage } = yield* callModel({
-      binding: ScopedRef.get(held),
-      renew: (failed) =>
-        ScopedRef.set(held, acquire(failed.subscriptionToken)).pipe(
-          Effect.tapError((error) =>
-            Effect.logWarning('Could not rebind the helper model').pipe(
-              Effect.annotateLogs({ error }),
-            ),
-          ),
-        ),
+      binding: Effect.succeed(bound),
       ...(retries === undefined ? {} : { retries }),
       request: {
         mode: 'foreground',

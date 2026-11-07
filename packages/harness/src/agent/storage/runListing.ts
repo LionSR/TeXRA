@@ -53,7 +53,7 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
         return {
           id,
           timestamp: new Date(run.launchedAt).toISOString(),
-          outcome: run.durableOutcome,
+          outcome: run.outcome,
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
           resumable: resumeFrom.kind === 'checkpoint',

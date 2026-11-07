@@ -26,6 +26,7 @@ const kimiRoute = (fields: object, planOn: boolean) =>
 
 const onKimiCode = {
   kind: 'api-key',
+  endpoint: 'https://api.kimi.com/coding/v1',
   provider: 'kimiCode',
   usageRoute: 'kimi-code-subscription',
 };

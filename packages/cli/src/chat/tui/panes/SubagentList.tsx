@@ -8,7 +8,7 @@ import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { finishedToolCalls } from '@cli/runtime/runProgressRenderer';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
+import { formatLoopPositionLabel, runStatus } from '@ui/copy/runStatus';
 
 import { childElapsed } from '../state/childControls';
 import { killableRunId } from '../state/sessionView';
@@ -97,7 +97,7 @@ function SessionRow({
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly run: RunView;
 }): React.JSX.Element {
-  const statusLabel = runStatusLabel(run.statusKey);
+  const statusLabel = runStatus(run).word;
   const elapsed = childElapsed(run.runStartedAt ?? undefined, nowMs);
   const approval = pendingApprovalRowDisplay(pendingKinds);
   const positionLabel = formatLoopPositionLabel(run.turn);
@@ -111,7 +111,7 @@ function SessionRow({
       })
     : undefined;
   const summary = run.description;
-  const color = CHILD_TONE_COLOR[run.tone];
+  const color = CHILD_TONE_COLOR[runStatus(run).tone];
   const rollup =
     !expanded && run.rollup.total > 0
       ? `${run.rollup.total} total · ${run.rollup.running} running · ${run.rollup.finished} finished`

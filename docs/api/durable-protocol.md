@@ -11,7 +11,7 @@ Attach a [`SessionHost`](./harness/#sessionhost) with [`session.attach({ approve
 ```ts
 import { Effect } from 'effect';
 import { Sessions } from '@texra-ai/harness';
-import type { PendingRequest } from '@texra-ai/harness/schemas';
+import { isInterrupted, type PendingRequest } from '@texra-ai/harness/schemas';
 
 const resumeInterruptedRuns = Effect.gen(function* () {
   const sessions = yield* Sessions;
@@ -35,7 +35,7 @@ const resumeInterruptedRuns = Effect.gen(function* () {
 
   const view = session.view.current();
   for (const runView of view.runs.values()) {
-    if (runView.durableOutcome === null && !runView.live) {
+    if (isInterrupted(runView)) {
       const resumed = yield* session.resume(runView.id);
       const end = yield* resumed.result;
       console.log(`Resumed ${resumed.runId} -> ${end.outcome}`);

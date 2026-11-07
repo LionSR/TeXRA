@@ -14,11 +14,9 @@
 import { Predicate } from 'effect';
 import {
   MESSAGE_TYPES,
-  RUN_PHASE,
   TOOL_CALL_STATUS,
   isPlainAgentIdentity,
   isTranscriptEvent,
-  type RunPhase,
   type SessionEvent,
   type TaskGroup,
   type ToolUseLog,
@@ -28,7 +26,6 @@ import {
   applyCompactionActivityEvent,
   settleCompactionActivities,
 } from '@shared/runs/compactionActivityProjection';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { decodeToolUseLog } from '@shared/toolUse';
 
 import {
@@ -50,7 +47,7 @@ import {
   type TranscriptContext,
   type TranscriptWork,
 } from './transcriptState';
-import { phaseMoveOf } from './runRowReads';
+import { phaseMoveOf, type PhaseMove } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
 /** A stage start opens its task group whole; a stage end closes the group
@@ -66,7 +63,7 @@ function applyTaskGroup(
       id: event.id,
       name: event.label,
       startTime: d.at,
-      status: RUN_PHASE.RUNNING,
+      status: 'running',
       ...(event.parentId ? { parentGroupId: event.parentId } : {}),
       ...(event.kind != null ? { kind: event.kind } : {}),
     };
@@ -289,14 +286,15 @@ function closeText(
 /** A phase move ({@link phaseMoveOf}) moves the transcript boundary: a
  *  waiting or ended run closes every open stream, fails every open card as
  *  cut by the run's end (`ToolRow.cutByRunEnd`) and finishes every open
- *  compaction as interrupted. */
-function moveBoundary(d: Draft, phase: RunPhase): void {
+ *  compaction as interrupted; an ended one also closes every open task
+ *  group on its outcome, as the drain that ends a run no driver holds
+ *  does. */
+function moveBoundary(d: Draft, move: PhaseMove): void {
   const { ix } = d;
-  if (phase === RUN_PHASE.RUNNING) {
+  if (move.position === 'running') {
     ix.closed = false;
     return;
   }
-  if (phase !== RUN_PHASE.WAITING && !isTerminalOutcomePhase(phase)) return;
   ix.closed = true;
   ix.pendingModelResponseId = undefined;
   for (const id of ix.streams) {
@@ -318,7 +316,15 @@ function moveBoundary(d: Draft, phase: RunPhase): void {
     upsertCompactionRows(d, d.next, compactions);
     d.touched = true;
   }
+  const { outcome } = move;
+  if (outcome === null || !d.next.taskGroups.some(isOpenGroup)) return;
+  d.next.taskGroups = d.next.taskGroups.map((group) =>
+    isOpenGroup(group) ? { ...group, status: outcome, endTime: d.at } : group,
+  );
+  d.touched = true;
 }
+
+const isOpenGroup = (group: TaskGroup): boolean => group.status === 'running';
 
 /**
  * Apply one session event to a run's transcript, advancing the run's working

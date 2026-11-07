@@ -28,53 +28,27 @@ export const UserFollowUpSupportSchema = Schema.Enum(USER_FOLLOW_UP_SUPPORT);
 export type UserFollowUpSupport = typeof UserFollowUpSupportSchema.Type;
 
 /**
- * The live phase vocabulary. Membership questions are answered by the
- * predicates `isInFlightPhase` and `isTerminalOutcomePhase`; whether a run
- * is working right now is the session view's `working`.
+ * Where a run's loop stands: `ready` takes an activation (none yet, or its
+ * last one ended), `running` is inside a turn, `waiting` between turns. How
+ * it ended is the separate `RunOutcome`.
  */
-export const RUN_PHASE = {
-  RUNNING: 'running',
-  WAITING: 'waiting',
-  COMPLETED: RUN_OUTCOME.COMPLETED,
-  CANCELLED: RUN_OUTCOME.CANCELLED,
-  FAILED: RUN_OUTCOME.FAILED,
-} as const;
-
-export const RunPhaseSchema = Schema.Enum(RUN_PHASE);
-export type RunPhase = typeof RunPhaseSchema.Type;
+export const RunPositionSchema = Schema.Literals([
+  'ready',
+  'running',
+  'waiting',
+]);
+export type RunPosition = typeof RunPositionSchema.Type;
 
 /**
- * Subset of `RunPhase` used for task groups (`TaskGroupSchema.status`,
- * populated from `GROUP_START`/`GROUP_END` transcript rows).
- * No `WAITING`: task groups have no waiting concept, only running and the
- * three terminal `RunOutcome` values. Using the native vocabulary keeps the
- * completed/cancelled distinction the group-end row records visible in the
- * rendered value.
+ * A task group's status (`TaskGroupSchema.status`, from `stage.start` and
+ * `stage.end` rows, and the run's end for a group still open): running, or
+ * the outcome it closed with.
  */
-export const TaskGroupStatusSchema = Schema.Literals([
-  RUN_PHASE.RUNNING,
-  RUN_PHASE.COMPLETED,
-  RUN_PHASE.CANCELLED,
-  RUN_PHASE.FAILED,
+export const TaskGroupStatusSchema = Schema.Union([
+  Schema.Literal('running'),
+  RunOutcomeSchema,
 ]);
 export type TaskGroupStatus = typeof TaskGroupStatusSchema.Type;
-
-export const RUN_SUBSTATE = {
-  STARTING: 'starting',
-  RESUMING: 'resuming',
-} as const;
-
-export const RunSubstateSchema = Schema.Enum(RUN_SUBSTATE);
-export type RunSubstate = typeof RunSubstateSchema.Type;
-
-/**
- * Wire-level lifecycle status of a run with no lifecycle recorded yet. `as const`
- * is load-bearing: a bare `const` gives a *widening* literal type, which
- * widens back to `string` inside an object literal.
- */
-export const RUN_LIFECYCLE_READY = 'ready' as const;
-
-export type RunLifecycleStatus = RunPhase | typeof RUN_LIFECYCLE_READY;
 
 export const WorktreeInfoSchema = Schema.Struct({
   /** Absolute path of the worktree the agent is operating in. */

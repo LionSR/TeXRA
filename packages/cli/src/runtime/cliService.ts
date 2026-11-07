@@ -35,7 +35,7 @@ import {
   JsonStore,
   setLogSink,
 } from '@texra-ai/harness/node';
-import { ensureError, RUN_PHASE } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
@@ -227,7 +227,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         session.view.changes.pipe(
           Stream.map((view) =>
             [...view.runs.values()].some(
-              (run) => run.runsHere && run.status !== RUN_PHASE.WAITING,
+              (run) => run.holder === 'here' && run.position !== 'waiting',
             ),
           ),
           Stream.changes,

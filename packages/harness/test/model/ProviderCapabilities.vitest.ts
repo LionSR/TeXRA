@@ -25,6 +25,7 @@ const chatgptConfig = (config: ModelConfig) =>
     Effect.map((facts) =>
       routeConfig(config, {
         kind: 'chatgpt-subscription',
+        endpoint: 'https://api.openai.com/v1',
         contextWindow:
           facts.chatgptContextWindow ??
           config.codexSubscription?.contextWindow ??
