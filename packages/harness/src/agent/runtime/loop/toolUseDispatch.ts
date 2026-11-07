@@ -586,12 +586,17 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   }
   // A result the schema refuses becomes an error result the model can read;
   // the projection of an error result cannot itself fail.
-  const plugin = (yield* ToolRegistry).entries.get(
-    dispatch.pluginOf.get(fact.toolName) ?? '',
-  );
+  // A tool no loaded plugin offers states no fact: the check names it.
+  const pluginId = dispatch.pluginOf.get(fact.toolName);
+  const plugin =
+    pluginId === undefined
+      ? undefined
+      : (yield* ToolRegistry).entries.get(pluginId);
   const extracted = yield* Effect.try({
     try: () =>
-      extractToolAttachments(result, (facts) => checkOwnFacts(plugin, facts)),
+      extractToolAttachments(result, (facts) =>
+        checkOwnFacts(fact.toolName, plugin, facts),
+      ),
     catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
