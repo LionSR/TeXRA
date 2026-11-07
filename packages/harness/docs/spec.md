@@ -176,15 +176,30 @@ after close is a defect; a detached one is logged and dropped
 (`agent/runtime/SessionEvents.ts#'Session publication after the plane closed'`,
 `#'Session publication dropped: the plane has closed'`).
 
+Once a job's transaction commits, the publisher SHALL publish what the job
+wrote, from memory, to the session's subscribers, one batch per job in commit
+order: the batch's display rows as a display read of the same commits returns
+them, and the commit it reached (`agent/runtime/SessionEvents.ts#publish`,
+`controllers/session/Database.ts#displayRows`). Nothing in the session reads
+its own writes back to learn what it committed. A tail reads from the store only
+the rows it starts behind the publisher's last published commit, then follows
+the batches (`agent/runtime/SessionEvents.ts#all`); the session's view takes its
+rows the same way (`controllers/session/sessionInputs.ts#sessionInputsLayer`).
+Every projection is caught up when the store opens, and each append keeps it
+current in its own transaction, so a read never checks it
+(`controllers/session/Database.ts#upkeep.catchUp`,
+`controllers/session/projections.ts#follow`).
+
 Above the publisher, the session's own door (`SessionLog.transact`) SHALL return
-only after the session's fold has folded every commit the job made
-(`controllers/session/sessionStore.ts#settleTo`).
+only after the session's view has applied every commit the job made
+(`controllers/session/sessionStore.ts#viewApplied`).
 A trace row emitted on its own reaches the publisher through
 `SessionLog.publish` (`shared/session/sessionLog.ts#SessionLogShape`); a call's
 card rows and a turn's closing rows commit inside the run's own batches instead
 (`agent/runtime/loop/toolUseDispatch.ts#cardRows`,
 `agent/runtime/loop/toolUse.ts#log.closure`). `SessionLog.settled` is the
-barrier after every job enqueued before it
+barrier after every job enqueued before it, once the terminal-result presenter
+has run over the view's rows past it
 (`controllers/session/sessionStore.ts#settled`).
 
 ### 2.4 Row versions and the store gate
@@ -661,10 +676,11 @@ refused at once with `STORE_HELD_MESSAGE`, never waited for
 (`controllers/session/Database.ts#STORE_HELD_MESSAGE`, `#exclusive`). The
 holder is the store's one writer and one reader; a cold listing of a held
 project fails the same way (`controllers/session/readSessionView.ts`). The
-global store is shared across processes, which see each other's commits through
-a 250 ms poll of SQLite's `data_version`
-(`controllers/session/Database.ts#'PRAGMA data_version'`); a project store
-runs no poll.
+global store is shared across processes and holds values alone; a change
+another process makes to it is seen through a 250 ms poll of SQLite's
+`data_version` (`controllers/session/Database.ts#'PRAGMA data_version'`). A
+project store runs no poll: its holder learns what it committed from its own
+publisher.
 
 ### 7.1 Aggregates
 

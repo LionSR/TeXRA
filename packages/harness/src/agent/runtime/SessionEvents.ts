@@ -1,11 +1,13 @@
 /**
- * The session event plane over its root's SQLite database. Publication commits
- * an ordered batch before waking readers. Listing and aggregate reads are
- * finite; the tails share one drain of the log (`logTails`). Wake
- * counters and commit ordinals are separate coordinates.
+ * The session event plane over its root's SQLite database. Each job commits
+ * one transaction, then publishes the rows it wrote, from memory, to the
+ * session's subscribers in commit order. Listing and aggregate reads are
+ * finite; a tail reads what it starts behind from the store and follows the
+ * publisher's batches after.
  */
 // Third-party imports
 import {
+  Array as Arr,
   Cause,
   Deferred,
   Effect,
@@ -13,8 +15,11 @@ import {
   Fiber,
   Layer,
   Option,
+  PubSub,
   Queue,
   Stream,
+  SubscriptionRef,
+  type Take,
 } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
@@ -22,16 +27,21 @@ import { writeLogLine } from '@logger/logSink';
 import {
   isDisplayRow,
   type AggregateId,
+  type CommitOrdinal,
+  type DisplayRow,
   type SessionRow,
 } from '@shared/schemas';
-import { Database, type DatabaseWriteFailed } from '@shared/session/database';
+import {
+  Database,
+  type DatabaseReadFailed,
+  type DatabaseWriteFailed,
+} from '@shared/session/database';
 import { closesRunWindow } from '@shared/session/runRowReads';
 import {
   InPublisherJob,
-  logTails,
   SessionEvents,
   type Append,
-  type JobOptions,
+  type CommittedBatch,
   type OpenWork,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
@@ -164,14 +174,30 @@ export const sessionEventsLayer = Layer.effect(
   Effect.gen(function* () {
     const log = yield* Database;
     const { track, openWork } = openWorkTracker();
+    const committed = yield* PubSub.unbounded<Take.Take<CommittedBatch>>();
+    let head = yield* log.currentCommit;
+    /** What a committed job wrote, tracked and published in commit order:
+     *  `head` moves first, so a reader that subscribes between the two
+     *  steps reads the batch from the store and drops its copy. */
+    const publish = (rows: readonly SessionRow[]) =>
+      Effect.suspend(() => {
+        const last = rows.at(-1);
+        if (last === undefined) return Effect.void;
+        track(rows);
+        head = last.commit;
+        return PubSub.publish(committed, [
+          { rows: log.displayRows(rows), through: last.commit },
+        ]);
+      });
     /** One job: one transaction (`Database.job`), or in its place with
-     *  none (`order`). What its rows leave open is tracked once the
-     *  transaction committed, so a rolled-back job leaves nothing behind. */
+     *  none (`order`). What it wrote is published once the transaction
+     *  committed, so a rolled-back job publishes nothing, and a commit is
+     *  never left unpublished by an interrupt. */
     const inTransaction = <A, E>(
-      job: (append: Append) => Effect.Effect<A, E>,
+      job: (append: Append, appended: SessionRow[]) => Effect.Effect<A, E>,
       order = false,
     ): Effect.Effect<A, E | DatabaseWriteFailed> => {
-      if (order) return job(ordering);
+      if (order) return job(ordering, []);
       const appended: SessionRow[] = [];
       // Both of `appendAll`'s rejections (a closed aggregate, a failed
       // write) pass through typed, not as defects.
@@ -179,9 +205,11 @@ export const sessionEventsLayer = Layer.effect(
         Effect.tap(log.appendAll(events), (rows) =>
           Effect.sync(() => appended.push(...rows)),
         );
-      return log
-        .job(Effect.suspend(() => job(append)))
-        .pipe(Effect.tap(() => Effect.sync(() => track(appended))));
+      return Effect.uninterruptibleMask((restore) =>
+        restore(log.job(Effect.suspend(() => job(append, appended)))).pipe(
+          Effect.tap(() => publish(appended)),
+        ),
+      );
     };
     const inbox = yield* Queue.unbounded<PublicationJob, Cause.Done>();
     // One job per take, never a batch: a job the close refuses is one the
@@ -233,31 +261,37 @@ export const sessionEventsLayer = Layer.effect(
           ).pipe(withLogChannel(CHANNEL));
       }),
     );
-    yield* Effect.addFinalizer(() => drain);
+    // The tails end once the inbox has run dry.
+    yield* Effect.addFinalizer(() =>
+      Effect.andThen(drain, PubSub.end(committed, Exit.void)),
+    );
     const enqueue = (job: PublicationJob): boolean =>
       Queue.offerUnsafe(inbox, job);
-    const transact = Effect.fn('transact')(function* <A, E>(
-      job: (append: Append) => Effect.Effect<A, E>,
-      options: JobOptions = {},
+    /** Enqueue `job` and wait for its exit. */
+    const awaited = Effect.fn('awaited')(function* <A, E>(
+      job: Effect.Effect<A, E | DatabaseWriteFailed>,
     ): Effect.fn.Return<A, E | DatabaseWriteFailed> {
       if (yield* InPublisherJob) return yield* reentered;
       const done = yield* Deferred.make<A, E | DatabaseWriteFailed>();
-      const admitted = enqueue(
-        settling(inTransaction(job, options.order), done),
-      );
-      if (!admitted) {
+      if (!enqueue(settling(job, done))) {
         return yield* Effect.die(
           new Error('Session publication after the plane closed'),
         );
       }
       return yield* Deferred.await(done);
     });
+    const transact: SessionEventsShape['transact'] = (job, options = {}) =>
+      awaited(inTransaction(job, options.order));
     const removeRun: SessionEventsShape['removeRun'] = (
       id,
       expectedStartCommit,
     ) =>
-      transact(() => log.runRemoval(id, expectedStartCommit)).pipe(
-        Effect.tap((rows) => Effect.sync(() => track(rows))),
+      awaited(
+        inTransaction((_, appended) =>
+          Effect.tap(log.runRemoval(id, expectedStartCommit), (rows) =>
+            Effect.sync(() => appended.push(...rows)),
+          ),
+        ),
       );
     const detach: SessionEventsShape['detach'] = (job, options = {}) => {
       const admitted = enqueue({
@@ -288,11 +322,72 @@ export const sessionEventsLayer = Layer.effect(
       removeRun,
       drain,
       openWork,
+      head: () => head,
+      subscribe: PubSub.subscribe(committed),
       listing: () =>
         Stream.fromIterableEffect(log.readListing()).pipe(
           Stream.filter(isDisplayRow),
         ),
-      all: yield* logTails(log),
+      all: (fromCommit, drained) =>
+        Stream.unwrap(
+          Effect.map(PubSub.subscribe(committed), (subscription) => {
+            // Read after subscribing: every batch past it reaches the
+            // subscription.
+            const published = head;
+            return released(
+              Stream.concat(
+                fromCommit < published
+                  ? readThrough(log.readDisplay, fromCommit, published)
+                  : Stream.empty,
+                Stream.flattenTake(Stream.fromSubscription(subscription)),
+              ),
+              fromCommit,
+              drained,
+            );
+          }),
+        ),
     };
   }),
 );
+
+/** One read of the rows above `fromCommit` through `upTo`, never past it,
+ *  as batches: a page at a time, then the whole range, rows the store no
+ *  longer held included. */
+const readThrough = (
+  read: (
+    fromCommit: CommitOrdinal,
+  ) => Stream.Stream<DisplayRow, DatabaseReadFailed>,
+  fromCommit: CommitOrdinal,
+  upTo: CommitOrdinal,
+): Stream.Stream<CommittedBatch, DatabaseReadFailed> =>
+  Stream.concat(
+    read(fromCommit).pipe(
+      Stream.takeWhile((event) => event.commit <= upTo),
+      Stream.mapArray((rows) => [
+        { rows, through: Arr.lastNonEmpty(rows).commit },
+      ]),
+    ),
+    Stream.succeed({ rows: [], through: Math.max(fromCommit, upTo) }),
+  );
+
+/** The rows of `batches` above `fromCommit`, each once. `drained`, when
+ *  given, receives the commit each batch covered, rows the store no longer
+ *  held included, only once its rows have reached the reader (as the reader
+ *  pulls past them). A row the store no longer holds emits nothing, so a
+ *  reader that must know the tail passed an ordinal (the NDJSON detach
+ *  drain) waits on this coordinate, never on the events alone. */
+const released = <E>(
+  batches: Stream.Stream<CommittedBatch, E>,
+  fromCommit: CommitOrdinal,
+  drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
+): Stream.Stream<DisplayRow, E> =>
+  Stream.suspend(() => {
+    let at = fromCommit;
+    return Stream.flatMap(batches, ({ rows, through }) => {
+      const fresh = Stream.fromIterable(rows.filter((row) => row.commit > at));
+      at = Math.max(at, through);
+      if (drained === undefined) return fresh;
+      const covered = Stream.fromEffect(SubscriptionRef.set(drained, at));
+      return Stream.concat(fresh, Stream.drain(covered));
+    });
+  });

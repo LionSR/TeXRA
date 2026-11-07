@@ -4,8 +4,9 @@
  * `input_history`. Each family's row is replaced in place in one
  * `BEGIN IMMEDIATE` with no aggregate claim, and decodes with its family's
  * schema where it is read; a row that no longer decodes fails that read.
- * `Database` hands it the connection's statements, transaction and wake
- * level, over which it also serves the values' change feed.
+ * `Database` hands it the connection's statements and transaction, and the
+ * counter of value writes its change feed wakes on: this module moves it
+ * for its own writes, the global store's poll for another process's.
  */
 import {
   Clock,
@@ -89,11 +90,12 @@ export function currentValues(store: {
   readonly query: <A, E>(
     read: Effect.Effect<A, E>,
   ) => Effect.Effect<A, DatabaseReadFailed>;
-  readonly level: SubscriptionRef.SubscriptionRef<number>;
+  /** Moved once per committed value write. */
+  readonly written: SubscriptionRef.SubscriptionRef<number>;
   /** Record for the gate that a value was written at this build's version. */
   readonly valueWritten: Effect.Effect<void, SqlError>;
 }): Pick<Database['Service'], 'values' | 'inputHistory'> {
-  const { exec, execOne, transact, query, level, valueWritten } = store;
+  const { exec, execOne, transact, query, written, valueWritten } = store;
   const valueRow = (family: string, key: string) =>
     execOne(
       'SELECT key, value FROM current_value WHERE family = ? AND key = ?',
@@ -108,9 +110,11 @@ export function currentValues(store: {
           ),
         ),
       ),
-    modify: (family, key, change) =>
-      transact(
+    modify: (family, key, change) => {
+      let wrote = false;
+      return transact(
         Effect.gen(function* () {
+          wrote = false;
           const row = yield* valueRow(family.name, key);
           const result = change(
             row === undefined ? undefined : decodeValue(family, row),
@@ -123,6 +127,7 @@ export function currentValues(store: {
               'DELETE FROM current_value WHERE family = ? AND key = ?',
               [family.name, key],
             );
+            wrote = row !== undefined;
             return result;
           }
           const value = Schema.encodeSync(Schema.fromJsonString(family.schema))(
@@ -136,13 +141,20 @@ export function currentValues(store: {
               yield* Clock.currentTimeMillis,
             ]);
             yield* valueWritten;
+            wrote = true;
           }
           return result;
         }),
       ).pipe(
+        Effect.tap(() =>
+          wrote
+            ? SubscriptionRef.update(written, (count) => count + 1)
+            : Effect.void,
+        ),
         Effect.flatMap(Effect.fromResult),
         Effect.map(([value]) => value),
-      ),
+      );
+    },
     list: (family) =>
       query(
         exec(
@@ -161,7 +173,7 @@ export function currentValues(store: {
      *  failed read is logged and read again, holding the wake until it
      *  reads (the database poll's own backoff), so no change is missed. */
     changes: (family, keys) =>
-      SubscriptionRef.changes(level).pipe(
+      SubscriptionRef.changes(written).pipe(
         Stream.mapEffect(() =>
           exec(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
             Effect.map((rows) =>

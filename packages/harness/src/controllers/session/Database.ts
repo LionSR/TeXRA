@@ -24,7 +24,6 @@ import {
   Clock,
   Context,
   Effect,
-  Exit,
   Layer,
   Option,
   Schema,
@@ -62,7 +61,7 @@ import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
-import { LISTED_TYPES, projectionUpkeep } from './projections';
+import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
 import {
   EVENT_COLUMNS,
   EVENT_FROM,
@@ -80,6 +79,7 @@ import {
 } from './rowCodec';
 import {
   AGGREGATE,
+  DISPLAY_READ_KINDS,
   DISPLAY_READ_TYPES,
   PROJECTED_COLUMNS,
   PROJECTED_FROM,
@@ -138,10 +138,6 @@ SELECT s.kind, s.logical_id AS logicalId, s.uid,
 FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
 WHERE s.id IN (${AGGREGATE_LIST})
 `;
-/** The aggregates whose existence changed after an ordinal
- *  (`aggregate_change`, `storeSchema.ts`), a primary-key range. */
-const CHANGED_SINCE = `SELECT kind, logical_id AS logicalId, change
-  FROM aggregate_change WHERE change > ? ORDER BY change`;
 
 /** Stored rows a display page reads before it runs on to its batch's end. */
 const DISPLAY_PAGE_ROWS = 2000;
@@ -173,6 +169,17 @@ const displayUnion = (where: string, order: string, arm?: string) =>
     UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
     ${arm === undefined ? '' : `UNION ALL ${arm}`}
   ) WHERE ${where} ORDER BY ${order}`;
+/** A committed batch's display rows, as a display read of its commits
+ *  selects and settles them: the display kinds and tool results, each priced
+ *  row's projected `usage` row after it, each card's output projected. */
+const displayRows = (rows: readonly SessionRow[]) =>
+  settleCards(
+    rows.flatMap((row) => [
+      ...(DISPLAY_READ_KINDS.has(row.type) ? [row] : []),
+      ...usageRows(row),
+    ]),
+  ).filter(isDisplayRow);
+
 /** How a store is opened: a project store, created if absent
  *  (`persistent`) or only opened (`existing`), is held exclusively by this
  *  process for the connection's life; the `global` store is shared across
@@ -258,12 +265,9 @@ export const databaseLayer = (
           ),
           mapDatabaseFailure(openFailed),
         );
-      const level = yield* SubscriptionRef.make(0);
-      const observedCommit = yield* SubscriptionRef.make(0);
-      /** Commits only move forward: a poll that read the high-water mark
-       *  before a local commit never sets it back. */
-      const observe = (commit: number) =>
-        SubscriptionRef.update(observedCommit, (c) => Math.max(c, commit));
+      /** Moved by every value write, this process's or (on the global
+       *  store, by the poll) another's: what `values.changes` wakes on. */
+      const valuesWritten = yield* SubscriptionRef.make(0);
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
       const commitFromRows = ([row]: readonly SqlRow[]) =>
         row === undefined
@@ -301,10 +305,6 @@ export const databaseLayer = (
         );
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
-      );
-      yield* SubscriptionRef.set(
-        observedCommit,
-        yield* currentCommit.pipe(mapDatabaseFailure(openFailed)),
       );
       yield* gate.pipe(mapDatabaseFailure(openFailed));
       const dependents = `WITH RECURSIVE dependents(id) AS (
@@ -361,8 +361,8 @@ export const databaseLayer = (
       let version = (yield* execOne(dataVersion, []).pipe(
         mapDatabaseFailure(openFailed),
       ))?.data_version;
-      // Only the global store has other writers to watch for. A failed read
-      // logs and retries; `version` moves once its commit is read.
+      // Only the global store has other writers to watch for, and it holds
+      // values alone. A failed read logs and retries.
       if (mode === 'global')
         yield* Effect.forkScoped(
           Stream.tick('250 millis').pipe(
@@ -372,10 +372,11 @@ export const databaseLayer = (
                   const next = (yield* query(execOne(dataVersion, [])))
                     ?.data_version;
                   if (next !== version) {
-                    const commit = yield* query(currentCommit);
                     version = next;
-                    yield* observe(commit);
-                    yield* SubscriptionRef.update(level, (wake) => wake + 1);
+                    yield* SubscriptionRef.update(
+                      valuesWritten,
+                      (wake) => wake + 1,
+                    );
                   }
                 },
                 Effect.tapError((error) =>
@@ -397,31 +398,7 @@ export const databaseLayer = (
       const withTransaction = SqlClient.makeWithTransaction({
         transactionService: sql.transactionService,
         spanAttributes: [['db.system.name', 'sqlite']],
-        acquireConnection: Effect.fn('Database.acquireConnection')(
-          function* (restore) {
-            const mode = yield* TxMode;
-            const connection = yield* restore(sql.reserve);
-            // Runs before the release (added after it): a COMMIT is published
-            // before the connection goes, even with an interrupt pending.
-            yield* Effect.addFinalizer((exit) =>
-              mode === 'write' && Exit.isSuccess(exit)
-                ? Effect.gen(function* () {
-                    yield* observe(
-                      commitFromRows(
-                        yield* connection.executeUnprepared(
-                          highWater,
-                          [],
-                          undefined,
-                        ),
-                      ),
-                    );
-                    yield* SubscriptionRef.update(level, (wake) => wake + 1);
-                  }).pipe(Effect.orDie)
-                : Effect.void,
-            );
-            return connection;
-          },
-        ),
+        acquireConnection: (restore) => restore(sql.reserve),
         begin: (connection) =>
           Effect.flatMap(TxMode, (mode) =>
             connection.executeUnprepared(
@@ -702,10 +679,9 @@ export const databaseLayer = (
         openFailed,
       ).pipe(Effect.repeat({ until: (done) => done }));
       return {
-        observedCommit,
         movedAside,
-        level,
         currentCommit: query(currentCommit),
+        displayRows,
         readDisplay: (fromCommit) => {
           // Pages are separate snapshots: a deletion marker seen stays in view.
           const tombstones = new Map<number, SessionRow>();
@@ -749,7 +725,7 @@ export const databaseLayer = (
           execOne,
           transact,
           query,
-          level,
+          written: valuesWritten,
           valueWritten: Effect.asVoid(
             exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
           ),
@@ -771,30 +747,19 @@ export const databaseLayer = (
             ]).pipe(Effect.map((rows) => rows.filter(isDisplayRow))),
           ),
         aggregateState: (ids) => query(readState(ids)),
-        readInputBatch: (ids, fromCommit, checkedIds, since) =>
+        readInputBatch: (ids, fromCommit, throughCommit, checkedIds) =>
           snapshot(
             Effect.gen(function* () {
-              const cursor = yield* currentCommit;
-              const changed =
-                since === undefined ? [] : yield* exec(CHANGED_SINCE, [since]);
-              const change = Number(changed.at(-1)?.change ?? since ?? 0);
               const events = yield* decodedRows(inputRows, [
                 LISTED_TYPES,
                 ...aggregateLists(ids),
                 LISTED_TYPES,
                 fromCommit,
-                cursor,
+                throughCommit,
               ]);
-              const checked = new Set(checkedIds);
-              for (const row of changed)
-                checked.add(aggregateOf(row.kind, row.logicalId));
-              const checkedAggregateIds = [...checked];
               return {
-                cursor,
-                change,
                 events,
-                checkedAggregateIds,
-                state: yield* readState(checkedAggregateIds),
+                state: yield* readState(checkedIds),
                 damaged: yield* reader.damaged,
               };
             }),

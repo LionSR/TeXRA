@@ -279,15 +279,13 @@ const graph = (
   );
 };
 
-/** The run history as the session builds it: over its store's log, whose
- *  tail is delivered, so a batch returns once the view folded it. */
+/** The run history as the session builds it: over its store's log, so a
+ *  batch returns once the view applied it. */
 const runHistoryOverStore = Layer.effect(
   RunHistory,
-  Effect.gen(function* () {
-    const store = yield* makeSessionStore('/workspace/framing');
-    yield* store.deliver(() => {});
-    return makeRunHistory(store.log);
-  }),
+  Effect.map(makeSessionStore('/workspace/framing'), (store) =>
+    makeRunHistory(store.log),
+  ),
 ).pipe(Layer.provide(ProcessIdentity.layer(SELF)));
 
 /** What a renderer would draw of each state: the run's status and the
@@ -794,7 +792,6 @@ describe('the session event table and its one publisher', () => {
       return Effect.gen(function* () {
         const db = yield* Database;
         const now = yield* Clock.currentTimeMillis;
-        const opened = yield* SubscriptionRef.get(db.level);
         const first = yield* db.appendAll([runStart, olderStart, waiting]);
         const second = yield* db.appendAll([requested]);
 
@@ -811,8 +808,6 @@ describe('the session event table and its one publisher', () => {
         expect(first.every((e) => e.origin === SELF && e.at === now)).toBe(
           true,
         );
-        // One wake per committed batch, independent of its event ordinal.
-        expect(yield* SubscriptionRef.get(db.level)).toBe(opened + 2);
         expect(yield* db.currentCommit).toBe(4);
         // A run begins with exactly one `run.start` (decision 9): a second
         // creation of a live run is refused, and the sequence it allocated
@@ -822,7 +817,6 @@ describe('the session event table and its one publisher', () => {
         );
         expect((yield* db.appendAll([waiting]))[0]?.seq).toBe(4);
         expect(yield* db.currentCommit).toBe(5);
-        expect(yield* SubscriptionRef.get(db.level)).toBe(opened + 3);
       }).pipe(Effect.provide(substrate(storage)));
     },
   );

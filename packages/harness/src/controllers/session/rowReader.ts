@@ -58,10 +58,12 @@ export const PROJECTED_FROM = `projected_row p
   JOIN event_sequence s ON s.id = e.aggregate`;
 /** The kinds a display read selects: the display rows, and the settlements
  *  their tool cards' output is projected from (`settleCards`). */
-export const DISPLAY_READ_TYPES = JSON.stringify([
+export const DISPLAY_READ_KINDS: ReadonlySet<string> = new Set([
   ...DISPLAY_ROW_TYPES,
   'tool.result',
 ]);
+/** {@link DISPLAY_READ_KINDS} as the JSON list a display read binds. */
+export const DISPLAY_READ_TYPES = JSON.stringify([...DISPLAY_READ_KINDS]);
 /** The listing (each aggregate's `listing_entry` rows and each run's spend
  *  on its newest priced row's envelope, in commit order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
  *  store is never `ANALYZE`d), each by its event's primary key. */

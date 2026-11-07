@@ -190,14 +190,25 @@ export const sessionOwnersLayer = (
           permission: sessionPermission(approvals, interactions),
         }),
       );
-      // The requests, over the store's removal door.
+      // The requests, over the store's removal door: a committed removal's
+      // local half (the inbox forgets its runs) and its collection follow
+      // from the rows it returns.
       const database = yield* Database;
       const requests = sessionRequests({
         sessionLog: log,
         view,
         log: {
           aggregateState: database.aggregateState,
-          removeRun: store.removeRun,
+          removeRun: (id, expectedStartCommit) =>
+            Effect.tap(store.removeRun(id, expectedStartCommit), (rows) =>
+              Effect.sync(() => {
+                for (const row of rows) {
+                  if (row.type !== 'run.removed') continue;
+                  for (const runId of row.runIds) inbox.forget(runId);
+                  deletions.removed(row);
+                }
+              }),
+            ),
         },
         plugins: yield* ToolRegistry,
         services: yield* Effect.context<RunServices>(),
@@ -260,20 +271,12 @@ export const sessionOwnersLayer = (
       // and the dependency probes, held for its life and probed beside the
       // open (the gate withholds nothing until they answer).
       const plugins = yield* ToolRegistry;
-      // The local half of a committed removal (its plugin rows go with it)
-      // and its collection.
-      yield* store
-        .deliver((runId, marker) => {
-          inbox.forget(runId);
-          deletions.removed(marker);
-        })
-        .pipe(Scope.provide(consumers));
-      // The registry's phase notification rides the fold-gated tail: its
+      // The registry's phase notification rides the applied rows: its
       // waiters read `RunView.status` once the view holds a row's state.
       // Host notices go to the author. `log.settled` waits for this reader.
       const announce = announceWrites(factKindsOf(plugins.entries.values()));
       yield* Stream.runForEach(
-        store.folded,
+        store.applied,
         Effect.fnUntraced(function* (event) {
           yield* announce(event);
           if (store.closed()) return;
@@ -286,15 +289,7 @@ export const sessionOwnersLayer = (
             ),
           );
         }),
-      ).pipe(
-        Effect.catch(
-          logFailure(
-            `Session ${roots.storage} stopped delivering folded rows: the log could not be read.`,
-            Effect.logError,
-          ),
-        ),
-        Effect.forkIn(consumers),
-      );
+      ).pipe(Effect.forkIn(consumers));
       yield* sweepLeftoverRuns.pipe(Effect.provide(session), Effect.forkScoped);
       yield* Effect.forkScoped(deletions.pending);
       yield* (yield* ToolAvailability).hold(roots);

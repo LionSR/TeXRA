@@ -17,7 +17,6 @@ import {
   type Result,
   Schema,
   type Stream,
-  type SubscriptionRef,
 } from 'effect';
 import { AggregateIdSchema } from '@shared/schemas';
 import type {
@@ -66,7 +65,7 @@ export class DatabaseOpenFailed extends Schema.TaggedError<DatabaseOpenFailed>()
   override readonly message = storeFailureMessage(this.cause);
 }
 
-/** A batch was rejected whole: no member, sequence or wake level moved. */
+/** A batch was rejected whole: no member or sequence moved. */
 export class DatabaseWriteFailed extends Schema.TaggedError<DatabaseWriteFailed>()(
   'DatabaseWriteFailed',
   storeFailure,
@@ -160,10 +159,9 @@ export interface CurrentValues {
     DatabaseReadFailed
   >;
   /**
-   * Emits as subscribed, then after each commit, by this process or
-   * another, that changed one of `keys`' values: the root's wake level
-   * narrowed inside the store to those rows. A read that fails is logged and
-   * retried, so no change is missed.
+   * Emits as subscribed, then after each value write, by this process or
+   * (on the global store) another, that changed one of `keys`' values. A
+   * read that fails is logged and retried, so no change is missed.
    */
   readonly changes: (
     family: Pick<ValueFamily<unknown>, 'name'>,
@@ -209,18 +207,19 @@ export class Database extends Context.Service<
       readonly SessionRow[],
       DatabaseAggregateClosed | DatabaseWriteFailed
     >;
-    /** Run `body` as one write transaction, whole or not at all; readers
-     *  wake after. It holds the write lock, so `body` is database-only. */
+    /** Run `body` as one write transaction, whole or not at all. It holds
+     *  the write lock, so `body` is database-only. */
     readonly job: <A, E>(
       body: Effect.Effect<A, E>,
     ) => Effect.Effect<A, E | DatabaseWriteFailed>;
-    /** Replaying wake counter. Local commits advance it (and, on the global
-     *  store, another process's); it is never interpreted as an event ordinal. */
-    readonly level: SubscriptionRef.SubscriptionRef<number>;
-    /** SQLite's committed high-water mark, which need not equal the wake level. */
+    /** SQLite's committed high-water mark. */
     readonly currentCommit: Effect.Effect<CommitOrdinal, DatabaseReadFailed>;
-    /** Last committed ordinal observed by this connection, for synchronous drain anchors. */
-    readonly observedCommit: SubscriptionRef.SubscriptionRef<CommitOrdinal>;
+    /** The display rows a committed batch shows, as a display read of the
+     *  same commits returns them (each tool card's output projected, the
+     *  priced rows' `usage` rows added), from the rows in memory. */
+    readonly displayRows: (
+      rows: readonly SessionRow[],
+    ) => readonly DisplayRow[];
     /** The display rows from `fromCommit`, filtered in SQL (a tail never
      *  decodes private records to drop them), a page at a time; each page is
      *  its own snapshot, so a deletion marker a page saw is delivered regardless. */
@@ -282,22 +281,18 @@ export class Database extends Context.Service<
         cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
       ) => Effect.Effect<void, Error>;
     };
-    /** The event prefix, current existence and damaged runs from one read:
-     *  the state of `checkedIds` and of every aggregate whose existence
-     *  changed after `changedSince` (a row that changes one is such a change
-     *  too); `change` is the last such change the read saw, or `changedSince`
-     *  when there was none. */
+    /** From one snapshot: the rows above `fromCommit` through
+     *  `throughCommit` a session's view reads (every listing kind, and every
+     *  row of the aggregates `ids`), the existence of `checkedIds`, and the
+     *  runs this build cannot open. */
     readonly readInputBatch: (
       ids: readonly AggregateId[],
       fromCommit: CommitOrdinal,
+      throughCommit: CommitOrdinal,
       checkedIds: readonly AggregateId[],
-      changedSince?: number,
     ) => Effect.Effect<
       {
-        readonly cursor: CommitOrdinal;
-        readonly change: number;
         readonly events: readonly SessionRow[];
-        readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];
         readonly damaged: readonly UnreadableRun[];
       },

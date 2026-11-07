@@ -25,6 +25,7 @@ import {
   listingTypeOf,
   pendingKeyOf,
   SessionRowDraftSchema,
+  SessionRowSchema,
   sumUsageStats,
   TokenUsageStatsSchema,
   type AggregateId,
@@ -99,6 +100,27 @@ function pricedUsage(event: SessionRow): TokenUsageStats | null {
   return usage;
 }
 
+/** The `usage` display row a priced row projects, as a display read of the
+ *  store returns it, or none. */
+export function usageRows(event: SessionRow): readonly SessionRow[] {
+  if (event.type === 'usage') return [];
+  const usage = pricedUsage(event);
+  if (usage === null) return [];
+  const { aggregateId, seq, commit, origin, at } = event;
+  return [
+    decodeUsageRow({
+      type: 'usage',
+      usage,
+      aggregateId,
+      seq,
+      commit,
+      origin,
+      at,
+    }),
+  ];
+}
+const decodeUsageRow = Schema.decodeUnknownSync(SessionRowSchema);
+
 /** The projections this build maintains; {@link PROJECTORS} has one each. */
 const PROJECTION_NAMES = ['listing', 'usage'] as const;
 type ProjectionName = (typeof PROJECTION_NAMES)[number];
@@ -163,11 +185,14 @@ const PROJECTORS = {
 const PROJECTION_INPUTS = new Map(
   PROJECTION_NAMES.map((name) => [name, new Set(PROJECTORS[name].inputs)]),
 );
-/** The listing's input kinds and the stored `usage` kind, as a JSON list. */
-export const LISTED_TYPES = JSON.stringify([
+/** The listing's input kinds and the `usage` kind: what a view reads of
+ *  every aggregate, beside its subscribed aggregates' rows. */
+export const LISTED_KINDS: ReadonlySet<string> = new Set([
   ...PROJECTORS.listing.inputs,
   'usage',
 ]);
+/** {@link LISTED_KINDS} as the JSON list a read binds. */
+export const LISTED_TYPES = JSON.stringify([...LISTED_KINDS]);
 /** One projection's checkpoint: its projector's version and the commit it
  *  read through. A name this build does not know (a later build's, or one
  *  an earlier build kept) is ignored. */

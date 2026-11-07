@@ -2,8 +2,8 @@
  * Each run's trace sink (the session log's `publish`, `lost` and `closure`): its rows in the publisher's order, the
  * transient text of what it streams, and what it left open. A row the store
  * refused is the run's own to hear at its end (`lost`), never another
- * writer's; the text a committed row closes is dropped as the tail delivers
- * it (`committed`). The trace's one read side is those rows and that text
+ * writer's; the text a committed row closes is dropped as the publisher
+ * publishes it (`committed`). The trace's one read side is those rows and that text
  * read back (`replayTrace`).
  */
 import { Effect, Stream, Struct, SubscriptionRef } from 'effect';
@@ -38,7 +38,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { textSince, type InflightText } from './sessionSources';
 
-/** A session's trace sink, and the tail's hand-off of each committed row. */
+/** A session's trace sink, and the hand-off of each published row. */
 interface RunTraceSink extends Pick<
   SessionLogShape,
   'publish' | 'lost' | 'closure'

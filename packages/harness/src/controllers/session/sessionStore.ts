@@ -2,14 +2,13 @@
  *  transaction door with its reads and each run's trace), over the
  *  root's publisher and database.
  *
- *  "Published" means folded: a transaction returns once the session's tail
- *  has delivered, and its view has folded, every commit it made, so a caller
- *  that reads the view next sees what it wrote. The raw tail is delivered
- *  here too ({@link SessionStore.deliver}): it drops the transient text a
- *  committed row closes and hands a run's removal to the session. "Settled"
- *  waits further, for the reader of the folded tail to run over a commit. */
+ *  "Published" means applied: a transaction returns once the session's view
+ *  has applied every commit it made, so a caller that reads the view next
+ *  sees what it wrote. The view, the presenter and the trace's text all take
+ *  the publisher's batches, published from what each job wrote; nothing here
+ *  reads the store back. "Settled" waits further, for the presenter to run
+ *  over a commit. */
 import {
-  type Context,
   Deferred,
   Effect,
   Option,
@@ -18,23 +17,18 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
 import {
   qualifyAggregateId,
-  aggregateTarget,
   type CommitOrdinal,
-  type RunId,
-  type SessionRow,
+  type DisplayRow,
 } from '@shared/schemas';
 import {
   Database,
   type DatabaseAggregateClosed,
-  type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
   SessionEvents,
-  tailFrom,
   type Append,
   type SessionEventsShape,
   type UnfoldedDraft,
@@ -64,20 +58,10 @@ export interface SessionStore {
   readonly detach: SessionEventsShape['detach'];
   /** Remove a run and its dependents, as the publisher's next job. */
   readonly removeRun: SessionEventsShape['removeRun'];
-  /** The tail as the view has folded it (each row released once the view
-   *  holds its state), for the session's one reader: `settled` waits until
-   *  it has run over a commit, so it never waits on `settled` itself. */
-  readonly folded: Stream.Stream<SessionRow, DatabaseReadFailed>;
-  /** Deliver the raw tail from the store's opening commit for the caller's
-   *  scope: each committed row drops the transient text it closes, a run's
-   *  removal is handed to `removed`, and the position it reaches is what a
-   *  transaction's settle waits for. */
-  readonly deliver: (
-    removed: (
-      runId: RunId,
-      marker: Extract<SessionRow, { type: 'run.removed' }>,
-    ) => void,
-  ) => Effect.Effect<void, never, Scope.Scope>;
+  /** The committed display rows, each batch released once the view has
+   *  applied it, for the session's one presenter: `settled` waits until it
+   *  has run over a commit, so the presenter never waits on `settled`. */
+  readonly applied: Stream.Stream<DisplayRow>;
   /** Drain the publisher inside the close deadline, then shut the doors:
    *  from here on a trace row, a transcript subscription and an interrupted
    *  request's cancellation write nothing; the first late trace row says so. */
@@ -85,63 +69,13 @@ export interface SessionStore {
   readonly closed: () => boolean;
 }
 
-const CHANNEL = 'sessionStore';
-
-/** Log a failure on this channel, with the failure attached as its `data`. */
-const logFailure =
-  (message: string, log = Effect.logWarning) =>
-  (data: unknown) =>
-    log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
-
-/** The settled level: the lesser of what the tail delivered and what the
- *  view folded. `to(commit)` waits until it (or `level`) reaches `commit`;
- *  it dies with the tail or the level's end, so it never hangs. */
-function settlement(
-  view: Context.Service.Shape<typeof SessionViewService>,
-  delivered: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-  tailEnded: Deferred.Deferred<void, DatabaseReadFailed>,
-) {
-  const cursor = () =>
-    Math.min(
-      SubscriptionRef.getUnsafe(view.ref).cursor,
-      SubscriptionRef.getUnsafe(delivered),
-    );
-  /** The level as a stream, re-read on every move of either coordinate; it
-   *  ends with the fold (`view.changes`), whose defect it carries. */
-  const changes = Stream.merge(
-    view.changes,
-    SubscriptionRef.changes(delivered),
-    { haltStrategy: 'left' },
-  ).pipe(Stream.map(cursor));
-  const to = (commit: CommitOrdinal, level = changes): Effect.Effect<void> =>
-    level.pipe(
-      Stream.filter((at) => at >= commit),
-      Stream.runHead,
-      Effect.raceFirst(
-        Deferred.await(tailEnded).pipe(
-          Effect.orDie,
-          Effect.andThen(
-            Effect.die(new Error('Session committed-event consumer stopped')),
-          ),
-        ),
-      ),
-      Effect.flatMap((level) =>
-        Option.isSome(level)
-          ? Effect.void
-          : Effect.die(
-              new Error('Session view or reader stopped before settling'),
-            ),
-      ),
-    );
-  return { cursor, changes, to };
-}
-
-/** One transaction on the publisher, settled against its own last commit,
- *  never another job's: one that appended nothing returns at once. */
+/** One transaction on the publisher, returned once the view applied its own
+ *  last commit, never another job's: one that appended nothing returns at
+ *  once. */
 const transaction =
   (
     events: SessionEventsShape,
-    settleTo: (commit: CommitOrdinal) => Effect.Effect<void>,
+    applied: (commit: CommitOrdinal) => Effect.Effect<void>,
   ) =>
   <A, E>(
     job: (tx: SessionTransaction) => Effect.Effect<A, E>,
@@ -157,9 +91,24 @@ const transaction =
           ),
       });
       const value = yield* events.transact((append) => job(tx(append)));
-      if (committed !== null) yield* settleTo(committed);
+      if (committed !== null) yield* applied(committed);
       return value;
     });
+
+/** Wait until `level` reaches `commit`; it dies if `level` ends first
+ *  (`stopped` names what stopped), so it never hangs. */
+const reach = (
+  level: Stream.Stream<CommitOrdinal>,
+  commit: CommitOrdinal,
+  stopped: string,
+): Effect.Effect<void> =>
+  level.pipe(
+    Stream.filter((at) => at >= commit),
+    Stream.runHead,
+    Effect.flatMap((at) =>
+      Option.isSome(at) ? Effect.void : Effect.die(new Error(stopped)),
+    ),
+  );
 
 /**
  * Build one root's {@link SessionStore} in the session's scope. `storage`
@@ -170,7 +119,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
     storage: string,
   ): Effect.fn.Return<
     SessionStore,
-    DatabaseReadFailed,
+    never,
     | Scope.Scope
     | SessionEvents
     | Database
@@ -181,25 +130,36 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
     const database = yield* Database;
     const view = yield* SessionViewService;
     const chunks = yield* TextChunkSource;
-    // Captured before anything can publish: the tails' first reads cover
-    // every commit after it.
-    const anchor = yield* database.currentCommit;
-    const delivered = yield* SubscriptionRef.make(anchor);
-    const tailEnded = yield* Deferred.make<void, DatabaseReadFailed>();
-    const settle = settlement(view, delivered, tailEnded);
-    const foldedRead = yield* SubscriptionRef.make(anchor);
-    const foldedEnded = yield* Deferred.make<void>();
-    const foldedLevel = SubscriptionRef.changes(foldedRead).pipe(
-      Stream.interruptWhen(Deferred.await(foldedEnded)),
-    );
-    const readPast = (commit: CommitOrdinal) => settle.to(commit, foldedLevel);
-    const transact = transaction(events, settle.to);
+    // Taken now, before anything can publish: they see every batch.
+    const textFeed = yield* events.subscribe;
+    const presenterFeed = yield* events.subscribe;
+    const presented = yield* SubscriptionRef.make(events.head());
+    const presenterEnded = yield* Deferred.make<void>();
+    const viewApplied = (commit: CommitOrdinal) =>
+      reach(
+        Stream.map(view.changes, ({ cursor }) => cursor),
+        commit,
+        'Session view stopped before applying a commit',
+      );
+    const transact = transaction(events, viewApplied);
     let doorsShut = false;
     const closed = () => doorsShut;
-    /** Jobs before it ran, `folded` read past them; its end fails only this. */
+    /** Jobs before it ran, the presenter ran past them; its end fails only
+     *  this. */
     const settled = events
-      .transact(() => database.currentCommit, { order: true })
-      .pipe(Effect.orDie, Effect.flatMap(readPast));
+      .transact(() => Effect.sync(events.head), { order: true })
+      .pipe(
+        Effect.orDie,
+        Effect.flatMap((commit) =>
+          reach(
+            SubscriptionRef.changes(presented).pipe(
+              Stream.interruptWhen(Deferred.await(presenterEnded)),
+            ),
+            commit,
+            'Session presenter stopped before settling',
+          ),
+        ),
+      );
     const trace = makeRunTrace({
       storage,
       events,
@@ -207,6 +167,13 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       settled,
       closed,
     });
+    // The text a committed row closes is dropped as its batch is published.
+    yield* Stream.flattenTake(Stream.fromSubscription(textFeed)).pipe(
+      Stream.runForEach(({ rows }) =>
+        Effect.forEach(rows, trace.committed, { discard: true }),
+      ),
+      Effect.forkScoped,
+    );
     const log: SessionLogShape = {
       transact: <A, E>(
         work:
@@ -223,7 +190,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       lost: trace.lost,
       closure: trace.closure,
       settled,
-      now: () => SubscriptionRef.getUnsafe(database.observedCommit),
+      now: events.head,
       history: (id, fromSeq = 1, types = RUN_STATE_ROW_TYPES) =>
         database.readAggregate(id, fromSeq, types),
       runRows: (id, read, through) =>
@@ -249,34 +216,21 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       log,
       detach: events.detach,
       removeRun: events.removeRun,
-      // Pulled in order: `foldedRead` moves once a read's rows were run.
-      folded: tailFrom(
-        database.readDisplay,
-        { get: Effect.sync(settle.cursor), changes: settle.changes },
-        anchor,
-        foldedRead,
-      ).pipe(Stream.ensuring(Deferred.succeed(foldedEnded, undefined))),
-      deliver: (removed) =>
-        events.all(anchor, delivered).pipe(
-          Stream.runForEach(
-            Effect.fnUntraced(function* (event) {
-              const target = aggregateTarget(event.aggregateId);
-              if (target.kind === 'run' && event.type === 'run.removed')
-                removed(target.id, event);
-              yield* trace.committed(event);
-              yield* SubscriptionRef.set(delivered, event.commit);
-            }),
-          ),
-          Effect.tapError(
-            logFailure(
-              `Session ${storage} stopped delivering committed rows: the log could not be read.`,
-              Effect.logError,
+      // Pulled in order: `presented` moves once a batch's rows were run.
+      applied: Stream.flattenTake(Stream.fromSubscription(presenterFeed)).pipe(
+        Stream.mapEffect((batch) =>
+          Effect.as(viewApplied(batch.through), batch),
+        ),
+        Stream.flatMap(({ rows, through }) =>
+          Stream.concat(
+            Stream.fromIterable(rows),
+            Stream.drain(
+              Stream.fromEffect(SubscriptionRef.set(presented, through)),
             ),
           ),
-          Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
-          Effect.forkScoped,
-          Effect.asVoid,
         ),
+        Stream.ensuring(Deferred.succeed(presenterEnded, undefined)),
+      ),
       close: events.drain.pipe(
         Effect.ensuring(
           Effect.sync(() => {
