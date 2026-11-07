@@ -444,7 +444,8 @@ Delivery and error order, which this module owns and no caller may vary:
   So a signal published in the same synchronous turn that subscribed
   reaches nobody — the ordinary `PubSub` rule that a subscription only
   receives what is published after it exists, and the reason the suites
-  here yield once before they publish.
+  here yield once before they publish. A caller that must be subscribed
+  before it continues calls `subscribe` in its own scope instead.
 
 Every signal below records which hosts consume it and — where a host does
 not — why not. A signal with no such note is the ambiguous middle this file
@@ -603,7 +604,7 @@ class AppSignals extends Context.Service<
 lifetime: each run subscribes when it starts and unsubscribes when it
 ends, so it reads what is published after it starts. A caller that must
 know the subscription is live before it reads the state the signal
-announces uses {@link onAppSignal} and its `subscribed`.
+announces subscribes in its own scope first (`AppSignals`' `subscribe`).
 
 ```ts
 function appSignalStream<K extends AppSignal>(
@@ -1439,15 +1440,12 @@ const OFFICE_EXTENSIONS: readonly string[]
 Deliver `signal` to `listener` until the caller interrupts. The program a
 host's run edge forks: its scope holds the subscription, so interrupting
 the fiber unsubscribes, and the `warn` on a failing listener is this
-module's, not the host's. `subscribed` completes once the subscription is
-live, for a caller that must not miss a signal published after it reads
-the state the signal announces.
+module's, not the host's.
 
 ```ts
 function onAppSignal<K extends AppSignal>(
   signal: K,
   listener: (payload: AppSignalPayloads[K]) => void,
-  subscribed?: Deferred.Deferred<void>,
 ): Effect.Effect<void, never, AppSignals>
 ```
 
@@ -2576,21 +2574,22 @@ class ToolAvailability extends Context.Service<
     /** Each workspace root's last results; a dashboard follows its changes. */
     readonly results: SubscriptionRef.SubscriptionRef<AvailabilityResults>;
     /**
-     * Probe every plugin for `inputs`' workspace now and publish the
-     * results, joining the probe in flight for that root. Tools recently
-     * found missing are looked up again, so one installed since shows up.
-     * Each plugin's
-     * probe has its own deadline and reports a failure as `unknown`, so this
-     * never fails.
+     * Probe every plugin for `inputs`' workspace and publish the results:
+     * the round after the one in flight for that root reads `inputs` (or
+     * newer ones another caller asked with), and every caller asking while
+     * it waits shares it. Tools recently found missing are looked up again,
+     * so one installed since shows up. Each plugin's probe has its own
+     * deadline and reports a failure as `unknown`, so this never fails.
      */
     readonly refresh: (
       inputs: ToolProbeInputs,
     ) => Effect.Effect<readonly ExternalToolCheckResult[]>;
     /**
      * Keep `roots`' results for the caller's scope and probe them now,
-     * without waiting: a session holds its roots for its life. Only a held
-     * root's results are kept, and a root's are dropped when its last holder
-     * closes, so the map is bounded by the open sessions.
+     * without waiting: a session holds its roots for its life, and a refresh
+     * holds its root while it waits. Only a held root's results are kept, and
+     * a root's are dropped when its last holder closes, so the map is bounded
+     * by the open sessions and the refreshes in flight.
      */
     readonly hold: (
       roots: ToolProbeInputs,
