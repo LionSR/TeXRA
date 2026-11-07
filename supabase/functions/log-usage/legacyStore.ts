@@ -75,7 +75,7 @@ export async function storeForUser(
     destinations.map(async (destination) => {
       const entries = batch.entries.filter(destination.accepts);
       if (entries.length === 0) return null;
-      const { data, error } = await adminClient!
+      const { data, error } = await adminClient
         .from(destination.table)
         .select('id')
         .eq('user_id', userId)
@@ -98,7 +98,7 @@ export async function storeForUser(
   const errors = (
     await Promise.all(
       pending.map(async ({ rpc, rows }) => {
-        const { error } = await adminClient!.rpc(rpc, { p_rows: rows });
+        const { error } = await adminClient.rpc(rpc, { p_rows: rows });
         return error?.message;
       }),
     )

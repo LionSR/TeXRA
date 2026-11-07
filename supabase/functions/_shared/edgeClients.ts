@@ -1,34 +1,36 @@
 /**
- * Shared Supabase environment and stateless edge clients.
+ * Shared Supabase environment and stateless edge clients, read once at load.
  *
- * Env and clients are fixed at cold start, so every function reads the same
- * values and builds its clients the same way. A client is null when the key it
- * needs is missing; callers must reject the request explicitly rather than
- * dereference it.
+ * The hosted runtime sets all three keys for every function, so a missing
+ * one is a misconfigured deploy: the import throws and the worker does not
+ * start, and no request has to ask again.
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
-export const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-export const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-/** Stateless server client (no token refresh, no persisted session). */
-function createEdgeClient(
-  url: string | undefined,
-  key: string | undefined,
-): SupabaseClient | null {
-  if (!url || !key) return null;
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+function requireEnv(name: string): string {
+  const value = Deno.env.get(name);
+  if (!value) throw new Error(`${name} is required`);
+  return value;
 }
 
+export const SUPABASE_URL = requireEnv('SUPABASE_URL');
+export const SUPABASE_ANON_KEY = requireEnv('SUPABASE_ANON_KEY');
+const SUPABASE_SERVICE_ROLE_KEY = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+
+/** Stateless server clients: no token refresh, no persisted session. */
+const STATELESS = { auth: { autoRefreshToken: false, persistSession: false } };
+
 /** Service-role client: bypasses RLS, never reachable from a browser. */
-export const adminClient = createEdgeClient(
+export const adminClient = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
+  STATELESS,
 );
 
 /** Anon-key client used to consume server-minted GoTrue tokens. */
-export const anonClient = createEdgeClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const anonClient = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  STATELESS,
+);

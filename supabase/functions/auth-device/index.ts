@@ -28,16 +28,21 @@
  * in the Supabase Auth URL configuration (e.g. https://remote.texra.ai/functions/v1/auth-device/verify).
  */
 
-import { type Context as HonoContext, Hono } from '@hono/hono';
+import { type Context, Hono } from '@hono/hono';
 import { parseApprovalDecision } from './approvalRequest.ts';
-import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
+import {
+  AuthUnavailable,
+  authenticateJwt,
+  bearerToken,
+} from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
 import { randomBase64Url, sha256Hex } from '../_shared/crypto.ts';
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../_shared/edgeClients.ts';
 import {
-  requireSupabaseClients,
-  type SupabaseClientVariables,
-} from '../_shared/edgeMiddleware.ts';
+  adminClient,
+  anonClient,
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+} from '../_shared/edgeClients.ts';
 import {
   mintGoTrueSession,
   sessionResponseBody,
@@ -87,9 +92,7 @@ const PAGE_SDK_INTEGRITY =
 
 // The edge runtime hands over paths including the function slug
 // (/auth-device/code).
-const app = new Hono<{ Variables: SupabaseClientVariables }>().basePath(
-  '/auth-device',
-);
+const app = new Hono().basePath('/auth-device');
 
 // CORS middleware. The verification page is served from this same origin, so
 // same-origin browser fetches (which may carry a *.supabase.co Origin not in
@@ -105,13 +108,9 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-app.use('*', requireSupabaseClients);
-
 // =============================================================================
 // Helpers
 // =============================================================================
-
-type Context = HonoContext<{ Variables: SupabaseClientVariables }>;
 
 function randomUserCode(): string {
   const bytes = new Uint8Array(USER_CODE_LENGTH * 2);
@@ -151,10 +150,8 @@ function verificationUri(c: Context): string {
 // POST /code - Start a device authorization (anonymous).
 app.post('/code', async (c) => {
   try {
-    const supabase = c.get('supabase');
-
     // Opportunistic cleanup keeps the table from accumulating abandoned rows.
-    await supabase
+    await adminClient
       .from('device_auth_requests')
       .delete()
       .lt('expires_at', new Date().toISOString());
@@ -166,7 +163,7 @@ app.post('/code', async (c) => {
     let userCode: string | null = null;
     for (let attempt = 0; attempt < USER_CODE_INSERT_ATTEMPTS; attempt += 1) {
       const candidate = randomUserCode();
-      const { error } = await supabase.from('device_auth_requests').insert({
+      const { error } = await adminClient.from('device_auth_requests').insert({
         device_code_hash: deviceCodeHash,
         user_code: candidate,
         status: 'pending',
@@ -248,8 +245,7 @@ app.post('/approve', async (c) => {
       );
     }
 
-    const { data, error } = await c
-      .get('supabase')
+    const { data, error } = await adminClient
       .from('device_auth_requests')
       .update({
         status: approve ? 'approved' : 'denied',
@@ -283,6 +279,14 @@ app.post('/approve', async (c) => {
       200,
     );
   } catch (error) {
+    if (error instanceof AuthUnavailable) {
+      console.warn('[DEVICE]', error.message);
+      return errorResponse(
+        c.req.raw,
+        'Sign-in could not be checked right now. Try again in a moment.',
+        503,
+      );
+    }
     console.error('[DEVICE] approve error:', error);
     return errorResponse(c.req.raw, 'Internal server error', 500);
   }
@@ -298,9 +302,8 @@ app.post('/token', async (c) => {
       return errorResponse(c.req.raw, 'invalid_grant', 400);
     }
 
-    const supabase = c.get('supabase');
     const deviceCodeHash = await sha256Hex(deviceCode);
-    const { data: row, error } = await supabase
+    const { data: row, error } = await adminClient
       .from('device_auth_requests')
       .select(
         'id, status, expires_at, last_polled_at, poll_interval_seconds, user_id',
@@ -317,7 +320,7 @@ app.post('/token', async (c) => {
     }
 
     const deleteRow = () =>
-      supabase.from('device_auth_requests').delete().eq('id', row.id);
+      adminClient.from('device_auth_requests').delete().eq('id', row.id);
 
     const now = Date.now();
     if (new Date(row.expires_at).getTime() <= now) {
@@ -336,7 +339,7 @@ app.post('/token', async (c) => {
         : 0;
       const minGapMs = row.poll_interval_seconds * 1000 - POLL_TOLERANCE_MS;
       const tooFast = now - lastPolled < minGapMs;
-      await supabase
+      await adminClient
         .from('device_auth_requests')
         .update({
           last_polled_at: new Date(now).toISOString(),
@@ -359,7 +362,7 @@ app.post('/token', async (c) => {
     // any concurrent poll sees no claimed row and gets invalid_grant, so a
     // single approval can never mint two sessions.
     const { data: userData, error: userError } =
-      await supabase.auth.admin.getUserById(row.user_id);
+      await adminClient.auth.admin.getUserById(row.user_id);
     // GoTrue answering "no such user" is as final as an account without an
     // email (the session is minted by email); any other failure is retried.
     if (userError && userError.status !== 404) {
@@ -383,7 +386,7 @@ app.post('/token', async (c) => {
       );
     }
 
-    const { data: claimed, error: claimError } = await supabase
+    const { data: claimed, error: claimError } = await adminClient
       .from('device_auth_requests')
       .delete()
       .eq('id', row.id)
@@ -399,8 +402,8 @@ app.post('/token', async (c) => {
     }
 
     const session = await mintGoTrueSession(
-      supabase,
-      c.get('authClient'),
+      adminClient,
+      anonClient,
       email,
       row.user_id,
       '[DEVICE]',
@@ -421,9 +424,6 @@ app.post('/token', async (c) => {
 
 // GET /verify - Browser verification page.
 app.get('/verify', (c) => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return errorResponse(c.req.raw, 'Server configuration error', 500);
-  }
   const scriptNonce = randomBase64Url(16);
   return new Response(
     verifyPageHtml(SUPABASE_URL, SUPABASE_ANON_KEY, scriptNonce),

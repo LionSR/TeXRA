@@ -15,7 +15,7 @@ export async function storeForInstall(
   installId: string,
   { batchId, entries }: UsageBatch,
 ): Promise<boolean> {
-  const { count, error } = await adminClient!.from('install_usage_logs').upsert(
+  const { count, error } = await adminClient.from('install_usage_logs').upsert(
     entries.map((entry, index) => ({
       install_id: installId,
       batch_id: batchId,
