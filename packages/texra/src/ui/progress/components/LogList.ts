@@ -1,6 +1,6 @@
 /**
  * The transcript of one run, on the session view's transcript slice. It keeps one
- * `<task-group-list>` per recently shown run so a switch back restores
+ * `<stage-list>` per recently shown run so a switch back restores
  * scroll and render windows, and it maps the file and label links
  * inside rows to `host-request` arms. Group expansion is the surface's
  * (`RunSurface.groups`): the list reads the run's map and every toggle is
@@ -12,7 +12,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import './TaskGroupList';
+import './StageList';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@ui/wa/spinner';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
@@ -22,11 +22,11 @@ import { designTokens } from '@ui/styles';
 import { getComposedPathElement } from '../utils';
 import { logStyles } from '../styles/logStyles';
 import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
-import type { TaskGroupList } from './TaskGroupList';
+import type { StageList } from './StageList';
 
 interface CachedRun {
   run: RunView;
-  ref: Ref<TaskGroupList>;
+  ref: Ref<StageList>;
 }
 
 @customElement('log-list')
@@ -71,7 +71,7 @@ export class LogList extends LitElement {
     }
     const entry = this.runCache.get(run.id);
     if (entry) entry.run = run;
-    else this.runCache.set(run.id, { run, ref: createRef<TaskGroupList>() });
+    else this.runCache.set(run.id, { run, ref: createRef<StageList>() });
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -89,7 +89,7 @@ export class LogList extends LitElement {
         const id = run.id;
         const terminal = run.identity.kind === 'process';
         return html`
-          <task-group-list
+          <stage-list
             ${ref(data.ref)}
             role=${terminal ? nothing : 'log'}
             aria-label=${terminal ? nothing : `Activity for ${run.label}`}
@@ -103,7 +103,7 @@ export class LogList extends LitElement {
             .transcript=${run.transcript}
             .expanded=${this.surface?.runs.get(id)?.groups}
             ?terminal=${terminal}
-          ></task-group-list>
+          ></stage-list>
         `;
       },
     )}`;

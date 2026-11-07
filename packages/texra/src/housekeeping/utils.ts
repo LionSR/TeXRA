@@ -46,19 +46,19 @@ export const filesystemFor = Effect.fn('housekeeping.filesystemFor')(function* (
   workspaceFs: RootedFileSystem,
   target: string,
 ) {
-  let workspacePath: string | undefined = target;
+  let workspaceRoot: string | undefined = target;
   if (path.isAbsolute(target)) {
-    workspacePath =
+    workspaceRoot =
       workspaceFs.root === undefined
         ? undefined
         : relativeToRoot(workspaceFs.root, target);
   }
-  if (workspacePath === undefined) {
+  if (workspaceRoot === undefined) {
     const fs: FileSystem.FileSystem = yield* FileSystem.FileSystem;
     return { fs, absolutePath: target };
   }
   const fs: FileSystem.FileSystem = workspaceFs;
-  return { fs, absolutePath: yield* workspaceFs.resolve(workspacePath) };
+  return { fs, absolutePath: yield* workspaceFs.resolve(workspaceRoot) };
 });
 
 /**

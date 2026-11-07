@@ -30,7 +30,7 @@ export interface HostSkillOptions {
    * skills. Absent, a project has no skills but those a custom root or an
    * interop listing reads.
    */
-  readonly projectFolder?: string;
+  readonly projectDataDirName?: string;
   readonly skillSourceOptions?: SkillSourceOptions;
 }
 
@@ -212,22 +212,27 @@ function pluginSkillContribution(pluginId: string): SkillSourceContribution {
 
 /**
  * The contributions a host installs: the core sources, the project skills
- * in the folder it keeps in each project (`HostSkillOptions.projectFolder`),
+ * in the folder it keeps in each project (`HostSkillOptions.projectDataDirName`),
  * then the bundled skills of each tool plugin. The ids come in as strings
  * from the host bootstrap, which reads the process's plugin list, so
  * `@skills` keeps no edge to `@tools`.
  */
 export function hostSkillContributions(
   pluginIds: readonly string[],
-  projectFolder?: string,
+  projectDataDirName?: string,
 ): readonly SkillSourceContribution[] {
   const project: SkillSourceContribution = {
     id: 'core:project',
     tier: 'project',
     roots: ({ cwd }) =>
-      cwd === undefined || projectFolder === undefined
+      cwd === undefined || projectDataDirName === undefined
         ? []
-        : [{ path: path.join(cwd, projectFolder, 'skills'), label: 'project' }],
+        : [
+            {
+              path: path.join(cwd, projectDataDirName, 'skills'),
+              label: 'project',
+            },
+          ],
   };
   return [
     ...CORE_SKILL_CONTRIBUTIONS,

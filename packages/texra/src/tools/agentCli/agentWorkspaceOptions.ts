@@ -9,7 +9,7 @@ interface AgentWorkspaceOptions {
 
 /**
  * Resolve the working directory and any extra workspace roots for external
- * agent SDKs that need access to the project at `workspacePath` (the calling
+ * agent SDKs that need access to the project at `workspaceRoot` (the calling
  * session's `roots.workspace`, passed as data). `workingDirectory` is the
  * run's, already absolute or absent (decided where the run launched).
  *
@@ -21,20 +21,20 @@ interface AgentWorkspaceOptions {
  * additional root.
  */
 export function buildAgentWorkspaceOptions(
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
   workingDirectory?: string,
 ): AgentWorkspaceOptions {
-  if (!workspacePath) {
+  if (!workspaceRoot) {
     return workingDirectory ? { workingDirectory } : {};
   }
-  if (!workingDirectory) return { workingDirectory: workspacePath };
+  if (!workingDirectory) return { workingDirectory: workspaceRoot };
 
   const isInsideWorkspace = isStrictlyWithin(
-    path.resolve(workspacePath),
+    path.resolve(workspaceRoot),
     path.resolve(workingDirectory),
   );
 
   return isInsideWorkspace
-    ? { workingDirectory, additionalDirectories: [workspacePath] }
+    ? { workingDirectory, additionalDirectories: [workspaceRoot] }
     : { workingDirectory };
 }

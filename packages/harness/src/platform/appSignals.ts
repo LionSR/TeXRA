@@ -32,7 +32,8 @@ import { Context, Effect, Layer, PubSub, type Scope, Stream } from 'effect';
  *   reaches nobody — the ordinary `PubSub` rule that a subscription only
  *   receives what is published after it exists, and the reason the suites
  *   here yield once before they publish. A caller that must be subscribed
- *   before it continues calls `subscribe` in its own scope instead.
+ *   before it continues calls {@link subscribeAppSignal} in its own scope
+ *   instead.
  *
  * Every signal below records which hosts consume it and — where a host does
  * not — why not. A signal with no such note is the ambiguous middle this file
@@ -243,7 +244,7 @@ export function subscribeAppSignal<K extends AppSignal>(
  * lifetime: each run subscribes when it starts and unsubscribes when it
  * ends, so it reads what is published after it starts. A caller that must
  * know the subscription is live before it reads the state the signal
- * announces subscribes in its own scope first (`AppSignals`' `subscribe`).
+ * announces subscribes in its own scope first ({@link subscribeAppSignal}).
  */
 export function appSignalStream<K extends AppSignal>(
   signal: K,

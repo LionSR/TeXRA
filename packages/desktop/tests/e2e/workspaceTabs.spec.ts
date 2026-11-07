@@ -153,18 +153,18 @@ async function moveTab(
 
 test.beforeAll(async () => {
   profile = createProfile();
-  const { workspacePath } = profile;
+  const { workspaceRoot } = profile;
   writeFileSync(
-    join(workspacePath, 'first.ts'),
+    join(workspaceRoot, 'first.ts'),
     'export const firstDocument = true;\n',
   );
   writeFileSync(
-    join(workspacePath, 'second.ts'),
+    join(workspaceRoot, 'second.ts'),
     'export const secondDocument = true;\n',
   );
   for (const name of ['third', 'fourth'])
     writeFileSync(
-      join(workspacePath, `${name}.ts`),
+      join(workspaceRoot, `${name}.ts`),
       `export const ${name}Document = true;\n`,
     );
   launched = await launchTexraApp(profile);
@@ -207,7 +207,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   // Main's file-refresh fix must survive the dock migration: reactivating a
   // cached clean document reads external edits into the existing model.
   writeFileSync(
-    join(profile.workspacePath, 'first.ts'),
+    join(profile.workspaceRoot, 'first.ts'),
     'export const firstDocument = true; // external update\n',
   );
   await openFile('first.ts');
@@ -396,7 +396,7 @@ test('moves live terminals and unsaved editors without recreating resources', as
   const terminalSurface1 = page.locator(
     '.shell-dock-terminal[data-panel-id="workbench:terminal:1"] .desktop-terminal-surface',
   );
-  const pidPath = join(profile.workspacePath, 'terminal.pid');
+  const pidPath = join(profile.workspaceRoot, 'terminal.pid');
   await terminalSurface1.locator('.xterm').click();
   await page.keyboard.type(`printf '%s' "$$" > '${pidPath}'`);
   await page.keyboard.press('Enter');
@@ -481,7 +481,7 @@ test('restarts an exited terminal in its own tab', async () => {
   await restart.click();
   await expect(restart).toHaveCount(0);
   // The new shell takes input: it writes its pid where the test can read it.
-  const pidPath = join(profile.workspacePath, 'restarted.pid');
+  const pidPath = join(profile.workspaceRoot, 'restarted.pid');
   await page.keyboard.type(`printf '%s' "$$" > '${pidPath}'`);
   await page.keyboard.press('Enter');
   await expect
@@ -594,7 +594,7 @@ test('preserves each project’s grid and unsaved editor when switching projects
       'otherProject',
     );
     // An explicit command addressed to an offscreen project still runs there.
-    const commandOutput = join(profile.workspacePath, 'background-command.txt');
+    const commandOutput = join(profile.workspaceRoot, 'background-command.txt');
     await page.evaluate(
       ({ session, initialCommand }) => {
         window.postMessage(

@@ -15,7 +15,6 @@
  */
 import { Cause, Effect, Schema } from 'effect';
 
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
@@ -31,7 +30,7 @@ import {
   Runs,
   type AgentRunServices,
 } from '@agent/runtime/runRegistry';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
@@ -41,6 +40,7 @@ import {
   type RunId,
   type RunParent,
   type SubagentProgressUpdate,
+  type AgentConfigPayload,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { ensureError } from '@utils/errors/errorMessage';

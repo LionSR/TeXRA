@@ -34,20 +34,20 @@ const HEADLESS = process.env.TEXRA_DESKTOP_E2E_HEADED !== '1';
 export interface Profile {
   readonly home: string;
   readonly dataRoot: string;
-  readonly workspacePath: string;
+  readonly workspaceRoot: string;
 }
 
 /** A fresh profile with an empty project; {@link removeProfile} ends it. */
 export function createProfile(): Profile {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'texra-e2e-home-')));
-  const workspacePath = join(home, 'project');
-  mkdirSync(workspacePath);
+  const workspaceRoot = join(home, 'project');
+  mkdirSync(workspaceRoot);
   // Chromium on Linux reads the certificates it trusts from the user's NSS
   // database; that is the machine's configuration, not TeXRA data, so the
   // home keeps it (a TLS proxy's root, say, for a page a test loads).
   const trust = join(homedir(), '.pki');
   if (existsSync(trust)) symlinkSync(trust, join(home, '.pki'));
-  return { home, dataRoot: join(home, '.texra'), workspacePath };
+  return { home, dataRoot: join(home, '.texra'), workspaceRoot };
 }
 
 /** The background services of `dataRoot`: each listens on a socket named
@@ -179,7 +179,7 @@ export async function findWorkspaceStoragePath(
   const fixture = await loadDatabaseFixture();
   return fixture.resolveWorkspaceStoragePath(
     profile.dataRoot,
-    realpathSync(profile.workspacePath),
+    realpathSync(profile.workspaceRoot),
   );
 }
 
@@ -203,7 +203,7 @@ export async function launchTexraApp(
   }
 
   // The app reopens what the profile remembers; there is no launch flag.
-  await rememberOpenProject(profile.dataRoot, profile.workspacePath);
+  await rememberOpenProject(profile.dataRoot, profile.workspaceRoot);
   const app = await electron.launch({
     args: [
       MAIN_ENTRY,

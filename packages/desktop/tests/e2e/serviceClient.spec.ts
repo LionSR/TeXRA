@@ -38,7 +38,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
   test.setTimeout(300_000);
   // The app's data root is the profile home's ~/.texra, the one root a
   // service serves, so the app, the service and the CLIs share it.
-  const { home, dataRoot, workspacePath: work } = profile;
+  const { home, dataRoot, workspaceRoot: work } = profile;
   // A task held at its model call, by the newer build's scripted model.
   const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
   mkdirSync(agents, { recursive: true });
@@ -264,7 +264,7 @@ test('a tool edit the app changed keeps its changes when another window answers 
   launch,
 }) => {
   test.setTimeout(300_000);
-  const { home, dataRoot, workspacePath: work } = profile;
+  const { home, dataRoot, workspaceRoot: work } = profile;
   // A task that asks to write a file the project does not have yet.
   const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
   mkdirSync(agents, { recursive: true });

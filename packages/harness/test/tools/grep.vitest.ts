@@ -8,7 +8,7 @@ import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { GrepTool } from '@tools/grep';
 
 layer(SessionGraph.hosted)('GrepTool run', (it) => {
-  it.layer(FakeHost.layer({ workspacePath: process.cwd() }), {
+  it.layer(FakeHost.layer({ workspaceRoot: process.cwd() }), {
     buildPerTest: true,
   })((it) => {
     it.effect(

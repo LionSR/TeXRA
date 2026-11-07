@@ -17,8 +17,8 @@ import { EXCLUDED_DIRS } from '@texra/shared/constants/excludedDirs';
  * workspaces.
  */
 export const findBuildDirectories = Effect.gen(function* () {
-  const workspacePath = (yield* WorkspaceFs).root;
-  if (!workspacePath) return [];
+  const workspaceRoot = (yield* WorkspaceFs).root;
+  if (!workspaceRoot) return [];
 
   const ignorePatterns = [...EXCLUDED_DIRS]
     .filter((dir) => dir !== 'build')
@@ -32,7 +32,7 @@ export const findBuildDirectories = Effect.gen(function* () {
   const directories = yield* Effect.tryPromise({
     try: () =>
       glob(pattern, {
-        cwd: workspacePath,
+        cwd: workspaceRoot,
         ignore: ignorePatterns,
         posix: true,
       }),

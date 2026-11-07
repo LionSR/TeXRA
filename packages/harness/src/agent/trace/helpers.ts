@@ -135,7 +135,7 @@ export function startCompactionActivity(
  * attachment]` markers for media that only ever reached the provider
  * message, and `media` what a follow-up attached, by address, which
  * "Fork from here" carries into the fork's composer. `scriptSummary` carries
- * a workflow delivery's typed presentation facts beside the row text
+ * a script delivery's typed presentation facts beside the row text
  * (`UserMessagePayloadSchema`), so renderers never re-parse them out of the
  * text.
  */

@@ -125,11 +125,11 @@ test('a closed project is offered in the empty rail and reopens from it', async 
   launched,
 }) => {
   const { page, app, profile } = launched;
-  const { workspacePath } = profile;
+  const { workspaceRoot } = profile;
   await dismissOnboarding(page);
-  const name = basename(workspacePath);
+  const name = basename(workspaceRoot);
   // The app stores the folder canonicalized (macOS: /tmp is /private/tmp).
-  const root = realpathSync(workspacePath);
+  const root = realpathSync(workspaceRoot);
   const rail = page.getByRole('region', { name: 'Open projects' });
 
   await page.getByRole('button', { name: `Actions for ${name}` }).click();

@@ -29,7 +29,7 @@ import {
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   openNodeWorkspaceRoots,
-  canonicalizeWorkspacePath,
+  canonicalizeWorkspaceRoot,
   resolveGlobalStoragePath,
   envFlag,
   JsonStore,
@@ -109,7 +109,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       { discard: true },
     );
     return yield* openNodeWorkspaceRoots({
-      workspacePath: workspace,
+      workspaceRoot: workspace,
       storageRoot,
       config: {
         ...configs,
@@ -241,7 +241,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     // A lookup that failed (a store another process still holds) is not
     // kept for the idle time: the next open tries again.
     open: (workspace) => {
-      const key = canonicalizeWorkspacePath(workspace);
+      const key = canonicalizeWorkspaceRoot(workspace);
       return RcMap.get(projects, key).pipe(
         Effect.tapError(() => RcMap.invalidate(projects, key)),
         Effect.provideContext(services),

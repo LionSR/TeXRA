@@ -176,7 +176,7 @@ const TOKENS_FREED_ACTIONS = new Set(['clear_tool_uses', 'clear_thinking']);
 const MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD = 32_768;
 
 // ---------------------------------------------------------------------------
-// Tool and workflow-call rows
+// Tool and script-call rows
 // ---------------------------------------------------------------------------
 
 /** What a tool row says of its call beyond its payload, as the transcript

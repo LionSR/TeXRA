@@ -104,7 +104,7 @@ const gitAuthorEnv = Effect.fn('gitAuthorEnv')(function* (
  */
 function commandEnv(
   inherited: Record<string, string>,
-  workspacePath: string,
+  workspaceRoot: string,
   authorEnv: Record<string, string | undefined> | undefined,
   envOverrides: Record<string, string> | undefined,
 ): Effect.Effect<Record<string, string | undefined>> {
@@ -116,8 +116,8 @@ function commandEnv(
     ...inherited,
     ...authorEnv,
     ...envOverrides,
-    PROJECT_DIR: workspacePath,
-    PROJECT_NAME: path.basename(workspacePath),
+    PROJECT_DIR: workspaceRoot,
+    PROJECT_NAME: path.basename(workspaceRoot),
   });
 }
 

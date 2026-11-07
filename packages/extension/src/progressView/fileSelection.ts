@@ -49,7 +49,7 @@ function createMultiPicker(
   return () =>
     announceSelection(
       selectFiles({
-        workspacePath: roots.workspace,
+        workspaceRoot: roots.workspace,
         openLabel: options.openLabel,
         filters: options.filters(),
       }),

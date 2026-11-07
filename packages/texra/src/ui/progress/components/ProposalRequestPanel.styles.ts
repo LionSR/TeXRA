@@ -1,4 +1,4 @@
-/** Component-scoped styles for {@link ProposalRequestPanel} (workflow proposal requests). */
+/** Component-scoped styles for {@link ProposalRequestPanel} (script proposal requests). */
 
 import { css, type CSSResult } from 'lit';
 

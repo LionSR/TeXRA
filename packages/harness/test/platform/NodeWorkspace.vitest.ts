@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
 import {
-  canonicalizeWorkspacePath,
+  canonicalizeWorkspaceRoot,
   relativeToRoot,
 } from '@texra-ai/harness/node';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -24,7 +24,7 @@ describe('Node workspace identity', () => {
     await writeFile(join(target, 'paper.tex'), 'content', 'utf8');
 
     const canonical = await realpath(link);
-    expect(canonicalizeWorkspacePath(link)).toBe(canonical);
+    expect(canonicalizeWorkspaceRoot(link)).toBe(canonical);
     expect(relativeToRoot(link, join(link, 'paper.tex'))).toBe('paper.tex');
     expect(relativeToRoot(link, join(link, 'new', 'draft.tex'))).toBe(
       'new/draft.tex',

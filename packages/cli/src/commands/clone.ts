@@ -36,10 +36,10 @@ import { writeCliResult } from './_helpers/output';
 function buildOverleafClonePorts(
   context: CliContext,
   remote: OverleafRemote,
-  workspacePath: string,
+  workspaceRoot: string,
   secrets: PlatformSecrets,
 ): OverleafCloneWorkflowPorts {
-  let canonicalWorkspacePath = workspacePath;
+  let canonicalWorkspacePath = workspaceRoot;
   return {
     // A credential store this host cannot reach fails the clone with its
     // `SecretsFailed`, which the workflow's `Error` channel carries.
@@ -94,7 +94,7 @@ function buildOverleafClonePorts(
     showWorkspaceNotEmpty: () =>
       Effect.sync(() => {
         writeTextStderr(
-          `The destination directory ${workspacePath} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./project`,
+          `The destination directory ${workspaceRoot} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./project`,
         );
       }),
 
@@ -179,18 +179,18 @@ export const cloneCommand = withUsageSections(
         });
       }
 
-      const workspacePath = ctx.args.destination
+      const workspaceRoot = ctx.args.destination
         ? resolve(context.cwd, ctx.args.destination)
         : context.cwd;
 
       return Effect.gen(function* () {
         const outcome = yield* cloneOverleafProject(
           remote,
-          workspacePath,
+          workspaceRoot,
           buildOverleafClonePorts(
             context,
             remote,
-            workspacePath,
+            workspaceRoot,
             yield* Secrets,
           ),
         );

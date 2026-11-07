@@ -28,7 +28,7 @@ import type { SessionServices } from './rootLaunch';
  */
 export interface SessionHandleInit {
   /** The workspace this session works on: the opener is the one caller that
-   *  knows which paper it opened. */
+   *  knows which project it opened. */
   readonly roots: WorkspaceRoots;
   /** A presentation host the session is born with: it answers while no
    *  host is attached. */

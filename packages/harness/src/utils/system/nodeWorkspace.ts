@@ -18,15 +18,15 @@ import { canonicalizePath } from '@utils/files/externalRoots';
  * ancestor still opens, keyed by its resolved spelling. Every other failure
  * propagates.
  */
-export function canonicalizeWorkspacePath(workspacePath: string): string {
+export function canonicalizeWorkspaceRoot(workspaceRoot: string): string {
   let canonical: string;
   try {
-    canonical = canonicalizePath(workspacePath);
+    canonical = canonicalizePath(workspaceRoot);
   } catch (error) {
     const code =
       error instanceof Error && 'code' in error ? error.code : undefined;
     if (code !== 'EACCES' && code !== 'EPERM') throw error;
-    canonical = path.resolve(workspacePath);
+    canonical = path.resolve(workspaceRoot);
   }
   return /^[a-z]:[\\/]/.test(canonical) ? Str.capitalize(canonical) : canonical;
 }
@@ -48,8 +48,8 @@ export function relativeToRoot(
   if (isPathWithin(resolvedRoot, resolvedFilePath)) {
     return normalizeFilePath(path.relative(resolvedRoot, resolvedFilePath));
   }
-  const canonicalRoot = canonicalizeWorkspacePath(root);
-  const canonicalFilePath = canonicalizeWorkspacePath(filePath);
+  const canonicalRoot = canonicalizeWorkspaceRoot(root);
+  const canonicalFilePath = canonicalizeWorkspaceRoot(filePath);
   return isPathWithin(canonicalRoot, canonicalFilePath)
     ? normalizeFilePath(path.relative(canonicalRoot, canonicalFilePath))
     : undefined;

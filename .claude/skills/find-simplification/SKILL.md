@@ -19,7 +19,7 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 Treat these as intentional by default; removing an unused method _inside_ one can still be valid, but collapsing the seam itself must beat the recorded rationale:
 
 - The frozen harness SDK surface (`@texra-ai/harness`, `packages/harness/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
-- The one run program (`packages/harness/src/agent/runtime/loop/toolUse.ts`; a document task is a run of it on the recipe script in `packages/texra/src/agent/output/documentRecipe.ts`) over the run history. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the run history.
+- The one run program (`packages/harness/src/agent/runtime/loop/runLoop.ts`; a document task is a run of it on the recipe script in `packages/texra/src/agent/output/documentRecipe.ts`) over the run history. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the run history.
 - The three hosts (extension, desktop, CLI), the trace viewer, and each host's composition root over `processLayer()`. Desktop has had no public release, which makes desktop state a _simplification_ source (no migration machinery allowed), not a target.
 - The two browser entries (`@texra-ai/harness/schemas`, `@texra-ai/harness/transcript`), whose closure the browser build proves; the webview frontends import no `@utils/*`. Adding Node built-ins to that closure is a regression.
 

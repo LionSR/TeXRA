@@ -22,7 +22,7 @@ import { Settings } from '@texra-ai/harness/plugins';
 import { modelConfig } from '@texra-ai/llm';
 import {
   absentReason,
-  canonicalizeWorkspacePath,
+  canonicalizeWorkspaceRoot,
 } from '@texra-ai/harness/node';
 import {
   APPROVAL_POLICY_SETTING,
@@ -399,7 +399,7 @@ const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
   // should fail loudly instead of silently falling back to the resolved-but-
   // nonexistent string and running the agent against the wrong workspace.
   if (typeof cwdFlag !== 'string' || cwdFlag.trim() === '') {
-    return canonicalizeWorkspacePath(readCliCwd());
+    return canonicalizeWorkspaceRoot(readCliCwd());
   }
   const requested = path.resolve(cwdFlag);
   const fs = yield* FileSystem.FileSystem;
@@ -419,7 +419,7 @@ const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
       message: `--cwd: not a directory: ${requested}`,
     });
   }
-  return canonicalizeWorkspacePath(requested);
+  return canonicalizeWorkspaceRoot(requested);
 });
 
 export const buildCliContext = Effect.fn('cliContext.buildCliContext')(

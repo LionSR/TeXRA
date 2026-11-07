@@ -25,7 +25,7 @@
 export type {
   AgentConfig,
   AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+} from '@shared/schemas/agentConfig';
 // A run's saved record (`assembleTrace`'s): an agent's config or a task's,
 // and its JSON with the fields its category hides dropped.
 export type { RunRecord } from '@agent/core/definition/RunRecord';
@@ -134,8 +134,8 @@ export type {
   SessionRow,
   SessionRowDraft,
   AgentNotFoundPayload,
-  TaskGroup,
-  TaskGroupStatus,
+  Stage,
+  StageStatus,
   ToolCallStatus,
   ToolCard,
   ToolDefinition,
@@ -311,7 +311,7 @@ export {
   blocksCaller,
   type ContextStateData,
   CredentialSwitchSchema,
-  DEFAULT_WORKFLOW_AGENT,
+  DEFAULT_TASK_AGENT,
   type DiffStats,
   DiffStatsSchema,
   emptyRunEndOutput,

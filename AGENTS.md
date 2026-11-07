@@ -206,7 +206,7 @@ providers in `packages/extension/src/progressView/` and in
 
 The harness's `packages/harness/src/agent/` holds the domain model (`core/`,
 see its README) and the runtime. A run is one Effect program
-(`runtime/loop/toolUse.ts`) that appends rows to the run history and continues
+(`runtime/loop/runLoop.ts`) that appends rows to the run history and continues
 from the `RunState` each append returns; resume is the same function over the
 same rows. There is no flow engine: do not add a node, a cursor, a services
 bag, or a second writer of the run history. Every model call goes through

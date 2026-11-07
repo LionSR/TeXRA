@@ -86,7 +86,7 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
   launch,
 }) => {
   test.setTimeout(300_000);
-  const { home, dataRoot, workspacePath: work } = profile;
+  const { home, dataRoot, workspaceRoot: work } = profile;
   const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
   mkdirSync(agents, { recursive: true });
   // The asking task: its scripted model calls `document_task` with this

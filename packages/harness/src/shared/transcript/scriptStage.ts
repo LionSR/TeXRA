@@ -18,7 +18,7 @@ import {
   TOOL_CALL_STATUS,
   type RequestPayload,
   type RunId,
-  type TaskGroup,
+  type Stage,
 } from '@shared/schemas';
 import {
   acceptsFollowUp,
@@ -28,7 +28,7 @@ import {
 import type { RunView, SessionView } from '@shared/session/readonlyViews';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { deliveredResponse } from '@shared/subagentFollowup';
-import { formatWorkflowCallFiles } from '@shared/transcript/workflowCall';
+import { formatScriptCallFiles } from '@shared/transcript/scriptCall';
 import { getBasename } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
@@ -98,7 +98,7 @@ export interface ScriptSectionView {
 export interface ScriptStageView {
   /** The stage's id; its calls' cards carry it as their group. */
   readonly id: string;
-  readonly status: TaskGroup['status'];
+  readonly status: Stage['status'];
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly sections: readonly ScriptSectionView[];
@@ -191,7 +191,7 @@ function callView(
     agent ? (child?.modelLabel ?? stringOf(input.model)) : undefined,
     row.attempt !== undefined && row.attempt > 1 ? 'retried' : undefined,
     agent
-      ? formatWorkflowCallFiles({
+      ? formatScriptCallFiles({
           input: namesOf(input.inputFiles),
           context: namesOf(input.contextFiles),
           media: namesOf(input.mediaFiles),
@@ -273,11 +273,9 @@ export function dispatchedChildren<Run extends RunView>(
   run: Run,
   view: { readonly runs: ReadonlyMap<RunId, Run> },
 ): Run[] {
-  const { taskGroups, rows } = run.transcript;
+  const { stages, rows } = run.transcript;
   const stageIds = new Set(
-    taskGroups
-      .filter((group) => group.kind === 'script')
-      .map((group) => group.id),
+    stages.filter((group) => group.kind === 'script').map((group) => group.id),
   );
   const scriptCards = new Set(
     rows.flatMap((row) =>
@@ -306,8 +304,10 @@ export function scriptStages(
   run: RunView,
   view: Pick<SessionView, 'runs' | 'requests'>,
 ): ScriptStageView[] {
-  const { taskGroups, rows } = run.transcript;
-  const stages = taskGroups.filter((group) => group.kind === 'script');
+  const { rows } = run.transcript;
+  const stages = run.transcript.stages.filter(
+    (group) => group.kind === 'script',
+  );
   if (stages.length === 0) return [];
   const byStage = Map.groupBy(
     rows.filter(

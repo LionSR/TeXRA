@@ -22,7 +22,7 @@ test('renders the dev app from a cold cache and restores the editor after reload
   const testInfo = test.info();
   const temporary = mkdtempSync(join(tmpdir(), 'texra-dev-startup-'));
   writeFileSync(
-    join(profile.workspacePath, 'sample.tex'),
+    join(profile.workspaceRoot, 'sample.tex'),
     'A dev editor document.\n' +
       Array.from({ length: 599 }, (_, index) => `% Line ${index + 2}`).join(
         '\n',

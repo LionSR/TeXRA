@@ -46,7 +46,7 @@ test.beforeAll(async () => {
   // The app opens the project the profile remembers, under its name.
   await expect(
     launched.page.locator('.shell-project-name').first(),
-  ).toContainText(basename(profile.workspacePath));
+  ).toContainText(basename(profile.workspaceRoot));
 });
 
 // The Settings popup is modal; a journey that opened it must not leave it

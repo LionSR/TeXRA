@@ -221,8 +221,8 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     content: string,
     suffix: string,
   ): Effect.fn.Return<string, Error, PreviewServices> {
-    const workspacePath = entry.request.roots.workspace;
-    if (!workspacePath) {
+    const workspaceRoot = entry.request.roots.workspace;
+    if (!workspaceRoot) {
       return yield* Effect.fail(new Error('No workspace folder open'));
     }
 
@@ -235,7 +235,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     const tempDir = path.dirname(
       path.isAbsolute(originalPath)
         ? originalPath
-        : path.join(workspacePath, originalPath),
+        : path.join(workspaceRoot, originalPath),
     );
     const tempPath = path.join(tempDir, tempFileName);
 
@@ -250,12 +250,12 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
   },
 );
 function tempPathToLocation(
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
   tempPath: string,
 ): FileLocation {
-  if (workspacePath == null) return createExternalLocation(tempPath);
+  if (workspaceRoot == null) return createExternalLocation(tempPath);
 
-  const normalizedWorkspacePath = path.normalize(workspacePath);
+  const normalizedWorkspacePath = path.normalize(workspaceRoot);
   const normalizedTempPath = path.normalize(tempPath);
   const relativePath = path.relative(
     normalizedWorkspacePath,

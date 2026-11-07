@@ -99,7 +99,7 @@ async function bundleDatabaseFixture() {
   await build({
     stdin: {
       contents: `
-        export { databaseLayer, globalDatabaseLayer } from '@controllers/session/Database';
+        export { databaseLayer, globalDatabaseLayer } from '@controllers/session/databaseLayer';
         export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
         export { Database, GlobalDatabase } from '@shared/session/database';
         export { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -131,7 +131,7 @@ async function bundleDatabaseFixture() {
  * Seed the data root (`<home>/.texra`) through the same project-record owner
  * as the application, on a handle over its global root.
  */
-export async function rememberOpenProject(dataRoot, workspacePath) {
+export async function rememberOpenProject(dataRoot, workspaceRoot) {
   const fixture = await loadDatabaseFixture();
   // The identity read and the database open spawn through the Node spawner
   // the application's runtime serves.
@@ -143,7 +143,7 @@ export async function rememberOpenProject(dataRoot, workspacePath) {
       yield* Effect.gen(function* () {
         const { values } = yield* fixture.GlobalDatabase;
         const records = fixture.openDesktopProjectRecords(values);
-        yield* records.activate(workspacePath);
+        yield* records.activate(workspaceRoot);
       }).pipe(
         Effect.provide(
           fixture

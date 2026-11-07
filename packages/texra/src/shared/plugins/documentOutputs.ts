@@ -111,7 +111,7 @@ export function outputDiffCounts(
 
 /**
  * Flattened projection of {@link OutputFileInfo} for agent results and
- * run metadata. It keeps persisted workflow summaries independent from
+ * run metadata. It keeps persisted document task summaries independent from
  * the richer file-location internals used while a run is active.
  */
 const OutputFileSummarySchema = Schema.Struct({

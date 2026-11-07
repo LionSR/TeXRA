@@ -261,7 +261,7 @@ const DisplayRowDraftSchema = Schema.Union([
   durable('run.stop', { reason: RunStopReasonSchema }),
   /**
    * The terminal fact: outcome, the classified error behind a failure, and
-   * a tool-use run's reply (usage and workflow files have their own rows).
+   * a tool-use run's reply (usage and output files have their own rows).
    * Written once per lifecycle, by the storage finalizer, after the run's
    * last transcript row; the fold derives the terminal phase from it and
    * from nothing else.

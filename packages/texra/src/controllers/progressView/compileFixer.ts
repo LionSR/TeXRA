@@ -63,11 +63,11 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
   > {
     const compileFailures = input.rounds.flatMap(compileFailuresOf);
     // The compile-fixer planner serves document tasks only.
-    const workflowConfig =
+    const savedTaskConfig =
       input.runConfig && isTaskConfig(input.runConfig)
         ? input.runConfig
         : undefined;
-    if (!workflowConfig) {
+    if (!savedTaskConfig) {
       return yield* new Rejected({
         reason:
           'No document task found for this stream. Cannot run latexFixer.',
@@ -82,7 +82,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
 
     const decision = decideRunModel(
       [
-        { model: workflowConfig.model, reason: 'agent-config' },
+        { model: savedTaskConfig.model, reason: 'agent-config' },
         {
           model: input.modelOptions.find(isModelOptionAvailable)?.value,
           reason: 'access-list-default',
@@ -101,7 +101,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
 
     const model = decision.model;
     const targets = yield* compileFixerTargets(
-      workflowConfig,
+      savedTaskConfig,
       compileFailures,
       input.rounds,
       input.workspaceRoot,
@@ -123,7 +123,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     }
 
     return {
-      ...workflowConfig,
+      ...savedTaskConfig,
       agent: 'latexFixer',
       model,
       instruction: buildCompileFixerQuestion(

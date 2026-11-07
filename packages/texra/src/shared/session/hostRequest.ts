@@ -33,7 +33,7 @@ export type GettingStartedAction = typeof GettingStartedActionSchema.Type;
 
 const runScoped = { runId: RunIdSchema };
 
-/** The verbs an output file offers on a workflow run's file list. */
+/** The verbs an output file offers on a document task run's file list. */
 export const FileActionSchema = Schema.Literals([
   'compareOriginal',
   'latexdiff',
@@ -72,7 +72,7 @@ export const HostCommandSchema = Schema.Union([
     draft: Schema.optional(Schema.NullOr(Schema.String)),
     media: Schema.optional(Schema.NullOr(Schema.Array(StoredMediaSchema))),
   }),
-  /** The latexFixer follow-up over a workflow run's compile failures. */
+  /** The latexFixer follow-up over a document task run's compile failures. */
   Schema.Struct({ kind: Schema.Literal('runCompileFixer'), ...runScoped }),
   /** A retry on the user's own API key: the host stores one, then finishes
    *  the pending retry on personal credentials. `credentialSwitch` is the
@@ -195,7 +195,7 @@ export const HostCommandSchema = Schema.Union([
       Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
     ),
   }),
-  /** An output file's verbs on a workflow run's file list. */
+  /** An output file's verbs on a document task run's file list. */
   Schema.Struct({
     kind: Schema.Literal('fileAction'),
     ...runScoped,
