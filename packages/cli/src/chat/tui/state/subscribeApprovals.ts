@@ -14,18 +14,17 @@
 import { Cause, Effect, Exit, FiberSet, Scope } from 'effect';
 
 import {
-  followPendingRequests,
   withLogChannel,
   type HostInteractions,
   type ProcessRuntime,
   type SettingsStores,
 } from '@texra-ai/harness/host';
-import { toErrorMessage, type PendingRequest } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/platform/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import { readToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
+import { followToolEditPreviews } from '@texra/controllers/approval/ToolEditApprovalController';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
@@ -72,14 +71,6 @@ interface TuiApprovalStores {
    *  host's lifetime rather than looked up per decision. */
   readonly runtime: ProcessRuntime;
 }
-
-/** A tool edit this host stages a card for until the view drops it. */
-type StagedRequest = PendingRequest & {
-  readonly payload: Extract<
-    PendingRequest['payload'],
-    { readonly kind: 'toolEdit' }
-  >;
-};
 
 /** Create the TUI's presentation host. */
 export function createTuiHostInteractions(
@@ -174,25 +165,14 @@ export function createTuiHostInteractions(
    * request was listed, so what is listed waits for a person. A preview
    * that could not be read is said on the card itself.
    */
-  const stage = ({ payload, runId, requestId }: StagedRequest) =>
-    readToolEditPreview(stores.requests, runId, requestId).pipe(
-      Effect.map((tui) =>
-        stagePresentation({ kind: 'toolEdit', data: payload.data, tui }),
-      ),
-      Effect.andThen(Effect.never),
-      Effect.ensuring(dropPresentation(requestId)),
-    );
   stores.runtime.runFork(
     Effect.forkIn(
-      Effect.scoped(
-        followPendingRequests(
-          stores.requests.view,
-          (view) =>
-            view.requests.filter(
-              (request): request is StagedRequest =>
-                request.payload.kind === 'toolEdit',
-            ),
-          stage,
+      followToolEditPreviews(stores.requests, ({ payload, requestId }, tui) =>
+        Effect.acquireRelease(
+          Effect.sync(() =>
+            stagePresentation({ kind: 'toolEdit', data: payload.data, tui }),
+          ),
+          () => dropPresentation(requestId),
         ),
       ),
       attached,

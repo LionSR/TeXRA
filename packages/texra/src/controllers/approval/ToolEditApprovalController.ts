@@ -121,6 +121,45 @@ export function readToolEditPreview(
   );
 }
 
+type PendingToolEdit = PendingRequest & {
+  readonly payload: {
+    readonly kind: 'toolEdit';
+    readonly data: ToolEditRequest;
+  };
+};
+
+const isToolEdit = (request: PendingRequest): request is PendingToolEdit =>
+  request.payload.kind === 'toolEdit';
+
+/**
+ * Follow the pending tool edits `session` lists, until interrupted: read
+ * each one's preview once, and keep what `show` puts up with it until the
+ * view drops the request, however it was decided. `show` runs in a scope of
+ * the request's own, which closes then and releases what it holds.
+ */
+export const followToolEditPreviews = <R>(
+  session: Pick<Session, 'request'> & {
+    readonly view: Pick<Session['view'], 'changes'>;
+  },
+  show: (
+    pending: PendingToolEdit,
+    read: ToolEditPreviewRead,
+  ) => Effect.Effect<void, never, R>,
+): Effect.Effect<void, never, Exclude<R, Scope.Scope>> =>
+  Effect.scoped(
+    followPendingRequests(
+      session.view,
+      (view) => view.requests.filter(isToolEdit),
+      (pending) =>
+        Effect.scoped(
+          readToolEditPreview(session, pending.runId, pending.requestId).pipe(
+            Effect.flatMap((read) => show(pending, read)),
+            Effect.andThen(Effect.never),
+          ),
+        ),
+    ),
+  );
+
 /** A pending tool edit as a host stages it: its prompt and its content. */
 export type ToolEditPreviewRequest = ToolEditRequest & ToolEditContent;
 
@@ -172,16 +211,6 @@ interface StagedPreview extends LatexPreviewEntry {
   readonly applied: Ref.Ref<boolean>;
 }
 
-type PendingToolEdit = PendingRequest & {
-  readonly payload: {
-    readonly kind: 'toolEdit';
-    readonly data: ToolEditRequest;
-  };
-};
-
-const isToolEdit = (request: PendingRequest): request is PendingToolEdit =>
-  request.payload.kind === 'toolEdit';
-
 export class ToolEditApprovalController {
   /** The requests staged in this window, each held by its scope. */
   private readonly staged = new Map<string, StagedPreview>();
@@ -193,18 +222,13 @@ export class ToolEditApprovalController {
 
   /** Stage every pending tool edit the session lists, until interrupted. */
   get follow(): Effect.Effect<void, never, PreviewServices> {
-    return Effect.scoped(
-      followPendingRequests(
-        this.options.session.view,
-        (view) => view.requests.filter(isToolEdit),
-        (pending) =>
-          Effect.scoped(this.stage(pending)).pipe(
-            Effect.catchCause((cause) =>
-              Cause.hasInterruptsOnly(cause)
-                ? Effect.interrupt
-                : this.report(cause).pipe(Effect.andThen(Effect.never)),
-            ),
-          ),
+    return followToolEditPreviews(this.options.session, (pending, read) =>
+      this.stage(pending, read).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : this.report(cause),
+        ),
       ),
     );
   }
@@ -268,21 +292,21 @@ export class ToolEditApprovalController {
     });
   }
 
-  /** Stage one request, show it when this window is focused, and hold it
-   *  until its scope closes. */
+  /** Stage one request in its scope and show it when this window is
+   *  focused; the scope's close removes it. */
   private stage(
     pending: PendingToolEdit,
-  ): Effect.Effect<never, HostCommandFailure, PreviewServices | Scope.Scope> {
-    const { session, host, roots } = this.options;
-    const { runId, requestId } = pending;
+    read: ToolEditPreviewRead,
+  ): Effect.Effect<void, HostCommandFailure, PreviewServices | Scope.Scope> {
+    const { host, roots } = this.options;
+    const { requestId } = pending;
     return Effect.gen({ self: this }, function* () {
-      const read = yield* readToolEditPreview(session, runId, requestId);
       if (read.kind === 'unavailable') {
         // The card still answers from its payload; there is no diff to show.
         host.reportError(
           `No diff of the edit to ${pending.payload.data.relativePath}: ${read.reason}.`,
         );
-        return yield* Effect.never;
+        return;
       }
       const content = read.content;
       const scope = yield* Scope.Scope;
@@ -327,7 +351,6 @@ export class ToolEditApprovalController {
         yield* Effect.uninterruptible(entry.preview.showDiff()).pipe(
           Effect.catch((error) => this.report(error)),
         );
-      return yield* Effect.never;
     });
   }
 
