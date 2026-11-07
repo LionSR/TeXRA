@@ -30,7 +30,7 @@ import { applyTeam } from '@texra/shared/teamPlan';
 import {
   AGENT_TEMPLATE_FILES,
   agentFileFromTemplate,
-} from '@texra/agent/templates/agentTemplateRenderer';
+} from '@texra/agent/templates/agentTemplates';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { ProcessServices } from '@texra-ai/harness/host';
