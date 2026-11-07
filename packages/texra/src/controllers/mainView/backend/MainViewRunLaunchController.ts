@@ -142,17 +142,15 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
 });
 
 /**
- * The run option an Auto-approve launch adds: its run starts with the
- * delegated-work bypass on, the same state the run header's "agent work"
- * switch writes, so the header shows it and the user can take it back
- * mid-run. Block still denies: the policy is decided before any bypass.
+ * The run option an Auto-approve launch adds: its run starts with every
+ * bypass on, the same state the run header's switches write, so the header
+ * shows it and the user can take it back mid-run. Block still denies: the
+ * policy is decided before any bypass.
  */
 export function launchApprovalOptions({
   launch,
 }: LaunchRequest): Pick<StartInput, 'approval'> {
-  return launch.approval === 'autoApprove'
-    ? { approval: { delegated: true } }
-    : {};
+  return launch.approval === 'autoApprove' ? { approval: 'autoApprove' } : {};
 }
 
 /** Both GUI hosts launch the selections carried by the requesting surface. */

@@ -27,7 +27,7 @@ import {
 } from '@ui/copy/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
 import { UNLISTED_AGENT_LABEL } from '@ui/copy/taskAgent';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
+import { launchPolicy, type ApprovalPolicy } from '@texra-ai/harness/schemas';
 
 export interface ChipMenu {
   readonly id: string;
@@ -255,7 +255,10 @@ function approvalMenu(
     openSettings(target: SettingsTarget): void;
   },
 ): ChipMenu {
-  const overridden = launch.approval === 'autoApprove' && policy !== 'never';
+  // The task's own Auto-approve, unless the project's Block still wins.
+  const overridden =
+    launch.approval === 'autoApprove' &&
+    launchPolicy(policy, 'autoApprove') !== 'never';
   const policyLabel = approvalPolicyLabel(policy);
   const policyDescription = formatApprovalPolicy(policy);
   return {

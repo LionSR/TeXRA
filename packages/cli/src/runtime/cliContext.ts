@@ -26,8 +26,9 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseApprovalPolicy,
+  launchPolicy,
   type ApprovalPolicy,
-  stricterPolicy,
+  type LaunchApproval,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
@@ -41,7 +42,6 @@ import { loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
 import { interactiveTerminalFailure } from './terminalRequirements';
-import type { StartInput } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type CliMode = 'headless' | 'interactive';
@@ -492,18 +492,14 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
 /**
  * What a launch asks for with the policy this invocation requested
  * explicitly (its flag, `TEXRA_APPROVAL_POLICY`, `--no-input`, a chat's
- * `/approval`); none follows the project's. The request is the run's launch
- * limit, which only narrows the project's policy. An explicit Auto-approve
- * also grants the run every bypass (an Auto-approve launch), recorded on
- * the run, never on the project. Local and service launches alike.
+ * `/approval`); none follows the project's. An explicit Auto-approve is an
+ * Auto-approve launch; any other policy is the limit the launch narrows its
+ * run to. Local and service launches alike.
  */
 export function launchApproval(
   requested: ApprovalPolicy | undefined,
-): StartInput['approval'] {
-  return {
-    ...(requested !== undefined && { policy: requested }),
-    delegated: requested === 'yolo',
-  };
+): LaunchApproval | undefined {
+  return requested === 'yolo' ? 'autoApprove' : requested;
 }
 
 /** The project's persisted approval policy, as the session reads it at each
@@ -512,17 +508,13 @@ export function projectApprovalPolicy(config: ConfigProvider): ApprovalPolicy {
   return Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
 }
 
-/** The policy a launch runs under: the project's, narrowed by what the
- *  invocation asked for, or Auto-approve when it asked for that, which a
- *  Block project still denies first. */
+/** The policy a launch runs under: the harness's rule (`launchPolicy`)
+ *  over what this invocation asked for. */
 export function effectiveApprovalPolicy(
   requested: ApprovalPolicy | undefined,
   configured: ApprovalPolicy,
 ): ApprovalPolicy {
-  if (requested === undefined) return configured;
-  return requested === 'yolo' && configured !== 'never'
-    ? 'yolo'
-    : stricterPolicy(requested, configured);
+  return launchPolicy(configured, launchApproval(requested));
 }
 
 /** Why a request is not what a launch runs under: one more permissive than

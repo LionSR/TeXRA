@@ -291,7 +291,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         let seen: boolean | undefined;
         mocks.rootLaunch.mockImplementationOnce(
           async (request: LaunchInput) => {
-            if (request.approval?.delegated) {
+            if (request.approval === 'autoApprove') {
               publishTestRows(session, [
                 {
                   ...runStartRow(request.runId),

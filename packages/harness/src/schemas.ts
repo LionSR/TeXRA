@@ -163,10 +163,11 @@ export {
 // resolve against the policy.
 export {
   APPROVAL_BYPASS_KINDS,
+  launchPolicy,
   resolveBypass,
   runBypasses,
-  stricterPolicy,
   type ApprovalBypassKind,
+  type LaunchApproval,
   type ApprovalGrants,
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
