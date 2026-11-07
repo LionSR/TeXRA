@@ -59,8 +59,9 @@ there is no reader for the old nested `settings:` / `prompts:` format.
 
 ## Template variables (Nunjucks)
 
-`task.prefix` and each `task.requests` entry receive the variables below.
-The persona `prompt` does not: it is the system prompt of every revision's
+`task.prefix` and each `task.requests` entry receive the run's template
+variables; the ones a task usually needs are below. The persona `prompt`
+does not: it is the system prompt of every revision's
 call, rendered without the task's files.
 
 - `{{ INPUT_FILE }}` — path of the main input file
