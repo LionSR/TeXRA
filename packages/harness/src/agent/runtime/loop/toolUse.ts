@@ -315,7 +315,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       for (;;) {
         state = yield* applyPendingModelSwitch(
           cell,
-          (at) => compaction.settle(at, 'the model is switching'),
+          compaction,
           yield* followUps.input.controls,
         );
         if (state.pendingResponse !== null) {
@@ -463,7 +463,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         return finish(state, RUN_OUTCOME.CANCELLED);
       }
       // A summary the turn started lands before the turn ends.
-      state = yield* compaction.finish(cell);
+      state = yield* compaction.landPending(cell);
       // The turn's trace rows are queued ahead of the boundary: the
       // barrier lets the open streams `waiting` closes count every one.
       yield* log.settled;
@@ -544,7 +544,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // summary lands before the halt (its usage is the run's); one still running
       // stops with the run. A refused summary fails the run, which its end records.
       compaction
-        .settle(cell, 'the run stopped')
+        .landPending(cell, 'the run stopped')
         .pipe(Effect.asVoid, Effect.ensuring(settleRun(cell, followUps)(exit))),
   ).pipe(
     Effect.map((loop) => result(loop.outcome, loop.state)),
