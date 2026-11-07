@@ -78,7 +78,7 @@ It touches `src/test-kernel/{agent,tools}/**`,
 `src/test-kernel/support/childProcessTestLayer.ts`.
 
 **PR 2, tiers, the desktop e2e specs, edge functions and test-only knobs**
-(C):
+(G):
 
 - the desktop e2e switches, a Playwright launch fixture, the lint zone for
   `!`, ARIA instead of Lit reads, and the duplicate or uncovered specs
@@ -95,7 +95,7 @@ It touches `packages/desktop/**`, `vitest.config.mjs`, `.github/workflows/`,
 `src/test-kernel/{model,agent/output/CompileCheck*,cli/ModelAccess*}` and
 the CLI settings comments.
 
-**Sequenced after other PRs, not in either:**
+**Sequenced after other PRs: D's PR 3 once each blocker lands, except ranked 3, which is A's:**
 
 - ranked 3 goes in A's TUI lifecycle PR;
 - ranked 4, `sessionEvents`' split (L5 F1), the `processLayer` test options
