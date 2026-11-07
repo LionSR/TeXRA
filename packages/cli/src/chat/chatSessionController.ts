@@ -846,8 +846,14 @@ export function createChatSessionController(
       const focused = runViewOf(currentView(), selectedRunIdSignal.get());
       if (focused !== undefined && focused.parentId !== null)
         return yield* send(focused.id, false);
-      if (session.launched !== undefined)
-        return returned('The conversation is still being resumed.');
+      // A launch on its way: the message goes to its run once the session
+      // holds it. One that ended without a run leaves the message to start
+      // its own below.
+      const pending = session.launched;
+      if (pending !== undefined) {
+        const launchedRun = yield* Deferred.await(pending);
+        if (launchedRun !== null) return yield* send(launchedRun, true);
+      }
       // The root run the session holds, stopping or not, or one the user
       // stopped, which the session continues; anything else (none yet, or
       // one that failed) starts a fresh run, which picks its model again. A

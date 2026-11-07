@@ -26,10 +26,11 @@ import { runViewOf, sessionView } from './sessionView';
  * renders would cache stale (#8273).
  */
 interface RootLaunch {
-  /** Done once the session holds the launch's run, or the launch ended
-   *  without one: a stop asked meanwhile waits for it, then lands on the
-   *  root the chat holds. */
-  readonly launched: Deferred.Deferred<void>;
+  /** Done once the session holds the launch's run, with its id, or the
+   *  launch ended without one, with null: a stop asked meanwhile waits for
+   *  it, then lands on the root the chat holds, and a message typed
+   *  meanwhile goes to that run. */
+  readonly launched: Deferred.Deferred<RunId | null>;
   /** For a launch that ended without a run: the code the chat exits with
    *  unless a later root replaces it (a refused resume is a usage error, a
    *  failed launch an agent error, a resume with no run a success). */
@@ -38,9 +39,7 @@ interface RootLaunch {
 
 /** How a root launch ended: the session holds its run, or it has none and
  *  the chat exits with `exitCode`. */
-type LaunchEnd =
-  | { readonly runId: RunId }
-  | { readonly exitCode: CliExitCode };
+type LaunchEnd = { readonly runId: RunId } | { readonly exitCode: CliExitCode };
 
 /** How the chat leaves, once decided: on its own (`/exit`, a Ctrl-C with
  *  nothing to stop), or on a signal with that signal's exit code. */
@@ -120,7 +119,7 @@ export class TuiSession {
   }
 
   /** The launch on its way to the session: what a stop waits for. */
-  get launched(): Deferred.Deferred<void> | undefined {
+  get launched(): Deferred.Deferred<RunId | null> | undefined {
     return launchInFlight()?.launched;
   }
 
@@ -137,9 +136,9 @@ export class TuiSession {
    * chooses its model already sees it. Undefined when a root run is in
    * flight. The claimant ends it with {@link endLaunch}.
    */
-  claimLaunch(): Deferred.Deferred<void> | undefined {
+  claimLaunch(): Deferred.Deferred<RunId | null> | undefined {
     if (!this.canStartRootRun()) return undefined;
-    const launched = Deferred.makeUnsafe<void>();
+    const launched = Deferred.makeUnsafe<RunId | null>();
     rootLaunch.set({ launched, exitCode: undefined });
     return launched;
   }
@@ -147,7 +146,7 @@ export class TuiSession {
   /** The launch `launched` reached its end: the session holds its run,
    *  which becomes the chat's root, or it has none. Only its first end
    *  counts, and only while it is still the chat's latest launch. */
-  endLaunch(launched: Deferred.Deferred<void>, end: LaunchEnd): void {
+  endLaunch(launched: Deferred.Deferred<RunId | null>, end: LaunchEnd): void {
     if (Deferred.isDoneUnsafe(launched)) return;
     if (rootLaunch.get()?.launched === launched) {
       if ('runId' in end) rootRunId.set(end.runId);
@@ -160,7 +159,10 @@ export class TuiSession {
     }
     // Last: the fibers waiting on the launch resume inside this call, and
     // they read the root it names.
-    Deferred.doneUnsafe(launched, Effect.void);
+    Deferred.doneUnsafe(
+      launched,
+      Effect.succeed('runId' in end ? end.runId : null),
+    );
   }
 
   /** A root the session resumed on its own becomes the chat's: it replaces
