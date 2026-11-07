@@ -207,7 +207,7 @@ lists the findings it closes and the primitive.
    a preview's fiber is in the request's scope, and `Semaphore.make(1)` per
    entry is "one LaTeX operation at a time". Deletes `settled`, `isSettled`,
    `workspaceTempCleanup`, `latexOperationInProgress`, `registerCleanup` and
-   one uninterruptible mask (PR 14784). The approval's masks and the
+   one uninterruptible mask. Landed in PR 14784 (2026-11-07). The approval's masks and the
    `applied` Ref wait for R7. N10, one staging for both hosts, was refused
    on investigation (below).
 
@@ -413,7 +413,7 @@ item a report lists without a lane. Full deletion lists are in the reports.
 
 | Id  | Finding                                                                                     | Species | Step      |
 | --- | ------------------------------------------------------------------------------------------- | ------- | --------- |
-| G1  | the tool-edit preview fights its own scope: five `uninterruptible`, a `settled` Deferred    | S1      | 3.1       |
+| G1  | the tool-edit preview fights its own scope: five `uninterruptible`, a `settled` Deferred    | S1      | landed    |
 | G2  | the process recorder: two booleans, two Deferreds, a detached fiber, a listener Set         | S1, S2  | 3.7       |
 | G3  | the host snapshot as a hand-written `SubscriptionRef`; capabilities as optional members     | S2      | 3.2       |
 | G4  | `openGuiWindow`'s contract typed from four controllers; a thirteen-field bag                | S4      | 2.2       |
@@ -445,7 +445,7 @@ item a report lists without a lane. Full deletion lists are in the reports.
 | I8  | the arXiv download hand-joins a promise; a cause wrapper around `Effect.retry`              | S6      | 4.4       |
 | I9  | `compileLatex2Pdf` reports success before the PDF exists                                    | S6      | landed    |
 | I10 | the toolchain catalog's install advice as prose parsed back                                 | S5      | 4.4       |
-| I11 | the LaTeX preview re-implements the request's scope                                         | S1      | 3.1       |
+| I11 | the LaTeX preview re-implements the request's scope                                         | S1      | landed    |
 | I12 | batched: helpers, `applyFor`'s enum, `LatexTrace`, `taskFileSnapshots`'s `WeakMap`, …       | S3      | 8.1       |
 | J1  | the webview transport as a hand-rolled RPC beside its own runtime                           | S2      | 3.5       |
 | J2  | a response carries both kinds' outcomes; its error decoded and said twice                   | S6      | 3.5       |
