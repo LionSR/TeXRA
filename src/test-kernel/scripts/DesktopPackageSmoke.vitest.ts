@@ -17,7 +17,6 @@ describe('packaged desktop smoke environment', () => {
       },
       {
         profile: '/isolation/profile',
-        userData: '/isolation/user-data',
       },
     );
 
@@ -26,7 +25,6 @@ describe('packaged desktop smoke environment', () => {
       LC_ALL: 'C.UTF-8',
       PATH: '/usr/bin',
       HOME: '/isolation/profile',
-      TEXRA_DESKTOP_E2E_USER_DATA_PATH: '/isolation/user-data',
     });
     expect(environment).not.toHaveProperty(
       'DESKTOP_FUTURE_LINUX_GPG_SIGNING_KEY',

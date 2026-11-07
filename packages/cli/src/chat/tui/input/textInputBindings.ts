@@ -8,9 +8,7 @@
 // structurally impossible.
 //
 // Order is precedence: earlier entries win, so modified chords
-// (Alt-Backspace, Ctrl/Alt-arrows) must precede their unmodified bases. The
-// audit in TextInputBindings.vitest.mts probes every chord and fails on
-// shadowed or unreachable entries.
+// (Alt-Backspace, Ctrl/Alt-arrows) must precede their unmodified bases.
 //
 // Deliberately NOT in this table: stateful interactions that need component
 // context — Enter (submit), Ctrl-J/Shift-Enter (newline), Esc (cancel paste),

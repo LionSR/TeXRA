@@ -139,7 +139,6 @@ type LeanSessionError =
 
 interface LeanServerOptions {
   readonly workspaceRoot: string;
-  readonly lakeCommand: string;
 }
 
 export class LeanServer extends Context.Service<
@@ -259,7 +258,6 @@ const stopProcess = Effect.fn('LeanServer.stopProcess')(function* (
 
 const make = ({
   workspaceRoot: root,
-  lakeCommand,
 }: LeanServerOptions): Effect.Effect<
   LeanServer['Service'],
   LeanStartError,
@@ -274,7 +272,7 @@ const make = ({
       SubscriptionRef.SubscriptionRef<FileState>
     >();
 
-    const handle = yield* ChildProcess.make(lakeCommand, [
+    const handle = yield* ChildProcess.make('lake', [
       'env',
       'lean',
       '--server',

@@ -12,22 +12,6 @@ export function cleanupDirectory(path: string): void {
 }
 
 /**
- * Allocate a fresh workspace + Electron user-data directory pair for a test
- * that relaunches the desktop app against a shared profile (relaunch-based
- * persistence and repair tests). Callers are responsible for cleaning up
- * both paths with `cleanupDirectory` once the app under test is closed.
- */
-export function createIsolatedProfile(): {
-  workspaceRoot: string;
-  userDataPath: string;
-} {
-  return {
-    workspaceRoot: mkdtempSync(join(tmpdir(), 'texra-e2e-workspace-')),
-    userDataPath: mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-')),
-  };
-}
-
-/**
  * `use` over a copy of the project store at `storagePath` (its `texra.db`
  * and write-ahead log): the process that holds a project store admits no
  * other, so a test reads what it has committed from the files. The copy

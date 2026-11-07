@@ -1,5 +1,5 @@
 import { layer } from '@effect/vitest';
-import { beforeEach, expect, vi } from 'vitest';
+import { expect } from 'vitest';
 import { Effect } from 'effect';
 
 import {
@@ -10,18 +10,6 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import type { RunModelDecisionReason } from '@texra-ai/harness/host';
-
-const readModelOptionsMock = vi.hoisted(() => vi.fn());
-
-vi.mock('@model/computeModelOptions', () => ({
-  // A case seeds the option rows on the read, and the wording below hands
-  // them straight back.
-  readModelOptions: readModelOptionsMock,
-}));
-// The availability read is stubbed to rows already.
-vi.mock('@texra/model/modelOptions', () => ({
-  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
-}));
 
 function model(
   value: string,
@@ -82,10 +70,6 @@ const resolveModelFromAccessList = (
 layer(SessionGraph.hosted)('CLI model access resolution', (it) => {
   // A fresh default host per test, as the lookups read its stores.
   it.layer(FakeHost.layer({}), { buildPerTest: true })((it) => {
-    beforeEach(() => {
-      readModelOptionsMock.mockReset();
-    });
-
     it.effect('owns fallback behavior by model source', () =>
       Effect.gen(function* () {
         const entries = [

@@ -404,3 +404,131 @@ first.
   - W3's alternative design, and W7, the server half's two copies: both
     held for the owner, with details shared outside this record;
   - the GitHub account-age rule, decided in two places (W9).
+
+## 6. Round 5: what the code says about itself, and what the tests protect
+
+Round 5 (`.agents/docs/evidence/2026-11-07-design-red-flags-round-5-docs/`,
+`-round-5-prompts/`, `-round-5-tests/`, read at main `c9ceb23`) audited
+three things no area audit reads as a whole: the public guide against the
+code (H), the bundled prompts as the model reads them (I), and the test
+suites against what they protect (six lenses and a ranked list). H and I
+fixed what they found in their own PRs (#14831, #14832) and handed the code
+they found wrong to F, which landed it in #14834, #14835 and #14839 with
+two regression tests: the telemetry opt-out hint named a key the config
+file does not store, and paper2poster's theme files never reached the
+compile directory. The test audit's ranked list is two PRs with no file in
+common: D's run-loop and tool suites onto production paths (#14842), and
+G's tiers, desktop e2e specs, edge functions and test-only knobs
+(its PR is still being written). The catalogue's "Status at main `14d4b72`" counts the rows.
+
+The lesson of round 5 is the information-leakage cluster of section 4
+again, one level out: a prompt, a guide page and a test are facts copied
+out of the code into files no compiler checks, and each round of code
+changes leaves them wrong. The two setup-tool suites that protected
+nothing since #14826 (R5-1) are the test-side instance: a suite pinned to
+how a layer is built, not to what the tool refuses.
+
+### 6.1 By owner
+
+- **F:** done, except the four prompt items held for the owner (I-C1,
+  I-C4, I-C5, I-C16).
+- **D, PR 3:** R5-4 (a row builder for `run.start` and one tool-use turn),
+  R5-11 (`sessionEvents`' split), R5-12 (the `processLayer` test options,
+  which also frees R5-8's background cases), R5-13 (`ProviderCapabilities`),
+  then R5-14 (the 40-file move, now that #14836 and #14837 have landed).
+  R5-15 waits on G9.
+- **A:** R5-3, the CLI suites onto the real session, after the TUI
+  lifecycle PR (#14837).
+- **Open:** R5-6's other `runFork` sites and the run-id counters.
+
+## 7. Round 6: two areas spread across layers
+
+Round 6 (`.agents/docs/evidence/2026-11-07-design-red-flags-round-6/`,
+read at main `fcb53f7` with #14836's names) audited two areas no directory
+holds: the stage (the former task group), which the schema, the run loop,
+the trace, the view fold, the progress view and the CLI panes each own a
+part of; and the session database against pi-durable, the peer the owner
+named. Each report answers the area's questions with evidence, compares two
+designs and chooses one, and ends in a ranked plan of two PRs.
+
+- **S, the stage.** One stage has 12 representations, 5 writers of
+  `stage.start` and 8 closers. The chosen design: a stage is only a span no
+  other row bounds. The run and the turn are bounded by `run.activate`,
+  `run.end` and the turn rows, so their stages go (E1's item 7, which the
+  catalogue had marked landed); a script's stage is a projection of its
+  card; the one span nothing else bounds, a plugin's section inside a call,
+  stays a `stage.*` pair under one scoped trace call. It carries one defect
+  (R6-S2): an interrupted run's open stage reads "Running" after the process
+  dies, because the stage's status has eight writers and the fold is not one
+  of them.
+- **T, the session database.** The SQL layer is sound and in places
+  stronger than the peer (STRICT tables, one `BEGIN IMMEDIATE` writer,
+  content-addressed blobs, collection by reachability). What is not is the
+  layer between the writer and its readers: TeXRA writes a batch and reads
+  it back from SQLite three ways to learn what it wrote, and keeps the
+  machinery of a multi-process store on a store one process holds. pi
+  publishes each commit from memory. The chosen design: the publisher job
+  applies committed rows to the view and publishes them to one PubSub, and
+  nothing re-reads its own writes. T also found three catalogue rows marked
+  landed in error (B2, B3, B6: their symbols are on `main`), corrected in
+  the catalogue's "Status at main `14d4b72`".
+
+### 7.1 By owner
+
+- **The S session** (harness, progress view, CLI panes), after #14836:
+  PR 1, the defect first with its regression test written to fail, then
+  R6-S1, R6-S3, R6-S5, R6-S9 (`stage.start` v3, `StageStatus` and
+  `StageKindSchema` deleted, the golden store regenerated, the headless
+  contract bumped); PR 2, a script's stage is its card (R6-S4, R6-S6,
+  R6-S8, R6-S7, R6-S10).
+- **E, the T session**, after #14843: PR 1 (R6-T2, R6-T1 with F13, R6-T4,
+  R6-T7a, R6-T7c), about −450 lines; PR 2 (R6-T3 with C for
+  `externalInquiry.ts`, R6-T5, R6-T6), about −120.
+- **The owner's call:** whether R6-T6 rides the next format batch instead
+  of PR 2; R6-T7b's spec wording.
+
+## 8. Round 7: the fallbacks, read as design decisions
+
+Round 7 (`.agents/docs/evidence/2026-11-07-design-red-flags-round-7-fallbacks/`,
+read at main `d7c0c45`, merged as #14845) started from the owner's
+observation that many fallbacks look like red flags, and are design problems
+rather than local ones. The audit counted every shape that turns a failure,
+an absence or an unknown case into a default (184 handlers that succeed with
+a default, 63 of which warn first; 310 lines that say "fallback"; almost no
+test of a degraded path) and then grouped the sites by the decision the
+design refused upstream. Ten causes, six with a reachable defect:
+
+- a fact with no owner across a window's life (FB1: where the window's
+  tasks run, which the desktop never shows and the e2e suite runs on);
+- a decision pushed to each caller as an optional field (FB2: the model
+  fallback's notice, dropped by delegation and the compile fixer);
+- a switch that chose "everything else" over an exhaustive match (FB3,
+  with a privacy case in the trace redaction);
+- a value carried as an id and looked up again, so each reader guesses a
+  default for a broken invariant (FB4);
+- "recorded but not offered" decided per capability kind (FB5: tools warn,
+  skills vanish);
+- absence and failure merged at a read boundary (FB6: sign-out skips
+  revocation silently);
+- a build fact guessed at run time by two rules (FB7);
+- a host's policy as a branch on the host's name (FB8, G11 i's residue);
+- a refusal's reason rebuilt by its catcher (FB9); and lone catches (FB10).
+
+The review of the report found FB4's empty-upload case unreachable (the
+strict blob reader throws first) and moved FB4 d onto the code #14837 left.
+
+### 8.1 By owner
+
+One PR per cause group, three sessions, after round 6's T and S PR 1:
+
+- **G:** FB1 (the report's design A: `openProjectSession` returns where the
+  session runs as one value, the banner projects it, the desktop's log-only
+  branch goes, the e2e launch stops running the fallback) and FB7 (the
+  bundler writes the layout; no candidate loop, no `'unknown'` version), with
+  FB10 a.
+- **E:** FB2 (a union the caller must match; `'credential'` and the `mode`
+  column deleted), FB3 a–d, FB4 a–c and e's view half, FB5, FB6 b, c, e and
+  the `storeSchema.ts` case.
+- **A, B, C and F's lettered parts, one session:** FB3 e and f, FB4 d with
+  `cliState.ts`, FB6 a, d and the `claudeAgentConfig.ts` case, FB8, FB9,
+  FB10 b, d and e.
