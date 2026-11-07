@@ -162,6 +162,24 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
     (row) => row.runId === runId && row.requestId === requestId,
   );
 
+/**
+ * A pending request as of this call. The current view answers when it lists
+ * the request; when it does not, the log does (`view.read`): a surface fed
+ * by another reader of the same log, a window's feed from the service, can
+ * list a request the moment it is committed, before this view has applied
+ * it, and ask about it at once.
+ */
+const pendingAsOfNow = (deps: RequestDeps, runId: RunId, requestId: string) => {
+  const pending = pendingOf(deps, runId, requestId);
+  return pending !== undefined
+    ? Effect.succeed(pending)
+    : Effect.map(deps.view.read([runId]), (view) =>
+        view.requests.find(
+          (row) => row.runId === runId && row.requestId === requestId,
+        ),
+      );
+};
+
 const decideSurfaceRequest = (
   deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
@@ -272,17 +290,25 @@ const handle = (
       );
     case 'request.decide':
       return decideSurfaceRequest(deps, req, heldHere);
-    case 'request.preview': {
-      const payload = pendingOf(deps, req.runId, req.requestId)?.payload;
-      return payload?.kind === 'toolEdit'
-        ? readToolEditContent(deps.sessionLog.blobs, payload.data.content).pipe(
-            Effect.map(({ originalContent, ...content }) => ({
-              kind: 'preview' as const,
-              preview: { ...content, originalContent: originalContent ?? '' },
-            })),
-          )
-        : Effect.succeed({ kind: 'preview', preview: null });
-    }
+    case 'request.preview':
+      return Effect.flatMap(
+        pendingAsOfNow(deps, req.runId, req.requestId),
+        (pending): Effect.Effect<Outcome> =>
+          pending?.payload.kind === 'toolEdit'
+            ? readToolEditContent(
+                deps.sessionLog.blobs,
+                pending.payload.data.content,
+              ).pipe(
+                Effect.map(({ originalContent, ...content }) => ({
+                  kind: 'preview',
+                  preview: {
+                    ...content,
+                    originalContent: originalContent ?? '',
+                  },
+                })),
+              )
+            : Effect.succeed({ kind: 'preview', preview: null }),
+      );
     case 'policy.set':
       return setPolicy(req.change, Effect.succeed(done));
   }
