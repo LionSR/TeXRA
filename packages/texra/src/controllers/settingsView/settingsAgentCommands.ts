@@ -105,6 +105,15 @@ interface SettingsAgentCommandsPorts {
   readonly present: SettingsPresentation;
 }
 
+/** What the person is told when customizing kept their own copies of files
+ *  the agent binds: the copy now reads as current, so nothing else says the
+ *  bundled ones differ. */
+function keptDifferingNotice(files: readonly string[]): string {
+  return files.length === 1
+    ? `Kept your existing ${files[0]}; it differs from the built-in one.`
+    : `Kept your existing ${files.join(', ')}; they differ from the built-in ones.`;
+}
+
 /** The Agents page: its arms, its pages, and what an agent change runs. */
 export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const { bindings, present } = ports;
@@ -262,7 +271,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           }
 
           // A copy already there is replaced only on the user's say-so.
-          const targetPath = yield* catalog
+          const copy = yield* catalog
             .customize(entry, 'copy')
             .pipe(
               Effect.catchTag('AgentCustomizeRefused', (refused) =>
@@ -280,13 +289,15 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
                   : Effect.as(present.alert(refused.message), undefined),
               ),
             );
-          if (targetPath === undefined) return;
+          if (copy === undefined) return;
 
           yield* agentFilesChanged;
-          yield* bindings.openPath(targetPath);
+          yield* bindings.openPath(copy.path);
           yield* present.notice(
-            `Created custom copy: ${path.basename(targetPath)}`,
+            `Created custom copy: ${path.basename(copy.path)}`,
           );
+          if (copy.keptDiffering.length > 0)
+            yield* present.notice(keptDifferingNotice(copy.keptDiffering));
         }),
       ),
     deleteCustomAgent: (message) =>

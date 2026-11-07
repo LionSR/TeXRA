@@ -1634,6 +1634,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **An agent whose template file cannot be read is reported, not run
+  without it.** A task that names a file in `task.files` that is missing or
+  unreadable is listed as an issue on the Agents page and in `texra agents`,
+  naming the file, instead of running with that template left out.
 - **The VS Code extension no longer reports another extension's error as
   its own.** VS Code runs every extension in one process, and TeXRA showed
   "The extension host encountered an unrecoverable error" for a failure in
