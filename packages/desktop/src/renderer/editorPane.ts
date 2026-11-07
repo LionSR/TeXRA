@@ -27,6 +27,8 @@ import {
   FiberSet,
   Scope,
   Semaphore,
+  Stream,
+  SubscriptionRef,
 } from 'effect';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
@@ -66,8 +68,50 @@ interface FileState {
   /** What this pane last read from or wrote to the file: a save lands only
    *  while the file still holds it. */
   disk?: string;
-  dirty: boolean;
   syncing: boolean;
+}
+
+/** What the file tree shows, as one value: every change replaces it and
+ *  the tree renders the new one. */
+interface TreeState {
+  /** The top-level listing. */
+  readonly nodes: readonly EditorTreeNode[];
+  readonly loading: boolean;
+  readonly error: string | undefined;
+  /** The file the editor shows. */
+  readonly openPath: string | undefined;
+  /** Files with edits not yet saved. */
+  readonly dirty: ReadonlySet<string>;
+  readonly expanded: ReadonlySet<string>;
+  /** Each listed folder's entries. */
+  readonly children: ReadonlyMap<string, readonly EditorTreeNode[]>;
+  readonly listing: ReadonlySet<string>;
+  readonly failed: ReadonlySet<string>;
+}
+
+const FRESH_TREE: TreeState = {
+  nodes: [],
+  loading: true,
+  error: undefined,
+  openPath: undefined,
+  dirty: new Set(),
+  expanded: new Set(),
+  children: new Map(),
+  listing: new Set(),
+  failed: new Set(),
+};
+
+/** `set` with `key` present or absent. */
+function withMember<K>(
+  set: ReadonlySet<K>,
+  key: K,
+  present: boolean,
+): ReadonlySet<K> {
+  if (set.has(key) === present) return set;
+  const next = new Set(set);
+  if (present) next.add(key);
+  else next.delete(key);
+  return next;
 }
 
 interface EditorPaneCallbacks {
@@ -137,17 +181,22 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   let disposed = false;
   let monaco: MonacoModule | undefined;
   let editor: CodeEditor | undefined;
-  let treeNodes: readonly EditorTreeNode[] = [];
-  let openPath: string | undefined;
   let theme: Theme = 'dark';
-  let treeError: string | undefined;
-  let treeLoading = true;
   // Everything the pane runs lives in its scope: disposing the pane
   // interrupts whatever is still in flight.
   const scope = Scope.makeUnsafe();
-  const { opening, listing, directoryLoads } = Effect.runSync(
+  const { tree, opening, listing, directoryLoads } = Effect.runSync(
     Effect.gen(function* () {
+      const tree = yield* SubscriptionRef.make(FRESH_TREE);
+      // The tree renders every value it takes, for the pane's lifetime.
+      yield* Effect.forkIn(
+        Stream.runForEach(SubscriptionRef.changes(tree), (state) =>
+          Effect.sync(() => render(treeTemplate(state), treeHost)),
+        ),
+        scope,
+      );
       return {
+        tree,
         /** The open that chooses which file is visible: a newer open
          *  interrupts it. */
         opening: yield* FiberHandle.make<void>(),
@@ -180,27 +229,31 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         Effect.asVoid,
       ),
     );
-  const expandedDirectories = new Set<string>();
-  const directoryChildren = new Map<string, readonly EditorTreeNode[]>();
-  const loadingDirectories = new Set<string>();
-  const directoryErrors = new Set<string>();
   const files = new Map<string, FileState>();
+  /** Change the tree's state from outside an Effect. */
+  const setTree = (change: (state: TreeState) => TreeState): void =>
+    Effect.runSync(SubscriptionRef.update(tree, change));
+  /** Record whether `path` has unsaved edits, and tell the tab strip. */
+  function setDirty(path: string, dirty: boolean): void {
+    setTree((state) => ({
+      ...state,
+      dirty: withMember(state.dirty, path, dirty),
+    }));
+    callbacks.onDirtyChange(path, dirty);
+  }
+  const isDirty = (path: string): boolean =>
+    SubscriptionRef.getUnsafe(tree).dirty.has(path);
 
   function fileState(path: string): FileState {
     let file = files.get(path);
     if (!file) {
       file = {
         lane: Semaphore.makeUnsafe(1),
-        dirty: false,
         syncing: false,
       };
       files.set(path, file);
     }
     return file;
-  }
-
-  function renderTree(): void {
-    render(treeTemplate(), treeHost);
   }
 
   /**
@@ -215,18 +268,18 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     if (path) callbacks.onRequestOpen(path);
   }
 
-  function treeTemplate(): TemplateResult {
-    if (treeError) {
+  function treeTemplate(state: TreeState): TemplateResult {
+    if (state.error) {
       return html`
         <wa-callout class="desktop-editor-tree-empty" variant="danger">
-          ${waIcon('triangle-exclamation', { slot: 'icon' })} ${treeError}
+          ${waIcon('triangle-exclamation', { slot: 'icon' })} ${state.error}
         </wa-callout>
       `;
     }
-    if (treeLoading) {
+    if (state.loading) {
       return renderLoadingState('Loading project files…');
     }
-    if (treeNodes.length === 0) {
+    if (state.nodes.length === 0) {
       return renderEmptyState({
         icon: 'folder-open',
         title: 'No files found in this workspace.',
@@ -257,7 +310,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         ) => requestOpenFromRow(event.detail.selection.at(-1))}
         @click=${handleTreeClick}
       >
-        ${treeNodes.map((node) => treeNodeTemplate(node))}
+        ${state.nodes.map((node) => treeNodeTemplate(state, node))}
       </wa-tree>
     `;
   }
@@ -283,61 +336,70 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     // Tree item events bubble through ancestor tree items. Only the directory
     // whose disclosure control changed should update its expansion state.
     if (event.target !== event.currentTarget) return;
+    setTree((state) => ({
+      ...state,
+      expanded: withMember(state.expanded, directory.path, expanded),
+    }));
     if (expanded) {
-      expandedDirectories.add(directory.path);
       void run(
         FiberSet.run(directoryLoads, loadDirectory(directory)).pipe(
           Effect.asVoid,
         ),
       );
-    } else {
-      expandedDirectories.delete(directory.path);
     }
   }
 
   /** List one folder for the tree. A refresh interrupts it, and clears
    *  what it would have written. */
   function loadDirectory(directory: EditorTreeDirectory): Effect.Effect<void> {
+    const { path } = directory;
     return Effect.suspend(() => {
-      if (
-        directoryChildren.has(directory.path) ||
-        loadingDirectories.has(directory.path)
-      ) {
+      const state = SubscriptionRef.getUnsafe(tree);
+      if (state.children.has(path) || state.listing.has(path)) {
         return Effect.void;
       }
-      loadingDirectories.add(directory.path);
-      directoryErrors.delete(directory.path);
-      renderTree();
-      return callbacks.listFiles(directory.path).pipe(
+      setTree((current) => ({
+        ...current,
+        listing: withMember(current.listing, path, true),
+        failed: withMember(current.failed, path, false),
+      }));
+      return callbacks.listFiles(path).pipe(
         Effect.match({
-          onSuccess: (entries) => {
-            directoryChildren.set(
-              directory.path,
+          onSuccess: (entries) => (current: TreeState) => ({
+            ...current,
+            children: new Map(current.children).set(
+              path,
               buildEditorDirectoryEntries(entries),
-            );
-          },
+            ),
+          }),
           onFailure: (error) => {
             callbacks.onError(error);
-            directoryErrors.add(directory.path);
+            return (current: TreeState) => ({
+              ...current,
+              failed: withMember(current.failed, path, true),
+            });
           },
         }),
-        Effect.andThen(
-          Effect.sync(() => {
-            loadingDirectories.delete(directory.path);
-            renderTree();
-          }),
+        Effect.flatMap((change) =>
+          SubscriptionRef.update(tree, (current) => ({
+            ...change(current),
+            listing: withMember(current.listing, path, false),
+          })),
         ),
       );
     });
   }
 
-  function treeNodeTemplate(node: EditorTreeNode): TemplateResult {
+  function treeNodeTemplate(
+    state: TreeState,
+    node: EditorTreeNode,
+  ): TemplateResult {
     if (node.kind === 'directory') {
-      const expanded = expandedDirectories.has(node.path);
-      const loaded = directoryChildren.has(node.path);
-      const children = directoryChildren.get(node.path) ?? [];
-      const loading = loadingDirectories.has(node.path);
-      const failed = directoryErrors.has(node.path);
+      const expanded = state.expanded.has(node.path);
+      const loaded = state.children.has(node.path);
+      const children = state.children.get(node.path) ?? [];
+      const loading = state.listing.has(node.path);
+      const failed = state.failed.has(node.path);
       return html`
         <wa-tree-item
           class="desktop-editor-tree-row"
@@ -373,13 +435,13 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
                 >`
               : nothing
           }
-          ${children.map((child) => treeNodeTemplate(child))}
+          ${children.map((child) => treeNodeTemplate(state, child))}
         </wa-tree-item>
       `;
     }
 
-    const isOpen = node.path === openPath;
-    const isDirty = files.get(node.path)?.dirty === true;
+    const isOpen = node.path === state.openPath;
+    const dirty = state.dirty.has(node.path);
     return html`
       <wa-tree-item
         class="desktop-editor-tree-row"
@@ -390,7 +452,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       >
         <span class="desktop-editor-tree-icon">${waIcon('file-lines')}</span>
         <span class="desktop-editor-tree-label">${node.name}</span>
-        ${isDirty ? html`<span class="status-dot desktop-editor-dirty-dot"></span>` : nothing}
+        ${dirty ? html`<span class="status-dot desktop-editor-dirty-dot"></span>` : nothing}
       </wa-tree-item>
     `;
   }
@@ -457,10 +519,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
           // edits too, which is correct here: only reads and saves are
           // programmatic, and both reset the flag explicitly.
           created.onDidChangeContent(() => {
-            if (file.syncing || file.dirty) return;
-            file.dirty = true;
-            callbacks.onDirtyChange(path, true);
-            renderTree();
+            if (file.syncing || isDirty(path)) return;
+            setDirty(path, true);
           });
           file.model = created;
           return created;
@@ -476,11 +536,11 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     model: TextModel,
   ): Effect.Effect<void, Error> {
     return Effect.suspend(() => {
-      if (file.dirty) return Effect.void;
+      if (isDirty(path)) return Effect.void;
       const version = model.getVersionId();
       return Effect.map(callbacks.readFile(path), (contents) => {
         // Typing while the read was in flight is newer than it.
-        if (file.dirty || model.getVersionId() !== version) return;
+        if (isDirty(path) || model.getVersionId() !== version) return;
         // Only a read that is accepted retires an earlier notice, so a save
         // that failed before it keeps its warning.
         notice.clear(path);
@@ -505,10 +565,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
             if (file.model !== model || model.getVersionId() !== version)
               return;
             setClean(file, model, contents);
-            file.dirty = false;
-            callbacks.onDirtyChange(path, false);
+            setDirty(path, false);
             notice.clear(path);
-            renderTree();
           }),
         )
         .pipe(
@@ -539,6 +597,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         const target = loaded.editor;
         const file = fileState(path);
         const model = yield* currentModel(path, file, loaded.monaco);
+        const { openPath } = SubscriptionRef.getUnsafe(tree);
         if (target.getModel() !== model) {
           if (openPath) {
             const state = target.saveViewState();
@@ -548,7 +607,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
           const state = file.viewState;
           if (state) target.restoreViewState(state);
         }
-        openPath = path;
+        yield* SubscriptionRef.update(tree, (state) => ({
+          ...state,
+          openPath: path,
+        }));
         target.updateOptions({
           readOnly: callbacks.isReadOnly?.(path) ?? false,
           readOnlyMessage: {
@@ -557,7 +619,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
           },
         });
         notice.clear(path);
-        renderTree();
       }).pipe(
         Effect.catch((error) =>
           Effect.sync(() => notice.report(path, 'open', error)),
@@ -567,42 +628,44 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   }
 
   /** The tree's top-level listing, from scratch. */
-  const listTree = Effect.suspend(() => {
-    treeLoading = true;
-    renderTree();
-    return callbacks.listFiles('').pipe(
-      Effect.match({
-        onSuccess: (listedFiles) => {
-          treeNodes = buildEditorDirectoryEntries(listedFiles);
-          treeError = undefined;
-        },
-        onFailure: (error) => {
-          callbacks.onError(error);
-          treeError = 'Could not list workspace files.';
-        },
+  const listTree = SubscriptionRef.update(tree, (state) => ({
+    ...state,
+    loading: true,
+  })).pipe(
+    Effect.andThen(callbacks.listFiles('')),
+    Effect.match({
+      onSuccess: (listedFiles) => ({
+        nodes: buildEditorDirectoryEntries(listedFiles),
+        error: undefined,
       }),
-      Effect.andThen(
-        Effect.sync(() => {
-          treeLoading = false;
-          renderTree();
-        }),
-      ),
-    );
-  });
+      onFailure: (error) => {
+        callbacks.onError(error);
+        return { error: 'Could not list workspace files.' };
+      },
+    }),
+    Effect.flatMap((listed) =>
+      SubscriptionRef.update(tree, (state) => ({
+        ...state,
+        ...listed,
+        loading: false,
+      })),
+    ),
+  );
 
   /** Re-read the tree and every open file from disk. A refresh during
    *  another interrupts its listing and folder loads; each file's re-read
    *  queues on its lane, behind a first read still in flight. */
   function refresh(): Promise<void> {
     if (disposed) return Promise.resolve();
-    const tree = FiberSet.clear(directoryLoads).pipe(
+    const relist = FiberSet.clear(directoryLoads).pipe(
       Effect.andThen(
-        Effect.sync(() => {
-          expandedDirectories.clear();
-          directoryChildren.clear();
-          loadingDirectories.clear();
-          directoryErrors.clear();
-        }),
+        SubscriptionRef.update(tree, (state) => ({
+          ...state,
+          expanded: FRESH_TREE.expanded,
+          children: FRESH_TREE.children,
+          listing: FRESH_TREE.listing,
+          failed: FRESH_TREE.failed,
+        })),
       ),
       Effect.andThen(FiberHandle.run(listing, listTree)),
       Effect.flatMap(Fiber.await),
@@ -624,7 +687,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         ),
     );
     return run(
-      Effect.all([tree, ...fileRefreshes], {
+      Effect.all([relist, ...fileRefreshes], {
         concurrency: 'unbounded',
         discard: true,
       }),
@@ -666,10 +729,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
                   model.getVersionId() !== savedVersion
                 )
                   return;
-                file.dirty = false;
-                callbacks.onDirtyChange(path, false);
+                setDirty(path, false);
                 notice.clear(path);
-                renderTree();
               },
             );
           }),
@@ -681,8 +742,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         ),
     );
   }
-
-  renderTree();
 
   return {
     element,
@@ -704,9 +763,9 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       editor?.layout();
     },
 
-    hasUnsavedChanges: () => [...files.values()].some((file) => file.dirty),
+    hasUnsavedChanges: () => SubscriptionRef.getUnsafe(tree).dirty.size > 0,
     // A plain save never overwrites: only the conflict notice's answer does.
-    save: () => save(openPath),
+    save: () => save(SubscriptionRef.getUnsafe(tree).openPath),
 
     dispose() {
       disposed = true;
