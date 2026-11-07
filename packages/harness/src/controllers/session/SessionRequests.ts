@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { Context, Effect, FileSystem, Path, SubscriptionRef } from 'effect';
+import { Context, Effect, FileSystem, Path } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import {
@@ -156,29 +156,18 @@ const rename = (
     Effect.as(done),
   );
 
-/** The pending request `requestId` of run `runId`, if the view lists it. */
-const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
-  SubscriptionRef.getUnsafe(deps.view.ref).requests.find(
-    (row) => row.runId === runId && row.requestId === requestId,
-  );
-
 /**
- * A pending request as of this call. The current view answers when it lists
- * the request; when it does not, the log does (`view.read`): a surface fed
- * by another reader of the same log, a window's feed from the service, can
- * list a request the moment it is committed, before this view has applied
- * it, and ask about it at once.
+ * The pending request `requestId` of run `runId`, read from the log. Not the
+ * current view: a window fed by the service's log can list a request the
+ * moment it is committed, before the service's view has applied it, and
+ * preview or decide it at once.
  */
-const pendingAsOfNow = (deps: RequestDeps, runId: RunId, requestId: string) => {
-  const pending = pendingOf(deps, runId, requestId);
-  return pending !== undefined
-    ? Effect.succeed(pending)
-    : Effect.map(deps.view.read([runId]), (view) =>
-        view.requests.find(
-          (row) => row.runId === runId && row.requestId === requestId,
-        ),
-      );
-};
+const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
+  Effect.map(deps.view.read([runId]), (view) =>
+    view.requests.find(
+      (row) => row.runId === runId && row.requestId === requestId,
+    ),
+  );
 
 const decideSurfaceRequest = (
   deps: RequestDeps,
@@ -188,7 +177,7 @@ const decideSurfaceRequest = (
   const answer = Effect.fn('answer')(function* <R>(
     write: Effect.Effect<boolean, RequestError, R>,
   ) {
-    const pending = pendingOf(deps, req.runId, req.requestId);
+    const pending = yield* pendingOf(deps, req.runId, req.requestId);
     if (pending === undefined) return yield* settled(req.runId);
     // A request that blocks its caller is answered by the fiber waiting on it,
     // and that fiber died with the owner this decision takes over from:
@@ -225,12 +214,15 @@ const decideSurfaceRequest = (
     return done;
   });
   // An answer the request does not take is refused in the lane, before its grant.
-  const decided = Effect.suspend(() => {
-    const payload = pendingOf(deps, req.runId, req.requestId)?.payload;
-    const reason = payload && answerMismatch(payload, req.decision, req.grant);
-    if (reason) return Effect.fail(new Rejected({ reason }));
-    return decideUnderGrant(req, answer);
-  });
+  const decided = Effect.flatMap(
+    pendingOf(deps, req.runId, req.requestId),
+    (pending) => {
+      const reason =
+        pending && answerMismatch(pending.payload, req.decision, req.grant);
+      if (reason) return Effect.fail(new Rejected({ reason }));
+      return decideUnderGrant(req, answer);
+    },
+  );
   return withPerKeyLane(
     deps.decisionLanes,
     `${req.runId}/${req.requestId}`,
@@ -292,7 +284,7 @@ const handle = (
       return decideSurfaceRequest(deps, req, heldHere);
     case 'request.preview':
       return Effect.flatMap(
-        pendingAsOfNow(deps, req.runId, req.requestId),
+        pendingOf(deps, req.runId, req.requestId),
         (pending): Effect.Effect<Outcome> =>
           pending?.payload.kind === 'toolEdit'
             ? readToolEditContent(
