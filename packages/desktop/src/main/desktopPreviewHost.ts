@@ -18,7 +18,7 @@ import {
 import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
+import { HostFailed } from '@texra/hosts/uiHosts';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 
 import {
@@ -48,8 +48,8 @@ interface DesktopShellAdapter {
  */
 interface DesktopPreviewHost {
   /** Open a URL in the default browser. The shell's rejection is
-   *  {@link ExternalOpenFailed}; the caller presents it. */
-  openExternal(url: string): Effect.Effect<void, ExternalOpenFailed>;
+   *  {@link HostFailed}; the caller presents it. */
+  openExternal(url: string): Effect.Effect<void, HostFailed>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
@@ -115,12 +115,12 @@ export function createDesktopPreviewHost(
     }
   });
 
-  const openExternal = (url: string): Effect.Effect<void, ExternalOpenFailed> =>
+  const openExternal = (url: string): Effect.Effect<void, HostFailed> =>
     Effect.tryPromise({
       try: () => options.shell.openExternal(url),
       catch: (cause) =>
-        new ExternalOpenFailed({
-          target: url,
+        new HostFailed({
+          member: 'openExternal',
           message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
           cause,
         }),

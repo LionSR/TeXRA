@@ -1,23 +1,25 @@
 /**
  * A host attached to one session of `@texra-ai/harness`: its presentation
  * surface, and its approval handler at work, which requests it is asked
- * (once each) and what is recorded when it does not answer. A request is
- * never left waiting on a handler that failed, threw, or went quiet: that is
- * a denial, with the cause logged.
+ * (once each) and what is recorded when it does not answer. A handler that
+ * fails or throws denies the request, with the cause logged; one that has not
+ * answered yet is waited for, with no deadline.
  */
 import {
   Cause,
   Context,
-  Deferred,
   Effect,
   Fiber,
   FiberMap,
+  Option,
   Schedule,
   type Scope,
   Stream,
+  SubscriptionRef,
 } from 'effect';
 
 import {
+  attachInteractions,
   Interactions,
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
@@ -192,20 +194,20 @@ export const attachHost = Effect.fn('attachHost')(function* (
   session: Context.Context<SessionServices>,
   host: SessionHost,
 ): Effect.fn.Return<void, never, Scope.Scope> {
-  // The session disposes its host as it closes: the answerer ends then.
-  const ended = yield* Deferred.make<void>();
-  yield* Effect.acquireRelease(
-    Context.get(session, Interactions).use(
-      overlay(host, () => Deferred.doneUnsafe(ended, Effect.void)),
-    ),
-    (detach) => Effect.sync(detach),
-  );
+  const interactions = Context.get(session, Interactions);
+  yield* attachInteractions(interactions, overlay(host));
   if (!answers(host)) return;
-  // The session ended: closing the answerer's scope interrupts every
-  // prompt still out, so none decides against it.
+  // The session detaches its host as it closes: the answerer ends then, and
+  // closing its scope interrupts every prompt still out, so none decides
+  // against it.
   yield* Effect.forkScoped(
     Effect.scoped(answerRequests(session, host)).pipe(
-      Effect.raceFirst(Deferred.await(ended)),
+      Effect.raceFirst(
+        SubscriptionRef.changes(interactions.host).pipe(
+          Stream.filter(Option.isNone),
+          Stream.runHead,
+        ),
+      ),
     ),
   );
 });
@@ -219,15 +221,13 @@ const answers = (host: SessionHost): host is AnsweringHost =>
 /**
  * `host` as the session's attachment sees it: its presentation members,
  * bound to it (a class-based host keeps its prototype's methods and private
- * state), with the session's `dispose` and, for a host that answers,
- * `approvalPromptsUnavailable: false`.
+ * state), and, for a host that answers, `approvalPromptsUnavailable: false`.
  */
-function overlay(host: SessionHost, dispose: () => void): HostInteractions {
+function overlay(host: SessionHost): HostInteractions {
   return {
     ...(host.emit && { emit: host.emit.bind(host) }),
     approvalPromptsUnavailable: answers(host)
       ? false
       : host.approvalPromptsUnavailable === true,
-    dispose,
   };
 }

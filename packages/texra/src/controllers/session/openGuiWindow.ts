@@ -29,7 +29,7 @@ import {
 } from '@texra-ai/harness';
 import {
   AgentDirectories,
-  SessionHostInteractions,
+  presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
   type ProcessServices,
@@ -91,6 +91,7 @@ import {
   type HostSnapshotSource,
 } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
+import { findLabelInWorkspace } from './workspaceFileOptions';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
@@ -108,7 +109,6 @@ export interface GuiSession {
 const OWN_REQUEST_LABEL = {
   popOut: 'Pop-out to editor',
   popBack: 'Pop-out to editor',
-  pickFiles: 'The file picker',
   useCurrentFile: "The editor's current file",
   addOpenedFiles: "The editor's open files",
   gettingStarted: 'Starting a project',
@@ -153,8 +153,11 @@ type LatexdiffsRequest = Extract<HostRequest, { kind: 'latexdiffs' }>;
 export interface SharedHostRequestBindings {
   /** Open a file of this session's workspace, at a line when one is named. */
   openPath(file: string, line: number | undefined): HostVerb<void>;
-  /** Reveal the first file defining `label`; `false` when none does. */
-  openLabel(label: string): HostVerb<boolean>;
+  /** The files the user picked for a launcher field; null when they picked
+   *  none. */
+  pickFiles(
+    fileType: Extract<HostRequest, { kind: 'pickFiles' }>['fileType'],
+  ): HostVerb<readonly string[] | null>;
   /** How a generated diff opens and a diff run shows its progress. */
   readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
@@ -302,7 +305,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // it for the same. Its own failures before a run opens, it presents
   // itself.
   const workspace = roots.workspace ?? roots.storage;
-  const present = new SessionHostInteractions(host.window);
+  const present = presenterOn(host.window);
   yield* Effect.forkScoped(
     attachWindowHost(runs.link, workspace, host.window, ports.focused),
   );
@@ -352,6 +355,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       return run === undefined ? [] : documentRoundsOf(run);
     },
     storageRoot: roots.storage,
+    workspace: roots.workspace,
     host: { ...host.files, showInfo: host.showInfoMessage },
     runs: runActions,
   });
@@ -442,13 +446,21 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
 
     return Effect.gen(function* () {
       switch (request.kind) {
+        case 'pickFiles': {
+          const paths = yield* bindings.pickFiles(request.fileType);
+          if (paths === null) return yield* new Cancelled();
+          return { kind: 'files', paths } satisfies HostOutcome;
+        }
         case 'openFile':
           yield* bindings.openPath(request.path, request.line ?? undefined);
           return done;
         case 'openLabel': {
-          // The "not found" message belongs to the request, not to either
-          // host's search: both word it the same way.
-          const opened = yield* bindings.openLabel(request.label);
+          // The search is the body's; the host only opens the match.
+          const opened = yield* findLabelInWorkspace(
+            roots.workspace,
+            request.label,
+            (absolutePath, line) => bindings.openPath(absolutePath, line),
+          );
           if (!opened) {
             return yield* new Rejected({
               reason: `No file defines the label ${request.label}.`,

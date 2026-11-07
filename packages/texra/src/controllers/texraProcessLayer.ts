@@ -24,6 +24,7 @@ import {
   type StateStore,
 } from '@texra-ai/harness/host';
 import {
+  CommandDirs,
   FileSecrets,
   type GlobalDatabase,
   secretsDirectory,
@@ -100,7 +101,6 @@ export const texraProcessLayer = ({
   const services = processLayer({
     storageRoot,
     settings: TEXRA_SETTINGS.catalog,
-    commandDirs,
     plugins,
     ...(resourcesPath !== undefined && {
       skills: {
@@ -144,6 +144,11 @@ export const texraProcessLayer = ({
     }),
     // TeXRA's plugin list is fixed in this build, so a list the harness
     // refuses is a defect of the build, not a failure a host can recover.
-  }).pipe(Layer.orDie);
+  }).pipe(
+    Layer.orDie,
+    // Beneath every session the process builds, so each command it runs
+    // resolves on the app's directories too.
+    Layer.provideMerge(Layer.succeed(CommandDirs)(commandDirs)),
+  );
   return Layer.merge(services, HostWindows.layer(editors));
 };

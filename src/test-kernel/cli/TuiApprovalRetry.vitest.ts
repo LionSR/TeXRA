@@ -48,7 +48,10 @@ import {
   type RetryPermission,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { Interactions } from '@agent/runtime/HostInteractions';
+import {
+  attachInteractions,
+  Interactions,
+} from '@agent/runtime/HostInteractions';
 import { openRequest as openRunRequest } from '@agent/runtime/requests';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
@@ -128,14 +131,14 @@ const tui = Effect.gen(function* () {
   } as unknown as CliRuntimeHost;
   const session = yield* sessionHandle;
   yield* Effect.addFinalizer(() => cancelOpenRequests);
-  const detachHost = yield* Context.get(session, Interactions).use(
+  yield* attachInteractions(
+    Context.get(session, Interactions),
     createTuiHostInteractions(presentationHost, cliContext, {
       requests: yield* TestSession,
       settings: settingsStores.stores,
       runtime: yield* SessionGraph.runtime,
     }),
   );
-  yield* Effect.addFinalizer(() => Effect.sync(detachHost));
 });
 
 /** Run ids are hex-branded, so a readable case label hashes to a stable one. */

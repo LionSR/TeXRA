@@ -43,13 +43,14 @@ function createDeps(
       },
     ],
     host: {
-      compareFiles: () => Effect.void,
-      acceptEditedFile: () => Effect.void,
+      openDiff: () => Effect.void,
+      confirmAccept: () => Effect.succeed(true),
       openDirectory: () => Effect.void,
       showInfo: () => Effect.void,
       ...overrides,
     },
     storageRoot: '/storage',
+    workspace: '/workspace',
     runs: { merge: () => Effect.void, followUpLauncher: () => Effect.void },
   };
 }
@@ -60,9 +61,10 @@ layer(SessionGraph.hosted)('ProgressWorkflowFileActionsController', (it) => {
     () =>
       Effect.gen(function* () {
         const followUps: string[] = [];
-        const acceptResults = [false, true];
+        const confirmations = [false, true];
         const deps = createDeps({
-          acceptEditedFile: () => Effect.sync(() => acceptResults.shift()),
+          confirmAccept: () =>
+            Effect.sync(() => confirmations.shift() ?? false),
         });
         deps.runs.followUpLauncher = (_run, text) =>
           Effect.sync(() => {
@@ -83,6 +85,10 @@ layer(SessionGraph.hosted)('ProgressWorkflowFileActionsController', (it) => {
         Effect.provide(
           Layer.merge(
             FileSystem.layerNoop({
+              exists: () => Effect.succeed(true),
+              writeFileString: () => Effect.void,
+              rename: () => Effect.void,
+              remove: () => Effect.void,
               // The model's copy the revision kept, and the file the user
               // changed before accepting.
               readFileString: (path) =>

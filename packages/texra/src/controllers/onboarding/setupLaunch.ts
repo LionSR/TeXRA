@@ -6,7 +6,7 @@ import { agentName, type AgentConfig } from '@texra-ai/harness/schemas';
 import {
   presentRunFailure,
   type Secrets,
-  type SessionHostInteractions,
+  type Notices,
 } from '@texra-ai/harness/host';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
@@ -87,7 +87,7 @@ export const kickoffDesktopSetup = (options: {
    *  none before the window has bound the project. */
   readonly run:
     | (Pick<HostRunActions, 'runValidated'> & {
-        readonly present: Pick<SessionHostInteractions, 'emit'>;
+        readonly present: Notices;
       })
     | undefined;
 }): Effect.Effect<void, never, Secrets | ProcessServices> => {

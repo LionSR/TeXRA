@@ -1,14 +1,21 @@
+import { runCommand, type ArgsDef, type CommandDef } from 'citty';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 
-// One CLI invocation per process — module-level pending exit code is the
-// simplest way to surface handler exit codes back to `bin/texra.ts` after
-// `runCommand` returns. citty's `ctx.data` would also work but is `any`-typed.
+// citty's `runCommand` drops a subcommand's return value and passes no
+// `data` down to it, so a command's exit code reaches the process entry
+// through this slot. One CLI invocation per process.
 let pendingExitCode: number = CliExitCode.Success;
 
 export function setExitCode(code: number): void {
   pendingExitCode = code;
 }
 
-export function getExitCode(): number {
+/** Run `command` and answer the code it set, success if it set none. */
+export async function runCommandForExitCode<A extends ArgsDef>(
+  command: CommandDef<A>,
+  rawArgs: string[],
+): Promise<number> {
+  pendingExitCode = CliExitCode.Success;
+  await runCommand(command, { rawArgs });
   return pendingExitCode;
 }

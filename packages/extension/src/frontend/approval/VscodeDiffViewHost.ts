@@ -9,8 +9,8 @@ import {
 import {
   fromHost,
   hostFailure,
-  type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
 import type { RequestRefusal } from '@texra-ai/harness';
@@ -22,7 +22,7 @@ const REVEAL_TIMEOUT_MS = 1500;
  * The failure of a `vscode.*` call this host lifted through `fromHost`: the
  * host's own refusal, tagged with the capability that raised it.
  */
-type EditorCallFailed = HostCallFailed | RequestRefusal;
+type EditorCallFailed = HostFailed | RequestRefusal;
 
 /**
  * The file URI a tab input surfaces, or null when the tab shows no single

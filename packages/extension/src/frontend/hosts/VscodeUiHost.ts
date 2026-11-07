@@ -5,8 +5,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
-  NotificationFailed,
-  PromptFailed,
+  HostFailed,
   type MessageHost,
   type PromptConfirmOptions,
   type PromptHost,
@@ -22,7 +21,7 @@ import {
  * that answers the call.
  */
 const SHOW_OF_MEMBER: Record<
-  NotificationFailed['member'],
+  HostFailed['member'],
   (
     message: string,
     options: vscode.MessageOptions,
@@ -64,8 +63,7 @@ export const withCancellationToken = <A, E>(
  * Both ports end in the same three `vscode.window.show*Message` calls — a
  * toast is that call with no items and no answer — so this holds one wrap of
  * them, in `showMessage`. The fire-and-forget members are that program with
- * the answer voided, which is why they raise the same
- * {@link NotificationFailed} an answerable message does.
+ * the answer voided.
  *
  * Notifications and modal message boxes have no cancellation channel in the
  * VS Code API, so an interrupted fiber detaches from them and the dialog stays
@@ -74,50 +72,47 @@ export const withCancellationToken = <A, E>(
  * opened instead of leaving it waiting for an answer nobody will read.
  */
 class VscodeUiHost implements MessageHost, PromptHost {
-  showInfoMessage(message: string): Effect.Effect<void, NotificationFailed> {
+  showInfoMessage(message: string): Effect.Effect<void, HostFailed> {
     return Effect.asVoid(this.info(message));
   }
 
-  showWarningMessage(message: string): Effect.Effect<void, NotificationFailed> {
+  showWarningMessage(message: string): Effect.Effect<void, HostFailed> {
     return Effect.asVoid(this.warning(message));
   }
 
-  showErrorMessage(message: string): Effect.Effect<void, NotificationFailed> {
+  showErrorMessage(message: string): Effect.Effect<void, HostFailed> {
     return Effect.asVoid(this.error(message));
   }
 
   info<T extends string = string>(
     message: string,
     options: PromptMessageOptions<T> = {},
-  ): Effect.Effect<T | undefined, NotificationFailed> {
+  ): Effect.Effect<T | undefined, HostFailed> {
     return this.showMessage('showInfoMessage', message, options);
   }
 
   warning<T extends string = string>(
     message: string,
     options: PromptMessageOptions<T> = {},
-  ): Effect.Effect<T | undefined, NotificationFailed> {
+  ): Effect.Effect<T | undefined, HostFailed> {
     return this.showMessage('showWarningMessage', message, options);
   }
 
   error<T extends string = string>(
     message: string,
     options: PromptMessageOptions<T> = {},
-  ): Effect.Effect<T | undefined, NotificationFailed> {
+  ): Effect.Effect<T | undefined, HostFailed> {
     return this.showMessage('showErrorMessage', message, options);
   }
 
   /**
    * A confirmation is a warning message carrying the two buttons this port
-   * mandates, so it runs the same wrap. It keeps {@link PromptFailed}: the
-   * desktop answers this member with a native confirmation dialog rather than
-   * with a `show*Message` call, so the tag names the member neither host could
-   * present rather than a call only one of them makes.
+   * mandates, so it runs the same wrap, failing as `confirm`.
    */
   confirm(
     message: string,
     options: PromptConfirmOptions,
-  ): Effect.Effect<boolean, PromptFailed> {
+  ): Effect.Effect<boolean, HostFailed> {
     const confirmLabel = options.confirmLabel;
     return this.showMessage('showWarningMessage', message, {
       detail: options.detail,
@@ -126,7 +121,8 @@ class VscodeUiHost implements MessageHost, PromptHost {
     }).pipe(
       Effect.mapError(
         (failure) =>
-          new PromptFailed({
+          new HostFailed({
+            member: 'confirm',
             message: 'VS Code would not show the confirmation dialog.',
             cause: failure.cause,
           }),
@@ -138,13 +134,14 @@ class VscodeUiHost implements MessageHost, PromptHost {
   /** Ask for one line of text in a box {@link withCancellationToken} owns. */
   input(
     options: PromptInputOptions,
-  ): Effect.Effect<string | undefined, PromptFailed> {
+  ): Effect.Effect<string | undefined, HostFailed> {
     return withCancellationToken(
       // A secret pasted from another window must not dismiss the box.
       (token) =>
         vscode.window.showInputBox({ ...options, ignoreFocusOut: true }, token),
       (cause) =>
-        new PromptFailed({
+        new HostFailed({
+          member: 'input',
           message: 'VS Code would not show the input box.',
           cause,
         }),
@@ -153,10 +150,10 @@ class VscodeUiHost implements MessageHost, PromptHost {
 
   /** The one wrap of `vscode.window.show*Message` this host holds. */
   private showMessage<T extends string>(
-    member: NotificationFailed['member'],
+    member: HostFailed['member'],
     message: string,
     options: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined, NotificationFailed> {
+  ): Effect.Effect<T | undefined, HostFailed> {
     const items = this.toVscodeItems(options.items);
     return Effect.tryPromise({
       try: async () =>
@@ -166,7 +163,7 @@ class VscodeUiHost implements MessageHost, PromptHost {
           ...items,
         ),
       catch: (cause) =>
-        new NotificationFailed({
+        new HostFailed({
           member,
           message: toErrorMessage(cause),
           cause,

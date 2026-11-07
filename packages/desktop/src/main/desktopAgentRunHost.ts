@@ -1,7 +1,7 @@
 import type {
   DiffViewHost,
   MessageHost,
-  PromptFailed,
+  HostFailed,
 } from '@texra/hosts/uiHosts';
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
@@ -46,5 +46,5 @@ export interface DesktopAgentRunHost extends MessageHost {
   ): Effect.Effect<void, PreviewUnavailable>;
   openBuildDisplay: BuildDisplayFn;
   openDiff: DiffViewHost['openDiff'];
-  confirmAcceptFile(message: string): Effect.Effect<boolean, PromptFailed>;
+  confirmAcceptFile(message: string): Effect.Effect<boolean, HostFailed>;
 }

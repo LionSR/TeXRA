@@ -73,8 +73,6 @@ embedder supplying its own names its workspace roots beside them.
 interface AgentPlatform {
   /** The agent directories this process's `AgentDirectories` service serves. */
   readonly agentDirectories: AgentDirectoriesPort;
-  /** The app's directories on every command's PATH (`CommandDirs`). */
-  readonly commandDirs?: () => readonly string[];
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
@@ -296,10 +294,10 @@ function isRequestRefusal(error: unknown): error is RequestRefusal
 ## ITool
 
 Contract for tool implementations.
-`defineTool` provides the canonical implementation with schema validation. Expected
-tool failures are returned as literal `{ status: 'error', error: ... }`
-ToolResult values; unexpected/programmer failures should throw and let
-`defineTool` convert them at the boundary.
+`defineTool` provides the canonical implementation with schema validation.
+A tool fails with an `Error` (usually a `ToolError`) and the model reads its
+message as the call's error; a throw is a defect, which `defineTool` turns
+into a failed call and logs as a crash unless it is a `ToolError`.
 
 ```ts
 interface ITool<E = Error, R = never> {
@@ -445,7 +443,7 @@ interface LocalSession extends Session {
   };
   /** Show a notice through the attached host; a notice raised while no
    *  host is attached waits for the next one. */
-  readonly emit: SessionHostInteractions['emit'];
+  readonly emit: Notices['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been
    *  shown to the attached host (or queued for the next one). */
@@ -590,9 +588,9 @@ interface Plugin {
 
 The plugin list cannot be composed, for a defect `toolTable` refuses: an
 id that is not lowercase letters, digits and dashes, an id or tool name
-listed twice, a second plugin continuing waiting runs or recording one
-request kind's decisions, or a switch on a plugin with no availability
-probe.
+listed twice, a switch on a plugin with no availability probe, a
+`requires` naming a plugin not listed, an agent-file block owned twice or
+keyed by a persona key, or two script modules of one name.
 
 ```ts
 class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(

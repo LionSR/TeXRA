@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { ExternalOpenFailed, type ExternalOpener } from '@texra/hosts/uiHosts';
+import { HostFailed, type ExternalOpener } from '@texra/hosts/uiHosts';
 import { texraGuideUrl } from '@ui/copy/guide';
 
 /**
@@ -12,12 +12,12 @@ import { texraGuideUrl } from '@ui/copy/guide';
  * cancellation channel, so an interrupted fiber detaches from the wait.
  */
 export class VscodeExternalOpener implements ExternalOpener {
-  openExternal(url: string): Effect.Effect<void, ExternalOpenFailed> {
+  openExternal(url: string): Effect.Effect<void, HostFailed> {
     return Effect.tryPromise({
       try: () => vscode.env.openExternal(vscode.Uri.parse(url)),
       catch: (cause) =>
-        new ExternalOpenFailed({
-          target: url,
+        new HostFailed({
+          member: 'openExternal',
           message: 'VS Code would not open the URL in the default browser.',
           cause,
         }),
@@ -25,12 +25,12 @@ export class VscodeExternalOpener implements ExternalOpener {
       // openExternal resolves `false` — does not throw — when VS Code
       // declines the URI, its documented path for an unhandled scheme. That
       // refusal is the same failure as a rejection, so it reaches the caller
-      // as ExternalOpenFailed too, not as a successful open.
+      // as HostFailed too, not as a successful open.
       Effect.filterOrFail(
         (opened) => opened,
         () =>
-          new ExternalOpenFailed({
-            target: url,
+          new HostFailed({
+            member: 'openExternal',
             message: 'VS Code declined to open the URL: no handler took it.',
             // The refusal is the answer itself; there is no underlying fault.
             cause: undefined,
@@ -43,8 +43,6 @@ export class VscodeExternalOpener implements ExternalOpener {
 
 /** A page of the TeXRA guide on texra.ai, in the default browser: what
  *  `texra.openDoc` and every docs button in this host open. */
-export function openGuidePage(
-  page: string,
-): Effect.Effect<void, ExternalOpenFailed> {
+export function openGuidePage(page: string): Effect.Effect<void, HostFailed> {
   return new VscodeExternalOpener().openExternal(texraGuideUrl(page));
 }

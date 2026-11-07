@@ -384,7 +384,7 @@ export const callRequests = (
           },
         ]),
       ).pipe(Effect.asVoid),
-    present: interactions.emit.bind(interactions),
+    present: interactions.emit,
   };
   return { requests, retireStanding };
 };

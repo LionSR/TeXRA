@@ -50,7 +50,10 @@ import { vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
 import { AgentCatalog, type HostInteractions } from '@texra-ai/harness/host';
-import { Interactions } from '@agent/runtime/HostInteractions';
+import {
+  attachInteractions,
+  Interactions,
+} from '@agent/runtime/HostInteractions';
 import {
   rootRun,
   type SessionOwner,
@@ -603,6 +606,9 @@ export const parkedRunAfterCrash = (
     );
     const session = yield* persistentTestSession({ ...roots, storage });
     if (options.interactions !== undefined)
-      yield* Context.get(session, Interactions).use(options.interactions);
+      yield* attachInteractions(
+        Context.get(session, Interactions),
+        options.interactions,
+      );
     return { session, runId, storage };
   });

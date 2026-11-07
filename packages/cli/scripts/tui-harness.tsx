@@ -16,7 +16,15 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
-import { Context, Effect, Fiber, Schema, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Fiber,
+  Schema,
+  Scope,
+  SubscriptionRef,
+} from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -26,7 +34,10 @@ import {
   describeFollowUpFailure,
   Secrets,
 } from '@texra-ai/harness/host';
-import { Interactions } from '@agent/runtime/HostInteractions';
+import {
+  attachInteractions,
+  Interactions,
+} from '@agent/runtime/HostInteractions';
 import { openRequest, SessionRequests } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
@@ -101,26 +112,24 @@ import { nodeFileServices } from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
-import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
+import { builtinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
+import { loginFromChat } from '../src/chat/tui/commands/handlers/loginCommands';
 import { showCliWorkPlan } from '../src/chat/tui/commands/handlers/sessionCommands';
 import { formatSlashCommandHelp } from '../src/chat/tui/commands/helpText';
 import {
-  findSlashCommand,
-  listSlashCommands,
   parseSlashInput,
-  suggestSlashCommand,
+  SlashCommandsProvider,
 } from '../src/chat/tui/commands/slashRegistry';
-import {
-  openCliSlashCommandForm,
-  openRegisteredCliSlashForm,
-} from '../src/chat/tui/commands/slashForms';
+import { openRegisteredCliSlashForm } from '../src/chat/tui/commands/slashForms';
 import {
   focusRun,
   rootRunId,
+  patchSessionMeta,
   resetCliState,
   selectedRunId,
   sessionMeta,
   setCliSessionModelOverride,
+  setTransientNotice,
 } from '../src/chat/tui/state/cliState';
 import {
   bindSessionView,
@@ -515,25 +524,28 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 // attached, exactly as `chatSessionController` wires a live chat.
 const harnessRuntimeHost: CliRuntimeHost =
   createCliRuntimeHost(HARNESS_CLI_CONTEXT);
-HARNESS_DISPOSERS.push(
-  Effect.runSync(
-    session().interactions.use(
-      createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-        requests: {
-          request: (req) =>
-            session()
-              .requests.request(req)
-              .pipe(Effect.provide(harnessRuntimeSession)),
-          view: {
-            current: () => SubscriptionRef.getUnsafe(session().view.ref),
-            changes: session().view.changes,
-          },
+const harnessHostScope = Effect.runSync(Scope.make());
+HARNESS_DISPOSERS.push(() =>
+  Effect.runSync(Scope.close(harnessHostScope, Exit.void)),
+);
+Effect.runSync(
+  attachInteractions(
+    session().interactions,
+    createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
+      requests: {
+        request: (req) =>
+          session()
+            .requests.request(req)
+            .pipe(Effect.provide(harnessRuntimeSession)),
+        view: {
+          current: () => SubscriptionRef.getUnsafe(session().view.ref),
+          changes: session().view.changes,
         },
-        settings: HARNESS_PLATFORM_SERVICES,
-        runtime: harnessRuntime,
-      }),
-    ),
-  ),
+      },
+      settings: HARNESS_PLATFORM_SERVICES,
+      runtime: harnessRuntime,
+    }),
+  ).pipe(Scope.provide(harnessHostScope)),
 );
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
@@ -1652,7 +1664,8 @@ function applyHarnessApprovalPolicySelection(
 ): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
-    if (openCliSlashCommandForm('approval')) return;
+    const approval = harnessCommands.find('approval');
+    if (approval && openRegisteredCliSlashForm(approval)) return;
   }
 
   const policy = parseApprovalPolicy(normalized);
@@ -1734,7 +1747,7 @@ function handleHarnessSlashCommand(line: string): boolean {
   switch (commandName) {
     case 'help':
       appendHarnessAssistantTranscript(
-        formatSlashCommandHelp(listSlashCommands(), {
+        formatSlashCommandHelp(harnessCommands.list, {
           shortcutModifierLabel: defaultShortcutModifierLabel(),
         }),
       );
@@ -1755,9 +1768,9 @@ function handleHarnessSlashCommand(line: string): boolean {
       applyHarnessApprovalPolicySelection(rest, HARNESS_APPROVAL_USAGE);
       return true;
     default: {
-      const command = findSlashCommand(commandName);
+      const command = harnessCommands.find(commandName);
       if (!command) {
-        const suggestion = suggestSlashCommand(commandName);
+        const suggestion = harnessCommands.suggest(commandName);
         const didYouMean = suggestion
           ? ` Did you mean /${suggestion.name}?`
           : '';
@@ -1778,10 +1791,18 @@ function handleHarnessSlashCommand(line: string): boolean {
 /** The harness's root-run claim, held the way `texra chat` holds its own. */
 const harnessSession = new TuiSession();
 
-registerBuiltinSlashCommands({
+const harnessCommands = builtinSlashCommands({
   stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runSession: harnessRunSession,
+  onAgentSelect: (agent) => Effect.sync(() => patchSessionMeta({ agent })),
+  onTeamSelect: () =>
+    Effect.sync(() =>
+      setTransientNotice('Teams can only be chosen in `texra chat`.'),
+    ),
+  onAccountChanged: () => Effect.void,
+  onLoginSelect: (value, output) =>
+    loginFromChat(value, HARNESS_PLATFORM_SERVICES, undefined, output),
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending.
   canSelectAgent: () => chatTuiCanStartRootRun(harnessSession),
@@ -1871,15 +1892,17 @@ function handleHarnessCtrlC(): void {
 
 function renderHarnessApp(): React.JSX.Element {
   return (
-    <App
-      stores={HARNESS_PLATFORM_SERVICES}
-      runtime={harnessRuntime}
-      session={harnessRunSession}
-      draft={harnessDraft}
-      onSubmit={(draft) => handleHarnessSubmit(expandText(draft).trim())}
-      scrollback={scrollback}
-      onCtrlC={handleHarnessCtrlC}
-    />
+    <SlashCommandsProvider value={harnessCommands}>
+      <App
+        stores={HARNESS_PLATFORM_SERVICES}
+        runtime={harnessRuntime}
+        session={harnessRunSession}
+        draft={harnessDraft}
+        onSubmit={(draft) => handleHarnessSubmit(expandText(draft).trim())}
+        scrollback={scrollback}
+        onCtrlC={handleHarnessCtrlC}
+      />
+    </SlashCommandsProvider>
   );
 }
 

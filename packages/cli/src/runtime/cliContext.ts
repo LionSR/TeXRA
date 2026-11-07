@@ -244,7 +244,7 @@ let cachedManifest:
   | undefined;
 
 /** The one cached read of the CLI's `package.json`; `readCliVersion` and
- *  `readCliBugsUrl` both derive from it. */
+ *  `formatCrashReportLine` both derive from it. */
 function loadCliPackageManifest(): CliPackageManifest | undefined {
   cachedManifest ??= { value: readCliPackageManifest() };
   return cachedManifest.value;

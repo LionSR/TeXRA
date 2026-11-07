@@ -42,10 +42,11 @@ import {
 import {
   attemptRequests,
   resumedAttempt,
+  outOfOrder,
   type Invocation,
   type PendingResponse,
 } from './inFlight';
-import { outOfOrder, TURN_ROW_HANDLERS } from './turnRowHandlers';
+import { TURN_ROW_HANDLERS } from './turnRowHandlers';
 import type { RunPosition } from './runRowsShape';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 

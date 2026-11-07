@@ -56,6 +56,16 @@ propagates.
 function canonicalizeWorkspacePath(workspacePath: string): string
 ```
 
+## CommandDirs
+
+The directories an app adds to the PATH a command runs and resolves on:
+the package-manager and tool installs a GUI-launched process may lack.
+Absent, none.
+
+```ts
+const CommandDirs: Reference<() => readonly string[]>
+```
+
 ## ConfigStore
 
 The store surface one config target needs. `JsonStore` satisfies it; so does

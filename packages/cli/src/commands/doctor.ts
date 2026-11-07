@@ -101,8 +101,7 @@ export const doctorCommand = defineCommand({
   // can borrow a runtime at neither end — none exists when the init
   // begins, and an init that fails disposes the one it installed before it
   // re-raises. So the whole command, context build included, is one program
-  // run here: the CLI's one pinned no-runtime run of a command
-  // (`BARE_EFFECT_RUN_SITES` in dependencyDirection.vitest.ts).
+  // run here, before any process runtime exists.
   async run(ctx) {
     if (ctx.args['prune-storage'] === true)
       return pruneStorageCommand.run?.(ctx);

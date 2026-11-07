@@ -8,7 +8,6 @@
  * Interaction state (selection, drafts, recording, expansion, focus, scroll)
  * is never here.
  */
-// `sessionPresentationBoundary.vitest.ts` pins the interaction-state names.
 import { Schema } from 'effect';
 
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';

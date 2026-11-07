@@ -1,5 +1,5 @@
-// The built-in slash command contributions, built from the surface's runtime
-// options and installed once at startup.
+// The built-in slash commands, built once per chat from what the chat's
+// surface does with each choice.
 
 import { Effect, Result, type Scope } from 'effect';
 
@@ -27,13 +27,7 @@ import { PluginsListForm } from '../forms/PluginsListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { TasksForm } from '../forms/TasksForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
-import {
-  patchSessionMeta,
-  selectedRunId,
-  sessionMeta,
-  setTransientNotice,
-  setCliSessionModelOverride,
-} from '../state/cliState';
+import { selectedRunId, sessionMeta } from '../state/cliState';
 import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalNotice } from '../state/transcript';
 import {
@@ -62,11 +56,12 @@ import {
 } from './handlers/sessionCommands';
 import { type ErrorHandler, formSelectionHandler } from './formSelection';
 import {
-  installSlashCommands,
-  type SlashCommandContribution,
+  slashCommands,
+  type SlashCommand,
+  type SlashCommands,
   type SlashFormProps,
 } from './slashRegistry';
-import { openCliSlashCommandForm } from './slashForms';
+import { openRegisteredCliSlashForm } from './slashForms';
 import {
   type FormActionHandler,
   modelAccessContribution,
@@ -82,11 +77,17 @@ import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;
 
-/**
- * Build the built-in contributions from the surface's runtime options and
- * install them, replacing the installed slash command table.
- */
-export function registerBuiltinSlashCommands(options: {
+/** The built-in slash commands, with the two forms the chat opens itself:
+ *  `/login` (the "Connect a model" panel) and `/agent` (a first run's
+ *  pick). */
+export interface BuiltinSlashCommands extends SlashCommands {
+  readonly login: SlashCommand;
+  readonly agent: SlashCommand;
+}
+
+/** Build the built-in slash commands over what the chat's surface does with
+ *  each choice. */
+export function builtinSlashCommands(options: {
   /**
    * The setting stores the built-in forms and handlers read: they run
    * outside Effect, so the stores arrive from the surface that registers the
@@ -100,54 +101,50 @@ export function registerBuiltinSlashCommands(options: {
   /** Where the commands' run requests and resumes land: the chat's session,
    *  here or in the service. */
   runSession: Session;
-  onAgentSelect?: SelectHandler<string>;
+  onAgentSelect: SelectHandler<string>;
   /** `/agent` → a team preset, by id. */
-  onTeamSelect?: SelectHandler<string>;
+  onTeamSelect: SelectHandler<string>;
   /** After a sign-in, sign-out, preference, or key save finishes: the chat
    *  re-checks whether a model can answer now. */
-  onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
-  canSelectAgent?: () => boolean;
-  getApprovalPolicy?: () => ApprovalPolicy;
+  onAccountChanged: () => Effect.Effect<void, never, ProcessServices>;
+  canSelectAgent: () => boolean;
+  getApprovalPolicy: () => ApprovalPolicy;
   /** `/approval`'s choice: the chat's own launch policy, finished once the
    *  chat's run has recorded it. */
-  onApprovalPolicySelect?: (policy: ApprovalPolicy) => Effect.Effect<void>;
+  onApprovalPolicySelect: (policy: ApprovalPolicy) => Effect.Effect<void>;
   /** The project's policy `/config` wrote. Stays a plain callback: the
    *  shared write path takes it as a void-returning port. */
-  onProjectApprovalPolicyChanged?: (policy: ApprovalPolicy) => void;
-  onModelSelect?: SelectHandler<string>;
-  canSelectModel?: () => boolean;
-  getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
-  onModelAccessSelect?: FormActionHandler<CliModelAccessSelection>;
-  onLoginSelect?: FormActionHandler<LoginFormValue>;
-  onMemorySelect?: SelectHandler<string>;
-  onResumeSelect?: SelectHandler<RunId>;
-  onSkillSelect?: SelectHandler<SkillActivation>;
+  onProjectApprovalPolicyChanged: (policy: ApprovalPolicy) => void;
+  onModelSelect: SelectHandler<string>;
+  canSelectModel: () => boolean;
+  getModelSwitchDisabledReason: GetModelSwitchDisabledReason;
+  onModelAccessSelect: FormActionHandler<CliModelAccessSelection>;
+  onLoginSelect: FormActionHandler<LoginFormValue>;
+  onMemorySelect: SelectHandler<string>;
+  onResumeSelect: SelectHandler<RunId>;
+  onSkillSelect: SelectHandler<SkillActivation>;
   /** The TeXRA service's client (`/tasks`), through the chat's link; absent
-   *  where the chat holds none. */
+   *  where the chat holds none, and `/tasks` with it. */
   connectService?: () => Effect.Effect<
     Pick<ServiceConnection, 'client'>,
     Error,
     Scope.Scope | GlobalValues
   >;
-  configRoots?: WorkspaceRoots;
-  onError?: ErrorHandler;
-}): void {
-  const { stores, runtime, runSession } = options;
+  /** The project roots `/config` reads and writes. */
+  configRoots: WorkspaceRoots;
+  onError: ErrorHandler;
+}): BuiltinSlashCommands {
+  const {
+    stores,
+    runtime,
+    runSession,
+    onAgentSelect,
+    onModelSelect,
+    onTeamSelect,
+    canSelectAgent,
+    canSelectModel,
+  } = options;
   const modelStores = { ...stores, runtime };
-  const onAgentSelect: SelectHandler<string> =
-    options.onAgentSelect ??
-    ((agent) => Effect.sync(() => patchSessionMeta({ agent })));
-  const onModelSelect: SelectHandler<string> =
-    options.onModelSelect ??
-    ((model) => Effect.sync(() => setCliSessionModelOverride(model)));
-  const onTeamSelect: SelectHandler<string> =
-    options.onTeamSelect ??
-    (() =>
-      Effect.sync(() =>
-        setTransientNotice('Teams can only be chosen in `texra chat`.'),
-      ));
-  const canSelectAgent = options.canSelectAgent ?? (() => true);
-  const canSelectModel = options.canSelectModel ?? (() => true);
 
   // Every picker's selection runs on this surface's runtime and error hook and
   // completes through its slash form's done and persistence props; a picker
@@ -201,7 +198,7 @@ export function registerBuiltinSlashCommands(options: {
             selectable && canSelectModel()
               ? (value) => {
                   props.onDone(value);
-                  openCliSlashCommandForm('model');
+                  openRegisteredCliSlashForm(model);
                 }
               : props.onDone,
         })}
@@ -211,7 +208,7 @@ export function registerBuiltinSlashCommands(options: {
   }
 
   function ApprovalPolicyFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = options.getApprovalPolicy?.() ?? 'ask';
+    const current = options.getApprovalPolicy();
     // The grants of the run the status bar describes, offered for revoking
     // only while that run's `actions` takes a grant (the gate `policy.set`
     // is refused by).
@@ -238,7 +235,7 @@ export function registerBuiltinSlashCommands(options: {
               case 'ask':
               case 'never':
               case 'yolo':
-                return options.onApprovalPolicySelect?.(value) ?? Effect.void;
+                return options.onApprovalPolicySelect(value);
               default:
                 return value satisfies never;
             }
@@ -295,7 +292,7 @@ export function registerBuiltinSlashCommands(options: {
         {...formProps}
       />
     ),
-    (value: string) => options.onMemorySelect?.(value) ?? Effect.void,
+    options.onMemorySelect,
   );
   // `/resume` lists the project's stored runs; bind the session here so the
   // command still uses the one plain-picker adapter.
@@ -307,7 +304,7 @@ export function registerBuiltinSlashCommands(options: {
         {...formProps}
       />
     ),
-    (id: RunId) => options.onResumeSelect?.(id) ?? Effect.void,
+    options.onResumeSelect,
   );
   const connectService = options.connectService;
   const TasksFormAdapter = connectService
@@ -328,7 +325,7 @@ export function registerBuiltinSlashCommands(options: {
         {...formProps}
       />
     ),
-    (value: SkillActivation) => options.onSkillSelect?.(value) ?? Effect.void,
+    options.onSkillSelect,
   );
 
   const EnabledModelsFormAdapter = (
@@ -382,41 +379,51 @@ export function registerBuiltinSlashCommands(options: {
     appendLocalNotice(PLUGINS_TUI.added(added.map(({ name }) => name)));
   });
 
-  function configContribution(
-    configRoots: WorkspaceRoots,
-  ): SlashCommandContribution {
-    const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => (
-      <CliConfigForm
-        roots={configRoots}
-        runtime={runtime}
-        availableRows={props.availableRows}
-        // The project's policy, written: the status bar follows it, and
-        // the chat's own `/approval` choice stays as it was.
-        onApprovalPolicyChanged={options.onProjectApprovalPolicyChanged}
-        onClose={() => props.onDone(undefined)}
-        onError={async (error) => {
-          props.onPersist?.();
-          await options.onError?.(error);
-        }}
-      />
-    );
-    return {
-      pluginId: 'config',
-      commands: [
-        {
-          name: 'config',
-          description: 'View and toggle settings',
-          aliases: ['settings'],
-          category: 'configuration',
-          echo: 'never',
-          formComponent: ConfigFormAdapter,
-        },
-      ],
-    };
-  }
+  const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => (
+    <CliConfigForm
+      roots={options.configRoots}
+      runtime={runtime}
+      availableRows={props.availableRows}
+      // The project's policy, written: the status bar follows it, and
+      // the chat's own `/approval` choice stays as it was.
+      onApprovalPolicyChanged={options.onProjectApprovalPolicyChanged}
+      onClose={() => props.onDone(undefined)}
+      onError={async (error) => {
+        props.onPersist?.();
+        await options.onError(error);
+      }}
+    />
+  );
+
+  const agent: SlashCommand = {
+    name: 'agent',
+    description: 'Choose an agent, or a team it leads',
+    aliases: ['agents'],
+    category: 'configuration',
+    echo: 'ifPersists',
+    handler: applyInitialCliAgentSelection,
+    formComponent: AgentListFormAdapter,
+  };
+  const model: SlashCommand = {
+    name: 'model',
+    description: 'Choose the model for this chat',
+    category: 'configuration',
+    echo: 'ifPersists',
+    handler: applyCliModelSelection,
+    formComponent: ModelListFormAdapter,
+  };
+  const modelAccess = modelAccessContribution({
+    stores,
+    runtime,
+    bindSelection,
+    onModelAccessSelect: options.onModelAccessSelect,
+    onLoginSelect: options.onLoginSelect,
+    onAccountChanged: options.onAccountChanged,
+    onError: options.onError,
+  });
 
   // The contributions' order is the palette's and `/help`'s order.
-  installSlashCommands([
+  const commands = slashCommands([
     {
       pluginId: 'chat-basics',
       commands: [
@@ -425,7 +432,8 @@ export function registerBuiltinSlashCommands(options: {
           description: 'Show available slash commands',
           category: 'session',
           echo: 'ifPersists',
-          handler: () => Effect.sync(showCliSlashCommandHelp),
+          handler: (_remainder, context) =>
+            Effect.sync(() => showCliSlashCommandHelp(context.commands)),
         },
         {
           name: 'clear',
@@ -442,23 +450,8 @@ export function registerBuiltinSlashCommands(options: {
     {
       pluginId: 'agent-model',
       commands: [
-        {
-          name: 'agent',
-          description: 'Choose an agent, or a team it leads',
-          aliases: ['agents'],
-          category: 'configuration',
-          echo: 'ifPersists',
-          handler: applyInitialCliAgentSelection,
-          formComponent: AgentListFormAdapter,
-        },
-        {
-          name: 'model',
-          description: 'Choose the model for this chat',
-          category: 'configuration',
-          echo: 'ifPersists',
-          handler: applyCliModelSelection,
-          formComponent: ModelListFormAdapter,
-        },
+        agent,
+        model,
         {
           name: 'models',
           description: 'Enable or disable models in pickers',
@@ -468,15 +461,7 @@ export function registerBuiltinSlashCommands(options: {
         },
       ],
     },
-    modelAccessContribution({
-      stores,
-      runtime,
-      bindSelection,
-      onModelAccessSelect: options.onModelAccessSelect,
-      onLoginSelect: options.onLoginSelect,
-      onAccountChanged: options.onAccountChanged,
-      onError: options.onError,
-    }),
+    modelAccess,
     {
       pluginId: 'approval',
       commands: [
@@ -576,9 +561,20 @@ export function registerBuiltinSlashCommands(options: {
         },
       ],
     },
-    // Only offer /config when the host wired the stores it reads/writes — a
-    // command that can't reach a store would render an inert panel.
-    ...(options.configRoots ? [configContribution(options.configRoots)] : []),
+    {
+      pluginId: 'config',
+      commands: [
+        {
+          name: 'config',
+          description: 'View and toggle settings',
+          aliases: ['settings'],
+          category: 'configuration',
+          echo: 'never',
+          formComponent: ConfigFormAdapter,
+        },
+      ],
+    },
     ...sessionContributions(runSession),
   ]);
+  return { ...commands, login: modelAccess.login, agent };
 }

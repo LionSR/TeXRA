@@ -392,8 +392,8 @@ const CRITICIZE_MACRO = '\\criticize';
 /**
  * Strip all `\criticize{comment}{severity}{confidence}` LaTeX annotations
  * (inserted by critique-style agents) from LaTeX content. Uses the same
- * brace-balanced macro scanner as `parseCriticismAnnotations`
- * (`@latex/criticismParser`) so a message containing nested macros (e.g.
+ * brace-balanced macro scanner as `parseCriticismAnnotations` (the
+ * extension's `frontend/latex/criticismParser.ts`) so a message containing nested macros (e.g.
  * `\cref{...}`, `\frac{a}{b}`) is stripped correctly rather than left
  * behind. Unlike `parseCriticismAnnotations`, this applies no
  * severity/confidence validation — malformed annotations still need to be

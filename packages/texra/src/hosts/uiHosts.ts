@@ -28,7 +28,7 @@ export interface DiffLabel {
  * a rejection a lift had to re-tag, and interrupting the fiber that opened a
  * diff abandons the wait instead of detaching from it. The error is any
  * `Error`: each implementation fails with what its surface raised (a VS Code
- * command rejection, an `ExternalOpenFailed`, a filesystem error), and the
+ * command rejection, a `HostFailed`, a filesystem error), and the
  * callers that need a tag map it into their own.
  */
 export interface DiffViewHost {
@@ -41,29 +41,30 @@ export interface DiffViewHost {
 }
 
 /**
- * The operating system would not open what it was handed: no handler for the
- * URL's scheme or the file's type, or the shell refusing the request. All
- * three hosts raise it — VS Code's `env.openExternal`, Electron's
- * `shell.openExternal`, and the CLI's platform opener (`open`, `rundll32`,
- * `xdg-open`).
+ * A host capability failed on a channel its caller has no other tag for: a
+ * message or dialog the host's own machinery would not show (VS Code's
+ * `window.show*Message`, the desktop's `dialog.showMessageBox` when the window
+ * it is anchored to is gone), a URL or path the operating system would not
+ * open, a promise-faced host API that rejected. `member` names the call, so
+ * a report says what failed; `message` is the failure's own text, so a
+ * surface that renders only the message shows it unchanged; `cause` is the
+ * value it failed with, so a host that classifies a failure reads that
+ * rather than this wrapper.
  *
- * This is the tag {@link ExternalOpener.openExternal} fails with. The
- * desktop's sibling `openPath` is an Effect as well, so a caller wording its
- * own report raises this tag by mapping that member's failure rather than by
- * lifting a promise; `target` names the URL or path that was refused.
+ * A user who dismisses a prompt or ignores a message is not a failure: that
+ * is an answer (`undefined`, `false`) or the absence of one. The CLI's
+ * notices and Ink dialogs are its own, so it raises this tag only where it
+ * calls the platform.
  */
-export class ExternalOpenFailed extends Schema.TaggedError<ExternalOpenFailed>()(
-  'ExternalOpenFailed',
-  {
-    target: Schema.String,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
+export class HostFailed extends Schema.TaggedError<HostFailed>()('HostFailed', {
+  member: Schema.String,
+  message: Schema.String,
+  cause: Schema.Defect(),
+}) {}
 
 /**
  * Open a URL in the host's default browser. The member is an `Effect`, so a
- * host that could not open it reaches the caller as {@link ExternalOpenFailed}
+ * host that could not open it reaches the caller as {@link HostFailed}
  * rather than as `unknown`. Neither VS Code's `env.openExternal` nor
  * Electron's `shell.openExternal` has a cancellation channel, so an
  * interrupted fiber detaches from the wait — the foreign-API limitation the
@@ -72,67 +73,8 @@ export class ExternalOpenFailed extends Schema.TaggedError<ExternalOpenFailed>()
  * crosses no promise to reach it.
  */
 export interface ExternalOpener {
-  openExternal(url: string): Effect.Effect<void, ExternalOpenFailed>;
+  openExternal(url: string): Effect.Effect<void, HostFailed>;
 }
-
-/**
- * Why a confirmation or an input box never reached the user.
- *
- * Read off what the implementations raise, and nothing else: the desktop's
- * `dialog.showMessageBox(window, …)` and VS Code's dialogs reject when the
- * host's own dialog machinery faults. The CLI's Ink
- * dialog raises none: it is a form in the app's own foreground slot, so
- * there is no foreign dialog to fault.
- *
- * The message members answer to {@link NotificationFailed} instead: a message
- * the host would not show is the same fault whether or not it carried buttons,
- * so there is one tag for it rather than one per shape. This tag is what is
- * left — the two members whose dialog is not a `show*Message` call on any
- * host.
- *
- * A user who dismisses a prompt is **not** a failure: `input` answers
- * `undefined` and `confirm` answers `false`, exactly as they did before this
- * port was typed. Neither is an interruption — a fiber interrupted while a
- * prompt is open dismisses or detaches from the wait and the interruption
- * propagates, so no caller reads it as a host fault.
- */
-export class PromptFailed extends Schema.TaggedError<PromptFailed>()(
-  'PromptFailed',
-  {
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {}
-
-/**
- * A message never reached the user: VS Code's `window.show*Message` or the
- * desktop's `dialog.showMessageBox` rejected, which they do only when the
- * host's own dialog machinery faults or the window a box is anchored to is
- * already gone. The CLI writes a local transcript notice, which cannot fail,
- * so it never raises this tag — the failure channel is what the two windowed
- * hosts need, not a cost the terminal pays. A user who ignores a message, or
- * dismisses one that offered buttons, is not a failure — that is an answer,
- * or the absence of one.
- *
- * This is the one tag both message surfaces fail with: every
- * {@link MessageHost} member and {@link PromptHost}'s `info`/`warning`/
- * `error`. The two shapes are the same host call with and without items, so
- * they raise the same tag and `member` names the call rather than the shape.
- * `message` is the rejection's own text, so it survives being shown through a
- * reporting surface that renders only the message.
- */
-export class NotificationFailed extends Schema.TaggedError<NotificationFailed>()(
-  'NotificationFailed',
-  {
-    member: Schema.Literals([
-      'showInfoMessage',
-      'showWarningMessage',
-      'showErrorMessage',
-    ]),
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
 
 /**
  * A host capable of surfacing simple, non-blocking notifications to the
@@ -141,16 +83,16 @@ export class NotificationFailed extends Schema.TaggedError<NotificationFailed>()
  * status reporting (a saved credential, a failed operation, a caveat).
  *
  * Every member is an `Effect`: a host that could not present reaches the
- * caller as {@link NotificationFailed} rather than as `unknown`, and a
+ * caller as {@link HostFailed} rather than as `unknown`, and a
  * caller that does not want to wait for the dialog forks the member instead
  * of `void`-ing a promise. Awaiting or forking is the caller's choice; the
  * member itself never reports a dismissal as an error, because there is
  * nothing to answer.
  */
 export interface MessageHost {
-  showInfoMessage(message: string): Effect.Effect<void, NotificationFailed>;
-  showWarningMessage(message: string): Effect.Effect<void, NotificationFailed>;
-  showErrorMessage(message: string): Effect.Effect<void, NotificationFailed>;
+  showInfoMessage(message: string): Effect.Effect<void, HostFailed>;
+  showWarningMessage(message: string): Effect.Effect<void, HostFailed>;
+  showErrorMessage(message: string): Effect.Effect<void, HostFailed>;
 }
 
 export type PromptMessageItem<T extends string = string> =
@@ -197,27 +139,24 @@ export interface PromptInputOptions {
  * has none (native message boxes). The user's own answer — a dismissal
  * included — is a value, never an error.
  *
- * `info`/`warning` are {@link MessageHost}'s members with items and an
- * answer, so they fail with {@link NotificationFailed}, the same tag that
- * surface raises; `confirm` and `input` open a dialog that is not a
- * `show*Message` call on any host and keep {@link PromptFailed}.
+ * Every member fails with {@link HostFailed}.
  */
 export interface PromptHost {
   info<T extends string = string>(
     message: string,
     options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined, NotificationFailed>;
+  ): Effect.Effect<T | undefined, HostFailed>;
   warning<T extends string = string>(
     message: string,
     options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined, NotificationFailed>;
+  ): Effect.Effect<T | undefined, HostFailed>;
   confirm(
     message: string,
     options: PromptConfirmOptions,
-  ): Effect.Effect<boolean, PromptFailed>;
+  ): Effect.Effect<boolean, HostFailed>;
   input(
     options: PromptInputOptions,
-  ): Effect.Effect<string | undefined, PromptFailed>;
+  ): Effect.Effect<string | undefined, HostFailed>;
 }
 
 export interface TerminalRunRequest {

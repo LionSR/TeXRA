@@ -2,10 +2,11 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 51
+Exports: 52
 
 - `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
+- `CommandDirs` — `const CommandDirs: Reference<() => readonly string[]>`
 - `ConfigStore` — `interface ConfigStore { get(key: string): unknown; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
 - `effectDiagnosticsLayer` — `const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>`
 - `entryChannel` — `function entryChannel: (entry: { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }) => string | undefined`
