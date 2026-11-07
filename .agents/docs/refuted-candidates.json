@@ -526,6 +526,19 @@
           "signature": "private get inquiry(): InquiryRequest {…}"
         }
       ]
+    },
+    {
+      "id": "TEST-golden-store-staleness-stamp",
+      "candidate": "a check, or a staleness stamp, that fails when src/test-kernel/fixtures/storage/golden-1.0.sql no longer matches what the current CLI would write",
+      "why": "The golden store is a conformance fixture: goldenStore.vitest.ts states that every later build must read it as the build that wrote it did, so the rows an earlier build wrote, stale prompt and tool text included, are what it should hold. A row-format change already fails that suite, which forces the regeneration. A staleness stamp would make every prompt or tool-description edit pay a CLI regeneration (building the validation bundle and driving the CLI for minutes) for nothing it protects. New row kinds gain golden rows in the PR that changes the format. Left open by #14823 (round 3, R3-R); refused for the round-4 catalogue at c9ceb23.",
+      "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-lenses/catalogue.md#status-at-main-c9ceb23",
+      "symbols": [
+        {
+          "file": "packages/cli/scripts/generate-golden-store.mjs",
+          "symbol": "fixturePath",
+          "signature": "const fixturePath = path.join( repoRoot, 'src/test-kernel/fixtures/storage/golden-1.0.sql', );"
+        }
+      ]
     }
   ]
 }
