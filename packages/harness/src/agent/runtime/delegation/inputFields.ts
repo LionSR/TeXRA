@@ -60,7 +60,7 @@ export const memoriesField = nullishWithDefault(
 );
 
 const WORKTREE_DISABLED_MESSAGE =
-  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `git.worktreeSupport` ('Subagent worktrees' in Settings > General > Git).";
+  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `git.worktreeSupport` ('Subagent worktrees' in Settings > Agents > Advanced).";
 
 /**
  * The `working_directory` gate, over the settings of the project the call

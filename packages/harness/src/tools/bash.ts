@@ -129,7 +129,7 @@ const BashInputSchema = Schema.Struct({
   run_in_background: nullishWithDefault(
     Schema.Boolean,
     false,
-    'Run command in background. Returns immediately with run ID and a background task tab. Result delivered as follow-up when complete.',
+    'Run command in background. Returns immediately with run ID and a background task tab. Result delivered as follow-up when complete; `timeout` still bounds the command.',
   ),
 });
 
@@ -404,7 +404,7 @@ export const BashTool = defineTool({
   name: 'bash',
   slow: true,
   description:
-    'Execute shell commands directly in the workspace directory. Commands run from the project root automatically. Available environment variables: $PROJECT_DIR (workspace path), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands.',
+    'Execute shell commands in the working directory (the project root, or the worktree the run is rooted in). Available environment variables: $PROJECT_DIR (that directory), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands, with `timeout` raised to what they need.',
   schema: BashInputSchema,
   // The command this call runs; the loop gets it approved before the body.
   guard: {

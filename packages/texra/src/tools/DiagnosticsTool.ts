@@ -74,7 +74,7 @@ const DiagnosticsInputSchema = Schema.Union([
       .check(Schema.isLessThanOrEqualTo(5))
       .annotate({
         description:
-          'Severity 0–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic, 0=verified/correct.',
+          'Severity 0–5, the \\criticize scale: 5 fatal (invalidates a main claim or result), 4 critical (seriously weakens the paper), 3 major, 2 minor, 1 cosmetic, 0 verified correct.',
       }),
     confidence: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
       .check(Schema.isLessThanOrEqualTo(5))
@@ -167,7 +167,7 @@ const addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(function* (
   );
   if (!accepted) {
     return executed(
-      'Inline criticism diagnostics are disabled. Enable "texra.inlineCriticism.enabled" in settings to surface critiques as diagnostics.',
+      'Inline criticism diagnostics are disabled. Ask the user to turn on "Show criticism as editor diagnostics" (`texra.inlineCriticism.enabled`) in Settings > LaTeX to surface critiques as diagnostics.',
       'Criticism not accepted',
     );
   }
@@ -197,7 +197,7 @@ export const DiagnosticsTool = defineTool({
   // one of its windows.
   hostCapability: 'diagnostics' satisfies EditorCapability,
   description:
-    'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the experimental "texra.inlineCriticism.enabled" setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',
+    'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the "Show criticism as editor diagnostics" setting (`texra.inlineCriticism.enabled`, Settings > LaTeX) and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',
   schema: DiagnosticsInputSchema,
   execute: diagnose,
 });

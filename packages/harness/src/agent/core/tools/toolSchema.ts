@@ -319,9 +319,10 @@ export const inputSchema = (
   const { schema, definitions } = Schema.toJsonSchemaDocument(
     definition.schema,
   );
+  const root = withObjectRoot(definition, schema);
   return Object.keys(definitions).length === 0
-    ? schema
-    : { ...schema, $defs: definitions };
+    ? root
+    : { ...root, $defs: definitions };
 };
 
 /**
@@ -335,17 +336,16 @@ export function convertToolSchema(
 ): JSONSchemaObject | null {
   const schema: JSONSchemaObject | undefined = inputSchema(def);
   if (!schema) return null;
-  return withArrayItems(
-    stripDollarSchema(withObjectRoot(def, flattenTopLevelUnion(schema))),
-  );
+  return withArrayItems(stripDollarSchema(flattenTopLevelUnion(schema)));
 }
 
 /**
  * Every function-calling API takes only an object as a tool's parameters,
  * and Effect Schema emits a struct with no fields as `{ not: { type: 'null' } }`
  * (it decodes any value but null). A tool whose schema is a struct declared
- * an object, so its parameters are one; any other root stays as it is, for
- * the provider to reject by the tool's name.
+ * an object, so its parameters are one, on the wire and in the script's
+ * declarations alike; any other root stays as it is, for the provider to
+ * reject by the tool's name.
  */
 function withObjectRoot(
   def: ToolDefinition,

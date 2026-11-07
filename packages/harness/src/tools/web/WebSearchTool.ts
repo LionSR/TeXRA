@@ -19,7 +19,7 @@ const WebSearchInputSchema = Schema.Struct({
     description: 'Search query to send to the web search provider.',
   }),
   max_results: nullishWithDefault(
-    Schema.Finite.check(Schema.isGreaterThanOrEqualTo(1)).check(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
       Schema.isLessThanOrEqualTo(5),
     ),
     3,

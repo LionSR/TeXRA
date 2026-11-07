@@ -40,7 +40,7 @@ const WebFetchInputSchema = Schema.Struct({
     Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
   ).annotate({
     description:
-      'Optional instruction describing what to extract from the page.',
+      'Optional note on what you need from the page, echoed above the fetched text as a reminder; nothing extracts for you.',
   }),
 });
 
@@ -317,7 +317,7 @@ export const WebFetchTool = defineTool({
   slow: true,
   lane: 'parallel',
   description:
-    'Fetch content from a URL and return it as clean text. Fetches the HTML and converts it to Markdown locally. Include an optional prompt to explain what context you need so the fetched content can be interpreted correctly.',
+    'Fetch content from a URL and return it as clean text. Fetches the HTML and converts it to Markdown locally. An optional prompt is echoed above the text as a reminder of what you need from it.',
   schema: WebFetchInputSchema,
   // The owning agent run's cancellation enters here as interruption —
   // without it, a cancelled run would wait out fetches (and their retries)

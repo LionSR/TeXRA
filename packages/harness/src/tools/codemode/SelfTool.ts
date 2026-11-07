@@ -195,7 +195,7 @@ function selfTask(prompt: string, forked: boolean): string {
   const context = forked
     ? 'The request above is the one that script is already carrying out; this run does one part of it, the task below.'
     : 'It does one part of the work that script is carrying out, the task below.';
-  return `A script of yours started this run of you with self(). ${context} Do only that task, without taking on the rest of the work or starting self() or agent() runs for it, and end with its result.\n\n<task>\n${prompt}\n</task>`;
+  return `A script of yours started this run of you with self(). ${context} Do only that task, without taking on the rest of the work or starting further self() runs for it, and end with its result.\n\n<task>\n${prompt}\n</task>`;
 }
 
 /** The `self` function of a script. */
