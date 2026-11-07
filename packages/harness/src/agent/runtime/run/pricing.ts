@@ -6,7 +6,7 @@
  * process usage log, at its list price.
  */
 import { Effect } from 'effect';
-import { turnCost, type TurnResult } from '@texra-ai/llm';
+import { listCost, turnCost, type TurnResult } from '@texra-ai/llm';
 
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { NormalizedUsage, RunId } from '@shared/schemas';
@@ -90,10 +90,11 @@ export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
       inputTokens: Math.max(0, (usage.inputTokens ?? 0) - cachedInputTokens),
       outputTokens: usage.outputTokens ?? 0,
       listCost: Number(
-        turnCost(bound.catalogEntry, usage, {
-          plan: false,
-          tier: bound.serviceTier ?? undefined,
-        }).toFixed(6),
+        listCost(
+          bound.catalogEntry,
+          usage,
+          bound.serviceTier ?? undefined,
+        ).toFixed(6),
       ),
       responseTimeMs: Math.round(responseTimeMs),
       cachedInputTokens,

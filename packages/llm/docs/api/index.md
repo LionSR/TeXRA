@@ -491,6 +491,21 @@ Materialized JSON: a string-keyed object of JSON values.
 const JsonObjectSchema: compose<$Record<String, Codec<Json, Json, never, never>>, Unknown>
 ```
 
+## listCost
+
+The cost of one turn at the catalog's rates on its service tier, never
+negative: what an API key would be billed, whatever route the turn took.
+It reads no receipt's own cost, so a subscription turn's zero-cost receipt
+cannot stand in for its list price.
+
+```ts
+function listCost(
+  model: ModelConfig,
+  usage: TurnUsage,
+  tier?: 'fast',
+): number
+```
+
 ## MessageSchema
 
 One message of the history a turn sends (user, assistant, tool, system).
