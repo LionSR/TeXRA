@@ -16,7 +16,6 @@
  */
 import { Effect } from 'effect';
 
-import type { AgentConfig } from '@shared/schemas/agentConfig';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import type { SessionRoots } from '@platform/rootedFs';
@@ -26,6 +25,7 @@ import {
   type RunId,
   generateRunId,
   factName,
+  type AgentConfig,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { Rejected } from '@shared/session/runtimeRequest';

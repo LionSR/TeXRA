@@ -1,9 +1,8 @@
 import type {
+  AgentConfig,
   NonAgentRunRecordSchema,
   RunRecordFieldsSchema,
 } from '@shared/schemas';
-
-import type { AgentConfig } from '@shared/schemas/agentConfig';
 
 /**
  * The canonical run configuration (`RunRecordFieldsSchema`, the `run.config`

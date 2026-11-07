@@ -9,13 +9,17 @@
 
 import { Cause, Context, Effect, Exit, Fiber } from 'effect';
 
-import type { AgentConfig } from '@shared/schemas/agentConfig';
 import { helperCall } from '@agent/runtime/helperModel';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
-import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+  type AgentConfig,
+} from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
 import { descriptionRow } from '@shared/session/runFacts';

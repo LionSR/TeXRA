@@ -14,7 +14,6 @@
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
-import type { AgentConfig } from '@shared/schemas/agentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
@@ -33,6 +32,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
   type ToolResult,
+  type AgentConfig,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import {

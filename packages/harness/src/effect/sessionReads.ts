@@ -8,7 +8,6 @@
  */
 import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
-import type { AgentConfig } from '@shared/schemas/agentConfig';
 import type { ExportNode } from '@agent/export/schemas';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
@@ -30,6 +29,7 @@ import {
   type RunResult,
   type RunWorkspaceFile,
   type TranscriptSubscription,
+  type AgentConfig,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RequestError } from '@shared/session/runtimeRequest';

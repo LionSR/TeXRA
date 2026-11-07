@@ -2,8 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, Predicate } from 'effect';
 
-import type { AgentConfig } from '@shared/schemas/agentConfig';
-import type { RunWorkspaceFile } from '@shared/schemas';
+import type { AgentConfig, RunWorkspaceFile } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryMetadataAt } from '@utils/files/fsDurability';

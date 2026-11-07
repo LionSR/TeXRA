@@ -15,7 +15,6 @@
  */
 import { Cause, Effect, Schema } from 'effect';
 
-import type { AgentConfigPayload } from '@shared/schemas/agentConfig';
 import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
@@ -41,6 +40,7 @@ import {
   type RunId,
   type RunParent,
   type SubagentProgressUpdate,
+  type AgentConfigPayload,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { ensureError } from '@utils/errors/errorMessage';

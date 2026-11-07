@@ -3,11 +3,10 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import type { AgentConfig } from '@shared/schemas/agentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
 import { displayToStoragePath } from '@agent/memory/memoryUtils';
-import type { AttachedMemoryMiss } from '@shared/schemas';
+import type { AgentConfig, AttachedMemoryMiss } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
