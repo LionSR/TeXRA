@@ -1,5 +1,5 @@
 /**
- * Shared utilities for the Claude Code and Codex CLI vendor tools, which ship
+ * Loading the Claude Code and Codex CLI vendor packages: both tools ship
  * their SDKs and native binaries as npm platform packages
  * (e.g. @anthropic-ai/claude-agent-sdk-*, @openai/codex-*).
  *
@@ -30,7 +30,7 @@ import { ensureError } from '@texra-ai/harness/schemas';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-const CHANNEL = 'ExternalBinaryUtils';
+const CHANNEL = 'VendorPackages';
 
 /**
  * `process.resourcesPath` when running inside a packaged Electron app;
@@ -160,7 +160,7 @@ interface ResolveBinaryConfig {
  * resolved path, or `undefined` to let the caller fall back to its own
  * resolution. Caching is handled by {@link createCachedBinaryResolver}.
  */
-const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
+const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   config: ResolveBinaryConfig,
 ): Effect.fn.Return<
   string | undefined,
@@ -307,20 +307,20 @@ export function resolvePackageDir(
  * Resolve the platform package from `baseDir` via Node module resolution, then
  * locate the binary inside it. Returns the binary path if found.
  */
-const resolveBinaryFromBase = Effect.fn(
-  'externalBinaryUtils.resolveBinaryFromBase',
-)(function* (
-  baseDir: string,
-  config: ResolveBinaryConfig,
-): Effect.fn.Return<string | undefined, never, FileSystem.FileSystem> {
-  for (const pkg of config.platformPackages) {
-    const platformPkgDir = yield* resolvePackageDir(baseDir, pkg);
-    if (platformPkgDir === undefined) continue;
-    const binary = yield* config.binaryInPlatformPackage(platformPkgDir);
-    if (binary) return binary;
-  }
-  return undefined;
-});
+const resolveBinaryFromBase = Effect.fn('vendorPackages.resolveBinaryFromBase')(
+  function* (
+    baseDir: string,
+    config: ResolveBinaryConfig,
+  ): Effect.fn.Return<string | undefined, never, FileSystem.FileSystem> {
+    for (const pkg of config.platformPackages) {
+      const platformPkgDir = yield* resolvePackageDir(baseDir, pkg);
+      if (platformPkgDir === undefined) continue;
+      const binary = yield* config.binaryInPlatformPackage(platformPkgDir);
+      if (binary) return binary;
+    }
+    return undefined;
+  },
+);
 
 /**
  * `binary` when a file is there, else `undefined`: how a platform package's
