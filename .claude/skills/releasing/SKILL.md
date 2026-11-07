@@ -62,10 +62,11 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    `texra-ai/texra-desktop-releases` repo by dispatching it on the tagged
    commit with `run_desktop_installers`, `run_windows_desktop`,
    `require_desktop_signing`, and `publish_desktop_release_artifacts` all
-   `true`, **and `release_tag` = `vX.Y.Z`**. The publish step fails closed on
-   an empty `release_tag`, and on one that does not match
-   `packages/desktop/package.json`, for every dispatch, stable as well as
-   preview.
+   `true`, **and `release_tag` = `vX.Y.Z`**. The publish job fails closed on
+   an empty `release_tag`, on one that does not match
+   `packages/desktop/package.json`, and on one with no GitHub Release here or
+   whose pre-release flag disagrees with the version, for every dispatch,
+   stable as well as preview.
 
 5. **`llm-zoo` pin.** `packages/llm/package.json` is the one workspace
    manifest that declares `llm-zoo`, pinned exactly; everything else imports
@@ -126,10 +127,10 @@ a package that exists, so the owner publishes the first version by hand,
 then configures it:
 
 1. `corepack pnpm --filter @texra-ai/harness run example:packed` must end
-   with `done`; `node packages/harness/scripts/publish-npm.mjs --tag latest
-   --dry-run` names both packages and the version.
-2. `npm login`, then `node packages/harness/scripts/publish-npm.mjs --tag
-   latest` (npm asks for the OTP).
+   with `done`; `node packages/harness/scripts/publish-npm.mjs --dry-run`
+   names both packages, the version and its dist-tag.
+2. `npm login`, then `node packages/harness/scripts/publish-npm.mjs` (npm
+   asks for the OTP).
 3. On npmjs.com, for each of `@texra-ai/llm` and `@texra-ai/harness`:
    Settings, Trusted Publisher, GitHub Actions, with this repository and the
    workflow `release.yml`, as for `@texra-ai/cli`. From then on, releases
@@ -138,9 +139,12 @@ then configures it:
 ## Preview releases
 
 A preview is the same three tracks on a second channel that existing users
-never receive unless they opt in. Both publish jobs decide the channel from the
-package version **and** the GitHub pre-release flag, and fail closed when the
-two disagree, so a preview cannot land on stable by a missing flag.
+never receive unless they opt in. Every publish job decides the channel from
+the package version **and** the GitHub pre-release flag, and fails closed when
+the two disagree, so a preview cannot land on stable by a missing flag. The
+one check is `scripts/release-version.mjs`, run by
+`.github/actions/release-channel`; the module also holds the version grammar
+and the Marketplace rule below.
 
 - **Version scheme:** `X.Y.Z-preview.N`, N from 1. It is the one prerelease
   form the bump script and the workflows accept (`-beta`, `-rc` are rejected).
@@ -151,18 +155,21 @@ two disagree, so a preview cannot land on stable by a missing flag.
   train and `publish-extension` packages it as the bare `X.(Y+1).N`
   pre-release (`v1.0.0-preview.3` publishes as `1.1.3`, pre-release). From
   1.0 on, stable extension trains use even minor numbers (1.0, 1.2, ...); the
-  job refuses an odd-minor stable tag and a preview of a `.Z ≠ 0` or odd-minor
-  version. Only the VSIX is renumbered; npm and the desktop installers carry
+  check refuses, for any `v` tag (the desktop installers share it), an
+  odd-minor stable version and a preview of a `.Z ≠ 0` or odd-minor version.
+  Only the VSIX is renumbered; npm and the desktop installers carry
   `X.Y.Z-preview.N` as-is.
 - **CLI:** `publish-cli` runs `npm publish --tag preview` for a preview version
   and `--tag latest` for a stable one, never the implicit default. Users opt in
   with `npm install -g @texra-ai/cli@preview`.
 - **Desktop:** the same `desktop-package.yml` dispatch, with `release_tag` set
   to `vX.Y.Z-preview.N`. The publish step creates the release in
-  `texra-ai/texra-desktop-releases` marked pre-release, and refuses to attach
-  installers to an existing release whose pre-release flag disagrees with the
-  version, to a tag that does not match `packages/desktop/package.json`, or
-  when `DESKTOP_RELEASES_TOKEN` is unset.
+  `texra-ai/texra-desktop-releases` marked pre-release. The job takes the
+  pre-release flag from this repository's release for `release_tag`, and
+  refuses to attach installers when that flag or an existing release's in
+  `texra-ai/texra-desktop-releases` disagrees with the version, to a tag that
+  does not match `packages/desktop/package.json`, or when
+  `DESKTOP_RELEASES_TOKEN` is unset.
 - **No version bump:** `version-bump.yml` skips pre-releases, so the next
   preview number is set by hand (below).
 
@@ -209,8 +216,8 @@ Verify on a throwaway tag before the first real preview of a train:
 
 ## Gotchas
 
-- **Both publish jobs assert the release tag matches the corresponding
-  `package.json` version and fail closed if it doesn't.** Cut the tags only
+- **Every publish job asserts the release tag matches the corresponding
+  `package.json` version and fails closed if it doesn't.** Cut the tags only
   after that manifest version is actually on `main`.
 - **Take the version `version-bump.yml` proposes as-is, including at the end
   of a patch train.** `nextWorkspaceVersion` in
@@ -227,10 +234,10 @@ Verify on a throwaway tag before the first real preview of a train:
   a PR bumping every package manifest to the next dev version; that PR does
   **not** touch `CHANGELOG.md`.
 
-- **Both publish jobs fail closed on a channel mismatch.** A `-preview.N`
+- **Every publish job fails closed on a channel mismatch.** A `-preview.N`
   version whose GitHub release is not marked pre-release, or a bare version
-  whose release is, stops at the first step. Delete the release, recreate it
-  with the right flag, and the workflow re-runs.
+  whose release is, stops before anything is published. Delete the release,
+  recreate it with the right flag, and the workflow re-runs.
 
 - **Re-running an abandoned release.** If a tag/release for a version was
   created previously but the workflow never ran, re-running

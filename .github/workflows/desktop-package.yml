@@ -279,6 +279,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      # The installers publish on the channel of the TeXRA release they
+      # belong to, so that release's pre-release flag is the one checked.
+      - name: Read the release's pre-release flag
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [ -z "$RELEASE_TAG" ]; then
+            echo '::error::release_tag is required to publish: the vX.Y.Z or vX.Y.Z-preview.N release these installers belong to.'
+            exit 1
+          fi
+          prerelease="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve release channel
+        id: channel
+        uses: ./.github/actions/release-channel
+        with:
+          manifest: packages/desktop/package.json
+          tag-prefix: v
+          tag: ${{ inputs.release_tag }}
+          prerelease: ${{ steps.release.outputs.prerelease }}
+
       - name: Download desktop installer artifacts
         uses: actions/download-artifact@v8
         with:
@@ -295,13 +319,13 @@ jobs:
       - name: Publish desktop artifacts to public release repository
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
+          PRERELEASE: ${{ steps.channel.outputs.channel == 'preview' }}
         # Installers land in the public releases repo under the same tag the
         # extension/CLI shipped with. A preview (`vX.Y.Z-preview.N`) is
         # created there as a pre-release, and an existing release under that
         # tag must already be a pre-release, so a preview installer can never
         # be attached to a stable release, nor a stable installer to a
-        # preview. Missing token, missing tag, or a tag that does not match
-        # the packaged version all fail the job instead of publishing.
+        # preview. A missing token fails the job instead of publishing.
         run: |
           set -euo pipefail
 
@@ -310,25 +334,7 @@ jobs:
             exit 1
           fi
 
-          version="$(node -p "require('./packages/desktop/package.json').version")"
-          tag="v${version}"
-          if [ -z "$RELEASE_TAG" ]; then
-            echo "::error::release_tag is required to publish; pass '$tag' to attach these installers to that release."
-            exit 1
-          fi
-          if [ "$RELEASE_TAG" != "$tag" ]; then
-            echo "::error::release_tag '$RELEASE_TAG' does not match packages/desktop/package.json version '$version' (expected '$tag'). Dispatch the workflow on the tagged commit."
-            exit 1
-          fi
-          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            prerelease=false
-          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-preview\.[1-9][0-9]*$ ]]; then
-            prerelease=true
-          else
-            echo "::error::Version '$version' is neither X.Y.Z nor X.Y.Z-preview.N; nothing publishes it."
-            exit 1
-          fi
-
+          version="${RELEASE_TAG#v}"
           actual_repo="$(gh repo view "$DESKTOP_RELEASE_REPO" --json nameWithOwner --jq .nameWithOwner)"
           visibility="$(gh repo view "$DESKTOP_RELEASE_REPO" --json visibility --jq .visibility)"
 
@@ -354,18 +360,18 @@ jobs:
             exit 1
           fi
 
-          if existing="$(gh release view "$tag" --repo "$DESKTOP_RELEASE_REPO" --json isPrerelease --jq .isPrerelease 2>/dev/null)"; then
-            if [ "$existing" != "$prerelease" ]; then
-              echo "::error::Release '$tag' in $DESKTOP_RELEASE_REPO has isPrerelease=$existing but version '$version' requires isPrerelease=$prerelease; refusing to attach installers to the wrong channel."
+          if existing="$(gh release view "$RELEASE_TAG" --repo "$DESKTOP_RELEASE_REPO" --json isPrerelease --jq .isPrerelease 2>/dev/null)"; then
+            if [ "$existing" != "$PRERELEASE" ]; then
+              echo "::error::Release '$RELEASE_TAG' in $DESKTOP_RELEASE_REPO has isPrerelease=$existing but version '$version' requires isPrerelease=$PRERELEASE; refusing to attach installers to the wrong channel."
               exit 1
             fi
-            gh release upload "$tag" "${assets[@]}" --repo "$DESKTOP_RELEASE_REPO" --clobber
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --repo "$DESKTOP_RELEASE_REPO" --clobber
           else
             prerelease_flag=''
-            if [ "$prerelease" = true ]; then
+            if [ "$PRERELEASE" = true ]; then
               prerelease_flag=--prerelease
             fi
-            gh release create "$tag" "${assets[@]}" \
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
               --repo "$DESKTOP_RELEASE_REPO" \
               --title "TeXRA Desktop ${version}" \
               --notes-file "$notes_file" \
