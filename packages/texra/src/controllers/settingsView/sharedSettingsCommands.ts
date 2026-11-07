@@ -160,7 +160,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       hostStatePage(
         'subscriptionUsage',
         ['usage'],
-        Effect.map(usage.getAllUsage({ forceRefresh: false }), (snapshots) => ({
+        Effect.map(usage.getAllUsage(), (snapshots) => ({
           snapshots,
         })),
       ),
@@ -355,9 +355,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         setPreferSubscription(message.provider, message.enabled),
       getSubscriptionUsage: (message) =>
         Effect.andThen(
-          message.forceRefresh === true
-            ? usage.getAllUsage({ forceRefresh: true })
-            : Effect.void,
+          message.forceRefresh === true ? usage.invalidateAll() : Effect.void,
           changed('usage'),
         ),
 
