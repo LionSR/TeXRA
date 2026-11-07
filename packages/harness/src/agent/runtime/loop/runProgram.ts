@@ -11,8 +11,12 @@ import { Cause, Context, Effect, Exit, ScopedRef } from 'effect';
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
 import { SessionRoots } from '@platform/rootedFs';
-import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
-import { outcomeFromCause } from '@shared/runs/runStatus';
+import {
+  outcomeFromCause,
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+} from '@shared/schemas';
 import {
   Approvals,
   RunHistory,

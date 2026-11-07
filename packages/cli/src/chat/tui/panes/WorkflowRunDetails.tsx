@@ -59,9 +59,10 @@ function taskGroupLine(
       : '';
   return {
     key: `group:${group.id}`,
-    // A task group's status is a RunPhase, so it is worded with the stream
-    // vocabulary — the same one the progress view's group icon announces,
-    // never the workflow-call vocabulary that happens to share key names.
+    // A task group's status is running or a run outcome, so it is worded
+    // with the stream vocabulary — the same one the progress view's group
+    // icon announces, never the workflow-call vocabulary that happens to
+    // share key names.
     text: `${appearance.marker} ${safeTerminalText(label)} ${runStatusLabel(status)}${duration}`,
     color: appearance.color,
     role: 'lifecycle',

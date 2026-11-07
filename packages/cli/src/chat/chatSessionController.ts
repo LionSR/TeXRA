@@ -369,7 +369,7 @@ export function createChatSessionController(
   const reportRunFailure = (error: unknown, claim: RootRunSettled): void => {
     if (!session.holdsClaim(claim)) return;
     session.settleExitCode(claim, CliExitCode.AgentError);
-    if (session.exited || session.status() === 'cancelled') return;
+    if (session.exited || session.standing()?.outcome === 'cancelled') return;
     const { classification } = normalizeProviderError(error);
     showFailure(
       error,

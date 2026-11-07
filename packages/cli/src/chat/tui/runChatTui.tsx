@@ -98,7 +98,6 @@ import {
   bindSessionView,
   currentView,
   sessionView,
-  runPhaseOf,
   runViewOf,
 } from './state/sessionView';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
@@ -539,7 +538,7 @@ export async function runChat(
     const isRunPending = chatTuiRunPending(session);
 
     if (
-      (isRunPending && runPhaseOf(activeRun) !== 'waiting') ||
+      (isRunPending && activeRun?.position !== 'waiting') ||
       (activeRun != null && isWorking(activeRun))
     ) {
       setTransientNotice(
@@ -725,18 +724,19 @@ export async function runChat(
   // A run that ends after waiting was already announced, and a stop the user
   // asked for is not news. A turn end, not `attentionOf`'s `finished`: a
   // conversation's turn ends at WAITING with no outcome.
-  let rootPhase = session.status();
+  let rootStanding = session.standing();
   onChatClose(
     subscribeToSignalChanges([sessionView()], () => {
-      const previous = rootPhase;
-      rootPhase = session.status();
+      const previous = rootStanding;
+      rootStanding = session.standing();
+      const outcome = rootStanding?.outcome ?? null;
       if (
-        rootPhase !== previous &&
-        previous !== 'waiting' &&
-        rootPhase !== undefined &&
-        rootPhase !== 'running' &&
-        // A stop ends the run cancelled: no "finished" bell for it.
-        rootPhase !== 'cancelled'
+        previous?.position !== 'waiting' &&
+        (rootStanding?.position === 'waiting' ||
+          (outcome !== null &&
+            outcome !== previous?.outcome &&
+            // A stop ends the run cancelled: no "finished" bell for it.
+            outcome !== 'cancelled'))
       ) {
         notify('agentFinished');
       }

@@ -75,6 +75,8 @@ export type {
   InputHistoryRecord,
   SessionStoreMovedAside,
 } from '@shared/session/database';
+// Where a run stands, the pair of `RunView` fields a renderer reads.
+export type { RunStanding } from '@shared/session/runRowReads';
 // A follow-up queued for a run, as its row holds it (`InboxItem.control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
 // The data shapes the public signatures name: session events and their

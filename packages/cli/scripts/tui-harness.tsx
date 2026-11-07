@@ -137,7 +137,6 @@ import {
   runningChildCount,
   sessionView,
   runViewOf,
-  type RunPhase,
 } from '../src/chat/tui/state/sessionView';
 import {
   chatTuiCanStartRootRun,
@@ -635,19 +634,23 @@ function releaseRun(runId: RunId): void {
   harnessRuntime.runFork(Fiber.interrupt(held));
 }
 
+/** Where a fixture puts a run: inside a turn, between turns, or ended on
+ *  an outcome. */
+type SeededStanding = 'running' | 'waiting' | RunOutcome;
+
 /**
- * Place a run in a phase the way production does: `run.activate` opens the
- * running window and a `run.position` parks it (one run model, 3.3). A terminal
- * phase is `run.end`, so a fixture that names one lands there instead.
+ * Place a run the way production does: `run.activate` opens the running
+ * window and a `run.position` parks it. An outcome is `run.end`, so a
+ * fixture that names one lands there instead.
  *
  * The run window opens at the activation row's publish clock, which the
  * publisher stamps, so a fixture cannot backdate the elapsed time the status
  * bar shows.
  */
-function seedPhase(runId: RunId, phase: RunPhase): void {
+function seedStanding(runId: RunId, standing: SeededStanding): void {
   seedRun(runId);
-  if (phase !== 'running' && phase !== 'waiting') {
-    seedRunEnd(runId, phase);
+  if (standing !== 'running' && standing !== 'waiting') {
+    seedRunEnd(runId, standing);
     return;
   }
   const run = runViewOf(currentView(), runId);
@@ -657,7 +660,7 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
       aggregateId: qualifyAggregateId('run', runId),
     });
   }
-  if (phase === 'waiting') {
+  if (standing === 'waiting') {
     publish({
       type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
@@ -1258,7 +1261,7 @@ async function appendHarnessPlanDecision(
   if (result.action === 'approve_and_goal') {
     // A plan run as a goal launches a goal run beside the chat; the chat's
     // own grants stay as they were.
-    seedPhase(HARNESS_RUN_ID, 'running');
+    seedStanding(HARNESS_RUN_ID, 'running');
     appendHarnessAssistantTranscript(
       result.autoApproveAll ? 'PLAN-GOAL-ALL' : 'PLAN-GOAL',
     );
@@ -1280,7 +1283,7 @@ const HARNESS_RUN_ACTIVE =
 const HARNESS_RUN_IDLE =
   (SHOW_PLAN && SHOW_IDLE_PLAN) || process.env.HARNESS_ROOT_WAITING === '1';
 
-function harnessInitialRunStatus(): RunPhase | undefined {
+function harnessInitialRunStatus(): SeededStanding | undefined {
   if (HARNESS_RUN_ACTIVE) return 'running';
   if (HARNESS_RUN_IDLE) return 'waiting';
   return undefined;
@@ -1328,9 +1331,9 @@ publish(
     content: queuedRow(item, undefined, () => 'child').content,
   })),
 );
-const HARNESS_INITIAL_RUN_PHASE = harnessInitialRunStatus();
-if (HARNESS_INITIAL_RUN_PHASE) {
-  seedPhase(HARNESS_RUN_ID, HARNESS_INITIAL_RUN_PHASE);
+const HARNESS_INITIAL_RUN_STANDING = harnessInitialRunStatus();
+if (HARNESS_INITIAL_RUN_STANDING) {
+  seedStanding(HARNESS_RUN_ID, HARNESS_INITIAL_RUN_STANDING);
 }
 
 if (SHOW_LIVE_TOOL_ONLY) {
@@ -1353,7 +1356,7 @@ function seedRunningScript(): void {
     parentRunId: HARNESS_RUN_ID,
     takesFollowUps: false,
   });
-  seedPhase(scriptRunId, 'running');
+  seedStanding(scriptRunId, 'running');
   for (const agentRunId of [
     RUNNING_SCRIPT_FIRST_AGENT_RUN_ID,
     harnessRunId('aaaa000bf10e'),
@@ -1363,7 +1366,7 @@ function seedRunningScript(): void {
       parentRunId: scriptRunId,
       takesFollowUps: false,
     });
-    seedPhase(agentRunId, 'running');
+    seedStanding(agentRunId, 'running');
   }
 }
 
@@ -1375,7 +1378,7 @@ function seedRunningProcessChild(): void {
     takesFollowUps: false,
   });
   seedDescription(childRunId, 'sleep 30');
-  seedPhase(childRunId, 'running');
+  seedStanding(childRunId, 'running');
   focusRun(childRunId);
 }
 
@@ -1391,28 +1394,28 @@ if (SHOW_CHILDREN) {
       runId: harnessRunId('aaaa0005f10e'),
       identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
-      status: 'running' as RunPhase,
+      status: 'running' as SeededStanding,
     },
     {
       runId: harnessRunId('aaaa0006f10e'),
       identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
-      status: 'waiting' as RunPhase,
+      status: 'waiting' as SeededStanding,
     },
     {
       runId: harnessRunId('aaaa0007f10e'),
       identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
-      status: 'running' as RunPhase,
+      status: 'running' as SeededStanding,
     },
   ].map((child) =>
     child.agentName === FAILED_CHILD_AGENT
-      ? { ...child, status: 'failed' as RunPhase }
+      ? { ...child, status: 'failed' as SeededStanding }
       : child,
   );
   // One run window across every later active phase: an activation on a run
-  // already running would re-open it, so `seedPhase` keeps the first one.
-  seedPhase(HARNESS_RUN_ID, 'running');
+  // already running would re-open it, so `seedStanding` keeps the first one.
+  seedStanding(HARNESS_RUN_ID, 'running');
   for (const child of childRuns) {
     const runId = child.runId;
     seedRun(runId, {
@@ -1430,7 +1433,7 @@ if (SHOW_CHILDREN) {
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
     }
-    seedPhase(runId, child.status);
+    seedStanding(runId, child.status);
   }
   if (SHOW_NESTED_CHILDREN) {
     const nestedRunId = nestedStrategyChild.runId;
@@ -1443,7 +1446,7 @@ if (SHOW_CHILDREN) {
       nestedRunId,
       makeChildEntries('localChecker', 'nested proof check'),
     );
-    seedPhase(nestedRunId, 'running');
+    seedStanding(nestedRunId, 'running');
   }
 }
 
@@ -1982,7 +1985,7 @@ if (SHOW_STREAMING_TOOL_OUTPUT) {
   const fiber = harnessRuntime.runFork(
     Effect.gen(function* () {
       yield* Effect.sleep('1 second');
-      seedPhase(HARNESS_RUN_ID, 'running');
+      seedStanding(HARNESS_RUN_ID, 'running');
       session().log.publish(HARNESS_RUN_ID, {
         type: 'stream.start',
         id: 'streaming-thinking',

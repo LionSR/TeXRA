@@ -92,7 +92,7 @@ export const RunViewSchema = Schema.Struct({
    *  undecoded here, read through its plugin's reader. */
   facts: Schema.Record(Schema.String, JsonValueSchema),
   worktree: Schema.NullOr(WorktreeInfoSchema),
-  /** Where its loop stands (`phaseMoveOf`): `ready` before its first
+  /** Where its loop stands (`standingAfter`): `ready` before its first
    *  activation and after an end, `running` inside a turn, `waiting`
    *  between turns. */
   position: RunPositionSchema,

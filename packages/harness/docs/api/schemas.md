@@ -1863,6 +1863,18 @@ exit once its command exited.
 const RunResultSchema: Struct<{ readonly error: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["disk-full", "result-lost", "unexpected"]>; readonly message: String; }>, Struct<{ readonly message: String; readonly statusCode: optional<Int>; readonly statusText: optional<String>; readonly provider: optional<String>; readonly classification: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["missing-api-key", "context-window", "upstream-credit"]>; }>, Struct<{ readonly kind: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly planType: optional<String>; readonly resetsInMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"subscription-session">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription"]>; readonly needsReauth: Boolean; readonly sessionError: String; }>]>>; readonly requestId: optional<String>; readonly partialText: optional<String>; readonly kind: Literal<"model">; }>]>>; readonly usage: optional<Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cachedInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheWriteTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly toolUsePromptTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; }>>; readonly output: Struct<{ readonly response: String; readonly files: $Array<String>; readonly structured: optional<Codec<Json, Json, never, never>>; }>; readonly outcome: optional<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; readonly exit: optional<Struct<{ readonly code: NullOr<Int>; readonly timedOut: Boolean; }>>; }>
 ```
 
+## RunStanding
+
+Where a run stands: its loop position, and its outcome once it ended
+(`RunView` carries both).
+
+```ts
+interface RunStanding {
+  readonly position: RunPosition;
+  readonly outcome: RunOutcome | null;
+}
+```
+
 ## RunStorageFileLocation
 
 ```ts
