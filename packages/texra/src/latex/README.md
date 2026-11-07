@@ -65,7 +65,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
 - **`latexdiff/`**: the diffs of a document task's rounds around
   `latexdiff`. `diffOperations.ts` (`latexdiffPairs`) is the one pairing of a
   round's outputs, which the run's `document_diff` pass
-  (`agent/output/LatexDiffManager.ts`) and the hosts' verb share.
+  (`agent/output/revisionLatexdiffs.ts`) and the hosts' verb share.
   `latexdiffVerbs.ts` is the one body of the GUI hosts' latexdiff verbs (two
   files, against a commit, a whole run), with the guards, refusals and
   notices; a whole run opens the diffs its rounds recorded and diffs only a

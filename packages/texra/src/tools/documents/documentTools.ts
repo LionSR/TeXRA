@@ -41,7 +41,7 @@ import { runCompileCheck } from '@texra/agent/output/compileCheck';
 import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
 import { recoverOutputFailure } from '@texra/agent/output/outputOperations';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
-import { LatexDiffManager } from '@texra/agent/output/LatexDiffManager';
+import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 import { ensureCorrectXmlStructure } from '@texra/agent/output/replyDocuments';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { revisionLayout } from '@texra/shared/constants/workflowOutput';
@@ -494,13 +494,8 @@ export const DocumentDiffTool = defineTool({
         ),
         value: { diffs: [], failed: [], notRun: null },
       };
-    const { logger, fileService, roots } = docs.deps;
-    const { artifacts, entries, notRun } = yield* new LatexDiffManager(
-      logger,
-      docs.run.runId,
-      fileService,
-      roots,
-    ).handleLatexdiffOfOutput(
+    const { artifacts, entries, notRun } = yield* revisionLatexdiffs(
+      docs.deps,
       revision,
       outputs,
       roundOf(docs.rounds, revision - 1)?.outputs ?? [],

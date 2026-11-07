@@ -18,7 +18,7 @@ import { FakeHost } from '@test/support/testKernel';
 import { TEXRA_APP } from '@test/support/texraApp';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { LatexDiffManager } from '@texra/agent/output/LatexDiffManager';
+import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 
 // Local file imports
 import {
@@ -105,14 +105,12 @@ layer(
         },
         diff: null,
       });
-      const manager = new LatexDiffManager(
-        spiedTrace(),
-        runId,
-        new RunFileService(runId, testWorkspaceRoots()),
-        testWorkspaceRoots(),
-      );
-
-      const { entries } = yield* manager.handleLatexdiffOfOutput(
+      const { entries } = yield* revisionLatexdiffs(
+        {
+          logger: spiedTrace(),
+          fileService: new RunFileService(runId, testWorkspaceRoots()),
+          roots: testWorkspaceRoots(),
+        },
         1,
         [output(1, 'a'), output(1, 'b')],
         [output(0, 'a'), output(0, 'b')],
