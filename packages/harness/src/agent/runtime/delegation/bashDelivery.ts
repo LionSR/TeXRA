@@ -10,7 +10,7 @@
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 
-import type { DisplaySessionEvent, ExecResult } from '@shared/schemas';
+import type { DisplayRow, ExecResult } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -63,7 +63,7 @@ export function formatBashDelivery(
   wallTimeMs: number,
   result: ExecResult,
   output: {
-    readonly rows: readonly DisplaySessionEvent[];
+    readonly rows: readonly DisplayRow[];
     /** Per stream, where its rows skip what the cap held back: after its
      *  first `recorded` characters, `elided` are missing (0: none are). */
     readonly gaps: Readonly<

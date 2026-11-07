@@ -87,7 +87,7 @@ Where a run stands is three facts on its `RunView`, decided once by the reducer:
 
 In-process callers read `session.view.current()` and `session.view.changes`. Across an IPC boundary (VS Code webviews, Electron renderers), the host streams `session.view.watch(subscriptions, { cursor, debug })` (`Stream<readonly SessionViewInput[]>`) and the renderer feeds those batches into [`RemoteSessionView`](./harness/transcript#remotesessionview) via [`SessionInputs`](./harness/transcript#sessioninputs):
 
-- **[`EventInputSchema`](./harness/transcript#eventinputschema)** and **[`CommitOrdinalSchema`](./harness/transcript#commitordinalschema)**: ordered batches of [`DisplaySessionEvent`](./harness/transcript#displaysessionevent)s in `commit` order.
+- **[`EventInputSchema`](./harness/transcript#eventinputschema)** and **[`CommitOrdinalSchema`](./harness/transcript#commitordinalschema)**: ordered batches of [`DisplayRow`](./harness/transcript#displaysessionevent)s in `commit` order.
 - **[`TextChunkSchema`](./harness/transcript#textchunkschema)**: transient streaming deltas for active assistant, thinking, and tool rows.
 - **[`LocalRuntimeStateSchema`](./harness/transcript#localruntimestateschema)** and **[`ExistenceReconciliationSchema`](./harness/transcript#existencereconciliationschema)**: liveness flags for runs held by the host process and pruning of deleted runs.
 - **[`TranscriptSubscriptionSchema`](./harness/transcript#transcriptsubscriptionschema)**: the `{ id, fromSeq }` set controlling which runs have their `TranscriptView` materialized.

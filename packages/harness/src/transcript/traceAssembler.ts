@@ -16,7 +16,7 @@ import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { getRunRecords } from '@agent/storage/runRecords';
 
 import {
-  isDisplaySessionEvent,
+  isDisplayRow,
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
@@ -83,7 +83,7 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
   // belongs after the filter: a tombstoned aggregate and one holding only
   // run-history-private rows are both "no replayable timeline", and readers may
   // then treat a non-empty document as having a creation row.
-  const displayEvents = events.filter(isDisplaySessionEvent);
+  const displayEvents = events.filter(isDisplayRow);
   if (displayEvents.length === 0) return { status: 'streamLogs_missing' };
   return {
     status: 'ok',

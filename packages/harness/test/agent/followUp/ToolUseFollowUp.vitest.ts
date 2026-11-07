@@ -15,8 +15,8 @@ import {
   qualifyAggregateId,
   RunIdSchema,
   type RunId,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
 } from '@texra-ai/harness/schemas';
 import { DatabaseWriteFailed } from '@texra-ai/harness/host';
 import * as resumability from '@agent/storage/resumability';
@@ -78,7 +78,7 @@ const withResumePort =
  * `failWrites` refuses that many appends.
  */
 function recordedFollowUps(options: { failWrites?: number } = {}) {
-  const rows: SessionEvent[] = [];
+  const rows: SessionRow[] = [];
   const live = new Set<RunId>();
   let failWrites = options.failWrites ?? 0;
   const publisher = Semaphore.makeUnsafe(1);
@@ -102,7 +102,7 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
             commit: rows.length + 1,
             origin: null,
             at: 0,
-          }) as SessionEvent,
+          }) as SessionRow,
       );
       rows.push(...committed);
       return Effect.succeed(committed);
@@ -111,7 +111,7 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
   const log = {
     transact: <A, E>(
       work:
-        | readonly SessionEventDraft[]
+        | readonly SessionRowDraft[]
         | ((tx: Transaction) => Effect.Effect<A, E>),
     ) =>
       typeof work === 'function'

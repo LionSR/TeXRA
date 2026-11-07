@@ -412,7 +412,7 @@ interface AppSignalEvent {
 
 Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
 credentials, workspace-file writes). Not for run/session progress
-events — those extend `AgentEvent` (`agent/trace/`) or the `SessionEvent`
+events — those extend `AgentEvent` (`agent/trace/`) or the `SessionRow`
 schema (`shared/schemas/sessionEvent.ts`), per the event-channel rule in
 the harness AGENTS.md.
 
@@ -984,7 +984,7 @@ A read of committed events.
 
 ```ts
 type EventsRead = Effect.Effect<
-  readonly SessionEvent[],
+  readonly SessionRow[],
   DatabaseReadFailed
 >;
 ```
@@ -2608,7 +2608,7 @@ Convert a path to POSIX style (forward slashes, collapsed separators, resolved `
 function toPosixPath(relativePath: string): string
 ```
 
-## TraceArm
+## TraceRow
 
 One session arm as the trace carries it, distributive over `T`: an
 {@link AgentEvent} arm, or the `run.end` a {@link ResultEvent} names. A
@@ -2617,9 +2617,9 @@ display door, and those rows commit through the run's cell
 (`runEventDraft`, typed to an unfolded draft, refuses any other).
 
 ```ts
-type TraceArm<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
+type TraceRow<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
   T extends unknown
-    ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
+    ? Omit<Extract<SessionRowDraft, { type: T }>, 'aggregateId'>
     : never;
 ```
 

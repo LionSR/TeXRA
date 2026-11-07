@@ -47,7 +47,7 @@ export type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 export { SessionInputs } from '@shared/session/sessionInputs';
 export {
   CommitOrdinalSchema,
-  DisplaySessionEventSchema,
+  DisplayRowSchema,
   EventInputSchema,
   SessionViewInputSchema,
   TranscriptSubscriptionSchema,

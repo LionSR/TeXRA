@@ -33,7 +33,7 @@ import {
   type InvocationRef,
   type NormalizedUsage,
   type RunId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import {
@@ -80,7 +80,7 @@ interface HistorySession {
   readonly view: SessionViewAccess['Service'];
 }
 
-type ModelMessage = Extract<SessionEvent, { type: 'model.message' }>;
+type ModelMessage = Extract<SessionRow, { type: 'model.message' }>;
 
 /** The write that ends request `invocation` of `runId`. */
 const modelEnd = (
@@ -193,7 +193,7 @@ function toolCall(
 function callWrites(
   calls: CallPositions,
   runId: RunId,
-  row: SessionEvent,
+  row: SessionRow,
 ): HistoryWrite[] {
   const at = new Date(row.at).toISOString();
   if (row.type === 'model.message') return modelWrites(calls, runId, row, at);

@@ -17,7 +17,7 @@ import type { AgentEvent } from '@shared/session/agentEvent';
 import type {
   AgentRunListingEntry,
   CommitOrdinal,
-  DisplaySessionEvent,
+  DisplayRow,
   SessionViewInput,
   RequestDecision,
   RunEnd,
@@ -272,7 +272,7 @@ export interface LocalSession extends Session {
     readonly events: (
       from: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+    ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
   };
   /** The {@link Run} of `runId`'s activation at `activation`, as `start`
    *  or `resume` handed it out: a host that carries a handle across a

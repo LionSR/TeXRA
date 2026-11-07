@@ -13,14 +13,14 @@ import { Effect, Result, Schema, Struct } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
-  DISPLAY_EVENT_TYPES,
+  DISPLAY_ROW_TYPES,
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
   type AggregateId,
   type JsonValue,
   type UnreadableRun,
   type RunId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import {
   DatabaseRowEarlier,
@@ -60,7 +60,7 @@ export const PROJECTED_FROM = `projected_row p
 /** The kinds a display read selects: the display rows, and the settlements
  *  their tool cards' output is projected from (`settleCards`). */
 export const DISPLAY_READ_TYPES = JSON.stringify([
-  ...DISPLAY_EVENT_TYPES,
+  ...DISPLAY_ROW_TYPES,
   'tool.result',
 ]);
 /** The listing (each aggregate's `listing_entry` rows and each run's spend
@@ -174,7 +174,7 @@ export interface RowReader<E> {
     rows: readonly SqlRow[],
     whole: boolean,
   ) => Effect.Effect<
-    readonly SessionEvent[],
+    readonly SessionRow[],
     E | DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
   >;
   /** Every run found unopenable so far, with why: shown read-only. */
@@ -289,7 +289,7 @@ export function rowReader<E>(
     }
     // The batch's blobs in one statement: a row carries addresses only.
     const texts: Blobs = yield* stored(blobDigests(rows));
-    const events: SessionEvent[] = [];
+    const events: SessionRow[] = [];
     for (const row of rows) {
       const decoded = decodeRow(row, factKinds, texts);
       if (Result.isSuccess(decoded)) {
@@ -330,7 +330,7 @@ export function rowReader<E>(
 }
 
 /** A damaged `run.start` as a bare one, so its run still lists. */
-function bareStart(input: SqlRow): SessionEvent | null {
+function bareStart(input: SqlRow): SessionRow | null {
   const row = Schema.decodeUnknownSync(RowSchema)(input);
   if (row.type !== 'run.start' || row.kind !== 'run') return null;
   return {
@@ -354,12 +354,9 @@ function bareStart(input: SqlRow): SessionEvent | null {
  * keeps its `files`; the fold keeps the name and input it opened with.
  */
 export function settleCards(
-  events: readonly SessionEvent[],
-): readonly SessionEvent[] {
-  const settled = new Map<
-    AggregateId,
-    SessionEvent & { type: 'tool.result' }
-  >();
+  events: readonly SessionRow[],
+): readonly SessionRow[] {
+  const settled = new Map<AggregateId, SessionRow & { type: 'tool.result' }>();
   return events.map((event) => {
     if (event.type === 'tool.result') settled.set(event.aggregateId, event);
     else if (event.type !== 'tool.start') {
@@ -373,8 +370,8 @@ export function settleCards(
 }
 
 function cardResult(
-  { payload }: SessionEvent & { type: 'tool.result' },
-  files: Extract<SessionEvent, { type: 'tool.end' }>['files'],
+  { payload }: SessionRow & { type: 'tool.result' },
+  files: Extract<SessionRow, { type: 'tool.end' }>['files'],
 ): JsonValue {
   const { status: _status, ...rest } = payload.result;
   const output = { ...rest, ...(files?.length ? { editedFiles: files } : {}) };

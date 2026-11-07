@@ -11,7 +11,7 @@ import {
   listingTypeOf,
   referencedAggregates,
   runIdentityDisplayName,
-  type DisplaySessionEvent,
+  type DisplayRow,
   type TraceDocument,
 } from '@texra-ai/harness/schemas';
 import {
@@ -24,10 +24,7 @@ import type {
 } from '@texra/shared/session/sessionFrames';
 
 /** One position of the run's loop: the row the scrubber cuts the trace at. */
-export type TracePosition = Extract<
-  DisplaySessionEvent,
-  { type: 'run.position' }
->;
+export type TracePosition = Extract<DisplayRow, { type: 'run.position' }>;
 
 /** The run's `run.position` rows in commit order — the scrubber's positions. */
 export function tracePositions(trace: TraceDocument): TracePosition[] {
@@ -41,7 +38,7 @@ export function tracePositions(trace: TraceDocument): TracePosition[] {
  *  with no creation row has no name, so its id is all there is to name. */
 export function traceDisplayName(trace: TraceDocument): string {
   const start = trace.events.find(
-    (event): event is Extract<DisplaySessionEvent, { type: 'run.start' }> =>
+    (event): event is Extract<DisplayRow, { type: 'run.start' }> =>
       event.type === 'run.start',
   );
   return start ? runIdentityDisplayName(start.identity) : trace.runId;

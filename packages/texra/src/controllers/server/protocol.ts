@@ -56,7 +56,7 @@ import {
 import { RUN_STATUS_KEYS } from '@ui/copy/runStatus';
 import {
   CommitOrdinalSchema,
-  DisplaySessionEventSchema,
+  DisplayRowSchema,
 } from '@texra-ai/harness/transcript';
 
 import {
@@ -324,7 +324,7 @@ export const TexraRpcs = RpcGroup.make(
         // A `TraceDocument`: the run's display rows, in commit order.
         trace: Schema.Struct({
           runId: RunIdSchema,
-          events: Schema.Array(DisplaySessionEventSchema),
+          events: Schema.Array(DisplayRowSchema),
         }),
         record: RunRecordFieldsSchema,
       }),

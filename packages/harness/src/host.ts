@@ -120,7 +120,7 @@ export {
 } from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 // Which side of a trace event a run wrote.
-export type { TraceArm } from '@shared/session/agentEvent';
+export type { TraceRow } from '@shared/session/agentEvent';
 export type { AggregateId, SessionCloseReport } from '@shared/schemas';
 // The agent-directories port and the process services plugins read.
 export {

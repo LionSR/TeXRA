@@ -58,7 +58,7 @@ import {
   type RequestPayload,
   type RequestDecision,
   type RunId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { DraftBlob } from '@shared/session/historyTurns';
@@ -318,7 +318,7 @@ export const decisionOf = (
   requestId: string,
   from: CommitOrdinal,
 ): Effect.Effect<
-  Extract<SessionEvent, { type: 'request.decided' }>,
+  Extract<SessionRow, { type: 'request.decided' }>,
   Error,
   SessionLog
 > =>

@@ -1,7 +1,7 @@
 import { Result, Schema } from 'effect';
 
 import {
-  DisplaySessionEventSchema,
+  DisplayRowSchema,
   GOAL_PLAN_KIND,
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
@@ -20,7 +20,7 @@ import {
  */
 export const TraceDocumentSchema = Schema.Struct({
   runId: RunIdSchema,
-  events: Schema.Array(DisplaySessionEventSchema),
+  events: Schema.Array(DisplayRowSchema),
 });
 
 export type TraceDocument = Readonly<typeof TraceDocumentSchema.Type>;

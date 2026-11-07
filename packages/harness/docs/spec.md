@@ -281,7 +281,7 @@ the display reader, which selects `tool.result` to fill the adjacent `tool.end`
 card's result before it drops the private row
 (`controllers/session/rowReader.ts#DISPLAY_READ_TYPES`, `#settleCards`). The
 private rows themselves are never sent to a renderer
-(`shared/schemas/sessionEvent.ts#isDisplaySessionEvent`).
+(`shared/schemas/sessionEvent.ts#isDisplayRow`).
 
 - `model.message` (folded: yes): One arm per invocation fact: `attempt`,
   `identified`, `accepted`, `cancelled`, `failed`, `response`, `handed-down`,
@@ -359,7 +359,7 @@ also read by `applyRunRows`.
 - `run.position` (folded: yes): Where the loop stands.
 
 The transcript tier is display rows too
-(`shared/schemas/traceEvent.ts#TranscriptEventSchema`):
+(`shared/schemas/traceEvent.ts#TraceRowFieldsSchema`):
 `log`, `stage.start`, `stage.end`, `tool.start` (a call's card opens),
 `tool.end` (it closes), `usage` (one priced turn; a run with a run history
 stores none), `context.state`, `stream.start`, `stream.end`, and

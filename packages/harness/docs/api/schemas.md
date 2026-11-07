@@ -566,10 +566,10 @@ const DiffStatsSchema: Struct<{ readonly added: optional<Int>; readonly removed:
 type DispatchFacts = typeof DispatchFactsSchema.Type;
 ```
 
-## DisplaySessionEvent
+## DisplayRow
 
 ```ts
-type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
+type DisplayRow = typeof DisplayRowSchema.Type;
 ```
 
 ## emptyRunEndOutput
@@ -1045,7 +1045,7 @@ kinds on one type, so it is read grouped by kind as well (`listingKeyOf`,
 
 ```ts
 function listingTypeOf(
-  event: Pick<SessionEventDraft, 'type'>,
+  event: Pick<SessionRowDraft, 'type'>,
 ): string | null
 ```
 
@@ -1435,7 +1435,7 @@ A follow-up queued for the run and not yet consumed, as its row holds it.
 
 ```ts
 type QueuedFollowUp = Pick<
-  Extract<SessionEvent, { type: 'followup.queued' }>,
+  Extract<SessionRow, { type: 'followup.queued' }>,
   'followUpId' | 'content' | 'holdUntil' | 'control' | 'commit'
 >;
 ```
@@ -1501,7 +1501,7 @@ const recipeBlockOf: (config: { readonly name: string; readonly instruction: str
 Aggregate identities introduced by a fact and its declared lifecycle edges.
 
 ```ts
-function referencedAggregates(event: SessionEvent): AggregateId[]
+function referencedAggregates(event: SessionRow): AggregateId[]
 ```
 
 ## Rejected
@@ -1955,13 +1955,13 @@ working right now; a conversation waiting on its user is idle.
 function sessionActivity(view: ReadSessionView): SessionTitleState
 ```
 
-## SessionEvent
+## SessionRow
 
 ```ts
-type SessionEvent = typeof SessionEventSchema.Type;
+type SessionRow = typeof SessionRowSchema.Type;
 ```
 
-## SessionEventDraft
+## SessionRowDraft
 
 What a publisher hands `SessionEvents.publish`: the body plus the aggregate
 it lives on. The publisher stamps the rest of the envelope
@@ -1969,7 +1969,7 @@ it lives on. The publisher stamps the rest of the envelope
 Parsing a draft removes caller-supplied envelope fields before storage.
 
 ```ts
-type SessionEventDraft = typeof SessionEventDraftSchema.Type;
+type SessionRowDraft = typeof SessionEventDraftSchema.Type;
 ```
 
 ## SessionStoreMovedAside

@@ -5,7 +5,7 @@ import type { FileLocation } from './output';
 
 /**
  * Shared output-file and host-presentation payloads. Session state is
- * defined by SessionEvent.
+ * defined by SessionRow.
  */
 
 /**

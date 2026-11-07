@@ -23,10 +23,10 @@ import { AggregateIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
   CommitOrdinal,
-  DisplaySessionEvent,
+  DisplayRow,
   RunId,
-  SessionEvent,
-  SessionEventDraft,
+  SessionRow,
+  SessionRowDraft,
   UnreadableRun,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -187,7 +187,7 @@ export type SessionOpenError =
 
 /** A read of committed events. */
 export type EventsRead = Effect.Effect<
-  readonly SessionEvent[],
+  readonly SessionRow[],
   DatabaseReadFailed
 >;
 
@@ -204,9 +204,9 @@ export class Database extends Context.Service<
      * `DatabaseWriteFailed`.
      */
     readonly appendAll: (
-      drafts: readonly WithBlobs<SessionEventDraft>[],
+      drafts: readonly WithBlobs<SessionRowDraft>[],
     ) => Effect.Effect<
-      readonly SessionEvent[],
+      readonly SessionRow[],
       DatabaseAggregateClosed | DatabaseWriteFailed
     >;
     /** Run `body` as one write transaction, whole or not at all; readers
@@ -226,7 +226,7 @@ export class Database extends Context.Service<
      *  its own snapshot, so a deletion marker a page saw is delivered regardless. */
     readonly readDisplay: (
       fromCommit: CommitOrdinal,
-    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+    ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
     readonly readListing: () => EventsRead;
     /** The strings under `digests`: media bytes a history names by address. */
     readonly readBlobs: (
@@ -253,15 +253,15 @@ export class Database extends Context.Service<
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,
-      types: readonly SessionEvent['type'][],
+      types: readonly SessionRow['type'][],
       toSeq?: number,
-    ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    ) => Effect.Effect<readonly SessionRow[], DatabaseReadFailed>;
     /** One aggregate's display rows in seq order, with the `usage` rows its
      *  priced responses project: what a renderer replays. */
     readonly readDisplayAggregate: (
       id: AggregateId,
       fromSeq: number,
-    ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
+    ) => Effect.Effect<readonly DisplayRow[], DatabaseReadFailed>;
     /** The job that removes a run tree (`SessionEvents.removeRun`): reread
      *  it, refuse one that changed since `expectedStartCommit`, append the
      *  deletion marker. */
@@ -269,7 +269,7 @@ export class Database extends Context.Service<
       id: AggregateId,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
-      readonly SessionEvent[],
+      readonly SessionRow[],
       DatabaseAggregateClosed | DatabaseWriteFailed
     >;
     /** The deletion markers not collected yet, and one's collection: `cleanup`
@@ -278,7 +278,7 @@ export class Database extends Context.Service<
     readonly deletions: {
       readonly pending: () => EventsRead;
       readonly collect: (
-        tombstone: Extract<SessionEvent, { type: 'run.removed' }>,
+        tombstone: Extract<SessionRow, { type: 'run.removed' }>,
         cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
       ) => Effect.Effect<void, Error>;
     };
@@ -296,7 +296,7 @@ export class Database extends Context.Service<
       {
         readonly cursor: CommitOrdinal;
         readonly change: number;
-        readonly events: readonly SessionEvent[];
+        readonly events: readonly SessionRow[];
         readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];
         readonly damaged: readonly UnreadableRun[];

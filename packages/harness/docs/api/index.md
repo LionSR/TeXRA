@@ -48,7 +48,7 @@ Discriminated union of every event the SDK surface emits.
 
 ```ts
 type AgentEvent =
-  | TraceArm<(typeof TRACE_ROW_TYPES)[number]>
+  | TraceRow<(typeof TRACE_ROW_TYPES)[number]>
   | StreamChunkEvent;
 ```
 
@@ -195,10 +195,10 @@ function defineTool<T, R = never, const Name extends string = string>(
 ): DefinedTool<T, R, Name>
 ```
 
-## DisplaySessionEvent
+## DisplayRow
 
 ```ts
-type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
+type DisplayRow = typeof DisplayRowSchema.Type;
 ```
 
 ## ExportNode
@@ -400,7 +400,7 @@ interface LocalSession extends Session {
     readonly events: (
       from: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+    ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
   };
   /** The {@link Run} of `runId`'s activation at `activation`, as `start`
    *  or `resume` handed it out: a host that carries a handle across a

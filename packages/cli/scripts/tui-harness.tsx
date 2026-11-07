@@ -82,7 +82,7 @@ import {
   type RetryRequest,
   type RunOutcome,
   type RunId,
-  type SessionEventDraft,
+  type SessionRowDraft,
   type UserQuestionRequest,
   aggregateTarget,
   type ToolEditContent,
@@ -484,14 +484,14 @@ function publish(...drafts: SeedRow[]): void {
 
 /** The run rows the fixtures seed that a run's state folds. */
 type CellRow = Extract<
-  SessionEventDraft,
+  SessionRowDraft,
   { type: 'run.config' | 'run.position' | 'request.decided' }
 >;
 /** What a fixture seeds: a row no run folds, its cell's rows, its opening. */
 type SeedRow =
   | UnfoldedDraft
   | CellRow
-  | Extract<SessionEventDraft, { type: 'run.activate' }>;
+  | Extract<SessionRowDraft, { type: 'run.activate' }>;
 const isCellRow = (draft: SeedRow): draft is CellRow =>
   draft.type === 'run.config' ||
   draft.type === 'run.position' ||
@@ -570,13 +570,13 @@ function seedRun(
   runId: RunId,
   options: {
     readonly identity?: NonNullable<
-      Extract<SessionEventDraft, { type: 'run.start' }>['identity']
+      Extract<SessionRowDraft, { type: 'run.start' }>['identity']
     >;
     readonly parentRunId?: RunId;
     /** The agent name for a default (agent) identity; a run id names nothing. */
     readonly agent?: string;
     readonly takesFollowUps?: Extract<
-      SessionEventDraft,
+      SessionRowDraft,
       { type: 'run.start' }
     >['takesFollowUps'];
   } = {},

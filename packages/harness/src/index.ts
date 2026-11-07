@@ -68,7 +68,7 @@ export type {
 export type { ExportNode } from '@agent/export/schemas';
 export type {
   CommitOrdinal,
-  DisplaySessionEvent,
+  DisplayRow,
   RequestDecision,
   RunId,
 } from '@shared/schemas';
