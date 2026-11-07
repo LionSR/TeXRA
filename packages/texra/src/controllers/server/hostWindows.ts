@@ -53,7 +53,7 @@ import {
   type HostAnswer,
   type HostCall,
   type HostCapability,
-  type HostFrame,
+  type HostAttachFrame,
   type Notice,
 } from './hostCalls';
 import { followed, type ServiceLink } from './client';
@@ -102,7 +102,7 @@ interface Window {
   readonly project: string;
   readonly capabilities: ReadonlySet<HostCapability>;
   focusedAt: number;
-  readonly frames: Queue.Queue<HostFrame>;
+  readonly frames: Queue.Queue<HostAttachFrame>;
   /** The calls it has not answered yet, by call id: what each answer
    *  does, and how the call fails when the window goes. */
   readonly pending: Map<string, PendingCall>;
@@ -316,7 +316,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
   const attach = (
     session: Session,
     capabilities: readonly HostCapability[],
-  ): Stream.Stream<HostFrame> =>
+  ): Stream.Stream<HostAttachFrame> =>
     Stream.unwrap(
       Effect.gen(function* () {
         const window: Window = {
@@ -325,7 +325,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
           project: projectOf(session),
           capabilities: new Set(capabilities),
           focusedAt: yield* Clock.currentTimeMillis,
-          frames: yield* Queue.unbounded<HostFrame>(),
+          frames: yield* Queue.unbounded<HostAttachFrame>(),
           pending: new Map(),
         };
         windows.add(window);
@@ -334,7 +334,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
         // had none reaches this one.
         yield* RcMap.get(surfaces, Equal.byReferenceUnsafe(session));
         return Stream.concat(
-          Stream.succeed<HostFrame>({
+          Stream.succeed<HostAttachFrame>({
             kind: 'attached',
             attachment: window.id,
           }),

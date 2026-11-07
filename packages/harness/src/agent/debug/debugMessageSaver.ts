@@ -7,6 +7,7 @@ import { runDirUnder } from '@common/storage/storageLayout';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { InvocationRef, RunId } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
+import { SAVE_MODEL_IO_SETTING } from '@shared/state/stateSettings';
 
 /** One model request or response to save under its run's directory. */
 interface SaveDebugParams {
@@ -57,7 +58,7 @@ export function maybeSaveDebugObject({
     });
 
   return Effect.gen(function* () {
-    if (!(yield* Settings.get<boolean>(roots, 'debug.saveModelIO'))) return;
+    if (!(yield* Settings.get(roots, SAVE_MODEL_IO_SETTING))) return;
     const fs = yield* FileSystem.FileSystem;
     yield* fs.makeDirectory(runDir, { recursive: true });
     yield* fs.writeFileString(filePath, JSON.stringify(object, null, 2));

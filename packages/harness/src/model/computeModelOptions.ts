@@ -29,7 +29,7 @@ import {
   type ModelAvailabilityKind,
   type UsageRoute,
 } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { StateKey } from '@shared/state/stateSettings';
 
 import { readModelSettings, routeFactsFor } from './modelSettings';
 import {
@@ -275,6 +275,14 @@ const ModelSelectionSchema = Schema.Struct({
 });
 type ModelSelection = typeof ModelSelectionSchema.Type;
 
+/** The model selection's key. Its absence is the empty delta, read here
+ *  rather than by a decoding default, so a corrupt record is reported. */
+export const MODEL_SELECTION_KEY = {
+  key: 'modelSelection',
+  slot: 'globalState',
+  schema: ModelSelectionSchema,
+} as const satisfies StateKey<ModelSelection>;
+
 const EMPTY_MODEL_SELECTION: ModelSelection = {
   enabledExtras: [],
   disabledDefaults: [],
@@ -289,7 +297,7 @@ function selectionOf(stored: unknown) {
   const parsed =
     stored === undefined
       ? undefined
-      : Schema.decodeUnknownResult(ModelSelectionSchema)(stored);
+      : Schema.decodeUnknownResult(MODEL_SELECTION_KEY.schema)(stored);
   if (parsed === undefined) return { selection: EMPTY_MODEL_SELECTION };
   return Result.isSuccess(parsed)
     ? { selection: parsed.success }
@@ -300,7 +308,7 @@ const reportInvalid = (invalid: Schema.SchemaError | undefined) =>
   invalid === undefined
     ? Effect.void
     : Effect.logWarning(
-        `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
+        `Invalid stored ${MODEL_SELECTION_KEY.key}; showing the default models.`,
         invalid.message,
       );
 
@@ -336,12 +344,12 @@ function enabledOrDefaults(selection: ModelSelection): readonly string[] {
 
 /**
  * The models the pickers show — the single reader of
- * `GlobalStateKey.MODEL_SELECTION` for every host.
+ * {@link MODEL_SELECTION_KEY} for every host.
  */
 export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
   state: Pick<StateStore, 'get'>,
 ) {
-  const stored = yield* state.get(GlobalStateKey.MODEL_SELECTION);
+  const stored = yield* state.get(MODEL_SELECTION_KEY.key);
   const { selection, invalid } = selectionOf(stored);
   yield* reportInvalid(invalid);
   return enabledOrDefaults(selection);
@@ -349,7 +357,7 @@ export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
 
 /**
  * Enable or disable one model — the only writer of
- * `GlobalStateKey.MODEL_SELECTION`.
+ * {@link MODEL_SELECTION_KEY}.
  *
  * Two invariants: at least one model stays enabled, and an unserved model is
  * never enabled. Either violation fails with `StateWriteFailed`.
@@ -362,7 +370,7 @@ export function setModelEnabled(input: {
   // Refusals are typed failures, never throws, so a UI can surface them.
   const refuse = (message: string) =>
     new StateWriteFailed({
-      key: GlobalStateKey.MODEL_SELECTION,
+      key: MODEL_SELECTION_KEY.key,
       message,
       cause: new Error(message),
     });
@@ -380,7 +388,7 @@ export function setModelEnabled(input: {
   // survives the model later leaving the curated defaults. A helper model
   // disabled here is not rewritten: `getHelperModelName` checks it at read.
   return input.state
-    .modify(GlobalStateKey.MODEL_SELECTION, (stored) => {
+    .modify(MODEL_SELECTION_KEY.key, (stored) => {
       const read = selectionOf(stored);
       invalid = read.invalid;
       const others = enabledOrDefaults(read.selection).filter(

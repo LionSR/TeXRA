@@ -24,10 +24,28 @@ import {
   type DesktopWorkspaceRequest,
 } from '../shared/desktopWorkspaceMessages';
 import { dockGroupActions, dockTab } from './dockControls';
-import type { createEditorPane } from './editorPane';
-import type { createPdfPane } from './pdfPane';
 import type { createTerminalPane } from './terminalPane';
-import type { createReviewPane } from './reviewPane';
+
+/**
+ * What one kind of pane does in the dock. `zone` places a new tab when no tab
+ * of its kind is open: `edge` at the dock's left edge, `navigator` left of the
+ * documents, `document` with them, `bottom` below them.
+ */
+export interface PaneKind {
+  readonly zone: 'edge' | 'navigator' | 'document' | 'bottom';
+  /** The panel's size when its tab is first added. */
+  readonly size?: { readonly width?: number; readonly height?: number };
+  /** Fill the panel's element, once per tab. */
+  mount(tab: WorkbenchTab, host: HTMLElement): void;
+  /** Each layout while the panel is visible. */
+  layout?(tab: WorkbenchTab, host: HTMLElement): void;
+  /** When the panel becomes the dock's active one. */
+  activate?(tab: WorkbenchTab): void;
+  /** Each state update, for a tab whose record changed in place. */
+  update?(tab: WorkbenchTab): void;
+  /** The tab closed: release what `mount` acquired. */
+  release?(tab: WorkbenchTab): void;
+}
 
 interface WorkbenchControllerDeps {
   session: string;
@@ -35,14 +53,8 @@ interface WorkbenchControllerDeps {
   isBrowserCovered(): boolean;
   /** Asks before discarding a dirty tab; runs `discard` only on consent. */
   confirmDiscard(title: string, discard: () => void): void;
-  conversationView: HTMLElement;
-  fileTree: ReturnType<typeof createEditorPane>;
-  editorFor(id: string): ReturnType<typeof createEditorPane>;
-  closeEditor(id: string): void;
+  panes: { readonly [K in WorkbenchKind]: PaneKind };
   terminalPane: ReturnType<typeof createTerminalPane>;
-  reviewPane: ReturnType<typeof createReviewPane>;
-  pdfPane: ReturnType<typeof createPdfPane>;
-  logsPane: HTMLElement;
   getState(): DesktopShellState;
   updateShell(next: DesktopShellState): void;
   postMessage(message: DesktopWorkspaceRequest): void;
@@ -50,14 +62,8 @@ interface WorkbenchControllerDeps {
 
 /** A project owns one dock. Reparenting a panel never disposes its resources. */
 export function createWorkbenchController(deps: WorkbenchControllerDeps) {
-  const {
-    getState,
-    updateShell,
-    postMessage,
-    isActive,
-    editorFor,
-    terminalPane,
-  } = deps;
+  const { getState, updateShell, postMessage, isActive, panes, terminalPane } =
+    deps;
   const element = document.createElement('div');
   element.className = 'shell-dock';
   element.dataset.session = deps.session;
@@ -87,11 +93,14 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
   let lastRequestedTab: string | undefined;
   let dragging = false;
   const pendingTerminalCommands = new Map<string, string>();
-  const loadedBrowserTabs = new Set<string>();
   const mounted = new Map<string, HTMLElement>();
   const subscriptions: { dispose(): void }[] = [];
   const tabFor = (id: string) =>
     getState().workbenchTabs.find((tab) => tab.id === id);
+  const zoneOf = (id: string) => {
+    const tab = tabFor(id);
+    return tab && panes[tab.kind].zone;
+  };
 
   function persist() {
     if (reconciling || disposed || !dock || persistFrame !== undefined) return;
@@ -175,22 +184,8 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
           else if (left < strip.scrollLeft) strip.scrollLeft = left;
         }
         const tab = tabFor(panel.id);
-        if (tab?.kind === 'editor' && tab.target) editorFor(tab.id).layout();
-        if (tab?.kind === 'terminal')
-          terminalPane.activate(tab.id, { focus: false });
-        if (
-          tab?.kind === 'browser' &&
-          tab.target &&
-          !loadedBrowserTabs.has(tab.id)
-        ) {
-          loadedBrowserTabs.add(tab.id);
-          postMessage({
-            command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN,
-            tabId: tab.id,
-            url: tab.target,
-          });
-        }
-        if (tab?.kind === 'logs') mounted.get(tab.id)?.append(deps.logsPane);
+        const host = tab && mounted.get(tab.id);
+        if (tab && host) panes[tab.kind].layout?.(tab, host);
       }
       syncBrowserViewBounds();
     });
@@ -201,58 +196,15 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     host.className = `shell-dock-surface shell-dock-${tab.kind}`;
     host.dataset.kind = tab.kind;
     host.dataset.panelId = tab.id;
-    if (tab.kind === 'agent') {
-      host.classList.add('shell-conversation');
-      host.append(deps.conversationView);
-    } else if (tab.kind === 'files') {
-      host.classList.add('shell-files');
-      host.append(deps.fileTree.treeElement);
-      void deps.fileTree.refresh();
-    } else if (tab.kind === 'editor' && tab.target) {
-      const editor = editorFor(tab.id);
-      host.append(editor.element);
-      const footer = document.createElement('footer');
-      footer.className = 'shell-editor-toolbar';
-      render(
-        html`<span class="shell-editor-path" title=${tab.target}
-            >${tab.target}</span
-          >
-          ${renderLabeledActionButton({
-            text: 'Save',
-            icon: 'floppy-disk',
-            kind: 'ghost',
-            className: 'is-compact',
-            onClick: () => void editor.save(),
-          })}`,
-        footer,
-      );
-      host.append(footer);
-      void editor.open(tab.target);
-    } else if (tab.kind === 'terminal')
-      host.append(terminalPane.elementFor(tab.id));
-    else if (tab.kind === 'review') host.append(deps.reviewPane.element);
-    else if (tab.kind === 'pdf') host.append(deps.pdfPane.frameFor(tab));
-    else if (tab.kind === 'browser') host.dataset.browserSlot = tab.id;
-    else if (tab.kind === 'logs' && isActive()) host.append(deps.logsPane);
+    panes[tab.kind].mount(tab, host);
     mounted.set(tab.id, host);
     return host;
   }
 
   function release(tab: WorkbenchTab) {
     mounted.delete(tab.id);
-    if (tab.kind === 'editor') deps.closeEditor(tab.id);
-    if (tab.kind === 'terminal') {
-      pendingTerminalCommands.delete(tab.id);
-      terminalPane.dispose(tab.id);
-    }
-    if (tab.kind === 'pdf') deps.pdfPane.dispose(tab.id);
-    if (tab.kind === 'browser') {
-      loadedBrowserTabs.delete(tab.id);
-      postMessage({
-        command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE,
-        tabId: tab.id,
-      });
-    }
+    pendingTerminalCommands.delete(tab.id);
+    panes[tab.kind].release?.(tab);
   }
 
   function disposeWorkbenchTab(id: string) {
@@ -306,25 +258,24 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       (panel) => tabFor(panel.id)?.kind === tab.kind,
     );
     if (sameKind) return { referencePanel: sameKind };
-    const document = dock.panels.find((panel) =>
-      ['editor', 'pdf', 'review', 'browser'].includes(
-        tabFor(panel.id)?.kind ?? '',
-      ),
+    const document = dock.panels.find(
+      (panel) => zoneOf(panel.id) === 'document',
     );
-    if (tab.kind === 'terminal' || tab.kind === 'logs') {
-      return {
-        referencePanel: document ?? dock.activePanel ?? firstPanel,
-        direction: 'below',
-      };
+    const fallback = dock.activePanel ?? firstPanel;
+    switch (panes[tab.kind].zone) {
+      case 'edge':
+        return { direction: 'left' };
+      case 'bottom':
+        return { referencePanel: document ?? fallback, direction: 'below' };
+      case 'navigator':
+        if (document) return { referencePanel: document, direction: 'left' };
+        break;
+      case 'document':
+        if (document) return { referencePanel: document };
+        break;
     }
-    if (tab.kind === 'agent') return { direction: 'left' };
-    if (tab.kind === 'files' && document)
-      return { referencePanel: document, direction: 'left' };
-    const files = dock.getPanel('workbench:files');
-    if (['editor', 'pdf', 'review', 'browser'].includes(tab.kind) && document)
-      return { referencePanel: document };
     return {
-      referencePanel: files ?? dock.activePanel ?? firstPanel,
+      referencePanel: dock.getPanel('workbench:files') ?? fallback,
       direction: 'right',
     };
   }
@@ -445,8 +396,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     subscriptions.push(
       dock.onDidActivePanelChange(() => {
         const tab = dock?.activePanel && tabFor(dock.activePanel.id);
-        if (tab?.kind === 'editor' && tab.target)
-          void editorFor(tab.id).open(tab.target);
+        if (tab) panes[tab.kind].activate?.(tab);
         persist();
         layoutVisibleSurfaces();
       }),
@@ -523,15 +473,14 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
             minimumWidth: 160,
             minimumHeight: 100,
           });
-          if (tab.kind === 'files') panel.api.setSize({ width: 220 });
-          if (tab.kind === 'agent') panel.api.setSize({ width: 380 });
-          if (tab.kind === 'terminal' || tab.kind === 'logs')
-            panel.api.setSize({ height: 220 });
+          const pane = panes[tab.kind];
+          if (pane.size) panel.api.setSize(pane.size);
+          // The first document narrows the agent and the file tree to give
+          // it room.
           if (
-            tab.kind === 'editor' &&
+            pane.zone === 'document' &&
             !dock.panels.some(
-              (other) =>
-                other.id !== tab.id && tabFor(other.id)?.kind === 'editor',
+              (other) => other.id !== tab.id && zoneOf(other.id) === 'document',
             )
           ) {
             dock.getPanel('workbench:agent')?.api.setSize({
@@ -545,7 +494,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
         if (panel.title !== tab.title) panel.api.setTitle(tab.title);
         if (panel.params?.dirty !== tab.dirty)
           panel.api.updateParameters({ dirty: tab.dirty });
-        if (tab.kind === 'pdf') deps.pdfPane.frameFor(tab);
+        panes[tab.kind].update?.(tab);
       }
       const requested = getState().activeTabId;
       if (requested !== lastRequestedTab) {

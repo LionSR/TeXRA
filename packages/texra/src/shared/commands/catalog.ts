@@ -6,7 +6,7 @@ export interface CommandKeybinding {
   when?: string;
 }
 
-export interface CommandCatalogEntry {
+interface CommandCatalogEntry {
   id: string;
   title: string;
   shortTitle?: string;
@@ -22,73 +22,49 @@ export interface CommandCatalogEntry {
    */
   settingsTab?: SettingsTarget;
   /**
-   * Set on entries whose VS Code extension registration goes through the
-   * shared `dispatchCommandFromRegistry` handler map (see
-   * `packages/extension/src/commands/extensionCommandHandlers.ts`) rather
-   * than a bespoke `vscode.commands.registerCommand` call elsewhere.
-   * Untagged entries are still valid commands — they're registered
-   * directly by other command modules — this flag only marks membership
-   * in the shared-registry surface so it can be derived instead of hand-
-   * mirrored.
+   * `false` hides the command from VS Code's command palette: it is reached
+   * from a button, a keybinding or a comment thread instead. Every other
+   * extension row shows there once the window has activated.
    */
-  extensionRegistry?: true;
-  /**
-   * Set on rows only the desktop app owns. They carry the same identity
-   * fields as every other row (title, category, keybinding), so the desktop
-   * menus, palette and shortcut registry read one table — but they have no VS
-   * Code registration, so {@link packageCommandContributions} filters them
-   * out of the extension manifest.
-   */
-  host?: 'desktop';
-  /**
-   * Set on the commands the setup agent's `invoke_command` tool may run:
-   * each opens an existing, trusted UI flow. Never set it on a command that
-   * deletes, resets or cleans anything.
-   */
-  setupInvokable?: true;
+  palette?: false;
 }
 
-export const commandCatalog = [
+/**
+ * The commands the VS Code extension contributes, in manifest order. The
+ * desktop app runs some of them too.
+ */
+const commandCatalog = [
   {
     id: 'texra.createSampleProject',
-    setupInvokable: true,
-    extensionRegistry: true,
     title: 'Create Sample Project',
     category: 'TeXRA',
   },
   {
     id: 'texra.runSetupAssistant',
-    extensionRegistry: true,
     title: 'Run Setup Assistant',
     category: 'TeXRA',
     icon: '$(rocket)',
   },
   {
     id: 'texra.openGettingStarted',
-    setupInvokable: true,
-    extensionRegistry: true,
     title: 'Open Getting Started Walkthrough',
     category: 'TeXRA',
     icon: '$(mortar-board)',
   },
   {
     id: 'texra.cleanBuild',
-    extensionRegistry: true,
     title: 'Delete All build/ Folders in Workspace',
     category: 'TeXRA',
     icon: '$(close-all)',
   },
   {
     id: 'texra.cloneOverleafProject',
-    setupInvokable: true,
-    extensionRegistry: true,
     title: 'Clone Overleaf/ShareLaTeX Project',
     category: 'TeXRA',
     icon: '$(repo-clone)',
   },
   {
     id: 'texra.indentCurrentTeX',
-    extensionRegistry: true,
     title: 'Format Current LaTeX File',
     category: 'TeXRA',
     icon: '$(indent)',
@@ -96,7 +72,6 @@ export const commandCatalog = [
   },
   {
     id: 'texra.fixCompilation',
-    extensionRegistry: true,
     title: 'Fix LaTeX Compilation Errors',
     category: 'TeXRA',
     icon: '$(wrench)',
@@ -104,7 +79,6 @@ export const commandCatalog = [
   },
   {
     id: 'texra.getTeXCount',
-    extensionRegistry: true,
     title: 'Count Words in Current TeX File',
     category: 'TeXRA',
     icon: '$(symbol-number)',
@@ -112,20 +86,17 @@ export const commandCatalog = [
   },
   {
     id: 'texra.compileTikzFigures',
-    extensionRegistry: true,
     title: 'Compile TikZ Figures from Current File',
     category: 'TeXRA',
   },
   {
     id: 'texra.downloadArXivSource',
-    setupInvokable: true,
-    extensionRegistry: true,
     title: 'Download arXiv Source',
     category: 'TeXRA',
   },
   {
     id: 'texra.execute',
-    extensionRegistry: true,
+    palette: false,
     title: 'Execute Agent',
     category: 'TeXRA',
     keybinding: {
@@ -136,29 +107,24 @@ export const commandCatalog = [
   },
   {
     id: 'texra.setApiKey',
-    setupInvokable: true,
-    extensionRegistry: true,
     title: 'Set API Key',
     category: 'TeXRA',
   },
   {
     id: 'texra.removeApiKey',
-    setupInvokable: true,
-    extensionRegistry: true,
+    palette: false,
     title: 'Remove API Key',
     category: 'TeXRA',
   },
   {
     id: 'texra.auth.chatgpt.signIn',
-    extensionRegistry: true,
     title: 'Sign In with ChatGPT Subscription',
     category: 'TeXRA',
     icon: '$(comment-discussion)',
   },
   {
     id: 'texra.showMemory',
-    setupInvokable: true,
-    extensionRegistry: true,
+    palette: false,
     title: 'Memory Settings',
     category: 'TeXRA',
     icon: '$(database)',
@@ -166,8 +132,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showModels',
-    setupInvokable: true,
-    extensionRegistry: true,
+    palette: false,
     title: 'Model Settings',
     category: 'TeXRA',
     icon: '$(hubot)',
@@ -175,8 +140,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showAgents',
-    setupInvokable: true,
-    extensionRegistry: true,
+    palette: false,
     title: 'Agent Settings',
     category: 'TeXRA',
     icon: '$(symbol-method)',
@@ -184,8 +148,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showTools',
-    setupInvokable: true,
-    extensionRegistry: true,
+    palette: false,
     title: 'Plugin Settings',
     category: 'TeXRA',
     icon: '$(extensions)',
@@ -193,7 +156,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showApprovalSettings',
-    extensionRegistry: true,
+    palette: false,
     title: 'Approval Settings',
     category: 'TeXRA',
     icon: '$(shield)',
@@ -201,8 +164,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showTeamSettings',
-    setupInvokable: true,
-    extensionRegistry: true,
+    palette: false,
     title: 'Agent Team Settings',
     category: 'TeXRA',
     icon: '$(organization)',
@@ -210,8 +172,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showGitSettings',
-    setupInvokable: true,
-    extensionRegistry: true,
+    palette: false,
     title: 'Git Settings',
     category: 'TeXRA',
     icon: '$(git-branch)',
@@ -219,8 +180,6 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showMainView',
-    setupInvokable: true,
-    extensionRegistry: true,
     title: 'New Task',
     category: 'TeXRA',
     icon: '$(edit)',
@@ -232,7 +191,6 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showProgressView',
-    extensionRegistry: true,
     title: 'Show Tasks',
     category: 'TeXRA',
     icon: '$(eye)',
@@ -244,7 +202,6 @@ export const commandCatalog = [
   },
   {
     id: 'texra.openProgressViewInTab',
-    extensionRegistry: true,
     title: 'Open Tasks in Editor',
     shortTitle: 'Open in Editor',
     category: 'TeXRA',
@@ -252,8 +209,6 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showDashboard',
-    setupInvokable: true,
-    extensionRegistry: true,
     title: 'Open Settings',
     shortTitle: 'Settings',
     category: 'TeXRA',
@@ -261,39 +216,46 @@ export const commandCatalog = [
   },
   {
     id: 'texra.replyComment',
+    palette: false,
     title: 'Reply',
     category: 'TeXRA',
   },
   {
     id: 'texra.resolveCommentThread',
+    palette: false,
     title: 'Resolve',
     category: 'TeXRA',
     icon: '$(check)',
   },
   {
     id: 'texra.unresolveCommentThread',
+    palette: false,
     title: 'Reopen',
     category: 'TeXRA',
     icon: '$(history)',
   },
-  // Desktop-only rows (`host: 'desktop'`): no VS Code registration, so they
-  // stay out of the extension manifest. Icons are a desktop concern and live
-  // with the desktop menu wiring.
+] as const satisfies readonly CommandCatalogEntry[];
+
+/**
+ * The commands only the desktop app has. They carry the same identity fields
+ * as the extension's rows, so the desktop menus, palette and shortcut registry
+ * read both tables through {@link commandCatalogById}; the extension manifest
+ * reads {@link commandCatalog} alone. Icons are a desktop concern and live
+ * with the desktop menu wiring.
+ */
+const desktopCommandCatalog = [
   {
     id: 'texra.desktop.showLogs',
-    host: 'desktop',
     title: 'Show Logs',
     category: 'TeXRA',
   },
   {
     id: 'texra.desktop.openLogFolder',
-    host: 'desktop',
     title: 'Open Logs Folder',
     category: 'TeXRA',
   },
   {
     id: 'texra.desktop.showCommands',
-    host: 'desktop',
     title: 'Show Commands',
     shortTitle: 'Commands',
     category: 'TeXRA',
@@ -301,47 +263,46 @@ export const commandCatalog = [
   },
   {
     id: 'texra.desktop.toggleBottomBar',
-    host: 'desktop',
     title: 'Show Terminal',
     category: 'View',
     keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
   },
   {
     id: 'texra.desktop.toggleSidePanel',
-    host: 'desktop',
     title: 'Show Files',
     category: 'View',
     keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
   },
   {
     id: 'texra.desktop.showBrowser',
-    host: 'desktop',
     title: 'Show Browser',
     category: 'View',
   },
   {
     id: 'texra.desktop.saveFile',
-    host: 'desktop',
     title: 'Save',
     category: 'File',
     keybinding: { key: 'ctrl+s', mac: 'cmd+s' },
   },
   {
     id: 'texra.desktop.openWorkspaceFolder',
-    host: 'desktop',
     title: 'Open Folder',
     category: 'File',
     keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
   },
   {
     id: 'texra.desktop.openDesktopDocs',
-    host: 'desktop',
     title: 'Desktop Documentation',
     category: 'Help',
   },
 ] as const satisfies readonly CommandCatalogEntry[];
 
-export type CommandId = (typeof commandCatalog)[number]['id'];
+/** A command the extension contributes. */
+export type ExtensionCommandId = (typeof commandCatalog)[number]['id'];
+
+export type CommandId =
+  | ExtensionCommandId
+  | (typeof desktopCommandCatalog)[number]['id'];
 
 /**
  * A `contributes.commands` row in `packages/extension/package.json`. Field
@@ -358,27 +319,39 @@ type PackageCommandContribution = { command: string } & Pick<
  * it into `package.json`, and its `--check` (in `npm run gate`) fails on drift.
  */
 export const packageCommandContributions: PackageCommandContribution[] =
-  commandCatalog.flatMap((entry: CommandCatalogEntry) =>
-    entry.host === 'desktop'
-      ? []
-      : [
-          {
-            command: entry.id,
-            title: entry.title,
-            ...(entry.shortTitle === undefined
-              ? {}
-              : { shortTitle: entry.shortTitle }),
-            category: entry.category,
-            ...(entry.icon === undefined ? {} : { icon: entry.icon }),
-            ...(entry.enablement === undefined
-              ? {}
-              : { enablement: entry.enablement }),
-          },
-        ],
-  );
+  commandCatalog.map((entry: CommandCatalogEntry) => ({
+    command: entry.id,
+    title: entry.title,
+    ...(entry.shortTitle === undefined ? {} : { shortTitle: entry.shortTitle }),
+    category: entry.category,
+    ...(entry.icon === undefined ? {} : { icon: entry.icon }),
+    ...(entry.enablement === undefined ? {} : { enablement: entry.enablement }),
+  }));
+
+/**
+ * The manifest's `menus.commandPalette`: every row waits for `texra.activated`,
+ * which the extension sets once all its commands are registered, so the
+ * palette never offers a command that is not there yet; a `palette: false`
+ * row is never shown.
+ */
+export const packageCommandPalette = commandCatalog.map(
+  (entry: CommandCatalogEntry) => ({
+    command: entry.id,
+    when: entry.palette === false ? 'false' : 'texra.activated',
+  }),
+);
+
+/** The manifest's `contributes.keybindings`, in catalog order. */
+export const commandKeybindings = commandCatalog.flatMap(
+  (entry: CommandCatalogEntry) =>
+    entry.keybinding ? [{ command: entry.id, ...entry.keybinding }] : [],
+);
 
 export const commandCatalogById = new Map<CommandId, CommandCatalogEntry>(
-  commandCatalog.map((entry) => [entry.id, entry]),
+  [...commandCatalog, ...desktopCommandCatalog].map((entry) => [
+    entry.id,
+    entry,
+  ]),
 );
 
 /** Ids of the catalog entries that open the settings view on a specific tab. */
@@ -397,17 +370,3 @@ export const settingsTabByCommand = Object.fromEntries(
     'settingsTab' in entry ? [[entry.id, entry.settingsTab]] : [],
   ),
 ) as Record<SettingsTabCommandId, SettingsTarget>;
-
-const commandKeybindingOrder = [
-  'texra.showMainView',
-  'texra.showProgressView',
-  'texra.execute',
-] as const satisfies readonly CommandId[];
-
-export const commandKeybindings = commandKeybindingOrder.map((id) => {
-  const keybinding = commandCatalogById.get(id)?.keybinding;
-  if (!keybinding) {
-    throw new Error(`Command has no keybinding: ${id}`);
-  }
-  return { command: id, ...keybinding };
-});

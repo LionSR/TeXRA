@@ -9,6 +9,7 @@ import {
 import type { RunEnd } from '@texra-ai/harness';
 import type { AgentConfig, RunView } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@texra-ai/harness/host';
+import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 /**
  * Decide whether a finished run should auto-open a final output, and which
@@ -46,7 +47,7 @@ export const selectAutoOpenFinalOutput = Effect.fn('selectAutoOpenFinalOutput')(
       result.outcome !== RUN_OUTCOME.COMPLETED
     )
       return undefined;
-    if (!(yield* Settings.get<boolean>(stores, 'agentOutputs.autoOpenFinal'))) {
+    if (!(yield* Settings.get(stores, AUTO_OPEN_FINAL_SETTING))) {
       return undefined;
     }
 

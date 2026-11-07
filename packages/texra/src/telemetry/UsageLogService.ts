@@ -25,7 +25,7 @@ import {
 import { envFlag } from '@texra-ai/harness/node';
 import { extractErrorMessage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
-import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
+import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settingsView/texraSettings';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import type { AppState, ConfigProvider } from '@texra-ai/harness/host';
 
@@ -98,7 +98,7 @@ const MAX_RETRY_DELAY = Duration.minutes(30);
  * Environment variables that switch usage logging off without editing config.
  * `TEXRA_NO_TELEMETRY` is ours; `DO_NOT_TRACK` is the cross-tool console
  * convention, honoured so a user who exports it once opts out of every tool
- * that respects it. Either one overrides {@link TELEMETRY_ENABLED_KEY} — an
+ * that respects it. Either one overrides {@link TELEMETRY_ENABLED_SETTING.key} — an
  * environment that says "do not send" wins over a stored `true`, never the
  * reverse, so neither can be used to force logging back on.
  */
@@ -149,10 +149,10 @@ const isTelemetryEnabledBySetting = Effect.fnUntraced(function* (
   // Which scope answers is the config store's rule (`projectValueIgnored`):
   // a project file may opt out but never opt in. The config files are
   // hand-edited raw JSON, so a mistyped `"false"` must not read as consent.
-  const value = config.get<unknown>(TELEMETRY_ENABLED_KEY);
+  const value = config.get<unknown>(TELEMETRY_ENABLED_SETTING.key);
   if (typeof value === 'boolean') return value;
   return yield* Effect.logWarning(
-    `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof value}); treating usage logging as disabled`,
+    `Ignoring non-boolean ${TELEMETRY_ENABLED_SETTING.key} (got ${typeof value}); treating usage logging as disabled`,
   ).pipe(withLogChannel(CHANNEL), Effect.as(false));
 });
 

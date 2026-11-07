@@ -57,7 +57,7 @@ export function createVsCodeLogSink(): LogSink {
         case 'TRACE':
           output.trace(line);
           break;
-        default:
+        case 'INFO':
           output.info(line);
       }
     },

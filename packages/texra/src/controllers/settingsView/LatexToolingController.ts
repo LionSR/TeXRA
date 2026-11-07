@@ -8,10 +8,12 @@ import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import {
   HOMEBREW_INSTALL_COMMAND,
   installAdvice,
   LATEX_DEPENDENCIES,
+  LATEX_WORKSHOP_EXT_ID,
   PROBED_LATEX_TOOLS,
   SCOOP_INSTALL_COMMAND,
   type LatexDependency,
@@ -24,14 +26,6 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { OsPlatformSchema, osPlatformOf } from '@texra/shared/osPlatform';
 
 const CHANNEL = 'LatexToolingController';
-
-/** The editor's side of the LaTeX status, as the host reports it: which
- *  recommended settings are applied, and whether LaTeX Workshop is
- *  installed. */
-export type LatexEditorStatus = Pick<
-  LatexSettingsStatus,
-  'outDir' | 'autoRevealExclude' | 'latexWorkshopInstalled'
->;
 
 const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
   HOMEBREW_INSTALL_COMMAND,
@@ -51,14 +45,18 @@ export function isAllowedLatexInstallCommand(command: string): boolean {
 }
 
 /**
- * The LaTeX settings status: the tool probes, and the editor's side the
- * host reports.
+ * The LaTeX settings status: the tool probes, and the side of the host's
+ * editor where it has one.
  */
 export function detectLatexSettingsStatus(
-  editor: LatexEditorStatus,
+  host: EditorIntegrationShape | undefined,
 ): Effect.Effect<LatexSettingsStatus, never, ChildProcessSpawner> {
   const platform = osPlatformOf(process.platform);
   return Effect.gen(function* () {
+    const editor = host && {
+      latexWorkshopInstalled: host.installed(LATEX_WORKSHOP_EXT_ID),
+      recommended: host.recommendedSettings(),
+    };
     const probes = yield* Effect.all(
       PROBED_LATEX_TOOLS.map((tool) =>
         Effect.map(probeTool(tool), (isInstalled) => ({ tool, isInstalled })),
@@ -92,7 +90,7 @@ export function detectLatexSettingsStatus(
       ]),
     ) as Record<LatexDependency, boolean>;
     return {
-      ...editor,
+      editor: editor ?? null,
       installed,
       platform,
       ...toolPaths,

@@ -84,16 +84,13 @@ export class ProgressWorkflowFileActionsController {
       action: Exclude<FileActionRequest['action'], 'latexdiff'>;
     },
   ): FileAction<void> {
-    const base = request.base ?? undefined;
     switch (request.action) {
       case 'compareOriginal':
-        return this.compareOriginal(request.file, base);
-      case 'comparePrevious':
-        return this.comparePrevious(request.file, request.prev ?? undefined);
+        return this.compareOriginal(request.file, request.base);
       case 'accept':
-        return this.acceptFile(request.file, base, request.runId);
+        return this.acceptFile(request.file, request.base, request.runId);
       case 'merge':
-        return this.mergeFile(request.file, base);
+        return this.mergeFile(request.file, request.base);
     }
   }
 
@@ -126,41 +123,22 @@ export class ProgressWorkflowFileActionsController {
     ),
   );
 
-  compareOriginal(file: string, base?: string): FileAction<void> {
-    return this.executeWithBaseFile(
-      file,
-      base,
-      'Compare original',
-      (targetFile, baseFile) => this.compare(baseFile, targetFile),
-    ).pipe(Effect.asVoid);
-  }
-
-  /** The diff of `edited` against `base`, titled the same on every host. */
-  private compare(base: string, edited: string): FileAction<void> {
+  /** The diff of `file` against `base`, titled the same on every host. */
+  compareOriginal(file: string, base: string): FileAction<void> {
     return this.deps.host.openDiff(
       base,
-      edited,
-      `Compare: ${path.basename(edited)} ↔ ${path.basename(base)}`,
+      file,
+      `Compare: ${path.basename(file)} ↔ ${path.basename(base)}`,
     );
-  }
-
-  comparePrevious(file: string, previous?: string): FileAction<void> {
-    if (!previous) {
-      return this.deps.host.showInfo('Compare previous needs a base file.');
-    }
-
-    return this.compare(previous, file);
   }
 
   readonly acceptFile: (
     file: string,
-    base?: string,
+    base: string,
     activeRun?: RunId,
   ) => FileAction<void> = Effect.fn(
     'ProgressWorkflowFileActionsController.acceptFile',
-  )({ self: this }, function* (file: string, base?: string, activeRun?: RunId) {
-    if (!base)
-      return yield* this.deps.host.showInfo('Accept needs a base file.');
+  )({ self: this }, function* (file: string, base: string, activeRun?: RunId) {
     const { host, workspace } = this.deps;
     // The content the accept wrote, read once by the write itself, so the
     // diff the launching chat is told of is exactly what was accepted.
@@ -175,27 +153,8 @@ export class ProgressWorkflowFileActionsController {
       yield* this.deps.runs.followUpLauncher(activeRun, edit);
   });
 
-  mergeFile(file: string, base?: string): FileAction<void> {
-    return this.executeWithBaseFile(
-      file,
-      base,
-      'Merge',
-      (targetFile, baseFile) => this.deps.runs.merge(baseFile, targetFile),
-    ).pipe(Effect.asVoid);
-  }
-
-  private executeWithBaseFile(
-    file: string,
-    base: string | undefined,
-    actionName: string,
-    execute: (file: string, base: string) => FileAction<boolean | void>,
-  ): FileAction<boolean> {
-    if (!base) {
-      return this.deps.host
-        .showInfo(`${actionName} needs a base file.`)
-        .pipe(Effect.as(false));
-    }
-    return execute(file, base).pipe(Effect.map((result) => result !== false));
+  mergeFile(file: string, base: string): FileAction<void> {
+    return this.deps.runs.merge(base, file);
   }
 
   /**

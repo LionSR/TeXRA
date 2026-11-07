@@ -26,20 +26,18 @@ import {
   withRequestTimeout,
   ToolError,
 } from '@texra-ai/harness/plugins';
+import { ZOTERO_PORT_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
 const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 
-/** The configured Zotero port: one port for both the Connector API and the
- *  Better BibTeX JSON-RPC (different paths). The transports below read it
- *  from the calling tool's project; the availability probe from its
- *  inputs. */
-export const ZOTERO_PORT_KEY = 'bib.zoteroPort';
-
-/** The port the calling tool's project configures. */
+/** The port the calling tool's project configures: one port for both the
+ *  Connector API and the Better BibTeX JSON-RPC (different paths). The
+ *  transports below read it from the calling tool's project; the
+ *  availability probe from its inputs. */
 const zoteroPort = Effect.flatMap(ToolContext, (call) =>
-  Settings.get<number>(call.env.roots, ZOTERO_PORT_KEY),
+  Settings.get(call.env.roots, ZOTERO_PORT_SETTING),
 );
 
 /** The URL of `pathname` on the local Zotero at `port`. */

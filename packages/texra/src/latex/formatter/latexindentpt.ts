@@ -9,8 +9,6 @@ import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
-export const LATEXINDENT_CONFIG_KEY = 'latex.latexindentConfig';
-
 const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
   logPath: string,
 ) {
@@ -128,7 +126,6 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   // A missing latexindent is the caller's `ToolMissing`: it never started, so
   // it left no backup or log to clean up.
   const { success } = yield* runTool('latexindent', args, {
-    channel: CHANNEL,
     cwd: workspacePath,
     // The slots the caller resolved this formatter from.
     settings,
@@ -146,9 +143,7 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   }
 
   if (success) {
-    yield* Effect.logInfo(`Indented ${absolutePath}`).pipe(
-      withLogChannel(CHANNEL),
-    );
+    yield* Effect.logInfo(`Indented ${absolutePath}`);
   }
   return success;
-});
+}, withLogChannel(CHANNEL));

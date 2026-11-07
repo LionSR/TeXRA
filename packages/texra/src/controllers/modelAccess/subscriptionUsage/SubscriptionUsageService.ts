@@ -10,7 +10,7 @@ import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
 import { HttpClientError } from 'effect/http';
 
 import { apiKey } from '@texra-ai/llm';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, GLM_REGION_SETTING } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
@@ -144,8 +144,7 @@ export class SubscriptionUsageService {
           ),
       },
       glmCodingPlan: {
-        resolveVariant: () =>
-          Settings.get<boolean>(this.stores, 'glm.useChina'),
+        resolveVariant: () => Settings.get(this.stores, GLM_REGION_SETTING),
         fetch: (useChina) =>
           Effect.flatMap(lookupStoredKey('glm'), (apiKey) =>
             apiKey
@@ -177,9 +176,17 @@ export class SubscriptionUsageService {
     },
   );
 
+  /** Drop every cached and in-flight entry, so the next reads fetch: the
+   *  usage panel's refresh. */
+  readonly invalidateAll = Effect.fn('SubscriptionUsageService.invalidateAll')(
+    { self: this },
+    function* (): Effect.fn.Return<void> {
+      yield* Cache.invalidateAll(yield* this.usageCache);
+    },
+  );
+
   getUsage(
     provider: SubscriptionUsageProvider,
-    options: { readonly forceRefresh?: boolean } = {},
   ): Effect.Effect<
     SubscriptionUsageSnapshot,
     never,
@@ -199,15 +206,13 @@ export class SubscriptionUsageService {
           ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
           return yield* this.unavailable(provider, 'request_failed');
         }),
-        onSuccess: (variant) => this.coalesced(provider, variant, options),
+        onSuccess: (variant) => this.coalesced(provider, variant),
       },
     );
   }
 
   /** One snapshot per subscription provider, for a settings-view refresh. */
-  getAllUsage(
-    options: { readonly forceRefresh?: boolean } = {},
-  ): Effect.Effect<
+  getAllUsage(): Effect.Effect<
     SubscriptionUsageSnapshots,
     never,
     HttpClient.HttpClient | Secrets
@@ -216,7 +221,7 @@ export class SubscriptionUsageService {
     // never drift apart.
     return Effect.all(
       EffectRecord.map(PLAN_BY_PROVIDER, (_plan, provider) =>
-        this.getUsage(provider, options),
+        this.getUsage(provider),
       ),
       { concurrency: 'unbounded' },
     );
@@ -226,18 +231,13 @@ export class SubscriptionUsageService {
   private coalesced(
     provider: SubscriptionUsageProvider,
     variant: boolean | undefined,
-    options: { readonly forceRefresh?: boolean },
   ): Effect.Effect<
     SubscriptionUsageSnapshot,
     never,
     HttpClient.HttpClient | Secrets
   > {
     const key: UsageCacheKey = [provider, variant];
-    return Effect.flatMap(this.usageCache, (cache) =>
-      options.forceRefresh
-        ? Effect.andThen(Cache.invalidate(cache, key), Cache.get(cache, key))
-        : Cache.get(cache, key),
-    );
+    return Effect.flatMap(this.usageCache, (cache) => Cache.get(cache, key));
   }
 
   private unavailable(

@@ -8,7 +8,7 @@ import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
 // Local file imports
 import { CHANNEL } from '@housekeeping/constants';
 import { GlobFailed } from '@housekeeping/utils';
-import { EXCLUDED_DIRS } from '@texra/shared/constants/latexTiming';
+import { EXCLUDED_DIRS } from '@texra/shared/constants/excludedDirs';
 
 /**
  * Every `build/` directory under the session's workspace, relative to its

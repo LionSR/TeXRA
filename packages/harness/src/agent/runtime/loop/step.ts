@@ -54,7 +54,6 @@ import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
-  AGENT_SKILLS_CONFIG_KEY,
   qualifyAggregateId,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
@@ -80,6 +79,7 @@ import { blobRows, contextAt, stored } from '../run/requestContext';
 import { appendRow, SCRIPT_TOOL_NAME } from './rows';
 import { stepHooks, type StepHooks } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
+import { AGENT_SKILLS_ENABLED_SETTING } from '@shared/state/stateSettings';
 
 /** The project's side of the tool catalog ({@link SessionTools}): its
  *  plugin layers and MCP servers, built in the session's scope and closed
@@ -272,7 +272,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const recordedSkills = recorded === null ? null : state.offeredWith.skills;
     const listing =
       recordedSkills === null
-        ? Settings.getConfig<boolean>(roots.config, AGENT_SKILLS_CONFIG_KEY)
+        ? Settings.getConfig(roots.config, AGENT_SKILLS_ENABLED_SETTING)
         : recordedSkills.length > 0;
     const catalog =
       listing || names.length > 0

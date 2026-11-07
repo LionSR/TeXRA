@@ -254,7 +254,9 @@ function boundModel(
     background: false,
     serviceTier: null,
     routes: routePolicies(['openai', 'api-key', ORIGIN.requestedModel], GPT54),
-    automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+    automaticRetries: Schema.decodeUnknownSync(
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema,
+    )(undefined),
     textOnly: false,
     ...overrides,
   };
@@ -337,9 +339,9 @@ const openRun = Effect.fn('openRun')(function* (
   ]);
   // The retries the binding carries, read from the session as `bindModel`
   // reads them.
-  const automaticRetries = yield* Settings.get<number>(
+  const automaticRetries = yield* Settings.get(
     Context.get(session, SessionRoots),
-    MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+    MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ).pipe(Effect.orDie);
   const bound = yield* ScopedRef.make(() =>
     boundModel(model, { automaticRetries, ...binding }),
@@ -576,9 +578,16 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         }),
       );
     });
-    it.layer(caseHost(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue), {
-      buildPerTest: true,
-    })((it) => {
+    it.layer(
+      caseHost(
+        Schema.decodeUnknownSync(MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema)(
+          undefined,
+        ),
+      ),
+      {
+        buildPerTest: true,
+      },
+    )((it) => {
       it.effect('stops automatic attempts at the configured limit', () =>
         Effect.gen(function* () {
           const session = yield* isolatedTestSession();
@@ -594,7 +603,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           yield* invokeOn(kit);
 
           expect(stub.attempts()).toBe(
-            1 + MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+            1 +
+              Schema.decodeUnknownSync(MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema)(
+                undefined,
+              ),
           );
           expect(requests.opened).toHaveLength(1);
           yield* Fiber.interrupt(pump);

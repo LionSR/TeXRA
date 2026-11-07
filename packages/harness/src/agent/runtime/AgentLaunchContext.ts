@@ -64,11 +64,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const agentEntry =
       fullConfig.persona != null
         ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
-        : yield* (yield* AgentCatalog).forLaunch(
-            roots,
-            fullConfig.agent,
-            fullConfig.agentSource,
-          );
+        : yield* (yield* AgentCatalog)
+            .workspaceAgents(roots)
+            .forLaunch(fullConfig.agent, fullConfig.agentSource);
     if (agentEntry.source === 'plugin')
       yield* requirePluginAgentLoads(
         agentEntry,

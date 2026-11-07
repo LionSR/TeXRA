@@ -11,7 +11,7 @@
  */
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 
 // Local imports
 import {
@@ -20,10 +20,9 @@ import {
   formatIssueReopened,
 } from './formatIssueEvent';
 import { withSince } from './githubPaths';
-import { ghGet } from './githubClient';
 import {
+  pollGet,
   readNewItems,
-  validateOrSkip,
   type PollEvent,
   type PollResult,
 } from './poller';
@@ -33,7 +32,7 @@ import {
   GhIssueSchema,
   type GhIssueComment,
 } from './prTypes';
-import { targetPath, type IssueTarget } from './subscriptionTarget';
+import type { IssueTarget } from './subscriptionTarget';
 
 /** What an issue's next poll starts from. */
 export interface IssueState {
@@ -49,38 +48,30 @@ export const pollIssue = Effect.fn('github.pollIssue')(function* (
   issue: IssueTarget,
   prior: IssueState | undefined,
 ) {
-  const path = targetPath(issue);
   const issuePath = `/repos/${issue.owner}/${issue.repo}/issues/${issue.number}`;
   const [issueRes, commentsRes] = yield* Effect.all(
     [
-      ghGet(issuePath, Schema.Unknown, prior?.etags.issue),
-      ghGet(
+      pollGet(issuePath, GhIssueSchema, prior?.etags.issue),
+      pollGet(
         withSince(
           `${issuePath}/comments?per_page=100`,
           prior?.comments?.sinceCursor,
         ),
-        Schema.Unknown,
+        GhIssueCommentArraySchema,
         prior?.etags.comments,
       ),
     ],
     { concurrency: 2 },
   );
 
-  // Each payload is validated on its own: a malformed issue skips only the
-  // state check, and malformed comments only the comment diff, so neither
-  // blocks the other. A skipped resource keeps its ETag and cursor, so the
-  // next poll fetches it again.
+  // A malformed issue skips only the state check, and malformed comments
+  // only the comment diff (`pollGet`), so neither blocks the other.
   const events: PollEvent[] = [];
   let state = prior?.state;
   let issueEtag = prior?.etags.issue;
-  const parsedIssue = yield* validateOrSkip(
-    issueRes,
-    GhIssueSchema,
-    `Skipping issue-state check for ${path}: malformed issue payload`,
-  );
-  if (parsedIssue?.status === 200) {
-    const issueData = parsedIssue.data;
-    issueEtag = parsedIssue.etag;
+  if (issueRes.status === 200) {
+    const issueData = issueRes.data;
+    issueEtag = issueRes.etag;
     if (prior !== undefined && state !== issueData.state) {
       if (state === 'open' && issueData.state === 'closed') {
         events.push(formatIssueClosed(issue, issueData));
@@ -91,29 +82,22 @@ export const pollIssue = Effect.fn('github.pollIssue')(function* (
     state = issueData.state;
   }
 
-  let comments = prior?.comments;
-  let commentsEtag = prior?.etags.comments;
-  const parsedComments = yield* validateOrSkip(
+  const comments = readNewItems(
+    prior?.comments,
     commentsRes,
-    GhIssueCommentArraySchema,
-    `Skipping comments tick for ${path}: malformed comments payload`,
+    dedupeComments<GhIssueComment>,
   );
-  if (parsedComments?.status === 200) {
-    const read = readNewItems(
-      comments,
-      parsedComments,
-      dedupeComments<GhIssueComment>,
-    );
-    comments = read.seen;
-    commentsEtag = parsedComments.etag;
-    events.push(...read.fresh.map((c) => formatIssueComment(issue, c)));
-  }
+  events.push(...comments.fresh.map((c) => formatIssueComment(issue, c)));
 
   return {
     next: {
       state,
-      comments,
-      etags: { issue: issueEtag, comments: commentsEtag },
+      comments: comments.seen,
+      etags: {
+        issue: issueEtag,
+        comments:
+          commentsRes.status === 200 ? commentsRes.etag : prior?.etags.comments,
+      },
     },
     events,
   } satisfies PollResult<IssueState>;

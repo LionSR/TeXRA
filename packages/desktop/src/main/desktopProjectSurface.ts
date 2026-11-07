@@ -99,31 +99,19 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
               postForActiveProject(built);
             }),
           ),
-        notify: {
-          showInfoMessage: dialogs.showInfoMessage,
-          showErrorMessage: dialogs.showErrorMessage,
-        },
-        // The window's dialogs behind the host-neutral prompt port. The
-        // renderer overlay settles a prompt it could not deliver as "no
-        // answer", so `input` has no failure of its own; the native dialogs
-        // reject once the window they anchor to is gone.
-        prompt: {
-          input: (input) =>
+        // The window's dialogs behind the host-neutral port. The renderer
+        // overlay settles a prompt it could not deliver as "no answer", so
+        // `input` has no failure of its own; the native confirmation fails
+        // once the window it anchors to is gone.
+        dialogs: {
+          notify: (level, message) => dialogs.notify(level, message),
+          confirm: (question) => dialogs.confirm(question),
+          input: (field) =>
             options.promptController.request({
-              title: input.prompt ?? 'TeXRA',
-              prompt: input.prompt ?? '',
-              password: input.password,
+              title: field.prompt,
+              prompt: field.prompt,
+              password: field.secret,
             }),
-          confirm: (message, promptOptions) =>
-            dialogs.confirmDialog({
-              message,
-              detail: promptOptions.detail,
-              confirmLabel: promptOptions.confirmLabel,
-            }),
-          info: (message) =>
-            dialogs.showInfoMessage(message).pipe(Effect.as(undefined)),
-          warning: (message) =>
-            dialogs.showWarningMessage(message).pipe(Effect.as(undefined)),
         },
         // The one browser hand-off every settings URL takes. Its failure
         // reaches the settings body's own report, so the opener shows no
@@ -198,13 +186,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
               initialCommand: command,
             });
           }),
-        // There is no editor whose settings the LaTeX page could recommend,
-        // nor one to install LaTeX Workshop into.
-        latexEditorStatus: () => ({
-          outDir: true,
-          autoRevealExclude: true,
-          latexWorkshopInstalled: false,
-        }),
       };
     };
 

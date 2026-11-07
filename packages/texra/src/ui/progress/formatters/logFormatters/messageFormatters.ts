@@ -4,10 +4,6 @@
  * detail set and the status summary are the row's, not this layer's.
  *
  * Uses Lit templates for declarative DOM construction.
- *
- * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
- * indentation will render with unwanted spaces in the output. Always use single-line
- * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Side-effect imports - register WA components
@@ -115,10 +111,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
     >${timeDisplay}</time
   >`;
   // prettier-ignore
-  const copyButton = buildCopyButton('Copy error details', {
-    content: rawContent,
-    labeled: true,
-  });
+  const copyButton = buildCopyButton('Copy error details', rawContent);
   // prettier-ignore
   const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${timestampLabel}${copyButton}</div>`;
   // prettier-ignore

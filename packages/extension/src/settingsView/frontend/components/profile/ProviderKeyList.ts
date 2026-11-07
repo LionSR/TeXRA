@@ -9,7 +9,7 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
-import { providerEndpointKey } from '@texra-ai/harness/schemas';
+import { providerEndpointSetting } from '@texra-ai/harness/schemas';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
@@ -129,8 +129,8 @@ export class ProviderKeyList extends LitElement {
               @change=${(e: Event) => {
                 if (!(e.target instanceof WaInput)) return;
                 const value = e.target.value?.trim() ?? '';
-                const key = providerEndpointKey(entry.provider);
-                if (key) postStateSetting(key, value);
+                const endpoint = providerEndpointSetting(entry.provider);
+                if (endpoint) postStateSetting(endpoint.key, value);
               }}
             ></wa-input>
           </div>

@@ -8,16 +8,17 @@
  * keeps as its next state.
  */
 
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 
 import {
   ghGet,
   type ConditionalResponse,
   type GitHubFailure,
+  type GitHubMalformedBodyError,
   type GitHubServices,
 } from './githubClient';
 import type { RateLimiterError } from 'effect/persistence/RateLimiter';
-import { validateOrSkip } from './poller';
+import { logWarning } from './poller';
 import {
   GhCheckAnnotationArraySchema,
   GhCheckRunsPageSchema,
@@ -128,7 +129,11 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(function* (
   repo: string,
   sha: string,
   cache: CheckRunsCache | undefined,
-): Effect.fn.Return<FetchAllCheckRunsResult, GitHubFailure, GitHubServices> {
+): Effect.fn.Return<
+  FetchAllCheckRunsResult,
+  GitHubFailure | GitHubMalformedBodyError,
+  GitHubServices
+> {
   const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=${CHECK_RUNS_PAGE_SIZE}`;
 
   // Seed a scratch cache we'll return. We rebuild from
@@ -156,7 +161,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(function* (
       total: number | undefined;
       was304: boolean;
     },
-    GitHubFailure,
+    GitHubFailure | GitHubMalformedBodyError,
     GitHubServices
   > {
     const pageEtag = cache?.pages.get(page)?.etag;
@@ -338,10 +343,13 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(function* (
     const path = `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations?per_page=${ANNOTATIONS_PAGE_SIZE}&page=${page}`;
     // A malformed page ends the walk with what was read, so one bad optional
     // response cannot stop the PR's subscription.
-    const res = yield* validateOrSkip(
-      yield* ghGet(path, Schema.Unknown),
-      GhCheckAnnotationArraySchema,
-      `Malformed annotations page ${page} for check ${checkRunId}`,
+    const res = yield* ghGet(path, GhCheckAnnotationArraySchema).pipe(
+      Effect.catchTag('GitHubMalformedBodyError', (error) =>
+        logWarning(
+          `Malformed annotations page ${page} for check ${checkRunId}`,
+          error,
+        ).pipe(Effect.as(undefined)),
+      ),
     );
     if (res === undefined || res.status !== 200) return annotations;
     annotations.push(...res.data);

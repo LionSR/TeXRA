@@ -7,11 +7,11 @@ import {
   type SettingsStores,
 } from '@texra-ai/harness/host';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
-import type { HostFailed, PromptHost } from '@texra/hosts/uiHosts';
+import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
 
 interface SettingsProfileKeyControllerDeps {
-  prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
+  dialogs: Dialogs;
   /** The setting slots a provider's display name is read from. */
   stores: SettingsStores;
 }
@@ -43,10 +43,10 @@ export class SettingsProfileKeyController {
       provider,
       'set',
       Effect.gen({ self: this }, function* () {
-        const apiKey = yield* this.deps.prompt.input({
+        const apiKey = yield* this.deps.dialogs.input({
           prompt: `Enter ${yield* getProviderDisplayName(this.deps.stores, provider)} API key`,
-          password: true,
-          placeHolder: '************************************',
+          secret: true,
+          placeholder: '************************************',
         });
         if (apiKey == null) return;
         yield* this.storeProviderKey(provider, apiKey);
@@ -72,10 +72,10 @@ export class SettingsProfileKeyController {
           this.deps.stores,
           provider,
         );
-        const confirmed = yield* this.deps.prompt.confirm(
-          `Remove the ${displayName} API key? This cannot be undone.`,
-          { confirmLabel: 'Remove', modal: false },
-        );
+        const confirmed = yield* this.deps.dialogs.confirm({
+          message: `Remove the ${displayName} API key? This cannot be undone.`,
+          action: 'Remove',
+        });
         if (!confirmed) return;
 
         yield* (yield* Secrets).delete(yield* secretNameFor(provider));
@@ -142,14 +142,9 @@ export class SettingsProfileKeyController {
    * action returns.
    */
   private notify(message: string): Effect.Effect<void> {
-    return this.deps.prompt.info(message).pipe(
-      Effect.ignore({
-        log: 'Warn',
-        message: 'The key-change notice could not be shown.',
-      }),
-      Effect.forkDetach({ startImmediately: true }),
-      Effect.asVoid,
-    );
+    return this.deps.dialogs
+      .notify('info', message)
+      .pipe(Effect.forkDetach({ startImmediately: true }), Effect.asVoid);
   }
 }
 

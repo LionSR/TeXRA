@@ -7,7 +7,6 @@ import { Box, Text } from 'ink';
 import { useState } from 'react';
 import { Effect, Predicate } from 'effect';
 
-import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   InstalledPlugins,
   type PluginReview,
@@ -15,7 +14,10 @@ import {
 } from '@texra-ai/harness/host';
 import { setCliToolEnabled } from '@cli/runtime/tools';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
-import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
+import {
+  buildPluginRows,
+  type PluginPageRoots,
+} from '@texra/controllers/settingsView/pluginRows';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   PLUGINS_PAGE,
@@ -34,13 +36,7 @@ import { AsyncListForm } from './_shared/ListForm';
 
 interface PluginsListFormProps {
   readonly availableRows?: number;
-  /** The session's roots: the install record and switches live in its
-   *  global state, the managed plugins under its global storage, and the
-   *  availability probes read its folder and configuration. */
-  readonly roots: Pick<
-    WorkspaceRoots,
-    'workspace' | 'config' | 'globalState' | 'globalStorage' | 'storageRoot'
-  >;
+  readonly roots: PluginPageRoots;
   /** The process runtime the probes and writes run on. */
   readonly runtime: ProcessRuntime;
   readonly onClose: () => void;

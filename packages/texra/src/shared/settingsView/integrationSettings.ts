@@ -7,82 +7,62 @@
 
 // Local imports
 import {
-  AGENT_CLI_EFFORT_SETTING,
-  CLAUDE_AGENT_MODEL_SETTING,
-  CODEX_MODEL_SETTING,
+  AGENT_CLI_EFFORT_VALUES,
+  type AgentCliEffort,
+  CLAUDE_AGENT_MODEL_VALUES,
+  CODEX_MODEL_VALUES,
 } from '@texra/shared/agentCliSettings';
 import { type PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 
-/** The `codex` plugin's repository-scoped keys. */
-export const CodexStateKey = Object.freeze({
-  MODEL: 'codexModel',
-  REASONING_EFFORT: 'codexReasoningEffort',
-} as const);
-export type CodexStateKey = (typeof CodexStateKey)[keyof typeof CodexStateKey];
+/** Where an external coding agent's row lives and shows: repo-scoped, on the
+ *  approval tab and in `/config`. */
+const AGENT_CLI_PLACEMENT = {
+  category: 'ai-agents',
+  slot: 'repoState',
+  surfaces: { settingsView: 'approval', cliConfig: true },
+} as const;
 
-/** The `claude-agent` plugin's repository-scoped keys. */
-export const ClaudeAgentStateKey = Object.freeze({
-  MODEL: 'claudeAgentModel',
-  EFFORT: 'claudeAgentEffort',
-} as const);
-export type ClaudeAgentStateKey =
-  (typeof ClaudeAgentStateKey)[keyof typeof ClaudeAgentStateKey];
+export const CODEX_MODEL_SETTING = {
+  key: 'codexModel',
+  ...CODEX_MODEL_VALUES,
+  title: 'Codex model',
+  description: 'OpenAI model selected for Codex agent sessions.',
+  ...AGENT_CLI_PLACEMENT,
+} as const satisfies TexraSettingRow<string>;
 
-/** An external coding agent's row: repo-scoped, on the approval tab and in `/config`. */
-function agentCliSetting(
-  entry: Omit<TexraSettingRow, 'category' | 'slot' | 'surfaces'>,
-): TexraSettingRow {
-  return {
-    ...entry,
-    category: 'ai-agents',
-    slot: 'repoState',
-    surfaces: { settingsView: 'approval', cliConfig: true },
-  } satisfies TexraSettingRow;
-}
+export const CODEX_REASONING_EFFORT_SETTING = {
+  key: 'codexReasoningEffort',
+  ...AGENT_CLI_EFFORT_VALUES,
+  title: 'Codex reasoning effort',
+  description: 'Reasoning effort for Codex runs, up to what the model takes.',
+  ...AGENT_CLI_PLACEMENT,
+} as const satisfies TexraSettingRow<AgentCliEffort>;
+
+export const CLAUDE_AGENT_MODEL_SETTING = {
+  key: 'claudeAgentModel',
+  ...CLAUDE_AGENT_MODEL_VALUES,
+  title: 'Claude Code model',
+  description: 'Claude model selected for Claude Code agent sessions.',
+  ...AGENT_CLI_PLACEMENT,
+} as const satisfies TexraSettingRow<string>;
+
+export const CLAUDE_AGENT_EFFORT_SETTING = {
+  key: 'claudeAgentEffort',
+  ...AGENT_CLI_EFFORT_VALUES,
+  title: 'Claude Code reasoning effort',
+  description: 'Reasoning effort for Claude Code, up to what the model takes.',
+  ...AGENT_CLI_PLACEMENT,
+} as const satisfies TexraSettingRow<AgentCliEffort>;
 
 /** The `codex` plugin's rows, in its card's order. */
 export const CODEX_SETTINGS: readonly PluginSettingRow[] = [
-  {
-    label: 'Model',
-    row: agentCliSetting({
-      key: CodexStateKey.MODEL,
-      ...CODEX_MODEL_SETTING,
-      title: 'Codex model',
-      description: 'OpenAI model selected for Codex agent sessions.',
-    }),
-  },
-  {
-    label: 'Reasoning effort',
-    row: agentCliSetting({
-      key: CodexStateKey.REASONING_EFFORT,
-      ...AGENT_CLI_EFFORT_SETTING,
-      title: 'Codex reasoning effort',
-      description:
-        'Reasoning effort for Codex runs, up to what the model takes.',
-    }),
-  },
+  { label: 'Model', row: CODEX_MODEL_SETTING },
+  { label: 'Reasoning effort', row: CODEX_REASONING_EFFORT_SETTING },
 ];
 
 /** The `claude-agent` plugin's rows, in its card's order. */
 export const CLAUDE_AGENT_SETTINGS: readonly PluginSettingRow[] = [
-  {
-    label: 'Model',
-    row: agentCliSetting({
-      key: ClaudeAgentStateKey.MODEL,
-      ...CLAUDE_AGENT_MODEL_SETTING,
-      title: 'Claude Code model',
-      description: 'Claude model selected for Claude Code agent sessions.',
-    }),
-  },
-  {
-    label: 'Reasoning effort',
-    row: agentCliSetting({
-      key: ClaudeAgentStateKey.EFFORT,
-      ...AGENT_CLI_EFFORT_SETTING,
-      title: 'Claude Code reasoning effort',
-      description:
-        'Reasoning effort for Claude Code, up to what the model takes.',
-    }),
-  },
+  { label: 'Model', row: CLAUDE_AGENT_MODEL_SETTING },
+  { label: 'Reasoning effort', row: CLAUDE_AGENT_EFFORT_SETTING },
 ];

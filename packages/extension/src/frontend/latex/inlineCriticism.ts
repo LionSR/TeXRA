@@ -35,10 +35,10 @@ import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
-import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { parseCriticismAnnotations } from './criticismParser';
 import type { Session } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness/host';
+import { INLINE_CRITICISM_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';
@@ -182,10 +182,7 @@ export function followInlineCriticism(
   session: Pick<Session, 'view'>,
   stores: SettingsStores,
 ): Effect.Effect<void, never, AppState | FileSystem.FileSystem> {
-  const enabled = Settings.get<boolean>(
-    stores,
-    TexraStateKey.INLINE_CRITICISM_ENABLED,
-  ).pipe(
+  const enabled = Settings.get(stores, INLINE_CRITICISM_SETTING).pipe(
     Effect.catch((error) =>
       Effect.logWarning(
         `Could not read whether inline criticism is on: ${error.message}`,
@@ -194,7 +191,7 @@ export function followInlineCriticism(
   );
   return Stream.unwrap(
     Effect.map(AppState, (appState) =>
-      appState.changes([TexraStateKey.INLINE_CRITICISM_ENABLED]),
+      appState.changes([INLINE_CRITICISM_SETTING.key]),
     ),
   ).pipe(
     Stream.mapEffect(() => enabled),

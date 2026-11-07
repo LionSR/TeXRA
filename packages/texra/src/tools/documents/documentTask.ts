@@ -62,7 +62,9 @@ const preferredRank = ({ name }: AgentEntry) => {
  */
 export const agentOptionsData = (stores: WorkspaceAgentsStores) =>
   Effect.map(
-    Effect.flatMap(AgentCatalog, (catalog) => catalog.visible(stores)),
+    Effect.flatMap(AgentCatalog, (catalog) =>
+      catalog.workspaceAgents(stores).visible(),
+    ),
     (entries) =>
       entries
         .toSorted(

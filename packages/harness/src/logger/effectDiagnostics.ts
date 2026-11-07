@@ -3,7 +3,7 @@
 import { Exit, Layer, Logger, type LogLevel, References, Tracer } from 'effect';
 
 // Local imports
-import { writeLogEntry } from '@logger/logSink';
+import { logEntryOf, writeLogEntry } from '@logger/logSink';
 
 const MAX_SPAN_ATTRIBUTES = 32;
 const MAX_ATTRIBUTE_LENGTH = 512;
@@ -16,8 +16,8 @@ const MAX_ATTRIBUTE_LENGTH = 512;
  * drops a level the runtime admitted.
  */
 const diagnosticLogger = Logger.make<unknown, void>((options) => {
-  if (options.logLevel === 'None') return;
-  writeLogEntry(Logger.formatStructured.log(options));
+  const entry = logEntryOf(options);
+  if (entry) writeLogEntry(entry);
 });
 
 /**

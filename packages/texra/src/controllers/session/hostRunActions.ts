@@ -44,7 +44,7 @@ import {
   DOCUMENT_TASK_BLOCK,
   documentRoundsOf,
 } from '@texra/shared/plugins/documents';
-import type { MessageHost, HostFailed } from '@texra/hosts/uiHosts';
+import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 
@@ -93,11 +93,8 @@ export interface HostRunActionPorts {
   launched(run: Run): Effect.Effect<void>;
   /** Show a finished run's final output, the file at `absolutePath`. */
   openFinalOutput(absolutePath: string): Effect.Effect<void, Error>;
-  /** The notification surface, shared with {@link MessageHost}: a host that
-   *  could not present fails with `HostFailed`, and a user who
-   *  ignores the notice is not a failure. */
-  showInfo: MessageHost['showInfoMessage'];
-  showWarning: MessageHost['showWarningMessage'];
+  /** The window's notices. */
+  notify: Dialogs['notify'];
 }
 
 /** What a host's request arms do once {@link createHostRunActions} has bound
@@ -352,7 +349,7 @@ export const createHostRunActions = Effect.fn(
       )
         launcher = parent.launchParentId;
       if (launcher === null) return Effect.void;
-      const present = (message: string) => ports.showWarning(message);
+      const present = (message: string) => ports.notify('warning', message);
       const deliver = session
         .request({ kind: 'followUp.send', runId: launcher, text })
         .pipe(
@@ -454,7 +451,7 @@ export const createHostRunActions = Effect.fn(
               operation === 'pack'
                 ? {
                     op: 'copy',
-                    to: packDestination({
+                    to: yield* packDestination({
                       runId,
                       inputFile,
                       agent: config.agent,
@@ -498,22 +495,14 @@ export const createHostRunActions = Effect.fn(
         Effect.provide(workspaceEnvironmentLayer(roots.workspace)),
         Effect.provideService(Secrets, secrets),
       );
-      const plan = yield* planCompileFixer({
+      const fixer = yield* planCompileFixer({
         runId,
         runConfig: config,
         rounds: roundsOfRun(runId),
         modelOptions,
         workspaceRoot: roots.workspace,
       }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
-      if (plan.kind === 'warning') {
-        yield* ports.showWarning(plan.message);
-      } else if (plan.kind === 'info') {
-        yield* ports.showInfo(plan.message);
-      } else {
-        yield* runAgentRequest(plan.config, {
-          helperModel: true,
-        });
-      }
+      yield* runAgentRequest(fixer, { helperModel: true });
     }),
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
       const forked = yield* forkRun(session, runId, at);

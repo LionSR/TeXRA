@@ -22,6 +22,7 @@ import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
   type ProcessRuntime,
+  type ProcessServices,
   type GlobalValues,
   withProcessServices,
   StateStores,
@@ -38,9 +39,8 @@ import {
   secretsDirectory,
   setLogSink,
 } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
 import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
@@ -53,6 +53,7 @@ import { installUnhandledRejectionSurface } from '@frontend/system/unhandledReje
 import { initializeLatexSupport } from '@frontend/setup';
 import { taskStatusBar } from '@frontend/statusBar/taskStatusBar';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
+import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import {
   announce,
   showLoggedMessageWithDocs,
@@ -73,7 +74,7 @@ import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {
   settingsTabByCommand,
-  type CommandId,
+  type ExtensionCommandId,
 } from '@texra/shared/commands/catalog';
 import { serviceProjectState } from '@texra/controllers/server/serviceSession';
 import { openProjectSession } from '@texra/controllers/session/openProjectSession';
@@ -91,6 +92,15 @@ import { registerCommands } from './commands';
 import type { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 
 const EXTENSION_CHANNEL = 'extension';
+
+/** Set once the first-run welcome card has been shown. */
+const WELCOME_SHOWN_KEY = {
+  key: 'welcomeShown',
+  slot: 'globalState',
+  schema: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+} as const satisfies StateKey<boolean>;
 
 // VS Code invokes activation and deactivation separately. Only this entry
 // reads back the scope the activation program ran in: its finalizer is the
@@ -139,9 +149,10 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           LeanLanguageServices,
           Effect.map(AppState, createVscodeLeanLanguageServices),
         ),
-        // The editor's commands, extensions and terminal, for the setup tools
-        // and the Lean 4 probe.
+        // The editor's commands and terminal, for the setup tools.
         setup: vscodeSetupPlatform,
+        // The editor's extensions, for the setup tools and the Lean 4 probe.
+        editor: vscodeEditorIntegration,
         // `~/.texra`: one history across CLI, desktop and extension.
         storageRoot: defaultNodeStorageRoot(),
         resourcesPath: path.join(context.extensionPath, 'resources'),
@@ -199,13 +210,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           runtime.runFork(
             Effect.logWarning(message).pipe(
               withLogChannel(EXTENSION_CHANNEL),
-              Effect.andThen(
-                announce(
-                  EXTENSION_CHANNEL,
-                  vscodeUi.showWarningMessage(message),
-                  undefined,
-                ),
-              ),
+              Effect.andThen(vscodeUi.notify('warning', message)),
             ),
           );
         },
@@ -226,32 +231,49 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const notice = vscode.env.isTelemetryEnabled
         ? yield* telemetryNoticeIfDue(roots.config)
         : null;
-      if (notice)
-        yield* Effect.forkDetach(
-          announce(
-            EXTENSION_CHANNEL,
-            vscodeUi.showInfoMessage(notice),
-            undefined,
-          ),
-        );
+      if (notice) yield* Effect.forkDetach(vscodeUi.notify('info', notice));
       return { runtime, roots, hosts: yield* HostWindows, reached };
     }),
   );
 });
 
 /**
- * Workspace-bound commands the getting-started walkthrough exposes as buttons.
- * Their links invoke one bridge command so a no-workspace click can explain
- * the prerequisite without firing the real command's `onCommand` completion
- * event.
+ * The commands a window without a single folder registers, since nothing they
+ * do needs a workspace: the walkthrough's credential and sample buttons work
+ * before a folder is open. The full command surface is registered only on the
+ * single-folder path, so these are standalone variants of its rows.
  */
-type WalkthroughCommandNeedingWorkspace =
-  | (typeof EXTENSION_COMMANDS)[
-      | 'CLONE_OVERLEAF_PROJECT'
-      | 'DOWNLOAD_ARXIV_SOURCE'
-      | 'RUN_SETUP_ASSISTANT'
-      | 'SHOW_MAIN_VIEW']
-  | Extract<CommandId, 'texra.showApprovalSettings'>;
+const NO_FOLDER_COMMANDS = {
+  // A first-time user without a LaTeX project can create the sample and land
+  // directly in a working workspace.
+  'texra.createSampleProject': (context) =>
+    createSampleProjectWithoutWorkspace(context.extensionPath),
+  'texra.openGettingStarted': (context) =>
+    openGettingStarted(context.extension.id),
+  'texra.auth.chatgpt.signIn': (_context, roots) =>
+    signInWithSubscription(roots, 'chatgpt').pipe(
+      withLogChannel('welcomeView'),
+    ),
+  'texra.setApiKey': (_context, roots) => apiSetApiKey(roots),
+} satisfies Partial<
+  Record<
+    ExtensionCommandId,
+    (
+      context: vscode.ExtensionContext,
+      roots: WorkspaceRoots,
+    ) => Effect.Effect<unknown, Error, ProcessServices | Sessions>
+  >
+>;
+
+/**
+ * The commands that need a folder. The getting-started walkthrough's buttons
+ * for them invoke one bridge command, so a no-workspace click can explain the
+ * prerequisite without firing the real command's `onCommand` completion event.
+ */
+type WalkthroughCommandNeedingWorkspace = Exclude<
+  ExtensionCommandId,
+  keyof typeof NO_FOLDER_COMMANDS
+>;
 
 /** Internal command URI used by workspace-bound walkthrough links. */
 const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
@@ -260,7 +282,8 @@ const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
   function* (extensionPath: string) {
     const openFolder = 'Open Folder';
     const createSample = 'Create Sample Project';
-    const choice = yield* vscodeUi.info(
+    const choice = yield* vscodeUi.ask(
+      'info',
       'TeXRA agents run inside a single-folder workspace. Open your LaTeX project folder or create the sample project first.',
       { items: [openFolder, createSample] },
     );
@@ -270,6 +293,7 @@ const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
       yield* createSampleProjectWithoutWorkspace(extensionPath);
     }
   },
+  withLogChannel(EXTENSION_CHANNEL),
 );
 
 function registerWalkthroughWorkspaceAction(
@@ -332,32 +356,13 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     // opening a folder reloads the window into that path (welcomeView.ts).
     const { runtime, roots } = yield* initVscodePlatform(context, undefined);
     registerWelcomeView(context, runtime);
-    // The full command surface (including the workspace-backed
-    // `texra.createSampleProject`) is only registered on the single-folder
-    // path below, so the welcome view registers its own standalone variant:
-    // a first-time user without a LaTeX project can create the sample and
-    // land directly in a working workspace.
-    context.subscriptions.push(
-      vscode.commands.registerCommand(
-        EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
-        () =>
-          runtime.runPromise(
-            createSampleProjectWithoutWorkspace(context.extensionPath),
-          ),
-      ),
-      vscode.commands.registerCommand(
-        EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
-        () => runtime.runPromise(openGettingStarted(context.extension.id)),
-      ),
-      vscode.commands.registerCommand('texra.auth.chatgpt.signIn', () =>
-        runtime.runPromise(
-          signInWithSubscription(roots, 'welcomeView', 'chatgpt'),
+    for (const [id, command] of Object.entries(NO_FOLDER_COMMANDS)) {
+      context.subscriptions.push(
+        vscode.commands.registerCommand(id, () =>
+          runtime.runPromise(command(context, roots)),
         ),
-      ),
-      vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        runtime.runPromise(apiSetApiKey(roots)),
-      ),
-    );
+      );
+    }
     registerWalkthroughWorkspaceAction(context, false, runtime);
     return;
   }
@@ -413,15 +418,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // tasks here, and says so once. While the link is down, the service's
   // session answers with the offline refusal.
   const warn = (message: string) =>
-    Effect.asVoid(
-      Effect.forkDetach(
-        announce(
-          EXTENSION_CHANNEL,
-          vscodeUi.showWarningMessage(message),
-          undefined,
-        ),
-      ),
-    );
+    Effect.asVoid(Effect.forkDetach(vscodeUi.notify('warning', message)));
   const windowSession: GuiSession = yield* openProjectSession(
     roots,
     Result.isSuccess(reached) ? reached.success : undefined,
@@ -446,13 +443,13 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   setupPill.text = '$(rocket) TeXRA: Get Started';
   setupPill.tooltip =
     'Connect a model: sign in with ChatGPT or add a provider API key';
-  setupPill.command = EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT;
+  setupPill.command = 'texra.runSetupAssistant' satisfies ExtensionCommandId;
   setupPill.accessibilityInformation = { label: 'TeXRA setup, get started' };
   context.subscriptions.push(setupPill);
   // The settings view is built with the commands, after the progress view
   // that opens it, so the progress view waits for it.
   const settingsView = yield* Deferred.make<SettingsViewProvider>();
-  const progressViewProvider = new ProgressViewProvider(
+  const progressViewProvider = yield* ProgressViewProvider.make(
     context,
     globalState,
     runtime,
@@ -468,10 +465,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       Effect.sync(() => (usable ? setupPill.hide() : setupPill.show())),
     ),
   );
-  yield* Effect.andThen(
-    progressViewProvider.initialize(),
-    Effect.logInfo('TeXRA extension activated'),
-  ).pipe(withLogChannel(EXTENSION_CHANNEL));
+  yield* Effect.logInfo('TeXRA extension activated').pipe(
+    withLogChannel(EXTENSION_CHANNEL),
+  );
   // Registered last, so the first thing the activation scope's close runs:
   // every session stops and settles its runs before the view and the host
   // resources registered above tear down around them.
@@ -533,8 +529,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     appSignalStream('githubTokenInvalid').pipe(
       Stream.runForEach(({ message }) =>
         announce(
-          EXTENSION_CHANNEL,
-          vscodeUi.error(gitHubTokenRejectedMessage(message), {
+          vscodeUi.ask('error', gitHubTokenRejectedMessage(message), {
             items: [openSettings],
           }),
           undefined,
@@ -550,10 +545,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
                       log: 'Warn',
                       message: 'Opening the Git settings',
                     }),
-                    withLogChannel(EXTENSION_CHANNEL),
                   )
               : Effect.void,
           ),
+          withLogChannel(EXTENSION_CHANNEL),
           Effect.forkChild,
         ),
       ),
@@ -571,18 +566,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // entries can fire before their handlers exist and produce "command not
   // found" errors.
   yield* executeVscodeCommand('setContext', 'texra.activated', true);
-  const welcomeKey = 'welcomeShown';
-  if (
-    !(yield* Settings.state(
-      globalState,
-      welcomeKey,
-      Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-    ))
-  ) {
+  if (!(yield* Settings.state(globalState, WELCOME_SHOWN_KEY))) {
     // First-run welcome card; a failure leaves the flag unset, so it repeats.
     yield* Effect.forkScoped(
       progressViewProvider.showLauncher().pipe(
-        Effect.andThen(globalState.update(welcomeKey, true)),
+        Effect.andThen(globalState.update(WELCOME_SHOWN_KEY.key, true)),
         // Scope close interrupts this fiber; that is not a failed welcome.
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)

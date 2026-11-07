@@ -8,8 +8,6 @@ import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { withCancellationToken } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 
-const CHANNEL = 'dialogs';
-
 /**
  * VS Code would not show its open dialog: `showOpenDialog` rejects only when
  * the host's own dialog machinery faults, which is the one failure either
@@ -88,7 +86,7 @@ export const selectFiles = Effect.fn('selectFiles')(function* (
     // The notice is detached, as the caller's `runFork` left it: the picker
     // answers "nothing picked" straight away rather than waiting on a toast
     // the user may never dismiss.
-    yield* showLoggedMessage(CHANNEL, 'No workspace folder open');
+    yield* showLoggedMessage('No workspace folder open');
     return null;
   }
 

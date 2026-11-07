@@ -40,20 +40,17 @@ export function settingsPluginCommands(ports: {
   const { roots, bindings, present } = ports;
 
   const confirmTrust = (review: PluginReview) =>
-    bindings.prompt.confirm(
-      `Trust ${review.name}${review.version ? ` ${review.version}` : ''} and enable it?`,
-      {
-        modal: true,
-        detail: review.lines.join('\n'),
-        confirmLabel: 'Trust and enable',
-      },
-    );
+    bindings.dialogs.confirm({
+      message: `Trust ${review.name}${review.version ? ` ${review.version}` : ''} and enable it?`,
+      action: 'Trust and enable',
+      detail: review.lines.join('\n'),
+    });
 
   const install = Effect.gen(function* () {
-    const source = (yield* bindings.prompt.input({
+    const source = (yield* bindings.dialogs.input({
       prompt:
         'Add a Claude Code or Codex plugin: github.com/<owner>/<repo>[@ref], a git URL, or a folder',
-      placeHolder: 'github.com/owner/repo',
+      placeholder: 'github.com/owner/repo',
     }))?.trim();
     if (!source) return;
     const origin = InstalledPlugins.origin(

@@ -7,8 +7,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { providerDisplayName } from '@texra-ai/llm';
 import {
-  GlobalStateKey,
   MODEL_AVAILABILITY_STATUS,
+  HELPER_MODEL_SETTING,
   pluralize,
 } from '@texra-ai/harness/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -121,7 +121,7 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
   }
 
   private handleHelperModelChange(e: Event): void {
-    postStateSetting(GlobalStateKey.HELPER_MODEL, readSelectValue(e));
+    postStateSetting(HELPER_MODEL_SETTING.key, readSelectValue(e));
   }
 
   private handleReasoningLevelChange(modelName: string, e: Event): void {
@@ -344,9 +344,7 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
   }
 
   private renderHelperModelDropdown(): TemplateResult {
-    const helperModel = settingSignal<string>(
-      GlobalStateKey.HELPER_MODEL,
-    ).get();
+    const helperModel = settingSignal(HELPER_MODEL_SETTING).get();
     const enabledModels = this.models.filter((m) => m.enabled);
     // TeXRA's default helper model is valid even when it is
     // not an enabled picker row. Keep it selectable so wa-select is not blank.

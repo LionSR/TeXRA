@@ -113,11 +113,9 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
 });
 
 /**
- * What an entry hands {@link installCliProcessRuntime}: its resources root
- * (absent only for the platform-less entries, which load no agents and
- * discover no skills), its `--source` flags, its project, its global stores
- * in place of the ones the install would otherwise open, and the
- * argv-selected diagnostics floor.
+ * What an entry hands {@link installCliProcessRuntime}: its resources root,
+ * its `--source` flags, its project, its global stores in place of the ones
+ * the install would otherwise open, and the argv-selected diagnostics floor.
  */
 type CliProcessRuntimeInstall = Pick<
   TexraProcessHost,
@@ -140,7 +138,10 @@ type CliProcessRuntimeInstall = Pick<
  * Effect `Layer`, an immutable descriptor this module does not own, so it is
  * left as Effect built it rather than frozen from here.
  */
-export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
+export const NO_PLATFORM_INSTALL: Pick<
+  CliProcessRuntimeInstall,
+  'globalStores'
+> = Object.freeze({
   globalStores: Object.freeze({
     appState: refusingStateStore,
     globalDatabase: refusingGlobalDatabase,
@@ -173,8 +174,8 @@ let installed: CliProcessRuntime | undefined;
  * there is no second record beside the runtime for a joining caller (or a
  * second root, like the test kernel's) to keep in sync.
  *
- * `options` is {@link NO_PLATFORM_INSTALL}, which the two platform-less
- * entries pass. Opening the global state store or the global root's database
+ * The two platform-less entries spread {@link NO_PLATFORM_INSTALL} into
+ * `options`. Opening the global state store or the global root's database
  * creates the global storage directory and its SQLite file, so those entries
  * hand over the refusals above and this install opens nothing under that root.
  * Nothing in such a process joins the install after it, which is what makes
@@ -183,7 +184,7 @@ let installed: CliProcessRuntime | undefined;
  */
 export function installCliProcessRuntime(
   storageRoot: string,
-  options?: CliProcessRuntimeInstall,
+  options: CliProcessRuntimeInstall,
 ): CliProcessRuntime {
   if (installed) return installed;
   const runtime = withForkFailureReporting(
@@ -198,7 +199,7 @@ export function installCliProcessRuntime(
           version: readCliVersion(),
           editorType: 'cli',
         },
-        minimumLogLevel: options?.minimumLogLevel ?? 'Info',
+        minimumLogLevel: options.minimumLogLevel ?? 'Info',
       }).pipe(Layer.provide(validationModelLayer)),
     ),
   );

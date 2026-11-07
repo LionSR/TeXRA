@@ -1,9 +1,5 @@
 /**
  * Shared helpers for the tool-use and web-search formatters.
- *
- * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates
- * with indentation render unwanted spaces. Always use single-line templates
- * with `// prettier-ignore` to prevent whitespace issues.
  */
 
 import { Predicate } from 'effect';
@@ -21,7 +17,6 @@ import {
   buildDetailsSummary,
   wrapInPre,
   buildCodeBlock,
-  SPINNER_ICON_NAME,
 } from '@ui/progress/formatters/htmlBuilders';
 import type { IconName } from '@ui/wa/iconNames';
 import type { TranscriptRowBase } from '@texra-ai/harness/transcript';
@@ -80,7 +75,9 @@ export function getToolTimeoutMs(
  */
 export function buildToolUseDetails(opts: {
   row: Pick<TranscriptRowBase, 'id' | 'groupId' | 'timestamp'>;
-  iconName: IconName | typeof SPINNER_ICON_NAME;
+  iconName: IconName;
+  /** Show a spinner in place of the icon. */
+  running: boolean;
   label: string;
   isError: boolean;
   content: TemplateResult;
@@ -101,7 +98,7 @@ export function buildToolUseDetails(opts: {
     : nothing;
   const extraContent = html`${statusText}${opts.extraContent ?? nothing}`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)} data-group-id=${ifDefined(opts.row.groupId)}>${opts.content}</div></wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, running: opts.running, label: opts.label, labelClass: 'tool-use-title', extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)} data-group-id=${ifDefined(opts.row.groupId)}>${opts.content}</div></wa-details>`;
 }
 
 type ToolSectionOptions = {
@@ -133,12 +130,7 @@ export function buildToolSection(
   const shouldHighlight = language !== 'plaintext';
 
   const content = shouldHighlight
-    ? buildCodeBlock(displayText, {
-        language,
-        className: extraClass,
-        showLanguage: true,
-        showCopy: true,
-      })
+    ? buildCodeBlock(displayText, language, extraClass)
     : wrapInPre(displayText, extraClass);
 
   return buildToolUseSection(label, content);

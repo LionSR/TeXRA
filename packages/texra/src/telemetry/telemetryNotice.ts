@@ -1,15 +1,25 @@
-import { Effect, Result } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
-import { AppState, type ConfigProvider } from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
-  TELEMETRY_ENABLED_KEY,
-  TexraStateKey,
-} from '@texra/shared/settingsView/texraSettings';
+  AppState,
+  Settings,
+  type ConfigProvider,
+} from '@texra-ai/harness/host';
+import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
+import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 import { usageLoggingOptOut } from './UsageLogService';
 
-const TELEMETRY_NOTICE = `TeXRA sends anonymous usage metadata (agent, model, token counts, duration, host, version) with a random anonymous install ID. It never sends prompts, document content, file paths or error text. Turn it off with "${TELEMETRY_ENABLED_KEY}": false, TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1. A custom agent is reported only as "custom". The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
+const TELEMETRY_NOTICE = `TeXRA sends anonymous usage metadata (agent, model, token counts, duration, host, version) with a random anonymous install ID. It never sends prompts, document content, file paths or error text. Turn it off with "${TELEMETRY_ENABLED_SETTING.key}": false, TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1. A custom agent is reported only as "custom". The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
+
+/** Set once the first-run telemetry notice has been shown on this machine. */
+const NOTICE_SHOWN_KEY = {
+  key: 'telemetry.noticeShown',
+  slot: 'globalState',
+  schema: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+} as const satisfies StateKey<boolean>;
 
 /**
  * The first-run notice, or null. It is due once per machine while telemetry
@@ -21,11 +31,8 @@ export const telemetryNoticeIfDue = Effect.fn('telemetryNoticeIfDue')(
   function* (config: ConfigProvider) {
     if ((yield* usageLoggingOptOut(config)) !== null) return null;
     const state = yield* AppState;
-    if ((yield* state.get(TexraStateKey.TELEMETRY_NOTICE_SHOWN)) === true)
-      return null;
-    yield* state.modify(TexraStateKey.TELEMETRY_NOTICE_SHOWN, () =>
-      Result.succeed(true),
-    );
+    if (yield* Settings.state(state, NOTICE_SHOWN_KEY)) return null;
+    yield* state.modify(NOTICE_SHOWN_KEY.key, () => Result.succeed(true));
     return TELEMETRY_NOTICE;
   },
   // A store failure must not stop a host starting; say so and show nothing.

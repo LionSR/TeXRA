@@ -4,7 +4,6 @@ import { Effect, Fiber } from 'effect';
 import { assert, expect } from 'vitest';
 
 // Local imports
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
@@ -12,10 +11,11 @@ import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { wolfram } from '@texra/tools/wolframPlugin';
 import { texraPlugins } from '@texra/tools/registry';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
+import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 
 /** A host whose DISABLED_TOOLS list is already seeded, and empty. */
 const seeded = FakeHost.layer({
-  globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] },
+  globalState: { [DISABLED_TOOLS_KEY.key]: [] },
 });
 
 layer(seeded, { buildPerTest: true })('seedDisabledToolDefaults', (it) => {
@@ -32,9 +32,7 @@ layer(seeded, { buildPerTest: true })('seedDisabledToolDefaults', (it) => {
           texraPlugins({ name: 'vscode' }),
         );
 
-        expect(yield* globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
-          [],
-        );
+        expect(yield* globalState.get(DISABLED_TOOLS_KEY.key)).toEqual([]);
       }),
   );
 });

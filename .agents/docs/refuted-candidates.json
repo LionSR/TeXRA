@@ -435,6 +435,97 @@
           "signature": "export const openDesktopProjectRegistry: ( options: DesktopProjectRegistryOptions, ) => Effect.Effect< DesktopProjectRegistry, Error, DesktopProjectRecords | StateStores | Sessions | HostWindows > = Effect.fn('openDesktopProjectRegistry')(…);"
         }
       ]
+    },
+    {
+      "id": "G11d-launch-config-schema-without-defaults",
+      "candidate": "a LaunchConfigSchema without defaults for the launcher's launches, deleting prepareSurfaceLaunch's missing agent/model pre-check",
+      "why": "The pre-check does not exist because AgentConfigSchema fills agent and model: buildLaunchConfig always passes both, so the row schema's withDecodingDefault (which fills an absent key only) never applies to a launch. What it rejects is the empty string the form sends while nothing is selected, which Schema.String accepts. A schema without defaults would still accept it; one with isMinLength(1) would turn \"Choose an agent and a model first.\" into decodeLaunchConfig's generic first-issue rejection. The launch surface's own defaults (LaunchSurfaceSchema's agent and model) fill an absent key at the wire boundary, a separate fact. The false comment that named the row schema was corrected, and the hand-made Result in buildLaunchConfig's catalog lookup removed, in the same change.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/G-app-controllers.md#finding-11-smaller-items-batched",
+      "symbols": [
+        {
+          "file": "packages/texra/src/controllers/mainView/backend/MainViewRunLaunchController.ts",
+          "symbol": "prepareSurfaceLaunch",
+          "signature": "export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')( function* ( { launch, instruction }: LaunchRequest, roots: LaunchRoots, ): Effect.fn.Return<AgentConfig, Rejected | StateReadFailed, AgentCatalog> {…}, );"
+        }
+      ]
+    },
+    {
+      "id": "G11f-subscription-descriptor-columns",
+      "candidate": "delete SubscriptionProvider.sessionName and .copyTarget as unread columns, and capture each binding directly instead of calling through a lambda",
+      "why": "Both columns are read: the extension's vscodePresenter destructures them (`const { displayName, sessionName, copyTarget } = provider`, packages/extension/src/frontend/auth/subscriptionSignIn.ts) for the loopback prompt (\"If your … session is in a different browser\") and the copy-link toast (\"Paste it into the browser where you use …\"); a search for `.sessionName` misses a destructuring read. Both differ from displayName for Grok ('xAI', 'Grok / xAI'), so neither is constant across the rows. The call-through lambdas are what let src/test-kernel/tools/setup/DefaultSetupPlatform.vitest.ts spy on `@texra-ai/llm/node`'s getChatgptStatus, the suite that checks a ChatGPT account's email and id never reach the setup tools; capturing the import at module load would bypass the spy and drop that check.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/G-app-controllers.md#finding-11-smaller-items-batched",
+      "symbols": [
+        {
+          "file": "packages/texra/src/controllers/modelAccess/subscriptionProviders.ts",
+          "symbol": "SubscriptionProvider",
+          "signature": "export interface SubscriptionProvider { readonly id: SubscriptionProviderId; readonly displayName: string; readonly sessionName: string; readonly copyTarget: string; readonly modelFamily: string; signIn( options: SubscriptionSignInOptions, ): Effect.Effect<SubscriptionAccount, Error, HttpClient.HttpClient | Secrets>; … }"
+        }
+      ]
+    },
+    {
+      "id": "UI-pasted-image-name-host-minted",
+      "candidate": "the pasted-image file name minted by the host's store (a content address or a sequence) and returned in the save outcome, the composer sending only { ext, base64 }",
+      "why": "The composer needs the name at paste time: it inserts the image's `[name]` chip into the textarea at the caret in the same event, and the follow-up draft keys the image by that name until the host answers with the stored file. A host-minted name means inserting the chip after the round trip, into a draft the user may have kept typing in, with the caret position carried across it (a write in the session surface module). The name the renderer mints is not an identity anything else rebuilds: the host validates its prefix and shape at the boundary (`pastedImageFileName`) and stores under it, and the CLI saves through the same `savePastedImageBuffer` with the same generator. Found as J9 (round 2, J-ui-kit.md); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#finding-9-renderers-that-rebuild-what-the-data-model-split",
+      "symbols": [
+        {
+          "file": "packages/texra/src/shared/utils/pastedImageName.ts",
+          "symbol": "generatePastedImageName",
+          "signature": "export function generatePastedImageName(ext: string): string {…}"
+        }
+      ]
+    },
+    {
+      "id": "UI-request-card-declaration-record",
+      "candidate": "BaseRequestPanel's hooks replaced by a declaration record (ask, primary, decline, grant, keys) that each card returns to one request-card element",
+      "why": "Every card stays an element either way: the inquiry card holds its form and validation, the proposal card its model picker and edit form, the tool-edit card its preview verbs, and the base its note. A record of callbacks moves each override into a record field one for one: the four hooks one card fills (primaryIcon for retry, notePrompt for the user question, declineTakesNote for the inquiry, emitRuntimeArm for the tool edit) become four optional fields with the same defaults, read at the same points. No decision moves to its owner and no code goes; the class keeps the one action row, keyboard routing and read-only gate in one place. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
+      "symbols": [
+        {
+          "file": "packages/texra/src/ui/progress/components/BaseRequestPanel.ts",
+          "symbol": "BaseRequestPanel",
+          "signature": "export abstract class BaseRequestPanel< K extends PermissionPayload['kind'] = PermissionPayload['kind'], > extends LitElement {…}"
+        }
+      ]
+    },
+    {
+      "id": "UI-signal-watcher-as-streams",
+      "candidate": "subscribeToSignalChanges replaced by Streams over the SubscriptionRefs behind the signals it watches",
+      "why": "Three of its four consumers are the terminal client's: React's useSyncExternalStore over a signal (useSignal), the terminal title over a computed signal, and the approval announcer over a computed signal. None has a SubscriptionRef behind it, so the watcher stays as the one signal-to-callback bridge (the inverse of toSignal). Moving the fourth, the progress view's surface reconciliation over view$, surface$ and host$, onto Streams would add a second mechanism beside it and delete nothing. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
+      "symbols": [
+        {
+          "file": "packages/texra/src/shared/signals.ts",
+          "symbol": "subscribeToSignalChanges",
+          "signature": "export function subscribeToSignalChanges( signals: readonly WatchableSignal[], notify: () => void, ): () => void {…}"
+        }
+      ]
+    },
+    {
+      "id": "UI-terminal-write-without-bound",
+      "candidate": "TerminalOutput.writeTerminalText awaits xterm's write callback alone, or an Effect.callback with Effect.timeout, in place of the promise raced against a 100 ms timer",
+      "why": "The bound is load-bearing: the flush loop holds isFlushingText while it awaits the write, and a terminal disposed or replaced mid-write never calls back, so an unbounded wait would leave every later flush skipped and the new terminal empty. The Effect form needs Effect.runPromise inside a Lit component in packages/texra, where Effect.run* is banned outside the host entries; it would move the same timer behind a runtime the component does not have. Found in round 2 (J-ui-kit.md, batched items); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
+      "symbols": [
+        {
+          "file": "packages/texra/src/ui/progress/components/TerminalOutput.ts",
+          "symbol": "writeTerminalText",
+          "signature": "private async writeTerminalText( terminal: Terminal, text: string, ): Promise<void> {…}"
+        }
+      ]
+    },
+    {
+      "id": "UI-inquiry-decode-by-reference",
+      "candidate": "ExternalInquiryPanel stops decoding permission.data with Schema.decodeUnknownSync and caching the result by reference",
+      "why": "A plugin request's payload is opaque JSON to the harness and its view (the plugin owns the shape), so the panel is the boundary where the inquiry plugin's data is decoded. The reference compare is that decode done once per request, not a second cache; moving it to willUpdate keeps the same decode and adds a field that is undefined before the first update. A typed plugin payload in the session view would delete it, and is the change to make if that lands. Found in round 2 (J-ui-kit.md, batched items); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
+      "symbols": [
+        {
+          "file": "packages/texra/src/ui/progress/components/ExternalInquiryPanel.ts",
+          "symbol": "ExternalInquiryPanel.inquiry",
+          "signature": "private get inquiry(): InquiryRequest {…}"
+        }
+      ]
     }
   ]
 }

@@ -56,10 +56,10 @@ export function settingsGitCommands(ports: {
   const handlers = {
     setGitHubToken: Effect.fn('settingsGitCommands.setGitHubToken')(
       function* () {
-        const token = yield* bindings.prompt.input({
+        const token = yield* bindings.dialogs.input({
           prompt: GITHUB_TOKEN_PROMPT,
-          placeHolder: 'ghp_…',
-          password: true,
+          placeholder: 'ghp_…',
+          secret: true,
         });
         if (token == null) return;
         yield* reported(

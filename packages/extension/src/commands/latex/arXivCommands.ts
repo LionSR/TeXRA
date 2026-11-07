@@ -121,7 +121,8 @@ export const downloadArXivSource: (
       return;
     }
 
-    const result = yield* vscodeUi.info(
+    const result = yield* vscodeUi.ask(
+      'info',
       `arXiv source downloaded to ${path.basename(extractedPath.value)}${
         autoIndent ? ' with LaTeX files indented' : ''
       }`,
@@ -129,11 +130,9 @@ export const downloadArXivSource: (
     );
 
     if (result === 'Open Folder') {
-      yield* safeExecuteCommand(
-        'revealFileInOS',
-        [vscode.Uri.file(extractedPath.value)],
-        CHANNEL,
-      );
+      yield* safeExecuteCommand('revealFileInOS', [
+        vscode.Uri.file(extractedPath.value),
+      ]);
     }
   },
   Effect.catchCause((cause) =>
@@ -144,9 +143,9 @@ export const downloadArXivSource: (
     Cause.hasInterruptsOnly(cause)
       ? Effect.interrupt
       : showLoggedErrorMessage(
-          CHANNEL,
           'Failed to download arXiv source',
           Cause.squash(cause),
         ).pipe(Effect.asVoid),
   ),
+  withLogChannel(CHANNEL),
 );

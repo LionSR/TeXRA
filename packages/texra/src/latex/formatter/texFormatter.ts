@@ -3,22 +3,27 @@ import { Effect } from 'effect';
 
 // Local imports - formatter implementations
 import { Settings } from '@texra-ai/harness/host';
-import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import type { LatexFormatterValue } from '@texra/shared/constants/latexConfig';
 
 // Local file imports
 import type { ToolMissing } from '@texra/utils/system/toolChecks';
-import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
-import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
+import { runLatexIndent } from './latexindentpt';
+import { runTexFmt } from './texfmt';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { FileSystem } from 'effect';
 import type { SettingsStores } from '@texra-ai/harness/host';
+import type { SettingRow } from '@texra-ai/harness/schemas';
+import {
+  LATEX_FORMATTER_SETTING,
+  LATEXINDENT_CONFIG_SETTING,
+  TEXFMT_CONFIG_SETTING,
+} from '@texra/shared/settingsView/texraSettings';
 
 interface LatexFormatterDefinition {
   /** Setting value that selects this formatter. */
   id: string;
-  /** Config key holding this formatter's optional config-file path. */
-  configKey: string;
+  /** The row holding this formatter's optional config-file path. */
+  configFile: SettingRow<string>;
   run(
     filePath: string,
     workspaceRoot: string | undefined,
@@ -50,12 +55,12 @@ const LATEX_FORMATTERS: Record<
 > = {
   'tex-fmt': {
     id: 'tex-fmt',
-    configKey: TEXFMT_CONFIG_KEY,
+    configFile: TEXFMT_CONFIG_SETTING,
     run: runTexFmt,
   },
   latexindent: {
     id: 'latexindent',
-    configKey: LATEXINDENT_CONFIG_KEY,
+    configFile: LATEXINDENT_CONFIG_SETTING,
     run: runLatexIndent,
   },
 };
@@ -63,7 +68,7 @@ const LATEX_FORMATTERS: Record<
 /**
  * Resolve the configured LaTeX formatter, or null when formatting is
  * disabled. Unrecognized settings fall back to latexindent. Sole owner of the
- * formatter → runner + config-key mapping.
+ * formatter → runner + config-file row mapping.
  *
  * `stores` are the settings slots of the workspace the caller is formatting
  * (a session's roots), held as data, so both the formatter choice and its
@@ -72,17 +77,14 @@ const LATEX_FORMATTERS: Record<
  */
 export const resolveLatexFormatter = Effect.fn('resolveLatexFormatter')(
   function* (stores: SettingsStores) {
-    const formatter = yield* Settings.get<LatexFormatterValue>(
-      stores,
-      TexraStateKey.LATEX_FORMATTER,
-    );
+    const formatter = yield* Settings.get(stores, LATEX_FORMATTER_SETTING);
     if (formatter === 'none') {
       return null;
     }
     const selected = LATEX_FORMATTERS[formatter];
     return {
       ...selected,
-      configPath: yield* Settings.get<string>(stores, selected.configKey),
+      configPath: yield* Settings.get(stores, selected.configFile),
       settings: stores,
     };
   },

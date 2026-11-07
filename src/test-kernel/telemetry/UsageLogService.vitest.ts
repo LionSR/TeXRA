@@ -16,7 +16,7 @@ import {
 import { fakeHostAppState } from '@test/support/setupPlatform';
 import { FakeHost } from '@test/support/testKernel';
 import {
-  TELEMETRY_ENABLED_KEY,
+  TELEMETRY_ENABLED_SETTING,
   TEXRA_SETTINGS,
 } from '@texra/shared/settingsView/texraSettings';
 
@@ -123,12 +123,12 @@ describe('UsageLogService', () => {
     it.effect('does not let a project opt in over a user-wide opt-out', () =>
       Effect.gen(function* () {
         yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
+          TELEMETRY_ENABLED_SETTING.key,
           false,
           'global',
         );
         yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
+          TELEMETRY_ENABLED_SETTING.key,
           true,
           'workspace',
         );
@@ -145,7 +145,7 @@ describe('UsageLogService', () => {
 
         logUsage(usageEntry('before-opt-out'), testWorkspaceRoots().config);
         yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
+          TELEMETRY_ENABLED_SETTING.key,
           false,
           'global',
         );
@@ -164,7 +164,7 @@ describe('UsageLogService', () => {
     it.effect('sends nothing while TEXRA_NO_TELEMETRY=1 is set', () =>
       Effect.gen(function* () {
         yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
+          TELEMETRY_ENABLED_SETTING.key,
           true,
           'global',
         );

@@ -1,12 +1,21 @@
 import { randomUUID } from 'node:crypto';
 
-import { Effect, Result } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 import { AppState } from '@texra-ai/harness/host';
-import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
+import type { StateKey } from '@texra-ai/harness/schemas';
 
-const INSTALL_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+/** The random anonymous telemetry install ID, a UUIDv4; deleting the key
+ *  resets it. */
+const INSTALL_ID_KEY = {
+  key: 'telemetry.installId',
+  slot: 'globalState',
+  schema: Schema.String.check(
+    Schema.isPattern(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    ),
+  ),
+} as const satisfies StateKey<string>;
 
 /**
  * The random anonymous install ID: a UUIDv4 made once in global app state,
@@ -16,11 +25,10 @@ const INSTALL_ID_PATTERN =
 export const readOrCreateInstallId = Effect.fn('UsageLogService.installId')(
   function* () {
     const state = yield* AppState;
-    const isId = (value: unknown): value is string =>
-      typeof value === 'string' && INSTALL_ID_PATTERN.test(value);
-    const stored = yield* state.get(TexraStateKey.TELEMETRY_INSTALL_ID);
+    const isId = Schema.is(INSTALL_ID_KEY.schema);
+    const stored = yield* state.get(INSTALL_ID_KEY.key);
     if (isId(stored)) return stored;
-    return yield* state.modify(TexraStateKey.TELEMETRY_INSTALL_ID, (current) =>
+    return yield* state.modify(INSTALL_ID_KEY.key, (current) =>
       Result.succeed(isId(current) ? current : randomUUID()),
     );
   },

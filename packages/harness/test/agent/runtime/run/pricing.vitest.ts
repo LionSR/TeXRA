@@ -5,7 +5,7 @@
  * rather than falling out of the turn's cost (#12316).
  */
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
@@ -79,7 +79,9 @@ const boundAnthropic: BoundModel = {
   background: false,
   serviceTier: null,
   routes: routePolicies(['test-route'], 'test-model'),
-  automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+  automaticRetries: Schema.decodeUnknownSync(
+    MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema,
+  )(undefined),
   textOnly: false,
 };
 
