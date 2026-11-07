@@ -6,11 +6,11 @@ import {
   CLI_CHEAP_START_MODEL,
   cliCommandDefaults,
   resolveKnownCliModelId,
-} from './cliConfig';
-import { CliUsageError, type CliContext } from './cliContext';
-import { writeTextStderr } from './logSinks';
+} from '../platform/cliConfig';
+import { CliUsageError, type CliContext } from '../platform/cliContext';
+import { writeTextStderr } from '../platform/logSinks';
 import { selectCliRunnableModel, type CliModelStores } from './modelAccess';
-import { shouldRenderRunProgress } from './runProgressRenderer';
+import { shouldRenderRunProgress } from '../headless/runProgressRenderer';
 import type { RunModelCandidate } from '@texra-ai/harness/host';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
@@ -46,7 +46,7 @@ function cliRunModelCandidates(
 /**
  * `stores` is the three setting slots availability and the command's
  * configured default are read from, with the runtime that serves `Secrets`,
- * handed over by the command's own `initCliPlatform` result rather than looked
+ * handed over by the command's own `CliPlatform` services rather than looked
  * up again here.
  */
 export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (

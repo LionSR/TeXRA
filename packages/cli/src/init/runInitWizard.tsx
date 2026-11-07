@@ -16,8 +16,8 @@ import {
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
-import type { InitAnswers } from '../runtime/initConfig';
-import type { CliModelAccess } from '../runtime/modelAccess';
+import type { InitAnswers } from '../runtime/platform/initConfig';
+import type { CliModelAccess } from '../runtime/models/modelAccess';
 
 interface InitWizardAgentOption {
   readonly name: string;

@@ -6,7 +6,7 @@ import {
   type RunId,
   type RunStanding,
 } from '@texra-ai/harness/schemas';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 
 import { registerCliStateResetHook, sessionViewFailure } from './cliState';
 import { runViewOf, sessionView } from './sessionView';

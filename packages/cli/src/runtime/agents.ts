@@ -8,7 +8,7 @@ import {
 import { agentKeyOf, formatResultCount } from '@texra-ai/harness/schemas';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 
-import { CliUsageError } from './cliContext';
+import { CliUsageError } from './platform/cliContext';
 
 export interface CliAgentListOptions {
   readonly includeHidden?: boolean;
@@ -54,7 +54,7 @@ export function resolveCliRunAgent(
       .workspaceAgents(stores)
       .forLaunch(name)
       .pipe(
-        Effect.catchTag('LaunchRefused', () =>
+        Effect.catchTag('AgentNotFound', () =>
           Effect.fail(
             new CliUsageError({ message: missingAgentMessage(name) }),
           ),

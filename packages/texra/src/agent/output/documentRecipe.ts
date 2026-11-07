@@ -143,7 +143,7 @@ export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
     .workspaceAgents(stores)
     .forLaunch(config.agent, config.agentSource)
     .pipe(
-      Effect.catchTag('LaunchRefused', (missed) =>
+      Effect.catchTag('AgentNotFound', (missed) =>
         Effect.fail(new DocumentTaskRefused({ message: missed.message })),
       ),
     );

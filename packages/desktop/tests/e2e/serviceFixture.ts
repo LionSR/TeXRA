@@ -14,7 +14,7 @@ import {
   VALIDATION_FLAG_CONTENT,
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
-} from '../../../cli/src/runtime/validationSwitch';
+} from '../../../cli/src/runtime/models/validationSwitch';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..', '..', '..');

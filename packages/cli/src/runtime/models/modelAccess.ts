@@ -20,7 +20,7 @@ import { modelOptionsFrom } from '@texra/model/modelOptions';
 
 // Local file imports
 import { MODEL_AVAILABILITY_LABEL } from '@ui/copy/modelAccess';
-import { resolveKnownCliModelId } from './cliConfig';
+import { resolveKnownCliModelId } from '../platform/cliConfig';
 
 export interface CliModelAccess {
   readonly model: ModelOptionData;

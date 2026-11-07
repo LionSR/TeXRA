@@ -1,6 +1,9 @@
 import { signal } from '@lit-labs/signals';
 
-import { ANSI_ESCAPE_START, isCsiFinalByte } from '@cli/runtime/ansiEscapes';
+import {
+  ANSI_ESCAPE_START,
+  isCsiFinalByte,
+} from '@cli/runtime/terminal/ansiEscapes';
 
 interface SgrStripState {
   pending: string;

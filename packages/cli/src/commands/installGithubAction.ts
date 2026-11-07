@@ -15,19 +15,20 @@ import {
   repositoryRoot,
 } from '@texra/utils/git/gitReads';
 
-import { CliExitCode } from '../runtime/exitCodes';
-import { tryOpenBrowser } from '../runtime/browser';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliSecretsLayer } from '../runtime/platform/cliProcessRuntime';
+import { tryOpenBrowser } from '../runtime/models/browser';
 import {
   cliErrorMessage,
   writeTextStderr,
   writeTextStdout,
-} from '../runtime/logSinks';
+} from '../runtime/platform/logSinks';
 import { gh, ghAvailable, git, localBranchExists } from '../runtime/gitOps';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { CliContext } from '../runtime/cliContext';
+import type { CliContext } from '../runtime/platform/cliContext';
 
 const WORKFLOW_RELATIVE_PATH = '.github/workflows/texra-code-review.yml';
 const DEFAULT_BRANCH_NAME = 'texra/add-code-review';
@@ -397,9 +398,8 @@ export const installGithubActionCommand = defineCliCommand({
     description: 'Install the TeXRA GitHub App and scaffold code review',
   },
   // The command brings no platform up: it only scaffolds a workflow file in a
-  // git repository, so the runtime its entry installs for the program serves
-  // the refusing state store and global-root handle `clone` takes.
-  install: 'noPlatform',
+  // git repository.
+  layer: cliSecretsLayer,
   args: {
     ...GLOBAL_ARGS,
     branch: {

@@ -64,7 +64,7 @@ import {
   VALIDATION_FLAG_CONTENT,
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
-} from '@cli/runtime/validationSwitch';
+} from '@cli/runtime/models/validationSwitch';
 import { SessionRoots } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {

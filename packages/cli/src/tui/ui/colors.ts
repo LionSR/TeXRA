@@ -1,4 +1,4 @@
-import { cliEnvValue } from '@cli/runtime/cliContext';
+import { cliEnvValue } from '@cli/runtime/platform/cliContext';
 
 // Semantic color palette for the CLI TUI. Components say WHAT (semantic
 // color); this module says WHICH Ink/chalk color name backs it — so

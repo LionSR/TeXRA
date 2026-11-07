@@ -30,19 +30,17 @@ import {
   launchApproval,
   launchApprovalNotice,
   projectApprovalPolicy,
-  CliInvocation,
-} from '../runtime/cliContext';
+} from '../runtime/platform/cliContext';
+import { isLinked, linkClient } from '../runtime/platform/cliService';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
-  isLinked,
-  linkClient,
-  type CliServiceLink,
-} from '../runtime/cliService';
-import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
-import { getStdoutColumns, writeTextStderr } from '../runtime/logSinks';
-import { selectCliRunModel } from '../runtime/runModel';
-import { attachTask } from '../runtime/taskAttach';
-import { runOutcomeExitCode } from '../runtime/terminalStatus';
+  getStdoutColumns,
+  writeTextStderr,
+} from '../runtime/platform/logSinks';
+import { selectCliRunModel } from '../runtime/models/runModel';
+import { attachTask } from '../runtime/headless/taskAttach';
+import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
@@ -83,14 +81,10 @@ function findTask(client: ServiceClient, id: string) {
 
 /** The service's client, through the platform's link; a command that
  *  holds none fails with why. */
-const serviceClient = CliInvocation.use(({ context }) =>
-  Effect.flatMap(
-    initCliPlatform({ ...context, startsService: true }),
-    ({ service }: { readonly service: CliServiceLink }) =>
-      isLinked(service)
-        ? linkClient(service)
-        : Effect.fail(new Error(service.none)),
-  ),
+const serviceClient = Effect.flatMap(cliPlatform, ({ service }) =>
+  isLinked(service)
+    ? linkClient(service)
+    : Effect.fail(new Error(service.none)),
 );
 
 /** One request to the task `id` names, refused as a usage error. */
@@ -128,6 +122,7 @@ const listCommand = defineCliCommand({
       'List the tasks of every project, newest first (* = running in the service)',
   },
   args: { ...GLOBAL_ARGS },
+  platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('run')(function* () {
     const { client } = yield* serviceClient;
@@ -150,6 +145,7 @@ const attachCommand = defineCliCommand({
       'Follow a task live until it ends; Ctrl-C detaches and leaves it running',
   },
   args: { ...GLOBAL_ARGS, id: TASK_ID_ARG },
+  platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: (context, ctx) => {
     // A live transcript has no single JSON document to print.
@@ -195,6 +191,7 @@ const startCommand = defineCliCommand({
     },
     model: { type: 'string', alias: 'm', description: 'Model for the agent' },
   },
+  platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('tasks.run')(function* (context, ctx) {
     const instruction = ctx.args.instruction.trim();
@@ -202,10 +199,7 @@ const startCommand = defineCliCommand({
       return yield* new CliUsageError({
         message: '--instruction must not be empty.',
       });
-    const services = yield* initCliPlatform({
-      ...context,
-      startsService: true,
-    });
+    const services = yield* cliPlatform;
     if (!isLinked(services.service))
       return yield* Effect.fail(new Error(services.service.none));
     const link = services.service;
@@ -271,6 +265,7 @@ const sendCommand = defineCliCommand({
       description: 'The follow-up message',
     },
   },
+  platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: (_, ctx) =>
     requestTask(ctx.args.id, (runId) => ({
@@ -295,6 +290,7 @@ const stopCommand = defineCliCommand({
     description: 'Stop a running task; it can be resumed later',
   },
   args: { ...GLOBAL_ARGS, id: TASK_ID_ARG },
+  platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: (_, ctx) =>
     requestTask(ctx.args.id, (runId) => ({

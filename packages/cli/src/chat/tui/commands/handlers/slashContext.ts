@@ -1,6 +1,6 @@
-import { type CliContext } from '@cli/runtime/cliContext';
-import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
-import { type CliSignInProgress } from '@cli/runtime/signInUrl';
+import { type CliContext } from '@cli/runtime/platform/cliContext';
+import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/models/modelAccess';
+import { type CliSignInProgress } from '@cli/runtime/models/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';

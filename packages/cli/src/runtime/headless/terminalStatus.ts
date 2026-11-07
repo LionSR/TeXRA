@@ -8,7 +8,7 @@ import {
   type CliRunResult,
 } from '@cli/schemas/cliOutput';
 
-import { CliExitCode } from './exitCodes';
+import { CliExitCode } from '../platform/exitCodes';
 
 /**
  * The plugins that load as a run result names them, read the way this

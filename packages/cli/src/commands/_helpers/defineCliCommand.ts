@@ -1,25 +1,36 @@
 import { defineCommand, type ArgsDef, type CommandDef } from 'citty';
-import { Cause, Effect, Exit, Result } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  type Layer,
+  ManagedRuntime,
+  Result,
+} from 'effect';
 
 import { setLogSink } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
+import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
-  installCliProcessRuntime,
-  NO_PLATFORM_INSTALL,
+  makeCliProcessRuntime,
   type CliServices,
-} from '@cli/runtime/cliProcessRuntime';
+} from '@cli/runtime/platform/cliProcessRuntime';
+import type {
+  CliPlatform,
+  CliPlatformOptions,
+} from '@cli/runtime/platform/initPlatform';
 import {
   prePlatformDiagnosticSink,
   silentLogSink,
   writeErrorStderr,
-} from '@cli/runtime/logSinks';
+} from '@cli/runtime/platform/logSinks';
 import type { RunChatInit } from '@cli/chat/tui/runChatTui';
 import {
   provideCliInvocation,
   type CliContext,
   type CliInvocation,
-} from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+} from '@cli/runtime/platform/cliContext';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 
 import { contextFromArgs } from './context';
 import { setExitCode } from './exitCode';
@@ -41,7 +52,7 @@ type CliCommandRunContext<A extends ArgsDef> = Parameters<
  */
 type CliCommandOutcome = number | { readonly chat: RunChatInit };
 
-interface DefineCliCommandOptions<A extends ArgsDef, E> {
+interface DefineCliCommandOptions<A extends ArgsDef, E, R, O> {
   readonly meta: CommandDef<A>['meta'];
   readonly args?: A;
   /**
@@ -55,43 +66,32 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
    * warnings surfaced by `contextFromArgs`) and citty's run context, and
    * returns the command as the program it is, run with that context as its
    * `CliInvocation`: one Effect ending in the
-   * process exit code, which this helper runs on the process runtime below.
+   * process exit code, which this helper runs on the command's runtime.
    * The value it finishes with is forwarded to `setExitCode`, so a handler
    * reduces to "do the work, return a code" — or, for a command that ends in
    * the chat TUI, "do the work, name the session", which this helper mounts
    * once the program has finished.
    *
-   * It is called to BUILD that program, before the runtime is installed. A
+   * It is called to BUILD that program, before the runtime is built. A
    * command that can refuse its arguments without the runtime refuses HERE,
    * in the builder, by throwing `CliUsageError` (`texra clone`'s project
    * parse, `texra history`'s id and limit parses, `texra config edit`'s
    * terminal check), so the refusal opens
    * nothing under the storage root. A usage error the program raises instead
-   * still exits 2: the process entry disposes whatever runtime is installed.
+   * still exits 2.
    */
   readonly run: (
     context: CliContext,
     ctx: CliCommandRunContext<A>,
-  ) => Effect.Effect<CliCommandOutcome, E, CliServices | CliInvocation>;
-  /**
-   * Set by the two commands that bring no platform up. Their program still
-   * runs on a process runtime, but one installed with `NO_PLATFORM_INSTALL`:
-   * a state store and a global-root handle that refuse, because neither
-   * command runs the platform shutdown that would dispose an opened one.
-   * Every other command omits it and takes the install that opens both.
-   * `service` is `texra serve`'s and its management commands': it serves
-   * many projects, so its own reads see no one project's `.env` (each run
-   * reads its own), and a project's broken `.env` never blocks a stop.
-   */
-  readonly install?: 'noPlatform' | 'service';
+  ) => Effect.Effect<O, E, R | CliInvocation>;
   /**
    * How this command reports a failure of its own — the program's, and the
-   * runtime install that precedes it. A number writes the error message to
+   * runtime build that precedes it. A number writes the error message to
    * stderr and becomes the exit code, replacing the per-command
    * `catch (error) { writeTextStderr(toErrorMessage(error)); setExitCode(...) }`
    * boilerplate. A function reports the failure itself and returns the code,
    * which is what a command whose failures have their own wording needs: the
-   * `models` group hands its `reportModelPlatformFailure` here, so an install
+   * `models` group hands its `reportModelPlatformFailure` here, so a runtime
    * that cannot open the storage root still reads as "could not list models"
    * rather than as a TeXRA crash.
    *
@@ -103,28 +103,71 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
 }
 
 /**
- * Combines the `contextFromArgs` → install the process runtime → run the
- * command's program → `setExitCode` boilerplate (optionally with the
- * error→stderr+exit-code catch) that every headless command repeats into one
- * declaration.
+ * Combines the `contextFromArgs` → build the command's runtime → run the
+ * command's program → `setExitCode` → dispose the runtime boilerplate
+ * (optionally with the error→stderr+exit-code catch) that every headless
+ * command repeats into one declaration.
  *
- * The runtime install and the run are this helper's, not each command's: a
- * command is one program on the process runtime, and this is the one place
- * the CLI enters it. One command cannot use this: `texra doctor`'s report
- * runs before the runtime exists and, when the platform init fails, after
- * that init has disposed the runtime it installed, so it has none to borrow
- * at either end.
+ * The runtime and the run are this helper's, not each command's: a command
+ * is one program on a runtime built for it, and this is the one place the
+ * CLI enters it. A command over the `--cwd` project runs over the process
+ * services and its {@link CliPlatform}, brought up with `platform` the first
+ * time the program asks; one that needs neither names the `layer` it runs
+ * over instead, so a read of what that layer lacks fails to type-check. One
+ * command cannot use this: `texra doctor` reports a runtime that fails to
+ * build, which leaves it nothing to run its report on.
  */
 export function defineCliCommand<const A extends ArgsDef, E>(
-  options: DefineCliCommandOptions<A, E>,
+  options: DefineCliCommandOptions<
+    A,
+    E,
+    CliServices | CliPlatform,
+    CliCommandOutcome
+  > & { readonly platform?: CliPlatformOptions },
+): CommandDef<A>;
+export function defineCliCommand<const A extends ArgsDef, E, R>(
+  options: DefineCliCommandOptions<A, E, NoInfer<R>, number> & {
+    readonly layer: (context: CliContext) => Layer.Layer<R>;
+  },
+): CommandDef<A>;
+export function defineCliCommand<const A extends ArgsDef, E>(
+  options: DefineCliCommandOptions<
+    A,
+    E,
+    CliServices | CliPlatform,
+    CliCommandOutcome
+  > & {
+    readonly platform?: CliPlatformOptions;
+    readonly layer?: (
+      context: CliContext,
+    ) => Layer.Layer<CliServices | CliPlatform>;
+  },
 ): CommandDef<A> {
+  function report(cause: Cause.Cause<unknown>): void {
+    // Ctrl-C or SIGTERM: the platform's shutdown interrupted the command,
+    // and its signal handler ends the process with the signal's code. That
+    // is a cancel, not a crash for `bin/texra.ts` to report as a bug.
+    if (Cause.hasInterruptsOnly(cause)) {
+      setExitCode(CliExitCode.Interrupted);
+      return;
+    }
+    const error = Cause.squash(cause);
+    if (options.catchExitCode === undefined) throw error;
+    if (typeof options.catchExitCode === 'function') {
+      setExitCode(options.catchExitCode(error));
+      return;
+    }
+    writeErrorStderr(error);
+    setExitCode(options.catchExitCode);
+  }
+
   return defineCommand<A>({
     meta: options.meta,
     args: options.args,
     setup: options.setup,
     async run(ctx) {
       // A pre-runtime run: the context program opens the config stores
-      // before any process runtime exists.
+      // before the command's runtime exists.
       const context = await Effect.runPromise(
         contextFromArgs(ctx.args, ctx.rawArgs),
       );
@@ -136,81 +179,46 @@ export function defineCliCommand<const A extends ArgsDef, E>(
         .run(context, ctx)
         .pipe(provideCliInvocation(context));
       // The sink that covers the runtime build below, chosen now that the
-      // context has answered `--quiet`. `installCliProcessRuntime` logs
-      // while its layers build (`UsageLogService started …`), and for a
-      // command that brings a platform up `initCliPlatform`'s own
-      // `setLogSink` runs one step later — inside the program this builds
-      // the runtime for. `bin/texra.ts` already put those lines on stderr;
-      // this is where `--quiet` can still silence them, and for the two
-      // platform-less entries it is the one sink they ever get.
+      // context has answered `--quiet`. The runtime logs while its layers
+      // build (`UsageLogService started …`), and a command's platform sets
+      // its own sink only once the program asks for it. `bin/texra.ts`
+      // already put those lines on stderr; this is where `--quiet` can
+      // still silence them, and for a command with no platform it is the
+      // one sink it ever gets.
       setLogSink(
         context.quietLogs ? silentLogSink : prePlatformDiagnosticSink,
         { trusted: true },
       );
-      // The command runs on the process runtime from plain async code, never
-      // from inside a default-runtime fiber: started from one, a headless
-      // run's Ctrl-C shutdown drain never finished. A failed install turns
-      // into the same exit as a failed program, so both reach one report.
-      const runtime = Result.try({
+      // The command runs on its runtime from plain async code, never from
+      // inside a default-runtime fiber: started from one, a headless run's
+      // Ctrl-C shutdown drain never finished. A runtime that cannot be
+      // built reaches the same report as a failed program.
+      const built = Result.try({
         try: () =>
-          installCliProcessRuntime(
-            context.storageRoot,
-            options.install === 'noPlatform'
-              ? {
-                  ...NO_PLATFORM_INSTALL,
-                  resourcesPath: context.resourcesPath,
-                  minimumLogLevel: context.minimumLogLevel,
-                }
-              : {
-                  resourcesPath: context.resourcesPath,
-                  skillSourceOptions: context.skillSourceOptions,
-                  minimumLogLevel: context.minimumLogLevel,
-                  // The command's project: its `.env` is what its model
-                  // availability and its runs read.
-                  ...(options.install !== 'service' && {
-                    workspace: context.cwd,
-                  }),
-                },
-          ),
+          options.layer === undefined
+            ? makeCliProcessRuntime(context, options.platform)
+            : withForkFailureReporting(
+                ManagedRuntime.make(options.layer(context)),
+              ),
         catch: ensureError,
       });
-      const exit: Exit.Exit<CliCommandOutcome, E | Error> = Result.isSuccess(
-        runtime,
-      )
-        ? await runtime.success.runPromiseExit(program)
-        : Exit.fail(runtime.failure);
-      if (Exit.isSuccess(exit)) {
+      if (Result.isFailure(built)) return report(Cause.fail(built.failure));
+      const runtime = built.success;
+      try {
+        const exit = await runtime.runPromiseExit(program);
+        if (Exit.isFailure(exit)) return report(exit.cause);
         const outcome = exit.value;
-        if (typeof outcome === 'number') {
-          setExitCode(outcome);
-          return;
-        }
-        // The TUI mounts at this Promise edge, after the program has finished,
-        // on the runtime that program ran on (a finished program means the
-        // install succeeded): `runChat` owns Ink, its own signal handlers and
-        // its teardown.
+        if (typeof outcome === 'number') return setExitCode(outcome);
+        // The TUI mounts at this Promise edge, after the program has
+        // finished, on the runtime that program ran on: `runChat` owns Ink,
+        // its own signal handlers and its teardown.
         const { runChat } = await import('@cli/chat/tui/runChatTui');
-        setExitCode(
-          (await runChat(Result.getOrThrow(runtime), context, outcome.chat))
-            .exitCode,
-        );
-        return;
+        setExitCode((await runChat(runtime, context, outcome.chat)).exitCode);
+      } finally {
+        // The command's one shutdown: its platform's sessions and project,
+        // then the process services, the usage log drained.
+        await runtime.dispose();
       }
-      // Ctrl-C or SIGTERM: the platform's shutdown interrupted the command,
-      // and its signal handler ends the process with the signal's code. That
-      // is a cancel, not a crash for `bin/texra.ts` to report as a bug.
-      if (Cause.hasInterruptsOnly(exit.cause)) {
-        setExitCode(CliExitCode.Interrupted);
-        return;
-      }
-      const error = Cause.squash(exit.cause);
-      if (options.catchExitCode === undefined) throw error;
-      if (typeof options.catchExitCode === 'function') {
-        setExitCode(options.catchExitCode(error));
-        return;
-      }
-      writeErrorStderr(error);
-      setExitCode(options.catchExitCode);
     },
   });
 }

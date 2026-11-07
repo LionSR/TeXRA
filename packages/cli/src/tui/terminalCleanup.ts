@@ -2,7 +2,7 @@ import { writeSync } from 'node:fs';
 
 import { kittyFlags } from 'ink';
 
-import { cliEnvValue } from '../runtime/cliContext';
+import { cliEnvValue } from '../runtime/platform/cliContext';
 
 // Undo exactly the input/display modes the TUI turns on: mouse tracking
 // (1000/1003/1006), the kitty keyboard stack (<u), bracketed paste (2004), and

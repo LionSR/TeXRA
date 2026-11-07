@@ -3,10 +3,10 @@ import { Effect } from 'effect';
 import { emitAppSignal } from '@texra-ai/harness/host';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
-import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
+import { loadCliDetailedAccountStatusLines } from '@cli/runtime/models/apiStatus';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
-import { type CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
-import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
+import { type CliModelAccessSelection } from '@cli/runtime/models/modelAccessRoute';
+import { updateCliModelAccess } from '@cli/runtime/models/modelAccessSelection';
 
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { planFallbackName } from '@ui/copy/modelAccess';

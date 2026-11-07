@@ -1,16 +1,16 @@
 import { Effect } from 'effect';
 
-import { CliUsageError } from '../runtime/cliContext';
-import { assertExplicitModelKnown } from '../runtime/runModel';
+import { CliUsageError } from '../runtime/platform/cliContext';
+import { assertExplicitModelKnown } from '../runtime/models/runModel';
 import {
   defaultShortcutModifierLabel,
   focusChordLabel,
-} from '../runtime/shortcutLabels';
+} from '../runtime/terminal/shortcutLabels';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
-} from '../runtime/terminalRequirements';
-import { notifyCliUpdate } from '../runtime/updateChecker';
+} from '../runtime/terminal/terminalRequirements';
+import { notifyCliUpdate } from '../runtime/platform/updateChecker';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
@@ -39,9 +39,12 @@ export const chatCommand = withUsageSections(
       },
     },
     setup: (ctx) => rejectHeadlessOnlyFlags(ctx.rawArgs, 'chat'),
+    // Every chat is a client of the one service, and shows a store moved
+    // aside in its transcript.
+    platform: { startsService: true, presentsStoreMovedAside: true },
     // The update check is the program; the session it hands the terminal to
     // is `defineCliCommand`'s to mount once the check has finished. An unusable
-    // terminal is refused here, in the builder, before the runtime installs.
+    // terminal is refused here, in the builder, before the runtime is built.
     run: (context, ctx) => {
       const modelOverride = assertExplicitModelKnown(optString(ctx.args.model));
       // `mode === 'headless'` already covers --print / CI / non-TTY stdin

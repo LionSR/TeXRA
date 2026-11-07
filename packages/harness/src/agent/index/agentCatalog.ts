@@ -75,14 +75,14 @@ export interface WorkspaceAgents extends WorkspaceAgentsController<AgentEntry> {
   /**
    * The agent a launch runs, over a settled catalog: the entry an explicit
    * `source` pins, else a visible one, else any. A miss reloads once, then
-   * refuses the launch with what the load said.
+   * fails with {@link AgentNotFound}, saying what the load said.
    */
   readonly forLaunch: (
     identifier: string,
     source?: AgentSource | null,
   ) => Effect.Effect<
     AgentEntry,
-    LaunchRefused | AgentCatalogLoadError | StateReadFailed
+    AgentNotFound | AgentCatalogLoadError | StateReadFailed
   >;
 }
 
@@ -230,10 +230,33 @@ const scanInto = Effect.fn('agentCatalog.scanInto')(function* (
   ).pipe(withLogChannel(CHANNEL));
 });
 
-/** Why a launch found nothing: the load's failure and the agent files it
- *  skipped. */
+/** No agent answers to `agent` in the settled catalog, rescanned once:
+ *  the catalog's own answer, which a launch turns into its refusal
+ *  ({@link missingAgentRefusal}) and every other reader reads as "not found". */
+export class AgentNotFound extends Schema.TaggedError<AgentNotFound>()(
+  'AgentNotFound',
+  { agent: Schema.String, message: Schema.String },
+) {}
+
+/** The one refusal of a launch whose agent is missing: the miss's message,
+ *  with the notice that offers the agent setting. */
+export const missingAgentRefusal = ({
+  agent,
+  message,
+}: Pick<AgentNotFound, 'agent' | 'message'>): LaunchRefused =>
+  new LaunchRefused({
+    message,
+    notice: { event: 'agentNotFound', payload: { agentName: agent } },
+  });
+
+/** The sentence every reader of a missing agent starts with. */
+export const agentMissMessage = (identifier: string): string =>
+  `Could not find agent: ${identifier}`;
+
+/** Why a launch found nothing: that sentence, then the load's failure and
+ *  the agent files it skipped. */
 const missMessage = (state: CatalogState, identifier: string): string =>
-  `Could not find agent: ${identifier}` +
+  agentMissMessage(identifier) +
   (state.loadFailure === undefined
     ? ''
     : `. The agent catalog did not load: ${state.loadFailure}`) +
@@ -359,12 +382,9 @@ export class AgentCatalog extends Context.Service<
             )) ??
             (yield* Effect.andThen(refresh, () => resolve(identifier, source)));
           if (entry) return entry;
-          return yield* new LaunchRefused({
+          return yield* new AgentNotFound({
+            agent: identifier,
             message: missMessage(state, identifier),
-            notice: {
-              event: 'agentNotFound',
-              payload: { agentName: identifier },
-            },
           });
         });
         return Object.assign(selection, { forLaunch });

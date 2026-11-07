@@ -43,8 +43,8 @@ import {
 import { attachScriptPlainOutput } from './scriptPlainOutput';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost } from './cliPresentationHost';
-import { CliExitCode } from './exitCodes';
-import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
+import { CliExitCode } from '../platform/exitCodes';
+import { writeTextStderr, writeTextStderrAndWait } from '../platform/logSinks';
 import { readCliPluginPins, runOutcomeExitCode } from './terminalStatus';
 import {
   CliUsageError,
@@ -53,7 +53,7 @@ import {
   projectApprovalPolicy,
   type CliContext,
   type CliInvocation,
-} from './cliContext';
+} from '../platform/cliContext';
 import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
 
 /** What a headless run starts: a host's whole configuration (the
@@ -63,7 +63,7 @@ type CliRunRequest = Required<
 >;
 
 export interface CliExecuteOptions {
-  /** The `initCliPlatform` services the run uses, from the command that
+  /** The `CliPlatform` services the run uses, from the command that
    *  holds them: `session`, where the run starts, resumes, stops and asks
    *  its host, and whose records and rows its output reads; `runtime`,
    *  which the shutdown

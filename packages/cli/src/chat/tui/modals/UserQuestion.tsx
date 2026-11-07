@@ -5,7 +5,7 @@ import {
   parseUserQuestionAnswer,
   USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
-} from '@cli/runtime/userQuestionAnswer';
+} from '@cli/runtime/headless/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   hiddenRowsText,
@@ -22,7 +22,10 @@ import {
   confirmCardContentWidth,
   isCompactRows,
 } from '@cli/tui/ui/theme';
-import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
+import {
+  clipToWidth,
+  textDisplayWidth,
+} from '@cli/runtime/terminal/terminalText';
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import {

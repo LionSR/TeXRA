@@ -10,7 +10,7 @@ import { Effect, FileSystem, Scope } from 'effect';
 
 import { ensureError } from '@texra-ai/harness/schemas';
 import { absentReason } from '@texra-ai/harness/node';
-import { CliUsageError } from '@cli/runtime/cliContext';
+import { CliUsageError } from '@cli/runtime/platform/cliContext';
 
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe at the call site below since the input is always a relative

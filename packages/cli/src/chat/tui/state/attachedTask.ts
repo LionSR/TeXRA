@@ -12,7 +12,7 @@ import {
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { watchTask } from '@cli/runtime/taskAttach';
+import { watchTask } from '@cli/runtime/headless/taskAttach';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
   requestOnService,

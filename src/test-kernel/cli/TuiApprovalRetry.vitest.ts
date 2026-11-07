@@ -57,7 +57,7 @@ import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
-import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import type { CliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import {
   SessionLog,
   Approvals,

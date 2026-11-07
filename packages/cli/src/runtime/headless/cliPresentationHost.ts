@@ -9,9 +9,9 @@ import {
 import { modelFailureText } from '@ui/copy/modelAccess';
 
 // Local imports - CLI runtime
-import { writeNdjsonStdout, writeTextStderr } from './logSinks';
+import { writeNdjsonStdout, writeTextStderr } from '../platform/logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
-import { missingAgentMessage } from './agents';
+import { missingAgentMessage } from '../agents';
 import type { Session } from '@texra-ai/harness';
 import type {
   PresentationEventHandlers,
@@ -19,7 +19,7 @@ import type {
   RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
-import type { CliContext } from './cliContext';
+import type { CliContext } from '../platform/cliContext';
 
 export interface CliRuntimeHost {
   emit<K extends RuntimePresentationEvent>(

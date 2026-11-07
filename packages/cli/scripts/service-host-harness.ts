@@ -89,6 +89,7 @@ await Effect.runPromise(
         Effect.fail(
           new Error('The harness attaches to a running service only.'),
         ),
+        Effect.logWarning,
       );
       if (mode === 'approve') return yield* approve(link);
       yield* Effect.forkScoped(

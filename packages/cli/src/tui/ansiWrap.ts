@@ -5,7 +5,7 @@ import {
   ANSI_C1_CSI_START,
   ANSI_ESCAPE_START,
   ansiEscapeEnd,
-} from '@cli/runtime/ansiEscapes';
+} from '@cli/runtime/terminal/ansiEscapes';
 
 const MIN_WRAP_WIDTH = 1;
 

@@ -24,7 +24,7 @@ import {
   type RunLaunch,
 } from '@agent/runtime/run/AgentRun';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { validationModel } from '@cli/runtime/validationModel';
+import { validationModel } from '@cli/runtime/models/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { noHttpClientLayer } from '@test/support/fetchTestUtils';

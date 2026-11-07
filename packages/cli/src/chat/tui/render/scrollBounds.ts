@@ -1,5 +1,8 @@
 import { Number as Num } from 'effect';
-import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
+import {
+  clipToWidth,
+  textDisplayWidth,
+} from '@cli/runtime/terminal/terminalText';
 import {
   hiddenRowsText,
   moreRowsText,

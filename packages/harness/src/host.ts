@@ -56,6 +56,7 @@ export type { AgentCatalogServices } from '@agent/index/agentEntry';
 export {
   AgentCatalog,
   AgentCatalogLoadError,
+  AgentNotFound,
   type AgentCatalogShape,
   type WorkspaceAgents,
   type WorkspaceAgentsStores,

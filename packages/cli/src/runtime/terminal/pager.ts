@@ -1,8 +1,8 @@
 import { Effect, type Result } from 'effect';
 
-import { cliEnvValue } from './cliContext';
-import { runForegroundCommand } from './foregroundCommand';
-import { writeTextStdout } from './logSinks';
+import { cliEnvValue } from '../platform/cliContext';
+import { runForegroundCommand } from '../platform/foregroundCommand';
+import { writeTextStdout } from '../platform/logSinks';
 import type { PlatformError } from 'effect/PlatformError';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

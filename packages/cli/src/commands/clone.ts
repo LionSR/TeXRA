@@ -21,10 +21,11 @@ import { installAdvice } from '@texra/shared/constants/latexToolchain';
 import { osPlatformOf } from '@texra/shared/osPlatform';
 
 // Local imports - runtime
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
-import { CliExitCode } from '../runtime/exitCodes';
-import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliSecretsLayer } from '../runtime/platform/cliProcessRuntime';
+import { askCliQuestion, writeTextStderr } from '../runtime/platform/logSinks';
 
 // Local imports - command helpers
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -164,17 +165,11 @@ export const cloneCommand = withUsageSections(
           'Directory to create or clone into (defaults to the working directory)',
       },
     },
-    // `clone` runs without a platform, but its token ports are the
-    // credential store the process runtime serves (`Secrets`), whose reads
-    // and writes are Effect programs. The runtime its entry installs for
-    // them serves a state store and a global-root handle
-    // that refuse: clone serves no application state and reads no record, and
-    // opening either would create the global storage directory and its
-    // database, which an env-token clone on a read-only storage root must
-    // not require.
-    install: 'noPlatform',
+    // `clone` runs without a platform: its token ports are the credential
+    // store (`Secrets`), and git runs on the Node process services.
+    layer: cliSecretsLayer,
     // The project and destination parses are the builder's, above the
-    // program: they refuse before anything is installed.
+    // program: they refuse before anything is built.
     run: (context, ctx) => {
       const remote = parseLatexGitUrl(ctx.args.project);
       if (!remote) {

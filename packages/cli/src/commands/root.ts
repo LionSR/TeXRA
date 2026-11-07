@@ -6,9 +6,9 @@ import {
   readCliArgv,
   readCliVersion,
   CliUsageError,
-} from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
-import { writeTextStderr } from '../runtime/logSinks';
+} from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import {
   isCliError,

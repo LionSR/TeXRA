@@ -28,14 +28,14 @@ import {
   askApproval,
   queueCliApprovalQuestion,
   whilePrompting,
-} from './approval/approvalPrompts';
+} from '../approval/approvalPrompts';
 import {
   buildAgentProposalApprovalContent,
   buildToolEditApprovalContent,
   formatBashApprovalSummary,
   formatRetryRequestMessage,
   formatUserQuestionPrompt,
-} from './approval/approvalSummaries';
+} from '../approval/approvalSummaries';
 import {
   parseUserQuestionAnswer,
   userQuestionDecision,
@@ -45,8 +45,8 @@ import {
   declineDecision,
   REQUEST_ACTIONS,
 } from '@texra/shared/session/surfaceDecision';
-import { CliInvocation } from './cliContext';
-import { writeTextStderr } from './logSinks';
+import { CliInvocation } from '../platform/cliContext';
+import { writeTextStderr } from '../platform/logSinks';
 import type { Session, SessionHost } from '@texra-ai/harness';
 import type { HostInteractions } from '@texra-ai/harness/host';
 

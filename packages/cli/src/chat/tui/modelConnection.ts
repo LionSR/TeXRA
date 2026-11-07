@@ -11,13 +11,13 @@ import {
   type RunModelDecisionReason,
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { setCliHelperModel } from '@cli/runtime/initPlatform';
+import { setCliHelperModel } from '@cli/runtime/platform/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
-} from '@cli/runtime/modelAccess';
-import type { CliPlatformServices } from '@cli/runtime/initPlatform';
+} from '@cli/runtime/models/modelAccess';
+import type { CliPlatformServices } from '@cli/runtime/platform/initPlatform';
 import { SETUP_AGENT_HANDOFF_NOTICE } from '@cli/onboarding/setupContinuation';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 

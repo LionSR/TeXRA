@@ -26,7 +26,7 @@ import {
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
-import type { CliContext } from './cliContext';
+import type { CliContext } from '../platform/cliContext';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 interface CliModelAccessSelectionResult {

@@ -5,8 +5,8 @@
  */
 import { type ArgDef, renderUsage } from 'citty';
 import stripAnsi from 'strip-ansi';
-import { writeRawStdout } from '@cli/runtime/logSinks';
-import { readCliAmbientState } from '@cli/runtime/cliContext';
+import { writeRawStdout } from '@cli/runtime/platform/logSinks';
+import { readCliAmbientState } from '@cli/runtime/platform/cliContext';
 import {
   commandArgs,
   commandMeta,
@@ -14,7 +14,7 @@ import {
   completionFlagVariants,
   flagFromArg,
   type AnyCommand,
-} from '@cli/runtime/completionCommandTree';
+} from '@cli/runtime/completion/completionCommandTree';
 import { editDistance, typoSuggestionThreshold } from './editDistance';
 import {
   GLOBAL_ARGS,
