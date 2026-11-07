@@ -104,6 +104,10 @@ export const RuntimeRequestSchema = Schema.Union([
     /** `turn`: the run reads the message when its current turn ends, not
      *  at the turn's next model request. Absent: at the next request. */
     holdUntil: Schema.optional(Schema.NullOr(Schema.Literal('turn'))),
+    /** The provider API-key variables of the sender's environment, as a
+     *  start carries them (`StartOptions.apiKeys`): what the run resumes
+     *  with if this message wakes it. Never stored. */
+    apiKeys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   }),
   /** The receipt of the message sent under `id`; with `wait`, once it is
    *  answered or unanswered. */

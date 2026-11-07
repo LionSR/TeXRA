@@ -6,7 +6,6 @@
  * listing folded here, and a watch is the service's feed, read back as the
  * fold inputs it carries.
  */
-import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 import { JsonValueSchema, type RunId } from '@texra-ai/harness/schemas';
 import {
   Cause,
@@ -50,6 +49,7 @@ import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 import { attachWindowHost } from './windowHost';
 import {
   WINDOW_OUTDATED,
+  environmentApiKeys,
   requestOnService,
   type ServiceClient,
   type ServiceLink,
@@ -223,20 +223,6 @@ export const serviceProjectState = (
       ),
   };
 };
-
-/**
- * The provider API keys this process's environment holds, as a start or a
- * resume sends them to the service (`StartOptions.apiKeys`): a key a
- * terminal or a window was given reaches the task it asks for, wherever
- * the task runs.
- */
-export const environmentApiKeys = (): Readonly<Record<string, string>> =>
-  Object.fromEntries(
-    API_KEY_ENV_NAMES.flatMap((name) => {
-      const value = process.env[name]?.trim();
-      return value ? [[name, value]] : [];
-    }),
-  );
 
 /** A failure of a call to the service, as a run's own. */
 const runFailure = (message: string, cause: Error = new Error(message)) =>
