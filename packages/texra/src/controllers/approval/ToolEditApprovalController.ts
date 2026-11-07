@@ -26,13 +26,13 @@
  */
 import {
   Cause,
-  Deferred,
   Effect,
   Fiber,
   type FileSystem,
   type Path,
   Ref,
   Scope,
+  Semaphore,
 } from 'effect';
 
 import {
@@ -286,13 +286,14 @@ export class ToolEditApprovalController {
       }
       const content = read.content;
       const scope = yield* Scope.Scope;
-      const settled = yield* Deferred.make<void>();
       const applied = yield* Ref.make(false);
-      const workspaceTempCleanup: StagedPreview['workspaceTempCleanup'] = [];
+      // The LaTeX previews' temp files go with this child scope. Forked
+      // first, it closes last: after the previews and the builds that read
+      // those files have stopped, and after the view's close, even when
+      // that fails, as it can at window teardown.
+      const files = yield* Scope.fork(scope);
       const preview = yield* Effect.acquireRelease(
         host.stagePreview({ ...pending.payload.data, ...content }),
-        // The files the LaTeX previews wrote go even when the view's close
-        // fails, as it can at window teardown.
         (staged) =>
           this.unapplied(
             pending,
@@ -301,9 +302,6 @@ export class ToolEditApprovalController {
             applied,
           ).pipe(
             Effect.flatMap((unapplied) => staged.dispose(unapplied)),
-            Effect.ensuring(
-              Effect.all(workspaceTempCleanup, { discard: true }),
-            ),
             Effect.catch((error) => this.report(error)),
           ),
       );
@@ -317,19 +315,13 @@ export class ToolEditApprovalController {
         proposedUri: { fsPath: preview.proposedPath },
         originalContent: content.originalContent,
         proposedContent: content.proposedContent,
-        isSettled: () => Deferred.isDoneUnsafe(settled),
-        settled,
-        workspaceTempCleanup,
-        latexOperationInProgress: false,
+        files,
+        operation: yield* Semaphore.make(1),
         onError: (message) => host.reportError(message),
       };
       yield* Effect.acquireRelease(
         Effect.sync(() => this.staged.set(requestId, entry)),
-        () =>
-          Effect.sync(() => {
-            this.staged.delete(requestId);
-            Deferred.doneUnsafe(settled, Effect.void);
-          }),
+        () => Effect.sync(() => this.staged.delete(requestId)),
       );
       if (host.focused())
         yield* Effect.uninterruptible(entry.preview.showDiff()).pipe(

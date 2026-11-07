@@ -10,7 +10,14 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import { Cause, Deferred, Effect, FileSystem, type Path } from 'effect';
+import {
+  Cause,
+  Effect,
+  FileSystem,
+  type Path,
+  Scope,
+  type Semaphore,
+} from 'effect';
 
 import {
   withLogChannel,
@@ -57,17 +64,15 @@ export interface LatexPreviewEntry {
   proposedUri: { fsPath: string };
   originalContent: string;
   proposedContent: string;
-  isSettled: () => boolean;
   /**
-   * Filled when the request finishes. A preview still running then is
-   * interrupted, which stops its latexdiff subprocess.
+   * Where the temp files the previews write are removed: each removal is a
+   * finalizer of this scope, which closes once the request's previews have
+   * stopped (a removal added after it closed runs at once).
    */
-  settled: Deferred.Deferred<void>;
-  /** Removals of the temp files the previews wrote, run when the request finishes. */
-  workspaceTempCleanup: Array<
-    Effect.Effect<void, never, FileSystem.FileSystem>
-  >;
-  latexOperationInProgress: boolean;
+  readonly files: Scope.Scope;
+  /** One LaTeX operation at a time: one started while another runs does
+   *  nothing. */
+  readonly operation: Semaphore.Semaphore;
   /** Platform-specific error reporter, injected by the caller. */
   onError: (message: string) => void;
 }
@@ -138,47 +143,43 @@ const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
   },
 );
 
-/** Register cleanup with the entry, or run it now if the entry already finished */
-const registerCleanup = (
+/** Remove `filePath` and its LaTeX auxiliary files when the entry's files
+ *  scope closes. */
+const removeWithEntry = Effect.fn('latexPreview.removeWithEntry')(function* (
   entry: LatexPreviewEntry,
-  cleanup: Effect.Effect<void, never, FileSystem.FileSystem>,
-): Effect.Effect<void, never, FileSystem.FileSystem> =>
-  Effect.suspend(() => {
-    if (entry.isSettled()) return cleanup;
-    entry.workspaceTempCleanup.push(cleanup);
-    return Effect.void;
-  });
+  filePath: string,
+): Effect.fn.Return<void, never, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
+  yield* Scope.addFinalizer(
+    entry.files,
+    deleteWithAuxFiles(filePath).pipe(
+      Effect.provideService(FileSystem.FileSystem, fs),
+    ),
+  );
+});
 
 /**
- * Run a LaTeX operation with standard error handling and progress tracking.
- * The operation ends early, interrupted, when the request finishes under it.
+ * Run a LaTeX operation, reporting its failure through the entry. It runs
+ * on a fiber in the request's scope, so the request finishing interrupts it.
  */
 const withLatexOperation = (
   entry: LatexPreviewEntry,
   operationName: string,
   operation: Effect.Effect<void, Error, PreviewServices>,
 ): Effect.Effect<void, never, PreviewServices> =>
-  Effect.suspend(() => {
-    if (entry.latexOperationInProgress) return Effect.void;
-    entry.latexOperationInProgress = true;
-    return operation.pipe(
-      Effect.raceFirst(Deferred.await(entry.settled)),
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.interrupt
-          : Effect.sync(() => {
-              entry.onError(
-                `${operationName} failed: ${toErrorMessage(Cause.squash(cause))}`,
-              );
-            }),
-      ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          entry.latexOperationInProgress = false;
-        }),
-      ),
-    );
-  });
+  operation.pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : Effect.sync(() => {
+            entry.onError(
+              `${operationName} failed: ${toErrorMessage(Cause.squash(cause))}`,
+            );
+          }),
+    ),
+    entry.operation.withPermitsIfAvailable(1),
+    Effect.asVoid,
+  );
 
 /** Read file content with fallback to provided default. The disk read exists
  *  to pick up the user's saved hand edits to the approval temp file; a
@@ -238,20 +239,12 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     );
     const tempPath = path.join(tempDir, tempFileName);
 
-    // Writing the file and registering its removal are one step: a finished
-    // request interrupting between them would leave a file nothing deletes.
-    // The removal is registered however the write ends, since a failed write
-    // can still leave a partial file behind.
-    yield* Effect.uninterruptible(
-      Effect.gen(function* () {
-        const fs = yield* FileSystem.FileSystem;
-        yield* fs.writeFileString(tempPath, content);
-      }).pipe(
-        Effect.onExit(() =>
-          registerCleanup(entry, deleteWithAuxFiles(tempPath)),
-        ),
-      ),
-    );
+    // The removal is registered however the write ends: a failed or
+    // interrupted write can still leave a partial file behind.
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs
+      .writeFileString(tempPath, content)
+      .pipe(Effect.onExit(() => removeWithEntry(entry, tempPath)));
 
     return tempPath;
   },
@@ -294,8 +287,6 @@ export const previewProposedLatex = (
         content,
         '_preview',
       );
-
-      if (entry.isSettled()) return;
 
       yield* options.openBuildDisplay(
         tempPathToLocation(entry.request.roots.workspace, tempPath),
@@ -344,13 +335,11 @@ export const runLatexdiff = (
       // request finishing mid-diff, which interrupts the diff after its
       // output may already be written, still has it deleted.
       const outputDirectory = path.dirname(originalPath);
-      yield* registerCleanup(
+      yield* removeWithEntry(
         entry,
-        deleteWithAuxFiles(
-          path.join(
-            outputDirectory,
-            generateDiffFileName(proposedPath, DIFF_SUFFIX),
-          ),
+        path.join(
+          outputDirectory,
+          generateDiffFileName(proposedPath, DIFF_SUFFIX),
         ),
       );
 
@@ -373,8 +362,6 @@ export const runLatexdiff = (
         entry.onError(result.message);
         return;
       }
-
-      if (entry.isSettled()) return;
 
       const diffLocation = tempPathToLocation(
         entry.request.roots.workspace,
