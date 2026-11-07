@@ -61,9 +61,10 @@ export interface CliContext {
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
-  /** The policy this invocation's launches run under: the configured one,
-   *  narrowed by {@link requestedApprovalPolicy} through
-   *  {@link effectiveApprovalPolicy}. */
+  /** The policy this invocation's launches decide privileged actions
+   *  under (`launchPolicy` over the configured one and
+   *  {@link requestedApprovalPolicy}); what the CLI's headless guards and
+   *  resume hints read. */
   readonly approvalPolicy: ApprovalPolicy;
   /** The policy this invocation asked for itself (`--approval-policy`,
    *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
@@ -535,8 +536,8 @@ export function projectApprovalPolicy(config: ConfigProvider): ApprovalPolicy {
   return Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
 }
 
-/** The policy a launch runs under: the harness's rule (`launchPolicy`)
- *  over what this invocation asked for. */
+/** The policy a launch decides privileged actions under: the harness's
+ *  rule (`launchPolicy`) over what this invocation asked for. */
 export function effectiveApprovalPolicy(
   requested: ApprovalPolicy | undefined,
   configured: ApprovalPolicy,

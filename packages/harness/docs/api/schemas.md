@@ -1024,9 +1024,13 @@ const LaunchNoticeSchema: Union<readonly [Struct<{ readonly event: Literal<"requ
 
 ## launchPolicy
 
-The policy a launch's run runs under: the project's, narrowed by the
-limit the launch asks for, or Auto-approve, which widens its own task
-but never over Block.
+The policy a launch's privileged actions (commands, edits, delegated
+work) are decided under: the project's, narrowed by the limit the launch
+asks for, or Auto-approve, which widens its own task but never over
+Block. Auto-approve gets there by turning the run's grants on
+(`rootLaunch`), not by changing the run's policy, which stays the
+project's: a question or a retry still goes to a person where one can
+answer it.
 
 ```ts
 function launchPolicy(
