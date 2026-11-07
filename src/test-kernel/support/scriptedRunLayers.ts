@@ -97,7 +97,6 @@ function testBoundModel({
     background: false,
     serviceTier: null,
     routes: routePolicies(['test-route'], 'test-model'),
-    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
     ...overrides,

@@ -90,14 +90,6 @@ export interface ModelSettings {
   };
 }
 
-/** Whether Google text-only turns go out as background Interactions, read
- *  again each turn; a Responses turn goes out so whenever its route can. */
-export function readGoogleBackground(
-  stores: SettingsStores,
-): Effect.Effect<boolean, StateReadFailed> {
-  return Settings.get<boolean>(stores, 'model.useGoogleBackgroundResponses');
-}
-
 /**
  * The endpoint the user chose for each provider: a dashboard URL, else the
  * default of the region its toggle picks. A provider with neither takes the
@@ -239,7 +231,12 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
       ),
       Effect.all({
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
-        googleBackground: readGoogleBackground(stores),
+        // Whether Google text-only turns go out as background Interactions; a
+        // Responses turn goes out so whenever its route can.
+        googleBackground: Settings.get<boolean>(
+          stores,
+          'model.useGoogleBackgroundResponses',
+        ),
         automaticRetries: Settings.get<number>(
           stores,
           MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,

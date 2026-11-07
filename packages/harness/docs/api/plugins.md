@@ -206,8 +206,6 @@ interface BoundModel extends Binding {
   readonly plan?: string;
   /** The retry gate's routes: the model on its wire route, then the wire route. */
   readonly routes: readonly [RoutePolicy, RoutePolicy];
-  /** How the next turn is delivered, from the live toggles. */
-  readonly delivery: Effect.Effect<TurnRequest['mode'], StateReadFailed>;
 }
 ```
 

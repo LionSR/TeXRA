@@ -18,7 +18,6 @@ import {
   type ModelError,
   type ModelRoute,
   selectModel,
-  type TurnRequest,
 } from '@texra-ai/llm';
 
 import { getHelperModelName } from '@agent/runtime/helperModelName';
@@ -26,7 +25,7 @@ import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { readModelSettings } from '@model/modelSettings';
 import { Secrets } from '@platform/secrets';
-import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import type {
   CredentialSwitch,
   DeclinableUsageRoute,
@@ -70,8 +69,6 @@ export interface BoundModel extends Binding {
   readonly plan?: string;
   /** The retry gate's routes: the model on its wire route, then the wire route. */
   readonly routes: readonly [RoutePolicy, RoutePolicy];
-  /** How the next turn is delivered, from the live toggles. */
-  readonly delivery: Effect.Effect<TurnRequest['mode'], StateReadFailed>;
 }
 
 /** What a run asks to bind. */
@@ -166,10 +163,13 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
     ...request,
     mode: ask.mode,
   });
-  return yield* bindRoute(
-    { request, requested: catalog, ask, settings, decision },
-    stores,
-  );
+  return yield* bindRoute({
+    request,
+    requested: catalog,
+    ask,
+    settings,
+    decision,
+  });
 });
 
 /**
