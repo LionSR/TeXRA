@@ -4,7 +4,7 @@
 import { Effect, Result, Schema, Struct } from 'effect';
 
 import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { Theme } from '@texra/shared/ipc';
@@ -98,7 +98,7 @@ export function createProjectWorkbench(options: {
   // pending until the project closes. A write is never abandoned: the host
   // cannot cancel it, and a retry must not race a write still in flight.
   const workspaceFile = (
-    action: Extract<HostRequest, { kind: 'workspaceFile' }>['action'],
+    action: Extract<HostCommand, { kind: 'workspaceFile' }>['action'],
   ) =>
     surfaces
       .answer(

@@ -71,7 +71,7 @@ export type {
   RequestDecision,
   RunId,
 } from '@shared/schemas';
-export type { RuntimeRequest } from '@shared/session/runtimeRequest';
+export type { RuntimeCommand } from '@shared/session/runtimeRequest';
 export type { PendingRequest } from '@shared/session/readonlyViews';
 
 // What a run reports while it runs, and how it ended.

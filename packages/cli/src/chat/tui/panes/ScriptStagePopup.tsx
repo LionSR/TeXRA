@@ -48,7 +48,7 @@ import { type ScriptPopupView } from '../state/cliState';
 import { killableRunId, runViewOf, sessionView } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 import { RowSegment } from './SubagentList';
-import type { RuntimeRequest, RunId } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand, RunId } from '@texra-ai/harness/schemas';
 
 /** Rows the popup paints besides its list: the focused call's facts. */
 const POPUP_EXTRA_ROWS = 1;
@@ -125,7 +125,7 @@ interface ScriptStagePopupProps {
   readonly onClose: () => void;
   readonly onFocusRun: (runId: RunId) => void;
   /** Stop a call's agent (`run.stop` of the call's child). */
-  readonly onRequest: (request: RuntimeRequest) => void;
+  readonly onRequest: (request: RuntimeCommand) => void;
   readonly onOpenTranscript: (runId: RunId) => void;
   readonly onViewChange: (patch: Partial<ScriptPopupView>) => void;
 }

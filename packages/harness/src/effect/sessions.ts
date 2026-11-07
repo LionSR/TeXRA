@@ -31,7 +31,7 @@ import type {
 import type { RequestError } from '@shared/session/runtimeRequest';
 import type {
   OutcomeOf,
-  RuntimeRequest,
+  RuntimeCommand,
   StartRequestSchema,
 } from '@shared/session/runtimeRequest';
 import type {
@@ -224,12 +224,12 @@ export interface Session {
     input?: ResumeInput,
   ) => Effect.Effect<Run, ResumeRefused | LaunchError | RunFailure>;
   /** Everything else you ask of the session, as one typed request
-   *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
+   *  (`RuntimeCommand` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
    *  Answered exactly once, with the outcome its kind is answered with
    *  (`OutcomeOf`) or a {@link RequestError}. A decision a request's kind
    *  does not take is `Rejected`. */
-  readonly request: <R extends RuntimeRequest>(
+  readonly request: <R extends RuntimeCommand>(
     request: R,
   ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
   /** Attach `host` until the caller's scope closes: it shows notices, and

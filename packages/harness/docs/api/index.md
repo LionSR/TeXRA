@@ -242,7 +242,7 @@ Whether `outcome` answers a request of `kind`: how a client reads an
 answer that crossed a process boundary.
 
 ```ts
-const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
+const isOutcomeOf: <K extends RuntimeCommand["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
 ```
 
 ## ITool
@@ -481,7 +481,7 @@ What a request of kind `K` is answered with: `done` unless it is one of
 the kinds above.
 
 ```ts
-type OutcomeOf<K extends RuntimeRequest['kind']> = Extract<
+type OutcomeOf<K extends RuntimeCommand['kind']> = Extract<
   Outcome,
   {
     kind: K extends keyof typeof OUTCOME_KIND
@@ -799,12 +799,12 @@ Why a run stops: a `user` stop or this process's `shutdown`.
 type RunStopReason = typeof RunStopReasonSchema.Type;
 ```
 
-## RuntimeRequest
+## RuntimeCommand
 
-One request a surface issues to its session's runtime.
+One command a surface issues to its session's runtime.
 
 ```ts
-type RuntimeRequest = typeof RuntimeRequestSchema.Type;
+type RuntimeCommand = typeof RuntimeCommandSchema.Type;
 ```
 
 ## Session
@@ -880,12 +880,12 @@ interface Session {
     input?: ResumeInput,
   ) => Effect.Effect<Run, ResumeRefused | LaunchError | RunFailure>;
   /** Everything else you ask of the session, as one typed request
-   *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
+   *  (`RuntimeCommand` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
    *  Answered exactly once, with the outcome its kind is answered with
    *  (`OutcomeOf`) or a {@link RequestError}. A decision a request's kind
    *  does not take is `Rejected`. */
-  readonly request: <R extends RuntimeRequest>(
+  readonly request: <R extends RuntimeCommand>(
     request: R,
   ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
   /** Attach `host` until the caller's scope closes: it shows notices, and
