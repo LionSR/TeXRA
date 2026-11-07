@@ -42,17 +42,20 @@ report.
 
 ## Where things stand on 2026-11-07
 
-| Work                                     | State                                                                                                                              |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| R1–R5, R7, R8's first half               | landed, PR 14769; compromises in [PR 1's record](./2026-11-06-root-designs-pr1-compromises.md)                                     |
-| The CLI service (R10's service side)     | landed, PRs 14771 and 14772 ([its note](./2026-11-06-cli-service-root-causes.md))                                                  |
-| R10's "the client holds one `Session`"   | landed, PR 14772 (`CliRunReads`, `serviceRunReads`, `serviceRecords` gone)                                                         |
-| `oneShot` as a read; six llm error kinds | landed, PRs 14774 and 14776; one platform-error unwrap, PR 14777                                                                   |
-| R9, the model path                       | two loops landed, PR 14778; the gate and `ScopedRef` (PR 14781) and the coordinator lock (PR 14782) in review; the credential next |
-| R6, the view's three facts               | not started; `RUN_PHASE` 64 references, `durableOutcome` 30, `statusKey` 31                                                        |
-| R10's hosts' verbs, exit code, drainer   | not started; `setExitCode` 22 references, `registerCliStateResetHook` 10                                                           |
-| R8's second half                         | not started (rooted filesystems as one `SessionRoots`, `SessionViewService`, `Interactions`)                                       |
-| PR 1 record §3 and §4, harness small     | not started, except `oneShot`                                                                                                      |
+| Work                                     | State                                                                                                                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| R1–R5, R7, R8's first half               | landed, PR 14769; compromises in [PR 1's record](./2026-11-06-root-designs-pr1-compromises.md)                                       |
+| The CLI service (R10's service side)     | landed, PRs 14771 and 14772 ([its note](./2026-11-06-cli-service-root-causes.md))                                                    |
+| R10's "the client holds one `Session`"   | landed, PR 14772 (`CliRunReads`, `serviceRunReads`, `serviceRecords` gone)                                                           |
+| `oneShot` as a read; six llm error kinds | landed, PRs 14774 and 14776; one platform-error unwrap, PR 14777                                                                     |
+| R9, the model path                       | two loops (PR 14778) and the gate with `ScopedRef` (PR 14781) landed; the coordinator lock (PR 14782) in review; the credential next |
+| Round 2, step 0 and 3.1                  | landed: I9 (PR 14783), G1 + I11 (PR 14784); M3 and N10 refused on investigation                                                      |
+| R6, the view's three facts               | not started; `RUN_PHASE` 64 references, `durableOutcome` 30, `statusKey` 31                                                          |
+| R10's hosts' verbs, exit code, drainer   | not started; `setExitCode` 22 references, `registerCliStateResetHook` 10                                                             |
+| R8's second half                         | not started (rooted filesystems as one `SessionRoots`, `SessionViewService`, `Interactions`)                                         |
+| PR 1 record §3 and §4, harness small     | not started, except `oneShot`                                                                                                        |
+
+Lanes 2 to 9 are handed out in "Who takes what" below.
 
 Open pull requests the order waits on:
 
@@ -170,11 +173,13 @@ Each lane is a sequence; lanes share no files, so several sessions can drive
 them at once. A step is numbered lane.step (3.1 is lane 3's first step) and
 lists the findings it closes and the primitive.
 
-**Lane 1, the model path** (driver: the session running PR 14778).
+**Lane 1, the model path** (driver: the session that landed PRs 14778 and
+14781).
 
-1. R9, two loops (PR 14778, open).
-2. R9, gate, `ScopedRef<BoundModel>`, credential getter, coordinator as one
-   `Semaphore(1)`.
+1. R9, two loops. Landed in PR 14778.
+2. R9, the gate as a `Latch` and a probe permit, `AgentRun.model` as a
+   `ScopedRef` (landed in PR 14781); the coordinator as one `Semaphore(1)`
+   (PR 14782, in review); the bearer on the credential (next).
 3. O7, the sign-in flows: `Effect.scoped` over `Effect.acquireRelease` for the
    presenter in both flows, the detached launcher as a `Deferred`, the
    loopback's wait as `Effect.retry({ while, schedule })`; depends on step 2's
@@ -183,7 +188,7 @@ lists the findings it closes and the primitive.
    provided by `Layer.effect`, its `WeakMap` memo and optional policy hooks
    deleted; depends on step 2.
 
-**Lane 2, the view and the hosts' verbs** (unassigned; the largest lane).
+**Lane 2, the view and the hosts' verbs** (package A; the largest lane).
 
 1. **R6**, the view carries `position`, `outcome`, `holder`, `actions`; one
    app function maps them to words. J7 (three tone tables, two of which
@@ -199,7 +204,7 @@ lists the findings it closes and the primitive.
    optional members; `WorkspaceRoots` restating `GlobalStorageFs` and
    `AppState` as fields).
 
-**Lane 3, one lifetime per request and window** (unassigned; no root).
+**Lane 3, one lifetime per request and window** (package B; no root).
 
 1. **The tool-edit preview: G1 + I11.** The request's `Scope` (the fiber
    `followPendingRequests`' `FiberMap.run` already gives it) is the only
@@ -261,7 +266,8 @@ lists the findings it closes and the primitive.
    `FiberSet` in its scope, closed by `awaitEmpty` under `Effect.timeout`; the
    process recorder as a `SubscriptionRef<Recording>` with a `FiberHandle`.
 
-**Lane 4, plugins** (unassigned; each PR stays inside one plugin).
+**Lane 4, plugins** (package C, but I8 + H10 are package F's; each PR stays
+inside one plugin).
 
 1. **GitHub: H1 + H2, then H3 + H4.** Subscriptions as `RcMap` keyed by
    target, a `PubSub` per entry and the poll fiber `Effect.forkScoped` in the
@@ -291,7 +297,7 @@ lists the findings it closes and the primitive.
    the plugin's `processLayer` (`effect/persistence`'s `RateLimiter` over
    `layerStoreMemory`) instead of a module `SynchronizedRef`.
 
-**Lane 5, the harness's built-in tools** (unassigned).
+**Lane 5, the harness's built-in tools** (package F).
 
 1. M2: the MCP pool's failed start as a failing `RcMap` lookup (4.1.2 keeps a
    failed lookup's exit in the entry until it is released or invalidated),
@@ -308,7 +314,7 @@ lists the findings it closes and the primitive.
    catalog follower as one feed with `Stream.take(1)` for the first load),
    H9 (a plugin reaches its host one way).
 
-**Lane 6, the terminal UI** (unassigned).
+**Lane 6, the terminal UI** (package D; 6.5 is package A's).
 
 1. K1 + K2: the scrollback as one `SubscriptionRef<Scrollback>`, printed in
    the order of the view's own `settledRows` prefix, which deletes the three
@@ -322,8 +328,7 @@ lists the findings it closes and the primitive.
 4. K7: one fitter with a policy field, pure.
 5. K9's registry half, after step 2.2.
 
-**Lane 7, llm providers** (unassigned; coordinate with lane 1 before
-touching `providers/credentials.ts`).
+**Lane 7, llm providers** (package E, after lane 1).
 
 1. O1 + O2 + O6: the route decision as one pure function over `RouteFacts`,
    reasoning controls as one table keyed by provider, "takes a document" as
@@ -334,7 +339,7 @@ touching `providers/credentials.ts`).
 3. O5 and O8: no synthetic transport identity on the turn; the key lookup as
    one `Effect<{ value, origin }>`.
 
-**Lane 8, sweeps by package** (unassigned; one PR per package).
+**Lane 8, sweeps by package** (package F; one PR per package).
 
 1. S3, module-level facts: M7's eleven in the harness (two of them deciding
    the proxy policy differently), H10's and G11's and I12's in the app, K4's
@@ -347,7 +352,7 @@ touching `providers/credentials.ts`).
 3. G10 and H3's error tags nothing branches on, after PR 14777: added to the
    storage-errors inventory §3 and cut there.
 
-**Lane 9, harness small** (unassigned; files the R9 driver does not hold).
+**Lane 9, harness small** (package E, after lane 7).
 
 PR 1's record §3 and §4: one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as
 a boolean, the awaited child's interruption through `RunRegistry.stop`, one
@@ -360,14 +365,171 @@ entry points (B9). The R9 driver folds in `openStep`'s mode (E9), `RunRows`
 and `recordOf` (C10) and the script run's `handedDown` branches (E4) where
 its files are open.
 
-### If one driver does it all
+## Who takes what
 
-Step 0 (I9); then R6 (2.1), since it unblocks the most; then the tool-edit
-preview (3.1, PR 14784); the host snapshot (3.2); R10's two PRs (2.2); a window's
-session (3.3); the settings view (3.4); the document task's record (4.3,
-once 14713 is in); the webview transport (3.5); R8's second half (2.3);
-GitHub and Lean (4.1, 4.2); then lanes 5, 6, 7, 8 and 9 in that order. Lane
-1 stays with its driver throughout.
+The large lanes go to sessions of their own; the small items stay with the
+session that wrote this note. A package below is one owner's for its whole
+length, so two owners never hold one file. Each brief is enough to start
+from: it names the steps, the findings with their reports, the files, what
+waits on what, and when the package is done.
+
+| Package                           | Steps                                 | Size       | Owner                                 | Starts                  |
+| --------------------------------- | ------------------------------------- | ---------- | ------------------------------------- | ----------------------- |
+| A. The view and the hosts' verbs  | 2.1, 2.2, 2.3; 6.5                    | largest    | a new session                         | now, with R6            |
+| B. Lifetimes in the app and views | 3.2 to 3.7                            | large      | a new session                         | now                     |
+| C. Plugins                        | 4.1, 4.2, 4.3, 4.4 (I6, I10)          | large      | a new session                         | now; 4.3 after PR 14713 |
+| D. The terminal UI                | 6.1 to 6.4                            | medium     | a new session                         | now                     |
+| E. The model path, then providers | lane 1, lane 7, lane 9                | large      | the R9 driver ("TeXRA pull requests") | already running         |
+| F. Small items                    | lane 5; 8.2, 8.3; 4.4 (I8 + H10); 8.1 | small each | this session                          | now                     |
+
+### What every owner follows
+
+- **Read first:** root `AGENTS.md` and the nested guide of each package you
+  touch; this note's lane; the round-2 report of each finding you take
+  (`../../evidence/2026-11-06-design-red-flags-round-2/<area>-*.md`, the
+  finding's section and the report's closing "Effect-native mapping"); for
+  lane 2, the root it implements in
+  [root designs, Effect-native](./2026-11-05-root-designs-effect-native.md).
+- **Re-verify each finding on `main` before writing code.** Two of round 2's
+  did not hold up (M3, N10, recorded above and in
+  `.agents/docs/refuted-candidates.json`). One that does not hold is
+  recorded the same way, not built. Check `refuted-candidates.json` before
+  proposing anything in it.
+- **Effect 4.1.2:** check every API in `node_modules/effect`'s `.d.ts`
+  before using it. There is no `Layer.scoped`; `Layer.effect` already
+  provides a `Scope`. `Scope.addFinalizer` on a closed scope runs the
+  finalizer at once, and finalizers run in reverse order of addition.
+- **One PR per step.** Cite the finding ids it closes, delete the
+  hand-rolled version in the same PR, fill the PR template (`Net elements
+  (R6)` and `Consumer counts (R8)` for a simplify PR), and name any finding
+  in your files that you leave.
+- **Tests:** zero new tests by default; a bug fix gets one regression test
+  that fails first on the old code; a behaviour-preserving change adds none.
+  Before a push: `npm run typecheck`, `npm run lint`, `npm run format:check`,
+  `npm run test:changed`, `npm run check:fact-spread`,
+  `node scripts/check-api-report.mjs`; `npm test` when the change reaches the
+  session store or the run loop.
+- **Identity:** commit as `Sirui Lu <14889516+LionSR@users.noreply.github.com>`
+  or `Claude <noreply@anthropic.com>`, never a personal address; a squash's
+  co-author lines come from the commits' authors.
+- **Merging is the owner's.** Watch your PR, fix its CI and its review
+  findings, and do not merge it unless the owner asks.
+- **Coordination:** tell the R9 driver before touching
+  `packages/llm/src/providers/credentials.ts`,
+  `packages/harness/src/agent/runtime/modelAccess/` or
+  `packages/llm/src/oauth/`. PR 14713 holds `hostRunActions.ts`,
+  `ProgressWorkflowFileActionsController.ts`, `documentTools.ts` and
+  `workflowOutput.ts` until it lands.
+
+### A. The view and the hosts' verbs
+
+- **Goal:** R6, then R10's hosts' half, then R8's second half, as the root
+  note designs them.
+- **First PR (2.1, R6):** `RunView` carries `position`, `outcome`, `holder`,
+  `actions`; one app function maps them to word, tone, group and offers.
+  Deletes `RUN_PHASE` (64 references on 2026-11-07), `statusKey` (31),
+  `durableOutcome` (30), `isTerminalOutcomePhase`, `HISTORY_RUN_STATUS`,
+  `cliRunStanding` and the rest of R6's list; J7's three tone tables go with
+  it. Re-baselines three hosts' status snapshots and breaks the NDJSON
+  `status` word (accepted in the root note).
+- **Then (2.2, R10):** `createHostRunActions` as the one action body for all
+  three hosts, the exit code as one function at the process edge, the NDJSON
+  drainer as one bounded read, with G4, G5, N2, K5 and K9's controller half.
+  Two PRs, after R6 and after PR 14713. **Then (2.3):** R8's second half
+  with M8. **Last (6.5):** K9's registry half, which waits on 2.2.
+- **Files:** `packages/harness/src/shared/session/` (the view and its
+  update), `packages/harness/src/shared/schemas/run.ts`, `packages/texra/src/ui/copy/`,
+  `packages/texra/src/controllers/session/` (`openGuiWindow.ts`,
+  `hostRunActions.ts`), the hosts' request handlers, `packages/cli/src/`'s
+  run reads, exit code and progress drainer.
+- **Leave to B:** `hostSnapshotSource.ts`, the onboarding funnel, the
+  settings view, `SessionBridge.ts`. **Leave to D:** the TUI's panes and
+  state stores.
+- **Done when:** R6's, R10's and R8's deletion lists are gone or each
+  leftover is named in a PR body; the fact-spread count shrinks on every
+  step.
+
+### B. Lifetimes in the app and views
+
+- **Goal:** each request, window and subscription has one lifetime, its
+  `Scope`; each changing value is one `SubscriptionRef`.
+- **Steps, in order:** 3.2 (G3, G6, N3: one `SubscriptionRef<HostSnapshot>`
+  fed by `Stream.zipLatest`), 3.4 (G8, J5, J6: one settings snapshot, no
+  page named by a mutation), 3.6 (N9, N5, N4, N8: the desktop window and
+  renderer), 3.7 (N6, G7, G2: the progress view's surfaces, the session
+  bridge, the process recorder), 3.5 (J1 to J4: the webview transport),
+  3.3 (N1, N7: one opener for a window's session). 3.3 last because R10
+  (package A) also edits the hosts' window wiring: agree the order with A
+  before it.
+- **Check first for 3.5:** whether `effect/rpc` fits the webview bundle and
+  the browser-bundle lint rule; if not, keep the framing and delete only the
+  Promise layer and the in-flight Sets.
+- **Files:** `packages/texra/src/controllers/` outside `session/hostRunActions.ts`
+  and `openGuiWindow.ts`, `packages/texra/src/ui/progress/`,
+  `packages/texra/src/shared/`, `packages/desktop/src/`,
+  `packages/extension/src/progressView/` and `settingsView/`.
+- **Done when:** steps 3.2 to 3.7 have landed or been refused with a
+  record, and the fiber-fighting count in `packages/texra/src`,
+  `packages/desktop/src` and `packages/extension/src` (49, 18, 9 at
+  `24df986`) has fallen.
+
+### C. Plugins
+
+- **Goal:** each plugin's state is one structure with one lifetime; each
+  plugin PR stays inside that plugin.
+- **Steps:** 4.1 GitHub (H1 + H2, then H3 + H4), 4.2 Lean (H5 + H7, then H6
+  and H8), 4.3 the document task's record (I5, I4, I1, then I2, I3, I7 and
+  J9; after PR 14713), 4.4's I6 (one latexdiff orchestrator) and I10 (the
+  toolchain catalog as data).
+- **Files:** `packages/texra/src/tools/github/`, `tools/lean/`,
+  `tools/documents/`, `agent/output/`, `latex/latexdiff/`,
+  `shared/constants/latexToolchain.ts`, and the Lean port's host halves in
+  `packages/extension/src/frontend/lean/` and the desktop.
+- **Leave to F:** `latex/arxivProcessor.ts` and `tools/arxiv/` (I8 + H10).
+- **Done when:** the steps have landed or been refused with a record; H's
+  23 `Deferred`s (15 in `leanServer.ts`) have mostly gone.
+
+### D. The terminal UI
+
+- **Goal:** the TUI holds each fact once, in a `SubscriptionRef` read
+  through its one `useStream` bridge, and each supersedable read in a
+  `FiberHandle`.
+- **Steps:** 6.1 (K1 + K2: the scrollback in the view's own `settledRows`
+  order), 6.2 (K3: the typed message's five homes as one draft), 6.3 (K6,
+  K8, K10: the status bar on signal streams, the child list's focus, reads
+  and pastes in mount-owned scopes), 6.4 (K7: one fitter). 6.5 is package
+  A's, after R10.
+- **Read first:** the repo's `texra-cli` skill (`.claude/skills/texra-cli/`).
+- **Files:** `packages/cli/src/chat/tui/`. **Leave to A:** the chat
+  controller's run reads, the exit path and the progress drainer.
+- **Done when:** the four steps have landed or been refused with a record,
+  and the module-level `let`s in `packages/cli/src` (16 at `24df986`) that
+  belong to the TUI are gone.
+
+### E. The model path, then providers
+
+Lane 1 (the credential PR, then O7 and O3), then lane 7 (O1, O2, O6, then
+O4, O5, O8), then lane 9 (PR 1's record §3 and §4; E3, E6, E10, B9). The R9
+driver holds `agent/runtime/` and `packages/llm/src/`; other packages ask it
+before touching them.
+
+### F. Small items (this session)
+
+In this order, one PR each, any of them refused with a record when it does
+not hold up on `main`:
+
+1. M2: the MCP pool's failed start as a failing `RcMap` lookup.
+2. G10 + H3: error tags and fields nothing branches on, added to the
+   storage-errors inventory §3 and cut.
+3. G9: `UsageLogService` as `Queue.sliding` into `Stream.groupedWithin`.
+4. I8 + H10: the arXiv download as a stream under `Effect.timeout`, its rate
+   limit in the plugin's layer.
+5. M1: `toolAvailability` as one `SubscriptionRef` per root.
+6. M5, M6: the `/executions` routes as one column; the background shell's
+   capture as a projection of its rows.
+7. 8.1, the module-level facts, one package at a time, each after that
+   package's owner above has landed its PRs there; M10 (`utils/` moves) last,
+   once no other package's PRs are open in the harness.
 
 ## Acceptance
 
