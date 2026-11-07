@@ -1,5 +1,4 @@
 // Node imports
-import { randomUUID } from 'node:crypto';
 
 // Third-party imports
 import {
@@ -27,11 +26,14 @@ import {
 import { originOf } from '../protocol.js';
 import { decodeWireOrFail, rejoin, wireFail } from './transport.js';
 import {
-  ResponseAuthenticationSchema,
+  authorized,
+  bearerHeaders,
+  bearerOf,
   prepareResponsesTurn,
-  responseAuthentication,
+  refuseAmbientHeaders,
   responseParameters,
 } from './openaiResponsesRequest.js';
+import type { ModelCredential } from '../node.js';
 import type { ClientRequest, IncomingMessage } from 'node:http';
 
 const JsonFrameSchema = Schema.fromJsonString(Schema.Unknown);
@@ -46,8 +48,7 @@ const MAX_CONNECTION_AGE_MS = 55 * 60_000;
 const connect = Effect.fnUntraced(function* (
   config: OpenAIResponsesConfiguration,
   endpoint: URL,
-  selected: ReturnType<typeof responseAuthentication>,
-  transport: { readonly kind: 'websocket'; readonly connectionId: string },
+  token: string,
 ) {
   const origin = originOf(config);
   const openedAt = yield* Clock.currentTimeMillis;
@@ -84,10 +85,7 @@ const connect = Effect.fnUntraced(function* (
   const resource = yield* Effect.acquireRelease(
     Effect.sync(() => {
       const socket = new WebSocket(endpoint, {
-        headers: {
-          Authorization: `Bearer ${selected.token}`,
-          ...selected.headers,
-        },
+        headers: bearerHeaders(token),
         followRedirects: false,
       });
       const reader = createWebSocketStream(socket, {
@@ -207,7 +205,6 @@ const connect = Effect.fnUntraced(function* (
       const { turn, parameters } = yield* responseParameters(
         config,
         origin,
-        transport,
         input,
         'foreground',
         null,
@@ -315,6 +312,8 @@ const connect = Effect.fnUntraced(function* (
       (now) => invalid === undefined && now - openedAt < MAX_CONNECTION_AGE_MS,
     ),
     send,
+    /** The token the connection opened with. */
+    token,
   };
 });
 
@@ -327,17 +326,18 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   'llm.responses.webSocketModel',
 )(function* (
   config: OpenAIResponsesConfiguration,
-  authentication: typeof ResponseAuthenticationSchema.Type,
+  authentication: ModelCredential,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   const origin = originOf(config);
-  const selected = yield* Effect.try({
-    try: () => responseAuthentication(authentication),
+  yield* Effect.try({
+    try: refuseAmbientHeaders,
     catch: (cause) => cause,
   }).pipe(
     Effect.catch((cause) =>
       cause instanceof ModelError ? Effect.fail(cause) : Effect.die(cause),
     ),
   );
+  const bearer = bearerOf(authentication);
   const endpoint = new URL(config.deployment.endpoint);
   if (endpoint.username || endpoint.password)
     return yield* new ModelError({
@@ -353,21 +353,45 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       kind: 'invalid-request',
       message: 'The Responses endpoint must use HTTP or HTTPS.',
     });
-  // A turn prepared on this model streams on whichever connection it holds.
-  const transport = { kind: 'websocket' as const, connectionId: randomUUID() };
-  const open = connect(config, endpoint, selected, transport);
+  // Each connection opens on the token current then; one the handshake
+  // rejects is handed back and the next tried once.
+  const open = authorized(bearer, (token) => connect(config, endpoint, token));
   const connection = yield* ScopedRef.fromAcquire(open);
   const lane = yield* Semaphore.make(1);
 
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, transport, request, null, undefined);
+    prepareResponsesTurn(config, origin, request, null, undefined);
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.unwrap(
       Effect.gen(function* () {
         yield* Semaphore.takeScoped(lane, 1);
         if (!(yield* (yield* ScopedRef.get(connection)).usable))
           yield* ScopedRef.set(connection, open);
-        return yield* (yield* ScopedRef.get(connection)).send(input);
+        const current = yield* ScopedRef.get(connection);
+        const turn = yield* current.send(input);
+        if (typeof bearer === 'string') return turn;
+        // A session token the provider rejects on an open connection, before
+        // the turn streamed anything, is handed back once and the turn sent
+        // again on a new connection; the rejected request was not billed.
+        let streamed = false;
+        return turn.pipe(
+          Stream.tap(() =>
+            Effect.sync(() => {
+              streamed = true;
+            }),
+          ),
+          Stream.catchIf(
+            (error) => !streamed && error.kind === 'authentication',
+            () =>
+              Stream.unwrap(
+                Effect.gen(function* () {
+                  yield* bearer.rejected(current.token);
+                  yield* ScopedRef.set(connection, open);
+                  return yield* (yield* ScopedRef.get(connection)).send(input);
+                }),
+              ),
+          ),
+        );
       }),
     );
   return Object.freeze({

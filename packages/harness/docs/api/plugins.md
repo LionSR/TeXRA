@@ -208,8 +208,6 @@ interface BoundModel extends Binding {
   readonly routes: readonly [RoutePolicy, RoutePolicy];
   /** How the next turn is delivered, from the live toggles. */
   readonly delivery: Effect.Effect<TurnRequest['mode'], StateReadFailed>;
-  /** The subscription access token the binding sends: what a renew names. */
-  readonly subscriptionToken?: string;
 }
 ```
 

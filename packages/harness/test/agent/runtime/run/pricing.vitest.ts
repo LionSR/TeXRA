@@ -62,7 +62,12 @@ const boundAnthropic: BoundModel = {
       credentialScope: 'anthropic',
     },
   },
-  route: { kind: 'api-key', provider: 'anthropic', usageRoute: 'api-key' },
+  route: {
+    kind: 'api-key',
+    endpoint: 'https://api.example.test/v1',
+    provider: 'anthropic',
+    usageRoute: 'api-key',
+  },
   forcedToolChoice: true,
   billing: 'api-key',
   maxOutputTokens: null,

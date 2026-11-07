@@ -8,7 +8,7 @@
  *
  * Derived from this list: the provider display name, the API-key provider
  * order and API-key env names (`./providers.ts`), default endpoints
- * (`../models/routeEndpoint.ts`). The app owns everything a user
+ * (`decideModelRoute`). The app owns everything a user
  * sees about a provider beyond its name: key pages, picker grouping and the
  * setup assistant's probe models, as well as the settings over this list —
  * the custom-endpoint and region toggles, their keys and their control copy,
@@ -32,6 +32,9 @@ import type { TurnProtocolSchema } from '../protocol.js';
  * dashboard endpoint may not speak it at all.
  */
 export const OPENAI_DEFAULT_ENDPOINT = 'https://api.openai.com/v1';
+
+/** xAI's own endpoint, the one surface a Grok subscription's token serves. */
+export const XAI_DEFAULT_ENDPOINT = 'https://api.x.ai/v1';
 
 /** A default endpoint that depends on the provider's region toggle. */
 export interface RegionalBaseUrl {
@@ -82,7 +85,7 @@ const MANIFEST = [
     id: 'xai',
     displayName: 'xAI',
     apiKey: true,
-    baseUrl: 'https://api.x.ai/v1',
+    baseUrl: XAI_DEFAULT_ENDPOINT,
   },
   {
     id: 'deepseek',

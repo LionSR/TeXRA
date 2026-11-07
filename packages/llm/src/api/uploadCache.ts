@@ -85,8 +85,17 @@ export function filesApiUploads(provider: {
   /** Names the provider in the malformed-response message. */
   readonly providerName: string;
   readonly model: string;
-  /** Maps an SDK rejection to this binding's enriched `ModelError`. */
-  readonly failure: (cause: unknown) => ModelError;
+  /**
+   * How this binding sends one Files request: the headers it carries (a
+   * session's token) and its rejection as this binding's enriched
+   * `ModelError`.
+   */
+  readonly request: <A>(
+    call: (
+      signal: AbortSignal,
+      headers: Readonly<Record<string, string>>,
+    ) => Promise<A>,
+  ) => Effect.Effect<A, ModelError>;
   /**
    * The create response's id and expiry, in canonical form. Each provider
    * states its expiry differently (RFC 3339 against whole Unix seconds), so
@@ -95,14 +104,21 @@ export function filesApiUploads(provider: {
   readonly parseUploaded: (
     raw: unknown,
   ) => Result.Result<Uploaded, Schema.SchemaError>;
-  readonly create: (file: FileUpload, signal: AbortSignal) => Promise<unknown>;
-  readonly remove: (fileId: string, signal: AbortSignal) => Promise<unknown>;
+  readonly create: (
+    file: FileUpload,
+    signal: AbortSignal,
+    headers: Readonly<Record<string, string>>,
+  ) => Promise<unknown>;
+  readonly remove: (
+    fileId: string,
+    signal: AbortSignal,
+    headers: Readonly<Record<string, string>>,
+  ) => Promise<unknown>;
 }): UploadCache {
   const send = Effect.fnUntraced(function* (upload: FileUpload) {
-    const created = yield* Effect.tryPromise({
-      try: (signal) => provider.create(upload, signal),
-      catch: provider.failure,
-    });
+    const created = yield* provider.request((signal, headers) =>
+      provider.create(upload, signal, headers),
+    );
     const parsed = provider.parseUploaded(created);
     if (!Result.isSuccess(parsed))
       return yield* new ModelError({
@@ -114,15 +130,14 @@ export function filesApiUploads(provider: {
     return parsed.success;
   });
   const remove = (fileId: string) =>
-    Effect.tryPromise({
-      try: (signal) => provider.remove(fileId, signal),
-      catch: provider.failure,
-    }).pipe(
-      Effect.asVoid,
-      Effect.catchTag('ModelError', (error) =>
-        error.status === 404 ? Effect.void : Effect.fail(error),
-      ),
-    );
+    provider
+      .request((signal, headers) => provider.remove(fileId, signal, headers))
+      .pipe(
+        Effect.asVoid,
+        Effect.catchTag('ModelError', (error) =>
+          error.status === 404 ? Effect.void : Effect.fail(error),
+        ),
+      );
 
   const digestOf = digestMemo();
   const live = new Map<string, Uploaded>();

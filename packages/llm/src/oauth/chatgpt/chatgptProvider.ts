@@ -6,10 +6,9 @@
  *
  * The first sign-in registers a client for the user (`dynamic_agent_client`),
  * and every later grant uses the client OpenAI issued then. Tokens are scoped
- * to the public Responses API (`resource`), which `resolveRouteEndpoint`
- * names for the subscription route
- * (`../../models/routeEndpoint.ts`). Keep every sign-in magic value here, so
- * an upstream change is a one-file edit.
+ * to the public Responses API (`resource`), OpenAI's own endpoint, which the
+ * route decision names for the subscription route. Keep every sign-in magic
+ * value here, so an upstream change is a one-file edit.
  *
  * Source: developers.openai.com/siwc/token-sharing-open-source (register an
  * open-source client; models and inference; preview limitations).
@@ -42,6 +41,7 @@ import {
 } from '../subscriptionSessionSchema.js';
 import { toErrorMessage } from '../support.js';
 import { isRetryableStatus } from '../../errors.js';
+import { OPENAI_DEFAULT_ENDPOINT } from '../../providers/providerPlugins.js';
 import type {
   CredentialStore,
   SecretsFailed,
@@ -68,8 +68,8 @@ const OPENAI_ID_TOKENS = {
 };
 
 /** The API the tokens are issued for, sent with the authorize request and
- *  every grant. */
-const CHATGPT_RESOURCE = 'https://api.openai.com/v1';
+ *  every grant: the endpoint the subscription route sends to. */
+const CHATGPT_RESOURCE = OPENAI_DEFAULT_ENDPOINT;
 
 /** The scope that lets the plan pay for inference. A user can decline it on
  *  the consent page, which leaves a token good for identity only. */

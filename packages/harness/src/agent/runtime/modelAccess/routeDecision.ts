@@ -18,7 +18,6 @@ import {
   OWN_KEY_ROUTE_FACTS,
   PLAN_ROUTES,
   type ReasoningMode,
-  type RouteFacts,
   type SelectedModel,
 } from '@texra-ai/llm';
 
@@ -53,8 +52,6 @@ type RunRoute = ModelRoute | { readonly kind: 'validation' };
 export interface RouteDecision {
   /** The unserved route fails in the decision. */
   readonly route: Exclude<RunRoute, { kind: 'unserved' }>;
-  /** The facts it was decided over; the binding reads endpoints off them. */
-  readonly facts: RouteFacts;
   /** The backend the route serves the model from. */
   readonly backend: ModelBackend;
 }
@@ -92,11 +89,7 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
       ? Option.isSome(canned) && (yield* canned.value.enabled)
       : backend === 'validation';
   if (validation) {
-    return {
-      route: { kind: 'validation' },
-      facts: host,
-      backend: 'validation',
-    };
+    return { route: { kind: 'validation' }, backend: 'validation' };
   }
   const decided = decideModelRoute(config, {
     ...host,
@@ -126,7 +119,7 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
       'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
     );
   }
-  return { route: decided, facts: host, backend: served };
+  return { route: decided, backend: served };
 });
 
 /** Why a model cannot replace a run's: a short reason, and the error's sentence. */

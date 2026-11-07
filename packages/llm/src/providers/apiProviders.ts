@@ -43,7 +43,8 @@ export function apiProviderOfSecretName(
 /** UI-safe provider key status derived from a resolved API key origin. */
 export type ApiKeyStatus = 'set' | 'env' | 'not-set';
 
-interface ResolvedApiKey {
+/** A provider's key, sealed, and its origin. */
+export interface ResolvedApiKey {
   /**
    * Held as `Redacted` from the store outward, so every caller carries a value
    * that renders as `<redacted:provider>` if it ever reaches a log, a trace,
@@ -67,11 +68,13 @@ export function exposeApiKey(key: Redacted.Redacted<string>): string {
 }
 
 /**
- * Read the provider's key through the one credential ladder: the secret store
- * (the authority; no copy of it is cached here), then the provider's
- * conventional environment variable.
+ * The provider's key and where it came from, through the one credential
+ * ladder: the secret store (the authority; no copy of it is cached here),
+ * then the provider's conventional environment variable. A program: a caller
+ * yields it and matches {@link SecretsFailed} instead of catching `unknown`
+ * from a rejected read.
  */
-function resolveApiKey(
+export function apiKey(
   credentials: CredentialStore,
   provider: ApiKeyProviderId,
 ): Effect.Effect<ResolvedApiKey, SecretsFailed> {
@@ -89,33 +92,6 @@ function resolveApiKey(
   );
 }
 
-/**
- * The key's value, or `undefined` if absent. It and {@link lookupApiKeyOrigin}
- * share one {@link resolveApiKey} pass over secret storage then the env var.
- * Both are programs: a caller yields one and matches {@link SecretsFailed}
- * instead of catching `unknown` from a rejected read.
- */
-export function lookupApiKey(
-  credentials: CredentialStore,
-  provider: ApiKeyProviderId,
-): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed> {
-  return Effect.map(
-    resolveApiKey(credentials, provider),
-    (resolved) => resolved.value,
-  );
-}
-
-/** Origin of the resolved key (`secret` / `env` / `none`). */
-export function lookupApiKeyOrigin(
-  credentials: CredentialStore,
-  provider: ApiKeyProviderId,
-): Effect.Effect<CredentialOrigin, SecretsFailed> {
-  return Effect.map(
-    resolveApiKey(credentials, provider),
-    (resolved) => resolved.origin,
-  );
-}
-
 const STATUS_BY_ORIGIN: Record<CredentialOrigin, ApiKeyStatus> = {
   secret: 'set',
   env: 'env',
@@ -130,8 +106,8 @@ export function loadApiKeyStatusMap(
     API_KEY_PROVIDER_IDS,
     (provider) =>
       Effect.map(
-        lookupApiKeyOrigin(credentials, provider),
-        (origin) => [provider, STATUS_BY_ORIGIN[origin]] as const,
+        apiKey(credentials, provider),
+        ({ origin }) => [provider, STATUS_BY_ORIGIN[origin]] as const,
       ),
     { concurrency: 'unbounded' },
   ).pipe(
@@ -155,7 +131,7 @@ export function hasUsableApiKey(
   provider: ApiKeyProviderId,
 ): Effect.Effect<boolean, SecretsFailed> {
   return Effect.map(
-    resolveApiKey(credentials, provider),
+    apiKey(credentials, provider),
     (resolved) => resolved.value !== undefined,
   );
 }
