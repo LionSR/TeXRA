@@ -78,11 +78,11 @@ export interface RouteFacts {
  * The facts under which a model takes its own key at its default endpoint:
  * no plan is on and the host names no endpoint.
  */
-export const OWN_KEY_ROUTE_FACTS: RouteFacts = {
-  plans: [],
+export const OWN_KEY_ROUTE_FACTS: RouteFacts = Object.freeze({
+  plans: Object.freeze([]),
   chatgptContextWindow: undefined,
-  endpoints: {},
-};
+  endpoints: Object.freeze({}),
+});
 
 /** The route a model's next request takes, decided by {@link decideModelRoute}. */
 export type ModelRoute =
