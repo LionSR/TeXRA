@@ -17,6 +17,8 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
+import { installAdvice } from '@texra/shared/constants/latexToolchain';
+import { osPlatformOf } from '@texra/shared/osPlatform';
 
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
@@ -29,8 +31,6 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { writeCliResult } from './_helpers/output';
-
-const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
 function buildOverleafClonePorts(
   context: CliContext,
@@ -67,7 +67,9 @@ function buildOverleafClonePorts(
     showGitMissing: () =>
       Effect.sync(() => {
         writeTextStderr(
-          `Git is not installed or is not on PATH. Install it from ${GIT_DOWNLOAD_URL}.`,
+          `Git is not installed or is not on PATH.\n\n${
+            installAdvice('Git', ['git'], osPlatformOf(process.platform)).guide
+          }`,
         );
       }),
     listWorkspaceEntries: (dir) =>

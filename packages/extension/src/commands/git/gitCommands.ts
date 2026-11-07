@@ -27,7 +27,12 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import { findCommand } from '@texra/utils/system/binaryResolver';
+import {
+  installAdvice,
+  LATEX_TOOL_ENTRIES,
+} from '@texra/shared/constants/latexToolchain';
+import { osPlatformOf } from '@texra/shared/osPlatform';
+import { hasPackageManager } from '@texra/utils/system/toolChecks';
 import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 const CHANNEL = 'gitCommands';
@@ -67,42 +72,22 @@ const promptInput = Effect.fn('promptInput')(function* (
   return trimmed;
 });
 
-/**
- * Platform-specific package-manager install options surfaced when `git` is
- * missing from PATH. Each option pairs the package-manager binary (used to
- * probe whether the PM is installed) with the full install command.
- */
-const GIT_INSTALL_OPTIONS: Partial<
-  Record<NodeJS.Platform, { tool: string; command: string }>
-> = {
-  darwin: { tool: 'brew', command: 'brew install git' },
-  win32: { tool: 'winget', command: 'winget install --id Git.Git -e' },
-  linux: { tool: 'apt-get', command: 'sudo apt-get install git' },
-};
-
-const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
-
 const promptGitMissing = Effect.fnUntraced(function* () {
-  const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
-  // A PATH lookup, not a spawn: the manager only has to be installed for
-  // its install command to be worth offering.
+  const platform = osPlatformOf(process.platform);
+  const advice = installAdvice('Git', ['git'], platform);
+  const downloadUrl = LATEX_TOOL_ENTRIES.git.install.url?.[platform];
+  // The command is worth offering only where its package manager is
+  // installed.
   const command =
-    option && (yield* findCommand(option.tool)) !== null
-      ? option.command
+    advice.command && hasPackageManager(advice.command.packageManager)
+      ? advice.command.command
       : null;
+  const message = `Git not found in PATH.\n\n${advice.guide}`;
 
-  let message: string;
-  if (command) {
-    message = `Git not found in PATH. Install it with:\n  ${command}`;
-  } else if (option) {
-    message = `Git not found in PATH. Install ${option.tool} and run "${option.command}", or download git from ${GIT_DOWNLOAD_URL}.`;
-  } else {
-    message = `Git not found in PATH. See ${GIT_DOWNLOAD_URL} to install it.`;
-  }
-
-  const actions = command
-    ? (['Copy Command', 'Run in Terminal', 'Open git-scm.com'] as const)
-    : (['Open git-scm.com'] as const);
+  const actions = [
+    ...(command ? (['Copy Command', 'Run in Terminal'] as const) : []),
+    ...(downloadUrl ? (['Open git-scm.com'] as const) : []),
+  ];
 
   yield* Effect.logError(message).pipe(withLogChannel(CHANNEL));
   const selected = yield* announce(
@@ -125,8 +110,8 @@ const promptGitMissing = Effect.fnUntraced(function* () {
     const terminal = vscode.window.createTerminal('Install Git');
     terminal.show();
     terminal.sendText(command);
-  } else if (selected === 'Open git-scm.com') {
-    yield* openUrl(GIT_DOWNLOAD_URL);
+  } else if (selected === 'Open git-scm.com' && downloadUrl) {
+    yield* openUrl(downloadUrl);
   }
 });
 

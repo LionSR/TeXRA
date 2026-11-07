@@ -329,6 +329,24 @@ const LATEX_TOOLS = [
     core: true,
   },
   {
+    // `latexdiff-vc` and the Overleaf clone run it; a missing git is
+    // reported where they run it, not probed.
+    name: 'git',
+    label: 'Git',
+    install: {
+      brew: 'git',
+      apt: 'git',
+      scoop: 'git',
+      url: {
+        darwin: 'https://git-scm.com/downloads',
+        linux: 'https://git-scm.com/downloads',
+        win32: 'https://git-scm.com/downloads',
+      },
+    },
+    doctor: { row: 'none' },
+    probe: 'none',
+  },
+  {
     name: 'gm',
     label: 'GraphicsMagick',
     install: {
