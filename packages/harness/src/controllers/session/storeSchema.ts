@@ -81,7 +81,7 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS event_blob (
     "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
     digest   TEXT NOT NULL REFERENCES blob(digest),
-    inline   INTEGER NOT NULL CHECK (inline IN (0, 1)),
+    inline   INTEGER NOT NULL DEFAULT 1 CHECK (inline IN (0, 1)),
     PRIMARY KEY ("commit", digest)
   ) STRICT, WITHOUT ROWID`,
   `CREATE TABLE IF NOT EXISTS stored_kind (
@@ -156,10 +156,12 @@ const ADDITIVE = [
 ];
 
 /** A column a `TABLES` table gained after stores held it: added at open
- *  where `pragma_table_info` lacks it, existing rows at the default.
- *  `event_blob.inline`: a string the codec moved out of the row (1, inflated
- *  on read) or a media address (0, never inflated); a store from before it
- *  links every blob at 1, reading right and fetching media it never uses. */
+ *  where `pragma_table_info` lacks it, under the write lock so two openers
+ *  add it once, with the same default the fresh table carries, so a writer
+ *  from before the column still inserts. `event_blob.inline`: a string the
+ *  codec moved out of the row (1, inflated on read) or a media address (0,
+ *  never inflated); a row from before it links at 1, reading right and
+ *  fetching media it never uses. */
 const ADDED_COLUMNS = [
   {
     table: 'event_blob',
@@ -169,16 +171,21 @@ const ADDED_COLUMNS = [
 ];
 
 /** Add each of `ADDED_COLUMNS` its table lacks. */
-const addColumns = Effect.fnUntraced(function* (sql: Sql) {
-  for (const { table, column, ddl } of ADDED_COLUMNS) {
-    const present = yield* sql.unsafe<{ name: string }>(
-      'SELECT name FROM pragma_table_info(?) WHERE name = ?',
-      [table, column],
-    );
-    if (present.length === 0)
-      yield* run(sql, `ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
-  }
-});
+const addColumns = (sql: Sql) =>
+  inImmediateTransaction(sql)(
+    Effect.forEach(ADDED_COLUMNS, ({ table, column, ddl }) =>
+      Effect.flatMap(
+        sql.unsafe<{ name: string }>(
+          'SELECT name FROM pragma_table_info(?) WHERE name = ?',
+          [table, column],
+        ),
+        (present) =>
+          present.length === 0
+            ? run(sql, `ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`)
+            : Effect.void,
+      ),
+    ),
+  );
 
 const verifyPragma = Effect.fnUntraced(function* (
   sql: Sql,

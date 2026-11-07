@@ -1021,7 +1021,7 @@ INSERT INTO event VALUES(955,18,65,'run.end',7,'["golden-host",12,"process-12"]'
 CREATE TABLE event_blob (
     "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
     digest   TEXT NOT NULL REFERENCES blob(digest),
-    inline   INTEGER NOT NULL CHECK (inline IN (0, 1)),
+    inline   INTEGER NOT NULL DEFAULT 1 CHECK (inline IN (0, 1)),
     PRIMARY KEY ("commit", digest)
   ) STRICT, WITHOUT ROWID;
 INSERT INTO event_blob VALUES(6,'c372067d8795592ec31ab21223bc792414ca3c9308db49667952518dfcb58125',1);

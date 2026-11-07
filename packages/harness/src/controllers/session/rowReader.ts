@@ -283,9 +283,15 @@ export function rowReader<E>(
       });
       if (refusal !== undefined) return yield* refusal;
     }
-    // The batch's blobs in two statements: a row carries addresses only.
+    // The batch's blobs in two statements: a row carries addresses only. A
+    // projected row (no version) holds none, and its commit is its source
+    // row's, whose strings it would fetch for nothing.
     const linked = yield* exec(INLINE_BLOBS, [
-      JSON.stringify(rows.map((row) => decodeCommit(row.commit))),
+      JSON.stringify(
+        rows.flatMap((row) =>
+          row.version === null ? [] : [decodeCommit(row.commit)],
+        ),
+      ),
     ]);
     const texts: Blobs = yield* stored(
       linked.map((row) => decodeDigest(row.digest)),
