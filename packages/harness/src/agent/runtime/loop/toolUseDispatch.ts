@@ -144,15 +144,19 @@ interface Dispatch {
 }
 
 /** One call as the per-call program takes it: its facts (a response's
- *  dispatch fact, or a script's `script.call`), its input and its dispatch;
- *  a script's call carries its script's title, which labels the stage, and
- *  `opensStage`, true for the first batch its script's door commits. */
+ *  dispatch fact, or a script's `script.call`), its input and its dispatch.
+ *  `stage` is the script's stage its batches may open: its title, which
+ *  labels it, and `opens`, true for the first batch the script's door
+ *  commits; null for a response's call and for the skips a script's end
+ *  commits. */
 interface Call {
   readonly dispatch: Dispatch;
   readonly fact: DispatchFacts | ScriptCallPayload;
   readonly input: unknown;
-  readonly title?: string | null;
-  readonly opensStage?: () => boolean;
+  readonly stage: {
+    readonly title: string | null;
+    readonly opens: () => boolean;
+  } | null;
 }
 
 /** The `script.call` a call carries, or null for a response's own. */
@@ -248,12 +252,12 @@ function resultContent(
 
 /** Commit rows of the call, its `script.call` first while the run holds no
  *  record of it: a script's call exists from its first row. The first batch
- *  a script's door commits (`opensStage`, asked under the cell's lock) opens
+ *  a script's door commits (`stage.opens`, asked under the cell's lock) opens
  *  the script's stage, again after an earlier activation's end closed it;
  *  the batch that records a call's `result` closes the stage of the calls it
  *  issued. Concurrent results of one group commit one at a time. */
 const commit = (
-  { dispatch, fact, title, opensStage }: Call,
+  { dispatch, fact, stage }: Call,
   rows: readonly RunHistoryDraft[],
   result?: Pick<ToolResult, 'status'>,
   alongside?: ReturnType<typeof factRows>['alongside'],
@@ -262,12 +266,12 @@ const commit = (
     const { runId } = dispatch.run;
     const script = scriptOf(fact);
     const batch: RunHistoryDraft[] = [];
-    if (script !== null && opensStage?.() === true)
+    if (script !== null && stage !== null && stage.opens())
       batch.push(
         displayRow(runId, {
           type: 'stage.start',
           id: script.stageId,
-          label: title ?? 'Script',
+          label: stage.title ?? 'Script',
           kind: 'script',
         }),
       );
@@ -741,7 +745,12 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
             issuedBy(state, script.callId),
             ({ call: fact, status }) => {
               if (status.kind === 'settled') return Effect.void;
-              const call: Call = { dispatch, fact, input: fact.input };
+              const call: Call = {
+                dispatch,
+                fact,
+                input: fact.input,
+                stage: null,
+              };
               const at = { responseId, callId: fact.callId };
               const entered = resumedAttempt(state, at, status);
               // A request the call was parked on is withdrawn with it.
@@ -832,7 +841,12 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
       phase: op.phase,
     };
     const { title } = source;
-    const call: Call = { dispatch, fact, input, title, opensStage };
+    const call: Call = {
+      dispatch,
+      fact,
+      input,
+      stage: { title, opens: opensStage },
+    };
     if (known?.status.kind === 'settled') {
       // Replayed from its row: it takes no lane and does not run.
       yield* inLane(op.seq, null, Effect.void);
@@ -1060,7 +1074,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   // One call of the response, with the door its guest's calls go through.
   const finish = (fact: DispatchFacts, ended: boolean) =>
     finishCall(
-      { dispatch, fact, input: inputOf.get(fact.callId) },
+      { dispatch, fact, input: inputOf.get(fact.callId), stage: null },
       { script: null, scriptCalls: scriptDoor(dispatch, fact) },
       ended,
     );
