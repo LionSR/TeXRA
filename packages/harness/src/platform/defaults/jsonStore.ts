@@ -25,27 +25,6 @@ function storageError(error: PlatformError.PlatformError): Error {
   return ensureError(error.reason.cause ?? error);
 }
 
-/** How {@link JsonStore.open} treats a file it cannot read, and whether the
- *  store follows other writers. */
-export interface JsonStoreOptions {
-  /**
-   * When set, a file that exists but cannot be read as a JSON object opens as
-   * an empty view and reports the cause here instead of failing the open.
-   * Writes still re-read the file in {@link flush}, so they fail rather than
-   * overwrite what the reader could not parse.
-   */
-  onUnreadable?: (error: Error) => void;
-  /**
-   * Serve other writers' changes: every read first compares the file's
-   * inode, mtime and size with the version it holds (about a microsecond)
-   * and re-reads the file when they differ. A long-lived process that other
-   * processes configure (a background service) opens its stores this way. A
-   * changed file it cannot read keeps the last view and is logged as a
-   * warning, once per version of the file.
-   */
-  follow?: boolean;
-}
-
 /** The file's version as a read compares it: absent, or its identity. */
 function fileVersion(filePath: string): string {
   const stat = statSync(filePath, { throwIfNoEntry: false });
@@ -54,7 +33,12 @@ function fileVersion(filePath: string): string {
     : `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
 }
 
-/** The file's record, read synchronously for {@link JsonStoreOptions.follow}. */
+/** {@link fileVersion} as an effect: a file that cannot be probed (an
+ *  untraversable directory, a symlink loop) fails it rather than dying. */
+const probeVersion = (filePath: string): Effect.Effect<string, Error> =>
+  Effect.try({ try: () => fileVersion(filePath), catch: ensureError });
+
+/** The file's record, read synchronously as a read follows the file. */
 function readJsonRecordSync(filePath: string): JsonRecord {
   let content: string;
   try {
@@ -150,10 +134,12 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * {@link writeLanes}, which orders this process's writers; across processes
  * the atomic rename is the only guarantee, so two hosts flushing the same file
  * in the same instant can still lose one of the two mutations. Reads (`get`,
- * `snapshot`, `keys`) still serve this instance's view: open-time
- * contents plus its own committed mutations — a `set` still queued behind
- * another one has changed nothing yet; they don't observe other writers'
- * changes.
+ * `snapshot`, `keys`) follow the file: each compares its inode, mtime and
+ * size with the version the view was read from (about a microsecond) and
+ * re-reads it when they differ, so another process's or another instance's
+ * write is served; a `set` still queued behind another one has changed
+ * nothing yet. A changed file that cannot be read keeps the last view and
+ * is logged once per version of the file.
  *
  * `set` is the store's own write and is an `Effect`, requirement-free: it
  * provides the Node filesystem services its flush reads and writes through, so
@@ -162,9 +148,8 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * this store serves deliberate configuration files.
  */
 export class JsonStore {
-  /** The file version `data` was read from, when the store follows it. */
+  /** The file version `data` was read from: undefined re-reads it. */
   private version: string | undefined;
-  private readonly follow: boolean;
 
   readonly filePath: string;
   private data: JsonRecord;
@@ -172,22 +157,21 @@ export class JsonStore {
     /** The file this store reads and writes; warnings name it. */
     filePath: string,
     data: JsonRecord,
-    follow: boolean,
+    version: string | undefined,
   ) {
     this.filePath = filePath;
     this.data = data;
-    this.follow = follow;
+    this.version = version;
   }
 
   /**
-   * A following store's view, brought up to the file's current version.
+   * The store's view, brought up to the file's current version.
    * The version is read before the record and again after it, so a write
    * landing between the two is read next time rather than taken for the
    * version already held. A file that cannot be probed or read keeps the
    * view and is reported once per failure.
    */
   private current(): JsonRecord {
-    if (!this.follow) return this.data;
     try {
       const version = fileVersion(this.filePath);
       if (version === this.version) return this.data;
@@ -217,22 +201,34 @@ export class JsonStore {
    */
   static readonly open = Effect.fn('JsonStore.open')(function* (
     filePath: string,
-    options: JsonStoreOptions = {},
   ) {
     const path = yield* Path.Path;
     const storePath = path.resolve(filePath);
-    const { onUnreadable } = options;
-    const data = yield* onUnreadable
-      ? readJsonRecord(storePath).pipe(
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              onUnreadable(ensureError(error));
-              return {};
-            }),
-          ),
-        )
-      : readJsonRecord(storePath);
-    return new JsonStore(storePath, data, options.follow === true);
+    // The version is taken before the read, so a write landing during it
+    // is read again at the first `get`.
+    const version = yield* probeVersion(storePath);
+    const data = yield* readJsonRecord(storePath);
+    return new JsonStore(storePath, data, version);
+  });
+
+  /**
+   * The store over a file that exists but cannot be read as a JSON object
+   * (`open` failed on it, and its caller reported why): an empty view held
+   * at the file's current version, so it reads the file again once the file
+   * changes; one that cannot even be probed holds no version, so each read
+   * tries it again and logs a new failure once. Writes still re-read
+   * the file in {@link flush}, so they fail rather than overwrite what could
+   * not be parsed.
+   */
+  static readonly unreadable = Effect.fn('JsonStore.unreadable')(function* (
+    filePath: string,
+  ) {
+    const path = yield* Path.Path;
+    const storePath = path.resolve(filePath);
+    const version = yield* probeVersion(storePath).pipe(
+      Effect.orElseSucceed(() => undefined),
+    );
+    return new JsonStore(storePath, {}, version);
   });
 
   get(key: string): unknown {
@@ -242,8 +238,8 @@ export class JsonStore {
   /**
    * Commit one mutation: take the file's lane in {@link writeLanes}, flush
    * it, and only once the flush has succeeded apply it to this instance's
-   * record — a failed flush (e.g. a store opened over an unreadable file via
-   * {@link JsonStoreOptions.onUnreadable}) leaves `get` serving what it
+   * record — a failed flush (e.g. a store opened over an unreadable file,
+   * {@link JsonStore.unreadable}) leaves `get` serving what it
    * served before, never a value that did not reach disk. Because the lane
    * serializes every commit on the file, no later `set` can apply between
    * this one's flush and its in-memory apply, so there is nothing to roll

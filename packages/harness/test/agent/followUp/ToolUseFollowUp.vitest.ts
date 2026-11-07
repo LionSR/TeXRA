@@ -21,7 +21,7 @@ import {
 import { DatabaseWriteFailed } from '@texra-ai/harness/host';
 import * as resumability from '@agent/storage/resumability';
 import { Inbox, SessionInbox, type InboxPort } from '@agent/followUp/Inbox';
-import { RunInput } from '@agent/followUp/RunInput';
+import { FollowUpReader } from '@agent/followUp/FollowUpReader';
 import { REFUSED, submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import * as resumeRunModule from '@agent/runtime/resumeRun';
@@ -163,7 +163,7 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
 }
 
 /** What `input` takes now without blocking (nothing is consumed). */
-const taken = (input: RunInput) =>
+const taken = (input: FollowUpReader) =>
   Effect.gen(function* () {
     const batch = (yield* input.hasPending('idle'))
       ? yield* input.next('idle')

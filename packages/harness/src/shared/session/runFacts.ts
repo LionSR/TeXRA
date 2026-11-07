@@ -7,7 +7,7 @@
  * fields, so the loop reads them off the same state on the live path and on
  * resume. The consumed follow-up is here too, as its writers commit it (its
  * receipt is `followUpReceipt`, in `runRowReads.ts`); the rules for which
- * pending rows a run reads are the reader's (`agent/followUp/RunInput.ts`).
+ * pending rows a run reads are the reader's (`agent/followUp/FollowUpReader.ts`).
  * The lifecycle rows a run is registered, activated and ended with are
  * built here, beside the readers of their facts;
  * `agent/storage/runLifecycle.ts` commits them.
@@ -53,6 +53,11 @@ export const turnText = (turn: Pick<TurnResult, 'content'>): string =>
     )
     .join('');
 
+/** The key of a call among a run's calls: its id within the response that
+ *  issued it, as a provider reuses call ids across responses. */
+export const callKey = (responseId: string, callId: string): string =>
+  `${responseId}/${callId}`;
+
 /** What a run answers and produced, as its rows record it. */
 export type RunFacts = {
   /** The latest nonempty text from this turn's response rows. A new turn
@@ -83,8 +88,8 @@ export type RunFacts = {
   /** The latest response's answer was finalized for display. */
   readonly answerFinalized: boolean;
   /** Each call a response issued, and each call a script of it issued, by
-   *  `responseId/callId`: its tool and card, and the response that issued
-   *  it (a script's call: its script's) with that row's commit and seq. */
+   *  {@link callKey}: its tool and card, and the response that issued it (a
+   *  script's call: its script's) with that row's commit and seq. */
   readonly calls: Readonly<
     Record<
       string,

@@ -113,7 +113,7 @@ Ids of the providers users can configure a direct API key for.
 ```ts
 type ApiKeyProviderId = Extract<
   (typeof MANIFEST)[number],
-  { readonly apiKey: true }
+  { readonly kind: 'backend' | 'plan-key' }
 >['id'];
 ```
 
@@ -351,17 +351,6 @@ subset of it, so a requested level can be compared with any model's list.
 const EFFORT_SCALE: readonly ReasoningEffort[]
 ```
 
-## EndpointProviderId
-
-Providers with an HTTP endpoint of their own, which a host may override.
-
-```ts
-type EndpointProviderId = Extract<
-  (typeof MANIFEST)[number],
-  { readonly baseUrl: string | RegionalBaseUrl }
->['id'];
-```
-
 ## exposeApiKey
 
 Unwrap a sealed key at the one point it is handed to a foreign runtime: a
@@ -468,7 +457,7 @@ the Kimi Code backend, not derivable from other model fields.
 
 ```ts
 function isKimiSubscriptionEligible(
-  model: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
+  model: Pick<ModelConfig, 'provider' | 'kimiSubscription'>,
 ): boolean
 ```
 
@@ -775,26 +764,28 @@ declare enum ModelProvider {
 
 ## ModelProviderPlugin
 
-One model provider plugin.
+One model provider plugin, by what TeXRA does with it:
+- `backend`: an llm-zoo provider a run binds to, over its own HTTP
+  endpoint (a default base URL, or a China/international pair the region
+  toggle picks), with a direct API key;
+- `plan-key`: a coding plan's own key outside llm-zoo (`kimiCode`), read
+  from its named variable;
+- `unserved`: an llm-zoo provider whose models TeXRA does not serve.
 
 ```ts
-interface ModelProviderPlugin {
+type ModelProviderPlugin = {
   /** Stable, persisted identifier: the llm-zoo provider or API-key id. */
   readonly id: string;
   /** The provider's own name. */
   readonly displayName: string;
-  /** Users can configure a direct API key for this provider. */
-  readonly apiKey?: true;
-  /** Environment variable for the key when it is not `<ID>_API_KEY`. */
-  readonly apiKeyEnvName?: string;
-  /**
-   * Default HTTP base URL, or a China/international pair chosen by the
-   * region toggle. `null`: an llm-zoo provider with no HTTP route of its
-   * own (checked below, so a dropped endpoint is a compile error). Absent:
-   * a plugin outside llm-zoo's `ModelProvider` (`kimiCode`).
-   */
-  readonly baseUrl?: string | RegionalBaseUrl | null;
-}
+} & (
+  | {
+      readonly kind: 'backend';
+      readonly baseUrl: string | RegionalBaseUrl;
+    }
+  | { readonly kind: 'plan-key'; readonly apiKeyEnvName: string }
+  | { readonly kind: 'unserved' }
+);
 ```
 
 ## ModelRef

@@ -19,6 +19,7 @@ import {
   type RunEnd,
   type RunId,
   type ToolResult,
+  factName,
 } from '@shared/schemas';
 import {
   Approvals,
@@ -191,7 +192,7 @@ export const childRuns = (call: RunCallShape): ChildRunsShape => {
     }),
     fact: (id, arm) =>
       Effect.map(log.facts(id), (held) => {
-        const row = held?.facts[`${arm.plugin}/${arm.kind}`];
+        const row = held?.facts[factName(arm)];
         return row === undefined
           ? undefined
           : Schema.decodeUnknownSync(arm.schema)(row.value);

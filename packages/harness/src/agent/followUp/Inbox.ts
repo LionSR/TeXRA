@@ -3,7 +3,7 @@
  * less its `followup.consumed` ones, read inside the job acting on them, by
  * one reader per run (its generation here); the publisher's one job at a
  * time is the only lock, and when a row may be read is data on it
- * (`holdUntil`, `RunInput`).
+ * (`holdUntil`, `FollowUpReader`).
  */
 import { Context, Effect, Result, type Scope } from 'effect';
 
@@ -24,7 +24,7 @@ import type {
 } from '@shared/session/sessionLog';
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
-import { needsWake, RunInput } from './RunInput';
+import { FollowUpReader, needsWake } from './FollowUpReader';
 import {
   queuedRow,
   sameAsFirst,
@@ -95,7 +95,7 @@ type InboxClosed =
 
 /** The session's follow-up inbox; see the module comment. */
 export class SessionInbox {
-  private readonly readers = new Map<RunId, RunInput>();
+  private readonly readers = new Map<RunId, FollowUpReader>();
   /** Each run's sends, admitted one at a time in call order. */
   readonly sendLanes = new Map<RunId, PerKeyLane>();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
@@ -125,12 +125,12 @@ export class SessionInbox {
 
   /** Open the run's reader for the generation running it (the caller's
    *  scope); the registry admits one at a time, so a second is a defect. */
-  open(runId: RunId): Effect.Effect<RunInput, never, Scope.Scope> {
+  open(runId: RunId): Effect.Effect<FollowUpReader, never, Scope.Scope> {
     return Effect.acquireRelease(
       Effect.suspend(() => {
         if (this.readers.has(runId))
           return Effect.die(new Error(`Run ${runId} already has a reader`));
-        const input = new RunInput(
+        const input = new FollowUpReader(
           this.read(runId).pipe(
             Effect.map(({ followUps }) => followUps),
             Effect.orDie,
@@ -147,7 +147,7 @@ export class SessionInbox {
   /** End the run's reader `input`; `terminal`: the observers hear the run
    *  takes no more input here, on the publisher after the sends already
    *  admitted, and only if none left a row queued. Idempotent. */
-  release(runId: RunId, input: RunInput, terminal: boolean): void {
+  release(runId: RunId, input: FollowUpReader, terminal: boolean): void {
     if (this.readers.get(runId) !== input) return;
     this.readers.delete(runId);
     input.end();

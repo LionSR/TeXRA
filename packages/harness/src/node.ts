@@ -130,5 +130,5 @@ export {
 // file-backed JSON store a host's configuration files open as, with the
 // Node file services both write through.
 export { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-export { JsonStore, type JsonStoreOptions } from '@platform/defaults/jsonStore';
+export { JsonStore } from '@platform/defaults/jsonStore';
 export { nodeFileServices } from '@utils/files/fsDurability';

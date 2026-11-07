@@ -196,8 +196,8 @@ store rather than the turn (`ROW_KINDS`, `packages/harness/src/shared/schemas/ro
 | File                              | What it owns                                                                                                                                                            |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `turn.ts`                         | the `.` entry's turn contract: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn`            |
-| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `ModelOriginSchema`), background capability and JSON materialization                                              |
-| `message.ts`                      | the wire message and history schemas, the content parts, and the continuation prefixes                                                                                  |
+| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `ModelOriginSchema`), JSON materialization, and the count and usage schemas                                       |
+| `message.ts`                      | the wire message and history schemas, the prepared-history rules and the call each tool result answers, the content parts, and the continuation prefixes                |
 | `errors.ts`                       | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                                        |
 | `api/transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                                       |
 | `api/openaiResponses.ts`          | `openaiResponsesModel`                                                                                                                                                  |
@@ -234,7 +234,7 @@ this package does not export cannot be reached from outside it. Tests are the
 one exception: the protocol suites in `src/test-kernel/llm/` reach `src/api/`
 and the sign-in suites in `src/test-kernel/auth/` reach `src/oauth/` by
 relative path, as `test-live/` does. Inside the package a module imports the file that defines a
-symbol, in one acyclic direction — `protocol` ← `message` ← `errors` ←
+symbol, in one acyclic direction — `protocol` ← `errors` ← `message` ←
 `api/transport` ← `turn`, with each protocol's own modules below its entry —
 and the only files that re-export are the two entries, whose published names
 are contract.

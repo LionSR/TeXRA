@@ -3,10 +3,10 @@ import { Effect, Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
+  TurnProtocolSchema,
   ModelOriginSchema,
   sameModelOrigin,
   type ModelOrigin,
-  checkPreparedHistory,
 } from './protocol.js';
 import { ModelError } from './errors.js';
 
@@ -111,18 +111,16 @@ const OutputPartSchema = Schema.Union([
 ]);
 
 export const ContentSchema = Schema.Array(OutputPartSchema);
-export const EVIDENCE_PROTOCOL = Object.freeze({
+/** The protocol each kind of part evidence belongs to: a part carries it
+ *  back only to the protocol that wrote it. */
+const EVIDENCE_PROTOCOL = Object.freeze({
   'google-interactions-thought-signature': 'google-interactions',
   'openai-responses-message': 'openai-responses',
   'openai-responses-reasoning': 'openai-responses',
   'openai-responses-function-call': 'openai-responses',
   'anthropic-thinking-signature': 'anthropic-messages',
   'anthropic-redacted-thinking': 'anthropic-messages',
-  anthropic: 'anthropic-messages',
-  xai: 'openai-responses',
-  'google-interactions': 'google-interactions',
-  'openai-responses': 'openai-responses',
-} as const);
+} as const satisfies Record<string, typeof TurnProtocolSchema.Type>);
 
 /** The schema issues in a turn's content against its origin: foreign
  *  evidence, malformed signed thinking, repeated item or call ids. */
@@ -226,6 +224,63 @@ export const MessageSchema = Schema.Union([
 /** A mid-conversation system message as the user text any protocol takes. */
 export const systemUpdateText = (text: string): string =>
   `<system-update>\n${text}\n</system-update>`;
+
+/** What the prepared-history rules read of an entry: its role, an
+ *  assistant's local calls and a tool group's ordinals. Over any input-part
+ *  shape, so a store that holds media by address checks the same rules. */
+export type PreparedHistoryEntry =
+  | { readonly role: 'user' | 'system' }
+  | {
+      readonly role: 'assistant';
+      readonly content: readonly { readonly kind: string }[];
+    }
+  | {
+      readonly role: 'tool';
+      readonly results: readonly { readonly callOrdinal: number }[];
+    };
+/** The history a turn sends: each assistant's local calls answered by the
+ *  next message, in call order. Only the next request needs them answered.
+ *  Returns the schema issues found, one per offending message. */
+export function checkPreparedHistory(
+  messages: readonly PreparedHistoryEntry[],
+): Schema.FilterIssue[] {
+  const issues: Schema.FilterIssue[] = [];
+  for (const [index, message] of messages.entries()) {
+    if (message.role === 'assistant') {
+      const calls = message.content.filter(
+        (part) => part.kind === 'local-call',
+      );
+      if (calls.length === 0) continue;
+      const results = messages[index + 1];
+      if (
+        results?.role !== 'tool' ||
+        results.results.length !== calls.length ||
+        !results.results.every(
+          (result, ordinal) => result.callOrdinal === ordinal,
+        )
+      ) {
+        issues.push({
+          path: [index],
+          issue:
+            'Every local call requires one adjacent, complete, ordinal-ordered tool-result group before another generation.',
+        });
+      }
+    } else if (message.role === 'tool') {
+      const previous = messages[index - 1];
+      if (
+        previous?.role !== 'assistant' ||
+        !previous.content.some((part) => part.kind === 'local-call')
+      ) {
+        issues.push({
+          path: [index],
+          issue:
+            'Tool results require an immediately preceding calling assistant.',
+        });
+      }
+    }
+  }
+  return issues;
+}
 
 /** The history a turn sends, under the prepared-history rules. */
 export const PreparedHistorySchema = Schema.Array(MessageSchema).check(

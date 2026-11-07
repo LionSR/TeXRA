@@ -11,7 +11,7 @@
  */
 import { Effect, Record as Rec, Result, Schema, Struct } from 'effect';
 
-import { type ToolFact } from '@texra-ai/harness/schemas';
+import { factName, type ToolFact } from '@texra-ai/harness/schemas';
 import {
   DocumentDiffsSchema,
   RoundOutputSchema,
@@ -53,7 +53,7 @@ export const DOCUMENTS_OUTPUT_KIND = {
 } as const;
 
 /** The key a run's documents are kept under in `RunView.facts`. */
-const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_KIND.plugin}/${DOCUMENTS_OUTPUT_KIND.kind}`;
+const DOCUMENTS_OUTPUT_KEY = factName(DOCUMENTS_OUTPUT_KIND);
 
 /** The fact that makes `rounds` (and, once proposed, the final `diffs`)
  *  the calling run's documents, for its call's result (`ToolResult.facts`). */

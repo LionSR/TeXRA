@@ -10,7 +10,6 @@ import {
   QualifiedSkillNameSchema,
   SKILL_CATALOG_MAX_SKILLS,
   type ActiveSkillSourceScope,
-  type SkillCatalogEntry,
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
@@ -44,6 +43,18 @@ import {
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
 } from '@shared/state/stateSettings';
+
+/** One skill in a step's catalog, as the prompt lists it, with the plugin
+ *  that ships it (null for a core source) and the directory tools may read
+ *  while a step lists or activated it (null when the workspace already
+ *  holds it). A step discovers its catalog; the system text it sends and
+ *  the names it lists are what is recorded. */
+export interface SkillCatalogEntry {
+  readonly plugin: string | null;
+  readonly name: string;
+  readonly text: string;
+  readonly directory: string | null;
+}
 
 /**
  * The skill contributions this process discovers, served by `processLayer`

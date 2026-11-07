@@ -57,11 +57,13 @@ import {
   qualifyAggregateId,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
-  type SkillCatalogEntry,
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
-import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
+import {
+  loadRuntimeSkillCatalog,
+  type SkillCatalogEntry,
+} from '@skills/runtimeSkills';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { readDisabledTools } from '@tools/plugins';
 import type { SessionTools } from '@tools/sessionTools';

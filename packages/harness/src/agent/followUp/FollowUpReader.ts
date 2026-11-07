@@ -97,7 +97,7 @@ const compacting = (rows: readonly QueuedFollowUp[]): boolean =>
  * same way, in commit order. The inbox signals the reader when a row lands
  * for it.
  */
-export class RunInput {
+export class FollowUpReader {
   private readonly signal = Latch.makeUnsafe(false);
   private ended = false;
 

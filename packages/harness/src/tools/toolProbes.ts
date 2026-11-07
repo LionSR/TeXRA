@@ -54,11 +54,6 @@ export type ToolProbeServices =
   | HttpClient.HttpClient
   | ChildProcessSpawner;
 
-/** A plugin that is probed but needs nothing installed: always available. */
-export const ALWAYS_AVAILABLE: ToolAvailabilityChecks = {
-  check: () => Effect.succeed({ available: true }),
-};
-
 /**
  * The asking workspace, carried into a plugin's probe as data rather than read
  * from an ambient scope: the folder a probe asks whether it is a git

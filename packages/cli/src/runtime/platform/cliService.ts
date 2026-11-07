@@ -84,12 +84,11 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
 ) {
   const { storageRoot } = context;
   const globalState = yield* AppState;
-  // The windows and the CLI write these files while the service runs: each
-  // read serves what they hold now, so a setting changed in any client
-  // reaches the next task and the next turn.
+  // The windows and the CLI write these files while the service runs: a
+  // store's read serves what they hold now, so a setting changed in any
+  // client reaches the next task and the next turn.
   const globalConfig = yield* JsonStore.open(
     path.join(resolveGlobalStoragePath(storageRoot), TEXRA_CONFIG_FILE_NAME),
-    { follow: true },
   );
   const openRoots = Effect.fn('cliServiceProjects.openRoots')(function* (
     workspace: string | undefined,
@@ -103,7 +102,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       storageRoot,
       workspace,
       (message) => warnings.push(message),
-      true,
     );
     yield* Effect.forEach(
       warnings,
