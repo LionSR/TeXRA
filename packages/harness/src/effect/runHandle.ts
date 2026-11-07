@@ -8,7 +8,6 @@
  */
 import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
-import { SessionRequests } from '@agent/runtime/requests';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -158,11 +157,5 @@ export function runView(
     ),
     // Every reader replays this activation from the session's rows.
     events: replayTrace({ view, log }, runId, activation, result),
-    interrupt: Context.get(session, SessionRequests)
-      .request({ kind: 'run.stop', runId, reason: 'user' })
-      .pipe(
-        Effect.provide(session),
-        Effect.ignore({ log: 'Warn', message: `Stopping run ${runId}` }),
-      ),
   };
 }

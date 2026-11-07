@@ -61,7 +61,7 @@ import {
   type SessionEventDraft,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { LocalRuntimeStateSchema } from '@texra-ai/harness/transcript';
+import { LocalRuntimeStateSchema } from '@shared/schemas';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';

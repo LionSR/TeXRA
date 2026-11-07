@@ -96,7 +96,6 @@ export {
   readStorageInventory,
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
-export { storeHeld } from '@controllers/session/Database';
 // Follow-up delivery helpers hosts share.
 export {
   describeFollowUpFailure,

@@ -524,9 +524,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         activation,
         result,
       ),
-      interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
-        Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
-      ),
     };
   });
   /** A start or resume naming a window's own tools is refused: the service

@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/plugins.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 126
+Exports: 125
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: Schema.Codec<A, unknown>; readonly result?: AgentBlockResult<R>; }`
@@ -95,7 +95,6 @@ Exports: 126
 - `RunStorageEntry` — `type RunStorageEntry = { readonly kind: 'file'; readonly location: RunStorageFileLocation; } | { readonly kind: 'symlink' | 'directory' | 'unsupported'; readonly absolutePath: string; } | { readonly kind: 'missing'; } | { readonly kind: 'invalid'; readonly reason: string; }; ≡ RunStorageEntry`
 - `scopedClient` — `const scopedClient: Effect<With<HttpClientError, Scope>, never, HttpClient>`
 - `scopedOkClient` — `const scopedOkClient: Effect<With<HttpClientError, Scope>, never, HttpClient>`
-- `senderOf` — `function senderOf: (caller: (string & Brand<"RunId">) | undefined) => FollowUpSenderInput`
 - `SessionPluginLayer` — `type SessionPluginLayer = Layer.Layer<never, never, PluginHold>; ≡ SessionPluginLayer`
 - `StageHandle` — `interface StageHandle { readonly id: string | undefined; end(status?: RunOutcome): void; child(label: string, options?: StageOptions): StageHandle; }`
 - `StageOptions` — `interface StageOptions { readonly kind?: 'run' | 'session'; readonly parent?: StageHandle; }`

@@ -13,10 +13,8 @@
  *   and [`SessionInputs`](#sessioninputs) keep a renderer's `SessionView` in
  *   sync across an IPC or message transport using ordered event batches
  *   ([`CommitOrdinalSchema`](#commitordinalschema),
- *   [`EventInputSchema`](#eventinputschema)), live stream chunks
- *   ([`TextChunkSchema`](#textchunkschema)), runtime liveness updates
- *   ([`LocalRuntimeStateSchema`](#localruntimestateschema)), existence checks
- *   ([`ExistenceReconciliationSchema`](#existencereconciliationschema)), and
+ *   [`EventInputSchema`](#eventinputschema)), the other inputs a transport
+ *   serves ([`SessionViewInputSchema`](#sessionviewinputschema)), and
  *   transcript subscriptions
  *   ([`TranscriptSubscriptionSchema`](#transcriptsubscriptionschema)).
  * - **Transcript row union**: [`TranscriptRow`](#transcriptrow) (with shared
@@ -49,17 +47,11 @@ export { SessionInputs } from '@shared/session/sessionInputs';
 export {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
-  ExistenceReconciliationSchema,
   EventInputSchema,
-  LocalRuntimeStateSchema,
-  ResumeBlockedSchema,
   SessionViewInputSchema,
-  TextChunkSchema,
   TranscriptSubscriptionSchema,
   type CommitOrdinal,
-  type ExistenceReconciliation,
   type SessionViewInput,
-  type TextChunk,
   type TranscriptSubscription,
 } from '@shared/schemas';
 // The runtime a view is built on: fork failures reported, and the redacting

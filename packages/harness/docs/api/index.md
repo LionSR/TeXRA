@@ -720,8 +720,6 @@ interface Run {
    * before the read reached it arrives whole, as one chunk.
    */
   readonly events: Stream.Stream<AgentEvent, RunFailure>;
-  /** Stop the run, as the user's `run.stop` does. */
-  readonly interrupt: Effect.Effect<void>;
 }
 ```
 

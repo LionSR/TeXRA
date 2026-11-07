@@ -1580,15 +1580,6 @@ const scopedClient: Effect<With<HttpClientError, Scope>, never, HttpClient>
 const scopedOkClient: Effect<With<HttpClientError, Scope>, never, HttpClient>
 ```
 
-## senderOf
-
-The sender a tool call speaks as: its run, or the user when no run
-calls it.
-
-```ts
-function senderOf(caller: RunId | undefined): FollowUpSenderInput
-```
-
 ## SessionPluginLayer
 
 A plugin's session-lifetime services (its `sessionLayer`): one build

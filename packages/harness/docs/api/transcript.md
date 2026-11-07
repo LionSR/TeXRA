@@ -16,10 +16,8 @@ renderer, and static trace viewer).
   and [`SessionInputs`](#sessioninputs) keep a renderer's `SessionView` in
   sync across an IPC or message transport using ordered event batches
   ([`CommitOrdinalSchema`](#commitordinalschema),
-  [`EventInputSchema`](#eventinputschema)), live stream chunks
-  ([`TextChunkSchema`](#textchunkschema)), runtime liveness updates
-  ([`LocalRuntimeStateSchema`](#localruntimestateschema)), existence checks
-  ([`ExistenceReconciliationSchema`](#existencereconciliationschema)), and
+  [`EventInputSchema`](#eventinputschema)), the other inputs a transport
+  serves ([`SessionViewInputSchema`](#sessionviewinputschema)), and
   transcript subscriptions
   ([`TranscriptSubscriptionSchema`](#transcriptsubscriptionschema)).
 - **Transcript row union**: [`TranscriptRow`](#transcriptrow) (with shared
@@ -276,23 +274,6 @@ number than the one the wait enforces.
 function executionsWaitTimeoutSeconds(timeout: unknown): number
 ```
 
-## ExistenceReconciliation
-
-```ts
-type ExistenceReconciliation =
-  (typeof ExistenceReconciliationSchema)['Type'];
-```
-
-## ExistenceReconciliationSchema
-
-Existence for exactly the scope a finite read checked: a checked
-aggregate absent from `present` no longer exists. `unreadable` names the
-runs the same read found this build cannot open.
-
-```ts
-const ExistenceReconciliationSchema: Struct<{ readonly checkedAggregateIds: $Array<brand<String, "AggregateId">>; readonly present: $Array<brand<String, "AggregateId">>; readonly unreadable: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Literals<readonly ["damaged", "earlierBuild"]>; }>>; }>
-```
-
 ## FileListRow
 
 ```ts
@@ -372,16 +353,6 @@ interface LoadedMediaRef {
   readonly path: string;
   readonly media: LoadedMediaMetadata;
 }
-```
-
-## LocalRuntimeStateSchema
-
-What this process knows that the rows cannot say: the runs a launch here
-holds (`runsHere`), written by the session's run registry. A run that
-has not ended and is not among them is interrupted.
-
-```ts
-const LocalRuntimeStateSchema: Struct<{ readonly runsHere: $Array<brand<String, "RunId">>; }>
 ```
 
 ## LogRow
@@ -467,15 +438,6 @@ class RemoteSessionView extends Context.Service<
     ) => Effect.Effect<void>;
   }
 >()('@texra-ai/harness/session/RemoteSessionView')
-```
-
-## ResumeBlockedSchema
-
-A run this process cannot continue until its agent, or its agent's
-plugin, is back: a fact about this build's catalog, never a row's.
-
-```ts
-const ResumeBlockedSchema: Struct<{ readonly kind: Literal<"blocked">; readonly blocker: Literals<readonly ["agentMissing", "pluginOff", "pluginUntrusted"]>; readonly name: String; }>
 ```
 
 ## rowHeadline
@@ -661,25 +623,6 @@ interface TextBudget {
   readonly headLines: number;
   readonly tailLines: number;
 }
-```
-
-## TextChunk
-
-```ts
-type TextChunk = typeof TextChunkSchema.Type;
-```
-
-## TextChunkSchema
-
-A live text delta for one row, carrying its own offsets into the row's
-in-flight text: the transient analogue of `seq`.
-The view ignores a chunk whose `to` is not past the text it holds,
-otherwise truncates at `from` and appends, so a redelivery in any order is
-a no-op, a `from: 0` chunk replaces the row, and two adjacent chunks merge
-into one exactly. Never durable, never a seq.
-
-```ts
-const TextChunkSchema: TaggedStruct<"chunk", { readonly runId: brand<String, "RunId">; readonly rowId: String; readonly from: Int; readonly to: Int; readonly text: String; }>
 ```
 
 ## ToolBadgesSection

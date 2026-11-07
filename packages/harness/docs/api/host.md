@@ -2548,15 +2548,6 @@ type StoredSetting<T = unknown> =
   | { readonly kind: 'invalid'; readonly cause: string };
 ```
 
-## storeHeld
-
-Whether a session failed to open because another process holds its
-project store: what a service that replaces a retiring one waits out.
-
-```ts
-const storeHeld: (error: SessionOpenError) => boolean
-```
-
 ## SubscriptionPreference
 
 Each subscription's "prefer my subscription" switch: its read (`get`) and

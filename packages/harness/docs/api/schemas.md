@@ -301,14 +301,6 @@ interface ApprovalGrantSource<Id> {
 type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
 ```
 
-## approvalPolicyDenialMessage
-
-```ts
-function approvalPolicyDenialMessage(
-  decision: 'deny-policy' | 'deny-unpresentable',
-): string
-```
-
 ## ApprovalPolicySchema
 
 ```ts
@@ -1882,14 +1874,6 @@ type RunView = ReadonlyDeep<
     ? Run
     : never
 >;
-```
-
-## RunViewSchema
-
-One run as every renderer reads it; `SessionView.runs` holds them.
-
-```ts
-const RunViewSchema: Struct<{ readonly id: brand<String, "RunId">; readonly identity: Union<readonly [Struct<{ readonly kind: Literal<"agent">; readonly agent: String; readonly tool: optional<String>; }>, Struct<{ readonly kind: Literal<"process">; readonly tool: String; }>, Struct<{ readonly kind: Literal<"script">; readonly title: String; }>]>; readonly label: String; readonly description: NullOr<String>; readonly descriptionBy: NullOr<Literals<readonly ["model", "user"]>>; readonly title: String; readonly model: NullOr<String>; readonly modelLabel: NullOr<String>; readonly command: NullOr<String>; readonly inputFiles: $Array<String>; readonly agentScope: optional<NullOr<$Array<String>>>; readonly facts: $Record<String, Codec<Json, Json, never, never>>; readonly worktree: NullOr<Struct<{ readonly workingDirectory: String; }>>; readonly position: Literals<readonly ["ready", "running", "waiting"]>; readonly outcome: NullOr<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; readonly holder: Literals<readonly ["here", "none"]>; readonly output: NullOr<Struct<{ readonly response: String; readonly files: $Array<String>; readonly structured: optional<Codec<Json, Json, never, never>>; }>>; readonly statusNotice: NullOr<Union<readonly [Struct<{ readonly kind: Literals<readonly ["damaged", "earlierBuild"]>; }>, Struct<{ readonly kind: Literal<"lost">; readonly message: String; }>]>>; readonly lost: NullOr<String>; readonly createdAt: Int; readonly launchedAt: Int; readonly turnStartedAt: NullOr<Int>; readonly runStartedAt: NullOr<Int>; readonly lastTimestamp: Number; readonly turn: NullOr<Int>; readonly takesFollowUps: Boolean; readonly context: NullOr<Struct<{ readonly inputTokens: Int; readonly contextWindow: Int; readonly utilizationPercent: Number; }>>; readonly parentId: NullOr<brand<String, "RunId">>; readonly launchParentId: NullOr<brand<String, "RunId">>; readonly forkedFrom: NullOr<Struct<{ readonly id: brand<String, "RunId">; readonly at: Int; }>>; readonly forkPoint: NullOr<Int>; readonly parentCard: NullOr<String>; readonly ancestors: $Array<Struct<{ readonly id: brand<String, "RunId">; readonly label: String; }>>; readonly childIds: $Array<brand<String, "RunId">>; readonly rollup: Struct<{ readonly total: Int; readonly running: Int; readonly finished: Int; }>; readonly approval: Literals<readonly ["none", "own", "descendant"]>; readonly actions: $Array<Literals<readonly ["stop", "grant", "compact", "resume", "runAgain", "fork", "files", "delete", "rename", "openRunStorage", "export", "copy"]>>; readonly usage: Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cachedInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheWriteTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly toolUsePromptTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; }>; readonly treeUsage: Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cachedInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheWriteTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly toolUsePromptTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; }>; readonly thinkingActive: Boolean; readonly compactingActive: Boolean; readonly latestLine: NullOr<String>; readonly transcript: Struct<{ readonly rows: $Array<declare<TranscriptRow, TranscriptRow>>; readonly taskGroups: $Array<Struct<{ readonly id: String; readonly name: String; readonly startTime: Number; readonly endTime: optional<Number>; readonly status: Union<readonly [Literal<"running">, Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>]>; readonly parentGroupId: optional<String>; readonly kind: optional<Literals<readonly ["run", "session", "script"]>>; }>>; readonly settledRows: Int; }>; readonly recipe: NullOr<String>; }>
 ```
 
 ## RunWorkspaceFile

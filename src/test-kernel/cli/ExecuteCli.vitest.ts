@@ -105,7 +105,6 @@ function runSessionFake(session: LocalSession): LocalSession {
           }),
           view: Stream.empty,
           events: Stream.empty,
-          interrupt: Effect.void,
         })),
       ),
     // A stop answers `done`; the real session answers every other kind.
