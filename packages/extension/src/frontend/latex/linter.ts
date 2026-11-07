@@ -66,11 +66,16 @@ const triggerLaTeXBuild = (
     });
 
   return Effect.gen(function* () {
-    yield* openFileInEditor(fileUri.fsPath, {
+    // The build reads the file from disk, so a dirty buffer is saved first.
+    const { editor } = yield* openFileInEditor(fileUri.fsPath, {
       preserveFocus: true,
-      save: true,
-      reuseVisible: true,
     }).pipe(Effect.mapError(buildFailed));
+    if (editor.document.isDirty) {
+      yield* Effect.tryPromise({
+        try: () => editor.document.save(),
+        catch: buildFailed,
+      });
+    }
 
     // Subscribed on this frame, before the build is triggered, so an update
     // the build produces is not missed. The wait is the `finally` of the
