@@ -124,7 +124,7 @@ interface Inputs {
   readonly missingTools: readonly MissingTool[];
   readonly recording: HostSnapshot['recording'];
   readonly agentConfig: HostSnapshot['banners']['agentConfig'];
-  readonly serviceOffline: string | null;
+  readonly service: HostSnapshot['banners']['service'];
   /** A dismissal lasts the session. */
   readonly dismissed: ReadonlySet<DismissibleBanner>;
   /** Whether a usable credential exists; undefined until a check answers. */
@@ -189,9 +189,12 @@ export interface HostSnapshotSource {
   readonly clearAgentConfigBanner: Effect.Effect<void>;
   /** The user dismissed a notice for the rest of this session. */
   dismissBanner(banner: DismissibleBanner): Effect.Effect<void>;
-  /** Why the service link holds no service (`ServiceLink.away`), or null
-   *  once it reached it again. */
-  setServiceOffline(reason: string | null): Effect.Effect<void>;
+  /** Where the window's tasks run, when the user should be told: its
+   *  service link holds no service (`ServiceLink.away`), or its folder's
+   *  tasks run in this process; null otherwise. */
+  setServiceBanner(
+    banner: HostSnapshot['banners']['service'],
+  ): Effect.Effect<void>;
 }
 
 /** A failed read keeps its fields' last values and says why at `warn`, so
@@ -232,7 +235,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       missingTools: [],
       recording: null,
       agentConfig: null,
-      serviceOffline: null,
+      service: null,
       dismissed: new Set(),
       credential: undefined,
       flags: undefined,
@@ -407,7 +410,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
           options.shows.gettingStarted &&
           s.fileOptions.baseFile.length === 0 &&
           !s.dismissed.has('gettingStarted'),
-        serviceOffline: s.serviceOffline,
+        service: s.service,
       },
       // An unanswered check or flag read is not "no credential" or "not
       // done": until both answer, the funnel stays out of the way.
@@ -476,7 +479,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
                 dismissed: new Set([...s.dismissed, banner]),
               }),
         ),
-      setServiceOffline: (serviceOffline) => write({ serviceOffline }),
+      setServiceBanner: (service) => write({ service }),
     };
   },
 );

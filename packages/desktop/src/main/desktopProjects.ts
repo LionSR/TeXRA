@@ -40,6 +40,7 @@ import type { ServiceLink } from '@texra/controllers/server/client';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import type { WindowClient } from '@texra/controllers/server/windowHost';
 import { openProjectSession } from '@texra/controllers/session/openProjectSession';
+import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import type { ConfigStore } from '@texra-ai/harness/node';
@@ -69,6 +70,8 @@ export type DesktopProject = DesktopProjectFacts & {
   /** What the window attaches through: this process's windows, or the
    *  service. */
   readonly link: ServiceLink<WindowClient>;
+  /** Where its runs run (`GuiSession.where`). */
+  readonly where: GuiSession['where'];
 };
 
 /** What the window shows and offers, as one value its surfaces follow. */
@@ -94,9 +97,10 @@ interface DesktopProjectRegistryOptions {
   /** The one store over the global config file, shared by every project's
    *  config provider. */
   readonly globalConfigStore: ConfigStore;
-  /** The background service, when the app is its client: a folder's
-   *  runs run there. */
-  readonly service: ServiceLink | undefined;
+  /** The app's one attempt to reach the background service: a folder's
+   *  runs run there when it succeeded, and here, with the banner saying
+   *  why, when it failed. */
+  readonly service: Result.Result<ServiceLink, Error>;
 }
 
 export interface DesktopProjectRegistry {
@@ -254,7 +258,7 @@ const openDesktopProject = Effect.fn('openDesktopProject')(function* (
   root: string | undefined,
   roots: WorkspaceRoots,
   scope: Scope.Closeable,
-  service: ServiceLink | undefined,
+  service: Result.Result<ServiceLink, Error>,
 ): Effect.fn.Return<
   DesktopProject,
   Error,
@@ -304,7 +308,7 @@ export const openDesktopProjectRegistry: (
         undefined,
         options.processRoots,
         options.processScope,
-        undefined,
+        options.service,
       ).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
@@ -366,8 +370,11 @@ export const openDesktopProjectRegistry: (
               },
               // A folder of the service keeps its state there: this process
               // opens no store of that project.
-              ...(options.service !== undefined && {
-                workspaceState: serviceProjectState(options.service, root),
+              ...(Result.isSuccess(options.service) && {
+                workspaceState: serviceProjectState(
+                  options.service.success,
+                  root,
+                ),
               }),
               stateStores,
               // Every project's roots share the process's global state.

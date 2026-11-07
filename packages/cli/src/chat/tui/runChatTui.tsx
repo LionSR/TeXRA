@@ -168,7 +168,8 @@ export async function runChat(
       // (starting one when none answers) whenever it goes away. One the
       // platform could not link runs here, and says so once.
       const services = yield* cliPlatform;
-      const link = isLinked(services.service) ? services.service : undefined;
+      const { service } = services;
+      const link = isLinked(service) ? service : undefined;
       const served = link !== undefined;
       // Where this chat's runs run: the service's session, or this one.
       const runSession = yield* services.runSession;
@@ -182,7 +183,7 @@ export async function runChat(
         projectApprovalPolicy(services.roots.config),
       );
       if (refused !== undefined) startupNotices.push(refused);
-      if (!served) {
+      if (!isLinked(service)) {
         // A store this process moved aside at open is said in the
         // transcript, not on stderr before Ink mounts, where it would sit
         // above the header.
@@ -192,7 +193,7 @@ export async function runChat(
             sessionStoreMovedAsideMessage(local.storeMovedAside),
           );
         startupNotices.push(
-          `This chat runs here only, so other terminals and windows will not see it: ${isLinked(services.service) ? 'the TeXRA service did not answer' : services.service.none}`,
+          `This chat runs here only, so other terminals and windows will not see it: ${service.none}`,
         );
       }
       // Without a usable credential the chat still opens: the "Connect a

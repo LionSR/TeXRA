@@ -12,6 +12,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,7 +20,13 @@ import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { alive } from '../../../../scripts/desktop-package-smoke-environment.mjs';
-import { closeTexraApp, expect, test } from './electronApp.js';
+import {
+  closeTexraApp,
+  dismissOnboarding,
+  expect,
+  showLauncher,
+  test,
+} from './electronApp.js';
 import {
   NEXT_BUILD,
   buildCli,
@@ -436,5 +443,31 @@ test('a tool edit the app changed keeps its changes when another window answers 
     }
   } finally {
     if (kept !== undefined) cleanupDirectory(dirname(kept));
+  }
+});
+
+// An app that cannot reach the service runs a folder's tasks in its own
+// process; its window says so, with why. Here the service cannot start: a
+// file stands where its run directory goes.
+test('a window that never reached the service says its tasks run in this window only', async ({
+  profile,
+  launch,
+}) => {
+  const run = join(profile.dataRoot, 'run');
+  mkdirSync(profile.dataRoot, { recursive: true });
+  writeFileSync(run, '');
+  try {
+    const launched = await launch({}, { reachesService: false });
+    await dismissOnboarding(launched.page);
+    await showLauncher(launched);
+    const banner = launched.page.locator('progress-app #serviceLocalBanner');
+    await expect(banner).toContainText('in this window only');
+    await expect(banner).toContainText('could not be started');
+    await banner.screenshot({
+      path: test.info().outputPath('service-local-banner.png'),
+    });
+  } finally {
+    // The profile's teardown looks for services in the run directory.
+    rmSync(run);
   }
 });
