@@ -34,15 +34,11 @@ import {
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import {
-  serviceProjectState,
-  serviceSession,
-} from '@texra/controllers/server/serviceSession';
+import { serviceProjectState } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import type { WindowClient } from '@texra/controllers/server/windowHost';
-import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
+import { openProjectSession } from '@texra/controllers/session/openProjectSession';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import type { ConfigStore } from '@texra-ai/harness/node';
@@ -257,47 +253,27 @@ const warnInDialog = (message: string): void => {
  * workspace override in `.texra/config.json` is the same value a run in this
  * session would read.
  */
-const openProjectSession = Effect.fn('openProjectSession')(function* (
+const openDesktopProject = Effect.fn('openDesktopProject')(function* (
   root: string | undefined,
   roots: WorkspaceRoots,
   scope: Scope.Closeable,
   service: ServiceLink | undefined,
-  sessions: Sessions['Service'],
-  hosts: Context.Service.Shape<typeof HostWindows>,
-): Effect.fn.Return<DesktopProject, Error, Scope.Scope> {
-  const facts = {
+): Effect.fn.Return<
+  DesktopProject,
+  Error,
+  Scope.Scope | Sessions | HostWindows
+> {
+  const opened = yield* openProjectSession(roots, service, (message) =>
+    Effect.sync(() => warnInDialog(message)),
+  );
+  return {
     key: roots.storage,
     display: projectDisplayOf(roots.storage, root),
     roots,
     dispose: () => Scope.close(scope, Exit.void),
+    root,
+    ...opened,
   };
-  // A folder's runs run in the service, which follows its interrupted
-  // tasks; this process opens no session for it.
-  if (service !== undefined && root !== undefined)
-    return {
-      ...facts,
-      root,
-      link: service,
-      session: yield* serviceSession(service, root, roots),
-    };
-  // The no-workspace session's runs, and every run without a service, run
-  // here.
-  const session = yield* Effect.acquireRelease(
-    sessions.open(roots, {
-      persistent: true,
-      host: {},
-    }),
-    // The one close every session takes: its runs stopped under the
-    // shutdown deadline, the ones still live past it settled, its
-    // artifacts flushed, its entry released.
-    (opened) => Effect.asVoid(sessions.close(opened.roots)),
-  );
-  yield* recordFirstCompletedRun(session);
-  // A store moved aside at open (pre-1.0 or corrupt) is said once, as the
-  // extension and the CLI say it.
-  if (session.storeMovedAside)
-    warnInDialog(sessionStoreMovedAsideMessage(session.storeMovedAside));
-  return { ...facts, root, session, link: yield* hosts.localLink(session) };
 });
 
 /**
@@ -312,21 +288,24 @@ export const openDesktopProjectRegistry: (
   DesktopProjectRecords | StateStores | Sessions | HostWindows
 > = Effect.fn('openDesktopProjectRegistry')(
   function* (options: DesktopProjectRegistryOptions) {
-    // The process's sessions: each project's session is opened through them.
+    // The process's sessions and windows, which every project opens with.
     const sessions = yield* Sessions;
     const hosts = yield* HostWindows;
+    const openProject = (...args: Parameters<typeof openDesktopProject>) =>
+      openDesktopProject(...args).pipe(
+        Effect.provideService(Sessions, sessions),
+        Effect.provideService(HostWindows, hosts),
+      );
     const records = yield* DesktopProjectRecords;
     const stateStores = yield* StateStores;
     const lanes = new Map<string | symbol, PerKeyLane>();
     const selection = Symbol();
     const fallback = yield* Effect.uninterruptible(
-      openProjectSession(
+      openProject(
         undefined,
         options.processRoots,
         options.processScope,
         undefined,
-        sessions,
-        hosts,
       ).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
@@ -399,14 +378,7 @@ export const openDesktopProjectRegistry: (
             // Acquire the session and install its registry owner before
             // interruption can leave this operation.
             return yield* Effect.uninterruptible(
-              openProjectSession(
-                root,
-                roots,
-                projectScope,
-                options.service,
-                sessions,
-                hosts,
-              ).pipe(
+              openProject(root, roots, projectScope, options.service).pipe(
                 Effect.tap(
                   Effect.fnUntraced(
                     function* (project) {
