@@ -19,20 +19,20 @@ R1–R10, the round-2 order and the round-3 plan, `refuted-candidates.json`, and
   and #14797 (F, R3-S). Both have since merged, with #14800; the rows they
   closed are updated below and in "Status at main `ca1431e`".
 
-## Status at main `096028c`
+## Status at main `c9ceb23`
 
-After #14814 and #14816 to #14825 merged, the ids stand at:
+After #14814, #14816 to #14826 merged, the ids stand at:
 
 | Status         | Rounds 1–3 | Round 4 | All | Change from `ed2004a`                                            |
 | -------------- | ---------: | ------: | --: | ---------------------------------------------------------------- |
-| landed         |        186 |      26 | 212 | +47: 22 in rounds 1–3, 25 in round 4                             |
-| assigned       |         26 |       4 |  30 | −50: 47 landed, 1 held, 2 open with a part that has no owner     |
+| landed         |        187 |      26 | 213 | +48: 23 in rounds 1–3, 25 in round 4                             |
+| assigned       |         25 |       4 |  29 | −51: 48 landed, 1 held, 2 open with a part that has no owner     |
 | refused        |          7 |       0 |   7 | none; the seven refusals recorded in this wave are parts of rows |
 | held           |          4 |       2 |   6 | +1, W9's "age unknown" rule                                      |
 | open, no owner |          2 |       0 |   2 | +2: G11 and J8                                                   |
 
-Read from the squash messages of `ed2004a..096028c` and the bodies of
-#14814, #14816, #14818, #14820 to #14825 on GitHub, with #14820's commits.
+Read from the squash messages of `ed2004a..c9ceb23` and the bodies of
+#14814, #14816, #14818, #14820 to #14826 on GitHub, with #14820's commits.
 
 **Counting in this wave.** The rules of `ed2004a` hold, and:
 
@@ -56,8 +56,8 @@ Read from the squash messages of `ed2004a..096028c` and the bodies of
   j), J8 (all but the icon-button ids), N11's rest, P8 (a, b, g, h, i), U7
   (a, d, e, f, g), Y-B's `rejected` and Y-C's "settled".
 - #14821 (C): Y2.
-- #14823 (D): RT1, RT2, RT3, RT4, RT5, RT7, RT8, and round 4's X-R9. RT6 is
-  not done.
+- #14823 (D): RT1, RT2, RT3, RT4, RT5, RT7, RT8, and round 4's X-R9. RT6 landed
+  in #14826.
 - #14824 (B): G11g.
 - #14825 (E): M11; C11c, E11's ii and iii, O9's 9a, 9b, 9c and 9f, and
   Y-B's NC4 spelling.
@@ -71,6 +71,7 @@ Read from the squash messages of `ed2004a..096028c` and the bodies of
 - #14822 (F, `670c650`): W1, W2, W3, W4, W5, W6, W8, W10, W9's rest,
   Y4, Y7, X-R2's `Exit` comment, X-R3, V-R21 and Y-C's three items, plus
   its review fixes. A's replies to X-R2's threads are on #14809.
+- #14826 (D, `c9ceb23`): RT6.
 
 **Refused.** No row was refused whole. Seven parts of rows were, each with a
 record in `refuted-candidates.json`:
@@ -115,7 +116,6 @@ the golden-store gap has no row.
 
 **Owners that changed:**
 
-- D has R6 (RT6), in its own PR, in progress.
 - E has R3-E2 (O3, the storage-format batch, GS1 and Q2), then Q1 with
   Q8 b. #14825 put C11d and O9 9d in that batch and O9 9e with O3. C11a
   waits on D's `sessionViewFixture`. E11's `callRequests` part is
@@ -756,9 +756,9 @@ A status in _italics_ marks an id that restates an earlier one.
 | RT1    | Run-loop suites fake the model by re-implementing `ModelInvoker`                                                              | tests         | repetition/two representations, overexposure                                                                                          | landed (#14823: `modelInvokerLayer` over `scriptedModel`)                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | RT2    | A test tool call assembled from a hand copy of the dispatch                                                                   | tests         | repetition/two representations, information leakage                                                                                   | landed (#14823: `nativeToolTestLayer` over the production `callRequests`)                                                                                                                                                                                                                                                                                                                                                                                                    |
 | RT3    | The TUI's hand-built `SessionView` has drifted from the fold                                                                  | tests         | repetition/two representations, nonobvious code                                                                                       | landed (#14823: the TUI fixture view built by `makeSessionViewUpdater`)                                                                                                                                                                                                                                                                                                                                                                                                      |
-| RT4    | The golden store generator re-implements the row codec                                                                        | tests         | repetition/two representations, information leakage                                                                                   | landed (#14823: the golden-store generator encodes through `rowCodec`); nothing yet catches a stale golden store, see "Open" under "Status at main `096028c`"                                                                                                                                                                                                                                                                                                                |
+| RT4    | The golden store generator re-implements the row codec                                                                        | tests         | repetition/two representations, information leakage                                                                                   | landed (#14823: the golden-store generator encodes through `rowCodec`); nothing yet catches a stale golden store, see "Open" under "Status at main `c9ceb23`"                                                                                                                                                                                                                                                                                                                |
 | RT5    | The validation model's switch restated by seven files; env patched in process                                                 | tests         | information leakage, special-general mixture, repetition/two representations                                                          | landed (#14823: `validationModel(scenario)`; the switch names in `validationSwitch.ts`)                                                                                                                                                                                                                                                                                                                                                                                      |
-| RT6    | The fake host read through a module slot over a worker-shared directory                                                       | tests         | nonobvious code, hard to describe                                                                                                     | assigned D (its own PR, in progress)                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| RT6    | The fake host read through a module slot over a worker-shared directory                                                       | tests         | nonobvious code, hard to describe                                                                                                     | landed (#14826)                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | RT7    | Tier membership read from import spelling; `pure` runs with the real home                                                     | tests         | information leakage, special-general mixture                                                                                          | landed (#14823: a suite's tier follows its imports; crash conformance is its own project)                                                                                                                                                                                                                                                                                                                                                                                    |
 | RT8    | Batched: dead support exports, a polling helper, five temp-dir idioms, `FakeHosts.ts`                                         | tests         | overexposure, reinvented primitive, repetition/two representations, vague name, nonobvious code                                       | landed (#14823)                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | S1     | The release gate trusts a `validate` run that skipped the checks                                                              | tooling       | errors not defined out of existence, repetition/two representations, conjoined methods                                                | landed (#14797)                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
