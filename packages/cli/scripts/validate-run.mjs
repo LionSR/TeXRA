@@ -1754,9 +1754,11 @@ prompt: |
 /**
  * Background compaction end to end (durable harness H5, gap 4): at a 1%
  * threshold, a long first message puts the conversation over it. The
- * resumed chat's next turn starts the summary off the loop and still sends
- * the whole history (the reply names the first message), and the turn
- * after lands it, as an edit of the messages before that turn's request,
+ * message starts a task in the service, which takes messages as a chat's
+ * run does (a headless `texra run` takes none). The chat that resumes it
+ * runs a turn that starts the summary off the loop and still sends the
+ * whole history (the reply names the first message), and the turn after
+ * lands it, as an edit of the messages before that turn's request,
  * keeping what followed (the reply names the summary and the new message
  * only). The store's `context.edit` rows are kept as the artifact.
  */
@@ -1766,7 +1768,33 @@ async function validateBackgroundCompaction() {
     const project = echoProject(cwd, {
       'texra.model.compactionThresholdPercent': 1,
     });
-    const source = project.firstRun(`${'filler '.repeat(8_000)}First message`);
+    const started = run(
+      process.execPath,
+      [
+        binaryPath,
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        `${'filler '.repeat(8_000)}First message`,
+        '--cwd',
+        project.work,
+      ],
+      { cwd: project.work, env: project.ptyEnv },
+    );
+    assertSuccess(started, 'texra tasks start echo_validation');
+    const source = started.stdout.trim();
+    await waitFor(
+      'the first turn to end',
+      () =>
+        project.readStore(
+          `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = '${source}' AND e.type = 'run.position'
+           AND json_extract(e.data, '$.payload.at') = 'waiting'`,
+        ).length > 0,
+    );
     const replies = [
       'First message | Second message',
       'Earlier turns, summarized. | Third message',
