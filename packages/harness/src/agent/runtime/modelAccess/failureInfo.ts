@@ -33,36 +33,19 @@ export function failureInfo(
   };
 }
 
-/** Which route a 429 cools: the model's, where the provider scoped it, else the wire's. */
-const modelScoped = (error: Error): boolean =>
-  error instanceof ModelError && error.scope === 'model';
-
 /**
  * The retry gate's two routes for one binding, narrowest first: `model` on
- * its `wire` route, then the wire route itself (provider, credential route,
- * endpoint, key fingerprint), which a failure llm scoped to the route cools.
+ * its `wire` route, which a failure llm scoped to the model cools, then the
+ * wire route itself (provider, credential route, endpoint, key fingerprint),
+ * which a failure scoped to the route cools.
  */
 export function routePolicies(
   wire: readonly string[],
   model: string,
 ): readonly [RoutePolicy, RoutePolicy] {
   const wireKey = JSON.stringify(wire);
-  const after = (error: Error) => ({
-    retryAfterMs: error instanceof ModelError ? error.retryAfterMs : undefined,
-  });
   return [
-    {
-      key: JSON.stringify([wireKey, model]),
-      classifyFailure: (error) =>
-        modelScoped(error) ? after(error) : undefined,
-    },
-    {
-      key: wireKey,
-      classifyFailure: (error) =>
-        error instanceof ModelError && error.scope === 'route'
-          ? after(error)
-          : undefined,
-      isReachableFailure: modelScoped,
-    },
+    { key: JSON.stringify([wireKey, model]), scope: 'model' },
+    { key: wireKey, scope: 'route' },
   ];
 }

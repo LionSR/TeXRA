@@ -39,6 +39,7 @@ import {
   Record,
   Schema,
   Scope,
+  ScopedRef,
   SynchronizedRef,
 } from 'effect';
 import { ModelProvider } from '@texra-ai/llm';
@@ -338,7 +339,7 @@ const openStep = Effect.fn('Step.open')(function* (
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
   // The model-dependent text follows the step's model and settings.
-  const model = yield* SynchronizedRef.get(run.model);
+  const model = yield* ScopedRef.get(run.model);
   const delegation = yield* readDelegationTargets(
     step.tools,
     roots,

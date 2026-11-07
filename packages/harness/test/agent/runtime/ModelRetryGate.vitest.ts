@@ -1,19 +1,25 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Random } from 'effect';
+import { ModelError } from '@texra-ai/llm';
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import type { RoutePolicy } from '@texra-ai/harness/plugins';
+import { makeRetryGate } from '@agent/runtime/ModelRetryGate';
+import type { ModelRetryGate, RoutePolicy } from '@texra-ai/harness/plugins';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
-const TRANSIENT = new Error('temporary connection failure');
+/** A failure llm scoped to the route, which cools it. */
+const TRANSIENT = new ModelError({
+  kind: 'transport',
+  message: 'temporary connection failure',
+  scope: 'route',
+});
 
-/** The default single wire route: every failure cools the shared route. */
+/** The single wire route, cooled by a route-scoped failure. */
 function wireRoutes(): [RoutePolicy] {
-  return [{ key: ROUTE, classifyFailure: () => ({}) }];
+  return [{ key: ROUTE, scope: 'route' }];
 }
 
 /** A draw at the middle of [0, 1): the ±20 % jitter scales by exactly 1. */
@@ -22,15 +28,15 @@ const MIDPOINT_RANDOM: Random.Random = {
   nextIntUnsafe: () => 0,
 };
 
-/** Run `attempt` through `gate` on `routes` with a 1s base backoff and a
- *  jitter-free cooldown. */
+/** Run `attempt` through `gate` on `routes` with a jitter-free cooldown
+ *  (the gate's base backoff is 1s). */
 function gated<A, E>(
   gate: ModelRetryGate,
   routes: readonly [RoutePolicy, ...RoutePolicy[]],
   attempt: Effect.Effect<A, E>,
 ): Effect.Effect<A, E> {
   return gate
-    .withRoutes(routes, { baseBackoffMs: 1000 })(attempt)
+    .withRoutes(routes)(attempt)
     .pipe(Effect.provideService(Random.Random, MIDPOINT_RANDOM));
 }
 
@@ -73,7 +79,7 @@ describe('ModelRetryGate', () => {
     'admits one recovery probe and releases siblings after success',
     () =>
       Effect.gen(function* () {
-        const gate = yield* ModelRetryGate.make;
+        const gate = makeRetryGate();
         yield* openGate(gate);
 
         const probe = pendingAttempt();
@@ -99,7 +105,7 @@ describe('ModelRetryGate', () => {
 
   it.effect('hands an abandoned probe to the next waiting call', () =>
     Effect.gen(function* () {
-      const gate = yield* ModelRetryGate.make;
+      const gate = makeRetryGate();
       yield* openGate(gate);
 
       const probe = pendingAttempt();

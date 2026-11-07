@@ -23,7 +23,7 @@
  * instead of asked of its model; `RunState.handedDown` ends the turn.
  */
 
-import { Effect, Exit, SynchronizedRef, type Scope } from 'effect';
+import { Effect, Exit, type Scope, ScopedRef } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace/helpers';
@@ -169,7 +169,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
     logger.debug('Resuming tool-use run from the run history.');
     return { cell, activation: cell.opened.commit, openingSystem: undefined };
   }
-  const bound = yield* SynchronizedRef.get(run.model);
+  const bound = yield* ScopedRef.get(run.model);
   // The state its first step opens on: what the opening batch records.
   const { backend, declinedRoutes } = bound;
   const binding = { backend, declinedRoutes };
@@ -350,7 +350,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (processed.done) return completeTurn(state);
           continue;
         }
-        const bound = yield* SynchronizedRef.get(run.model);
+        const bound = yield* ScopedRef.get(run.model);
         // A message typed while the turn ran joins the request after the tool
         // results (past a context update), never a user message: read before
         // the step opens, so a skill it activates is the step's, and before a

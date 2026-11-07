@@ -10,9 +10,9 @@
 import {
   Context,
   Effect,
-  Exit,
   Layer,
   Scope,
+  ScopedRef,
   Semaphore,
   SynchronizedRef,
 } from 'effect';
@@ -149,24 +149,15 @@ export interface AgentRunShape extends RunLaunch {
   readonly finalToolName: string | null;
   /**
    * The binding in force, this activation's resource (its route, socket,
-   * ping fiber and uploads), replaced only through `swapModel`. The run's
-   * model is a row fact, its newest `run.config`, read from the run state;
-   * the binding says only what was bound for it, and is read for what the
-   * bound model can do.
+   * ping fiber and uploads), in a scope of its own under the run's. A
+   * `ScopedRef.set` binds the next one into a fresh scope and closes the
+   * retired binding's at once; a bind that fails or is interrupted leaves
+   * the binding as it was. Its writers are a switch at the loop's model
+   * boundary and a rebind after a failure. The run's model is a row fact,
+   * its newest `run.config`, read from the run state; the binding says only
+   * what was bound for it, and is read for what the bound model can do.
    */
-  readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
-  /**
-   * Replace the binding: `next` binds into a scope of its own, forked from
-   * the run's, and the binding it returns goes into force; the retired
-   * binding's scope closes at once, releasing its socket, ping fiber and
-   * uploads. `next` returning the binding it was handed keeps it, and a
-   * failure or interruption closes the fork and leaves the binding as it
-   * was. The one writer of `model`: a switch, a manual retry's rebind and a
-   * reacquired connection all come through here.
-   */
-  readonly swapModel: <E, R>(
-    next: (current: BoundModel) => Effect.Effect<BoundModel, E, R>,
-  ) => Effect.Effect<BoundModel, E, Exclude<R, Scope.Scope>>;
+  readonly model: ScopedRef.ScopedRef<BoundModel>;
   /**
    * The run's scope: a parallel-strategy child of the layer's, closed when
    * the run's layer is released. What the run holds for its whole life (its
@@ -305,41 +296,20 @@ export const agentRunLayer = (
       // user's stored preferences.
       const declinedRoutes: readonly DeclinableUsageRoute[] =
         persisted?.declinedRoutes ?? [];
-      // Each binding owns a scope forked from the run's; only the one in
-      // force is open. `bindingScope` is written only inside the ref's
-      // update, which serializes every swap.
-      let bindingScope = yield* Scope.fork(scope);
-      const bound = yield* (yield* ModelAccess)
-        .bind({
-          modelId,
-          config: modelConfig,
-          backend,
-          declinedRoutes,
-          textOnly,
-          temperature: persona.temperature,
-        })
-        .pipe(Scope.provide(bindingScope));
-      const model = yield* SynchronizedRef.make(bound);
-      const swapModel: AgentRunShape['swapModel'] = (next) =>
-        SynchronizedRef.updateAndGetEffect(
-          model,
-          Effect.fnUntraced(function* (current) {
-            const fork = yield* Scope.fork(scope);
-            const replacement = yield* next(current).pipe(
-              Scope.provide(fork),
-              Effect.onExit((exit) =>
-                Exit.isSuccess(exit) && exit.value !== current
-                  ? Effect.void
-                  : Scope.close(fork, Exit.void),
-              ),
-            );
-            if (replacement === current) return current;
-            const retired = bindingScope;
-            bindingScope = fork;
-            yield* Scope.close(retired, Exit.void);
-            return replacement;
-          }),
-        );
+      // The ref masks its acquisition; a stop must still cut a bind in
+      // progress.
+      const model = yield* ScopedRef.fromAcquire(
+        (yield* ModelAccess)
+          .bind({
+            modelId,
+            config: modelConfig,
+            backend,
+            declinedRoutes,
+            textOnly,
+            temperature: persona.temperature,
+          })
+          .pipe(Effect.interruptible),
+      ).pipe(Scope.provide(scope));
 
       return {
         ...launch,
@@ -348,7 +318,6 @@ export const agentRunLayer = (
         steps: yield* SynchronizedRef.make<OpenStep | null>(null),
         finalToolName,
         model,
-        swapModel,
         scope,
         callbacks: input.callbacks,
         awaitedCalls: Semaphore.makeUnsafe(

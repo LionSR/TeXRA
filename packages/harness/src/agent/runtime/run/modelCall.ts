@@ -18,16 +18,12 @@ import {
 
 import type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import { RouteRetries } from '@agent/runtime/ModelRetryGate';
+import { resendDelayMs, RouteRetries } from '@agent/runtime/ModelRetryGate';
 import type { SettingsStores } from '@shared/config/settings';
 import type { NormalizedUsage } from '@shared/schemas';
 import { UsageLog } from '@shared/usageLog';
 
 import { priceTurnUsage, reportUsage, type UsageAttribution } from './pricing';
-
-/** Base delay between automatic resends; the route gate scales its own on
- *  top for a failure llm scoped to a route. */
-export const RETRY_BACKOFF_MS = 1000;
 
 /** A completed call and its priced usage (`null`: none reported). */
 export interface CallResult {
@@ -54,12 +50,6 @@ interface ModelCall<R> {
   /** Where a wait before a resend is said: a run's trace, else the logger. */
   readonly debug: (message: string) => Effect.Effect<void>;
 }
-
-/** The pause before an automatic resend: as long as the provider asked,
- *  else the base backoff; none for a failure llm scoped to a route, which
- *  the gate cools and waits out before the next send. */
-const pauseOf = (error: ModelError): number =>
-  error.scope !== undefined ? 0 : (error.retryAfterMs ?? RETRY_BACKOFF_MS);
 
 /**
  * One completed call off a run's rows: prepared in the foreground, streamed
@@ -98,11 +88,7 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
   });
   return yield* Effect.flatMap(call.binding, (bound) => {
     sent = bound;
-    return gate.withRoutes(bound.routes, {
-      baseBackoffMs: RETRY_BACKOFF_MS,
-      onWait: (delayMs) =>
-        call.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
-    })(attempt(bound));
+    return gate.withRoutes(bound.routes)(attempt(bound));
   }).pipe(
     Effect.retry({
       while: (error: CallFailure | Error) =>
@@ -119,7 +105,7 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
             yield* call.renew(sent);
           } else if (!error.retryable || resent >= retries) return false;
           resent += 1;
-          const delayMs = pauseOf(error);
+          const delayMs = resendDelayMs(error);
           yield* call.debug(
             `Model request failed; automatic retry in ${delayMs}ms.`,
           );

@@ -11,7 +11,7 @@
  */
 
 // Third-party imports
-import { Effect, Result, Schema, SynchronizedRef } from 'effect';
+import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -455,7 +455,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const selected = yield* Effect.result(
     selectAvailableDelegationModel({
       requestedModel: launch.model,
-      parentModel: (yield* SynchronizedRef.get(run.model)).modelId,
+      parentModel: (yield* ScopedRef.get(run.model)).modelId,
       settings: call.env.roots,
     }),
   );

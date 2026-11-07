@@ -9,7 +9,7 @@
  * the parent as one follow-up (`createScriptRunStrategy`), and a resume
  * replays it from its own rows.
  */
-import { Effect, Schema, SynchronizedRef } from 'effect';
+import { Effect, Schema, ScopedRef } from 'effect';
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -56,7 +56,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   const { runId: parentRunId } = run;
   const earlier = yield* earlierChild(call);
   if (earlier !== null) return receipt(title, earlier, true);
-  const bound = yield* SynchronizedRef.get(run.model);
+  const bound = yield* ScopedRef.get(run.model);
   const runId = agentChildRunId(call);
   const workingDirectory =
     call.env.workingDirectory ?? run.config.workingDirectory;
