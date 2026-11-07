@@ -67,6 +67,7 @@ export function compileContext(
     fileService: new RunFileService(runId, roots),
     logger: spiedTrace(),
     runId,
+    inputDirs: [],
   };
 }
 
