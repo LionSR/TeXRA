@@ -119,9 +119,12 @@ export class ModelAccess extends Context.Service<
   }
 >()('@texra-ai/harness/ModelAccess') {}
 
-/** The settings one binding reads. */
+/** The settings one binding reads; a subscription session that cannot be
+ *  read already fails as its route. */
 const settingsOf = (stores: SettingsStores) =>
-  Effect.mapError(readModelSettings(stores), RouteUnavailable.of);
+  Effect.mapError(readModelSettings(stores), (error) =>
+    error instanceof RouteUnavailable ? error : RouteUnavailable.of(error),
+  );
 
 /** The helper model's request: the configured model, else the asking run's.
  *  Its bind decides whether it can serve now, as a run's does. */

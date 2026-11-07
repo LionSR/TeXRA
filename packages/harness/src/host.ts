@@ -155,7 +155,6 @@ export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // its writer, run-model precedence, the reasoning policy, the helper model.
 export {
   getEnabledModels,
-  ModelHostFactUnreadable,
   readModelOptions,
   setModelEnabled,
   type ModelOption,

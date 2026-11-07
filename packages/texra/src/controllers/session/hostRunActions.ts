@@ -17,7 +17,7 @@ import {
   AgentCatalog,
   getHelperModelName,
   type ProcessServices,
-  type ModelHostFactUnreadable,
+  type readModelOptions,
   StateReadFailed,
   withLogChannel,
   launchNoticeOf,
@@ -74,6 +74,9 @@ class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
  *  session's `start` takes them. */
 type RunValidatedOptions = Pick<StartInput, 'helperModel' | 'approval'>;
 
+/** What reading the model options fails with: what its reads fail with. */
+type ModelOptionsUnreadable = Effect.Error<ReturnType<typeof readModelOptions>>;
+
 export interface HostRunActionPorts {
   /** The window's roots: its workspace and its settings stores. */
   readonly roots: WorkspaceRoots;
@@ -106,7 +109,7 @@ export interface HostRunActionPorts {
   ): Effect.Effect<void, Error, ProcessServices>;
   loadModelOptions(): Effect.Effect<
     Parameters<typeof planCompileFixer>[0]['modelOptions'],
-    ModelHostFactUnreadable | StateReadFailed
+    ModelOptionsUnreadable
   >;
   /** The notification surface, shared with {@link MessageHost}: a host that
    *  could not present fails with `NotificationFailed`, and a user who
@@ -149,7 +152,7 @@ export interface HostRunActions {
   ): Effect.Effect<
     void,
     | CompileFixerPlanFailed
-    | ModelHostFactUnreadable
+    | ModelOptionsUnreadable
     | StateReadFailed
     | NotificationFailed
     | RequestRefusal
