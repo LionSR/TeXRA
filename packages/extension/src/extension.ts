@@ -452,7 +452,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // The settings view is built with the commands, after the progress view
   // that opens it, so the progress view waits for it.
   const settingsView = yield* Deferred.make<SettingsViewProvider>();
-  const progressViewProvider = new ProgressViewProvider(
+  const progressViewProvider = yield* ProgressViewProvider.make(
     context,
     globalState,
     runtime,
@@ -468,10 +468,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       Effect.sync(() => (usable ? setupPill.hide() : setupPill.show())),
     ),
   );
-  yield* Effect.andThen(
-    progressViewProvider.initialize(),
-    Effect.logInfo('TeXRA extension activated'),
-  ).pipe(withLogChannel(EXTENSION_CHANNEL));
+  yield* Effect.logInfo('TeXRA extension activated').pipe(
+    withLogChannel(EXTENSION_CHANNEL),
+  );
   // Registered last, so the first thing the activation scope's close runs:
   // every session stops and settles its runs before the view and the host
   // resources registered above tear down around them.

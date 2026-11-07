@@ -35,6 +35,7 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuilt } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
   INSTRUCTION_ACTION,
   instructionActions,
@@ -222,7 +223,8 @@ export const revealProgressView = Effect.fn('revealProgressView')(function* (
  * before this host attaches.
  */
 export function createAgentPresentationHost(
-  progressViewProvider: ProgressViewProvider,
+  /** The window's host snapshot, which shows the missing-agent banner. */
+  snapshot: Pick<HostSnapshotSource, 'showAgentConfigBanner'>,
   globalState: StateStore,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
@@ -246,7 +248,10 @@ export function createAgentPresentationHost(
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, roots, runtime, payload),
     agentNotFound: (payload) =>
-      progressViewProvider.showAgentConfigBanner(payload.agentName),
+      withProcessServices(
+        runtime,
+        snapshot.showAgentConfigBanner(payload.agentName),
+      ),
     requestShowError: handleRequestShowError,
   };
   return {

@@ -88,10 +88,6 @@ void Effect.runPromise(
     // wire run on the process runtime the platform builds.
     const { runtime, processScope, initialize } =
       yield* initializeElectronPlatform(moduleDirname);
-    // Recording has one process owner, shared by every project and window.
-    const draftRequests = yield* HostDraftRequests.make.pipe(
-      Scope.provide(processScope),
-    );
     // The process's shutdown is this scope's close. Its finalizers run in
     // the reverse of their registration: the window releases everything it
     // held (awaited), every session closes (its runs stopped and settled,
@@ -105,14 +101,6 @@ void Effect.runPromise(
     const shutdown = yield* Effect.cached(
       Scope.close(shutdownScope, Exit.void),
     );
-    const reported = (what: string, step: Effect.Effect<void, Error>) =>
-      step.pipe(
-        Effect.catchCause((cause) =>
-          Effect.sync(() =>
-            console.error(`Shutdown: ${what} failed`, Cause.squash(cause)),
-          ),
-        ),
-      );
     yield* Scope.addFinalizer(shutdownScope, runtime.disposeEffect);
     yield* Scope.addFinalizer(
       shutdownScope,
@@ -120,9 +108,11 @@ void Effect.runPromise(
         () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
       ),
     );
-    yield* Scope.addFinalizer(
-      shutdownScope,
-      reported('stopping the active recording', draftRequests.shutdown),
+    // Recording has one process owner, shared by every project and window.
+    // It is made here so the shutdown stops a take at this point of the
+    // order, after the sessions close and before the projects go.
+    const draftRequests = yield* HostDraftRequests.make.pipe(
+      Scope.provide(shutdownScope),
     );
     yield* Scope.addFinalizer(
       shutdownScope,

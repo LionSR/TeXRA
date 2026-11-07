@@ -117,9 +117,9 @@ interface ExtensionHostRequestsOptions {
    *  run in a toast when it cannot (the run actions' `revealProgress`). */
   readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
   /** The window's launcher (`HostRunActions.runValidated`), which the setup
-   *  assistant's run starts through; bound once the window has opened, so
-   *  read as that run starts. */
-  launcher(): HostRunActions['runValidated'];
+   *  assistant's run starts through; it is there once the window has opened,
+   *  so the run waits for it. */
+  readonly launcher: Effect.Effect<HostRunActions['runValidated']>;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
@@ -380,14 +380,13 @@ export const createExtensionHostRequests = Effect.fn(
       }),
       // The snapshot follows the flags it reads.
       skip: setOnboardingDeclined(globalState, true),
-      // The launcher is read as the run starts.
-      runSetup: Effect.suspend(() =>
+      runSetup: Effect.flatMap(options.launcher, (launcher) =>
         runHandler(
           'runSetupAssistant',
           launchSetupAssistant(
             roots,
             runSession,
-            options.launcher(),
+            launcher,
             options.showConnectModel(),
             options.showProgressView(),
           ),
