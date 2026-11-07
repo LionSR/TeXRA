@@ -362,7 +362,11 @@ export class FileList extends LitElement {
       );
       return;
     }
-    if (!isFileAction(command)) return;
+    // The buttons below write every verb; another one is a binding bug.
+    if (!isFileAction(command)) {
+      console.warn(`Unknown file action: ${command}`);
+      return;
+    }
     this.dispatchEvent(
       SessionUiEvents.host({
         kind: 'fileAction',
