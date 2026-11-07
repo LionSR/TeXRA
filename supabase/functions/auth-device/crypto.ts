@@ -1,4 +1,4 @@
-/** Shared random-secret and hashing primitives for edge functions. */
+/** Random-secret and hashing primitives for the device flow. */
 
 /** Cryptographically random URL-safe base64 string from `byteCount` bytes. */
 export function randomBase64Url(byteCount: number): string {

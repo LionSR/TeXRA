@@ -30,24 +30,16 @@
 
 import { type Context, Hono } from '@hono/hono';
 import { parseApprovalDecision } from './approvalRequest.ts';
-import {
-  AuthUnavailable,
-  authenticateJwt,
-  bearerToken,
-} from '../_shared/auth.ts';
+import { randomBase64Url, sha256Hex } from './crypto.ts';
+import { mintGoTrueSession, sessionResponseBody } from './goTrueSession.ts';
+import { AuthUnavailable, authenticateJwt } from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
-import { randomBase64Url, sha256Hex } from '../_shared/crypto.ts';
 import {
   adminClient,
-  anonClient,
   SUPABASE_ANON_KEY,
   SUPABASE_URL,
 } from '../_shared/edgeClients.ts';
-import {
-  mintGoTrueSession,
-  sessionResponseBody,
-} from '../_shared/goTrueSession.ts';
-import { errorResponse, jsonResponse } from '../_shared/responses.ts';
+import { bearerToken, errorResponse, jsonResponse } from '../_shared/http.ts';
 
 // =============================================================================
 // Constants
@@ -401,13 +393,7 @@ app.post('/token', async (c) => {
       return errorResponse(c.req.raw, 'invalid_grant', 400);
     }
 
-    const session = await mintGoTrueSession(
-      adminClient,
-      anonClient,
-      email,
-      row.user_id,
-      '[DEVICE]',
-    );
+    const session = await mintGoTrueSession(email, row.user_id);
     if (!session) {
       // The claim is already burned — device codes are strictly single-use,
       // so a mint failure here ends the flow and the user re-runs login.

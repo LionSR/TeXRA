@@ -7,15 +7,11 @@
  * - POST /get-agent-config - Fetch agent YAML config by name
  */
 
-import {
-  AuthUnavailable,
-  authenticateJwt,
-  bearerToken,
-} from '../_shared/auth.ts';
+import { AuthUnavailable, authenticateJwt } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 // The service-role client bypasses bucket policies for storage operations.
 import { adminClient } from '../_shared/edgeClients.ts';
-import { errorResponse, jsonResponse } from '../_shared/responses.ts';
+import { bearerToken, errorResponse, jsonResponse } from '../_shared/http.ts';
 
 // =============================================================================
 // Request Handler

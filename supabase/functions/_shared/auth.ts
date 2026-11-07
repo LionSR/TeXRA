@@ -8,12 +8,6 @@ import {
 } from '@supabase/supabase-js';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from './edgeClients.ts';
 
-/** Extract the bearer token from the Authorization header. */
-export function bearerToken(req: Request): string | null {
-  const authHeader = req.headers.get('Authorization');
-  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-}
-
 interface AuthenticatedUser {
   user: User;
   /**

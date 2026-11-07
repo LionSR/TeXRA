@@ -28,7 +28,7 @@ import { Result, Schema, SchemaIssue } from 'effect';
 
 import { AuthUnavailable } from './auth.ts';
 import { handleCors } from './cors.ts';
-import { jsonResponse } from './responses.ts';
+import { jsonResponse } from './http.ts';
 
 const MAX_REPORTED_VALIDATION_ISSUES = 20;
 const flattenIssues = SchemaIssue.makeFormatterStandardSchemaV1();
@@ -49,7 +49,8 @@ function successResponse(
   );
 }
 
-function errorResponse(
+/** An answer that accepts none of the batch, in the usage wire's shape. */
+function rejectBatch(
   req: Request,
   error: string,
   status: number,
@@ -92,20 +93,20 @@ export function serveLogUsage<
     if (response) return response;
 
     if (req.method !== 'POST') {
-      return errorResponse(req, 'Method not allowed', 405);
+      return rejectBatch(req, 'Method not allowed', 405);
     }
 
     try {
       const owner = await resolveOwner(req);
       if (!owner) {
-        return errorResponse(req, 'Missing or invalid credential', 401);
+        return rejectBatch(req, 'Missing or invalid credential', 401);
       }
 
       let body: unknown;
       try {
         body = await req.json();
       } catch {
-        return errorResponse(req, 'Invalid JSON body', 400, {
+        return rejectBatch(req, 'Invalid JSON body', 400, {
           retryable: false,
           errorCode: 'INVALID_JSON',
         });
@@ -121,7 +122,7 @@ export function serveLogUsage<
         // of their retry queue. They already understand success:false on 2xx.
         // This status can return to 422 under the #6981 retirement gate once
         // the minimum supported client includes #8267.
-        return errorResponse(req, 'Invalid batch format or entry data', 200, {
+        return rejectBatch(req, 'Invalid batch format or entry data', 200, {
           retryable: false,
           errorCode: 'BATCH_REJECTED',
           issueCount: issues.length,
@@ -146,10 +147,10 @@ export function serveLogUsage<
     } catch (error) {
       if (error instanceof AuthUnavailable) {
         console.warn('[LOG_USAGE]', error.message);
-        return errorResponse(req, 'Authentication is unavailable', 503);
+        return rejectBatch(req, 'Authentication is unavailable', 503);
       }
       console.error('[LOG_USAGE] Unexpected error:', error);
-      return errorResponse(req, 'Internal server error', 500);
+      return rejectBatch(req, 'Internal server error', 500);
     }
   });
 }
