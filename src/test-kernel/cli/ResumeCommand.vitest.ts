@@ -6,6 +6,7 @@ import { beforeEach, expect, vi } from 'vitest';
 import {
   type AgentConfig,
   AgentConfigSchema,
+  emptyRunEndOutput,
   qualifyAggregateId,
   RunIdSchema,
   type RunId,
@@ -53,7 +54,10 @@ const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 /** Seed the real (fake-platform-backed) run records and run aggregate into
  *  the test's session, which the command resolves off its platform; the
  *  seeded session's handle comes back. */
-const seedRunRecord = (config: AgentConfig | null, takesFollowUps = true) =>
+const seedRunRecord = (
+  config: AgentConfig | null,
+  { takesFollowUps, ended }: { takesFollowUps: boolean; ended: boolean },
+) =>
   Effect.gen(function* () {
     const handle = yield* sessionHandleOf(yield* TestSession);
     yield* Context.get(handle, SessionLog).transact([
@@ -78,6 +82,15 @@ const seedRunRecord = (config: AgentConfig | null, takesFollowUps = true) =>
         payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
     ]);
+    if (ended)
+      yield* Context.get(handle, SessionLog).transact([
+        {
+          type: 'run.end',
+          aggregateId: qualifyAggregateId('run', RUN_ID),
+          outcome: 'completed',
+          output: emptyRunEndOutput(),
+        },
+      ]);
     return handle;
   });
 
@@ -126,10 +139,15 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     // A session of its own per case, seeded by the case.
     it.layer(TestSession.layer(), { buildPerTest: true })((it) => {
       it.effect(
-        'reopens the chat TUI with the persisted tool-use run record',
+        'reopens the chat TUI to finish an interrupted one-shot run',
         () =>
           Effect.gen(function* () {
-            yield* seedRunRecord(TOOL_USE_CONFIG);
+            // A headless `texra run` stopped mid-turn: no outcome yet, so
+            // its resume finishes the turn (a fork needs a finished one).
+            yield* seedRunRecord(TOOL_USE_CONFIG, {
+              takesFollowUps: false,
+              ended: false,
+            });
             expect(yield* run(cliContext())).toEqual({
               chat: { initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG } },
             });
@@ -144,8 +162,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // command first sees lacks the run its log already holds.
             const session = yield* TestSession;
             const opened = session.view.current();
-            // A headless `texra run` root: it ran once and reads no input.
-            yield* seedRunRecord(TOOL_USE_CONFIG, false);
+            // A headless `texra run` root that ended: it ran once and reads
+            // no input.
+            yield* seedRunRecord(TOOL_USE_CONFIG, {
+              takesFollowUps: false,
+              ended: true,
+            });
             const lagging: Session = {
               ...session,
               view: { ...session.view, current: () => opened },

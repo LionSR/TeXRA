@@ -587,11 +587,12 @@ export function createChatSessionController(
           );
           return;
         }
-        // A run launched to run once reads no messages: a chat over it would
-        // refuse every one, so it continues as a fork. Read from the log: at
-        // startup a service window's own view has not filled yet.
-        const stored = yield* runSession.view.read([id]);
-        if (stored.runs.get(id)?.takesFollowUps === false) {
+        // A run launched to run once reads no messages: once it ended, a
+        // chat over it would refuse every one, so it continues as a fork.
+        // One stopped mid-turn still resumes to finish it. Read from the
+        // log: at startup a service window's own view has not filled yet.
+        const stored = (yield* runSession.view.read([id])).runs.get(id);
+        if (stored?.takesFollowUps === false && stored.outcome !== null) {
           refuseResume(
             oneShotResumeNotice(init.sessionContext.commandName, id),
           );

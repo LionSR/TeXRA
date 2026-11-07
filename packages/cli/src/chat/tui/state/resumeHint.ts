@@ -56,9 +56,9 @@ export function formatResumeCommand(
   return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }
 
-/** Why a run launched to run once (a headless `texra run`) is not reopened
- *  as a chat: it reads no messages, so a fork, a new task holding its
- *  conversation, is how it continues. */
+/** Why a run launched to run once (a headless `texra run`) that ended is
+ *  not reopened as a chat: it reads no messages, so a fork, a new task
+ *  holding its conversation, is how it continues. */
 export function oneShotResumeNotice(
   commandName: string | undefined,
   runId: RunId,
