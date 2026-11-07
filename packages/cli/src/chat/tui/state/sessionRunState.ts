@@ -165,6 +165,16 @@ export class TuiSession {
     );
   }
 
+  /** The root `runId`'s result could not be read (its connection died, or
+   *  its end was lost): the chat exits as a failure, unless a later root
+   *  replaces it, whatever a view that stopped updating still shows. */
+  rootFailed(runId: RunId): void {
+    if (rootRunId.get() !== runId) return;
+    const launched = Deferred.makeUnsafe<RunId | null>();
+    Deferred.doneUnsafe(launched, Effect.succeed(runId));
+    rootLaunch.set({ launched, exitCode: CliExitCode.AgentError });
+  }
+
   /** A root the session resumed on its own becomes the chat's, unless a
    *  launch is on its way or another root of the chat is live here: either
    *  is newer than the resume and keeps the chat. Taken up, it replaces the

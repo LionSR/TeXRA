@@ -341,11 +341,13 @@ export function createChatSessionController(
       modelFailureText({ message: toErrorMessage(error), classification }),
     );
   };
-  // A held run's own failure (its end could not be read) says something
-  // only while it is still the chat's root and the user did not stop it.
+  // A held run's own failure (its end could not be read) fails the chat's
+  // exit and says so, only while it is still the chat's root and the user
+  // did not stop it.
   const reportHeldRunFailure = (runId: RunId, error: unknown): void => {
     if (rootRunId.get() !== runId) return;
     if (runViewOf(currentView(), runId)?.outcome === 'cancelled') return;
+    session.rootFailed(runId);
     reportRunFailure(error);
   };
 
