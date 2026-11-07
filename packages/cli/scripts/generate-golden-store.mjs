@@ -82,9 +82,10 @@
  *
  * What differs between two generations is normalized before the dump: the
  * temporary paths, the process identities, the clock, the random ids, and
- * the date and platform in a system prompt. A content address over a
- * normalized value is recomputed, so every digest still names its value.
- * Two generations on one tree give the same file.
+ * the date and platform in a system prompt. Each row is read and written
+ * back through the store's own row codec (`rowCodec.ts`), which recomputes
+ * a normalized value's content addresses, so every digest still names its
+ * value. Two generations on one tree give the same file.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -104,8 +105,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { zstdDecompressSync } from 'node:zlib';
+import { build as bundle } from 'esbuild';
 import stableStringify from 'safe-stable-stringify';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
@@ -1026,47 +1028,40 @@ async function generate(root) {
 // Normalization
 // ---------------------------------------------------------------------------
 
-const sha256 = (text) => createHash('sha256').update(text).digest('hex');
-const ZSTD_LEVEL_3 = { params: { [constants.ZSTD_c_compressionLevel]: 3 } };
-const REF_SHAPED = /^\$+b$/;
-const renameKeys = (value, rename) =>
-  Object.fromEntries(
-    Object.entries(value).map(([key, field]) => [
-      REF_SHAPED.test(key) ? rename(key) : key,
-      field,
-    ]),
-  );
-
-/** A row's payload with its blob references inflated and its escaped keys
- *  restored: the value the codec encoded (`rowCodec.ts`, `parseData`). */
-function inflate(data, blobs) {
-  return JSON.parse(data, (_key, value) => {
-    if (value === null || typeof value !== 'object' || Array.isArray(value))
-      return value;
-    if (!('$b' in value)) return renameKeys(value, (key) => key.slice(1));
-    const text = blobs.get(value.$b);
-    if (text === undefined) fail(`missing blob ${value.$b}`);
-    return JSON.parse(text);
+/** The store's row codec (`rowCodec.ts`), bundled from source: the golden
+ *  rows are read and written by the code that reads and writes every store. */
+async function loadRowCodec(root) {
+  const outfile = path.join(root, 'row-codec.mjs');
+  await bundle({
+    stdin: {
+      contents: `
+        export { decodeRow, encodeDraft, EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
+        export { sha256Hex } from '@utils/core/idHash';
+      `,
+      loader: 'ts',
+      resolveDir: repoRoot,
+    },
+    outfile,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node22.16',
+    tsconfig: path.join(repoRoot, 'tsconfig.json'),
+    logLevel: 'warning',
   });
+  return import(pathToFileURL(outfile).href);
 }
 
-/** The codec's encoding of a payload (`rowCodec.ts`, `encodeDraft`): each
- *  string of 4096+ characters outlined under the sha256 of its JSON text. */
-function outline(payload) {
-  const blobs = new Map();
-  const data = JSON.stringify(payload, (_key, value) => {
-    if (typeof value === 'string' && value.length >= 4096) {
-      const json = JSON.stringify(value);
-      const digest = sha256(json);
-      blobs.set(digest, json);
-      return { $b: digest };
-    }
-    return value !== null && typeof value === 'object' && !Array.isArray(value)
-      ? renameKeys(value, (key) => `$${key}`)
-      : value;
-  });
-  return { data, blobs };
-}
+/** The fields of a stored event its row's columns hold, not its data. */
+const ENVELOPE = new Set([
+  'aggregateId',
+  'seq',
+  'commit',
+  'origin',
+  'at',
+  'type',
+  'unavailable',
+]);
 
 /** One replacement per distinct value, handed out in the order values are
  *  first met. */
@@ -1096,11 +1091,13 @@ const BASE_AT = Date.UTC(2026, 0, 1);
 /** The script functions whose call names the child run it launches. */
 const CHILD_CALLS = new Set(['agent', 'self']);
 
-function normalize(file, root) {
+async function normalize(file, root) {
+  const { decodeRow, encodeDraft, EVENT_COLUMNS, EVENT_FROM, sha256Hex } =
+    await loadRowCodec(root);
   const db = new DatabaseSync(file);
   const events = db
     .prepare(
-      'SELECT "commit", aggregate, type, origin, data FROM event ORDER BY "commit"',
+      `SELECT ${EVENT_COLUMNS}, e.aggregate AS aggregate FROM ${EVENT_FROM} ORDER BY e."commit"`,
     )
     .all();
   const stored = new Map(
@@ -1109,7 +1106,7 @@ function normalize(file, root) {
       .all()
       .map((row) => [
         row.digest,
-        zstdDecompressSync(row.value).toString('utf8'),
+        JSON.parse(zstdDecompressSync(row.value).toString('utf8')),
       ]),
   );
   const sequences = db
@@ -1126,10 +1123,18 @@ function normalize(file, root) {
     (n, id) => `a${n.toString(16).padStart(id.length - 1, '0')}`,
   );
   for (const row of sequences) uuids.get(row.uid);
-  const rows = events.map((row) => ({
-    ...row,
-    value: inflate(row.data, stored),
-  }));
+  // Each row as the codec reads it (no plugin's fact kinds: a fact reads as
+  // written), less what its columns hold.
+  const rows = events.map((row) => {
+    const read = decodeRow(row, {}, stored);
+    if (read._tag === 'Failure') fail(`row ${row.commit}: ${read.failure}`);
+    const event = read.success;
+    if (event === undefined) fail(`row ${row.commit} is a retired kind`);
+    const value = Object.fromEntries(
+      Object.entries(event).filter(([key]) => !ENVELOPE.has(key)),
+    );
+    return { ...row, aggregateId: event.aggregateId, value };
+  });
   // This machine's paths, each replaced before anything else: the temporary
   // root, by its real path first, and the bundle's own resources, which the
   // system prompt lists.
@@ -1286,15 +1291,14 @@ function normalize(file, root) {
       Object.entries(value).map(([k, v]) => [scrubText(k), scrub(v, k)]),
     );
   };
-  const canonical = (text) => stableStringify(scrub(JSON.parse(text)));
   // A context blob is stored as its canonical JSON under that text's
   // sha256, and one blob names others (a request names its tools), so the
-  // new addresses are found to a fixed point.
+  // new addresses are found to a fixed point. The codec checks each.
   const contexts = rows.filter((row) => row.type === 'context.blob');
   for (let changed = true; changed;) {
     changed = false;
     for (const { value } of contexts) {
-      const next = sha256(canonical(value.payload.value));
+      const next = sha256Hex(stableStringify(scrub(value.payload.value)));
       if (digests.get(value.payload.digest) !== next) {
         digests.set(value.payload.digest, next);
         changed = true;
@@ -1310,12 +1314,13 @@ function normalize(file, root) {
   const insertBlob = db.prepare('INSERT OR IGNORE INTO blob VALUES (?, ?)');
   const insertRef = db.prepare('INSERT INTO event_blob VALUES (?, ?)');
   for (const row of rows) {
-    let payload = scrub(row.value);
-    if (row.type === 'context.blob') {
-      const value = canonical(row.value.payload.value);
-      payload = { ...payload, payload: { digest: sha256(value), value } };
-    }
-    const encoded = outline(payload);
+    // As the database encodes a row it has stamped (a child's parent
+    // incarnation), which its draft schema does not carry.
+    const encoded = encodeDraft({
+      ...scrub(row.value),
+      type: row.type,
+      aggregateId: row.aggregateId,
+    });
     updateEvent.run(
       origins.get(row.origin),
       // One second per commit: two batches can share a millisecond, so the
@@ -1324,8 +1329,8 @@ function normalize(file, root) {
       encoded.data,
       row.commit,
     );
-    for (const [digest, json] of encoded.blobs) {
-      insertBlob.run(digest, zstdCompressSync(json, ZSTD_LEVEL_3));
+    for (const { digest, value } of encoded.blobs) {
+      insertBlob.run(digest, value);
       insertRef.run(row.commit, digest);
     }
   }
@@ -1430,7 +1435,7 @@ async function generation() {
     const source = new DatabaseSync(store, { readOnly: true });
     source.exec(`VACUUM INTO '${copy.replaceAll("'", "''")}'`);
     source.close();
-    normalize(copy, root);
+    await normalize(copy, root);
     return dump(copy);
   } finally {
     for (const child of spawned) child.kill('SIGKILL');
