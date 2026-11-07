@@ -182,6 +182,9 @@ const joinOpening = (
 ): Effect.Effect<ResumeHandOff> =>
   Effect.suspend(() =>
     (runs.openingOf(runId) ?? Effect.void).pipe(
+      // An opening that failed leaves no run here, which reads below as
+      // not resumable; its launch reports the failure.
+      Effect.ignore,
       Effect.andThen(
         runs.inSession(
           Effect.gen(function* () {
@@ -195,7 +198,14 @@ const joinOpening = (
           }),
         ),
       ),
-      Effect.catch(() => Effect.succeed(REFUSED)),
+      // A run this resume cannot read is refused, and the read's failure
+      // is logged rather than read as an ordinary refusal.
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Could not read run ${runId} to join its opening; the resume is refused.`,
+          error,
+        ).pipe(Effect.as(REFUSED)),
+      ),
     ),
   );
 
