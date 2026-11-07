@@ -282,16 +282,16 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   );
   // The window's own view: the listing, plus the transcripts its readers
   // name, each reader's set held for its scope. A change of that set is a
-  // new generation of one watch, from the cursor and history the view
-  // already holds, as a webview resubscribes.
+  // new watch, from the cursor and history the view already holds. The
+  // watch is one ordered stream, so it needs no generation: the previous
+  // watch's fiber is gone before the new watch's frames begin.
   const window = yield* graph.view.subscribe([]);
   const watches = new Map<object, readonly TranscriptSubscription[]>();
   const feed = yield* FiberHandle.make<void, never>();
   const lane = Semaphore.makeUnsafe(1);
-  let generation = 0;
   const resubscribe = lane.withPermits(1)(
     Effect.gen(function* () {
-      generation += 1;
+      yield* FiberHandle.clear(feed);
       const view = graph.view.current();
       const named = new Set(
         [...watches.values()].flatMap((set) => set.map((entry) => entry.id)),
@@ -300,18 +300,18 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         id,
         fromSeq: view.transcriptSeq.get(id) ?? 0,
       }));
-      yield* graph.frames.begin(generation);
+      yield* graph.frames.begin(0);
       yield* window.set(aggregates);
       const client = yield* link.client.get;
       // Offline: the link's return resubscribes.
-      if (client === null) return yield* FiberHandle.clear(feed);
+      if (client === null) return;
       yield* FiberHandle.run(
         feed,
         client['task.watch']({
           workspace,
           subscribe: {
             kind: 'subscribe',
-            generation,
+            generation: 0,
             debug: view.debug,
             cursor: view.cursor,
             aggregates,

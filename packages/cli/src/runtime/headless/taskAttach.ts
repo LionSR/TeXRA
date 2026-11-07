@@ -96,17 +96,17 @@ export function watchTask(
       const aggregates = [
         { id: qualifyAggregateId('run', task.runId), fromSeq: 0 },
       ];
-      const generation = 1;
-      // Begin the generation and name the transcript before the first
-      // frame, as a webview shell does before it posts its `Subscribe`.
-      yield* graph.frames.begin(generation);
+      // Begin the frames and name the transcript before the first frame, as
+      // a webview shell does before it posts its `Subscribe`. One ordered
+      // watch stream needs no generation.
+      yield* graph.frames.begin(0);
       yield* graph.view.subscribe(aggregates);
       const { debug } = graph.view.current();
       const feeding = yield* client['task.watch']({
         workspace: task.workspace,
         subscribe: {
           kind: 'subscribe',
-          generation,
+          generation: 0,
           debug,
           cursor: 0,
           aggregates,
