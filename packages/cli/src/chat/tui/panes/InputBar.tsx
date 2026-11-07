@@ -35,10 +35,8 @@ import {
 } from '../commands/slashForms';
 import { SlashPalette, slashPaletteOwnsArrows } from '../commands/SlashPalette';
 import {
-  matchSlashCommands,
   parseSlashInput,
-  prefixSlashCommands,
-  shouldRedactSlashInput,
+  useSlashCommands,
   type SlashCommand,
   type SlashPickIntent,
 } from '../commands/slashRegistry';
@@ -127,6 +125,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const value = useSubscriptionRef(runtime, draftRef).text;
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const { columns } = useWindowSize();
+  const commands = useSlashCommands();
   // Reads and writes go to the ref at once, so a keystroke chunk handled
   // before the next render sees the one before it.
   const readDraft = useCallback(
@@ -270,7 +269,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       // ENOSPC) must not block the submit. Surface the failure through the
       // shared log sink so it isn't completely silent.
       const historyPersist =
-        historyText.length > 0 && !shouldRedactSlashInput(historyText)
+        historyText.length > 0 && !commands.shouldRedact(historyText)
           ? historyRef.current?.push(historyText)
           : undefined;
       if (historyPersist) {
@@ -286,7 +285,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       }
       onSubmit(message, holdUntil);
     },
-    [clearDraft, onSubmit, readDraft, runtime],
+    [clearDraft, commands, onSubmit, readDraft, runtime],
   );
 
   const acceptSlashCommand = useCallback(
@@ -307,7 +306,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         // the active-form signal mount the component (see App.tsx).
         clearDraft();
         openRegisteredCliSlashForm(cmd, () =>
-          appendSlashCommandEcho(commandLine),
+          appendSlashCommandEcho(commands, commandLine),
         );
         return;
       }
@@ -323,7 +322,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         `/${cmd.name}${remainder ? ` ${remainder.trimStart()}` : ' '}`,
       );
     },
-    [clearDraft, handleSubmit, imagePasteQueue, readDraft, replaceDraft],
+    [
+      clearDraft,
+      commands,
+      handleSubmit,
+      imagePasteQueue,
+      readDraft,
+      replaceDraft,
+    ],
   );
 
   const handleInputChunkSubmit = useCallback(
@@ -334,7 +340,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         // palette, so only auto-run prefix matches here — the substring/typo
         // fallbacks are palette-only, where the user previews the match.
         // Unmatched input falls through to the unknown-command suggestion.
-        const chosen = prefixSlashCommands(slash.name)[0];
+        const chosen = commands.prefix(slash.name)[0];
         if (chosen !== undefined) {
           acceptSlashCommand(chosen, 'submit', slash.name, slash.remainder);
           return;
@@ -342,13 +348,13 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       }
       handleSubmit(submitted);
     },
-    [acceptSlashCommand, handleSubmit],
+    [acceptSlashCommand, commands, handleSubmit],
   );
 
   // Slash palette pops up while typing /…
   const parsed = parseSlashInput(value);
   const paletteMatchCount =
-    parsed !== undefined ? matchSlashCommands(parsed.name).length : 0;
+    parsed !== undefined ? commands.match(parsed.name).length : 0;
   const showPalette =
     parsed !== undefined &&
     !/\s/.test(value.slice(1)) &&

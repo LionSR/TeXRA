@@ -28,20 +28,18 @@ export function apiKeySecretName(provider: ApiKeyProviderId): string {
 }
 
 /**
- * The provider whose API key a secret-store entry holds, or `undefined` for
- * every other entry (OAuth tokens, the GitHub token). The
- * inverse of {@link apiKeySecretName}, for subscribers of the store's
- * `credentialChanged` signal.
+ * What a secret-store entry is, the inverse of {@link apiKeySecretName}: the
+ * provider whose API key it holds, `'unknown'` for an API-key entry of no
+ * provider this build knows, or `undefined` for every other entry (OAuth
+ * tokens, the GitHub token).
  */
-export function apiProviderOfSecretName(
+export function apiKeyEntry(
   key: string,
-): ApiKeyProviderId | undefined {
-  const provider = key.startsWith('apiKey.') ? key.slice('apiKey.'.length) : '';
-  return isApiProvider(provider) ? provider : undefined;
+): ApiKeyProviderId | 'unknown' | undefined {
+  if (!key.startsWith('apiKey.')) return undefined;
+  const provider = key.slice('apiKey.'.length);
+  return isApiProvider(provider) ? provider : 'unknown';
 }
-
-/** UI-safe provider key status derived from a resolved API key origin. */
-export type ApiKeyStatus = 'set' | 'env' | 'not-set';
 
 /** A provider's key, sealed, and its origin. */
 export interface ResolvedApiKey {
@@ -92,22 +90,16 @@ export function apiKey(
   );
 }
 
-const STATUS_BY_ORIGIN: Record<CredentialOrigin, ApiKeyStatus> = {
-  secret: 'set',
-  env: 'env',
-  none: 'not-set',
-};
-
-/** Every API-key provider's status, from its resolved key origin. */
-export function loadApiKeyStatusMap(
+/** Where every API-key provider's key comes from. */
+export function apiKeyOrigins(
   credentials: CredentialStore,
-): Effect.Effect<Record<ApiKeyProviderId, ApiKeyStatus>, SecretsFailed> {
+): Effect.Effect<Record<ApiKeyProviderId, CredentialOrigin>, SecretsFailed> {
   return Effect.forEach(
     API_KEY_PROVIDER_IDS,
     (provider) =>
       Effect.map(
         apiKey(credentials, provider),
-        ({ origin }) => [provider, STATUS_BY_ORIGIN[origin]] as const,
+        ({ origin }) => [provider, origin] as const,
       ),
     { concurrency: 'unbounded' },
   ).pipe(
@@ -116,7 +108,10 @@ export function loadApiKeyStatusMap(
       // every ApiKeyProviderId, so the record is total.
       (entries) =>
         // cast: total over ApiKeyProviderId, per the note above.
-        Object.fromEntries(entries) as Record<ApiKeyProviderId, ApiKeyStatus>,
+        Object.fromEntries(entries) as Record<
+          ApiKeyProviderId,
+          CredentialOrigin
+        >,
     ),
   );
 }

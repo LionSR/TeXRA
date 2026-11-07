@@ -204,7 +204,57 @@ lists the findings it closes and the primitive.
    step 2.3.
 3. **R8's second half**, with M8 (platform ports carrying app facts as
    optional members; `WorkspaceRoots` restating `GlobalStorageFs` and
-   `AppState` as fields).
+   `AppState` as fields). Taken on 2026-11-07 as far as the evidence below
+   carries it.
+
+#### R8's second half and M8: what landed and what was refused
+
+Landed: the session's `Interactions` is a record over a
+`SubscriptionRef<Option<HostInteractions>>` (the attached host) and a
+`Queue.sliding(256)` of the notices no host presented, built in the
+session's scope (`Interactions.make`); a host attaches for its caller's
+scope (`attachInteractions`), and the answerer ends when the session
+detaches its host, so `SessionHostInteractions`, its replay array, `use`,
+the `disposed` flag and the answerer's `ended` Deferred went. A window's
+own notices go through `presenterOn`. The app's directories on every
+command's PATH are a `Layer.succeed(CommandDirs)` the app provides, so
+`ProcessServicesOptions.commandDirs` and the unused
+`AgentPlatform.commandDirs` went. `AppStateStore.changes` was already
+required.
+
+Refused on investigation:
+
+- **The rooted filesystems as fields of `SessionRoots`.** The two tags are
+  not two copies of the roots: eleven host boundaries (the settings view,
+  VS Code commands, the CLI's memory commands over a `Pick` of the roots)
+  run a program over a project's files with no session, by
+  `withSessionFs(roots, …)`. As fields of `SessionRoots`, each would build
+  the whole session roots value (both rooted views and every store) to
+  hand a LaTeX helper its workspace view, and every program that needs one
+  rooted filesystem would require the session's roots. Two tags deleted, a
+  builder renamed, wider requirements: no element removed. The controllers'
+  `WorkspaceRoots` tag is a separate fact: the storage key of a session
+  graph, provided as `{ storage }` alone by the read-only and remote views
+  (`readSessionView.ts`, `projectDatabase.ts`, `Database.ts`), which hold
+  no roots. Recorded as `SESSION-roots-carry-rooted-fs`.
+- **`WorkspaceRoots` without `globalStorage` and `globalState`.** Both are
+  read as data by code below `platform/`, where `AppState` and
+  `GlobalStorageFs` are defined: the settings catalog resolves a
+  `globalState` row against the `SettingsStores` the caller holds
+  (`shared/config/settings.ts`, "there is no ambient reader"), and the
+  plugin record, trust and managed directories take `PluginEnv`
+  (`globalState`, `globalStorage`) in `common/plugins/`. Dropping the
+  fields moves both services below `common/` and makes the `globalState`
+  slot an ambient requirement of every `Settings` read: a redesign of the
+  settings contract, not a sweep. Recorded as
+  `PLATFORM-roots-drop-global-slots`.
+- **`AgentDirectoriesPort.teamMembers` and `resourcesRoot`.** The harness
+  persists a team selection (`shared/schemas/workspaceAgents.ts`,
+  `WorkspaceAgentsController.setTeam`) and filters its catalog by it; the
+  optional reader is the one place the app's definition of a team enters.
+  `resourcesRoot` is where a host's bundle sits, a host fact the harness
+  reads for the plugins' agent directories and the creator's docs; it is
+  absent for an embedder that ships none. Neither is an app fact restated.
 
 **Lane 3, one lifetime per request and window** (package B; no root).
 

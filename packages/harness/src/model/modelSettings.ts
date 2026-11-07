@@ -14,9 +14,11 @@ import {
   type ReasoningEffort,
   type RegionalProviderId,
   type RouteFacts,
+  type SecretsFailed,
 } from '@texra-ai/llm';
 import { getChatgptStatus, getXaiStatus } from '@texra-ai/llm/node';
 
+import { RouteUnavailable } from '@common/errors/agentErrors';
 import { Secrets } from '@platform/secrets';
 import {
   Settings,
@@ -88,14 +90,6 @@ export interface ModelSettings {
   };
 }
 
-/** Whether Google text-only turns go out as background Interactions, read
- *  again each turn; a Responses turn goes out so whenever its route can. */
-export function readGoogleBackground(
-  stores: SettingsStores,
-): Effect.Effect<boolean, StateReadFailed> {
-  return Settings.get<boolean>(stores, 'model.useGoogleBackgroundResponses');
-}
-
 /**
  * The endpoint the user chose for each provider: a dashboard URL, else the
  * default of the region its toggle picks. A provider with neither takes the
@@ -156,47 +150,39 @@ function hostPath(input: string): string {
 /**
  * Whether a subscription's preference is on and its session signed in. The
  * sign-in is read only when the preference is on, and a session that cannot
- * be read fails rather than reading as signed out, which would route the
- * call to a different billing route; the preference read is a synchronous
- * catalog read that throws, kept in the typed channel.
+ * be read fails as its route, with whether only a fresh sign-in helps,
+ * rather than reading as signed out, which would route the call to a
+ * different billing route.
  */
 const subscriptionOn = (
   stores: SettingsStores,
   provider: 'chatgpt' | 'grok',
-): Effect.Effect<boolean, StateReadFailed, Secrets> =>
-  Effect.try({
-    try: () => SubscriptionPreference.get(provider, stores),
-    catch: (cause) =>
-      new StateReadFailed({
-        key: provider,
-        message: `Could not read the ${provider} subscription preference.`,
-        cause,
-      }),
-  }).pipe(
-    Effect.flatMap((on) =>
-      on
-        ? Effect.flatMap(Secrets, (secrets) =>
-            (provider === 'chatgpt' ? getChatgptStatus : getXaiStatus)(secrets),
-          ).pipe(
-            Effect.map((status) => status.signedIn),
-            Effect.mapError(
-              (cause) =>
-                new StateReadFailed({
-                  key: provider,
-                  message: `Could not read the ${provider} subscription session.`,
-                  cause,
-                }),
-            ),
-          )
-        : Effect.succeed(false),
-    ),
-  );
+): Effect.Effect<boolean, RouteUnavailable, Secrets> =>
+  SubscriptionPreference.get(provider, stores)
+    ? Effect.flatMap(Secrets, (secrets) =>
+        (provider === 'chatgpt' ? getChatgptStatus : getXaiStatus)(secrets),
+      ).pipe(
+        Effect.map((status) => status.signedIn),
+        Effect.mapError((error) =>
+          RouteUnavailable.ofSession(
+            provider === 'chatgpt'
+              ? 'chatgpt-subscription'
+              : 'xai-subscription',
+            error,
+          ),
+        ),
+      )
+    : Effect.succeed(false);
 
 /** Read every model-access setting from `stores` and the process
  *  {@link Secrets}, once. */
 export const readModelSettings = Effect.fn('readModelSettings')(function* (
   stores: SettingsStores,
-): Effect.fn.Return<ModelSettings, StateReadFailed, Secrets> {
+): Effect.fn.Return<
+  ModelSettings,
+  StateReadFailed | SecretsFailed | RouteUnavailable,
+  Secrets
+> {
   const secrets = yield* Secrets;
   const flag = (key: string) => Settings.get<boolean>(stores, key);
   // One read decides both the route and how an unreadable key fails.
@@ -220,14 +206,7 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
           kimiCodeKey: hasUsableApiKey(secrets, 'kimiCode').pipe(
             Effect.catchTag('SecretsFailed', (failure) =>
               preferKimiCode
-                ? Effect.fail(
-                    new StateReadFailed({
-                      key: 'kimiCode',
-                      message:
-                        'Could not read the Kimi Code API key while Kimi Code is preferred.',
-                      cause: failure,
-                    }),
-                  )
+                ? Effect.fail(failure)
                 : Effect.logWarning(
                     'Failed to read Kimi Code API key status; treating it as unavailable.',
                     failure.cause,
@@ -252,7 +231,12 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
       ),
       Effect.all({
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
-        googleBackground: readGoogleBackground(stores),
+        // Whether Google text-only turns go out as background Interactions; a
+        // Responses turn goes out so whenever its route can.
+        googleBackground: Settings.get<boolean>(
+          stores,
+          'model.useGoogleBackgroundResponses',
+        ),
         automaticRetries: Settings.get<number>(
           stores,
           MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,

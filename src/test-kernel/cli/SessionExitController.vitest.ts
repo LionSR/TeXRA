@@ -81,7 +81,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
         session.runId = 'exec-graceful-flush' as RunId;
         const { controller, terminal } = yield* createController(session);
 
-        yield* Effect.promise(() => controller.gracefulTeardown());
+        yield* Effect.promise(() => controller.exit());
 
         expect(mocks.writeTextStderrAndWait).toHaveBeenCalledWith(
           expect.stringContaining('Transcript flush failed during exit'),

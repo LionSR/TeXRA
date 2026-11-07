@@ -52,12 +52,12 @@ export type ResumeHandOff =
   | { readonly failed: ResumeRefusal }
   | { readonly ownedBy: RunId };
 
-/** What a resume's caller supplies: the run's extra tools, the provider
- *  keys of the environment it resumes from, its progress callback, and
- *  whether it stops after one cycle. It resumes in the caller's session. */
+/** What a resume's caller supplies: the run's extra tools, its progress
+ *  callback, and whether it stops after one cycle. It resumes in the
+ *  caller's session, with the caller's `LaunchKeys`. */
 export interface ResumeRunOptions extends Pick<
   ExecuteAgentOptions,
-  'tools' | 'apiKeys' | 'onProgress'
+  'tools' | 'onProgress'
 > {
   /** Stop the run after one model/tool cycle instead of waiting for
    *  follow-up input. */
@@ -182,6 +182,9 @@ const joinOpening = (
 ): Effect.Effect<ResumeHandOff> =>
   Effect.suspend(() =>
     (runs.openingOf(runId) ?? Effect.void).pipe(
+      // An opening that failed leaves no run here, which reads below as
+      // not resumable; its launch reports the failure.
+      Effect.ignore,
       Effect.andThen(
         runs.inSession(
           Effect.gen(function* () {
@@ -195,7 +198,14 @@ const joinOpening = (
           }),
         ),
       ),
-      Effect.catch(() => Effect.succeed(REFUSED)),
+      // A run this resume cannot read is refused, and the read's failure
+      // is logged rather than read as an ordinary refusal.
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Could not read run ${runId} to join its opening; the resume is refused.`,
+          error,
+        ).pipe(Effect.as(REFUSED)),
+      ),
     ),
   );
 
@@ -251,7 +261,6 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   });
   return yield* executeAgent(definition, runId, {
     tools: options.tools,
-    apiKeys: options.apiKeys,
     onProgress: options.onProgress,
     parentRunId,
   });

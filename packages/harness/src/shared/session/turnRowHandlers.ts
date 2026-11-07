@@ -15,13 +15,14 @@
 import { Result } from 'effect';
 
 import { assistantMessageFromResult } from '@texra-ai/llm';
-import { addTurnUsage, type DispatchFacts } from '@shared/schemas';
+import { addUsage, type DispatchFacts } from '@shared/schemas';
 import { byId, copyById, ownCopy, type BatchCopies } from './runRows';
 import { resultFacts, turnText, withInput } from './runFacts';
 import {
   attemptOf,
   callSettlementOf,
   invocationAfter,
+  outOfOrder,
   type PendingCall,
   type PendingResponse,
 } from './inFlight';
@@ -67,12 +68,6 @@ function pendingResponseOf(
     },
   };
 }
-
-/** A row out of the order the run history writes. */
-export const outOfOrder = (
-  detail: string,
-): Result.Result<never, RowRejection> =>
-  Result.fail({ reason: 'out-of-order', detail });
 
 /** `messages` with `added` appended: the batch's own array, changed in place
  *  once copied, so a batch of rows appends without re-copying the history. */
@@ -158,12 +153,11 @@ type InvocationKind = Exclude<MessageKind, 'handed-down' | 'append'>;
 const withInvocation = (
   state: RunState,
   p: Message<InvocationKind>,
-): RowOutcome => {
-  const invocation = invocationAfter(state.invocation, p);
-  return typeof invocation === 'string'
-    ? outOfOrder(invocation)
-    : Result.succeed({ ...state, invocation });
-};
+): RowOutcome =>
+  Result.map(invocationAfter(state.invocation, p), (invocation) => ({
+    ...state,
+    invocation,
+  }));
 
 /**
  * The `model.message` handlers, by payload kind: the turn's invocation
@@ -197,7 +191,7 @@ const MESSAGE_HANDLERS: {
         ...updated,
         lastError: asked ? p.error : state.lastError,
         continuation: next.kind === 'unchain' ? null : state.continuation,
-        usage: addTurnUsage(state.usage, p.usage ?? null),
+        usage: addUsage(state.usage, p.usage ?? null),
       });
     }),
   response: (state, p, copies) =>
@@ -213,7 +207,7 @@ const MESSAGE_HANDLERS: {
         lastTurn: p.turn,
         answer: turnText(p.turn) || state.answer,
         countStale: false,
-        usage: addTurnUsage(state.usage, p.usage),
+        usage: addUsage(state.usage, p.usage),
         forceFinalTool: false,
         answerFinalized: false,
       };

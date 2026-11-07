@@ -4,6 +4,7 @@
  * Outbound: Backend → Frontend (the `profile` page of the host state)
  */
 import { Effect, Schema } from 'effect';
+import { CredentialOriginSchema } from '@texra-ai/llm';
 
 // ============================================================
 // Data schemas
@@ -28,7 +29,7 @@ export type ProviderSetting = typeof ProviderSettingSchema.Type;
 const ProviderKeyStatusSchema = Schema.Struct({
   provider: Schema.String,
   displayName: Schema.String,
-  status: Schema.Literals(['set', 'env', 'not-set']),
+  status: CredentialOriginSchema,
   customEndpoint: Schema.String.pipe(
     Schema.withDecodingDefault(Effect.succeed('')),
   ),

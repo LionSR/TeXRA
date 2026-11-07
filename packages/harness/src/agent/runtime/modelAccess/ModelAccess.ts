@@ -18,15 +18,13 @@ import {
   type ModelError,
   type ModelRoute,
   selectModel,
-  type TurnRequest,
 } from '@texra-ai/llm';
 
-import { getHelperModelName } from '@agent/runtime/helperModelName';
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { readModelSettings } from '@model/modelSettings';
 import { Secrets } from '@platform/secrets';
-import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import type {
   CredentialSwitch,
   DeclinableUsageRoute,
@@ -70,8 +68,6 @@ export interface BoundModel extends Binding {
   readonly plan?: string;
   /** The retry gate's routes: the model on its wire route, then the wire route. */
   readonly routes: readonly [RoutePolicy, RoutePolicy];
-  /** How the next turn is delivered, from the live toggles. */
-  readonly delivery: Effect.Effect<TurnRequest['mode'], StateReadFailed>;
 }
 
 /** What a run asks to bind. */
@@ -88,20 +84,13 @@ export interface BindRequest {
   readonly temperature: number;
 }
 
-/** The configured helper model, for one call. */
-interface HelperRequest {
-  readonly purpose: 'helper';
-  /** The asking run's model, bound when no helper model is configured. */
-  readonly runModel?: string;
-}
-
 /** Model access for one project's runs. */
 export class ModelAccess extends Context.Service<
   ModelAccess,
   {
-    /** Bind a run's model, or the configured helper model, into the caller's scope. */
+    /** Bind a model into the caller's scope. */
     readonly bind: (
-      request: BindRequest | HelperRequest,
+      request: BindRequest,
     ) => Effect.Effect<BoundModel, CallFailure, Scope.Scope>;
     /** Why `modelId` cannot replace `current`'s model; null when it can. */
     readonly admit: (
@@ -119,27 +108,12 @@ export class ModelAccess extends Context.Service<
   }
 >()('@texra-ai/harness/ModelAccess') {}
 
-/** The settings one binding reads. */
+/** The settings one binding reads; a subscription session that cannot be
+ *  read already fails as its route. */
 const settingsOf = (stores: SettingsStores) =>
-  Effect.mapError(readModelSettings(stores), RouteUnavailable.of);
-
-/** The helper model's request: the configured model, else the asking run's.
- *  Its bind decides whether it can serve now, as a run's does. */
-const helperRequest = Effect.fn('ModelAccess.helper')(function* (
-  stores: SettingsStores,
-  runModel: string | undefined,
-): Effect.fn.Return<BindRequest, RouteUnavailable> {
-  const modelId =
-    (yield* Effect.mapError(getHelperModelName(stores), RouteUnavailable.of)) ??
-    runModel;
-  if (modelId === undefined) {
-    return yield* RouteUnavailable.of(
-      new Error('No helper model is configured, and no run model to use.'),
-    );
-  }
-  // One-shot deterministic text: the whole output budget, never sampled.
-  return { modelId, declinedRoutes: [], textOnly: true, temperature: 0 };
-});
+  Effect.mapError(readModelSettings(stores), (error) =>
+    error instanceof RouteUnavailable ? error : RouteUnavailable.of(error),
+  );
 
 /** Bind `request` over one settings read. */
 const bindOver = Effect.fn('ModelAccess.bind')(function* (
@@ -163,10 +137,13 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
     ...request,
     mode: ask.mode,
   });
-  return yield* bindRoute(
-    { request, requested: catalog, ask, settings, decision },
-    stores,
-  );
+  return yield* bindRoute({
+    request,
+    requested: catalog,
+    ask,
+    settings,
+    decision,
+  });
 });
 
 /**
@@ -192,15 +169,7 @@ export const modelAccessLayer = (
           Effect.provideService(Secrets, secrets),
         );
       return {
-        bind: (request) =>
-          inProject(
-            'purpose' in request
-              ? Effect.flatMap(
-                  helperRequest(stores, request.runModel),
-                  (helper) => bindOver(stores, helper),
-                )
-              : bindOver(stores, request),
-          ),
+        bind: (request) => inProject(bindOver(stores, request)),
         admit: (modelId, current, declined) => {
           if (current.modelId === modelId) return Effect.succeed(null);
           const selected = selectModel(modelId);

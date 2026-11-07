@@ -12,8 +12,6 @@ import {
   HOMEBREW_INSTALL_COMMAND,
   installAdvice,
   LATEX_DEPENDENCIES,
-  normalizePlatform,
-  OS_PLATFORMS,
   PROBED_LATEX_TOOLS,
   SCOOP_INSTALL_COMMAND,
   type LatexDependency,
@@ -23,6 +21,7 @@ import {
   probeTool,
 } from '@texra/utils/system/toolChecks';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import { OsPlatformSchema, osPlatformOf } from '@texra/shared/osPlatform';
 
 const CHANNEL = 'LatexToolingController';
 
@@ -38,7 +37,7 @@ const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
   HOMEBREW_INSTALL_COMMAND,
   SCOOP_INSTALL_COMMAND,
   ...Object.values(LATEX_DEPENDENCIES).flatMap(({ label, installs }) =>
-    OS_PLATFORMS.flatMap((platform) => {
+    OsPlatformSchema.literals.flatMap((platform) => {
       const { command } = installAdvice(label, installs, platform);
       return command ? [command.command] : [];
     }),
@@ -58,7 +57,7 @@ export function isAllowedLatexInstallCommand(command: string): boolean {
 export function detectLatexSettingsStatus(
   editor: LatexEditorStatus,
 ): Effect.Effect<LatexSettingsStatus, never, ChildProcessSpawner> {
-  const platform = normalizePlatform(process.platform);
+  const platform = osPlatformOf(process.platform);
   return Effect.gen(function* () {
     const probes = yield* Effect.all(
       PROBED_LATEX_TOOLS.map((tool) =>

@@ -113,11 +113,9 @@ export function vscodeLatexSettingsHandlers(
           'workbench.extensions.installExtension',
           extensionId,
         );
-        yield* Effect.forkDetach(
-          showLoggedInfoMessage(
-            CHANNEL,
-            `Extension "${extensionId}" installed`,
-          ),
+        yield* showLoggedInfoMessage(
+          CHANNEL,
+          `Extension "${extensionId}" installed`,
         );
         yield* refresh;
       }),
@@ -152,13 +150,11 @@ export function vscodeLatexSettingsHandlers(
 
           yield* body.changed('latex');
           const verb = reset ? 'reset' : 'applied';
-          yield* Effect.forkDetach(
-            showLoggedInfoMessage(
-              CHANNEL,
-              data.field
-                ? `LaTeX setting ${verb}`
-                : `All recommended LaTeX settings ${verb}`,
-            ),
+          yield* showLoggedInfoMessage(
+            CHANNEL,
+            data.field
+              ? `LaTeX setting ${verb}`
+              : `All recommended LaTeX settings ${verb}`,
           );
         }),
       ),

@@ -40,9 +40,11 @@ prompt: |
 
   - `agent_schema.md`: agent YAML schema, rules, full example.
   - `document_task_schema.md`: the `task` block, template variables,
-    output protocol, settings guide, full example.
-  - `tool_catalog.md`: every tool in the registry, recommended tool
-    groups by use case, system-prompt best practices.
+    the reply format TeXRA appends, settings guide, full example.
+  - `tool_catalog.md`: the tools an agent can be granted and what each
+    is for, recommended tool groups by use case, system-prompt
+    conventions. How to call a tool is in its own description, which the
+    agent reads when it runs.
   - `execution_and_testing.md`: how TeXRA runs agents and how to
     test a new agent with the `agent` and `document_task` tools.
 

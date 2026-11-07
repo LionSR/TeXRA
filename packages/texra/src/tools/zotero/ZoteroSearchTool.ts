@@ -16,7 +16,6 @@ import { executed } from '@texra-ai/harness/plugins';
 // Local imports - zotero
 import {
   callBetterBibTeX,
-  withZoteroPort,
   BbtCollectionChainSchema,
   BbtSearchResultItemSchema,
   type BbtCollectionChain,
@@ -129,17 +128,14 @@ function collectionPath(chain: BbtCollectionChain): string {
   return parts.join(' / ');
 }
 
-const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
-  {
-    query,
-    title,
-    author,
-    year,
-    library,
-    include_collections,
-  }: ZoteroSearchInput,
-  port: number,
-) {
+const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* ({
+  query,
+  title,
+  author,
+  year,
+  library,
+  include_collections,
+}: ZoteroSearchInput) {
   // Build search params: use advanced tuple search when structured fields
   // are provided, otherwise fall back to simple quick-search string.
   const searchTerms: unknown =
@@ -156,7 +152,6 @@ const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
   const result = yield* callBetterBibTeX(
     'item.search',
     params,
-    port,
     Schema.Array(BbtSearchResultItemSchema),
   );
 
@@ -173,7 +168,6 @@ const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
     ? yield* callBetterBibTeX(
         'item.collections',
         [result.map((r) => r.citekey), true],
-        port,
         Schema.Record(Schema.String, Schema.Array(BbtCollectionChainSchema)),
       )
     : null;
@@ -204,5 +198,5 @@ export const ZoteroSearchTool = defineTool({
     'Prefer the structured title/author/year fields over a single query string. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroSearchInputSchema,
-  execute: withZoteroPort(searchZotero),
+  execute: searchZotero,
 });

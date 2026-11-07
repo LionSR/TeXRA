@@ -13,12 +13,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FiberHandle, Scope } from 'effect';
 
-import {
-  Cancelled,
-  Rejected,
-  type Session,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+import { Rejected, type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   type StateStore,
   withProcessServices,
@@ -31,12 +26,9 @@ import {
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
 import { openLatexdiffs } from '@commands/latex/latexdiffCommands';
-import {
-  handleAcceptEdited,
-  handleCompare,
-} from '@commands/latex/compareCommands';
+import { handleCompare } from '@commands/latex/compareCommands';
 import { findCommitInHistory } from '@commands/git/gitCommands';
-import { openFile, openLabel } from '@commands/files/openFileCommands';
+import { openFile } from '@commands/files/openFileCommands';
 import {
   createFileSelectionPickers,
   getCurrentFile,
@@ -69,7 +61,7 @@ import type {
   HostRequest,
 } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
+import { HostFailed } from '@texra/hosts/uiHosts';
 
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
@@ -80,7 +72,6 @@ import { TranscriptExportFailed } from '@texra/controllers/progressView/transcri
 import {
   fromHost,
   hostFailure,
-  type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -141,7 +132,7 @@ const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 function runHandler<A, E, R>(
   command: string,
   handler: Effect.Effect<A, E, R>,
-): Effect.Effect<A, HostCallFailed | RequestRefusal, R> {
+): Effect.Effect<A, HostFailed | RequestRefusal, R> {
   const log = (failure: unknown) =>
     Effect.logError(
       `Command ${command} failed: ${toErrorMessage(failure)}`,
@@ -169,10 +160,10 @@ function revealFileInOS(fsPath: string) {
 const openExportPath = (
   filePath: string,
   kind: TranscriptExportOpenKind,
-): Effect.Effect<void, ExternalOpenFailed> => {
+): Effect.Effect<void, HostFailed> => {
   const failed = (cause: unknown) =>
-    new ExternalOpenFailed({
-      target: filePath,
+    new HostFailed({
+      member: 'openPath',
       message: toErrorMessage(cause),
       cause,
     });
@@ -313,20 +304,6 @@ export const createExtensionHostRequests = Effect.fn(
     } satisfies HostOutcome;
   });
 
-  function pickFiles(
-    request: Extract<HostRequest, { kind: 'pickFiles' }>,
-  ): Effect.Effect<HostOutcome, Cancelled> {
-    // The picker reports its own failures where they happen and answers
-    // `null`, so the only outcomes left here are a selection and a cancel.
-    return multipleFilePickers[request.fileType]().pipe(
-      Effect.flatMap((selected) =>
-        selected
-          ? Effect.succeed<HostOutcome>({ kind: 'files', paths: selected })
-          : Effect.fail(new Cancelled()),
-      ),
-    );
-  }
-
   /** The reads a new credential invalidates: the credential, which the
    *  funnel and the banner follow, and the catalogs. */
   const refreshAfterCredentialChange = Effect.all(
@@ -350,7 +327,9 @@ export const createExtensionHostRequests = Effect.fn(
    *  onto a VS Code command, an editor API, or the sidebar. */
   const bindings: SharedHostRequestBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
-    openLabel: (label) => runHandler('openLabel', openLabel(roots, label)),
+    // The picker reports its own failures where they happen and answers
+    // `null`, as it does for a cancel.
+    pickFiles: (fileType) => multipleFilePickers[fileType](),
     latexdiff: {
       // The viewer a diff schedules opens in the view's scope, so a close
       // of the view cancels a delayed open.
@@ -426,7 +405,6 @@ export const createExtensionHostRequests = Effect.fn(
   const own: OwnHostArms = {
     popOut: () => Effect.as(options.popOutToEditor(), done),
     popBack: () => Effect.as(options.showInSidebar(), done),
-    pickFiles: (request) => pickFiles(request),
     useCurrentFile: (request) => useCurrentFile(request),
     addOpenedFiles: (request) =>
       Effect.map(getOpenedFiles(), (opened): HostOutcome => {
@@ -456,21 +434,23 @@ export const createExtensionHostRequests = Effect.fn(
     bindings,
     own,
     window: options.window,
-    showInfoMessage: vscodeUi.showInfoMessage,
-    showWarningMessage: vscodeUi.showWarningMessage,
+    // The host's members read `this`, so they cross the boundary bound.
+    showInfoMessage: (message: string) => vscodeUi.showInfoMessage(message),
+    showWarningMessage: (message: string) =>
+      vscodeUi.showWarningMessage(message),
     runs: {
       revealProgress: options.revealProgress,
       openFinalOutput: previewFinalOutput,
     },
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {
-      compareFiles: (base: string, edited: string) =>
+      openDiff: (base: string, edited: string, title: string) =>
         runFileAction(
           'compare',
-          handleCompare(at(base), at(edited), diffRefresh),
+          handleCompare(at(base), at(edited), title, diffRefresh),
         ),
-      acceptEditedFile: (base: string, edited: string) =>
-        runFileAction('acceptEdited', handleAcceptEdited(at(base), at(edited))),
+      confirmAccept: (message: string) =>
+        vscodeUi.confirm(message, { confirmLabel: 'Replace file' }),
       openDirectory: revealFileInOS,
     },
     export: {

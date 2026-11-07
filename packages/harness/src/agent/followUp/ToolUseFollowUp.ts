@@ -2,6 +2,7 @@ import { Cause, Context, Effect, Exit } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { checkpointRefusal } from '@agent/storage/resumability';
+import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Runs } from '@agent/runtime/runRegistry';
 import { Interactions } from '@agent/runtime/HostInteractions';
@@ -147,7 +148,12 @@ export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
 ): Effect.fn.Return<boolean, never, Inbox | Runs | SessionViewAccess> {
   const owed = yield* (yield* Inbox).owesResume(runId);
   if (owed === undefined) return false;
-  if (owed) yield* Effect.forkDetach(wakeRun(runId));
+  // Keyless: the sender may be another client's run, whose keys this run
+  // must never take, and a send does not yet carry the woken run's own.
+  if (owed)
+    yield* Effect.forkDetach(
+      wakeRun(runId).pipe(Effect.provideService(LaunchKeys, {})),
+    );
   return true;
 });
 

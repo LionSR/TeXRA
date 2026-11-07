@@ -163,17 +163,16 @@ once before it fails with what the load said. `refresh` rescans every source.
 ### Per-session — attach host interactions when presentation is required
 
 A root launch and `executeAgent` obtain presentation and approval behavior from
-the selected session's stable `SessionHostInteractions` object. A host attaches
-its adapter with `session.interactions.use(...)` and detaches that adapter
-when the host presentation lifetime ends. `use` returns an `Effect` that
-yields the detach disposer, so it is `yield*`ed. The attachment answers
+the selected session's `Interactions`. A host attaches its adapter for its
+own scope (`session.attach(host)`), and the adapter is detached and disposed
+when that scope closes, or earlier when the session does. The attachment answers
 nothing: every request a run makes of a person (retry, question, approval) is
 a `request.opened` row the run's fold lists, closed by the
 `request.decided` row a surface's decision commits
 (`packages/harness/src/agent/runtime/HostInteractions.ts:67-74`). An unanswered request stays
 parked on its row. The adapter in the example below only receives
 presentation events, and sets `approvalPromptsUnavailable: true` on the
-object it passes to `use` (§3), which keeps the approval-gated tools away from the model.
+object it passes to `attach` (§3), which keeps the approval-gated tools away from the model.
 
 ### Putting it together
 

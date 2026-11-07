@@ -31,7 +31,6 @@ import type { ToolCatalog } from '@tools/liveTools';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { CommandDirs } from '@utils/system/platformPaths';
 
 import { PluginsRefused } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
@@ -145,7 +144,6 @@ export class Sessions extends Context.Service<
       agentDirectories: Layer.succeed(AgentDirectories)(
         platform.agentDirectories,
       ),
-      commandDirs: platform.commandDirs,
       // No logger of the harness's own: the embedder's logger layer,
       // level and tracer decide where the harness's lines go.
     });
@@ -240,11 +238,6 @@ function sessionsLayer(
               options.skills.projectFolder,
             ),
           }),
-    ),
-    Layer.provideMerge(
-      options.commandDirs === undefined
-        ? Layer.empty
-        : Layer.succeed(CommandDirs)(options.commandDirs),
     ),
   );
   return Layer.unwrap(

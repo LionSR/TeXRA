@@ -106,8 +106,9 @@ export {
 // emit handlers (one per event), and a failed run's presentation, with the
 // notice a refused launch carries.
 export {
-  SessionHostInteractions,
+  presenterOn,
   type HostInteractions,
+  type Notices,
   launchNoticeOf,
   presentRunFailure,
 } from '@agent/runtime/HostInteractions';
@@ -155,7 +156,6 @@ export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // its writer, run-model precedence, the reasoning policy, the helper model.
 export {
   getEnabledModels,
-  ModelHostFactUnreadable,
   readModelOptions,
   setModelEnabled,
   type ModelOption,

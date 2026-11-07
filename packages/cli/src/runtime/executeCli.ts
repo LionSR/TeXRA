@@ -1,4 +1,13 @@
-import { Cause, Deferred, Effect, Exit, Fiber, Result, Scope } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Result,
+  Scope,
+  Stream,
+} from 'effect';
 
 import {
   RUN_OUTCOME,
@@ -229,6 +238,29 @@ export const executeCliConfig: (
       },
     });
     yield* session.attach(host).pipe(Scope.provide(presentationScope));
+    // A denial has no prompt here to show it: the operator reads the reason
+    // its `request.decided` row records as a `[warn]` line, in either output
+    // format, as well as in the tool result the model reads.
+    yield* Stream.runForEach(
+      session.view.events(session.view.head()),
+      (event) =>
+        Effect.sync(() => {
+          if (
+            event.type === 'request.decided' &&
+            event.decision.action === 'deny'
+          )
+            writeTextStderr(`[warn] [cli.approval] ${event.decision.reason}`);
+        }),
+    ).pipe(
+      Effect.catch((failure) =>
+        Effect.sync(() =>
+          writeTextStderr(
+            `[warn] [cli.approval] Denied requests are no longer reported: ${toErrorMessage(failure)}`,
+          ),
+        ),
+      ),
+      Effect.forkIn(presentationScope),
+    );
     if (runContext.outputFormat === 'ndjson') {
       yield* Scope.addFinalizer(
         presentationScope,

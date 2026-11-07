@@ -253,6 +253,35 @@ const IdentitySchema = Schema.Struct({
   returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
 });
 
+/*
+ * Provider words a turn's evidence keeps as the provider spelled them. The
+ * wire schemas decode with these same sets, so a turn and the wire it came
+ * from cannot disagree; they live here, in the contract both import, so the
+ * browser-safe root entry carries no wire module.
+ */
+/** A Responses API response's status. */
+export const ResponsesStatusSchema = Schema.Literals([
+  'queued',
+  'in_progress',
+  'completed',
+  'failed',
+  'cancelled',
+  'incomplete',
+]);
+/** Why a Responses API response is incomplete. */
+export const ResponsesIncompleteReasonSchema = Schema.Literals([
+  'max_output_tokens',
+  'content_filter',
+]);
+/** The category of an Anthropic Messages refusal. */
+export const AnthropicRefusalCategorySchema = Schema.Literals([
+  'cyber',
+  'bio',
+  'frontier_llm',
+  'reasoning_extraction',
+  'general_harms',
+]);
+
 /** A completed provider turn, not a completed agent execution. */
 export const TurnResultSchema = Schema.Struct({
   kind: Schema.Literal('http'),
@@ -281,18 +310,9 @@ export const TurnResultSchema = Schema.Struct({
       }),
       Schema.Struct({
         kind: Schema.Literal('openai-responses'),
-        status: Schema.Literals([
-          'queued',
-          'in_progress',
-          'completed',
-          'failed',
-          'cancelled',
-          'incomplete',
-        ]),
+        status: ResponsesStatusSchema,
         // Present only on an incomplete response.
-        incompleteReason: Schema.NullOr(
-          Schema.Literals(['max_output_tokens', 'content_filter']),
-        ),
+        incompleteReason: Schema.NullOr(ResponsesIncompleteReasonSchema),
       }),
     ]),
   ),
@@ -300,15 +320,7 @@ export const TurnResultSchema = Schema.Struct({
     Schema.NullOr(
       Schema.Struct({
         kind: Schema.Literal('anthropic-refusal'),
-        category: Schema.NullOr(
-          Schema.Literals([
-            'cyber',
-            'bio',
-            'frontier_llm',
-            'reasoning_extraction',
-            'general_harms',
-          ]),
-        ),
+        category: Schema.NullOr(AnthropicRefusalCategorySchema),
         explanation: Schema.NullOr(Schema.String),
       }),
     ),

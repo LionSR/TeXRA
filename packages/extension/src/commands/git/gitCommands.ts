@@ -242,9 +242,9 @@ function buildOverleafClonePorts(
         ),
       ),
     showWorkspaceNotEmpty: () =>
-      Effect.forkDetach(
-        showLoggedMessage(CHANNEL, 'Workspace folder must be empty.'),
-      ).pipe(Effect.asVoid),
+      showLoggedMessage(CHANNEL, 'Workspace folder must be empty.').pipe(
+        Effect.asVoid,
+      ),
 
     runClone: (clone, workspacePath) =>
       withVSCodeProgress(
@@ -300,9 +300,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
 
     const remote = parseLatexGitUrl(input);
     if (!remote) {
-      yield* Effect.forkDetach(
-        showLoggedMessage(CHANNEL, 'Invalid project URL or ID.'),
-      );
+      yield* showLoggedMessage(CHANNEL, 'Invalid project URL or ID.');
       return;
     }
 
@@ -312,9 +310,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
     const workspaceFs = yield* WorkspaceFs;
     const workspacePath = workspaceFs.root;
     if (!workspacePath) {
-      yield* Effect.forkDetach(
-        showLoggedMessage(CHANNEL, 'Open a workspace folder first.'),
-      );
+      yield* showLoggedMessage(CHANNEL, 'Open a workspace folder first.');
       return;
     }
     yield* runOverleafClone(

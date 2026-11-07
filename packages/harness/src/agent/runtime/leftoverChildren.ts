@@ -98,10 +98,11 @@ export const cutShort = ({ end, stop }: RunRows): boolean =>
 
 /** The one closer of what a dead process or a clean close left of `run`
  *  ({@link resumeLeftoverChildren}, `sweepLeftoverRuns`). A child resumed
- *  under its parent takes the keys the parent's activation carries, as a
- *  child it starts does; a sweep has no parent and brings none. */
+ *  under its parent opens in the parent's run fiber and takes its
+ *  `LaunchKeys`, as a child it starts does; a sweep has no parent and
+ *  brings none. */
 export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
-  parent: Pick<RunLaunch, 'runId' | 'apiKeys'> | null,
+  parent: Pick<RunLaunch, 'runId'> | null,
   run: RunView,
 ) {
   if ((yield* Runs).get(run.id) !== undefined) return;
@@ -119,7 +120,7 @@ export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   const told = (what: string) => (error: unknown) =>
     warn(`Child run ${run.id} ${what}`, { parent: parentRunId, error });
   yield* Effect.forkScoped(
-    Effect.matchEffect(resumeRun(run.id, { apiKeys: parent?.apiKeys }), {
+    Effect.matchEffect(resumeRun(run.id, {}), {
       onSuccess: (answer) =>
         'failed' in answer && answer.failed.kind !== 'blocked'
           ? report(describeFollowUpFailure(answer.failed.kind))

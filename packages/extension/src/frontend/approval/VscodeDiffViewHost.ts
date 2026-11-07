@@ -1,12 +1,16 @@
 import { Effect, FileSystem, Option } from 'effect';
 import * as vscode from 'vscode';
 
-import { type DiffSource, type DiffViewHost } from '@texra/hosts/uiHosts';
+import {
+  type DiffLabel,
+  type DiffSource,
+  type DiffViewHost,
+} from '@texra/hosts/uiHosts';
 import {
   fromHost,
   hostFailure,
-  type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
 import { type RequestRefusal } from '@texra/controllers/session/hostCallFailure';
@@ -18,7 +22,7 @@ const REVEAL_TIMEOUT_MS = 1500;
  * The failure of a `vscode.*` call this host lifted through `fromHost`: the
  * host's own refusal, tagged with the capability that raised it.
  */
-type EditorCallFailed = HostCallFailed | RequestRefusal;
+type EditorCallFailed = HostFailed | RequestRefusal;
 
 /**
  * The file URI a tab input surfaces, or null when the tab shows no single
@@ -39,14 +43,14 @@ function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
 export interface DiffSession {
   original: DiffSource;
   proposed: DiffSource;
-  title: string;
+  label: DiffLabel;
 }
 
 export class VscodeDiffViewHost implements DiffViewHost {
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
-    title: string,
+    { title }: DiffLabel,
   ): Effect.Effect<void, EditorCallFailed> {
     return fromHost('vscode.diff', () =>
       vscode.commands.executeCommand(

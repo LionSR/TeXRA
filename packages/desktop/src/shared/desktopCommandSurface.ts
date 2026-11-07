@@ -11,7 +11,8 @@ import {
 } from '@texra/shared/commands/registry';
 import type { IconName } from '@ui/wa/iconNames';
 import { texraGuideUrl } from '@ui/copy/guide';
-import { toElectronAccelerator, type DesktopPlatform } from './accelerators';
+import { toElectronAccelerator } from './accelerators';
+import type { OsPlatform } from '@texra/shared/osPlatform';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopOpenSettingsMessageSchema,
@@ -137,7 +138,7 @@ export interface DesktopCommandActions {
 }
 
 export function getDesktopCommandMenuEntries(
-  platform: DesktopPlatform,
+  platform: OsPlatform,
 ): DesktopCommandMenuEntry[] {
   return DESKTOP_COMMAND_IDS.map((id) => {
     const entry = commandCatalogById.get(id);

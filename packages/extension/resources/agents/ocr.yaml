@@ -38,12 +38,6 @@ task:
       </instruction>
 
       Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Match notation, mathematical environments, and symbol usage. Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalone file can be compiled.
-
-      <documents>
-      <document name="{{ OUTPUT_FILES[0] }}">
-      {LATEX_OCR_CONTENT}
-      </document>
-      </documents>
     - |
       Review the OCR conversion against the images and check the following, fixing any issues found:
       \begin{itemize}
@@ -55,10 +49,4 @@ task:
 
       If the conversion is faithful, reproduce it unchanged rather than inventing corrections.
 
-      Output the refined LaTeX content with improved notation consistency and integration:
-
-      <documents>
-      <document name="{{ OUTPUT_FILES[0] }}">
-      {REFINED_LATEX_OCR_CONTENT}
-      </document>
-      </documents>
+      Output the refined LaTeX content with improved notation consistency and integration.

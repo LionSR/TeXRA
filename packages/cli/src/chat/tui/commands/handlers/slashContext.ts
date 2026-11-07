@@ -12,6 +12,7 @@ import type {
   SettingsStores,
 } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
+import type { BuiltinSlashCommands } from '../registerBuiltins';
 
 /**
  * What a slash command does, as a program the dispatcher runs: the chat's
@@ -23,6 +24,8 @@ export type SlashCommandEffect = Effect.Effect<void, Error, ProcessServices>;
 
 /** Shared context every slash-command handler receives from the chat TUI. */
 export interface SlashCommandContext {
+  /** The chat's slash commands: what the dispatcher looks a line up in. */
+  readonly commands: BuiltinSlashCommands;
   readonly cliContext: CliContext;
   readonly session: TuiSession;
   /** Where run requests and resumes land, and the project's stored runs

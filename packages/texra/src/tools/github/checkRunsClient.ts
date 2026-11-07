@@ -8,7 +8,7 @@
  * keeps as its next state.
  */
 
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import {
   ghGet,
@@ -20,6 +20,7 @@ import type { RateLimiterError } from 'effect/persistence/RateLimiter';
 import { validateOrSkip } from './poller';
 import {
   GhCheckAnnotationArraySchema,
+  GhCheckRunsPageSchema,
   type GhCheckAnnotation,
   type GhCheckRun,
 } from './prTypes';
@@ -159,10 +160,11 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(function* (
     GitHubServices
   > {
     const pageEtag = cache?.pages.get(page)?.etag;
-    const res = yield* ghGet<{
-      total_count: number;
-      check_runs: GhCheckRun[];
-    }>(`${basePath}&page=${page}`, pageEtag);
+    const res = yield* ghGet(
+      `${basePath}&page=${page}`,
+      GhCheckRunsPageSchema,
+      pageEtag,
+    );
     if (res.status === 304) {
       // Reuse cached page. Carry forward the ETag we sent.
       const cachedRuns = cache?.pages.get(page)?.runs ?? [];
@@ -180,9 +182,10 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(function* (
         was304: true,
       };
     }
-    nextPages.set(page, { etag: res.etag, runs: res.data.check_runs });
+    const runs = [...res.data.check_runs];
+    nextPages.set(page, { etag: res.etag, runs });
     return {
-      runs: res.data.check_runs,
+      runs,
       total: res.data.total_count,
       was304: false,
     };
@@ -336,7 +339,7 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(function* (
     // A malformed page ends the walk with what was read, so one bad optional
     // response cannot stop the PR's subscription.
     const res = yield* validateOrSkip(
-      yield* ghGet<unknown>(path),
+      yield* ghGet(path, Schema.Unknown),
       GhCheckAnnotationArraySchema,
       `Malformed annotations page ${page} for check ${checkRunId}`,
     );

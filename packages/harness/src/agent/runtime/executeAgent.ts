@@ -11,6 +11,7 @@
 import {
   Clock,
   ConfigProvider,
+  Context,
   Effect,
   Exit,
   Fiber,
@@ -70,10 +71,6 @@ export interface ExecuteAgentOptions {
   readonly parentRunId?: RunId;
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
-  /** The provider API-key variables the launch brings, by variable name
-   *  (`StartOptions.apiKeys`): in the run's environment after its project's
-   *  `.env` and before this process's. */
-  readonly apiKeys?: Readonly<Record<string, string>>;
   /** Fires on meaningful progress: plan changes and tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
 }
@@ -227,7 +224,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     startedAt: yield* Clock.currentTimeMillis,
     workingDirectory,
     config,
-    apiKeys: options.apiKeys,
     persona,
     toolPolicy: { stopAfterCycle },
     logger: agentLogger,
@@ -244,17 +240,28 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
 });
 
 /**
- * `effect` in the run's environment with the launch's `apiKeys` in it:
+ * The provider API-key variables a launch brought, by variable name
+ * (`StartOptions.apiKeys`), provided where the session starts or resumes
+ * the run. A run reads them as it opens and carries them on its own fiber,
+ * so a child it starts or resumes from its tool calls, and a leftover child
+ * it resumes, opens with them; a sweep with no launch behind it has none.
+ */
+export const LaunchKeys = Context.Reference<Readonly<Record<string, string>>>(
+  '@texra-ai/harness/LaunchKeys',
+  { defaultValue: () => ({}) },
+);
+
+/**
+ * `effect` in the run's environment with the launch's keys in it:
  * the project's `.env` first, then the keys, then this process's, for the
  * model binding (`ModelAccess`, which captures the config provider where
  * its layer is built) and for what a child process inherits
  * (`ProjectEnvironment`). Without keys, the environment as it is.
  */
 const withApiKeys =
-  (apiKeys: Readonly<Record<string, string>> | undefined) =>
+  (apiKeys: Readonly<Record<string, string>>) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> => {
-    if (apiKeys === undefined || Object.keys(apiKeys).length === 0)
-      return effect;
+    if (Object.keys(apiKeys).length === 0) return effect;
     return Effect.flatMap(ProjectEnvironment, (project) => {
       const variables = { ...apiKeys, ...project };
       return effect.pipe(
@@ -292,6 +299,7 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
   // the opening fails first.
   const scope = yield* Scope.make();
   const resume = options.registration === undefined;
+  const keys = yield* LaunchKeys;
   const prepared = yield* Effect.gen(function* () {
     const launch = yield* buildAgentLaunchContext(definition, runId, options);
     // Said as the launch opens, before the model binds: a host's e2e reads
@@ -325,7 +333,7 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
     );
     return { launch, services, opening };
   }).pipe(
-    withApiKeys(options.apiKeys),
+    withApiKeys(keys),
     Scope.provide(scope),
     Effect.onExit((exit) =>
       Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void,
@@ -383,6 +391,8 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
   }).pipe(Effect.onExit((exit) => Scope.close(scope, exit)));
   return {
     activation: opening.activation,
-    run: withApiKeys(options.apiKeys)(run),
+    // The registry forks the run on the session's context, which holds no
+    // launch's keys: the run carries its own.
+    run: run.pipe(withApiKeys(keys), Effect.provideService(LaunchKeys, keys)),
   };
 });

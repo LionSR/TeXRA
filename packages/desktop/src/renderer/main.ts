@@ -37,10 +37,8 @@ import {
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TEXRA_TAGLINE } from '@ui/copy/onboarding';
 import { applyHostBodyTheme } from './hostTheme';
-import {
-  formatDesktopAccelerator,
-  type DesktopPlatform,
-} from '../shared/accelerators';
+import { formatDesktopAccelerator } from '../shared/accelerators';
+import type { OsPlatform } from '@texra/shared/osPlatform';
 import { type Shell } from './shell';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
@@ -233,7 +231,7 @@ function finishProjectRename(key: string, name: string | null): void {
 }
 // The renderer has no Node types by design, so the platform is read from the
 // navigator, and an inconclusive one takes the non-mac branch.
-const rendererPlatform = ((): DesktopPlatform => {
+const rendererPlatform = ((): OsPlatform => {
   const platform = window.navigator.platform.toLowerCase();
   if (platform.includes('mac')) return 'darwin';
   if (platform.includes('win')) return 'win32';

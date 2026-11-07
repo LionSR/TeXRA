@@ -16,12 +16,12 @@ import {
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
 import {
   hostFailure,
-  type HostCallFailed,
+  type RequestRefusal,
 } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness/host';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
-import { type RequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 /** The onboarding cards' actions the host request handlers call. */
 export interface WindowOnboarding {
@@ -33,7 +33,7 @@ export interface WindowOnboarding {
   runSetup(): Effect.Effect<void>;
   signInWithChatGpt(): Effect.Effect<
     void,
-    StateWriteFailed | StateReadFailed | HostCallFailed | RequestRefusal,
+    StateWriteFailed | StateReadFailed | HostFailed | RequestRefusal,
     ProcessServices
   >;
 }

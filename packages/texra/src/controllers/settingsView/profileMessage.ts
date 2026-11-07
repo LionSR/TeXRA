@@ -1,6 +1,6 @@
 import { Secrets, Settings } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
-import { API_KEY_PROVIDER_IDS, loadApiKeyStatusMap } from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS, apiKeyOrigins } from '@texra-ai/llm';
 import { providerEndpointKey } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { SettingsHostState } from '@texra/shared/settingsView/settingsViewMessages';
@@ -15,7 +15,7 @@ import type { SettingsStores } from '@texra-ai/harness/host';
 export const buildProfilePage = Effect.fn('buildProfilePage')(function* (
   stores: SettingsStores,
 ): Effect.fn.Return<SettingsHostState['profile'], Error, Secrets> {
-  const secretStatuses = yield* loadApiKeyStatusMap(yield* Secrets);
+  const origins = yield* apiKeyOrigins(yield* Secrets);
   return {
     providerKeyStatuses: yield* Effect.forEach(
       API_KEY_PROVIDER_IDS,
@@ -24,7 +24,7 @@ export const buildProfilePage = Effect.fn('buildProfilePage')(function* (
         return {
           provider,
           displayName: yield* getProviderDisplayName(stores, provider),
-          status: secretStatuses[provider],
+          status: origins[provider],
           customEndpoint: endpointKey
             ? yield* Settings.get<string>(stores, endpointKey)
             : '',

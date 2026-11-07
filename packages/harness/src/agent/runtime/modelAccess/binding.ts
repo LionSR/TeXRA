@@ -18,10 +18,9 @@ import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { decideReasoning, PROTOCOL_BY_BACKEND } from '@model/reasoningLevel';
-import { readGoogleBackground, type ModelSettings } from '@model/modelSettings';
+import type { ModelSettings } from '@model/modelSettings';
 import { runModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { Secrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settings';
 
 import { routeCredential } from './credentials';
 import { routePolicies, type CallFailure } from './failureInfo';
@@ -44,9 +43,9 @@ interface BindPlan {
 }
 
 /**
- * How a turn on a binding is delivered: as background work when the binding
- * can and the turn is text-only; on Google only while its toggle is on,
- * read live each turn, so a flip mid-run applies to the next one.
+ * Whether a binding's turns go out as background work: when the binding can
+ * and its turns are text-only, and on Google only while its toggle is on.
+ * Decided once, at bind: a toggle flipped mid-run applies at the next bind.
  */
 function backgroundOn(
   googleBackground: boolean,
@@ -58,9 +57,6 @@ function backgroundOn(
   if (!turn.textOnly) return false;
   return turn.protocol !== 'google-interactions' || googleBackground;
 }
-
-/** A binding that never runs background work. */
-const FOREGROUND = Effect.succeed('foreground' as const);
 
 /**
  * The reasoning `config` asks for on `plan`'s route, its substitution logged.
@@ -93,7 +89,6 @@ const commonOf = ({ request, decision, settings }: BindPlan) => ({
 /** Bind `plan`'s decided route into the caller's scope. */
 export const bindRoute = Effect.fn('bindRoute')(function* (
   plan: BindPlan,
-  stores: SettingsStores,
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
@@ -130,7 +125,6 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       forcedToolChoice: true,
       route: { kind: 'validation' },
       routes: routePolicies([requested.provider, 'validation'], requested.id),
-      delivery: FOREGROUND,
     };
   }
   if (route.kind === 'validation') {
@@ -193,10 +187,5 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       ],
       bound.config.id,
     ),
-    delivery: bound.background
-      ? Effect.map(readGoogleBackground(stores), (googleBackground) =>
-          backgroundOn(googleBackground, turn) ? 'background' : 'foreground',
-        )
-      : FOREGROUND,
   };
 });

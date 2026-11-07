@@ -13,7 +13,12 @@ import { Effect, FileSystem } from 'effect';
 // Local imports - types
 import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { NotificationFailed, type DiffSource } from '@texra/hosts/uiHosts';
+import {
+  HostFailed,
+  type DiffLabel,
+  type DiffSource,
+} from '@texra/hosts/uiHosts';
+import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
@@ -40,7 +45,7 @@ type DesktopToolEditApprovalUi = Pick<
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
-    title: string,
+    label: DiffLabel,
     previewId: string,
   ): Effect.Effect<void, Error>;
   /**
@@ -123,12 +128,12 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   /** Fire-and-forget, as the voided promise was: the dialog waits for the
    *  user, its caller does not. One that cannot show leaves a console trace
    *  instead of an unhandled rejection. */
-  private show(dialog: Effect.Effect<void, NotificationFailed>): void {
+  private show(dialog: Effect.Effect<void, HostFailed>): void {
     this.options.spawn(
       dialog.pipe(
         // The handler's parameter names the channel's whole error type, so a
         // second tag added here fails to compile instead of being dropped.
-        Effect.catch((failure: NotificationFailed) =>
+        Effect.catch((failure: HostFailed) =>
           Effect.logError(
             `Tool-edit notice could not be shown: ${failure.message}`,
           ).pipe(withLogChannel('desktop')),
@@ -175,7 +180,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
       .openDiff(
         { filePath: this.staged.originalPath },
         { filePath: this.staged.proposedPath },
-        `Tool edit: ${this.request.relativePath}`,
+        toolEditDiffLabel(this.request),
         this.request.requestId,
       )
       .pipe(

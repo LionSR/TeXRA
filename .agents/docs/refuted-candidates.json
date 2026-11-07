@@ -216,7 +216,7 @@
     {
       "id": "RT-tool-edit-staging-one-owner",
       "candidate": "the tool-edit approval's staging in the controller, with each host reduced to its diff verbs",
-      "why": "The hosts differ where the flow matters: where the two copies live (a per-request temp directory, the extension's storage directory), where the user's edits are read from (the saved file, the unsaved editor buffer) and what survives an unapplied edit (the proposed file on disk, an untitled editor). Writing the copies is already one function, writeApprovalTempFiles; a controller-owned staging would have to know which files each host removes. What remains duplicated is two path getters and two spellings of the diff title.",
+      "why": "The hosts differ where the flow matters: where the two copies live (a per-request temp directory, the extension's storage directory), where the user's edits are read from (the saved file, the unsaved editor buffer) and what survives an unapplied edit (the proposed file on disk, an untitled editor). Writing the copies is already one function, writeApprovalTempFiles; a controller-owned staging would have to know which files each host removes. What remains duplicated is two path getters; the diff's title is one label in ui/copy/toolEditPreview.ts.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
       "symbols": [
         {
@@ -260,13 +260,26 @@
     {
       "id": "RT-desktop-window-fiberhandle",
       "candidate": "the desktop window as one FiberHandle: open as FiberHandle.run with onlyIfMissing, the closed event as FiberHandle.clear, the shutdown as awaitEmpty, the quit's resume as a Deferred",
-      "why": "FiberHandle.run with onlyIfMissing returns an already-interrupted fiber while the handle still holds the closing window's fiber (FiberHandle.js runImpl), and clear holds it there until the window's scope has released. A reopen asked for during a close (the macOS dock click right after closing) would be dropped instead of waiting for the release and opening, which the current open does with `releasing`. awaitEmpty before run cannot replace it: on an open window it never returns, so open would need the closing state again. The quit's resume must also stay on setImmediate: a quit requested from inside `closed` lands before Electron removes the window and is abandoned. What remains is the three optionals as one state value (closed, open, closing), not a different primitive.",
+      "why": "FiberHandle.run with onlyIfMissing returns an already-interrupted fiber while the handle still holds the closing window's fiber (FiberHandle.js runImpl), and clear holds it there until the window's scope has released. A reopen asked for during a close (the macOS dock click right after closing) would be dropped instead of waiting for the release and opening, which the current open does with `releasing`. awaitEmpty before run cannot replace it: on an open window it never returns, so open would need the closing state again. The quit's resume must also stay on setImmediate: a quit requested from inside `closed` lands before Electron removes the window and is abandoned. The three optionals are one state value instead (closed, open, closing), not a different primitive.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
       "symbols": [
         {
           "file": "packages/desktop/src/main/desktopWindows.ts",
           "symbol": "createDesktopWindows",
           "signature": "export function createDesktopWindows(options: {…}): DesktopWindows {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-listing-entry-actions",
+      "candidate": "the run listing entry carries RunView.actions (runActions) in place of resumable/resumeBlocked, so listRuns stops calling deriveResumability",
+      "why": "The two answer different questions. The listing's resumable is deriveResumability's checkpoint: a run that continues from its rows whatever its outcome, so a completed conversation is listed resumable and the CLI resume list enables it, and resumeBlocked carries why rows cannot be continued here (an earlier build, damaged rows, a plugin this process does not load). runActions offers resume only on an interrupted loop-driven run or an unfinished script, and reads the view, which holds no plugin facts, so the listing would disable every finished conversation and lose the blocked reason (packages/harness/example/10-external-plugin.ts asserts it). continuesFromRows is the shared rule both read on purpose, not a second decider.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/storage/runListing.ts",
+          "symbol": "listRuns",
+          "signature": "export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<AgentRunListingEntry[], Error, SessionLog | SessionViewAccess> {…})"
         }
       ]
     },
@@ -285,6 +298,58 @@
           "file": "packages/harness/src/tools/plugins.ts",
           "symbol": "ownFactRow",
           "signature": "export const ownFactRow = ( { aggregate, ...fact }: ToolFact & { readonly aggregate: string }, runId: RunId, ): OwnFactRow => ({…});"
+        }
+      ]
+    },
+    {
+      "id": "LLM-one-no-completed-turn-check",
+      "candidate": "one \"no completed turn\" check: assembleTurn's terminal check alone, deleting the public completedTurn fold's and the harness invoker's empty-stream failures (storage-errors note §6, round-3 audit V R13), with the codec layout move (input lowering into each *Codec.ts) beside it",
+      "why": "The three checks guard three boundaries of the Model interface, not one fact said three times. assembleTurn ends llm's own codecs' streams; completedTurn folds any Model's streamTurn, an embedder's included, which the package does not assemble; and ModelInvoker.finishAttempt reads any bound Model, the canned validation model among them, which emits its own events. A Model that ends its stream without a completed event is outside llm's codecs, so deleting either outer check turns that into a silent null turn. The abnormal-end kinds the note named have already converged (Google's live and background non-completed statuses and OpenAI's failed/cancelled are all provider-rejection) and the SyntaxError pre-checks are gone, so the remaining three checks are the boundary guards. The codec layout move is a file move with no fact behind it and was left with them.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md#6-the-model-call-failure-path",
+      "symbols": [
+        {
+          "file": "packages/llm/src/turn.ts",
+          "symbol": "completedTurn",
+          "signature": "export const completedTurn = Effect.fn('llm.generateTurn')(function* ( events: Stream.Stream<TurnEvent, ModelError>, ) {…});"
+        }
+      ]
+    },
+    {
+      "id": "RT-cli-exit-code-one-function",
+      "candidate": "the CLI's exit code decided by one function at the process edge (exitCodeOf(outcome) in packages/cli/src/bin/texra.ts), deleting setExitCode, settleExitCode, CliConfigExecuteResult.exitCode and ChatExit.signal's code",
+      "why": "citty 0.2.2's runCommand discards a nested subcommand's run() result and passes no data down, and every command, root's direct subcommands included, runs nested, so no return value reaches texra.ts. The other names are not edge decisions: defineCliCommand already turns every command's result into the code (only doctor, which cannot use it, and help, which re-enters runCli as the non-interactive default, set it themselves); settleExitCode is the chat's run-claim code returned through runChat; CliConfigExecuteResult.exitCode is a headless run's program result; and a signal exit with a waiting run calls process.exit because that run holds the event loop open. runOutcomeExitCode is already the one outcome-to-code mapping. What landed instead: runCli and texraServe share runCommandForExitCode.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md",
+      "symbols": [
+        {
+          "file": "packages/cli/src/commands/_helpers/exitCode.ts",
+          "symbol": "setExitCode",
+          "signature": "export function setExitCode(code: number): void {…}"
+        }
+      ]
+    },
+    {
+      "id": "SESSION-roots-carry-rooted-fs",
+      "candidate": "WorkspaceFs and StorageFs as fields of one SessionRoots value instead of context tags",
+      "why": "Eleven host boundaries run a program over a project's files with no session (withSessionFs over a WorkspaceRoots or a Pick of it: the settings view, VS Code commands, the CLI memory commands, the clipboard image). As fields of SessionRoots each would build the whole session roots value to hand a LaTeX helper or the memory store one rooted view, and every such program would require the session's roots: two tags deleted, the builder renamed, wider requirements, no element removed. The controllers' WorkspaceRoots tag is the storage key of a session graph, provided as { storage } alone by the read-only and remote views, which hold no roots.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#r8s-second-half-and-m8-what-landed-and-what-was-refused",
+      "symbols": [
+        {
+          "file": "packages/harness/src/platform/rootedFs.ts",
+          "symbol": "withSessionFs",
+          "signature": "export function withSessionFs<A, E, R>( roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>, program: Effect.Effect<A, E, R | WorkspaceFs | StorageFs>, ): Effect.Effect< A, E, Exclude<R, WorkspaceFs | StorageFs> | FileSystem.FileSystem | Path.Path > {…}"
+        }
+      ]
+    },
+    {
+      "id": "PLATFORM-roots-drop-global-slots",
+      "candidate": "WorkspaceRoots without globalStorage and globalState, readers taking GlobalStorageFs and AppState from the process services",
+      "why": "Both are read as data below platform/, where AppState and GlobalStorageFs are defined: Settings resolves a globalState row against the SettingsStores the caller holds (no ambient reader), and the plugin record, trust and managed directories take PluginEnv (globalState, globalStorage) in common/plugins. Dropping the fields moves both services below common/ and makes the globalState slot an ambient requirement of every Settings read: a redesign of the settings contract, not a sweep.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#r8s-second-half-and-m8-what-landed-and-what-was-refused",
+      "symbols": [
+        {
+          "file": "packages/harness/src/common/plugins/installRecord.ts",
+          "symbol": "PluginEnv",
+          "signature": "export type PluginEnv = Pick<SettingsStores, 'globalState'> & { readonly globalStorage: string; };"
         }
       ]
     },
@@ -324,6 +389,19 @@
           "file": "packages/texra/src/latex/arxivProcessor.ts",
           "symbol": "downloadFile",
           "signature": "function downloadFile( url: string, destBasePath: string, ): Effect.Effect<string, ArxivSourceError, DownloadServices> {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-desktop-projects-rcmap",
+      "candidate": "the desktop's open projects as an RcMap keyed by root (open as RcMap.get, close as RcMap.invalidate), the bindings as a second RcMap, deleting the per-root lanes, the uninterruptible hand-offs and the projects list",
+      "why": "RcMap.invalidate removes an entry but closes it only once no scope holds a reference (node_modules/effect/dist/RcMap.js invalidate: `if (entry.refCount > 0) return`). A desktop project is held for as long as it is open, past any window (macOS keeps the projects when the window closes), so its holder is the process scope, and close would never release it unless each project kept a scope of its own for the lookup to be held in: the per-project scope the registry already opens and closes. The reference count would be a second count beside the registry's ordered list, which the rail and the selection need anyway (an RcMap keeps no order). What was a hand-rolled primitive is gone instead: the Symbol-keyed lane is one Semaphore(1).",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
+      "symbols": [
+        {
+          "file": "packages/desktop/src/main/desktopProjects.ts",
+          "symbol": "openDesktopProjectRegistry",
+          "signature": "export const openDesktopProjectRegistry: ( options: DesktopProjectRegistryOptions, ) => Effect.Effect< DesktopProjectRegistry, Error, DesktopProjectRecords | StateStores | Sessions | HostWindows > = Effect.fn('openDesktopProjectRegistry')(…);"
         }
       ]
     }

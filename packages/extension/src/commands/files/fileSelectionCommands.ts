@@ -28,12 +28,7 @@ function announceSelection<E>(
     // The toast resolves only when dismissed, so the picker does not wait on it.
     Effect.tap((result) =>
       result
-        ? Effect.forkDetach(
-            showLoggedInfoMessage(
-              CHANNEL,
-              `Selected files: ${result.join(', ')}`,
-            ),
-          )
+        ? showLoggedInfoMessage(CHANNEL, `Selected files: ${result.join(', ')}`)
         : Effect.void,
     ),
     Effect.catch((err) =>

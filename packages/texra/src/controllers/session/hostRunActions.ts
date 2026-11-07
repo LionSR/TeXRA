@@ -16,13 +16,13 @@ import {
   AgentCatalog,
   getHelperModelName,
   type ProcessServices,
-  type ModelHostFactUnreadable,
+  type readModelOptions,
   Secrets,
   StateReadFailed,
   withLogChannel,
   presentFollowUpResult,
   presentRunFailure,
-  type SessionHostInteractions,
+  type Notices,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
 import { Cause, Effect, FileSystem, Scope } from 'effect';
@@ -44,7 +44,7 @@ import {
   DOCUMENT_TASK_BLOCK,
   documentRoundsOf,
 } from '@texra/shared/plugins/documents';
-import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
+import type { MessageHost, HostFailed } from '@texra/hosts/uiHosts';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 
@@ -71,11 +71,14 @@ interface WorkflowFileOperationResult {
  *  session's `start` takes them. */
 type RunValidatedOptions = Pick<StartInput, 'helperModel' | 'approval'>;
 
+/** What reading the model options fails with: what its reads fail with. */
+type ModelOptionsUnreadable = Effect.Error<ReturnType<typeof readModelOptions>>;
+
 export interface HostRunActionPorts {
   /** The window's roots: its workspace and its settings stores. */
   readonly roots: WorkspaceRoots;
   /** Where a failure before a run opens is presented. */
-  readonly present: Pick<SessionHostInteractions, 'emit'>;
+  readonly present: Notices;
   /** Bring the host's progress surface into view for a run this window just
    *  started, or name the run in a notice when it cannot; a host whose
    *  surface is always on screen does nothing. */
@@ -91,7 +94,7 @@ export interface HostRunActionPorts {
   /** Show a finished run's final output, the file at `absolutePath`. */
   openFinalOutput(absolutePath: string): Effect.Effect<void, Error>;
   /** The notification surface, shared with {@link MessageHost}: a host that
-   *  could not present fails with `NotificationFailed`, and a user who
+   *  could not present fails with `HostFailed`, and a user who
    *  ignores the notice is not a failure. */
   showInfo: MessageHost['showInfoMessage'];
   showWarning: MessageHost['showWarningMessage'];
@@ -127,9 +130,9 @@ export interface HostRunActions {
   ): Effect.Effect<
     void,
     | CompileFixerPlanFailed
-    | ModelHostFactUnreadable
+    | ModelOptionsUnreadable
     | StateReadFailed
-    | NotificationFailed
+    | HostFailed
     | RequestRefusal
     | RunFailure,
     ProcessServices

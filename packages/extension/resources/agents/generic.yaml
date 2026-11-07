@@ -63,23 +63,5 @@ task:
       Work on the \LaTeX document(s). Maintain professional academic standards and adhere to all \LaTeX formatting rules. Maintain consistency across documents (notation, definitions, results). Use the following format:
 
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
     - |
       Review the completed work across all documents, then output a refined version. Check accuracy, notation consistency, structure, formatting, and clarity. Preserve the changes from the previous step.
-
-      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>

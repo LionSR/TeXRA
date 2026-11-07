@@ -49,7 +49,7 @@ import {
   type ToolEditContent,
   type ToolEditPermission,
 } from '@texra-ai/harness/schemas';
-import { HostCallFailed } from '@texra/controllers/session/hostCallFailure';
+import { HostFailed } from '@texra/hosts/uiHosts';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
@@ -373,7 +373,7 @@ export class ToolEditApprovalController {
       const left = yield* preview.readProposedContent().pipe(
         Effect.mapError(
           (cause) =>
-            new HostCallFailed({
+            new HostFailed({
               member: 'readProposedContent',
               message: `${toErrorMessage(cause)} The proposed ${pending.payload.data.path} as you left it is kept at ${preview.proposedPath}.`,
               cause,

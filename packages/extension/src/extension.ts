@@ -75,18 +75,14 @@ import {
   settingsTabByCommand,
   type CommandId,
 } from '@texra/shared/commands/catalog';
-import {
-  serviceProjectState,
-  serviceSession,
-} from '@texra/controllers/server/serviceSession';
+import { serviceProjectState } from '@texra/controllers/server/serviceSession';
+import { openProjectSession } from '@texra/controllers/session/openProjectSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
-import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
-import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { reachExtensionService } from './common/extensionService';
 
 // Local file imports
@@ -426,28 +422,15 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         ),
       ),
     );
-  let windowSession: GuiSession;
-  if (Result.isSuccess(reached)) {
-    windowSession = {
-      link: reached.success,
-      session: yield* serviceSession(
-        reached.success,
-        roots.workspace ?? '',
-        roots,
-      ),
-    };
-  } else {
-    const session = yield* (yield* Sessions).open(roots, {
-      persistent: true,
-      host: {},
-    });
-    yield* recordFirstCompletedRun(session);
-    windowSession = { session, link: yield* hosts.localLink(session) };
+  const windowSession: GuiSession = yield* openProjectSession(
+    roots,
+    Result.isSuccess(reached) ? reached.success : undefined,
+    warn,
+  ).pipe(Effect.provideService(HostWindows, hosts));
+  if (Result.isFailure(reached)) {
     const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${reached.failure.message}`;
     yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));
     yield* warn(reason);
-    if (session.storeMovedAside)
-      yield* warn(sessionStoreMovedAsideMessage(session.storeMovedAside));
   }
   const { session } = windowSession;
 

@@ -50,16 +50,6 @@ task:
   requests:
     - |
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name. Make targeted changes that address the instruction. Do not change unrelated text.
-
-      Use the following format:
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED LATEX DOCUMENT {{ loop.index }} HERE
-      </document>
-      {% endfor %}
-      </documents>
     - |
       Review the changes and output a corrected version. If the instruction asked for equations and none were added, fix that omission.
 
@@ -73,14 +63,4 @@ task:
           \item Did you change anything NOT required by the instruction? If so, revert it.
       \end{itemize}
 
-      Output complete revised versions of all \LaTeX documents in the format below, incorporating the fixes above. Include all the changes you added in the previous step. If the previous output already satisfies the instruction and no failure modes apply, reproduce it unchanged rather than rewording for the sake of change. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency. Did later documents receive less attention than earlier ones? Re-read the last document now.
-
-      Output the documents in this order: {{ INPUT_FILES | default([], true) | join(', ') }}
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % REFINED LATEX DOCUMENT {{ loop.index }} HERE
-      </document>
-      {% endfor %}
-      </documents>
+      Output complete revised versions of all \LaTeX documents, incorporating the fixes above. Include all the changes you added in the previous step. If the previous output already satisfies the instruction and no failure modes apply, reproduce it unchanged rather than rewording for the sake of change. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency. Did later documents receive less attention than earlier ones? Re-read the last document now.

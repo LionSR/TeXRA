@@ -6,19 +6,19 @@ import { tryOpenBrowser } from '@cli/runtime/browser';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { CROSS } from '@cli/tui/ui/glyphs';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
+import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
 
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
+import type { CredentialOrigin } from '@texra-ai/llm';
 import type { ProcessRuntime, Secrets } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
-/**
- * Which source backs the GitHub token, as `resolveGitHubTokenSource` reports
- * it. The vocabulary lives beside the view that labels it.
- */
-type GitHubTokenStatus = 'secret' | 'env' | 'none';
+/** Which source backs the GitHub token, as `resolveGitHubTokenSource`
+ *  reports it. */
+type GitHubTokenStatus = CredentialOrigin;
 
 export interface GitHubTokenStatusView {
   readonly status?: GitHubTokenStatus;
@@ -28,17 +28,13 @@ export interface GitHubTokenStatusView {
 
 type GitHubTokenAction = 'set' | 'remove' | 'open-url';
 
-const STATUS_LABELS: Readonly<Record<GitHubTokenStatus, string>> = {
-  none: 'Not set',
-  secret: 'Token set',
-  env: 'From GH_TOKEN / GITHUB_TOKEN',
-};
-
 export function formatGitHubTokenSummary(view: GitHubTokenStatusView): string {
   return formatStatusViewSummary(
     view,
     'Checking token',
-    view.status === undefined ? undefined : STATUS_LABELS[view.status],
+    view.status === undefined
+      ? undefined
+      : credentialOriginLabel(view.status, 'token'),
   );
 }
 
@@ -48,21 +44,22 @@ function buildGitHubTokenActionItems(
   return [
     {
       value: 'set',
-      label: status === 'secret' ? 'Replace token' : 'Set token',
+      label:
+        status === 'secret' ? TOKEN_ACTION_COPY.replace : TOKEN_ACTION_COPY.set,
       description: 'stored in TeXRA secrets',
     },
     ...(status === 'secret'
       ? [
           {
             value: 'remove' as const,
-            label: 'Remove token',
+            label: TOKEN_ACTION_COPY.remove,
             description: 'forget the stored token',
           },
         ]
       : []),
     {
       value: 'open-url',
-      label: 'Create on GitHub…',
+      label: TOKEN_ACTION_COPY.create,
       description: 'repo scope pre-selected',
     },
   ];

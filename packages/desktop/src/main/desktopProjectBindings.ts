@@ -23,7 +23,7 @@ import {
   type ProcessRuntime,
   type ProcessServices,
   ToolAvailability,
-  type SessionHostInteractions,
+  type Notices,
   withLogChannel,
 } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
@@ -66,7 +66,7 @@ interface ProjectBinding {
   /** The project's launcher (`HostRunActions.runValidated`). */
   readonly runValidated: HostRunActions['runValidated'];
   /** Where a failure before one of its runs opens is presented. */
-  readonly present: Pick<SessionHostInteractions, 'emit'>;
+  readonly present: Notices;
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
   readonly browserViews: DesktopBrowserViews;
   /** The project's `.env` over the process's: every question about this
@@ -163,12 +163,11 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         getWindow: () => (host.window.isDestroyed() ? undefined : host.window),
         // Electron's window-open handler is the caller here, so the hand-off
         // forks on the binding's spawner rather than reaching the view as a
-        // program. The reporting host has shown the user-facing error; the
-        // failure is recorded too.
+        // program. The window shows the failure, and it is recorded too.
         openExternalUrl: (url) =>
           spawn(
-            host.previewHost
-              .openExternal(url)
+            host
+              .presented(host.previewHost.openExternal(url))
               .pipe(
                 Effect.catch((error) =>
                   Effect.sync(() => host.reportBackgroundError(error)),
@@ -288,7 +287,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           createDesktopHostRequests({
             ...parts,
             runtime,
-            project,
             host: hosts.run,
             files,
             workspaceFile: workspace.file,

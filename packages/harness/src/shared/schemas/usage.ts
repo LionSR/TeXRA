@@ -111,48 +111,17 @@ export function sumUsageStats(
   return total;
 }
 
+/** A run's usage before its first priced call. */
+export const NO_USAGE: TokenUsageStats = Object.freeze(emptyUsageStats());
+
 /**
- * Schema for the totals recorded when a run ends.
- *
- * `totalCost` is the running sum of `NormalizedUsage.cost`, which is already
- * calculated per provider (including prompt-cache discounts or creation
- * premiums). No extra adjustments are applied here.
+ * `total` with one call's priced usage added. A run's spend is summed this
+ * way from the priced usage each row carries, never from llm's unpriced
+ * `turn.usage`, which would leave a resumed run's cost at zero.
  */
-export const RunUsageTotalsSchema = Schema.Struct({
-  firstInputTokens: TokenCountSchema,
-  totalInputTokens: TokenCountSchema,
-  totalOutputTokens: TokenCountSchema,
-  totalCost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-  totalCachedInputTokens: TokenCountSchema,
-  totalCacheMissInputTokens: TokenCountSchema,
-  totalCacheWriteTokens: TokenCountSchema,
-  totalReasoningTokens: TokenCountSchema,
-  totalToolUsePromptTokens: TokenCountSchema,
-});
-
-export type RunUsageTotals = typeof RunUsageTotalsSchema.Type;
-
-/** A run's usage before its first turn: every counter at its zero. */
-export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze({
-  firstInputTokens: 0,
-  totalInputTokens: 0,
-  totalOutputTokens: 0,
-  totalCost: 0,
-  totalCachedInputTokens: 0,
-  totalCacheMissInputTokens: 0,
-  totalCacheWriteTokens: 0,
-  totalReasoningTokens: 0,
-  totalToolUsePromptTokens: 0,
-});
-
-/** `totals` summed field by field; the first input is the first's. */
-export function sumRunUsageTotals(
-  totals: readonly RunUsageTotals[],
-): RunUsageTotals {
-  const sum: Types.Mutable<RunUsageTotals> = { ...EMPTY_RUN_USAGE_TOTALS };
-  for (const usage of totals)
-    for (const key of Struct.keys(RunUsageTotalsSchema.fields))
-      if (key !== 'firstInputTokens') sum[key] += usage[key];
-  sum.firstInputTokens = totals[0]?.firstInputTokens ?? 0;
-  return sum;
+export function addUsage(
+  total: TokenUsageStats,
+  usage: TokenUsageStats | null,
+): TokenUsageStats {
+  return usage === null ? total : sumUsageStats([total, usage]);
 }

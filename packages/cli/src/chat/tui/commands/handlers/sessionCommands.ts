@@ -36,20 +36,17 @@ import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { formatSlashCommandHelp } from '../helpText';
-import {
-  listSlashCommands,
-  type SlashCommandContribution,
-} from '../slashRegistry';
+import type { SlashCommandContribution, SlashCommands } from '../slashRegistry';
 import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
-export function showCliSlashCommandHelp(): void {
+export function showCliSlashCommandHelp(commands: SlashCommands): void {
   openInfoPane(
     '/help',
-    formatSlashCommandHelp(listSlashCommands(), {
+    formatSlashCommandHelp(commands.list, {
       shortcutModifierLabel: defaultShortcutModifierLabel(),
       shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
     }),

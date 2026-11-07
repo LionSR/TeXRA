@@ -16,12 +16,14 @@ import {
   MessageSchema,
   ModelOriginSchema,
   RemoteOperationSchema,
+  type TurnResult,
   TurnResultSchema,
 } from '@texra-ai/llm';
 import {
   ContextEditPayloadSchema,
   ModelMessagePayloadSchema,
   StoredMessageSchema,
+  type StoredTurnSchema,
   toJsonValue,
   type SessionEvent,
   type SessionEventDraft,
@@ -42,6 +44,38 @@ import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { InputPart } from './run/mediaInput';
+
+type AssertNever<T extends never> = T;
+type StoredTurn = typeof StoredTurnSchema.Type;
+type StoredHistoryMessage = typeof StoredMessageSchema.Type;
+type LlmMessage = typeof MessageSchema.Type;
+/*
+ * Storage owns its copy of the turn's vocabulary, so a provider change is no
+ * stored format change; these keep the copy covering every value llm can
+ * produce, so an llm that adds one fails to compile here instead of failing
+ * to store a turn its provider already billed.
+ */
+type _EveryFinishReasonIsStored = AssertNever<
+  Exclude<TurnResult['finishReason'], StoredTurn['finishReason']>
+>;
+type _EveryOutputPartIsStored = AssertNever<
+  Exclude<
+    TurnResult['content'][number]['kind'],
+    StoredTurn['content'][number]['kind']
+  >
+>;
+type _EveryInputPartIsStored = AssertNever<
+  Exclude<
+    Extract<LlmMessage, { role: 'user' }>['content'][number]['kind'],
+    StoredInputPart['kind']
+  >
+>;
+type _EveryToolStatusIsStored = AssertNever<
+  Exclude<
+    Extract<LlmMessage, { role: 'tool' }>['results'][number]['status'],
+    Extract<StoredHistoryMessage, { role: 'tool' }>['results'][number]['status']
+  >
+>;
 
 /** The keys whose value is provider evidence, wherever a turn or a history
  *  entry holds one. */
@@ -102,25 +136,40 @@ const live = (value: unknown) =>
     return { kind, ...data };
   });
 
-/** A run history row as the store keeps it. */
+/**
+ * A run history row as the store keeps it, or why this build cannot store
+ * it: a value the gates above cannot see (an embedder's newer llm), named
+ * rather than thrown.
+ */
 export function storedDraft(
   row: RunHistoryDraft,
-): WithBlobs<SessionEventDraft> {
+): Result.Result<WithBlobs<SessionEventDraft>, RunHistoryInconsistent> {
+  const unstorable = (issue: Schema.SchemaError) =>
+    new RunHistoryInconsistent({
+      reason: 'unreadable-turn',
+      detail: `a ${row.type} row this build of the harness cannot store: ${issue.message}`,
+      commit: null,
+    });
   if (row.type === 'context.edit')
-    return {
-      ...row,
-      payload: Schema.decodeUnknownSync(ContextEditPayloadSchema)(
+    return Result.map(
+      Result.mapError(
+        Schema.decodeUnknownResult(ContextEditPayloadSchema)(
+          stored(row.payload),
+        ),
+        unstorable,
+      ),
+      (payload) => ({ ...row, payload }),
+    );
+  if (row.type !== 'model.message') return Result.succeed(row);
+  return Result.map(
+    Result.mapError(
+      Schema.decodeUnknownResult(ModelMessagePayloadSchema)(
         stored(row.payload),
       ),
-    };
-  if (row.type !== 'model.message') return row;
-  const { payload } = row;
-  return {
-    ...row,
-    payload: Schema.decodeUnknownSync(ModelMessagePayloadSchema)(
-      stored(payload),
+      unstorable,
     ),
-  };
+    (payload) => ({ ...row, payload }),
+  );
 }
 
 /** A history entry as the fold holds it: the stored user, tool and system

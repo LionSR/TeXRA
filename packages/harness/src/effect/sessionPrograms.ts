@@ -19,6 +19,7 @@ import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 
 // Each runtime value comes from the module that defines it.
 import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
+import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { describeResumeRefusal } from '@agent/runtime/resumeRun';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Interactions } from '@agent/runtime/HostInteractions';
@@ -164,6 +165,7 @@ const start = Effect.fn('start')(function* (
   let opened = false;
   return yield* rootRun({ ...input, config, runId }).pipe(
     Effect.provide(session),
+    Effect.provideService(LaunchKeys, input.apiKeys ?? {}),
     Effect.mapError(runFailure),
     Effect.map((activation) => {
       opened = true;
@@ -205,8 +207,11 @@ function resume(
     const resumed = yield* resumeRun(runId, {
       stopAfterCycle: interactive !== true,
       tools,
-      apiKeys,
-    }).pipe(Effect.provide(session), Effect.mapError(runFailure));
+    }).pipe(
+      Effect.provide(session),
+      Effect.provideService(LaunchKeys, apiKeys ?? {}),
+      Effect.mapError(runFailure),
+    );
     if ('ownedBy' in resumed)
       return yield* resume(
         session,

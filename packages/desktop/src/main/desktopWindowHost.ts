@@ -7,10 +7,7 @@ import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  ExternalOpenFailed,
-  type NotificationFailed,
-} from '@texra/hosts/uiHosts';
+import { HostFailed } from '@texra/hosts/uiHosts';
 import {
   INSTRUCTION_ACTION,
   type InstructionAction,
@@ -54,7 +51,7 @@ export function createDesktopWindowHost(options: {
       showErrorMessage(
         `A desktop operation failed: ${toErrorMessage(error)}`,
       ).pipe(
-        Effect.catch((notificationError: NotificationFailed) =>
+        Effect.catch((notificationError: HostFailed) =>
           Effect.sync(() => {
             console.error(
               'Failed to display desktop asynchronous operation error:',
@@ -77,50 +74,50 @@ export function createDesktopWindowHost(options: {
         : Effect.sync(() => reportAsyncError(Cause.squash(cause))),
     );
 
-  const previewOptions = { shell, runtime, postToRenderer: post };
+  // One preview host, which never presents: a caller that shows its own
+  // failure (a session request, at its dispatcher) yields it as it is, and
+  // one that leaves it to the window (a menu, a run's tool) wraps it in
+  // `presented`.
   const previewHost = createDesktopPreviewHost({
-    ...previewOptions,
-    showErrorMessage,
+    shell,
+    runtime,
+    postToRenderer: post,
   });
-  // Session requests present errors at their dispatcher. Menu, navigation,
-  // and runtime preview callers retain the reporting host above.
-  const requestPreviewHost = createDesktopPreviewHost(previewOptions);
   const diffHost = createDesktopDiffHost({ runtime, postToRenderer: post });
 
-  /**
-   * The shell-facing `openExternal` worded for the ExternalOpener port: the
-   * member is already a program, so this only names the failure.
-   * `reportFailure: false` leaves the window's own "could not open" dialog
-   * out, for a caller that reports the failure itself.
-   */
-  const openExternalProgram = (
-    url: string,
-    reportFailure: boolean,
-  ): Effect.Effect<void, ExternalOpenFailed> =>
-    previewHost.openExternal(url, { reportFailure }).pipe(
-      Effect.catchTag('PreviewUnavailable', (cause) =>
-        Effect.fail(
-          new ExternalOpenFailed({
-            target: url,
-            message: `The desktop could not open ${url} in the default browser: ${cause.message}`,
-            cause,
-          }),
+  /** Run `program`, showing its failure in the window's error dialog first;
+   *  the failure still reaches the caller. A dialog that cannot be shown is
+   *  logged. */
+  const presented = <A, E extends { readonly message: string }, R>(
+    program: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R> =>
+    program.pipe(
+      Effect.tapError((error) =>
+        showErrorMessage(error.message).pipe(
+          Effect.catch((notificationError: HostFailed) =>
+            Effect.sync(() =>
+              console.error(
+                'Failed to display a desktop error:',
+                notificationError,
+              ),
+            ),
+          ),
         ),
       ),
     );
+
   /**
    * Open a documentation URL without keeping the caller waiting; the browser
-   * never opening is reported, not swallowed. Its own wording, not
-   * {@link openExternalProgram}'s: this report names the documentation URL
-   * rather than the address the shell refused.
+   * never opening is shown in the window and logged, not swallowed. The log
+   * names the documentation URL rather than the address the shell refused.
    */
   const openExternalInBackground = (url: string): void => {
     spawn(
-      previewHost.openExternal(url).pipe(
+      presented(previewHost.openExternal(url)).pipe(
         Effect.mapError(
           (cause) =>
-            new ExternalOpenFailed({
-              target: url,
+            new HostFailed({
+              member: 'openExternal',
               message: 'The documentation URL could not be opened.',
               cause,
             }),
@@ -128,7 +125,7 @@ export function createDesktopWindowHost(options: {
         // The handler's parameter is the whole error type this expression can
         // carry, so a second failure added here fails to compile instead of
         // reading as a documentation URL that would not open.
-        Effect.catch((error: ExternalOpenFailed) =>
+        Effect.catch((error: HostFailed) =>
           Effect.sync(() => reportBackgroundError(error)),
         ),
       ),
@@ -154,10 +151,10 @@ export function createDesktopWindowHost(options: {
    * run behind it. The caller still awaits the dialog, as it did before.
    */
   const awaitOrReport = (
-    started: Effect.Effect<void, NotificationFailed>,
+    started: Effect.Effect<void, HostFailed>,
   ): Effect.Effect<void> =>
     started.pipe(
-      Effect.catchTag('NotificationFailed', (error) =>
+      Effect.catchTag('HostFailed', (error) =>
         Effect.sync(() => reportBackgroundError(error)),
       ),
     );
@@ -169,12 +166,12 @@ export function createDesktopWindowHost(options: {
     postSession: bridge.postSession,
     dialogs,
     previewHost,
-    /** The request-side `openExternal`: its failure is the caller's. */
-    openExternalUrl: requestPreviewHost.openExternal,
+    /** `openExternal`, its failure the caller's to present. */
+    openExternalUrl: previewHost.openExternal,
+    presented,
     reportAsyncError,
     reported,
     reportBackgroundError,
-    openExternalProgram,
     showDiscardDialog: () =>
       dialog.showMessageBoxSync(window, {
         type: 'warning',
@@ -262,7 +259,7 @@ export function createDesktopWindowHost(options: {
         DesktopAgentRunHost,
         'openBuildDisplay' | 'openDiff'
       > = {
-        openPath: previewHost.openPath,
+        openPath: (filePath) => presented(previewHost.openPath(filePath)),
         confirmAcceptFile: (message) =>
           dialogs.confirmDialog({
             message,
@@ -288,11 +285,13 @@ export function createDesktopWindowHost(options: {
         run: {
           ...dialogsOfProject,
           openDiff: diff.openDiff,
-          openBuildDisplay: previewHost.openBuildDisplayIn(roots),
+          openBuildDisplay: (location) =>
+            presented(previewHost.openBuildDisplayIn(roots)(location)),
         } satisfies DesktopAgentRunHost,
+        // The tool-edit preview presents its own failures.
         toolEditPreview: {
-          openPath: requestPreviewHost.openPath,
-          openBuildDisplay: requestPreviewHost.openBuildDisplayIn(roots),
+          openPath: previewHost.openPath,
+          openBuildDisplay: previewHost.openBuildDisplayIn(roots),
           openDiff: diff.openDiff,
           closeDiff: diff.closeDiff,
         },

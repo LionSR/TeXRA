@@ -177,9 +177,11 @@ The ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) lo
 
 ### <wa-icon library="texra" name="files"></wa-icon> Example: multiple output agent
 
-If your workflow requires several output files, your agent must structure its
-response using the appropriate filename list. Below is a simplified template
-for a document task that writes two generated output files:
+A document task that writes several files declares their names in
+`task.outputs`; TeXRA ends each request with the reply format, one
+`<document name="...">` block per name, so the request says only what to
+write. Below is a simplified template for a document task that writes two
+generated output files:
 
 ```yaml
 name: intro_and_conclusion
@@ -190,19 +192,8 @@ task:
     - conclusion.tex
   requests:
     - |
-      The output files should be in this order: {{ OUTPUT_FILES | join(", ") }}.
-
-      <scratchpad>
-      - Plan revisions for each file
-      </scratchpad>
-
-      <documents>
-      {% for output in OUTPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
+      Write an introduction and a conclusion for the paper. Plan each
+      file in a <scratchpad> first.
 ```
 
 This structure lets TeXRA save each `<document>` block to the corresponding

@@ -185,7 +185,6 @@ function boundModel(): BoundModel {
     background: false,
     serviceTier: null,
     routes: routePolicies(['wire'], GPT54),
-    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
   };

@@ -112,15 +112,7 @@ task:
       \end{enumerate}
       </scratchpad>
 
-      Following the scratchpad plan, output updated LaTeX with every mathematical step and coefficient derived explicitly. These fully derived versions will be revised in the next phase. Use this format:
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
+      Following the scratchpad plan, output updated LaTeX with every mathematical step and coefficient derived explicitly. These fully derived versions will be revised in the next phase.
     - |
       SECOND PHASE - REVISION: Revise the fully derived version(s) for scientific publication. Most scientific writing does not need every intermediate step, but it should motivate the argument clearly. Keep the original level of detail unless the instruction asks for more.
 
@@ -171,13 +163,3 @@ task:
       </scratchpad>
 
       Following the scratchpad plan, output revised LaTeX documents that turn the fully derived drafts into scientific papers with an appropriate level of detail. Apply the original instruction, motivate the mathematics, and retain intermediate steps only when they serve the scientific content or the instruction requires them.
-
-      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>

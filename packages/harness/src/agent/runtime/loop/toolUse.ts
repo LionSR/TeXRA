@@ -493,7 +493,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
             });
       if (turn.outcome === 'completed') {
-        const cost = state.usage.totalCost;
+        const cost = state.usage.cost;
         run.callbacks.onProgress?.({
           kind: 'overview',
           toolCallCount: state.toolCalls,

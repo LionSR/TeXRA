@@ -13,12 +13,9 @@ import {
   openRegisteredCliSlashForm,
 } from './slashForms';
 import {
-  findSlashCommand,
-  findRedactedSlashCommandInput,
   parseSlashInput,
-  shouldRedactSlashInput,
-  suggestSlashCommand,
   type SlashCommand,
+  type SlashCommands,
 } from './slashRegistry';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
@@ -30,6 +27,7 @@ import type { ProcessServices } from '@texra-ai/harness/host';
  * did not fail the command.
  */
 function runGuardedSlashCommand(
+  commands: SlashCommands,
   line: string,
   command: SlashCommand,
   action: () => SlashCommandEffect,
@@ -38,7 +36,7 @@ function runGuardedSlashCommand(
     let echoed = false;
     const echo = (): void => {
       if (echoed) return;
-      appendSlashCommandEcho(line);
+      appendSlashCommandEcho(commands, line);
       echoed = true;
     };
     if (command.echo === 'ifPersists') echo();
@@ -60,7 +58,8 @@ export const handleTuiSlashCommand = Effect.fn('handleTuiSlashCommand')(
     line: string,
     context: SlashCommandContext,
   ): Effect.fn.Return<boolean, Error, ProcessServices> {
-    const redactedIntent = findRedactedSlashCommandInput(line);
+    const { commands } = context;
+    const redactedIntent = commands.findRedacted(line);
     const parsed = parseSlashInput(line);
     if (!parsed) {
       if (!redactedIntent) return false;
@@ -69,7 +68,7 @@ export const handleTuiSlashCommand = Effect.fn('handleTuiSlashCommand')(
       );
       if (
         !openRegisteredCliSlashForm(redactedIntent, () =>
-          appendSlashCommandEcho(line),
+          appendSlashCommandEcho(commands, line),
         )
       ) {
         setTransientNotice(
@@ -80,19 +79,19 @@ export const handleTuiSlashCommand = Effect.fn('handleTuiSlashCommand')(
     }
 
     const rest = parsed.remainder.trim();
-    const registered = findSlashCommand(parsed.name) ?? redactedIntent;
+    const registered = commands.find(parsed.name) ?? redactedIntent;
     if (
       registered?.formComponent !== undefined &&
       (!rest || registered.formRemainders?.includes(rest.toLowerCase()))
     ) {
       openRegisteredCliSlashForm(registered, () =>
-        appendSlashCommandEcho(line),
+        appendSlashCommandEcho(commands, line),
       );
       return true;
     }
     const handler = registered?.handler;
     if (registered && handler) {
-      yield* runGuardedSlashCommand(line, registered, () =>
+      yield* runGuardedSlashCommand(commands, line, registered, () =>
         handler(rest, context),
       );
       return true;
@@ -100,12 +99,12 @@ export const handleTuiSlashCommand = Effect.fn('handleTuiSlashCommand')(
     if (registered) {
       if (
         openRegisteredCliSlashForm(registered, () =>
-          appendSlashCommandEcho(line),
+          appendSlashCommandEcho(commands, line),
         )
       ) {
         return true;
       }
-      yield* runGuardedSlashCommand(line, registered, () =>
+      yield* runGuardedSlashCommand(commands, line, registered, () =>
         Effect.fail(
           new Error(
             `/${parsed.name} is registered but is not available in this CLI view yet.`,
@@ -115,10 +114,10 @@ export const handleTuiSlashCommand = Effect.fn('handleTuiSlashCommand')(
       return true;
     }
 
-    const suggestion = suggestSlashCommand(parsed.name.toLowerCase());
+    const suggestion = commands.suggest(parsed.name.toLowerCase());
     const didYouMean = suggestion ? ` Did you mean /${suggestion.name}?` : '';
     setTransientNotice(
-      shouldRedactSlashInput(line)
+      commands.shouldRedact(line)
         ? 'Unknown command with protected input. Type /help to list commands.'
         : `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
     );

@@ -9,7 +9,7 @@
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type {
   HostInteractions,
-  SessionHostInteractions,
+  Notices,
 } from '@agent/runtime/HostInteractions';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentPlatform } from '@platform/agentPlatform';
@@ -293,7 +293,7 @@ export interface LocalSession extends Session {
   };
   /** Show a notice through the attached host; a notice raised while no
    *  host is attached waits for the next one. */
-  readonly emit: SessionHostInteractions['emit'];
+  readonly emit: Notices['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been
    *  shown to the attached host (or queued for the next one). */

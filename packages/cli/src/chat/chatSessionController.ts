@@ -101,19 +101,6 @@ import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 // ---------------------------------------------------------------------------
 
 /**
- * A chat-session host call this controller drives faulted. The model
- * selection reads the process stores, which does not report a normal outcome
- * this way.
- */
-class ChatSessionCallFailed extends Schema.TaggedError<ChatSessionCallFailed>()(
-  'ChatSessionCallFailed',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/**
  * Hand a run program's own exit to the deferred the root-run slot holds. The
  * slot is claimed before the program that settles it exists, so every launch
  * and resume path ends the same way: success, failure, defect and
@@ -379,7 +366,7 @@ export function createChatSessionController(
   const reportRunFailure = (error: unknown, claim: RootRunSettled): void => {
     if (!session.holdsClaim(claim)) return;
     session.settleExitCode(claim, CliExitCode.AgentError);
-    if (session.leaving || session.status() === 'cancelled') return;
+    if (session.exited || session.status() === 'cancelled') return;
     const { classification } = normalizeProviderError(error);
     showFailure(
       error,
@@ -806,18 +793,6 @@ export function createChatSessionController(
               CHAT_API_MODE_MODEL_RECOVERY,
             ),
           },
-        ).pipe(
-          Effect.mapError(
-            (cause) =>
-              // The selection's own failure is the user-facing text: it
-              // names the model, its availability status and the `/key`
-              // recovery. The tag carries that message verbatim, because the
-              // transcript renders `toErrorMessage` of this failure.
-              new ChatSessionCallFailed({
-                message: toErrorMessage(cause),
-                cause,
-              }),
-          ),
         );
         yield* setCliHelperModel(stores.globalState, selection.model);
         return {
@@ -977,7 +952,7 @@ export function createChatSessionController(
       ...(reason !== undefined ? { reason } : {}),
     });
     const route = Effect.gen(function* () {
-      if (session.leaving) return returned();
+      if (session.exited) return returned();
       // The focused agent below the root takes the message.
       const focused = runViewOf(currentView(), selectedRunIdSignal.get());
       if (focused !== undefined && focused.parentId !== null)

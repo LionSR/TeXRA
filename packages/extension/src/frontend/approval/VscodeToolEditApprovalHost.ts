@@ -8,10 +8,10 @@
  * pending on its card, where Open diff reopens it.
  */
 
+import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import { Effect, FileSystem, Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import { pluralize } from '@texra-ai/harness/transcript';
 import { withLogChannel, type ProcessRuntime } from '@texra-ai/harness/host';
 import {
   VscodeDiffViewHost,
@@ -134,7 +134,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     this.diffSession = {
       original: { filePath: staged.originalPath },
       proposed: { filePath: staged.proposedPath },
-      title: this.title(),
+      label: toolEditDiffLabel(request),
     };
   }
 
@@ -202,7 +202,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return this.diffViewHost.openDiff(
       this.diffSession.original,
       this.diffSession.proposed,
-      this.diffSession.title,
+      this.diffSession.label,
     );
   }
 
@@ -211,16 +211,5 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return line === null
       ? Effect.void
       : this.diffViewHost.revealFirstChange(this.diffSession, line);
-  }
-
-  private title(): string {
-    const { addedLines: added, removedLines: removed } = this.request;
-    const changeParts: string[] = [];
-    if (added > 0) changeParts.push(`+${added}`);
-    if (removed > 0) changeParts.push(`-${removed}`);
-    const changeSuffix = changeParts.length
-      ? ` · ${changeParts.join(' / ')} ${pluralize(added + removed, 'line')}`
-      : '';
-    return `Tool edit (${this.request.sourceTool}): ${this.request.relativePath}${changeSuffix}`;
   }
 }

@@ -50,7 +50,10 @@ import {
   type ProcessServices,
   type ValidationModel,
 } from '@texra-ai/harness/host';
-import { Interactions } from '@agent/runtime/HostInteractions';
+import {
+  attachInteractions,
+  Interactions,
+} from '@agent/runtime/HostInteractions';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import { RouteRetries } from '@agent/runtime/ModelRetryGate';
 import { validationModelLayer } from '@cli/runtime/validationModel';
@@ -328,6 +331,9 @@ export const isolatedTestSession = (
     );
     const handle = yield* sessionHandleOf(session);
     if (interactions !== undefined)
-      yield* Context.get(handle, Interactions).use(interactions);
+      yield* attachInteractions(
+        Context.get(handle, Interactions),
+        interactions,
+      );
     return handle;
   });

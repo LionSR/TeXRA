@@ -175,50 +175,13 @@ function resolveModelAvailability(
 }
 
 /**
- * A host fact (a preference, a config switch, a stored state entry) could not
- * be read because the host's store threw. Environmental, so it is a typed
- * failure a caller recovers from like an unreadable secret store. The module's
- * own invariant ({@link resolveModelAvailability}) stays a defect.
- */
-export class ModelHostFactUnreadable extends Schema.TaggedError<ModelHostFactUnreadable>()(
-  'ModelHostFactUnreadable',
-  {
-    fact: Schema.String,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/** Give state-read failures the availability computation's public error. */
-const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
-  read.pipe(
-    Effect.mapError(
-      (cause) =>
-        new ModelHostFactUnreadable({
-          fact,
-          message: `Could not read ${fact} from the host.`,
-          cause,
-        }),
-    ),
-  );
-
-/**
  * Stage 0: every host fact the routes are decided over, resolved once per
  * call. The Kimi Code key status is a route fact (`readModelSettings` reads it),
  * so it seeds the key statuses.
  */
 const buildAvailabilityContext = Effect.fn('buildAvailabilityContext')(
-  function* (
-    stores: SettingsStores,
-  ): Effect.fn.Return<
-    ModelAvailabilityContext,
-    ModelHostFactUnreadable,
-    Secrets
-  > {
-    const settings = yield* hostFact(
-      'the model settings',
-      readModelSettings(stores),
-    );
+  function* (stores: SettingsStores) {
+    const settings = yield* readModelSettings(stores);
     return {
       reasoningLevels: settings.reasoningLevels,
       facts: routeFactsFor(settings, []),
@@ -547,8 +510,9 @@ function optionOf(
  * facts every model shares are read once, each model is routed once, then
  * one key status is read per provider the routes consult; each option is
  * finished purely over them, so the ~157-model settings pass costs no
- * per-model awaits. Every host read fails in its typed channel
- * ({@link ModelHostFactUnreadable}). `models`, when given, is honored
+ * per-model awaits. Each read fails with its own error: a settings or key
+ * read as itself, a subscription session as its route (`RouteUnavailable`,
+ * with whether it needs a sign-in). `models`, when given, is honored
  * verbatim, one option each, in order. Nothing is cached here: the sign-in
  * state is read live by design. `stores` are the caller's setting slots (a
  * session's `roots`); provider keys and sign-ins come from the process
@@ -562,10 +526,7 @@ export const readModelOptions = Effect.fn('readModelOptions')(function* (
   const visible =
     models ??
     visibleModelsForAccess(
-      yield* hostFact(
-        'the enabled-model selection',
-        getEnabledModels(stores.globalState),
-      ),
+      yield* getEnabledModels(stores.globalState),
       routeCtx,
     );
   const routed = routeModels(visible, routeCtx);
