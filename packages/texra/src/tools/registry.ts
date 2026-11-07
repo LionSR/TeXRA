@@ -218,7 +218,7 @@ const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.
  * Tools every host offers without setup that no dashboard card lists:
  * review annotations, the PDF viewer, the user-question dialog, and Loogle
  * search (network only, so not gated on the Lean 4 plugin's probe). Its
- * prompt section, at every step of every run, finds the TeX sources, says how
+ * prompt section, at every step that offers a tool, finds the TeX sources, says how
  * replies write math, and names the configured default bibliography.
  */
 const core = (
