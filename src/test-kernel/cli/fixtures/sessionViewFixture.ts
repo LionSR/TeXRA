@@ -44,14 +44,14 @@ export function seedView(view: SessionView): void {
 
 /** A run the fixture view holds: a started agent run mid-turn, a child when
  *  it names its parent, and held by this terminal unless `held` is false. */
-export interface FixtureRun {
+interface FixtureRun {
   readonly id: RunId;
   readonly parentId?: RunId;
   readonly held?: boolean;
 }
 
 /** A request a run opened, as the view lists it. */
-export interface FixtureRequest {
+interface FixtureRequest {
   readonly runId: RunId;
   readonly requestId: string;
   readonly payload: RequestPayload;

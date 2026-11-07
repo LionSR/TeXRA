@@ -142,7 +142,7 @@ export function scriptedModel(
 }
 
 /** A scenario's binding: any field of it, and whether its model reads images. */
-export type TestBinding = Partial<BoundModel> & {
+type TestBinding = Partial<BoundModel> & {
   readonly supportsVision?: boolean;
 };
 

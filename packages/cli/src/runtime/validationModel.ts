@@ -37,7 +37,7 @@ import {
 } from './validationSwitch';
 
 /** Which scripted conversations the model plays, as a turn reads them. */
-export interface ValidationScenario {
+interface ValidationScenario {
   readonly scriptFanout: boolean;
   readonly historyQuery: boolean;
   readonly echo: boolean;
