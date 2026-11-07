@@ -6,8 +6,7 @@ import { afterEach, expect, vi } from 'vitest';
 
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
 import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
-import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
-import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
+import { builtinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { notices } from '@cli/chat/tui/state/transcript';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
@@ -34,7 +33,28 @@ function createContext(
   services: Effect.Success<typeof processServices>,
 ): SlashCommandContext {
   let approvalPolicy: ApprovalPolicy = 'ask';
+  const select = () => Effect.void;
   return {
+    commands: builtinSlashCommands({
+      ...services,
+      onAgentSelect: select,
+      onTeamSelect: select,
+      onAccountChanged: () => Effect.void,
+      canSelectAgent: () => true,
+      getApprovalPolicy: () => approvalPolicy,
+      onApprovalPolicySelect: select,
+      onProjectApprovalPolicyChanged: vi.fn(),
+      onModelSelect: select,
+      canSelectModel: () => true,
+      getModelSwitchDisabledReason: () => Effect.succeed(undefined),
+      onModelAccessSelect: select,
+      onLoginSelect: select,
+      onMemorySelect: select,
+      onResumeSelect: select,
+      onSkillSelect: select,
+      configRoots: services.runSession.roots,
+      onError: vi.fn(),
+    }),
     cliContext: createTestCliContext({
       cwd: '/tmp/workspace',
       mode: 'interactive',
@@ -60,7 +80,6 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted))(
   'handleTuiSlashCommand',
   (it) => {
     afterEach(() => {
-      installSlashCommands([]);
       resetCliState();
     });
 
@@ -69,7 +88,6 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted))(
       () =>
         Effect.gen(function* () {
           const services = yield* processServices;
-          registerBuiltinSlashCommands({ ...services });
           const secret = 'sk-private-test-value';
 
           // The dispatcher as the composer runs it: one program on the process

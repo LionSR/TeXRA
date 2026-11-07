@@ -18,9 +18,8 @@ import { Text } from 'ink';
 
 // Local imports
 import type {
-  NotificationFailed,
+  HostFailed,
   PromptConfirmOptions,
-  PromptFailed,
   PromptHost,
   PromptInputOptions,
   PromptMessageItem,
@@ -118,7 +117,7 @@ class TuiUiHost implements Pick<PromptHost, 'info' | 'confirm' | 'input'> {
   info<T extends string = string>(
     message: string,
     options: PromptMessageOptions<T> = {},
-  ): Effect.Effect<T | undefined, NotificationFailed> {
+  ): Effect.Effect<T | undefined, HostFailed> {
     const items = options.items ?? [];
     if (items.length === 0) {
       return Effect.sync(() => {
@@ -141,7 +140,7 @@ class TuiUiHost implements Pick<PromptHost, 'info' | 'confirm' | 'input'> {
   confirm(
     message: string,
     options: PromptConfirmOptions,
-  ): Effect.Effect<boolean, PromptFailed> {
+  ): Effect.Effect<boolean, HostFailed> {
     const confirmLabel = options.confirmLabel;
     return chooseItem<string>(message, { detail: options.detail }, [
       confirmLabel,
@@ -156,7 +155,7 @@ class TuiUiHost implements Pick<PromptHost, 'info' | 'confirm' | 'input'> {
    */
   input(
     options: PromptInputOptions,
-  ): Effect.Effect<string | undefined, PromptFailed> {
+  ): Effect.Effect<string | undefined, HostFailed> {
     return openDialog<string>('input', (answer) => (
       <TextEntryForm
         title={options.prompt ?? 'Enter a value'}

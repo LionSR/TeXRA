@@ -18,7 +18,7 @@ import {
 import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
+import { HostFailed, type MessageHost } from '@texra/hosts/uiHosts';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 
 import {
@@ -54,12 +54,12 @@ interface DesktopPreviewHost {
   openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
   /**
    * `reportFailure: false` leaves the dialog out and hands the caller the
-   * shell's rejection as {@link ExternalOpenFailed}.
+   * shell's rejection as {@link HostFailed}.
    */
   openExternal(
     url: string,
     options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed>;
+  ): Effect.Effect<void, PreviewUnavailable | HostFailed>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
@@ -105,7 +105,7 @@ export function createDesktopPreviewHost(
       options.showErrorMessage === undefined
         ? Effect.fail(new PreviewUnavailable({ message }))
         : options.showErrorMessage(message).pipe(
-            Effect.catchTag('NotificationFailed', (error) =>
+            Effect.catchTag('HostFailed', (error) =>
               Effect.fail(new PreviewUnavailable({ message: error.message })),
             ),
             Effect.flatMap(() =>
@@ -150,16 +150,16 @@ export function createDesktopPreviewHost(
   function openExternal(
     url: string,
     options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed>;
+  ): Effect.Effect<void, PreviewUnavailable | HostFailed>;
   function openExternal(
     url: string,
     { reportFailure = true }: { readonly reportFailure?: boolean } = {},
-  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed> {
+  ): Effect.Effect<void, PreviewUnavailable | HostFailed> {
     return Effect.tryPromise({
       try: () => options.shell.openExternal(url),
       catch: (cause) =>
-        new ExternalOpenFailed({
-          target: url,
+        new HostFailed({
+          member: 'openExternal',
           message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
           cause,
         }),
@@ -169,7 +169,7 @@ export function createDesktopPreviewHost(
       Effect.catch((error) =>
         reportFailure
           ? fail(`Failed to open URL ${url}: ${toErrorMessage(error.cause)}`)
-          : Effect.fail<PreviewUnavailable | ExternalOpenFailed>(error),
+          : Effect.fail<PreviewUnavailable | HostFailed>(error),
       ),
       Effect.asVoid,
     );

@@ -23,7 +23,7 @@ import {
   type ProcessRuntime,
   type ProcessServices,
   ToolAvailability,
-  type SessionHostInteractions,
+  type Notices,
   withLogChannel,
 } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
@@ -66,7 +66,7 @@ interface ProjectBinding {
   /** The project's launcher (`HostRunActions.runValidated`). */
   readonly runValidated: HostRunActions['runValidated'];
   /** Where a failure before one of its runs opens is presented. */
-  readonly present: Pick<SessionHostInteractions, 'emit'>;
+  readonly present: Notices;
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
   readonly browserViews: DesktopBrowserViews;
   /** The project's `.env` over the process's: every question about this
@@ -288,7 +288,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           createDesktopHostRequests({
             ...parts,
             runtime,
-            project,
             host: hosts.run,
             files,
             workspaceFile: workspace.file,

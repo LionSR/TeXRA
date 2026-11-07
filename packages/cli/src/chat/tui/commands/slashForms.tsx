@@ -16,14 +16,13 @@ import { takeActiveForm } from '../state/formSlot';
 import { useSignal } from '../state/useSignal';
 import { appendLocalUserTranscript } from '../state/transcript';
 
-import {
-  findSlashCommand,
-  shouldRedactSlashInput,
-  type SlashCommand,
-} from './slashRegistry';
+import type { SlashCommand, SlashCommands } from './slashRegistry';
 
-export function appendSlashCommandEcho(line: string): void {
-  if (!shouldRedactSlashInput(line)) appendLocalUserTranscript(line.trim());
+export function appendSlashCommandEcho(
+  commands: SlashCommands,
+  line: string,
+): void {
+  if (!commands.shouldRedact(line)) appendLocalUserTranscript(line.trim());
 }
 
 const CLIPBOARD_TOOL: Partial<Record<NodeJS.Platform, string>> = {
@@ -186,9 +185,4 @@ export function openRegisteredCliSlashForm(
     ),
   });
   return true;
-}
-
-export function openCliSlashCommandForm(commandName: string): boolean {
-  const command = findSlashCommand(commandName);
-  return command ? openRegisteredCliSlashForm(command) : false;
 }

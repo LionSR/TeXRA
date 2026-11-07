@@ -1,4 +1,6 @@
-// The slash command table, installed from plugin contributions at startup.
+// A chat's slash command table, built from plugin contributions.
+
+import { createContext, useContext } from 'react';
 
 import {
   editDistance,
@@ -64,7 +66,7 @@ export type SlashPickIntent = 'complete' | 'submit';
 
 /**
  * One plugin's slash commands. The id is stable and unique across the
- * installed contributions; the commands keep their listed order, which is
+ * chat's contributions; the commands keep their listed order, which is
  * the palette's and `/help`'s order.
  */
 export interface SlashCommandContribution {
@@ -72,17 +74,51 @@ export interface SlashCommandContribution {
   readonly commands: readonly SlashCommand[];
 }
 
-let installedCommands: readonly SlashCommand[] = [];
+/**
+ * A chat's slash commands, in the contributions' order, with the lookups the
+ * dispatcher, the palette and the redaction checks run over them.
+ */
+export interface SlashCommands {
+  readonly list: readonly SlashCommand[];
+  readonly find: (nameOrAlias: string) => SlashCommand | undefined;
+  /**
+   * Commands whose name or an alias starts with `prefix` — the palette's
+   * first tier, and the only tier safe to auto-run on a submit the user never
+   * previewed (e.g. a pasted chunk ending in a newline).
+   */
+  readonly prefix: (prefix: string) => readonly SlashCommand[];
+  /**
+   * Commands matching `prefix`, case-insensitively and in listed order.
+   * Prefix matches (on name or alias) win; when there are none, falls back to
+   * substring matches (`/odel` still finds `/model`), and finally to the
+   * closest typo suggestion (`/hlp` → `/help`) so the palette recovers from
+   * mistypes instead of going blank. The fallback tiers are for the palette,
+   * where the user sees the match before Enter runs it.
+   */
+  readonly match: (prefix: string) => readonly SlashCommand[];
+  /**
+   * Best "did you mean" candidate for a mistyped command name: the command
+   * (matching by name or alias) within the shared typo threshold, closest
+   * first, alphabetical on ties.
+   */
+  readonly suggest: (nameOrAlias: string) => SlashCommand | undefined;
+  /** Recognize a protected command even when punctuation makes parsing fail. */
+  readonly findRedacted: (text: string) => SlashCommand | undefined;
+  /**
+   * Whether a slash-shaped input may contain data that must not be retained.
+   * Unknown commands with arguments fail closed: a misspelled secret-bearing
+   * command must not place its argument in the transcript or input history.
+   */
+  readonly shouldRedact: (text: string) => boolean;
+}
 
 /**
- * Install the process's slash commands, replacing whatever was installed:
- * the surface that owns the runtime options builds its contributions from
- * them once at startup. A duplicate plugin id, or a name or alias claimed
- * twice, is a wiring bug and throws.
+ * The slash commands of these contributions. A duplicate plugin id, or a
+ * name or alias claimed twice, is a wiring bug and throws.
  */
-export function installSlashCommands(
+export function slashCommands(
   contributions: readonly SlashCommandContribution[],
-): void {
+): SlashCommands {
   const pluginIds = new Set<string>();
   const claimed = new Map<string, string>();
   for (const { pluginId, commands } of contributions) {
@@ -104,50 +140,121 @@ export function installSlashCommands(
       }
     }
   }
-  installedCommands = contributions.flatMap(({ commands }) => commands);
-}
+  const list = contributions.flatMap(({ commands }) => commands);
 
-export function listSlashCommands(): readonly SlashCommand[] {
-  return installedCommands;
+  const find = (nameOrAlias: string): SlashCommand | undefined => {
+    const lower = nameOrAlias.toLowerCase();
+    return list.find((cmd) => commandCandidates(cmd).includes(lower));
+  };
+
+  const prefix = (query: string): readonly SlashCommand[] => {
+    const lower = query.toLowerCase();
+    return list.filter((cmd) =>
+      commandCandidates(cmd).some((candidate) => candidate.startsWith(lower)),
+    );
+  };
+
+  const suggest = (nameOrAlias: string): SlashCommand | undefined => {
+    const token = nameOrAlias.toLowerCase();
+    let best:
+      | {
+          readonly command: SlashCommand;
+          readonly candidate: string;
+          readonly distance: number;
+        }
+      | undefined;
+
+    for (const command of list) {
+      for (const candidate of commandCandidates(command)) {
+        const distance = editDistance(token, candidate);
+        if (distance > typoSuggestionThreshold(token, candidate)) continue;
+        if (
+          best === undefined ||
+          distance < best.distance ||
+          (distance === best.distance && candidate < best.candidate)
+        ) {
+          best = { command, candidate, distance };
+        }
+      }
+    }
+
+    return best?.command;
+  };
+
+  const redactedCommandForToken = (token: string): SlashCommand | undefined => {
+    const exact = find(token);
+    if (exact !== undefined)
+      return exact.redactInput === true ? exact : undefined;
+
+    const suggestion = suggest(token);
+    if (suggestion?.redactInput === true) return suggestion;
+
+    const normalized = token.replace(/^(?:api|set)-?/u, '');
+    const variants = normalized === token ? [token] : [token, normalized];
+    return list.find(
+      (command) =>
+        command.redactInput === true &&
+        commandCandidates(command).some((candidate) =>
+          variants.some(
+            (variant) =>
+              variant === candidate ||
+              isAdjacentTransposition(variant, candidate) ||
+              hasConcatenatedCredentialPrefix(variant, candidate),
+          ),
+        ),
+    );
+  };
+
+  const findRedacted = (text: string): SlashCommand | undefined => {
+    const token = /^\/([\w-]+)/u.exec(text)?.[1]?.toLowerCase();
+    return token ? redactedCommandForToken(token) : undefined;
+  };
+
+  return {
+    list,
+    find,
+    prefix,
+    match: (query) => {
+      const lower = query.toLowerCase();
+      const prefixMatches = prefix(query);
+      if (prefixMatches.length > 0 || !lower) return prefixMatches;
+
+      const substringMatches = list.filter((cmd) =>
+        commandCandidates(cmd).some((candidate) => candidate.includes(lower)),
+      );
+      if (substringMatches.length > 0) return substringMatches;
+
+      const suggestion = suggest(lower);
+      return suggestion ? [suggestion] : [];
+    },
+    suggest,
+    findRedacted,
+    shouldRedact: (text) => {
+      if (findRedacted(text) !== undefined) return true;
+
+      const parsed = parseSlashInput(text);
+      if (parsed === undefined) return false;
+
+      const registered = find(parsed.name);
+      if (registered !== undefined) return registered.redactInput === true;
+      if (parsed.remainder.trim().length > 0) return true;
+      return list.some(
+        (command) =>
+          command.redactInput === true &&
+          commandCandidates(command).some(
+            (candidate) =>
+              parsed.name.length > candidate.length &&
+              parsed.name.toLowerCase().startsWith(candidate),
+          ),
+      );
+    },
+  };
 }
 
 /** Lowercased name + aliases a command can be addressed by. */
 function commandCandidates(command: SlashCommand): string[] {
   return [command.name, ...(command.aliases ?? [])].map((name) =>
     name.toLowerCase(),
-  );
-}
-
-export function findSlashCommand(
-  nameOrAlias: string,
-): SlashCommand | undefined {
-  const lower = nameOrAlias.toLowerCase();
-  return listSlashCommands().find((cmd) =>
-    commandCandidates(cmd).includes(lower),
-  );
-}
-
-function redactedCommandForToken(token: string): SlashCommand | undefined {
-  const exact = findSlashCommand(token);
-  if (exact !== undefined)
-    return exact.redactInput === true ? exact : undefined;
-
-  const suggestion = suggestSlashCommand(token);
-  if (suggestion?.redactInput === true) return suggestion;
-
-  const normalized = token.replace(/^(?:api|set)-?/u, '');
-  const variants = normalized === token ? [token] : [token, normalized];
-  return listSlashCommands().find(
-    (command) =>
-      command.redactInput === true &&
-      commandCandidates(command).some((candidate) =>
-        variants.some(
-          (variant) =>
-            variant === candidate ||
-            isAdjacentTransposition(variant, candidate) ||
-            hasConcatenatedCredentialPrefix(variant, candidate),
-        ),
-      ),
   );
 }
 
@@ -174,105 +281,20 @@ function hasConcatenatedCredentialPrefix(
   return /^(?:sk[-_]|gh[pousr]_|AIza|xai-)/iu.test(remainder);
 }
 
-/** Recognize a protected command even when punctuation makes parsing fail. */
-export function findRedactedSlashCommandInput(
-  text: string,
-): SlashCommand | undefined {
-  const token = /^\/([\w-]+)/u.exec(text)?.[1]?.toLowerCase();
-  return token ? redactedCommandForToken(token) : undefined;
-}
+const SlashCommandsContext = createContext<SlashCommands | undefined>(
+  undefined,
+);
 
-/**
- * Whether a slash-shaped input may contain data that must not be retained.
- * Unknown commands with arguments fail closed: a misspelled secret-bearing
- * command must not place its argument in the transcript or input history.
- */
-export function shouldRedactSlashInput(text: string): boolean {
-  if (findRedactedSlashCommandInput(text) !== undefined) return true;
+/** Hands the chat's slash commands to the input bar and its palette. */
+export const SlashCommandsProvider = SlashCommandsContext.Provider;
 
-  const parsed = parseSlashInput(text);
-  if (parsed === undefined) return false;
-
-  const registered = findSlashCommand(parsed.name);
-  if (registered !== undefined) return registered.redactInput === true;
-  if (parsed.remainder.trim().length > 0) return true;
-  return listSlashCommands().some(
-    (command) =>
-      command.redactInput === true &&
-      commandCandidates(command).some(
-        (candidate) =>
-          parsed.name.length > candidate.length &&
-          parsed.name.toLowerCase().startsWith(candidate),
-      ),
-  );
-}
-
-/**
- * Commands whose name or an alias starts with `prefix` — the palette's first
- * tier, and the only tier safe to auto-run on a submit the user never
- * previewed (e.g. a pasted chunk ending in a newline).
- */
-export function prefixSlashCommands(prefix: string): readonly SlashCommand[] {
-  const lower = prefix.toLowerCase();
-  return listSlashCommands().filter((cmd) =>
-    commandCandidates(cmd).some((candidate) => candidate.startsWith(lower)),
-  );
-}
-
-/**
- * Returns registered commands matching `prefix`, case-insensitively and in
- * installed order. Prefix matches (on name or alias) win; when there are
- * none, falls back to substring matches (`/odel` still finds `/model`), and
- * finally to the closest typo suggestion (`/hlp` → `/help`) so the palette
- * recovers from mistypes instead of going blank. The fallback tiers are for
- * the palette, where the user sees the match before Enter runs it.
- */
-export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
-  const lower = prefix.toLowerCase();
-  const prefixMatches = prefixSlashCommands(prefix);
-  if (prefixMatches.length > 0 || !lower) return prefixMatches;
-
-  const substringMatches = listSlashCommands().filter((cmd) =>
-    commandCandidates(cmd).some((candidate) => candidate.includes(lower)),
-  );
-  if (substringMatches.length > 0) return substringMatches;
-
-  const suggestion = suggestSlashCommand(lower);
-  return suggestion ? [suggestion] : [];
-}
-
-/**
- * Best "did you mean" candidate for a mistyped command name: the registered
- * command (matching by name or alias) within the shared typo threshold,
- * closest first, alphabetical on ties.
- */
-export function suggestSlashCommand(
-  nameOrAlias: string,
-): SlashCommand | undefined {
-  const token = nameOrAlias.toLowerCase();
-  let best:
-    | {
-        readonly command: SlashCommand;
-        readonly candidate: string;
-        readonly distance: number;
-      }
-    | undefined;
-
-  for (const command of listSlashCommands()) {
-    for (const candidate of commandCandidates(command)) {
-      const distance = editDistance(token, candidate);
-      if (distance > typoSuggestionThreshold(token, candidate)) continue;
-      if (
-        best === undefined ||
-        distance < best.distance ||
-        (distance === best.distance && candidate < best.candidate)
-      ) {
-        best = { command, candidate, distance };
-      }
-    }
+/** The slash commands of the chat this component renders in. */
+export function useSlashCommands(): SlashCommands {
+  const commands = useContext(SlashCommandsContext);
+  if (commands === undefined) {
+    throw new Error('No slash commands: render under SlashCommandsProvider.');
   }
-
-  return best?.command;
+  return commands;
 }
 
 /**

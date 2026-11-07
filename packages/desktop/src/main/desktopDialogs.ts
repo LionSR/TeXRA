@@ -6,7 +6,7 @@ import { type BrowserWindow, dialog } from 'electron';
 import { Effect, Predicate } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
+import { HostFailed } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import {
   INSTRUCTION_ACTION,
@@ -43,14 +43,8 @@ export function createDesktopDialogs(
   },
 ) {
   const showMessageBoxOfType =
-    (
-      member: NotificationFailed['member'],
-      type: 'error' | 'info' | 'warning',
-    ) =>
-    (
-      message: string,
-      project?: string,
-    ): Effect.Effect<void, NotificationFailed> =>
+    (member: HostFailed['member'], type: 'error' | 'info' | 'warning') =>
+    (message: string, project?: string): Effect.Effect<void, HostFailed> =>
       Effect.tryPromise({
         try: async () => {
           await dialog.showMessageBox(window, {
@@ -60,7 +54,7 @@ export function createDesktopDialogs(
           });
         },
         catch: (cause) =>
-          new NotificationFailed({
+          new HostFailed({
             member,
             message: toErrorMessage(cause),
             cause,
@@ -82,7 +76,7 @@ export function createDesktopDialogs(
       detail?: string;
       confirmLabel?: string;
       project?: string;
-    }): Effect.Effect<boolean, PromptFailed> =>
+    }): Effect.Effect<boolean, HostFailed> =>
       Effect.tryPromise({
         try: () =>
           dialog.showMessageBox(window, {
@@ -94,7 +88,8 @@ export function createDesktopDialogs(
             cancelId: 1,
           }),
         catch: (cause) =>
-          new PromptFailed({
+          new HostFailed({
+            member: 'confirmDialog',
             message: `The confirmation dialog could not be shown: ${toErrorMessage(cause)}`,
             cause,
           }),
@@ -110,7 +105,7 @@ export function createDesktopDialogs(
       message: string,
       docsPage: string | undefined,
       project: string,
-    ): Effect.Effect<void, NotificationFailed> => {
+    ): Effect.Effect<void, HostFailed> => {
       if (!docsPage) return showErrorMessage(message, project);
       return Effect.tryPromise({
         try: () =>
@@ -123,7 +118,7 @@ export function createDesktopDialogs(
             cancelId: 1,
           }),
         catch: (cause) =>
-          new NotificationFailed({
+          new HostFailed({
             member: 'showErrorMessage',
             message: `A desktop error dialog could not be shown: ${toErrorMessage(cause)}`,
             cause,
@@ -145,7 +140,7 @@ export function createDesktopDialogs(
       message: string,
       choices: readonly InstructionAction[],
       project: string,
-    ): Effect.Effect<void, NotificationFailed> => {
+    ): Effect.Effect<void, HostFailed> => {
       const buttons = [
         ...choices.map((token) => INSTRUCTION_ACTION_BUTTON_LABELS[token]),
         'Dismiss',
@@ -162,7 +157,7 @@ export function createDesktopDialogs(
             cancelId: dismissId,
           }),
         catch: (cause) =>
-          new NotificationFailed({
+          new HostFailed({
             member: 'showInfoMessage',
             message: `The instruction dialog could not be shown: ${toErrorMessage(cause)}`,
             cause,

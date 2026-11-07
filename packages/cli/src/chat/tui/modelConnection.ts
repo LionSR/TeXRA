@@ -22,7 +22,7 @@ import { SETUP_AGENT_HANDOFF_NOTICE } from '@cli/onboarding/setupContinuation';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 
 import { applyInitialCliAgentSelection } from './commands/handlers/agentModelCommands';
-import { openCliSlashCommandForm } from './commands/slashForms';
+import { openRegisteredCliSlashForm } from './commands/slashForms';
 import {
   patchSessionMeta,
   sessionMeta,
@@ -54,8 +54,11 @@ export interface ModelConnection {
   readonly open: Effect.Effect<boolean>;
 }
 
-/** The chat's model connection, open unless {@link modelConnectionNeeded}. */
-export function makeModelConnection(): ModelConnection {
+/** The chat's model connection, open unless {@link modelConnectionNeeded}.
+ *  `openConnectPanel` puts the "Connect a model" panel in front. */
+export function makeModelConnection(
+  openConnectPanel: () => void,
+): ModelConnection {
   const latch = Latch.makeUnsafe(!modelConnectionNeeded.get());
   let waiting = 0;
   return {
@@ -64,7 +67,7 @@ export function makeModelConnection(): ModelConnection {
       setTransientNotice(
         'Connect a model and your message will be sent right away.',
       );
-      openCliSlashCommandForm('login');
+      openConnectPanel();
       waiting += 1;
       return Latch.await(latch).pipe(
         Effect.ensuring(Effect.sync(() => (waiting -= 1))),
@@ -159,7 +162,8 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
     reportInTranscript,
     Effect.andThen(connection.open),
   );
-  if (!messageWaiting && setupAgent) openCliSlashCommandForm('agent');
+  if (!messageWaiting && setupAgent)
+    openRegisteredCliSlashForm(context.commands.agent);
 }, reportInTranscript);
 
 // Every step already speaks in the transcript; a failure or defect in one does

@@ -8,7 +8,7 @@ import { Skills, withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@texra-ai/harness/host';
 import { unsupported } from '@texra/controllers/settingsView/settingsViewDispatch';
-import type { ExternalOpenFailed } from '@texra/hosts/uiHosts';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import {
@@ -40,9 +40,7 @@ export interface DesktopSettingsIpcOptions {
     /** Fails rather than raising the window's own "could not open" dialog:
      *  the sign-in reports a missing browser itself and falls back to a
      *  device code. */
-    openSubscriptionSignInUrl(
-      url: string,
-    ): Effect.Effect<void, ExternalOpenFailed>;
+    openSubscriptionSignInUrl(url: string): Effect.Effect<void, HostFailed>;
     presentSubscriptionSignInUrl(
       url: string,
       productName: string,
@@ -107,7 +105,7 @@ export function createDesktopSettingsIpc(
             `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
           ),
         ),
-        Effect.catchTag('NotificationFailed', (notice) =>
+        Effect.catchTag('HostFailed', (notice) =>
           Effect.logError(notice.message).pipe(
             withLogChannel(SETTINGS_LOG_CHANNEL),
           ),
@@ -202,7 +200,7 @@ export function createDesktopSettingsIpc(
           bindings.notify
             .showErrorMessage(gitHubTokenRejectedMessage(message))
             .pipe(
-              Effect.catchTag('NotificationFailed', (notice) =>
+              Effect.catchTag('HostFailed', (notice) =>
                 Effect.logError(notice.message).pipe(
                   withLogChannel(SETTINGS_LOG_CHANNEL),
                 ),

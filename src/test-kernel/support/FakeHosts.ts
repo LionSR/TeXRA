@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 
 // Local imports - hosts
 import type {
-  ExternalOpenFailed,
+  HostFailed,
   ExternalOpener,
   PromptConfirmOptions,
   PromptHost,
@@ -103,7 +103,7 @@ class FakePromptHost implements PromptHost {
 class FakeExternalOpener implements ExternalOpener {
   readonly externalUrls: string[] = [];
 
-  openExternal(url: string): Effect.Effect<void, ExternalOpenFailed> {
+  openExternal(url: string): Effect.Effect<void, HostFailed> {
     return Effect.sync(() => {
       this.externalUrls.push(url);
     });
