@@ -410,11 +410,15 @@ const LOG_CHANNEL: "channel"
 
 One diagnostic record, shaped by Effect's own structured formatter rather
 than by a type of ours: `Logger.formatStructured` already carries level,
-fiber, timestamp, message, cause, annotations, and spans, so the logger
-layer maps straight onto this with no adaptation.
+fiber, timestamp, message, cause, annotations, and spans. Its `level` is
+typed `string`; here it is the call's severity, upper-cased, as the
+formatter writes it, so a sink's switch over it is exhaustive.
 
 ```ts
-type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
+type LogEntry = Omit<
+  ReturnType<typeof Logger.formatStructured.log>,
+  'level'
+> & { readonly level: Uppercase<LogLevel.Severity> };
 ```
 
 ## LogSink

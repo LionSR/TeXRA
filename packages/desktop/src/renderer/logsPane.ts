@@ -1,7 +1,7 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { Effect, Hash, Result, Schema } from 'effect';
+import { Effect, Hash, type LogLevel, Result, Schema } from 'effect';
 import { truncateSummary } from '@texra-ai/harness/schemas';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { IconName } from '@ui/wa/iconNames';
@@ -72,6 +72,9 @@ function formatTimestamp(isoTimestamp: string): string {
 
 type DesktopLogLevel = 'debug' | 'error' | 'info' | 'warn' | 'unknown';
 
+/** A log line's level, as the log sink writes it. */
+type EntryLevel = Uppercase<LogLevel.Severity>;
+
 interface DesktopLogEntry {
   readonly id: string;
   readonly level: DesktopLogLevel;
@@ -101,7 +104,7 @@ interface LogsPaneController {
 }
 
 /** Effect's level names as the rows this viewer paints. */
-const LEVEL_PRESENTATION_KEY: Record<string, DesktopLogLevel> = {
+const LEVEL_PRESENTATION_KEY: Record<EntryLevel, DesktopLogLevel> = {
   TRACE: 'debug',
   DEBUG: 'debug',
   INFO: 'info',
@@ -109,6 +112,9 @@ const LEVEL_PRESENTATION_KEY: Record<string, DesktopLogLevel> = {
   ERROR: 'error',
   FATAL: 'error',
 };
+/** Whether a level read back from the file is one this build writes. */
+const isEntryLevel = (level: string): level is EntryLevel =>
+  Object.hasOwn(LEVEL_PRESENTATION_KEY, level);
 const LOG_SUMMARY_MAX_LENGTH = 180;
 const LOG_LEVEL_PRESENTATION = {
   debug: { icon: 'code', label: 'Debug' },
@@ -155,9 +161,12 @@ function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
     const timestamp = line?.timestamp;
     return {
       id: duplicateCount === 0 ? baseId : `${baseId}-${duplicateCount + 1}`,
-      level: line
-        ? (LEVEL_PRESENTATION_KEY[line.level] ?? 'unknown')
-        : 'unknown',
+      // A level this build does not write (a line from another writer) is
+      // a partial row.
+      level:
+        line && isEntryLevel(line.level)
+          ? LEVEL_PRESENTATION_KEY[line.level]
+          : 'unknown',
       raw,
       summary:
         truncateSummary(message, LOG_SUMMARY_MAX_LENGTH) || '(no message)',

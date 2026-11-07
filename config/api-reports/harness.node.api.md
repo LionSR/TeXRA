@@ -9,8 +9,8 @@ Exports: 52
 - `CommandDirs` — `const CommandDirs: Reference<() => readonly string[]>`
 - `ConfigStore` — `interface ConfigStore { get(key: string): unknown; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
 - `effectDiagnosticsLayer` — `const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>`
-- `entryChannel` — `function entryChannel: (entry: { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }) => string | undefined`
-- `entryMessage` — `function entryMessage: (entry: { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }) => string`
+- `entryChannel` — `function entryChannel: (entry: LogEntry) => string | undefined`
+- `entryMessage` — `function entryMessage: (entry: LogEntry) => string`
 - `entryTypeIn` — `const entryTypeIn: (fs: FileSystem, target: string) => Effect<Type | undefined, PlatformError, never>`
 - `envFlag` — `const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>`
 - `envVar` — `const envVar: (name: string) => Effect<string | undefined, never, never>`
@@ -28,7 +28,7 @@ Exports: 52
 - `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, follow: boolean) => JsonStore; static: open: (filePath: string, options?: JsonStoreOptions | undefined) => Effect<JsonStore, Error, FileSystem | Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
 - `JsonStoreOptions` — `interface JsonStoreOptions { onUnreadable?: (error: Error) => void; follow?: boolean; }`
 - `LOG_CHANNEL` — `const LOG_CHANNEL: "channel"`
-- `LogEntry` — `type LogEntry = ReturnType<typeof Logger.formatStructured.log>; ≡ { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }`
+- `LogEntry` — `type LogEntry = Omit<ReturnType<typeof Logger.formatStructured.log>, 'level'> & { readonly level: Uppercase<LogLevel.Severity>; }; ≡ LogEntry`
 - `LogSink` — `interface LogSink { write(entry: LogEntry): void; dispose?(): void; }`
 - `makeMachineGitEnv` — `const makeMachineGitEnv: Effect<ProcessEnv, never, never>`
 - `nodeFileServices` — `const nodeFileServices: Layer<FileSystem | Path, never, never>`

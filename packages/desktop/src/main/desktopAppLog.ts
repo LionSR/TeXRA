@@ -125,7 +125,7 @@ function installConsoleMirror(): void {
 }
 
 /** Console levels as the names Effect's structured entry uses. */
-const ENTRY_LEVEL: Record<ConsoleLevel, string> = {
+const ENTRY_LEVEL: Record<ConsoleLevel, LogEntry['level']> = {
   debug: 'DEBUG',
   error: 'ERROR',
   info: 'INFO',
