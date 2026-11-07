@@ -168,9 +168,8 @@ export const agentCatalogFollower = Layer.effectDiscard(
     const catalog = yield* AgentCatalog;
     const directories = yield* AgentDirectories;
     const { resourcesRoot } = directories;
-    const packaged = resourcesRoot !== undefined && resourcesRoot !== '';
-    if (!packaged && !(yield* namedCustomDirectory)) return;
-    if (packaged) {
+    if (resourcesRoot === undefined && !(yield* namedCustomDirectory)) return;
+    if (resourcesRoot !== undefined) {
       yield* Effect.all(
         [
           registerRoot(directories.builtIn(), {
@@ -216,7 +215,7 @@ export const agentCatalogFollower = Layer.effectDiscard(
       Stream.switchMap(() =>
         Stream.unwrap(
           Effect.as(
-            packaged ? registerCustomAgentRoot : Effect.void,
+            resourcesRoot !== undefined ? registerCustomAgentRoot : Effect.void,
             watchCustomDirectory.pipe(
               // A launch inside the debounce loads the change itself.
               Stream.tap(() => catalog.invalidate),

@@ -51,8 +51,8 @@ export interface TexraProcessHost extends Omit<
   /** The storage root the process opens: sessions, global state, secrets. */
   readonly storageRoot: string;
   /** The packaged resources root the built-in agents and bundled skills are
-   *  read from. Absent only for a CLI entry that loads neither. */
-  readonly resourcesPath?: string;
+   *  read from. */
+  readonly resourcesPath: string;
   /** The flags every skill read uses (the CLI's `--source`). */
   readonly skillSourceOptions?: SkillSourceOptions;
   /** What the usage log stamps on each entry, and the host's own live
@@ -102,14 +102,12 @@ export const texraProcessLayer = ({
     storageRoot,
     settings: TEXRA_SETTINGS.catalog,
     plugins,
-    ...(resourcesPath !== undefined && {
-      skills: {
-        resourcesPath,
-        // A project's skills sit beside its `.texra/config.json`.
-        projectFolder: TEXRA_STORAGE_DIR_NAME,
-        skillSourceOptions,
-      },
-    }),
+    skills: {
+      resourcesPath,
+      // A project's skills sit beside its `.texra/config.json`.
+      projectFolder: TEXRA_STORAGE_DIR_NAME,
+      skillSourceOptions,
+    },
     // One credential store every host shares, announcing each key it writes.
     secrets: Secrets.announcing(
       (announce) => new FileSecrets(secretsDirectory(storageRoot), announce),
@@ -123,7 +121,7 @@ export const texraProcessLayer = ({
         (state) =>
           new AgentDirectoryService({
             channel: AGENT_LOAD_CHANNEL,
-            resourcesPath: resourcesPath ?? '',
+            resourcesPath,
             state,
             teamMembers,
             ...(agentIssues && {

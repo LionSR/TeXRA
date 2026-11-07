@@ -263,7 +263,7 @@ interface AgentDirectoriesPort {
   /**
    * The packaged resources root a host ships its bundled agents under,
    * the tool plugins' agent directories among them. Absent where none ships:
-   * an embedder's own directories, or the CLI entries that load no agents.
+   * an embedder's own directories.
    */
   readonly resourcesRoot?: string;
 }

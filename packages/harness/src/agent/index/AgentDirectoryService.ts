@@ -68,15 +68,14 @@ export interface AgentDirectoryServiceOptions {
 }
 
 export class AgentDirectoryService {
-  readonly resourcesRoot?: string;
+  readonly resourcesRoot: string;
   readonly teamMembers?: AgentDirectoriesPort['teamMembers'];
 
   private readonly options: AgentDirectoryServiceOptions;
   constructor(options: AgentDirectoryServiceOptions) {
     this.options = options;
     if (options.teamMembers) this.teamMembers = options.teamMembers;
-    if (options.resourcesPath !== '')
-      this.resourcesRoot = options.resourcesPath;
+    this.resourcesRoot = options.resourcesPath;
   }
 
   /**
