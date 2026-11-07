@@ -1,5 +1,5 @@
 // Third-party imports
-import { Schema, Struct } from 'effect';
+import { Effect, Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
@@ -8,6 +8,7 @@ import {
   type ModelOrigin,
   checkPreparedHistory,
 } from './protocol.js';
+import { ModelError } from './errors.js';
 
 const TextPartSchema = Schema.Struct({
   kind: Schema.Literal('text'),
@@ -232,6 +233,65 @@ export const PreparedHistorySchema = Schema.Array(MessageSchema).check(
   Schema.makeFilter(checkPreparedHistory),
 );
 type HistoryMessage = typeof MessageSchema.Type;
+
+/** A tool message of the history. */
+type ToolMessage = Extract<HistoryMessage, { readonly role: 'tool' }>;
+
+/** A local call and the result that answers it. */
+export interface AnsweredCall {
+  readonly call: typeof LocalCallPartSchema.Type;
+  readonly result: ToolMessage['results'][number];
+}
+
+/**
+ * Each tool message of `messages` with its results paired to the calls they
+ * answer: the local calls of the assistant message before it, by
+ * `callOrdinal`, the pairing `checkPreparedHistory` requires. Keyed by the
+ * tool message itself, which `replayableHistory` passes through, so a
+ * lowerer reads it for the message it lowers. A tool message whose results
+ * answer no call there is absent.
+ */
+export function answeredCalls(
+  messages: readonly HistoryMessage[],
+): ReadonlyMap<ToolMessage, readonly AnsweredCall[]> {
+  const answered = new Map<ToolMessage, readonly AnsweredCall[]>();
+  for (const [index, message] of messages.entries()) {
+    if (message.role !== 'tool') continue;
+    const previous = messages[index - 1];
+    const calls =
+      previous?.role === 'assistant'
+        ? previous.content.flatMap((part) =>
+            part.kind === 'local-call' ? [part] : [],
+          )
+        : [];
+    const pairs = message.results.flatMap((result) => {
+      const call = calls.at(result.callOrdinal);
+      return call === undefined || result.callOrdinal < 0
+        ? []
+        : [{ call, result }];
+    });
+    if (pairs.length === message.results.length) answered.set(message, pairs);
+  }
+  return answered;
+}
+
+/** The pairs of tool message `message`, or the refusal of a history whose
+ *  results answer no call (one `checkPreparedHistory` refuses). */
+export function callsAnsweredBy(
+  answered: ReadonlyMap<ToolMessage, readonly AnsweredCall[]>,
+  message: ToolMessage,
+): Effect.Effect<readonly AnsweredCall[], ModelError> {
+  const pairs = answered.get(message);
+  return pairs === undefined
+    ? Effect.fail(
+        new ModelError({
+          kind: 'invalid-request',
+          message:
+            'A tool result answers no local call of the assistant message before it.',
+        }),
+      )
+    : Effect.succeed(pairs);
+}
 
 /**
  * The history every codec lowers for a turn bound to `turn`: what another

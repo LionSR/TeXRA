@@ -28,7 +28,12 @@ import {
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, fitLimit, resolveTurn } from './turnInput.js';
-import { replayableHistory, systemUpdateText } from '../message.js';
+import {
+  answeredCalls,
+  callsAnsweredBy,
+  replayableHistory,
+  systemUpdateText,
+} from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
 import {
@@ -157,9 +162,8 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
     inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
   const messages: MessageParam[] = [];
-  let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
-    [];
   const history = replayableHistory(turn.messages, origin);
+  const answered = answeredCalls(history);
   for (const [index, message] of history.entries()) {
     if (message.role === 'system') {
       // Native where the model takes it and the API admits it: after a user
@@ -182,18 +186,19 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       });
     } else if (message.role === 'tool') {
       const content: ToolResultBlockParam[] = [];
-      for (const result of message.results) {
+      for (const { call, result } of yield* callsAnsweredBy(
+        answered,
+        message,
+      )) {
         content.push({
           type: 'tool_result',
-          // The canonical grammar guarantees adjacent, complete ordinals.
-          tool_use_id: calls[result.callOrdinal].providerCallId,
+          tool_use_id: call.providerCallId,
           is_error: result.status === 'error',
           content: yield* Effect.forEach(result.content, lowerPart),
         });
       }
       messages.push({ role: 'user', content });
     } else {
-      calls = [];
       const content: ContentBlockParam[] = [];
       for (const part of message.content) {
         if (part.kind === 'message' && part.evidence === undefined) {
@@ -206,7 +211,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
             content.push({ type: 'text', text: child.text });
           }
         } else if (part.kind === 'local-call' && part.evidence === undefined) {
-          calls.push(part);
           content.push({
             type: 'tool_use',
             id: part.providerCallId,

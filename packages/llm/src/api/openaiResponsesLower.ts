@@ -4,6 +4,8 @@ import OpenAI from 'openai';
 
 // Local imports - canonical model contract
 import {
+  answeredCalls,
+  callsAnsweredBy,
   ContinuationSchema,
   replayableHistory,
   systemUpdateText,
@@ -52,37 +54,16 @@ const loweredItemCount = (
 };
 
 /**
- * The call ids one message leaves for the next tool message, replayed
- * without lowering: any non-tool message resets the run, and an assistant
- * message then appends its local calls. A continuation's suffix lowers
- * against the ids its covered prefix left.
- */
-const replayCallIds = (
-  message: Extract<
-    ResolvedTurn,
-    { protocol: 'openai-responses' }
-  >['messages'][number],
-  callIds: string[],
-): void => {
-  if (message.role === 'tool') return;
-  callIds.length = 0;
-  if (message.role !== 'assistant') return;
-  for (const part of message.content) {
-    if (part.kind === 'local-call') callIds.push(part.providerCallId);
-  }
-};
-
-/**
- * The messages as Responses input items. `callIds` is the mutable call-id
- * run the loop keeps: seeded with the ids a covered prefix left when
- * lowering only a continuation's suffix.
+ * The messages as Responses input items. Each tool result names its call
+ * through `answered`, built over the whole history, so a continuation's
+ * suffix finds the calls its covered prefix made.
  */
 const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
   messages: Extract<ResolvedTurn, { protocol: 'openai-responses' }>['messages'],
   config: OpenAIResponsesConfiguration,
   documents: DocumentAccess,
-  callIds: string[],
+  answered: ReturnType<typeof answeredCalls>,
 ) {
   const namespace = toolNamespaceOf(config);
   const content = (part: Parameters<typeof responsesContent>[0]) =>
@@ -90,7 +71,10 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   const input: OpenAI.Responses.ResponseInput = [];
   for (const message of replayableHistory(messages, turn)) {
     if (message.role === 'tool') {
-      for (const result of message.results) {
+      for (const { call, result } of yield* callsAnsweredBy(
+        answered,
+        message,
+      )) {
         // A result that carries only text keeps the plain string output
         // the API has always taken. Attachments keep `result.content` order
         // so a label still sits next to the file it names.
@@ -107,13 +91,12 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
         }
         input.push({
           type: 'function_call_output',
-          call_id: callIds[result.callOrdinal],
+          call_id: call.providerCallId,
           output,
         });
       }
       continue;
     }
-    callIds.length = 0;
     if (message.role === 'system') {
       // A developer message outranks user text; elsewhere it is user text.
       input.push(
@@ -219,7 +202,6 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
                 'Responses tool history requires local calls without foreign evidence.',
             });
           }
-          callIds.push(part.providerCallId);
           input.push({
             type: 'function_call',
             call_id: part.providerCallId,
@@ -313,7 +295,13 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
   const continuation = turn.continuation;
   if (!continuation)
     return {
-      input: yield* lowerMessages(turn, turn.messages, config, documents, []),
+      input: yield* lowerMessages(
+        turn,
+        turn.messages,
+        config,
+        documents,
+        answeredCalls(turn.messages),
+      ),
     };
   const prefix = turn.messages.slice(0, continuation.coveredMessages);
   if (
@@ -335,16 +323,13 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
     });
   // The stored response already holds the covered prefix, so only the
   // uncovered suffix is lowered: a covered document's bytes are never
-  // materialized again. The suffix still lowers against the call ids the
-  // prefix's last assistant message left.
-  const callIds: string[] = [];
-  for (const message of prefix) replayCallIds(message, callIds);
+  // materialized again. Its results still name the calls the prefix made.
   const input = yield* lowerMessages(
     turn,
     turn.messages.slice(continuation.coveredMessages),
     config,
     documents,
-    callIds,
+    answeredCalls(turn.messages),
   );
   return {
     input,
