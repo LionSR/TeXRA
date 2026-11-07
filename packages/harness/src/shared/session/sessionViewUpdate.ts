@@ -666,9 +666,10 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
     case 'run.activate':
       // Every activation (the launch, a resume, a follow-up) sets the run
       // running, which clears its outcome; the tool-call count is the run's
-      // and carries over.
+      // and carries over. Its turn's clock starts here: an interrupted
+      // run's old start would count the time nothing ran it.
       return {
-        ...movePhase(run, phaseOf(event), event.at),
+        ...movePhase({ ...run, turnStartedAt: null }, phaseOf(event), event.at),
         turn: null,
         lost: null,
         output: null,

@@ -112,7 +112,7 @@ export const writeEvidence = (
             parentId: run.parentId,
             identity: run.identity,
             model: run.model,
-            status: run.status,
+            position: run.position,
             outcome: run.outcome,
             usage: run.usage,
           })),
