@@ -360,14 +360,27 @@ app.post('/token', async (c) => {
     // single approval can never mint two sessions.
     const { data: userData, error: userError } =
       await supabase.auth.admin.getUserById(row.user_id);
+    // GoTrue answering "no such user" is as final as an account without an
+    // email (the session is minted by email); any other failure is retried.
+    if (userError && userError.status !== 404) {
+      console.error('[DEVICE] approved user lookup failed:', userError.message);
+      return errorResponse(c.req.raw, 'Failed to create session', 500);
+    }
     const email = userData?.user?.email;
-    if (userError || !email) {
+    if (!email) {
       console.error(
-        '[DEVICE] approved user lookup failed:',
+        `[DEVICE] approved user ${row.user_id} cannot sign in:`,
         userError?.message ?? 'no email',
       );
       await deleteRow();
-      return errorResponse(c.req.raw, 'Failed to create session', 500);
+      return jsonResponse(
+        c.req.raw,
+        {
+          error: 'access_denied',
+          error_description: 'The approving account has no email address.',
+        },
+        400,
+      );
     }
 
     const { data: claimed, error: claimError } = await supabase
