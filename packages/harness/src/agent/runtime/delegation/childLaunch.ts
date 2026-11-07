@@ -67,9 +67,8 @@ const defectsAsErrors = <A, R>(
  * Start a fresh native child on the session's registry: its opening (its
  * registration batch) in this fiber, its run forked under its id. Answers
  * the commit of its opening; a launch that fails before the run exists
- * fails this with no run behind it. The child runs with the provider keys
- * its parent's start carried (`RunCall`), awaited or not: the registry
- * forks it on the session's environment, which holds none of them.
+ * fails this with no run behind it. The child opens in its parent's
+ * tool-call fiber, so it takes the parent's `LaunchKeys`, awaited or not.
  */
 export const startChildRun = Effect.fn('startChildRun')(function* (
   runId: RunId,
@@ -77,11 +76,9 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
   registration: RegisterRunOptions,
   options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools'> = {},
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const call = yield* RunCall;
   const { opened } = yield* registryOf(yield* Runs).start(runId, {
     open: executeAgent(definition, runId, {
       ...options,
-      apiKeys: call?.run.apiKeys,
       registration,
     }),
     run: (prepared) => prepared.run,
@@ -101,13 +98,12 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   parentRunId: RunId,
   options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const call = yield* RunCall;
   const runs = registryOf(yield* Runs);
   const { opened } = yield* runs.start(runId, {
     open: openResume(
       runs,
       runId,
-      { stopAfterCycle: true, ...options, apiKeys: call?.run.apiKeys },
+      { stopAfterCycle: true, ...options },
       parentRunId,
     ).pipe(
       Effect.catchTag('ResumeRefused', ({ answer }) =>

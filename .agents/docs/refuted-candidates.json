@@ -302,6 +302,19 @@
       ]
     },
     {
+      "id": "LLM-one-no-completed-turn-check",
+      "candidate": "one \"no completed turn\" check: assembleTurn's terminal check alone, deleting the public completedTurn fold's and the harness invoker's empty-stream failures (storage-errors note §6, round-3 audit V R13), with the codec layout move (input lowering into each *Codec.ts) beside it",
+      "why": "The three checks guard three boundaries of the Model interface, not one fact said three times. assembleTurn ends llm's own codecs' streams; completedTurn folds any Model's streamTurn, an embedder's included, which the package does not assemble; and ModelInvoker.finishAttempt reads any bound Model, the canned validation model among them, which emits its own events. A Model that ends its stream without a completed event is outside llm's codecs, so deleting either outer check turns that into a silent null turn. The abnormal-end kinds the note named have already converged (Google's live and background non-completed statuses and OpenAI's failed/cancelled are all provider-rejection) and the SyntaxError pre-checks are gone, so the remaining three checks are the boundary guards. The codec layout move is a file move with no fact behind it and was left with them.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md#6-the-model-call-failure-path",
+      "symbols": [
+        {
+          "file": "packages/llm/src/turn.ts",
+          "symbol": "completedTurn",
+          "signature": "export const completedTurn = Effect.fn('llm.generateTurn')(function* ( events: Stream.Stream<TurnEvent, ModelError>, ) {…});"
+        }
+      ]
+    },
+    {
       "id": "RT-cli-exit-code-one-function",
       "candidate": "the CLI's exit code decided by one function at the process edge (exitCodeOf(outcome) in packages/cli/src/bin/texra.ts), deleting setExitCode, settleExitCode, CliConfigExecuteResult.exitCode and ChatExit.signal's code",
       "why": "citty 0.2.2's runCommand discards a nested subcommand's run() result and passes no data down, and every command, root's direct subcommands included, runs nested, so no return value reaches texra.ts. The other names are not edge decisions: defineCliCommand already turns every command's result into the code (only doctor, which cannot use it, and help, which re-enters runCli as the non-interactive default, set it themselves); settleExitCode is the chat's run-claim code returned through runChat; CliConfigExecuteResult.exitCode is a headless run's program result; and a signal exit with a waiting run calls process.exit because that run holds the event loop open. runOutcomeExitCode is already the one outcome-to-code mapping. What landed instead: runCli and texraServe share runCommandForExitCode.",

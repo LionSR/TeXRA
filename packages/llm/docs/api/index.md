@@ -75,12 +75,35 @@ function apiKey(
 ): Effect.Effect<ResolvedApiKey, SecretsFailed>
 ```
 
+## apiKeyEntry
+
+What a secret-store entry is, the inverse of {@link apiKeySecretName}: the
+provider whose API key it holds, `'unknown'` for an API-key entry of no
+provider this build knows, or `undefined` for every other entry (OAuth
+tokens, the GitHub token).
+
+```ts
+function apiKeyEntry(
+  key: string,
+): ApiKeyProviderId | 'unknown' | undefined
+```
+
 ## apiKeyEnvName
 
 Environment variable for a provider's API key.
 
 ```ts
 function apiKeyEnvName(provider: ApiKeyProviderId): string
+```
+
+## apiKeyOrigins
+
+Where every API-key provider's key comes from.
+
+```ts
+function apiKeyOrigins(
+  credentials: CredentialStore,
+): Effect.Effect<Record<ApiKeyProviderId, CredentialOrigin>, SecretsFailed>
 ```
 
 ## ApiKeyProviderId
@@ -102,14 +125,6 @@ Secret storage key for a provider's API key.
 function apiKeySecretName(provider: ApiKeyProviderId): string
 ```
 
-## ApiKeyStatus
-
-UI-safe provider key status derived from a resolved API key origin.
-
-```ts
-type ApiKeyStatus = 'set' | 'env' | 'not-set';
-```
-
 ## ApiKeyUsageRoute
 
 What a direct provider key pays through: a `key` plan, or nothing.
@@ -122,19 +137,6 @@ type ApiKeyUsageRoute =
         ? P
         : never;
     }[PlanRoute];
-```
-
-## apiProviderOfSecretName
-
-The provider whose API key a secret-store entry holds, or `undefined` for
-every other entry (OAuth tokens, the GitHub token). The
-inverse of {@link apiKeySecretName}, for subscribers of the store's
-`credentialChanged` signal.
-
-```ts
-function apiProviderOfSecretName(
-  key: string,
-): ApiKeyProviderId | undefined
 ```
 
 ## AssistantMessage
@@ -276,10 +278,20 @@ type Continuation = typeof ContinuationSchema.Type;
 
 ## CredentialOrigin
 
-Where a resolved credential came from.
+{@link CredentialOriginSchema}'s value.
 
 ```ts
-type CredentialOrigin = 'secret' | 'env' | 'none';
+type CredentialOrigin = typeof CredentialOriginSchema.Type;
+```
+
+## CredentialOriginSchema
+
+Where a resolved credential came from: the host's secret store, the
+environment, or nowhere. The one vocabulary every status surface and wire
+message about a credential carries.
+
+```ts
+const CredentialOriginSchema: Literals<readonly ["secret", "env", "none"]>
 ```
 
 ## CredentialRoute
@@ -477,16 +489,6 @@ Materialized JSON: a string-keyed object of JSON values.
 
 ```ts
 const JsonObjectSchema: compose<$Record<String, Codec<Json, Json, never, never>>, Unknown>
-```
-
-## loadApiKeyStatusMap
-
-Every API-key provider's status, from its resolved key origin.
-
-```ts
-function loadApiKeyStatusMap(
-  credentials: CredentialStore,
-): Effect.Effect<Record<ApiKeyProviderId, ApiKeyStatus>, SecretsFailed>
 ```
 
 ## MessageSchema
@@ -1059,7 +1061,7 @@ both read through here, so the value and the origin a status surface
 reports can never disagree.
 
 ```ts
-const resolveCredential: (store: Pick<CredentialStore, "get">, name: string, envNames: readonly string[]) => Effect<{ readonly value: string | undefined; readonly origin: CredentialOrigin; }, SecretsFailed, never>
+const resolveCredential: (store: Pick<CredentialStore, "get">, name: string, envNames: readonly string[]) => Effect<{ readonly value: string | undefined; readonly origin: "none" | "env" | "secret"; }, SecretsFailed, never>
 ```
 
 ## ResolvedApiKey

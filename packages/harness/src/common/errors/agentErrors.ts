@@ -1,4 +1,4 @@
-import { Schema } from 'effect';
+import { Predicate, Schema } from 'effect';
 
 import {
   LaunchNoticeSchema,
@@ -57,5 +57,27 @@ export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
   /** `cause`, read as the reason no route can carry the call. */
   static of(cause: Error): RouteUnavailable {
     return new RouteUnavailable({ message: cause.message, cause });
+  }
+
+  /**
+   * A subscription session that could not be read or renewed, as its facts:
+   * the route that could not bill, the session's own failure, and whether
+   * only a fresh sign-in helps (the sign-in error's `needsReauth`). The one
+   * place either path that reads a session decides it.
+   */
+  static ofSession(
+    route: typeof SubscriptionSessionRouteSchema.Type,
+    error: Error,
+  ): RouteUnavailable {
+    return new RouteUnavailable({
+      message: error.message,
+      session: {
+        route,
+        needsReauth:
+          Predicate.hasProperty(error, 'needsReauth') &&
+          error.needsReauth === true,
+      },
+      cause: error,
+    });
   }
 }

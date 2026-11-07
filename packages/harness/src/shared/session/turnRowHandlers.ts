@@ -15,7 +15,7 @@
 import { Result } from 'effect';
 
 import { assistantMessageFromResult } from '@texra-ai/llm';
-import { addTurnUsage, type DispatchFacts } from '@shared/schemas';
+import { addUsage, type DispatchFacts } from '@shared/schemas';
 import { byId, copyById, ownCopy, type BatchCopies } from './runRows';
 import { resultFacts, turnText, withInput } from './runFacts';
 import {
@@ -191,7 +191,7 @@ const MESSAGE_HANDLERS: {
         ...updated,
         lastError: asked ? p.error : state.lastError,
         continuation: next.kind === 'unchain' ? null : state.continuation,
-        usage: addTurnUsage(state.usage, p.usage ?? null),
+        usage: addUsage(state.usage, p.usage ?? null),
       });
     }),
   response: (state, p, copies) =>
@@ -207,7 +207,7 @@ const MESSAGE_HANDLERS: {
         lastTurn: p.turn,
         answer: turnText(p.turn) || state.answer,
         countStale: false,
-        usage: addTurnUsage(state.usage, p.usage),
+        usage: addUsage(state.usage, p.usage),
         forceFinalTool: false,
         answerFinalized: false,
       };

@@ -18,7 +18,7 @@ import {
   AgentCatalog,
   getHelperModelName,
   type ProcessServices,
-  type ModelHostFactUnreadable,
+  type readModelOptions,
   Secrets,
   StateReadFailed,
   withLogChannel,
@@ -68,6 +68,9 @@ interface WorkflowFileOperationResult {
 /** The launch facts an action adds to a validated request, as the
  *  session's `start` takes them. */
 type RunValidatedOptions = Pick<StartInput, 'helperModel' | 'approval'>;
+
+/** What reading the model options fails with: what its reads fail with. */
+type ModelOptionsUnreadable = Effect.Error<ReturnType<typeof readModelOptions>>;
 
 export interface HostRunActionPorts {
   /** The window's roots: its workspace and its settings stores. */
@@ -125,7 +128,7 @@ export interface HostRunActions {
   ): Effect.Effect<
     void,
     | CompileFixerPlanFailed
-    | ModelHostFactUnreadable
+    | ModelOptionsUnreadable
     | StateReadFailed
     | HostFailed
     | RequestRefusal

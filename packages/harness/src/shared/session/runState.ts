@@ -13,9 +13,9 @@ import { Result, Schema, Struct } from 'effect';
 
 import { type Continuation, type TurnResult } from '@texra-ai/llm';
 import {
-  addTurnUsage,
+  addUsage,
   CommitOrdinalSchema,
-  EMPTY_RUN_USAGE_TOTALS,
+  NO_USAGE,
   blocksCaller,
   type CommitOrdinal,
   type HookOutcomes,
@@ -26,7 +26,7 @@ import {
   qualifyAggregateId,
   type RetryErrorInfo,
   type RunId,
-  type RunUsageTotals,
+  type TokenUsageStats,
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -136,7 +136,7 @@ export type RunState = RunPosition &
      *  activation leaves the loop resuming ({@link isResuming}). */
     readonly steppedAt: number | null;
     /** The priced usage summed from its `response` and `context.edit` rows. */
-    readonly usage: RunUsageTotals;
+    readonly usage: TokenUsageStats;
     /** The latest `context.edit`'s `seq`: the next edit's `base`. */
     readonly lastEdit: number | null;
     /** The turn compacted for a request the window could not hold. */
@@ -199,7 +199,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingResponse: null,
   activatedAt: null,
   steppedAt: null,
-  usage: EMPTY_RUN_USAGE_TOTALS,
+  usage: NO_USAGE,
   ...NO_FACTS,
   lastEdit: null,
   overflowCompacted: false,
@@ -434,7 +434,7 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
         // The next step renders the system text again, every change in it.
         offeredSystem: null,
         offeredContext: null,
-        usage: addTurnUsage(state.usage, p.usage),
+        usage: addUsage(state.usage, p.usage),
         countStale:
           state.countStale ||
           p.range.from !== p.range.to ||

@@ -20,7 +20,6 @@ import {
 import {
   chatgptCoordinator,
   type SessionToken,
-  SubscriptionOAuthError,
   xaiCoordinator,
 } from '@texra-ai/llm/node';
 import { HttpClient } from 'effect/http';
@@ -55,24 +54,6 @@ export type RouteCredential = {
 type KeyCredential = Extract<RouteCredential, { readonly route: 'api-key' }>;
 
 /**
- * A subscription session failure as its facts: the route that could not
- * bill, the session's own failure, and whether only a fresh sign-in helps.
- * `providerErrorOf` words them; a host's copy may word them its own way.
- */
-const subscriptionUnavailable = (
-  route: SessionRoute,
-  error: Error,
-): RouteUnavailable =>
-  new RouteUnavailable({
-    message: error.message,
-    session: {
-      route,
-      needsReauth: error instanceof SubscriptionOAuthError && error.needsReauth,
-    },
-    cause: error,
-  });
-
-/**
  * The OAuth session a subscription route bills. The decision already found the preference on, the model eligible
  * and a session signed in; this reads the session once, for its plan and so
  * a signed-out session fails here, and hands the transport the session's
@@ -90,7 +71,8 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
   const secrets = yield* Secrets;
   const http = yield* HttpClient.HttpClient;
   const { provider } = PLAN_ROUTES[route];
-  const unavailable = (error: Error) => subscriptionUnavailable(route, error);
+  const unavailable = (error: Error) =>
+    RouteUnavailable.ofSession(route, error);
   /** A session's token for the transport, its failures llm's
    *  `authentication`, caused by this route's own. */
   const tokenOf = (session: {

@@ -253,7 +253,6 @@ function boundModel(
     background: false,
     serviceTier: null,
     routes: routePolicies(['openai', 'api-key', ORIGIN.requestedModel], GPT54),
-    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
     ...overrides,

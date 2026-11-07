@@ -14,7 +14,7 @@
  * table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect, PubSub, Stream } from 'effect';
-import { apiProviderOfSecretName } from '@texra-ai/llm';
+import { apiKeyEntry } from '@texra-ai/llm';
 
 import {
   type PerKeyLane,
@@ -437,8 +437,8 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           followSignal('githubSubscriptionsChanged', () => changed('github')),
           followSignal('workspaceAgentsChanged', () => agents.agentsChanged()),
           followSignal('credentialChanged', ({ key }) => {
-            const provider = apiProviderOfSecretName(key);
-            return provider === undefined
+            const provider = apiKeyEntry(key);
+            return provider === undefined || provider === 'unknown'
               ? undefined
               : credentialsChanged(
                   CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,

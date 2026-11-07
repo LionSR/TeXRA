@@ -48,8 +48,18 @@ export interface CredentialStore {
   delete(name: string): Effect.Effect<void, SecretsFailed>;
 }
 
-/** Where a resolved credential came from. */
-export type CredentialOrigin = 'secret' | 'env' | 'none';
+/**
+ * Where a resolved credential came from: the host's secret store, the
+ * environment, or nowhere. The one vocabulary every status surface and wire
+ * message about a credential carries.
+ */
+export const CredentialOriginSchema = Schema.Literals([
+  'secret',
+  'env',
+  'none',
+]);
+/** {@link CredentialOriginSchema}'s value. */
+export type CredentialOrigin = typeof CredentialOriginSchema.Type;
 
 /** One variable of the ambient environment; unset and `''` read as undefined. */
 const envVar = (name: string): Effect.Effect<string | undefined> =>
