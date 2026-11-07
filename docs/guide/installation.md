@@ -278,7 +278,7 @@ The shortest path: open the TeXRA Settings, go to the **Models** page, and selec
 
 <ApiKeysHero />
 
-<p class="hero-caption">The Settings Models page → API keys: each provider shows its key status (Set · Env · Not set) with Set, Get, and Remove actions.</p>
+<p class="hero-caption">The Settings Models page → API keys: each provider shows its key status (Key set · Env · Not set) with Set, Get, and Remove actions.</p>
 
 ### In the CLI
 

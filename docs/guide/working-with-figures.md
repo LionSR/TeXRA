@@ -22,7 +22,7 @@ and `.bib` sources, not images.)
 2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `openai/gpt-6.1-sol`, `anthropic/claude-sonnet-5-5`, or `google/gemini-3.1-pro-preview`.
 3. Select your figure in the **Media** (<wa-icon library="texra" name="file-media"></wa-icon>) section.
 4. Type the instruction: "Write a detailed caption for this figure."
-5. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>, the arrow button at the end of the composer).
+5. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>, the arrow button at the end of the composer).
 
 ## <wa-icon library="texra" name="file-media"></wa-icon> The Media section
 
@@ -117,7 +117,7 @@ Agents can extract figures programmatically. These tools are part of the **LaTeX
   ]"
 />
 
-<p class="hero-caption">The three LaTeX Extraction tools as they surface in the Sessions view. Each returns referenced files, BibTeX records, or compiled TikZ PDFs the model can read directly. The raw request form for each is below.</p>
+<p class="hero-caption">The three LaTeX Extraction tools as they appear in a task. Each returns referenced files, BibTeX records, or compiled TikZ PDFs the model can read directly. The raw request form for each is below.</p>
 
 ### `extract_figures`
 

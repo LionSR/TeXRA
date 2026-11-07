@@ -44,7 +44,7 @@ Agents with tools (`research` or `presenter`) can create new TikZ figures from a
 1. Select an agent, `research` or `presenter` (<wa-icon library="texra" name="sparkle"></wa-icon>).
 2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`, and `google/gemini-3.1-pro-preview` are good choices for complex drawings.
 3. Describe the figure you want in detail.
-4. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
+4. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
 From the CLI, the same draw, compile, and inspect loop shown below runs
 headlessly (`texra run` takes any agent: one without a document task, like
@@ -68,7 +68,7 @@ Connect the steps with arrows and add appropriate labels.
 
 1. Select an agent (`research` or `presenter`).
 2. Describe the improvements you want, and name the file that holds the TikZ code; the agent reads it with its own tools.
-3. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
+3. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
 **Example instruction:**
 

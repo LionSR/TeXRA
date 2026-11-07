@@ -316,12 +316,12 @@ Some common tasks to try with TeXRA. Each is an agent, a model, and a one-line i
 A completed run writes everything into the run folder under run storage, one
 folder per revision (`r0/`, `r1/`, …). Each revision folder holds the revised document,
 which keeps your **input filename** (`draft.tex`, not `output.tex`), and the model's raw
-reply (`output.xml`); the run's latexdiff PDFs go under `diff/r{round}/` and compile
+reply (`output.xml`); the run's latexdiff PDFs go under `diff/r{revision}/` and compile
 logs under `compile/`:
 
 <OutputArtifactsTree />
 
-<p class="hero-caption">One folder per revision: the revised document at <code>r{round}/&lt;input-filename&gt;</code>, with its compile log and diff PDF beside the revision folders. The second revision (and any further one) repeats the layout in <code>r1/</code>, <code>r2/</code>, …</p>
+<p class="hero-caption">One folder per revision: the revised document at <code>r{revision}/&lt;input-filename&gt;</code> with the model's reply; latexdiff PDFs under <code>diff/</code> and compile logs under <code>compile/</code> sit beside the revision folders. Each further revision repeats the layout in <code>r1/</code>, <code>r2/</code>, …</p>
 
 The CLI writes the same per-revision tree under `executions/<run-id>/` in the
 workspace store. Read [First run](./first-run.md) for the terminal walkthrough.

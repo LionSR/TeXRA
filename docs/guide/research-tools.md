@@ -80,7 +80,7 @@ Add this arXiv paper to my Zotero library.
   ]"
 />
 
-<p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls surface in the Sessions view.</p>
+<p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls appear in the task.</p>
 
 ::: tip Default bibliography path
 Set a default location for Zotero exports so agents always know where to save bibliography entries. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
