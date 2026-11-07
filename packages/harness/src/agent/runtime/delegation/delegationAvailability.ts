@@ -132,9 +132,11 @@ export function delegationSection(targets: DelegationTargets): string {
             ({ name, description, tools: agentTools, task }) =>
               `- ${name}${task ? ' (task)' : ''}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
           ),
+          // What a task is belongs to the plugin whose block makes the agent
+          // one; the harness says only that the marker names such an agent.
           ...(targets.agents.some(({ task }) => task)
             ? [
-                'An agent marked (task) also runs a document task over files, through `document_task` where that tool is offered.',
+                "An agent marked (task) also runs as its plugin's task, through that plugin's task tool where it is offered.",
               ]
             : []),
         ];
