@@ -4,9 +4,11 @@
  * Every producer — `Effect.log*` through the logger layer and the direct
  * `writeLogEntry` publication points — ends at the one host sink, so a
  * suite asserts on the entries that reach it rather than on whichever producer
- * the code under test happens to use. Install with `captureLogEntries()` and
- * restore with `setLogSink(null)` in `afterEach`.
+ * the code under test happens to use. The capture holds for the caller's
+ * scope, whose release puts the console fallback back.
  */
+import { Effect } from 'effect';
+
 import { entryChannel, entryMessage, setLogSink } from '@logger/logSink';
 import type { LogEntry } from '@logger/logSink';
 
@@ -26,19 +28,25 @@ export interface LogCapture {
   readonly has: (level: string, channel: string, text: string) => boolean;
 }
 
-/** Route diagnostics into an in-memory list for the current test. */
-export function captureLogEntries(): LogCapture {
-  const captured: CapturedLog[] = [];
-  setLogSink({
-    write: (entry) =>
-      captured.push({
-        level: entry.level,
-        channel: entryChannel(entry),
-        message: entryMessage(entry),
-        annotations: entry.annotations,
-      }),
-  });
+/** Route diagnostics into an in-memory list for the caller's scope. */
+export const captureLogEntries = Effect.acquireRelease(
+  Effect.sync(() => {
+    const captured: CapturedLog[] = [];
+    setLogSink({
+      write: (entry) =>
+        captured.push({
+          level: entry.level,
+          channel: entryChannel(entry),
+          message: entryMessage(entry),
+          annotations: entry.annotations,
+        }),
+    });
+    return captured;
+  }),
+  () => Effect.sync(() => setLogSink(null)),
+).pipe(Effect.map(captureOf));
 
+function captureOf(captured: readonly CapturedLog[]): LogCapture {
   const at = (level: string, channel?: string): readonly CapturedLog[] =>
     captured.filter(
       (entry) =>

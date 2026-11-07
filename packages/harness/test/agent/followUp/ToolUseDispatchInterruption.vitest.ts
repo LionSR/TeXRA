@@ -12,6 +12,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   agentRunTestLayer,
   scriptedInvokerLayer,
+  scriptedModel,
   textTurn,
   toolCallTurn,
   type ScriptedRunInit,
@@ -24,12 +25,11 @@ import type { TurnResult } from '@texra-ai/llm';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session run history, with
-// the model faked at the `ModelInvoker` seam. The rows the fake writes are the
-// production ones, so the fold, the resume rules and dispatch all run against
+// a scripted `Model` under the production invoker, which writes the rows, so the fold, the resume rules and dispatch all run against
 // the durable facts a live turn leaves behind.
 // ---------------------------------------------------------------------------
 
-interface HarnessInit extends ScriptedRunInit {
+interface HarnessInit extends Omit<ScriptedRunInit, 'model'> {
   readonly tools: Record<string, ITool>;
   readonly turns: readonly TurnResult[];
 }
@@ -41,11 +41,10 @@ const settledIds = (state: RunState | null | undefined): string[] =>
   );
 
 function loopLayer(init: HarnessInit) {
-  return Layer.mergeAll(
-    scriptedInvokerLayer(init.turns),
-    nativeToolTestLayer(),
-  ).pipe(
-    Layer.provideMerge(agentRunTestLayer(init)),
+  return Layer.mergeAll(scriptedInvokerLayer, nativeToolTestLayer()).pipe(
+    Layer.provideMerge(
+      agentRunTestLayer({ ...init, model: scriptedModel(init.turns).model }),
+    ),
     Layer.provideMerge(
       Layer.succeed(RunHistory)(Context.get(init.session, RunHistory)),
     ),
@@ -93,7 +92,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         Effect.gen(function* () {
           const session = yield* isolatedTestSession({ emit: () => {} });
           const runId = generateRunId();
-          publishTestRunStart(session, runId);
+          yield* publishTestRunStart(session, runId);
           const toolA = executedTool('toolA');
           const toolB = blockingTool('toolB');
           const toolC = executedTool('toolC');
@@ -185,7 +184,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       Effect.gen(function* () {
         const session = yield* isolatedTestSession({ emit: () => {} });
         const runId = generateRunId();
-        publishTestRunStart(session, runId);
+        yield* publishTestRunStart(session, runId);
         const starts = yield* Queue.unbounded<void>();
         // The first three starts never finish; a fourth would.
         let started = 0;

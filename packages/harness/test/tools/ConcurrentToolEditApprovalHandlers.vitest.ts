@@ -54,11 +54,11 @@ layer(perTest, { buildPerTest: true, excludeTestServices: true })(
                     Context.get(session, SessionLog).now(),
                   ),
                   (event) =>
-                    Effect.sync(() => {
+                    Effect.gen(function* () {
                       if (event.type !== 'request.opened') return;
                       if (event.payload.kind !== 'toolEdit') return;
                       seen.push(event.payload.data.relativePath);
-                      publishTestRows(session, [
+                      yield* publishTestRows(session, [
                         {
                           type: 'request.decided',
                           aggregateId: event.aggregateId,
@@ -81,8 +81,8 @@ layer(perTest, { buildPerTest: true, excludeTestServices: true })(
           const windowA = yield* attachWindow(sessionA, 'from-a');
           const windowB = yield* attachWindow(sessionB, 'from-b');
 
-          const runA = publishTestRunStart(sessionA);
-          const runB = publishTestRunStart(sessionB);
+          const runA = yield* publishTestRunStart(sessionA);
+          const runB = yield* publishTestRunStart(sessionB);
           yield* Effect.all(
             [
               Context.get(sessionA, SessionLog).settled,

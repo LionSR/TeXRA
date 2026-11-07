@@ -1,7 +1,7 @@
 /**
  * Seed a run's record rows as production commits them: `run.config` through
- * registration (`runLifecycle`), `run.report` through child delivery, the
- * workspace files a run edited through its settled calls. Suites that start
+ * registration (`runLifecycle`), the workspace files a run edited through
+ * its settled calls. Suites that start
  * from a stored run commit the row directly instead.
  */
 import { randomUUID } from 'node:crypto';
@@ -34,21 +34,6 @@ export const seedRunRecord = (
       },
     ]),
   ).pipe(Effect.asVoid);
-
-export const seedReport = (
-  session: Context.Context<SessionServices>,
-  runId: RunId,
-  report: string,
-) =>
-  Context.get(session, SessionLog)
-    .transact([
-      {
-        type: 'run.report',
-        aggregateId: qualifyAggregateId('run', runId),
-        report,
-      },
-    ])
-    .pipe(Effect.asVoid);
 
 /** The run's history as a run that edited `paths` leaves it: one
  *  handed-down call whose executed settlement records the edits, the facts

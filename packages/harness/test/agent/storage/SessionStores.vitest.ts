@@ -22,10 +22,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             const parent = Schema.decodeUnknownSync(RunIdSchema)('aa0001');
             const child = Schema.decodeUnknownSync(RunIdSchema)('bb0002');
-            publishTestRunStart(session, parent);
-            publishTestRunStart(session, child, { parent });
+            yield* publishTestRunStart(session, parent);
+            yield* publishTestRunStart(session, child, { parent });
             yield* Context.get(session, SessionLog).settled;
-            publishTestRows(session, [
+            yield* publishTestRows(session, [
               {
                 type: 'request.opened',
                 aggregateId: qualifyAggregateId('run', parent),
@@ -56,7 +56,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               ).requests,
             ).toHaveLength(1);
             const before = Context.get(session, SessionLog).now();
-            publishTestRows(session, [
+            yield* publishTestRows(session, [
               {
                 type: 'run.removed',
                 aggregateId: qualifyAggregateId('run', parent),

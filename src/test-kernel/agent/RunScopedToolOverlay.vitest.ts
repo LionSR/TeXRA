@@ -1,17 +1,18 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-
 import { layer } from '@effect/vitest';
 import { Effect, Layer, Schema, Context } from 'effect';
-import { afterAll, assert, beforeAll, expect, vi } from 'vitest';
+import { assert, expect, vi } from 'vitest';
 
-import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import {
+  AgentConfigSchema,
+  generateRunId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import {
   AppSignals,
   AppState,
   mcpConfigPathOf,
   Secrets,
+  ValidationModel,
 } from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
@@ -23,10 +24,10 @@ import {
   type RunLaunch,
 } from '@agent/runtime/run/AgentRun';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { validationModelLayer } from '@cli/runtime/models/validationModel';
+import { validationModel } from '@cli/runtime/models/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { fakeHostAppState } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -44,7 +45,7 @@ import {
 import { texraPlugins } from '@texra/tools/registry';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 
-import { createTestLaunchContext } from './runtime/launchContextTestUtils';
+import { testLaunch } from '@test/support/scriptedRunLayers';
 import type { ITool } from '@texra-ai/harness';
 
 function tool(name: string): ITool {
@@ -56,15 +57,14 @@ function tool(name: string): ITool {
 
 /** A launch whose model binds without a credential (the validation model). */
 function validationLaunch(
-  init: Parameters<typeof createTestLaunchContext>[0],
+  runId: RunId,
   config: RunLaunch['config'],
 ): RunLaunch {
-  return {
-    ...createTestLaunchContext(init),
+  return testLaunch(runId, {
     config: { ...config, instruction: 'Do the thing.' },
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
-  };
+  });
 }
 
 /** A model that records the tools it was offered and then stops the run. */
@@ -98,7 +98,7 @@ function runLayer(
       }),
     ),
     Layer.provideMerge(Layer.succeedContext(session)),
-    Layer.provideMerge(testHttpClientLayer),
+    Layer.provideMerge(noHttpClientLayer),
     // No key is read: every launch here binds the validation model.
     Layer.provideMerge(Secrets.layer(new FakeSecrets())),
     Layer.provideMerge(
@@ -116,24 +116,23 @@ function runLayer(
       ),
     ),
     Layer.provideMerge(nodeSpawnerLayer),
-    Layer.provideMerge(validationModelLayer),
+    // Every launch here binds the deterministic in-process model through
+    // the real route.
+    Layer.provideMerge(
+      Layer.succeed(ValidationModel)({
+        enabled: Effect.succeed(true),
+        bind: validationModel(
+          Effect.succeed({
+            scriptFanout: false,
+            historyQuery: false,
+            echo: false,
+            golden: null,
+          }),
+        ),
+      }),
+    ),
   );
 }
-
-// Every launch here binds the deterministic in-process model through the
-// real route: the guarded package-validation gate, opened as validation opens it.
-beforeAll(() => {
-  const flag = path.join(mkdtempSync(path.join(tmpdir(), 'texra-vm-')), 'flag');
-  writeFileSync(flag, 'texra-cli-run-validation');
-  for (const [name, value] of Object.entries({
-    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
-    TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
-  }))
-    vi.stubEnv(name, value);
-});
-afterAll(() => {
-  vi.unstubAllEnvs();
-});
 
 layer(
   Layer.provideMerge(
@@ -148,13 +147,13 @@ layer(
       Effect.gen(function* () {
         const session = yield* isolatedTestSession({ emit: () => {} });
         const runId = generateRunId();
-        publishTestRunStart(session, runId);
+        yield* publishTestRunStart(session, runId);
         const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'chat',
           model: 'test-model',
           workingDirectory: process.cwd(),
         });
-        const ctx = validationLaunch({ runId }, config);
+        const ctx = validationLaunch(runId, config);
         yield* Effect.flatMap(openToolUse({ resume: false }), (opened) =>
           runToolUse({ resume: false }, opened),
         ).pipe(

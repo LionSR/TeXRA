@@ -31,7 +31,6 @@ import {
   type ModelOrigin,
   RemoteOperationSchema,
   type ResolvedTurn,
-  type TurnEvent,
   type TurnResult,
   TurnResultSchema,
 } from '@texra-ai/llm';
@@ -76,10 +75,10 @@ import {
   publishTestRunStart,
   seedRows,
 } from '@test/support/sessionTestUtils';
-import { testAgentRun } from '@test/support/scriptedRunLayers';
+import { scriptedModel, testAgentRun } from '@test/support/scriptedRunLayers';
 import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
 import {
   FakeHost,
@@ -165,69 +164,6 @@ function completedTurn(text: string): TurnResult {
       toolUsePromptTokens: null,
     },
   });
-}
-
-/** What one stubbed attempt does. */
-type AttemptOutcome =
-  | { readonly ok: TurnResult }
-  | { readonly fail: unknown }
-  /** The stream never ends: the process stops while it runs. */
-  | { readonly hang: true };
-
-interface StubModel {
-  readonly model: Model;
-  /** Attempts the stub has served, in order. */
-  readonly attempts: () => number;
-}
-
-/**
- * A `Model` that serves one outcome per attempt, repeating the last one. The
- * invoker is the only caller, so this is the whole provider surface it drives.
- */
-function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
-  let served = 0;
-  const next = (): AttemptOutcome => {
-    const outcome = outcomes[Math.min(served, outcomes.length - 1)];
-    served += 1;
-    if (outcome === undefined) throw new Error('No outcome to serve');
-    return outcome;
-  };
-  const model: Model = {
-    // The history it is asked for: the invoker checks the prepared turn
-    // against the run's rows, whatever the run opened with.
-    prepareTurn: ({ messages }) => Effect.succeed({ ...PREPARED, messages }),
-    streamTurn: () =>
-      Stream.unwrap(
-        Effect.sync(() => {
-          const outcome = next();
-          if ('fail' in outcome) {
-            return Stream.fail(
-              outcome.fail instanceof ModelError
-                ? outcome.fail
-                : judged(
-                    new ModelError({
-                      kind: 'transport',
-                      message: 'attempt failed',
-                      cause: outcome.fail,
-                    }),
-                  ),
-            );
-          }
-          if ('hang' in outcome) return Stream.never;
-          const events: TurnEvent[] = [
-            {
-              kind: 'identified',
-              providerResponseId: PROVIDER_RESPONSE_ID,
-              requestedOrigin: ORIGIN,
-              returnedModel: null,
-            },
-            { kind: 'completed', result: outcome.ok },
-          ];
-          return Stream.fromIterable(events);
-        }),
-      ),
-  };
-  return { model, attempts: () => served };
 }
 
 function boundModel(
@@ -327,7 +263,7 @@ const openRun = Effect.fn('openRun')(function* (
   RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
 > {
   const runId = retryRunId();
-  publishTestRunStart(session, runId);
+  yield* publishTestRunStart(session, runId);
   yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
   const cell = yield* Context.get(session, RunHistory).open(runId, {
     activation: () => Effect.succeed([]),
@@ -361,7 +297,7 @@ const openRun = Effect.fn('openRun')(function* (
     Layer.provide(
       modelAccessLayer(installedHost().roots).pipe(
         Layer.provide(
-          Layer.merge(testHttpClientLayer, Secrets.layer(fakeHostSecrets)),
+          Layer.merge(noHttpClientLayer, Secrets.layer(fakeHostSecrets)),
         ),
       ),
     ),
@@ -393,7 +329,7 @@ const invokeOn = ({ layer, cell }: InvokerKit) =>
     // the Node layer rather than the installed platform.
     Effect.provide(layer),
     Effect.provide(nodePlatformLayer),
-    Effect.provide(testHttpClientLayer),
+    Effect.provide(noHttpClientLayer),
   );
 
 /** A failure as the package's binding raises it: judged against its reply. */
@@ -463,9 +399,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           const requests = yield* autoDecideRequests(session, () => ({
             action: 'retry',
           }));
-          const stub = stubModel([
-            { fail: httpError('temporary provider failure', 503) },
-            { ok: completedTurn('recovered') },
+          const stub = scriptedModel([
+            httpError('temporary provider failure', 503),
+            completedTurn('recovered'),
           ]);
 
           const kit = yield* openRun(session, stub.model);
@@ -516,8 +452,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
             setTestApprovalPolicy('yolo');
-            const stub = stubModel([
-              { fail: new Error('stream dropped before first token') },
+            const stub = scriptedModel([
+              judged(
+                new ModelError({
+                  kind: 'transport',
+                  message: 'stream dropped before first token',
+                }),
+              ),
             ]);
 
             const kit = yield* openRun(session, stub.model);
@@ -548,7 +489,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.effect('refuses, unsent, a PDF the context window cannot hold', () =>
         Effect.gen(function* () {
           const session = yield* isolatedTestSession();
-          const stub = stubModel([{ ok: completedTurn('read') }]);
+          const stub = scriptedModel([completedTurn('read')]);
           const pdf = Buffer.from('%PDF-1.7').toString('base64');
 
           const kit = yield* openRun(
@@ -595,7 +536,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             action: 'deny',
             reason: 'Denied by the approval policy.',
           }));
-          const stub = stubModel([{ fail: httpError('busy', 503) }]);
+          const stub = scriptedModel([httpError('busy', 503)]);
 
           const kit = yield* openRun(session, stub.model);
           yield* Effect.promise(() => seedActiveRun(session, kit.runId));
@@ -625,10 +566,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               action: 'deny',
               reason: 'Denied by the approval policy.',
             }));
-            const stub = stubModel([
-              { hang: true },
-              { hang: true },
-              { ok: completedTurn('sent again') },
+            const stub = scriptedModel([
+              'hang',
+              'hang',
+              completedTurn('sent again'),
             ]);
             const kit = yield* openRun(session, stub.model);
             yield* Effect.promise(() => seedActiveRun(session, kit.runId));

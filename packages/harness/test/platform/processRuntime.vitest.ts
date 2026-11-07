@@ -1,9 +1,9 @@
 import { it } from '@effect/vitest';
 import { Effect, ManagedRuntime } from 'effect';
-import { afterEach, describe, expect } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
-import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
+import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
 
 import {
   captureLogEntries,
@@ -33,15 +33,11 @@ function waitForErrorEntry(capture: LogCapture) {
 }
 
 describe('withForkFailureReporting', () => {
-  afterEach(() => {
-    setLogSink(null);
-  });
-
   it.live.each([
     ['an unhandled typed failure', Effect.fail('refused')],
   ] as const)('reports %s in a forked fiber', ([, program]) =>
     Effect.gen(function* () {
-      const capture = captureLogEntries();
+      const capture = yield* captureLogEntries;
       const runtime = yield* makeReportingRuntime();
 
       runtime.runFork(program);

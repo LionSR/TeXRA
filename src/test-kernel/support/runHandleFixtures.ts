@@ -85,29 +85,6 @@ export const testRunPrograms: RunPrograms = {
     ),
 };
 
-/**
- * A run whose generation is live on the run registry, the way a real launch
- * admits one: the fiber is the run's stop target, and a stop reaches the
- * run by interrupting it. `onInterrupt` fires from the fiber's own
- * unwinding, so it has observably landed once the stop's settlement (or an
- * await of the returned fiber) resolves.
- */
-export function admitInterruptibleRun(
-  runs: RunsShape,
-  runId: RunId,
-  onInterrupt: () => void,
-): Fiber.Fiber<void> {
-  const interruptEffect = Effect.sync(onInterrupt);
-  // Awaited as a root launch awaits: interrupting this fiber stops the run.
-  return Effect.runFork(
-    startAwaited(
-      runs,
-      runId,
-      Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
-    ).pipe(Effect.ignore),
-  );
-}
-
 /** A run started at `runs`' door with nothing to open, and awaited: the
  *  caller's interruption stops it. Its parent, when it has one, is the
  *  view's (`run.start` published first). */

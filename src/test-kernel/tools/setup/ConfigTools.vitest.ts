@@ -59,7 +59,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           createRecordingHost().interactions,
         );
         const runId = generateRunId();
-        publishTestRunStart(session, runId);
+        yield* publishTestRunStart(session, runId);
         yield* Context.get(session, SessionLog).settled;
         const requests = yield* autoDecideRequests(session, () => ({
           action: 'reject',

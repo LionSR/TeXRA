@@ -9,7 +9,6 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { generateRunId, qualifyAggregateId } from '@texra-ai/harness/schemas';
-import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
@@ -21,10 +20,12 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   agentRunTestLayer,
   scriptedInvokerLayer,
+  scriptedModel,
   startedRun,
   textTurn,
+  type ScriptedModel,
   type ScriptedRunInit,
-  type ScriptedTurn,
+  type ScriptedAttempt,
 } from '@test/support/scriptedRunLayers';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -33,29 +34,29 @@ import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session run history and the
-// session's real follow-up queue, with the model faked at the `ModelInvoker`
-// seam. The wait, the drain and the consumption are the production ones, so
+// session's real follow-up queue, with a scripted `Model` under the production
+// invoker. The wait, the drain and the consumption are the production ones, so
 // what a parked run does with input is exercised end to end.
 // ---------------------------------------------------------------------------
 
-interface LoopInit extends ScriptedRunInit {
-  readonly script: readonly ScriptedTurn[];
+interface LoopInit extends Omit<ScriptedRunInit, 'model'> {
+  readonly script: readonly ScriptedAttempt[];
   readonly resume?: boolean;
 }
 
-function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
+function loopProgram(init: LoopInit, model: ScriptedModel['model']) {
   return Effect.flatMap(
     openToolUse({ resume: init.resume === true }),
     (opened) => runToolUse({ resume: init.resume === true }, opened),
   ).pipe(
     Effect.provide(
       Layer.mergeAll(
-        scriptedInvokerLayer(init.script, requests),
+        scriptedInvokerLayer,
         nativeToolTestLayer({
           run: { runId: init.runId, session: init.session, toolPolicy: {} },
         }),
       ).pipe(
-        Layer.provideMerge(agentRunTestLayer(init)),
+        Layer.provideMerge(agentRunTestLayer({ ...init, model })),
         Layer.provideMerge(
           Layer.succeed(RunHistory)(Context.get(init.session, RunHistory)),
         ),
@@ -73,9 +74,9 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
  * same batch.
  */
 const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
-  const requests: InvokeRequest[] = [];
+  const scripted = scriptedModel(init.script);
   const from = Context.get(init.session, SessionLog).now();
-  const fiber = yield* Effect.forkChild(loopProgram(init, requests));
+  const fiber = yield* Effect.forkChild(loopProgram(init, scripted.model));
   const run = qualifyAggregateId('run', init.runId);
   const park = (n: number) =>
     Context.get(init.session, SessionLog)
@@ -90,7 +91,7 @@ const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
         Stream.take(n + 1),
         Stream.runDrain,
       );
-  return { fiber, requests, park };
+  return { fiber, attempts: scripted.attempts, park };
 });
 
 /** A 1x1 PNG. */
@@ -120,7 +121,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             const session = yield* quietSession();
             const parentRunId = generateRunId();
-            const runId = startedRun(session, parentRunId);
+            const runId = yield* startedRun(session, parentRunId);
             const asked = 'state where finiteness is used';
 
             const first = yield* forkLoop({
@@ -139,7 +140,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               followUpId: 'follow-up-1',
               content: { text: asked, from: { kind: 'user' as const } },
             };
-            publishTestRows(session, [queued]);
+            yield* publishTestRows(session, [queued]);
             yield* Context.get(session, SessionLog).settled;
 
             const resumed = yield* forkLoop({
@@ -161,7 +162,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
 
             // A producer that replays the delivery after a restart writes the
             // same id again; it names a follow-up already consumed.
-            publishTestRows(session, [queued]);
+            yield* publishTestRows(session, [queued]);
             yield* Context.get(session, SessionLog).settled;
             const again = yield* forkLoop({
               runId,
@@ -171,7 +172,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               script: [textTurn('never reached')],
             });
             yield* again.park(0);
-            expect(again.requests).toHaveLength(0);
+            expect(again.attempts()).toBe(0);
             expect(
               userTexts(
                 yield* Context.get(session, RunHistory).load(runId),
@@ -187,7 +188,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             const session = yield* quietSession();
             const parentRunId = generateRunId();
-            const runId = startedRun(session, parentRunId);
+            const runId = yield* startedRun(session, parentRunId);
             const first = yield* forkLoop({
               runId,
               session,
@@ -200,7 +201,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // Its parent's message, queued once the child ended: the resume
             // that delivers it runs the turn it asks for, not the end alone.
             const asked = 'now check the boundary case';
-            publishTestRows(session, [
+            yield* publishTestRows(session, [
               {
                 type: 'followup.queued' as const,
                 aggregateId: qualifyAggregateId('run', runId),
@@ -228,7 +229,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect((yield* Fiber.join(resumed.fiber)).outcome).toBe(
               'completed',
             );
-            expect(resumed.requests).toHaveLength(1);
+            expect(resumed.attempts()).toBe(1);
             expect(
               userTexts(yield* Context.get(session, RunHistory).load(runId)),
             ).toContain(asked);
@@ -242,7 +243,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* quietSession();
-            const runId = startedRun(session);
+            const runId = yield* startedRun(session);
             const first = yield* forkLoop({
               runId,
               session,
@@ -277,7 +278,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* resumed.park(0);
             yield* Fiber.interrupt(resumed.fiber);
 
-            expect(resumed.requests).toHaveLength(1);
+            expect(resumed.attempts()).toBe(1);
           }),
       );
     });
@@ -288,7 +289,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.effect('reaches the model from the store once its file is gone', () =>
         Effect.gen(function* () {
           const session = yield* quietSession();
-          const runId = startedRun(session);
+          const runId = yield* startedRun(session);
           yield* Context.get(session, SessionLog).settled;
           const file = path.join(os.tmpdir(), `texra-${generateRunId()}.png`);
           writeFileSync(file, Buffer.from(PIXEL, 'base64'));

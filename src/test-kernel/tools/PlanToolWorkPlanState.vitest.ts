@@ -29,7 +29,6 @@ import {
   createRecordingHost,
   decideRequest,
 } from '../agent/progressTestUtils';
-import { waitForCondition } from '../support/asyncTestUtils';
 
 const followUpPlan: Plan = {
   objective: [
@@ -48,14 +47,16 @@ const followUpPlan: Plan = {
 const planSession = Effect.fn('planSession')(function* (runId: RunId) {
   const { interactions } = createRecordingHost();
   const session = yield* isolatedTestSession(interactions);
-  publishTestRunStart(session, runId);
-  const requests = yield* autoDecideRequests(session, () => null);
+  yield* publishTestRunStart(session, runId);
+  const first = Promise.withResolvers<void>();
+  const requests = yield* autoDecideRequests(session, () => {
+    first.resolve();
+    return null;
+  });
 
   /** The plan request the tool opened, and the way to answer it. */
   const awaitPlanRequest = async () => {
-    await waitForCondition(() => requests.opened.length > 0, {
-      timeoutMessage: 'Timed out waiting for the plan request to open',
-    });
+    await first.promise;
     const opened = requests.opened[0];
     if (opened.payload.kind !== 'planApproval') {
       throw new Error(`Expected a plan request, not ${opened.payload.kind}.`);
@@ -107,7 +108,7 @@ layer(perTest, { buildPerTest: true, excludeTestServices: true })(
             const { decide } = yield* Effect.tryPromise(() =>
               awaitPlanRequest(),
             );
-            decide({ action: 'approve' });
+            yield* decide({ action: 'approve' });
             expect((yield* Fiber.join(resultFiber)).status).toBe('executed');
           }),
         ),

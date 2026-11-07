@@ -59,6 +59,12 @@ import {
   type SessionOwner,
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
+import {
+  VALIDATION_FLAG,
+  VALIDATION_FLAG_CONTENT,
+  VALIDATION_SCENARIOS,
+  VALIDATION_SWITCH,
+} from '@cli/runtime/models/validationSwitch';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,
@@ -377,9 +383,9 @@ export const BUNDLED_AGENTS = resolve(
   'packages/extension/resources/agents',
 );
 const VALIDATION = {
-  TEXRA_INTERNAL_VALIDATE_MODEL: '1',
-  TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
-  TEXRA_INTERNAL_VALIDATE_ECHO: '1',
+  [VALIDATION_SWITCH]: '1',
+  [VALIDATION_SCENARIOS.golden]: '1',
+  [VALIDATION_SCENARIOS.echo]: '1',
 };
 
 /**
@@ -430,7 +436,7 @@ export const validationHost = (
         Effect.sync(() => {
           for (const [name, value] of Object.entries({
             ...VALIDATION,
-            TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
+            [VALIDATION_FLAG]: flag,
           }))
             vi.stubEnv(name, value);
           // Key lookups read the process environment, where a blank key
@@ -446,7 +452,7 @@ export const validationHost = (
           'the validation host opens a workspace folder',
         );
       mkdirSync(workspace, { recursive: true });
-      writeFileSync(flag, 'texra-cli-run-validation\n');
+      writeFileSync(flag, VALIDATION_FLAG_CONTENT);
       yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
       // A golden child's model is chosen among those a key makes available.
       yield* host.secrets

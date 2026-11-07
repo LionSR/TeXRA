@@ -111,11 +111,11 @@ export function createRecordingHost(): {
  * decision lands as the run's `request.decided` row, which is what the waiting
  * run and every surface read.
  */
-export function decideRequest(
+export const decideRequest = (
   session: Context.Context<SessionServices>,
   request: { readonly runId: RunId; readonly requestId: string },
   decision: RequestDecision,
-): void {
+): Effect.Effect<void> =>
   publishTestRows(session, [
     {
       type: 'request.decided',
@@ -124,7 +124,6 @@ export function decideRequest(
       decision,
     },
   ]);
-}
 
 /**
  * Answer every request a session opens from this call on, until the calling
@@ -149,13 +148,13 @@ export const autoDecideRequests = (
           ),
         ),
       (event) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
           opened.push(event);
           const decision = decide(event);
           if (decision === null) return;
           const target = aggregateTarget(event.aggregateId);
           if (target.kind !== 'run') return;
-          decideRequest(
+          yield* decideRequest(
             session,
             { runId: target.id, requestId: event.requestId },
             decision,
@@ -176,8 +175,7 @@ async function ensureRunStart(
   // refused by the substrate.
   await Effect.runPromise(Context.get(session, SessionLog).settled);
   if (Context.get(session, SessionViewAccess).run(runId) !== undefined) return;
-  publishTestRunStart(session, runId);
-  await Effect.runPromise(Context.get(session, SessionLog).settled);
+  await Effect.runPromise(publishTestRunStart(session, runId));
 }
 
 /** Fold a run to its running phase from the activation row that carries it. */
@@ -186,10 +184,11 @@ export async function seedActiveRun(
   runId: RunId,
 ): Promise<void> {
   await ensureRunStart(session, runId);
-  publishTestRows(session, [
-    { type: 'run.activate', aggregateId: qualifyAggregateId('run', runId) },
-  ]);
-  await Effect.runPromise(Context.get(session, SessionLog).settled);
+  await Effect.runPromise(
+    publishTestRows(session, [
+      { type: 'run.activate', aggregateId: qualifyAggregateId('run', runId) },
+    ]),
+  );
 }
 
 /** A tool whose calls the run's command grant answers, as the shell's do;

@@ -71,13 +71,15 @@ async function parkRunWaiting(
   session: Context.Context<SessionServices>,
   runId: RunId,
 ): Promise<void> {
-  publishTestRows(session, [
-    {
-      type: 'run.position',
-      aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', at: 'waiting' },
-    },
-  ]);
+  await Effect.runPromise(
+    publishTestRows(session, [
+      {
+        type: 'run.position',
+        aggregateId: qualifyAggregateId('run', runId),
+        payload: { family: 'toolUse', at: 'waiting' },
+      },
+    ]),
+  );
   await vi.waitFor(() => {
     assert.equal(
       Context.get(session, SessionViewAccess).run(runId)?.position,
@@ -160,7 +162,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           );
 
           const session = yield* sessionHandle;
-          const parentRunId = publishTestRunStart(session);
+          const parentRunId = yield* publishTestRunStart(session);
           let skippedAtResumeTime: boolean | undefined;
           // cast: '' names no run until the launch reports its id.
           let runId = '' as RunId;
@@ -234,7 +236,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
         Effect.gen(function* () {
           const resolveCommand = holdCommand();
           const session = yield* sessionHandle;
-          const parentRunId = publishTestRunStart(session);
+          const parentRunId = yield* publishTestRunStart(session);
 
           const runId = launchedRunId(
             yield* launchBackgroundBash(session, parentRunId),

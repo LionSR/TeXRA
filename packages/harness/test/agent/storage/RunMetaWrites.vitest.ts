@@ -17,7 +17,7 @@ const id = Schema.decodeUnknownSync(RunIdSchema)('bbb001');
 /** The test's session, with the run `id` started on it. */
 const startedSession = Effect.gen(function* () {
   const session = yield* isolatedTestSession();
-  publishTestRunStart(session, id);
+  yield* publishTestRunStart(session, id);
   yield* Context.get(session, SessionLog).settled;
   return session;
 });

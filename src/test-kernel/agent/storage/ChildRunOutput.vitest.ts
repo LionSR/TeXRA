@@ -96,7 +96,7 @@ const persistCompletedChild = (
       storageRoot,
       `executions/${childRunId}/${relativePath}`,
     );
-    publishTestRunStart(session, parentId);
+    yield* publishTestRunStart(session, parentId);
     yield* Context.get(session, SessionLog).settled;
     yield* seedRows(Context.get(session, SessionLog))([
       {

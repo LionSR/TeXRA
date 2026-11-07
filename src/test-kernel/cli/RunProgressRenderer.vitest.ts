@@ -1,5 +1,5 @@
 import { layer } from '@effect/vitest';
-import { Effect, Exit, Schema, Scope, type Context } from 'effect';
+import { Effect, Fiber, Exit, Schema, Scope, type Context } from 'effect';
 import { expect } from 'vitest';
 import {
   AgentConfigSchema,
@@ -12,11 +12,7 @@ import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost'
 import { attachCliSessionProgressProjection } from '@cli/runtime/headless/sessionProgressSubscription';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import {
-  holdTestRun,
-  publishTestRunStart,
-  publishTestRows,
-} from '@test/support/sessionTestUtils';
+import { holdTestRun, publishTestRows } from '@test/support/sessionTestUtils';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import {
   SessionGraph,
@@ -33,15 +29,18 @@ async function settle(): Promise<void> {
 }
 /** A run on a real session: its `run.start`, the config the fold reads the
  *  inputs from, and the RUNNING transition. */
-function publishRun(
+const publishRun = (
   session: Context.Context<SessionServices>,
   runId: RunId,
-): void {
+) => {
   const agent = 'polish';
-  publishTestRows(session, [
+  const aggregateId = qualifyAggregateId('run', runId);
+  // One batch, so the renderer's first view of the run already holds its
+  // inputs and its running phase.
+  return publishTestRows(session, [
     {
       type: 'run.start',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId,
       identity: { kind: 'agent', agent },
       takesFollowUps: true,
       worktree: null,
@@ -49,11 +48,9 @@ function publishRun(
       provenance: null,
       approvalPolicy: null,
     },
-  ]);
-  publishTestRows(session, [
     {
       type: 'run.config',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId,
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent,
         model: 'deepseek/deepseek-v4-flash',
@@ -67,22 +64,18 @@ function publishRun(
         workingDirectory: '/tmp/project',
       }),
     },
-  ]);
-  publishTestRows(session, [
-    {
-      type: 'run.activate',
-      aggregateId: qualifyAggregateId('run', runId),
-    },
+    { type: 'run.activate', aggregateId },
     // The first step of the loop: what clears the activation's starting
     // substate, so the live line reads the plain running phase. A workflow
     // run's first turn is its first round.
     {
       type: 'run.position',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId,
       payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
     },
   ]);
-}
+};
+
 /** What `action` writes to `stream`; `action` reads it as it grows. */
 function captureStreamWrites<E, R>(
   stream: NodeJS.WriteStream,
@@ -146,8 +139,14 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     yield* host
                       .attachRunProgressRenderer(session, runId)
                       .pipe(Scope.provide(scope));
-                    publishRun(handle, runId);
+                    // The rows land once this process holds the run, as a
+                    // launch's do: forked behind the hold's start, and
+                    // joined so a refused batch fails the case.
+                    const published = yield* Effect.forkChild(
+                      publishRun(handle, runId),
+                    );
                     yield* holdTestRun(handle, runId);
+                    yield* Fiber.join(published);
                     // Painted once the renderer's fiber sees the running
                     // view, as many event-loop turns later as Effect's
                     // scheduling takes.
@@ -179,14 +178,21 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               Effect.gen(function* () {
                 const session = yield* TestSession;
                 const handle = yield* sessionHandleOf(session);
-                publishTestRunStart(handle, parentRunId);
-                yield* Effect.promise(() => settle());
                 // The child list is the fold's: the parent's `childIds` and
                 // the child's own row, derived beside the line that folded
-                // them.
+                // them. Both runs land in one batch, so the projection's
+                // first sight of the parent already holds its child.
                 const detach =
                   yield* attachCliSessionProgressProjection(session);
-                publishTestRows(handle, [
+                yield* publishTestRows(handle, [
+                  {
+                    type: 'run.start',
+                    aggregateId: qualifyAggregateId('run', parentRunId),
+                    identity: { kind: 'agent', agent: 'chat' },
+                    takesFollowUps: true,
+                    parent: null,
+                    provenance: null,
+                  },
                   {
                     type: 'run.start',
                     aggregateId: qualifyAggregateId('run', childRunId),

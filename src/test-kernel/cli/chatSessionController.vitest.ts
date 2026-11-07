@@ -83,14 +83,12 @@ import {
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import {
   boundTestSessionView,
-  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
@@ -340,7 +338,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           // The early slot claim makes this resume() interruptible as soon as
           // the session admits the run: a Ctrl-C in that window lands on the
           // resumed run, which ends cancelled, rather than leaving it running.
-          const rehydrated = createDeferred<void>();
+          const rehydrated = Promise.withResolvers<void>();
           const session = makeSession({ runCompleted: true });
           // A resumed run the chat stopped through its session ends cancelled.
           const stops: RunId[] = [];
@@ -369,7 +367,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           );
 
           // A stop lands only on a run the fold holds.
-          seedView(viewWith([makeRunView({ id: decodeRunId('aaaaaa') })]));
+          seedView(viewWith([{ id: decodeRunId('aaaaaa') }]));
           // The resume command, run the way the Ink handler runs it.
           const resumed = yield* Effect.forkChild(
             ctrl.resume(decodeRunId('aaaaaa')),
@@ -411,7 +409,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           mocks.request.mockImplementation(() =>
             Effect.sync((): Outcome => ({ kind: 'done' })),
           );
-          const failing = createDeferred<void>();
+          const failing = Promise.withResolvers<void>();
           mocks.resumeRun.mockImplementationOnce((id: RunId) =>
             Effect.succeed({
               runId: id,
@@ -424,7 +422,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           const ctrl = createChatSessionController(
             yield* makeInit({ session }),
           );
-          seedView(viewWith([makeRunView({ id: decodeRunId('aaaaaa') })]));
+          seedView(viewWith([{ id: decodeRunId('aaaaaa') }]));
           const resumed = yield* Effect.forkChild(
             ctrl.resume(decodeRunId('aaaaaa')),
             { startImmediately: true },
@@ -452,7 +450,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           // once the stopped run's claim lets go, the slot passes to the
           // continued run, so a later message cannot start a second root
           // beside it.
-          seedView(viewWith([makeRunView({ id: decodeRunId('a11111') })]));
+          seedView(viewWith([{ id: decodeRunId('a11111') }]));
           installSession(installableViewRef());
           const teardown = pendingRunClaim();
           const session = makeSession({
