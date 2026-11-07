@@ -6,10 +6,8 @@ import {
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
 import { cliEnvValue, readCliVersion } from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
 
 import { emitCliResult } from './_helpers/output';
-import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 
 const isCliOutputFormat = Schema.is(CliOutputFormatSchema);
@@ -35,6 +33,5 @@ export const versionCommand = defineCommand({
         text: version,
       },
     );
-    setExitCode(CliExitCode.Success);
   },
 });
