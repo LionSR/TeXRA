@@ -95,7 +95,6 @@ export function createDesktopDialogs(
           }),
         catch: (cause) =>
           new PromptFailed({
-            member: 'confirm',
             message: `The confirmation dialog could not be shown: ${toErrorMessage(cause)}`,
             cause,
           }),
@@ -196,7 +195,6 @@ export function createDesktopDialogs(
         },
         catch: (cause) =>
           new TranscriptExportFailed({
-            step: 'pickFormat',
             message: toErrorMessage(cause),
             cause,
           }),

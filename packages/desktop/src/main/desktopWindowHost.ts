@@ -134,7 +134,6 @@ export function createDesktopWindowHost(options: {
       Effect.catchTag('PreviewUnavailable', (cause) =>
         Effect.fail(
           new ExternalOpenFailed({
-            kind: 'url',
             target: url,
             message: `The desktop could not open ${url} in the default browser: ${cause.message}`,
             cause,
@@ -154,7 +153,6 @@ export function createDesktopWindowHost(options: {
         Effect.mapError(
           (cause) =>
             new ExternalOpenFailed({
-              kind: 'url',
               target: url,
               message: 'The documentation URL could not be opened.',
               cause,

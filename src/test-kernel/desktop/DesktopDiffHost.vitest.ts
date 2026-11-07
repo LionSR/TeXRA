@@ -71,7 +71,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           );
           expect(error).toMatchObject({
             _tag: 'ExternalOpenFailed',
-            kind: 'path',
             cause: failure,
           });
 

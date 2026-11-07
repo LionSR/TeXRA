@@ -50,11 +50,13 @@ import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
+  ALL_KINDS,
   buildSummaryLines,
   buildSummaryTailLines,
   childRunViews,
   formatChildLine,
   runDisplayCategory,
+  type RunDisplayCategory,
 } from './executionFormatters';
 import { defineTool } from './core/definition';
 import { formatFileView } from './formatting';
@@ -170,10 +172,13 @@ type RouteActions = {
  * "Unknown path" error render from `path` and `summary`, a path accepts the
  * actions its row handles, and the "not valid here" error names the rows that
  * do. A `{…}` segment matches any one segment, a trailing `{path}` the rest.
+ * `kinds` are the runs a run's summary lists a path for; a row without it
+ * is listed for none.
  */
 const EXECUTION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly summary: string;
+  readonly kinds?: readonly RunDisplayCategory[];
   readonly actions: RouteActions;
 }> = [
   {
@@ -218,11 +223,13 @@ const EXECUTION_ROUTES: ReadonlyArray<{
   {
     path: '/executions/{id}/config',
     summary: 'Agent configuration JSON',
+    kinds: ALL_KINDS,
     actions: { view: ({ context, runId }) => showConfig(context, runId) },
   },
   {
     path: '/executions/{id}/conversation',
     summary: 'Full message history (subagents)',
+    kinds: ['agent', 'task', 'script'],
     actions: {
       view: ({ context, input, runId }) =>
         input.view_range
@@ -237,18 +244,21 @@ const EXECUTION_ROUTES: ReadonlyArray<{
   {
     path: '/executions/{id}/report',
     summary: 'Result report (persists after context compaction)',
+    kinds: ALL_KINDS,
     actions: { view: ({ context, runId }) => showReport(context, runId) },
   },
   {
     path: '/executions/{id}/result',
     summary:
       'Final result envelope (JSON) for chaining; process result for background commands',
+    kinds: ALL_KINDS,
     actions: { view: ({ context, runId }) => showResultMeta(context, runId) },
   },
   {
     path: '/executions/{id}/output',
     summary:
       'stdout/stderr of a background command, readable WHILE IT RUNS (report/result only exist once it finishes)',
+    kinds: ['process'],
     actions: {
       view: ({ input, runId }) =>
         showOutput(runId, input.view_range ?? undefined),
@@ -257,6 +267,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
   {
     path: '/executions/{id}/files',
     summary: 'Generated files (workflows only)',
+    kinds: ['task'],
     actions: { view: ({ runId }) => listFiles(runId) },
   },
   {
@@ -270,6 +281,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
   {
     path: '/executions/{id}/workspace-files',
     summary: 'Workspace files edited by tool-use runs',
+    kinds: ['agent'],
     actions: {
       view: ({ context, runId }) => listWorkspaceFiles(context, runId),
     },
@@ -291,6 +303,13 @@ function handlerFor<A extends ExecutionsAction>(
 ): RouteHandler<A> | undefined {
   return actions[action];
 }
+
+/** The paths a run of `category` serves, below its own, as its summary
+ *  lists them. */
+const pathsFor = (category: RunDisplayCategory): readonly string[] =>
+  EXECUTION_ROUTES.flatMap(({ path, kinds }) =>
+    kinds?.includes(category) ? [path.slice('/executions/{id}/'.length)] : [],
+  );
 
 const EXECUTION_PATH_LIST = EXECUTION_ROUTES.map(
   ({ path, summary }) => `- ${path} - ${summary}`,
@@ -433,12 +452,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   }
 
   lines.push(
-    ...buildSummaryTailLines(
-      runId,
-      runDisplayCategory(run),
-      children.length > 0,
-      report,
-    ),
+    ...buildSummaryTailLines(runId, pathsFor(runDisplayCategory(run)), report),
   );
 
   return executed(lines.join('\n'));

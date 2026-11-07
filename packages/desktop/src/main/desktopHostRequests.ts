@@ -266,7 +266,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
             Effect.mapError(
               (cause) =>
                 new ExternalOpenFailed({
-                  kind: 'path',
                   target: filePath,
                   message: toErrorMessage(cause),
                   cause,

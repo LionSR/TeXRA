@@ -11,7 +11,8 @@ import {
   categories as arxivCategories,
   type Category,
 } from 'arxiv-client/dist/defines/categories.js';
-import { Clock, Duration, Effect, Schema, SynchronizedRef } from 'effect';
+import { Duration, Effect, Schema } from 'effect';
+import * as RateLimiter from 'effect/persistence/RateLimiter';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -53,26 +54,22 @@ const ArxivCategorySchema = Schema.Trim.pipe(
 
 const MAX_RESULTS = 50;
 const DEFAULT_RESULTS = 10;
-/** arXiv API rate limit: approximately 1 request per 3 seconds. */
-const RATE_LIMIT_DELAY_MS = 3000;
 /** Deadline for one arXiv request (the client sets no timeout of its own). */
 const TIMEOUT_MS = 30_000;
 
-/**
- * The arXiv rate limit is a property of the remote API, shared by every call
- * in the process, so its state is module-level: `Effect.provide` builds a
- * layer afresh per tool call, which would give each call a limiter of its
- * own and no limit at all. One permit, so waiters take their slot in arrival
- * order, and an interrupted waiter gives its place back.
- */
-const nextRequestAt = SynchronizedRef.makeUnsafe(0);
-const awaitArxivSlot = SynchronizedRef.updateEffect(
-  nextRequestAt,
-  Effect.fnUntraced(function* (at) {
-    const now = yield* Clock.currentTimeMillis;
-    if (now < at) yield* Effect.sleep(Duration.millis(at - now));
-    return (yield* Clock.currentTimeMillis) + RATE_LIMIT_DELAY_MS;
+/** Wait for the API's slot: arXiv asks for one request per 3 seconds, and a
+ *  bucket of one token refilled every 3 seconds spaces them so, in the order
+ *  they ask. The limiter is the plugin's, one per process (`plugin.ts`). */
+const awaitArxivSlot = Effect.flatMap(RateLimiter.RateLimiter, (limiter) =>
+  RateLimiter.sleep(limiter, {
+    algorithm: 'token-bucket',
+    window: '3 seconds',
+    limit: 1,
+    key: 'arxiv',
   }),
+).pipe(
+  // The in-memory store does not fail: one that did is a defect.
+  Effect.orDie,
 );
 
 /** One hit as the tool emits it (built from already-typed arxiv-client
