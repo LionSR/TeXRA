@@ -1461,7 +1461,7 @@ How a call waits on its routes: the base backoff, and who hears a wait.
 ```ts
 interface RouteOptions {
   readonly baseBackoffMs: number;
-  readonly onWait?: (delayMs: number) => void;
+  readonly onWait?: (delayMs: number) => Effect.Effect<void>;
 }
 ```
 
