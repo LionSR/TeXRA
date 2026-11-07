@@ -266,7 +266,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         snapshot: {
           fileOptions: () => files.fileOptions(),
           workspaceRoots: () => [],
-          dependencyBanner: () => Effect.succeed({ visible: false }),
+          missingTools: () => Effect.succeed([]),
           shows: { apiKeyBanner: false, gettingStarted: false },
         },
         // The tool-edit preview: staged copies of the original and proposed

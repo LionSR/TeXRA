@@ -44,7 +44,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 
 // Local imports - progress view constants
-import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
+import { ELEMENT_IDS } from '../constants';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
@@ -310,10 +310,8 @@ export class TaskGroupList extends LitElement {
         <wa-button
           appearance="outlined"
           size="s"
-          data-reveal-kind=${options.kind}
-          data-reveal-scope=${options.scope}
-          data-hidden-count=${String(options.hiddenCount)}
-          @click=${this.handleRevealOlderRows}
+          @click=${(event: Event) =>
+            this.revealOlder(event, options.kind, options.scope)}
           aria-label=${`Show ${revealCount} older ${suffix}`}
           >${waIcon('chevron-up', { slot: 'start' })} Show ${revealCount} older
           ${suffix}</wa-button
@@ -364,18 +362,16 @@ export class TaskGroupList extends LitElement {
     );
   }
 
-  private handleRevealOlderRows(event: Event): void {
+  private revealOlder(
+    event: Event,
+    kind: 'timeline' | 'rows',
+    scope: string,
+  ): void {
     event.preventDefault();
     event.stopPropagation();
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLElement)) return;
-    const kind = target.dataset.revealKind;
-    const scope = target.dataset.revealScope;
-    if (!scope) return;
-
     if (kind === 'timeline') {
       this.timelineItemWindow += TIMELINE_ITEM_WINDOW_STEP;
-    } else if (kind === 'rows') {
+    } else {
       const current =
         this.groupRowWindows.get(scope) ?? DEFAULT_GROUP_ROW_WINDOW;
       this.groupRowWindows = new Map(this.groupRowWindows).set(
@@ -404,23 +400,6 @@ export class TaskGroupList extends LitElement {
       this.scrollContainer.scrollTop -
       this.scrollContainer.clientHeight;
     return remaining <= threshold;
-  }
-
-  /**
-   * Handle a group's open/close — wired to both wa-show and wa-hide. The
-   * groupId comes from the element ID, so there are no per-row closures; Lit
-   * binds the host as `this`. `dispatchGroupToggle` owns the bubble guard and
-   * the direction the event type carries.
-   */
-  private handleGroupToggle(event: Event): void {
-    const details = event.currentTarget;
-    if (!(details instanceof HTMLElement)) return;
-    dispatchGroupToggle(
-      this,
-      event,
-      this.runId,
-      details.id.slice(GROUP_DOM_IDS.DETAILS_PREFIX.length),
-    );
   }
 
   /** Render child group header inline (only called for non-root groups) */
@@ -495,16 +474,12 @@ export class TaskGroupList extends LitElement {
     isRoot = false,
   ): TemplateResult | typeof nothing {
     const { group } = node;
-    const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
-    const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
     // Tree roots: simple container (no collapsible), always render content.
     if (isRoot) {
       return html`
-        <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
-          <div id=${contentId} class="log-group-content">
-            ${this.renderGroupBody(node)}
-          </div>
+        <div class="log-group log-run" data-run-id=${group.id}>
+          <div class="log-group-content">${this.renderGroupBody(node)}</div>
         </div>
       `;
     }
@@ -512,18 +487,20 @@ export class TaskGroupList extends LitElement {
     // Child groups: collapsible details element.
     // Collapsed child groups contribute zero DOM nodes for their content.
     const expanded = this.isExpanded(group.id);
+    // wa-show and wa-hide both: `dispatchGroupToggle` owns the bubble guard
+    // and reads the direction from the event type.
+    const onToggle = (event: Event) =>
+      dispatchGroupToggle(this, event, this.runId, group.id);
 
     return html`
       <wa-details
-        id=${detailsId}
         class="log-group"
         ?open=${expanded}
-        @wa-show=${this.handleGroupToggle}
-        @wa-hide=${this.handleGroupToggle}
+        @wa-show=${onToggle}
+        @wa-hide=${onToggle}
       >
         <div
           slot="summary"
-          id="${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}"
           class=${classMap({
             'log-group-header': true,
             [`is-${group.status}`]: true,
@@ -531,7 +508,7 @@ export class TaskGroupList extends LitElement {
         >
           ${this.renderGroupHeader(node)}
         </div>
-        <div id=${contentId} class="log-group-content">
+        <div class="log-group-content">
           ${expanded ? this.renderGroupBody(node) : nothing}
         </div>
       </wa-details>

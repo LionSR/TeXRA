@@ -126,11 +126,6 @@ export function approvalDecisionArm(
   decision: SurfaceDecision,
 ): ApprovalArm {
   const { runId, requestId } = permission.data;
-  if (runId === '') {
-    throw new Error(
-      `Permission ${permission.kind}:${requestId} names no run to decide on.`,
-    );
-  }
   const decide = (
     d: RequestDecision,
     grant?: ApprovalBypassKind,

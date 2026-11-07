@@ -50,12 +50,6 @@ export const ELEMENT_IDS = {
   COMPACT_RESPONSE_BTN: 'compactResponseBtn',
 };
 
-export const GROUP_DOM_IDS = Object.freeze({
-  DETAILS_PREFIX: 'group-',
-  HEADER_PREFIX: 'group-header-',
-  CONTENT_PREFIX: 'group-content-',
-});
-
 const OPEN_RUN_STORAGE_ACTION: RunMenuAction = {
   id: ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   action: 'openRunStorage',

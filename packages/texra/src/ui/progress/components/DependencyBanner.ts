@@ -2,7 +2,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, css, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type { MissingTool } from '@texra/shared/session/hostSnapshot';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { focusRingStyles } from '@ui/styles/controlStyles';
@@ -46,17 +46,14 @@ export class DependencyBanner extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) state: HostSnapshot['banners']['dependency'] =
-    {
-      visible: false,
-    };
+  @property({ attribute: false }) missingTools: readonly MissingTool[] = [];
 
   private install(): void {
     this.dispatchEvent(SessionUiEvents.host({ kind: 'openInstallGuide' }));
   }
 
   override render(): TemplateResult {
-    const tools = this.state.missingTools ?? [];
+    const tools = this.missingTools;
     const either = tools.filter((tool) => tool.interchangeable);
     // The names to list: each required tool, and the interchangeable ones as one.
     const groups = [

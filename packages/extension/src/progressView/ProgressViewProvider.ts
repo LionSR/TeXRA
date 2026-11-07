@@ -231,13 +231,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             })) ?? [],
           shows: { apiKeyBanner: true, gettingStarted: true },
           // A failed probe reads as a missing tool, so the read never fails.
-          dependencyBanner: () =>
-            checkCoreDependencies().pipe(
-              Effect.map((missingTools) => ({
-                visible: missingTools.length > 0,
-                missingTools: [...missingTools],
-              })),
-            ),
+          missingTools: () => checkCoreDependencies(),
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the diff editor shows, for each tool edit the session

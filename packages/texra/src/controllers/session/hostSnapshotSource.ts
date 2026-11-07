@@ -44,6 +44,7 @@ import { loadTeamOptions } from '@texra/shared/teamLaunch';
 import type {
   FileOptions,
   HostSnapshot,
+  MissingTool,
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
@@ -67,7 +68,6 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'Host Snapshot';
 
-type Banners = HostSnapshot['banners'];
 type DismissibleBanner = 'gettingStarted' | 'dependency';
 
 interface HostSnapshotSourceOptions {
@@ -97,8 +97,8 @@ interface HostSnapshotSourceOptions {
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots(): HostSnapshot['workspaceRoots'];
   /** The tools TeXRA needs that this machine lacks. */
-  dependencyBanner(): Effect.Effect<
-    Banners['dependency'],
+  missingTools(): Effect.Effect<
+    readonly MissingTool[],
     never,
     ChildProcessSpawner
   >;
@@ -120,9 +120,9 @@ interface Inputs {
   readonly workspaceRoots: HostSnapshot['workspaceRoots'];
   readonly fileOptions: FileOptions;
   readonly commits: { readonly commits: string[]; readonly isGitRepo: boolean };
-  readonly dependency: Banners['dependency'];
+  readonly missingTools: readonly MissingTool[];
   readonly recording: HostSnapshot['recording'];
-  readonly agentConfig: Banners['agentConfig'];
+  readonly agentConfig: HostSnapshot['banners']['agentConfig'];
   readonly serviceOffline: string | null;
   /** A dismissal lasts the session. */
   readonly dismissed: ReadonlySet<DismissibleBanner>;
@@ -222,9 +222,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       workspaceRoots: options.workspaceRoots(),
       fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
       commits: { commits: [], isGitRepo: false },
-      dependency: { visible: false },
+      missingTools: [],
       recording: null,
-      agentConfig: { visible: false },
+      agentConfig: null,
       serviceOffline: null,
       dismissed: new Set(),
       credential: undefined,
@@ -311,8 +311,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     );
     const loadDependencies = yield* producer(
       'the missing tools',
-      Effect.flatMap(options.dependencyBanner(), (dependency) =>
-        write({ dependency }),
+      Effect.flatMap(options.missingTools(), (missingTools) =>
+        write({ missingTools }),
       ),
     );
     // Asked under the project's `.env` over the process's: the key a run of
@@ -387,17 +387,15 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       banners: {
         // A credential that worked stopped working: raised only once a task
         // has finished; before that the "Connect a model" card is the prompt.
-        apiKey: {
-          visible:
-            options.shows.apiKeyBanner &&
-            s.credential === false &&
-            s.flags?.firstRunDone === true,
-        },
+        apiKey:
+          options.shows.apiKeyBanner &&
+          s.credential === false &&
+          s.flags?.firstRunDone === true,
         agentConfig: s.agentConfig,
-        dependency: {
-          ...s.dependency,
-          visible: s.dependency.visible && !s.dismissed.has('dependency'),
-        },
+        dependency:
+          s.missingTools.length > 0 && !s.dismissed.has('dependency')
+            ? s.missingTools
+            : null,
         gettingStarted:
           options.shows.gettingStarted &&
           s.fileOptions.baseFile.length === 0 &&
@@ -455,13 +453,11 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
             ),
           ),
         );
-        yield* write({
-          agentConfig: { visible: true, agentName, customDirSet },
-        });
+        yield* write({ agentConfig: { agentName, customDirSet } });
       }),
       clearAgentConfigBanner: SubscriptionRef.updateSome(inputs, (s) =>
-        s.agentConfig.visible
-          ? Option.some({ ...s, agentConfig: { visible: false } })
+        s.agentConfig !== null
+          ? Option.some({ ...s, agentConfig: null })
           : Option.none(),
       ),
       dismissBanner: (banner) =>
