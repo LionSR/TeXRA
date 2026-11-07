@@ -59,9 +59,9 @@ Open pull requests the order waits on:
 - **14713** (a document task tells its chat what the user changed) edits
   `hostRunActions.ts`, `documentTools.ts` and `workflowOutput.ts`: G5, I1,
   I3, I4, I5 and I7 land after it.
-- **14773** (programs, not agents, for the catalog and codemode) may replace
-  how plugins register agents and scripts: M4, M9 and H9 wait for the owner's
-  decision on it.
+- **14773** (programs, not agents, for the catalog and codemode) is set
+  aside by the owner (2026-11-07). M4, M9 and H9, which its outcome could
+  replace, are out of the order until the owner returns to it.
 - **14777** (one unwrap of a platform error) is the error classifiers'
   owner: G10's error tags join the storage-errors inventory after it.
 - **14741** (blob link kinds) touches only the store; nothing here waits.
@@ -120,7 +120,7 @@ zero.
 3. **A second implementation before a cleanup inside one.** Deleting a host's
    copy of a flow (S4) or a hand-rolled twin of a scope (S1) removes the most
    change amplification and the most fiber-fighting calls per line changed.
-4. **An open PR's files after it merges.** 14713, 14773 and 14777 above.
+4. **An open PR's files after it merges.** 14713 and 14777 above.
 5. **One PR per cluster, named by the primitive it introduces, deleting the
    hand-rolled version in the same PR** (AGENTS.md "New ports, facades and
    template methods delete what they replace in the same PR"). A PR body cites
@@ -135,10 +135,10 @@ zero.
   (`API_KEY_ENV_NAMES`) and control variables are withheld from every child;
   the credential-shaped name test (`/KEY|PASSWORD|SECRET|TOKEN|CREDENTIAL/i`)
   stays an extra withholding for third-party MCP servers, as today; the git
-  helper starts from `environment` too. **Owner decision:** whether shell
-  commands should also lose credential-shaped names. Today a project's
-  `GITHUB_TOKEN` reaches `gh` in a bash command; withholding it would break
-  that.
+  helper starts from `environment` too. **Decided (owner, 2026-11-07):**
+  shell commands keep the credential-shaped names they see today, so a
+  project's `GITHUB_TOKEN` still reaches `gh` in a bash command; only the
+  harness's own credentials are withheld from them.
 - **I9, a compile that succeeds without a PDF.** `compileLatex2Pdf`
   (`latex/texTools.ts:295-299`) answers `ok` on the engine's exit code, and two
   of its seven callers (`compileCheck.ts`, `LatexDiffManager.ts`) trust it. One
@@ -271,10 +271,10 @@ lists the findings it closes and the primitive.
    shell's head and tail as a projection of its `process.output` rows.
 4. M10: `utils/core/index.ts`'s barrel and the three modules with domain
    owners moved to them.
-5. After the owner's decision on PR 14773: M4 (the plan tool reads its fact
-   row, not its own past tool results), M9 (the catalog follower as one feed
-   with `Stream.take(1)` for the first load), H9 (a plugin reaches its host
-   one way).
+5. Set aside with PR 14773 (owner, 2026-11-07), not in the order: M4 (the
+   plan tool reads its fact row, not its own past tool results), M9 (the
+   catalog follower as one feed with `Stream.take(1)` for the first load),
+   H9 (a plugin reaches its host one way).
 
 **Lane 6, the terminal UI** (unassigned).
 
@@ -364,8 +364,10 @@ GitHub and Lean (4.1, 4.2); then lanes 5, 6, 7, 8 and 9 in that order. Lane
 
 ## What we give up, and risks
 
-- **M3** may change what a shell command sees, depending on the owner's
-  decision above; MCP servers lose nothing.
+- **M3** changes nothing a shell command or an MCP server sees. The git
+  helper gains the project's `.env`, so a project's proxy or
+  `GIT_SSH_COMMAND` now reaches a plugin's git fetch as it already reaches
+  the project's shell commands.
 - **J1** puts `effect/rpc` in the webview bundle; if the bundle budget or the
   browser-bundle rule refuses it, the transport keeps its own framing and
   only the Promise layer and in-flight Sets go.
@@ -402,7 +404,7 @@ item a report lists without a lane. Full deletion lists are in the reports.
 | H6  | a per-file condition variable re-armed per notification                                     | S2      | 4.2       |
 | H7  | the server roster as a second record of the pool, with a generation counter                 | S5      | 4.2       |
 | H8  | the Lean port's optional host hooks; command rows one host answers with an error            | S4      | 4.2       |
-| H9  | a plugin reaches its host six ways; a capability as a bare flag                             | S4      | 5.5       |
+| H9  | a plugin reaches its host six ways; a capability as a bare flag                             | S4      | held      |
 | H10 | the arXiv rate limit as a module `SynchronizedRef`                                          | S3      | 4.4       |
 | H11 | batched: two Zotero classifiers, a field-scan decision, two `AppSignals` paths, …           | —       | —         |
 | I1  | a revision's record as a mutable map six modules write into                                 | S5      | 4.3       |
@@ -441,12 +443,12 @@ item a report lists without a lane. Full deletion lists are in the reports.
 | M1  | `toolAvailability`'s latest-wins scheduler, refcount and signal relay                       | S2      | 5.2       |
 | M2  | the MCP pool caches a failed start as a success and remembers it in a Set                   | S3, S6  | 5.1       |
 | M3  | a child process's environment decided in four modules, two vocabularies                     | S5      | 0         |
-| M4  | the plan tool decodes its own past results to find its goal                                 | S5      | 5.5       |
+| M4  | the plan tool decodes its own past results to find its goal                                 | S5      | held      |
 | M5  | `/executions` paths per run kind spelled three times                                        | S5      | 5.3       |
 | M6  | the background shell's in-memory capture beside its `process.output` rows                   | S5      | 5.3       |
 | M7  | eleven process facts in module `let`s; two proxy policies                                   | S3      | 8.1       |
 | M8  | platform ports carry app facts as optionals; `WorkspaceRoots` restates services             | S4      | 2.3       |
-| M9  | the catalog follower's three subscriptions and a readiness Deferred                         | S2      | 5.5       |
+| M9  | the catalog follower's three subscriptions and a readiness Deferred                         | S2      | held      |
 | M10 | `utils/` holds domain modules; `utils/core/index.ts` a three-topic barrel                   | —       | 5.4       |
 | M11 | batched: `JsonStore`'s one-caller options, `FileSecrets.watch`, …                           | S2      | —         |
 | N1  | "open a window's session" written by all three hosts                                        | S4      | 3.3       |
