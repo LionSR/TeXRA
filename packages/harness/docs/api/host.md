@@ -825,10 +825,9 @@ interface CurrentValues {
     DatabaseReadFailed
   >;
   /**
-   * Emits as subscribed, then after each commit, by this process or
-   * another, that changed one of `keys`' values: the root's wake level
-   * narrowed inside the store to those rows. A read that fails is logged and
-   * retried, so no change is missed.
+   * Emits as subscribed, then after each value write, by this process or
+   * (on the global store) another, that changed one of `keys`' values. A
+   * read that fails is logged and retried, so no change is missed.
    */
   readonly changes: (
     family: Pick<ValueFamily<unknown>, 'name'>,
@@ -848,7 +847,7 @@ const CUSTOM_AGENT_DIR_KEY: { readonly key: "customAgentDir"; readonly slot: "gl
 
 ## DatabaseWriteFailed
 
-A batch was rejected whole: no member, sequence or wake level moved.
+A batch was rejected whole: no member or sequence moved.
 
 ```ts
 class DatabaseWriteFailed extends Schema.TaggedError<DatabaseWriteFailed>()(
