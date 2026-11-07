@@ -110,7 +110,6 @@ const LEVEL_PRESENTATION_KEY: Record<string, DesktopLogLevel> = {
   FATAL: 'error',
 };
 const LOG_SUMMARY_MAX_LENGTH = 180;
-const LOG_AUTO_REFRESH_INTERVAL_MS = 5_000;
 const LOG_LEVEL_PRESENTATION = {
   debug: { icon: 'code', label: 'Debug' },
   error: { icon: 'circle-xmark', label: 'Error' },
@@ -179,7 +178,6 @@ export function createLogsPane(): LogsPaneController {
     meta: 'Recent redacted log entries appear here.',
   };
   let active = false;
-  let refreshHandle: number | undefined;
 
   function requestSnapshot(): void {
     postMessage(DESKTOP_LOG_COMMANDS.REQUEST_LOG);
@@ -281,24 +279,11 @@ export function createLogsPane(): LogsPaneController {
     render(viewerTemplate(), container);
   }
 
+  /** Shown, main pushes the log as its file changes; hidden, it stops. */
   function setActive(nextActive: boolean): void {
     if (active === nextActive) return;
     active = nextActive;
-    if (!active) {
-      if (refreshHandle != null) window.clearInterval(refreshHandle);
-      refreshHandle = undefined;
-      return;
-    }
-
-    requestSnapshot();
-    refreshHandle = window.setInterval(() => {
-      if (!active) return;
-      if (!container.isConnected) {
-        setActive(false);
-        return;
-      }
-      requestSnapshot();
-    }, LOG_AUTO_REFRESH_INTERVAL_MS);
+    postMessage(DESKTOP_LOG_COMMANDS.FOLLOW_LOG, { following: active });
   }
 
   function applySnapshot(message: DesktopSetLogMessage): void {
