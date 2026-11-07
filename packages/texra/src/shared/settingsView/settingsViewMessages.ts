@@ -22,7 +22,6 @@ import { API_KEY_PROVIDER_IDS, ReasoningEffortSchema } from '@texra-ai/llm';
 import { AgentModePresetSchema } from '@texra/shared/agentTeams';
 import {
   LATEX_DEPENDENCIES,
-  OS_PLATFORMS,
   SYSTEM_PACKAGE_MANAGERS,
 } from '@texra/shared/constants/latexToolchain';
 import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
@@ -53,6 +52,7 @@ import {
   PluginActionMessageSchema,
   PluginListItemSchema,
 } from './pluginMessages';
+import { OsPlatformSchema } from '@texra/shared/osPlatform';
 
 /** An absolute URL the host may open. */
 const UrlSchema = Schema.String.check(
@@ -393,7 +393,7 @@ const LatexSettingsStatusSchema = Schema.Struct({
     Schema.Boolean,
   ),
   latexWorkshopInstalled: Schema.Boolean,
-  platform: Schema.Literals(OS_PLATFORMS),
+  platform: OsPlatformSchema,
   pdflatexPath: Schema.NullOr(Schema.String),
   latexmkPath: Schema.NullOr(Schema.String),
   latexdiffPath: Schema.NullOr(Schema.String),

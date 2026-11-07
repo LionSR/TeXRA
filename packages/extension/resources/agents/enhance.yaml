@@ -77,7 +77,6 @@ prompt: |
 
   Write the explanatory prose around derivations in plain technical English for the paper's reader: lead with the mathematical content, give each step's justification once and concretely (``by periodicity the boundary terms vanish''), use plain verbs, and remark only on the steps a reader would stumble on; routine steps pass without comment.
 
-
 task:
   files:
     CRITICIZE: criticize.tex

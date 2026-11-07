@@ -4,6 +4,8 @@
  * LaTeX tab reports, and the one renderer of install advice.
  */
 
+import type { OsPlatform } from '@texra/shared/osPlatform';
+
 /** Extension ID for the LaTeX Workshop VS Code extension. */
 export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
 
@@ -53,11 +55,6 @@ export const LATEX_RECOMMENDED_SETTINGS = {
 export type LatexRecommendedSettingField =
   keyof typeof LATEX_RECOMMENDED_SETTINGS;
 
-/** Supported OS platform keys for install advice. */
-export const OS_PLATFORMS = ['darwin', 'win32', 'linux'] as const;
-
-export type OSPlatform = (typeof OS_PLATFORMS)[number];
-
 /** Package managers TeXRA knows how to install dependencies with. */
 export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
 
@@ -85,8 +82,8 @@ interface InstallRecord {
   /** A Cargo crate, on every platform. */
   readonly cargo?: string;
   /** A download page, per platform. */
-  readonly url?: Partial<Record<OSPlatform, string>>;
-  readonly notes?: Partial<Record<OSPlatform, string>>;
+  readonly url?: Partial<Record<OsPlatform, string>>;
+  readonly notes?: Partial<Record<OsPlatform, string>>;
 }
 
 const TEX_DISTRIBUTION_INSTALL: InstallRecord = {
@@ -599,7 +596,7 @@ const PLATFORM_PACKAGE_MANAGER = {
   darwin: 'brew',
   linux: 'apt',
   win32: 'scoop',
-} as const satisfies Record<OSPlatform, SystemPackageManager>;
+} as const satisfies Record<OsPlatform, SystemPackageManager>;
 
 const MANAGER_INSTALL: Record<SystemPackageManager, string> = {
   brew: 'brew install',
@@ -634,7 +631,7 @@ export interface InstallAdvice {
 export function installAdvice(
   label: string,
   tools: readonly LatexToolName[],
-  platform: OSPlatform,
+  platform: OsPlatform,
 ): InstallAdvice {
   const manager = PLATFORM_PACKAGE_MANAGER[platform];
   // Tools that share a record (the TeX distribution's) say it once.
@@ -681,11 +678,3 @@ export function installAdvice(
 // ============================================================
 // Utility functions
 // ============================================================
-
-/**
- * Normalize a raw platform string to one of the three supported values.
- * Falls back to 'linux' for unrecognized platforms (e.g. 'freebsd').
- */
-export function normalizePlatform(raw: string): OSPlatform {
-  return raw === 'darwin' || raw === 'win32' ? raw : 'linux';
-}

@@ -98,7 +98,6 @@ prompt: |
           \end{itemize}
   \end{itemize}
 
-
 task:
   files:
     CRITICIZE: criticize.tex
