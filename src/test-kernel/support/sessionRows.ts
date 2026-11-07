@@ -32,93 +32,93 @@ export const runStart = (
   ...over,
 });
 
-const ORIGIN = {
-  protocol: 'openai-responses',
-  requestedModel: 'gpt-test',
-  deployment: {
-    endpoint: 'https://api.example.test/v1',
-    credentialScope: 'openai',
-  },
-  codecVersion: 1,
-} as const;
-const INVOCATION = {
-  invocationId: '0f1e2d3c-4b5a-4a9b-8c7d-6e5f4a3b2c1d',
-  attempt: 1,
-} as const;
-const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
-/** The provider's turn: a message and two `bash` calls. */
-const TURN = {
-  kind: 'http',
-  providerResponseId: 'resp-1',
-  requestedOrigin: ORIGIN,
-  returnedModel: null,
-  modelFingerprint: null,
-  content: [
-    { kind: 'message', content: [{ kind: 'text', text: 'running ls' }] },
-    {
-      kind: 'local-call',
-      providerCallId: 'call-a',
-      name: 'bash',
-      argumentsText: '{"command":"ls"}',
-    },
-    {
-      kind: 'local-call',
-      providerCallId: 'call-b',
-      name: 'bash',
-      argumentsText: '{"command":"ls"}',
-    },
-  ],
-  finishReason: 'tool-calls',
-  usage: {
-    inputTokens: 10,
-    outputTokens: 5,
-    totalTokens: 15,
-    cachedInputTokens: 4,
-    cacheWriteTokens: null,
-    reasoningTokens: null,
-    toolUsePromptTokens: null,
-  },
-} as const;
-/** The dispatch facts: two barrier calls, the second a duplicate of the
- *  first. */
-const CALLS = [
-  {
-    callId: 'call-a',
-    toolName: 'bash',
-    lane: 'barrier',
-    replay: 'unsafe',
-    duplicateOf: null,
-    logId: 'card-0',
-  },
-  {
-    callId: 'call-b',
-    toolName: 'bash',
-    lane: 'barrier',
-    replay: 'unsafe',
-    duplicateOf: 'call-a',
-    logId: 'card-1',
-  },
-] as const;
-/** What the writer stamps beside `calls`: the runtime's priced usage. */
-const TURN_USAGE = {
-  inputTokens: 10,
-  outputTokens: 5,
-  cost: 0.25,
-  responseTimeMs: 1200,
-  provider: 'openai-responses',
-  cachedInputTokens: 4,
-  cacheMissInputTokens: 6,
-} as const;
-
 /**
  * One tool-use turn of `runId` as the loop writes it, row by row: the user
  * message, the model attempt, its provider id, the response with its two
  * `bash` calls, the first call's intent, and the tool group that delivers
  * both results. `result` builds a call's `tool.result`; `over` replaces any
- * payload field.
+ * payload field. Every object is built afresh per call, so no suite can
+ * change another's input.
  */
 export function toolUseTurn(runId: RunId) {
   const aggregateId = qualifyAggregateId('run', runId);
+  const ORIGIN = {
+    protocol: 'openai-responses',
+    requestedModel: 'gpt-test',
+    deployment: {
+      endpoint: 'https://api.example.test/v1',
+      credentialScope: 'openai',
+    },
+    codecVersion: 1,
+  } as const;
+  const INVOCATION = {
+    invocationId: '0f1e2d3c-4b5a-4a9b-8c7d-6e5f4a3b2c1d',
+    attempt: 1,
+  } as const;
+  const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
+  /** The provider's turn: a message and two `bash` calls. */
+  const TURN = {
+    kind: 'http',
+    providerResponseId: 'resp-1',
+    requestedOrigin: ORIGIN,
+    returnedModel: null,
+    modelFingerprint: null,
+    content: [
+      { kind: 'message', content: [{ kind: 'text', text: 'running ls' }] },
+      {
+        kind: 'local-call',
+        providerCallId: 'call-a',
+        name: 'bash',
+        argumentsText: '{"command":"ls"}',
+      },
+      {
+        kind: 'local-call',
+        providerCallId: 'call-b',
+        name: 'bash',
+        argumentsText: '{"command":"ls"}',
+      },
+    ],
+    finishReason: 'tool-calls',
+    usage: {
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      cachedInputTokens: 4,
+      cacheWriteTokens: null,
+      reasoningTokens: null,
+      toolUsePromptTokens: null,
+    },
+  } as const;
+  /** The dispatch facts: two barrier calls, the second a duplicate of the
+   *  first. */
+  const CALLS = [
+    {
+      callId: 'call-a',
+      toolName: 'bash',
+      lane: 'barrier',
+      replay: 'unsafe',
+      duplicateOf: null,
+      logId: 'card-0',
+    },
+    {
+      callId: 'call-b',
+      toolName: 'bash',
+      lane: 'barrier',
+      replay: 'unsafe',
+      duplicateOf: 'call-a',
+      logId: 'card-1',
+    },
+  ] as const;
+  /** What the writer stamps beside `calls`: the runtime's priced usage. */
+  const TURN_USAGE = {
+    inputTokens: 10,
+    outputTokens: 5,
+    cost: 0.25,
+    responseTimeMs: 1200,
+    provider: 'openai-responses',
+    cachedInputTokens: 4,
+    cacheMissInputTokens: 6,
+  } as const;
   const append: HistoryDraft<'model.message'> = {
     type: 'model.message',
     aggregateId,
