@@ -52,12 +52,12 @@ export type ResumeHandOff =
   | { readonly failed: ResumeRefusal }
   | { readonly ownedBy: RunId };
 
-/** What a resume's caller supplies: the run's extra tools, the provider
- *  keys of the environment it resumes from, its progress callback, and
- *  whether it stops after one cycle. It resumes in the caller's session. */
+/** What a resume's caller supplies: the run's extra tools, its progress
+ *  callback, and whether it stops after one cycle. It resumes in the
+ *  caller's session, with the caller's `LaunchKeys`. */
 export interface ResumeRunOptions extends Pick<
   ExecuteAgentOptions,
-  'tools' | 'apiKeys' | 'onProgress'
+  'tools' | 'onProgress'
 > {
   /** Stop the run after one model/tool cycle instead of waiting for
    *  follow-up input. */
@@ -261,7 +261,6 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   });
   return yield* executeAgent(definition, runId, {
     tools: options.tools,
-    apiKeys: options.apiKeys,
     onProgress: options.onProgress,
     parentRunId,
   });
