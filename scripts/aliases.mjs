@@ -18,19 +18,19 @@ const rootDir = resolve(__dirname, '..');
  * tsconfig format: { "@alias/*": ["src/path/*"] }
  * output format:   { "@alias": "/absolute/path/to/src/path" }
  */
-export const aliases = loadAliases(rootDir);
+export const aliases = Object.freeze(loadAliases(rootDir));
 
 /**
  * Packages a Vite build resolves from the project root, so the sources it
  * pulls in from several workspace packages share one copy: Web Awesome and
  * Lit define their custom elements once, and the signals share one graph.
  */
-export const dedupe = [
+export const dedupe = Object.freeze([
   '@awesome.me/webawesome',
   '@lit-labs/signals',
   'lit',
   'signal-polyfill',
-];
+]);
 
 /**
  * Root directory of the project.

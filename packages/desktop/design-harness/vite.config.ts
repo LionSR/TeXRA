@@ -11,6 +11,6 @@ export default defineConfig({
   },
   resolve: {
     alias: aliases,
-    dedupe,
+    dedupe: [...dedupe],
   },
 });
