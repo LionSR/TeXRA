@@ -20,7 +20,7 @@ import {
 import type { ModelRoute } from './modelRoute.js';
 
 /** The effort used when neither the caller nor the user names one. */
-const DEFAULT_EFFORT = ReasoningEffort.MEDIUM;
+export const DEFAULT_EFFORT = ReasoningEffort.MEDIUM;
 
 /**
  * The ChatGPT plan route's effort ceiling, applied through the one reasoning

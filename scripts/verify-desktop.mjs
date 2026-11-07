@@ -1259,8 +1259,9 @@ async function createIsolation(root, rememberOpenProject) {
   await Promise.all(
     Object.values(paths).map((path) => mkdir(path, { recursive: true })),
   );
-  // Seed the same private SQLite record read by desktop startup.
-  await rememberOpenProject(paths.userData, paths.workspace);
+  // Seed the same private SQLite record read by desktop startup, in the data
+  // root the isolated home gives the app.
+  await rememberOpenProject(join(profile, '.texra'), paths.workspace);
   return paths;
 }
 
@@ -1393,7 +1394,7 @@ async function smokePackagedLaunch(args) {
   const label = 'Desktop package launch smoke';
   const desktopRequire = createRequire(join(desktopRoot, 'package.json'));
   const { _electron: electron } = desktopRequire('@playwright/test');
-  const { buildDesktopSmokeEnvironment, rememberOpenProject } =
+  const { buildDesktopSmokeEnvironment, rememberOpenProject, stopServices } =
     await import('./desktop-package-smoke-environment.mjs');
 
   let executablePath;
@@ -1413,6 +1414,7 @@ async function smokePackagedLaunch(args) {
     phase = 'launching packaged Electron app';
     application = await electron.launch({
       executablePath,
+      args: [`--user-data-dir=${paths.userData}`],
       cwd: paths.workspace,
       env: buildDesktopSmokeEnvironment(process.env, paths),
       timeout: READINESS_TIMEOUT_MS,
@@ -1466,6 +1468,8 @@ async function smokePackagedLaunch(args) {
 
     if (temporaryRoot) {
       try {
+        // The app's detached service outlives it; it goes before its home.
+        await stopServices(join(temporaryRoot, 'profile', '.texra'));
         await rm(temporaryRoot, {
           force: true,
           maxRetries: 3,

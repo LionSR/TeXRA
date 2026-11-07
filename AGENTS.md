@@ -28,7 +28,7 @@ npm run typecheck         # builds do NOT type check, see below
 npm run gate              # the static CI jobs: lint + invariants, docs, typecheck + format
 npm run test:watch        # while editing: reruns what a save reaches
 npm run test:changed      # before a commit: suites reachable from uncommitted edits
-npm run test:pure         # before a push (~30s): the host-free tier
+npm run test:pure         # before a push (~5s): the host-free tier
 npm test                  # before opening a PR: the full suite, with the crash
                           # conformance replays the two loops above leave out
 npm run format

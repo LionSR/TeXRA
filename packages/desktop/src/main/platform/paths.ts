@@ -1,10 +1,9 @@
 import { dirname, join } from 'node:path';
 
-import { Config, Effect, FileSystem, Option, Schema } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 
 import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness/host';
 import { absentReason, pathExists } from '@texra-ai/harness/node';
-import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 
 /** The app's resources directory holds no bundled agents. */
 class DesktopResourcesNotFound extends Schema.TaggedError<DesktopResourcesNotFound>()(
@@ -13,30 +12,6 @@ class DesktopResourcesNotFound extends Schema.TaggedError<DesktopResourcesNotFou
     message: Schema.String,
   },
 ) {}
-
-/**
- * Root directory for desktop-persisted memory/history/executions data.
- *
- * Production desktop shares the CLI's `~/.texra` root ({@link
- * defaultNodeStorageRoot}) so a workspace worked on from both hosts shows
- * one memory/history view (#7987). The e2e/dev harness isolates Electron's
- * own `userData` profile via `TEXRA_DESKTOP_E2E_USER_DATA_PATH` (see
- * `packages/desktop/src/main/bootstrap.ts`) so relaunches share one throwaway
- * profile without ever touching a developer's real `~/.texra`; when that var
- * is set, the data root stays colocated with that same isolated profile
- * (`userDataPath` is already the isolated path by the time this runs). The
- * variable comes from the ambient Effect `ConfigProvider`.
- */
-export const resolveDesktopDataRoot = Effect.fn('resolveDesktopDataRoot')(
-  function* (userDataPath: string) {
-    const e2eUserDataPath = yield* Config.String(
-      'TEXRA_DESKTOP_E2E_USER_DATA_PATH',
-    ).pipe(Config.option, Effect.orDie);
-    return Option.getOrUndefined(e2eUserDataPath)?.trim()
-      ? userDataPath
-      : defaultNodeStorageRoot();
-  },
-);
 
 /**
  * The directory holding the built main bundle: the nearest of `startDir` and

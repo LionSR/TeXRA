@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 95
+Exports: 96
 
 - `acceptedEfforts` — `function acceptedEfforts: (config: Pick<ModelConfig, "provider" | "reasoning">, route?: Pick<ModelRoute, "kind"> | undefined) => ReasoningEffort[]`
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
@@ -32,6 +32,7 @@ Exports: 95
 - `CredentialRoute` — `type CredentialRoute = Exclude<ModelRoute, { kind: 'no-api-key' | 'unserved'; }>; ≡ CredentialRoute`
 - `CredentialStore` — `interface CredentialStore { get(name: string): Effect.Effect<string | undefined, SecretsFailed>; set(name: string, value: string): Effect.Effect<void, SecretsFailed>; delete(name: string): Effect.Effect<void, SecretsFailed>; }`
 - `decideModelRoute` — `function decideModelRoute: (config: ModelConfig, facts: RouteFacts) => ModelRoute`
+- `DEFAULT_EFFORT` — `const DEFAULT_EFFORT: ReasoningEffort.MEDIUM`
 - `DEFAULT_MODEL_CAPABILITIES` — `const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities`
 - `EFFORT_SCALE` — `const EFFORT_SCALE: readonly ReasoningEffort[]`
 - `exposeApiKey` — `function exposeApiKey: (key: Redacted<string>) => string`

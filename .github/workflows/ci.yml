@@ -286,8 +286,17 @@ jobs:
 
       # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039); the
       # shards exist because a single runner can't go wider than that.
-      - name: Kernel tests
-        run: pnpm run test --maxWorkers=2 --shard=${{ matrix.shard }}/2
+      # The projects that share a module registry run in a new file order
+      # each time, so a suite that leaks process-wide state into the next
+      # fails here; the log's "Running tests with seed" line replays the
+      # order with --sequence.seed. Vitest picks one order for a whole run,
+      # so the other two projects keep the duration order in their own step.
+      - name: Kernel tests, shuffled
+        run: pnpm run test --project pure --project kernel --sequence.shuffle.files --maxWorkers=2 --shard=${{ matrix.shard }}/2
+
+      - name: Isolated and crash tests
+        if: ${{ !cancelled() }}
+        run: pnpm run test --project isolated --project crash --maxWorkers=2 --shard=${{ matrix.shard }}/2
 
   build:
     name: build artifacts (linux)
