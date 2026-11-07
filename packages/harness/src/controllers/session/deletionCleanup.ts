@@ -31,7 +31,12 @@ import {
   type RunId,
   type SessionRow,
 } from '@shared/schemas';
-import type { AggregateState, Database } from '@shared/session/database';
+import {
+  DatabaseAggregateClosed,
+  RunChanged,
+  type AggregateState,
+  type Database,
+} from '@shared/session/database';
 import {
   Rejected,
   RunActive,
@@ -127,8 +132,8 @@ export interface DeletionCollector {
 /**
  * The session's deletion collector, bound to the caller's scope: one fiber
  * there collects each marker handed to `removed`, in commit order. Every
- * step of a collection may run twice, in one process or two, so a marker
- * the open pass and the fiber both take collects once; a failed record
+ * step of a collection may run twice (the open's pass and the fiber can both
+ * take a marker), so such a marker collects once; a failed record
  * stays closed and pending for the next session's pass, and a failed read
  * of the records is logged.
  */
@@ -253,9 +258,15 @@ export const deleteAdmittedRun = (
       .pipe(
         Effect.mapError((error): RequestError => {
           if (error instanceof RunLive) return new RunActive({ runId });
+          const noun = runNoun(deps.view, runId);
           return new Unavailable({
             runId,
-            reason: `The ${runNoun(deps.view, runId)} could not be removed from the listing.`,
+            reason:
+              error instanceof RunChanged
+                ? `The ${noun} started again since its deletion was asked for; nothing was removed.`
+                : error instanceof DatabaseAggregateClosed
+                  ? `The ${noun} is already removed.`
+                  : `The ${noun} could not be removed from the listing.`,
           });
         }),
       );

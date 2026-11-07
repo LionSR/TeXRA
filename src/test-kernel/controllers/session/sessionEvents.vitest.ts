@@ -37,6 +37,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Result,
   Schema,
   Stream,
   SubscriptionRef,
@@ -278,15 +279,13 @@ const graph = (
   );
 };
 
-/** The run history as the session builds it: over its store's log, whose
- *  tail is delivered, so a batch returns once the view folded it. */
+/** The run history as the session builds it: over its store's log, so a
+ *  batch returns once the view applied it. */
 const runHistoryOverStore = Layer.effect(
   RunHistory,
-  Effect.gen(function* () {
-    const store = yield* makeSessionStore('/workspace/framing');
-    yield* store.deliver(() => {});
-    return makeRunHistory(store.log);
-  }),
+  Effect.map(makeSessionStore('/workspace/framing'), (store) =>
+    makeRunHistory(store.log),
+  ),
 ).pipe(Layer.provide(ProcessIdentity.layer(SELF)));
 
 /** What a renderer would draw of each state: the run's status and the
@@ -809,21 +808,33 @@ describe('the session event table and its one publisher', () => {
         expect(first.every((e) => e.origin === SELF && e.at === now)).toBe(
           true,
         );
-        // One wake per committed batch, independent of its event ordinal.
-        expect(yield* SubscriptionRef.get(db.level)).toBe(2);
         expect(yield* db.currentCommit).toBe(4);
         // A run begins with exactly one `run.start` (decision 9): a second
-        // creation of a live run is refused, and the sequence it allocated
-        // rolls back with it.
-        expect((yield* Effect.flip(db.appendAll([runStart])))._tag).toBe(
-          'DatabaseWriteFailed',
-        );
+        // creation of a live run is the caller's defect, and the sequence it
+        // allocated rolls back with it.
+        const again = yield* Effect.exit(db.appendAll([runStart]));
+        expect(Exit.isFailure(again) && Cause.hasDies(again.cause)).toBe(true);
         expect((yield* db.appendAll([waiting]))[0]?.seq).toBe(4);
         expect(yield* db.currentCommit).toBe(5);
-        expect(yield* SubscriptionRef.get(db.level)).toBe(3);
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
+
+  it.effect('fails the read of a value that no longer decodes, typed', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const db = yield* Database;
+      const name = 'regression-family';
+      yield* db.values.modify({ name, schema: Schema.String }, 'k', () =>
+        Result.succeed(['written', 'a string'] as const),
+      );
+      // The same family read with a schema its stored value fails.
+      const failed = yield* Effect.flip(
+        db.values.get({ name, schema: Schema.Finite }, 'k'),
+      );
+      expect(failed._tag).toBe('DatabaseReadFailed');
+    }).pipe(Effect.provide(substrate(storage)));
+  });
 
   it.effect('reopens at the committed ordinal and never reuses one', () => {
     const storage = workspace();
@@ -1111,7 +1122,7 @@ describe('the session event table and its one publisher', () => {
         }),
       );
       expect(yield* first.aggregateState([root, inquiry])).toEqual([]);
-      // Collecting it again, as a second process would, is a no-op.
+      // Collecting it again, as the open's pass would, is a no-op.
       const again = vi.fn(() => Effect.void);
       yield* first.deletions.collect(tombstone, again);
       expect(again).not.toHaveBeenCalled();
@@ -1119,10 +1130,12 @@ describe('the session event table and its one publisher', () => {
         olderStart.aggregateId,
         unrelated.aggregateId,
       ]);
+      // A removal admitted against the run's earlier lifetime is refused as
+      // such, never as a failed write.
       const replacement = yield* first.appendAll([runStart]);
       expect(
         (yield* Effect.flip(first.runRemoval(root, initialCommit)))._tag,
-      ).toBe('DatabaseWriteFailed');
+      ).toBe('RunChanged');
       expect(yield* first.readAggregate(root, 0, ROW_TYPES)).toEqual(
         replacement,
       );

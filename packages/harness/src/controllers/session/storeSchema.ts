@@ -110,11 +110,13 @@ const TABLES = [
 /**
  * What any build adds without a bump (`CREATE … IF NOT EXISTS` at every
  * open): the projection tables, which carry their own versions in
- * `projection_state` (`projections.ts`), the indexes, each serving one
- * lookup the reads make, named for the columns it keys, and the change
- * record: each aggregate's last insert, close or collection (a collection
- * leaves no row of its own) under an ordinal AUTOINCREMENT never reuses,
- * kept by triggers for every writer.
+ * `projection_state` (`projections.ts`), and the indexes, each serving one
+ * lookup the reads make, named for the columns it keys.
+ *
+ * `aggregate_change` and its triggers are dead: nothing reads them since the
+ * publisher publishes what it commits. They stay in the 1.0 baseline's DDL,
+ * because an open never alters a stamped store, and go with the next stamp
+ * bump.
  */
 const ADDITIVE = [
   `CREATE TABLE IF NOT EXISTS aggregate_change (change INTEGER PRIMARY KEY

@@ -73,6 +73,7 @@ export type {
   AggregateState,
   DatabaseAggregateClosed,
   InputHistoryRecord,
+  RunChanged,
   SessionStoreMovedAside,
 } from '@shared/session/database';
 // Where a run stands, the pair of `RunView` fields a renderer reads.

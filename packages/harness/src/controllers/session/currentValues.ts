@@ -4,8 +4,9 @@
  * `input_history`. Each family's row is replaced in place in one
  * `BEGIN IMMEDIATE` with no aggregate claim, and decodes with its family's
  * schema where it is read; a row that no longer decodes fails that read.
- * `Database` hands it the connection's statements, transaction and wake
- * level, over which it also serves the values' change feed.
+ * `Database` hands it the connection's statements and transaction, and the
+ * counter of value writes its change feed wakes on: this module moves it
+ * for its own writes, the global store's poll for another process's.
  */
 import {
   Clock,
@@ -57,16 +58,23 @@ const decodeString = Schema.decodeUnknownSync(Schema.String);
 const decodeHistoryRecord = Schema.decodeUnknownSync(InputHistoryRecordSchema);
 
 /** One current value, decoded by its family's schema; one that no longer
- *  decodes fails the read naming itself. A newer build's values refuse the
- *  store at open (`storeGate`), so no row read here is one. */
-function decodeValue<T>(family: ValueFamily<T>, row: SqlRow): T {
+ *  decodes fails the read naming itself, as a failure the read's caller
+ *  types, never a defect. A newer build's values refuse the store at open
+ *  (`storeGate`), so no row read here is one. */
+function decodeValue<T>(
+  family: ValueFamily<T>,
+  row: SqlRow,
+): Effect.Effect<T, Error> {
   const parsed = Schema.decodeUnknownResult(
     Schema.fromJsonString(family.schema),
   )(decodeString(row.value));
-  if (Result.isSuccess(parsed)) return parsed.success;
-  throw new Error(
-    `Stored ${family.name} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
-  );
+  return Result.isSuccess(parsed)
+    ? Effect.succeed(parsed.success)
+    : Effect.fail(
+        new Error(
+          `Stored ${family.name} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
+        ),
+      );
 }
 
 export function currentValues(store: {
@@ -89,11 +97,12 @@ export function currentValues(store: {
   readonly query: <A, E>(
     read: Effect.Effect<A, E>,
   ) => Effect.Effect<A, DatabaseReadFailed>;
-  readonly level: SubscriptionRef.SubscriptionRef<number>;
+  /** Moved once per committed value write. */
+  readonly written: SubscriptionRef.SubscriptionRef<number>;
   /** Record for the gate that a value was written at this build's version. */
   readonly valueWritten: Effect.Effect<void, SqlError>;
 }): Pick<Database['Service'], 'values' | 'inputHistory'> {
-  const { exec, execOne, transact, query, level, valueWritten } = store;
+  const { exec, execOne, transact, query, written, valueWritten } = store;
   const valueRow = (family: string, key: string) =>
     execOne(
       'SELECT key, value FROM current_value WHERE family = ? AND key = ?',
@@ -103,17 +112,19 @@ export function currentValues(store: {
     get: (family, key) =>
       query(
         valueRow(family.name, key).pipe(
-          Effect.map((row) =>
-            row === undefined ? undefined : decodeValue(family, row),
+          Effect.flatMap((row) =>
+            row === undefined ? Effect.undefined : decodeValue(family, row),
           ),
         ),
       ),
-    modify: (family, key, change) =>
-      transact(
+    modify: (family, key, change) => {
+      let wrote = false;
+      return transact(
         Effect.gen(function* () {
+          wrote = false;
           const row = yield* valueRow(family.name, key);
           const result = change(
-            row === undefined ? undefined : decodeValue(family, row),
+            row === undefined ? undefined : yield* decodeValue(family, row),
           );
           if (Result.isFailure(result) || result.success.length === 1)
             return result;
@@ -123,11 +134,12 @@ export function currentValues(store: {
               'DELETE FROM current_value WHERE family = ? AND key = ?',
               [family.name, key],
             );
+            wrote = row !== undefined;
             return result;
           }
-          const value = Schema.encodeSync(Schema.fromJsonString(family.schema))(
-            next,
-          );
+          const value = yield* Schema.encodeEffect(
+            Schema.fromJsonString(family.schema),
+          )(next);
           if (row?.value !== value) {
             yield* exec(UPSERT_VALUE, [
               family.name,
@@ -136,24 +148,33 @@ export function currentValues(store: {
               yield* Clock.currentTimeMillis,
             ]);
             yield* valueWritten;
+            wrote = true;
           }
           return result;
         }),
       ).pipe(
+        Effect.tap(() =>
+          wrote
+            ? SubscriptionRef.update(written, (count) => count + 1)
+            : Effect.void,
+        ),
         Effect.flatMap(Effect.fromResult),
         Effect.map(([value]) => value),
-      ),
+      );
+    },
     list: (family) =>
       query(
         exec(
           'SELECT key, value FROM current_value WHERE family = ? ORDER BY at DESC',
           [family.name],
         ).pipe(
-          Effect.map((rows) =>
-            rows.map((row) => ({
-              key: decodeString(row.key),
-              value: decodeValue(family, row),
-            })),
+          Effect.flatMap((rows) =>
+            Effect.forEach(rows, (row) =>
+              Effect.map(decodeValue(family, row), (value) => ({
+                key: decodeString(row.key),
+                value,
+              })),
+            ),
           ),
         ),
       ),
@@ -161,7 +182,7 @@ export function currentValues(store: {
      *  failed read is logged and read again, holding the wake until it
      *  reads (the database poll's own backoff), so no change is missed. */
     changes: (family, keys) =>
-      SubscriptionRef.changes(level).pipe(
+      SubscriptionRef.changes(written).pipe(
         Stream.mapEffect(() =>
           exec(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
             Effect.map((rows) =>
