@@ -5,7 +5,7 @@ import { expect, vi } from 'vitest';
 
 // Local imports
 import { generateRunId } from '@texra-ai/harness/schemas';
-import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';

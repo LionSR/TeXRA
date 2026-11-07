@@ -23,7 +23,7 @@ type PendingToolEdit = Parameters<typeof requestToolEditApproval>[0];
 /** The process, over a fresh host for the test. */
 const perTest = Layer.provideMerge(
   SessionGraph.layer,
-  FakeHost.layer({ workspacePath: '/workspace', config: {}, files: {} }),
+  FakeHost.layer({ workspaceRoot: '/workspace', config: {}, files: {} }),
 );
 
 // Live clock: the sessions' publishers and readers run on real turns.

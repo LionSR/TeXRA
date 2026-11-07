@@ -16,7 +16,7 @@ import { Inbox } from '@agent/followUp/Inbox';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { checkpointRefusal } from '@agent/storage/resumability';
 import { deliveryId, endRunRows } from '@agent/storage/runLifecycle';
-import { owningCall } from '@agent/storage/runRecords';
+import { owningCall } from '@agent/storage/runOwnership';
 import { withLogChannel } from '@logger/effectLog';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';

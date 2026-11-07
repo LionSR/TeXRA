@@ -18,7 +18,7 @@ import {
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
 
 interface DesktopAppLogModule {
-  readDesktopLogSnapshot(options: { workspacePath?: string | undefined }): {
+  readDesktopLogSnapshot(options: { workspaceRoot?: string | undefined }): {
     path: string;
     text: string;
     truncated: boolean;
@@ -67,7 +67,7 @@ describe('desktop app log', () => {
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
 
     const snapshot = readDesktopLogSnapshot({
-      workspacePath: 'C:\\work\\project',
+      workspaceRoot: 'C:\\work\\project',
     });
 
     expect(snapshot.text).toMatch(/^Opened \[path\][\\/]+paper\.tex$/);

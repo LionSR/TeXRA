@@ -104,7 +104,7 @@ import {
   checkRecordedRequest,
   type InvokeRequest,
 } from './run/requestContext';
-import { providerMessages } from './storedTurn';
+import { providerMessages } from './providerMessages';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
 import { positionRow } from './loop/rows';
 import type { SessionServices } from './rootLaunch';

@@ -708,7 +708,7 @@ function formatToolOutput(
 
 ## getGitignoreMatcher
 
-Build the ignore matcher for `workspacePath` from its ignore policy files.
+Build the ignore matcher for `workspaceRoot` from its ignore policy files.
 The root is the caller's — the `WorkspaceFs` of the session the call works
 on — rather than whichever roots the calling fiber carries, so a listing
 and the policy that filters it name the same workspace. Read on every call:
@@ -716,7 +716,7 @@ a process serves several projects, and each call should see the policy as
 it is on disk now.
 
 ```ts
-const getGitignoreMatcher: (workspacePath: string | undefined) => Effect<GitignoreMatcher, PlatformError, FileSystem>
+const getGitignoreMatcher: (workspaceRoot: string | undefined) => Effect<GitignoreMatcher, PlatformError, FileSystem>
 ```
 
 ## GitignoreMatcher

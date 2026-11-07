@@ -188,14 +188,14 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
   }
 
   const root = (yield* repositoryRoot(cwd, undefined)) ?? cwd;
-  const workflowAbsPath = path.join(root, WORKFLOW_RELATIVE_PATH);
+  const documentTaskAbsPath = path.join(root, WORKFLOW_RELATIVE_PATH);
 
   // An unreadable workflow path is the command's failure, reported by the
   // `catchExitCode` below; only "not there" is an answer.
-  const workflowExists = yield* FileSystem.FileSystem.use((fs) =>
-    pathExists(fs, workflowAbsPath),
+  const documentTaskExists = yield* FileSystem.FileSystem.use((fs) =>
+    pathExists(fs, documentTaskAbsPath),
   );
-  if (workflowExists && !opts.force) {
+  if (documentTaskExists && !opts.force) {
     writeTextStderr(
       `${WORKFLOW_RELATIVE_PATH} already exists. Re-run with --force to overwrite it.`,
     );
@@ -253,9 +253,11 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
   // failure is the abort message below, not the command's error channel.
   const writeFailure = yield* FileSystem.FileSystem.use((fs) =>
     fs
-      .makeDirectory(path.dirname(workflowAbsPath), { recursive: true })
+      .makeDirectory(path.dirname(documentTaskAbsPath), { recursive: true })
       .pipe(
-        Effect.andThen(fs.writeFileString(workflowAbsPath, WORKFLOW_TEMPLATE)),
+        Effect.andThen(
+          fs.writeFileString(documentTaskAbsPath, WORKFLOW_TEMPLATE),
+        ),
       ),
   ).pipe(
     Effect.uninterruptible,
@@ -289,8 +291,8 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
     );
   }
 
-  const hasWorkflowChanges = diff.exitCode === 1;
-  if (hasWorkflowChanges) {
+  const hasDocumentTaskChanges = diff.exitCode === 1;
+  if (hasDocumentTaskChanges) {
     const commit = yield* git(
       root,
       'commit',

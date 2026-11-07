@@ -28,7 +28,7 @@ import {
 import {
   toErrorMessage,
   agentKeyOf,
-  DEFAULT_WORKFLOW_AGENT,
+  DEFAULT_TASK_AGENT,
   type FileListEntry,
 } from '@texra-ai/harness/schemas';
 import type { AgentOptionData } from '@texra/shared/pickerOptions';
@@ -48,7 +48,7 @@ export const documentTaskOf = (
  *  name. */
 const PREFERRED_AGENTS: readonly string[] = [
   ...PREFERRED_TOOL_USE_AGENTS,
-  DEFAULT_WORKFLOW_AGENT,
+  DEFAULT_TASK_AGENT,
 ];
 const preferredRank = ({ name }: AgentEntry) => {
   const rank = PREFERRED_AGENTS.indexOf(name);

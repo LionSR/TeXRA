@@ -23,7 +23,7 @@ vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
 
 /** The workspace and build folder of the test's host. */
 const hostDirs = Effect.map(FakeHost, (host) => ({
-  workspacePath: host.path('workspace'),
+  workspaceRoot: host.path('workspace'),
   buildDir: host.path('workspace', 'build'),
 }));
 
@@ -48,9 +48,9 @@ const engineExits = (buildDir: string, pdf?: string) =>
  *  host's roots, as a session hands them. */
 const compileMain = Effect.gen(function* () {
   const { roots } = yield* FakeHost;
-  const { workspacePath, buildDir } = yield* hostDirs;
+  const { workspaceRoot, buildDir } = yield* hostDirs;
   return yield* compileLatex2Pdf(
-    pathToLocationIn(roots.workspace, path.join(workspacePath, 'main.tex')),
+    pathToLocationIn(roots.workspace, path.join(workspaceRoot, 'main.tex')),
     roots,
     { outputDirectory: buildDir },
   ).pipe(Effect.provide(rootedFsLayer(roots)));
@@ -69,7 +69,7 @@ layer(FakeHost.layer({ app: TEXRA_APP }), {
     'returns { ok: true } with the engine PDF path and no logTail on success',
     () =>
       Effect.gen(function* () {
-        const { workspacePath, buildDir } = yield* hostDirs;
+        const { workspaceRoot, buildDir } = yield* hostDirs;
         mocks.runTool.mockReturnValue(engineExits(buildDir, '%PDF-1.5'));
 
         const result = yield* compileMain;
@@ -86,12 +86,12 @@ layer(FakeHost.layer({ app: TEXRA_APP }), {
           'latexmk',
           expect.any(Array),
           expect.objectContaining({
-            cwd: workspacePath,
+            cwd: workspaceRoot,
             // latexmk's engine passes are its children: a stop signals them.
             killProcessTree: true,
             env: expect.objectContaining({
               TEXINPUTS: expect.stringContaining(
-                `${workspacePath}${D}.${D}${workspacePath}${D}`,
+                `${workspaceRoot}${D}.${D}${workspaceRoot}${D}`,
               ),
             }),
           }),

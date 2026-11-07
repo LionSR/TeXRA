@@ -10,7 +10,7 @@ import { describe, expect } from 'vitest';
 
 import { AppState } from '@texra-ai/harness/host';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
-import { globalDatabaseLayer } from '@controllers/session/Database';
+import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 

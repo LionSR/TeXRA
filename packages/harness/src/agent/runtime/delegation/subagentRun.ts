@@ -9,7 +9,7 @@ import { Effect, Schema } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@shared/schemas/agentConfig';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import {
   NO_APPROVAL_GRANTS,

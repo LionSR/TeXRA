@@ -11,7 +11,7 @@ import type { Surface } from '@texra/shared/session/surface';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
 import './ToolUseRunContent';
-import './WorkflowRunContent';
+import './DocumentTaskRunContent';
 import './ProcessRunContent';
 
 @customElement('run-conversation')
@@ -40,7 +40,7 @@ export class RunConversation extends LitElement {
     }
 
     tool-use-run-content,
-    workflow-run-content,
+    document-task-run-content,
     process-run-content {
       display: flex;
       flex: 1 1 auto;
@@ -70,12 +70,12 @@ export class RunConversation extends LitElement {
     }
 
     return run.recipe
-      ? html`<workflow-run-content
+      ? html`<document-task-run-content
           .run=${run}
           .view=${view}
           .surface=${surface}
           .host=${this.host}
-        ></workflow-run-content>`
+        ></document-task-run-content>`
       : html`<tool-use-run-content
           .run=${run}
           .view=${view}

@@ -19,7 +19,7 @@ import {
 } from 'effect';
 
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 import {
   ToolContext,
   type CallRequests,

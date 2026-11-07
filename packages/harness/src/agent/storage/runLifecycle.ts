@@ -44,7 +44,7 @@ import {
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionTransaction } from '@shared/session/sessionLog';
 import { ensureError } from '@utils/errors/errorMessage';
-import { getRunRecords } from './runRecords';
+import { getRunRecords } from './runOwnership';
 
 function pinRunWorkingDirectory(record: RunRecord, root?: string): RunRecord {
   // First non-blank wins, untrimmed: a trimmed path was once mangled.

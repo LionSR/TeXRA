@@ -1,6 +1,6 @@
 import { Context, Effect, SubscriptionRef } from 'effect';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 import { Inbox } from '@agent/followUp/Inbox';
 import {
   SessionRoots,

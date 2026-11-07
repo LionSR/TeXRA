@@ -4,8 +4,8 @@
 
 import { Effect, Result, Schema } from 'effect';
 
-import { runHistoryRows } from '@agent/runtime/storedTurn';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { runHistoryRows } from '@agent/runtime/providerMessages';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 import {
   isAgentRunRecord,
   type RunRecord,

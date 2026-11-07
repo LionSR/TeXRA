@@ -17,7 +17,7 @@ import {
 import {
   runOutcomeToCliRunStatus,
   type CliRunResult,
-  type CliWorkflowRunResult,
+  type CliDocumentTaskResult,
 } from '@cli/schemas/cliOutput';
 import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
@@ -28,7 +28,7 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 
 import { CliUsageError, type CliContext } from '../platform/cliContext';
-import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
+import { STDIN_WORKFLOW_INPUT_BASENAME } from './documentTaskInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 type OutputFlag = '--output' | '--output-dir';
@@ -187,7 +187,7 @@ export function assertOutputFileAvailable(
   );
 }
 
-interface WorkflowOutputResolutionOptions {
+interface DocumentTaskOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
   /** Storage root of the session that ran the workflow. */
   readonly storageRoot: string;
@@ -291,7 +291,7 @@ function copyOutputFile(
   );
 }
 
-export const resolveWorkflowOutput = Effect.fn('resolveWorkflowOutput')(
+export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
   function* (
     outputFile: string | undefined,
     outputDir: string | undefined,
@@ -300,8 +300,8 @@ export const resolveWorkflowOutput = Effect.fn('resolveWorkflowOutput')(
      *  before it extracted any. */
     reported: DocumentsResult | undefined,
     context: CliContext,
-    options: WorkflowOutputResolutionOptions,
-  ): Effect.fn.Return<CliWorkflowRunResult, Error, FileSystem.FileSystem> {
+    options: DocumentTaskOutputResolutionOptions,
+  ): Effect.fn.Return<CliDocumentTaskResult, Error, FileSystem.FileSystem> {
     // A recipe returns no value: its documents are its documents row.
     const { structured: _none, ...output } = result.output;
     const documents = reported ?? {
@@ -391,7 +391,9 @@ export const resolveWorkflowOutput = Effect.fn('resolveWorkflowOutput')(
   },
 );
 
-export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
+export function formatDocumentTaskTextResult(
+  result: CliDocumentTaskResult,
+): string {
   if (result.outcome === RUN_OUTCOME.FAILED) {
     // The reply of a failed run is its error (the uncompiled documents and
     // their logs), so the text result says it beside where the artifacts are.
@@ -421,7 +423,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   return finalOutput?.absolutePath ?? result.runDirectory;
 }
 
-export function resumeWorkflowOutputFile(
+export function resumeDocumentTaskOutputFile(
   config: AgentConfigPayload,
 ): string | undefined {
   if (!isTaskConfig(config)) return undefined;
@@ -449,7 +451,7 @@ export function resumeWorkflowOutputFile(
     : outputFile;
 }
 
-export function resumeWorkflowOutputDirectory(
+export function resumeDocumentTaskOutputDirectory(
   config: AgentConfigPayload,
 ): string | undefined {
   if (!isTaskConfig(config)) return undefined;

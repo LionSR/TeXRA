@@ -56,7 +56,7 @@ const fail = (session: Session, runId: RunId) =>
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'deriveResumability',
   (it) => {
-    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+    it.layer(FakeHost.layer({ workspaceRoot: '/workspace' }), {
       buildPerTest: true,
     })((it) => {
       it.effect('keeps a failed run resumable while its rows stand', () =>

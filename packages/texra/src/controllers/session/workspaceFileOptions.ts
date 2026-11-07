@@ -26,16 +26,16 @@ import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
 export const findLabelInWorkspace = Effect.fn(
   'workspaceFileOptions.findLabelInWorkspace',
 )(function* <OpenError, OpenServices>(
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
   label: string,
   open: (
     absolutePath: string,
     line: number,
   ) => Effect.Effect<unknown, OpenError, OpenServices>,
 ) {
-  if (!workspacePath) return false;
+  if (!workspaceRoot) return false;
   const [inputs, contexts] = yield* listWorkspaceFiles({
-    root: workspacePath,
+    root: workspaceRoot,
     configs: [getFileListConfig('input'), getFileListConfig('context')],
   });
   const workspaceFs = yield* WorkspaceFs;
@@ -55,12 +55,12 @@ export const findLabelInWorkspace = Effect.fn(
  *  them to the chosen base. */
 export const workspaceFileOptions = Effect.fn(
   'workspaceFileOptions.workspaceFileOptions',
-)(function* (workspacePath: string | undefined) {
-  if (!workspacePath) {
+)(function* (workspaceRoot: string | undefined) {
+  if (!workspaceRoot) {
     return { baseFile: [], editedFile: [], commit: ['HEAD'] };
   }
   const [baseFile, editedFile] = yield* listWorkspaceFiles({
-    root: workspacePath,
+    root: workspaceRoot,
     configs: [getFileListConfig('input'), getEditedFileListConfig()],
   });
   return { baseFile, editedFile, commit: ['HEAD'] };

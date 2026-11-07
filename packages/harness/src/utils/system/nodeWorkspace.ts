@@ -18,15 +18,15 @@ import { canonicalizePath } from '@utils/files/externalRoots';
  * ancestor still opens, keyed by its resolved spelling. Every other failure
  * propagates.
  */
-export function canonicalizeWorkspacePath(workspacePath: string): string {
+export function canonicalizeWorkspacePath(workspaceRoot: string): string {
   let canonical: string;
   try {
-    canonical = canonicalizePath(workspacePath);
+    canonical = canonicalizePath(workspaceRoot);
   } catch (error) {
     const code =
       error instanceof Error && 'code' in error ? error.code : undefined;
     if (code !== 'EACCES' && code !== 'EPERM') throw error;
-    canonical = path.resolve(workspacePath);
+    canonical = path.resolve(workspaceRoot);
   }
   return /^[a-z]:[\\/]/.test(canonical) ? Str.capitalize(canonical) : canonical;
 }

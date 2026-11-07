@@ -192,7 +192,7 @@ export function App(props: AppProps): React.JSX.Element {
   const scriptPopup = useSignal(scriptPopupViewSignal);
   // The active run's transcript holds a script's calls: Ctrl-O shows them.
   const scriptAvailable =
-    activeRun?.transcript.taskGroups.some((group) => group.kind === 'script') ??
+    activeRun?.transcript.stages.some((group) => group.kind === 'script') ??
     false;
   // Kill, skip and retry; a refusal (a finished call) reads into the transcript.
   const request = (req: RuntimeCommand): void => {

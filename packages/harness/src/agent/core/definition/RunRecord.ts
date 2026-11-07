@@ -3,7 +3,7 @@ import type {
   RunRecordFieldsSchema,
 } from '@shared/schemas';
 
-import type { AgentConfig } from './AgentConfig';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 
 /**
  * The canonical run configuration (`RunRecordFieldsSchema`, the `run.config`

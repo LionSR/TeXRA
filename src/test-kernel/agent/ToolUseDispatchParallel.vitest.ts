@@ -341,7 +341,7 @@ const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool-use dispatch',
   (it) => {
-    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+    it.layer(FakeHost.layer({ workspaceRoot: '/workspace' }), {
       buildPerTest: true,
     })((it) => {
       // Failure modes: a SQL page reaches the guest as display text, losing its

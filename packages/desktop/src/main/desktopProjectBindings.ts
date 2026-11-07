@@ -219,7 +219,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       );
       const hosts = host.forProject(project);
       const files = createDesktopFileSelection({
-        workspacePath: project.root,
+        workspaceRoot: project.root,
         showOpenFileDialog: host.openFileDialog,
       });
       yield* Effect.forkScoped(workspace.followFilesWritten, {

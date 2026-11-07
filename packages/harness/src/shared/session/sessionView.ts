@@ -26,7 +26,7 @@ import {
   RunOutcomeSchema,
   RunPositionSchema,
   RunIdSchema,
-  TaskGroupSchema,
+  StageSchema,
   TokenUsageStatsSchema,
   WorktreeInfoSchema,
   type RequestPayload,
@@ -60,7 +60,7 @@ const TranscriptViewSchema = Schema.Struct({
    *  in first-appearance order. */
   rows: Schema.Array(Schema.declare((_u): _u is TranscriptRow => true)),
   /** One group per stage: opened by `stage.start`, closed by `stage.end`. */
-  taskGroups: Schema.Array(TaskGroupSchema),
+  stages: Schema.Array(StageSchema),
   /** The contiguous leading prefix of rows whose finalizing event has been
    *  applied: what an append-only scrollback may print. */
   settledRows: Count,
@@ -73,7 +73,7 @@ export const RunViewSchema = Schema.Struct({
   id: RunIdSchema,
   /** From `run.start`; every run has one. */
   identity: RunIdentitySchema,
-  /** The run identity's display name: agent, tool, or workflow name. */
+  /** The run identity's display name: agent, tool, or script name. */
   label: Schema.String,
   /** The run's title: the user's rename, else the AI one-liner. */
   description: Schema.NullOr(Schema.String),
@@ -173,7 +173,7 @@ export const RunViewSchema = Schema.Struct({
   thinkingActive: Schema.Boolean,
   /** A context compaction is in progress. */
   compactingActive: Schema.Boolean,
-  /** The run's latest line: a workflow run's newest operational summary,
+  /** The run's latest line: a script run's newest operational summary,
    *  any other run's newest user instruction or settled model reply. */
   latestLine: Schema.NullOr(Schema.String),
   transcript: TranscriptViewSchema,

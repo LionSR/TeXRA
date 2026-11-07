@@ -43,15 +43,15 @@ export const RunPositionSchema = Schema.Literals([
 export type RunPosition = typeof RunPositionSchema.Type;
 
 /**
- * A task group's status (`TaskGroupSchema.status`, from `stage.start` and
+ * A stage's status (`StageSchema.status`, from `stage.start` and
  * `stage.end` rows, and the run's end for a group still open): running, or
  * the outcome it closed with.
  */
-export const TaskGroupStatusSchema = Schema.Union([
+export const StageStatusSchema = Schema.Union([
   Schema.Literal('running'),
   RunOutcomeSchema,
 ]);
-export type TaskGroupStatus = typeof TaskGroupStatusSchema.Type;
+export type StageStatus = typeof StageStatusSchema.Type;
 
 export const WorktreeInfoSchema = Schema.Struct({
   /** Absolute path of the worktree the agent is operating in. */

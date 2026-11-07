@@ -1,13 +1,13 @@
 /**
  * The one transcript reducer: session events straight to a run's
- * `TranscriptView` (rows, task groups, compaction blocks) and the run model's
+ * `TranscriptView` (rows, stages, compaction blocks) and the run model's
  * inputs. The session view's updater runs it for every subscribed run, and
  * `buildRunTranscript` runs the same reducer over one aggregate's committed
  * rows where no view holds the run, so live and cold reads cannot drift.
  *
  * The caller supplies each event's clock and id, and the reducer owns no
  * clock, timer, IO, or durable write. Each event type writes the value the
- * event means: a stage its task group and heading, a tool card its row from
+ * event means: a stage its stage and heading, a tool card its row from
  * one decode, a stream its text row, a `log` row its decoded payload
  * (`transcriptLogRows.ts`). The working state lives in `transcriptState.ts`.
  */
@@ -18,7 +18,7 @@ import {
   isPlainAgentIdentity,
   isTranscriptEvent,
   type SessionRow,
-  type TaskGroup,
+  type Stage,
   type ToolUseLog,
   type TraceRowFields,
 } from '@shared/schemas';
@@ -50,22 +50,22 @@ import {
 import { standingAfter, type RunStanding } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
-/** A stage start opens its task group whole; a stage end closes the group
+/** A stage start opens its stage whole; a stage end closes the group
  *  its start opened and writes nothing for a group no start opened. A
  *  group's parent is a group this transcript opened, or it has none. */
-function applyTaskGroup(
+function applyStage(
   d: Draft,
   event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
 ): void {
-  const at = d.ix.taskGroupIndex.get(event.id);
-  let group: TaskGroup;
+  const at = d.ix.stageIndex.get(event.id);
+  let group: Stage;
   if (event.type === 'stage.start') {
     group = {
       id: event.id,
       name: event.label,
       startTime: d.at,
       status: 'running',
-      ...(event.parentId && d.ix.taskGroupIndex.has(event.parentId)
+      ...(event.parentId && d.ix.stageIndex.has(event.parentId)
         ? { parentGroupId: event.parentId }
         : {}),
       ...(event.kind != null ? { kind: event.kind } : {}),
@@ -73,14 +73,14 @@ function applyTaskGroup(
   } else {
     if (at === undefined) return;
     group = {
-      ...d.next.taskGroups[at],
+      ...d.next.stages[at],
       status: event.status,
       endTime: d.at,
     };
   }
-  const groups = writableArray(d, d.next, 'taskGroups');
+  const groups = writableArray(d, d.next, 'stages');
   if (at !== undefined) groups[at] = group;
-  else d.ix.taskGroupIndex.set(event.id, groups.push(group) - 1);
+  else d.ix.stageIndex.set(event.id, groups.push(group) - 1);
   d.touched = true;
 }
 
@@ -119,14 +119,14 @@ function record(d: Draft, event: TraceRowFields): void {
         ),
         label: event.label,
       });
-      applyTaskGroup(d, event);
+      applyStage(d, event);
       return;
     }
 
     case 'stage.end': {
       const slot = ix.slots.get(event.id);
       if (slot?.kind === 'stage') write(d, slot);
-      applyTaskGroup(d, event);
+      applyStage(d, event);
       return;
     }
 
@@ -290,7 +290,7 @@ function closeText(
  *  transcript boundary: a waiting or ended run closes every open stream,
  *  fails every open card as cut by the run's end (`ToolRow.cutByRunEnd`)
  *  and finishes every open compaction as interrupted; an ended one also
- *  closes every open task group on its outcome, as the drain that ends a
+ *  closes every open stage on its outcome, as the drain that ends a
  *  run no driver holds does. */
 function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
   const { ix } = d;
@@ -320,14 +320,14 @@ function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
     d.touched = true;
   }
   const { outcome } = standing;
-  if (outcome === null || !d.next.taskGroups.some(isOpenGroup)) return;
-  d.next.taskGroups = d.next.taskGroups.map((group) =>
+  if (outcome === null || !d.next.stages.some(isOpenGroup)) return;
+  d.next.stages = d.next.stages.map((group) =>
     isOpenGroup(group) ? { ...group, status: outcome, endTime: d.at } : group,
   );
   d.touched = true;
 }
 
-const isOpenGroup = (group: TaskGroup): boolean => group.status === 'running';
+const isOpenGroup = (group: Stage): boolean => group.status === 'running';
 
 /**
  * Apply one session event to a run's transcript, advancing the run's working
@@ -399,7 +399,7 @@ export function buildRunTranscript(
   }
   const ctx: TranscriptContext = {
     debug,
-    lifecycleToTaskGroups: isPlainAgentIdentity(start.identity),
+    lifecycleStages: isPlainAgentIdentity(start.identity),
   };
   for (const event of events) {
     transcript = applyTranscriptEvent(transcript, work, event, ctx);

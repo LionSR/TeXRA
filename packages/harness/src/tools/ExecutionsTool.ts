@@ -20,7 +20,7 @@ import {
 
 // Local imports
 import { isDeliveryOf } from '@agent/storage/runLifecycle';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
@@ -416,7 +416,7 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
  *
  * The view is folded cold rather than read off the live projection, which
  * deliberately keeps only a bounded transcript for inactive runs: a
- * workflow's board would otherwise lose its terminal cards and its
+ * script's board would otherwise lose its terminal cards and its
  * board-level opened state. That board is why this is the one read on the
  * surface that names its run's aggregate; every other path here takes the
  * listing tier alone.

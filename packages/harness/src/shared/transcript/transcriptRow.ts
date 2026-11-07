@@ -92,7 +92,7 @@ export interface UserRow extends TranscriptRowBase {
   /** The message as its follow-up shows it: a delivery or notice is its
    *  summary (`FollowUpContent.displayText`), not its envelope. */
   readonly text: TranscriptText;
-  /** A workflow delivery's facts, typed. */
+  /** A script delivery's facts, typed. */
   readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>;
   /** Media that was sent to the model beside the text, by kind (no bytes). */
   readonly attachments?: readonly MediaAttachmentKind[];
@@ -229,7 +229,7 @@ export type TranscriptRowKind = TranscriptRow['kind'];
 
 /**
  * Kinds whose content is complete the moment the row appears. A tool call or a
- * workflow task is deliberately absent: it does reach a typed terminal state,
+ * script stage is deliberately absent: it does reach a typed terminal state,
  * but only in a position the producer chose, so it settles through
  * {@link isSettledRow} rather than on its own.
  */

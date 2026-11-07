@@ -48,7 +48,7 @@ const readGitignoreFile = Effect.fn('readGitignoreFile')(function* (
 });
 
 /**
- * Build the ignore matcher for `workspacePath` from its ignore policy files.
+ * Build the ignore matcher for `workspaceRoot` from its ignore policy files.
  * The root is the caller's — the `WorkspaceFs` of the session the call works
  * on — rather than whichever roots the calling fiber carries, so a listing
  * and the policy that filters it name the same workspace. Read on every call:
@@ -56,9 +56,9 @@ const readGitignoreFile = Effect.fn('readGitignoreFile')(function* (
  * it is on disk now.
  */
 export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(function* (
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
 ) {
-  if (!workspacePath) {
+  if (!workspaceRoot) {
     return EMPTY_GITIGNORE_MATCHER;
   }
 
@@ -68,8 +68,8 @@ export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(function* (
       home
         ? readGitignoreFile(path.join(home, '.gitignore_global'))
         : Effect.succeed(null),
-      readGitignoreFile(path.join(workspacePath, '.gitignore_global')),
-      readGitignoreFile(path.join(workspacePath, '.gitignore')),
+      readGitignoreFile(path.join(workspaceRoot, '.gitignore_global')),
+      readGitignoreFile(path.join(workspaceRoot, '.gitignore')),
     ],
     // The three policies were read together and fail fast, as Promise.all did.
     { concurrency: 'unbounded' },

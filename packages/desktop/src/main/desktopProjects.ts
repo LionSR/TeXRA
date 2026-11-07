@@ -357,7 +357,7 @@ export const openDesktopProjectRegistry: (
               },
             );
             const roots = yield* openNodeWorkspaceRoots({
-              workspacePath: root,
+              workspaceRoot: root,
               storageRoot: options.dataRoot,
               config: {
                 ...workspaceConfigs,

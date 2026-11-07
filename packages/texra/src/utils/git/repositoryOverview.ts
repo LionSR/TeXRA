@@ -82,15 +82,15 @@ interface GitRecentCommits {
 export const readRecentCommits = Effect.fn(
   'repositoryOverview.readRecentCommits',
 )(function* (
-  workspacePath: string,
+  workspaceRoot: string,
   limit: number,
   options: GitReadOptions,
 ): Effect.fn.Return<GitRecentCommits, never, ChildProcessSpawner> {
-  if (!(yield* isGitRepository(workspacePath, options.settings))) {
+  if (!(yield* isGitRepository(workspaceRoot, options.settings))) {
     return { commits: [], isGitRepo: false };
   }
   const output = yield* readGit(
-    workspacePath,
+    workspaceRoot,
     [
       // `--no-pager` is portable; Windows lacks `cat` on PATH (#3817).
       '--no-pager',

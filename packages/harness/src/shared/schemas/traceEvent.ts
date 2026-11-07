@@ -7,7 +7,7 @@ import { JsonValueSchema } from './jsonValue';
 import { FileListEntrySchema, LogLevelSchema, MessageTypeSchema } from './log';
 import { ToolCallStatusSchema, ToolCardSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
-import { StageKindSchema } from './taskGroup';
+import { StageKindSchema } from './stage';
 import { TokenUsageStatsSchema } from './usage';
 
 function trace<T extends string, const F extends Schema.Struct.Fields>(

@@ -53,7 +53,7 @@ ancestor still opens, keyed by its resolved spelling. Every other failure
 propagates.
 
 ```ts
-function canonicalizeWorkspacePath(workspacePath: string): string
+function canonicalizeWorkspacePath(workspaceRoot: string): string
 ```
 
 ## CommandDirs
@@ -492,7 +492,7 @@ What a Node host names to open one workspace folder's roots.
 interface NodeWorkspaceRootsInit {
   /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by
    *  the host where it reads it; undefined when no folder is open. */
-  readonly workspacePath: string | undefined;
+  readonly workspaceRoot: string | undefined;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
   /** The workspace, local and global config stores to build the file-backed
@@ -668,7 +668,7 @@ workspace's identity (`no-workspace` for none).
 ```ts
 function resolveWorkspaceStoragePath(
   storageRoot: string,
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
 ): string
 ```
 

@@ -34,7 +34,7 @@ export * from './runRecords';
 // Layer 3: Depends on layer 2
 export * from './log';
 export * from './logPayload';
-export * from './taskGroup';
+export * from './stage';
 export * from './plan';
 export * from './subagentProgress';
 export * from './requestPayloads';

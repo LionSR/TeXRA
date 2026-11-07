@@ -155,8 +155,8 @@ function buildOverleafClonePorts(
 
     showGitMissing: () =>
       Effect.provideService(promptGitMissing(), ChildProcessSpawner, spawner),
-    listWorkspaceEntries: (workspacePath) =>
-      workspaceFs.readDirectory(workspacePath),
+    listWorkspaceEntries: (workspaceRoot) =>
+      workspaceFs.readDirectory(workspaceRoot),
     showWorkspaceUnreadable: (e) =>
       Effect.logError(`readDir failed: ${toErrorMessage(e)}`).pipe(
         withLogChannel(CHANNEL),
@@ -169,13 +169,13 @@ function buildOverleafClonePorts(
     showWorkspaceNotEmpty: () =>
       showLoggedMessage('Workspace folder must be empty.').pipe(Effect.asVoid),
 
-    runClone: (clone, workspacePath) =>
+    runClone: (clone, workspaceRoot) =>
       withVSCodeProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: `Cloning ${remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX'}…`,
         },
-        () => gitClone(clone, workspacePath),
+        () => gitClone(clone, workspaceRoot),
       ),
     showCloneSucceeded: (label) =>
       Effect.forkDetach(
@@ -224,14 +224,14 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
     // so the emptiness check and the clone agree on one folder. The view is
     // the one the command root provided; this depth only reads it.
     const workspaceFs = yield* WorkspaceFs;
-    const workspacePath = workspaceFs.root;
-    if (!workspacePath) {
+    const workspaceRoot = workspaceFs.root;
+    if (!workspaceRoot) {
       yield* showLoggedMessage('Open a workspace folder first.');
       return;
     }
     yield* runOverleafClone(
       remote,
-      workspacePath,
+      workspaceRoot,
       buildOverleafClonePorts(
         yield* Secrets,
         remote,

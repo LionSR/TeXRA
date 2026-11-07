@@ -20,7 +20,7 @@ import {
 import * as resumeRunModule from '@agent/runtime/resumeRun';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -90,7 +90,7 @@ async function parkRunWaiting(
 
 // Unit tests exercise the tool directly — no approval host is wired.
 const BASH_PLATFORM_OPTIONS = {
-  workspacePath: '/workspace',
+  workspaceRoot: '/workspace',
   config: { [APPROVAL_POLICY_SETTING.key]: 'yolo' },
 } as const;
 

@@ -1,4 +1,4 @@
-/** Declarative task group list — renders groups, headers, and log entries inline. */
+/** Declarative stage list — renders groups, headers, and log entries inline. */
 
 // Third-party imports
 import { String as Str } from 'effect';
@@ -20,7 +20,7 @@ import {
   isInterrupted,
   isWorking,
   type RunId,
-  type TaskGroup,
+  type Stage,
   formatCompactDuration,
   pluralize,
 } from '@texra-ai/harness/schemas';
@@ -71,7 +71,7 @@ const TIMELINE_ITEM_WINDOW_STEP = 120;
 const DEFAULT_GROUP_ROW_WINDOW = 400;
 const GROUP_ROW_WINDOW_STEP = 400;
 
-const taskGroupListStyles = css`
+const stageListStyles = css`
   /* Phase labels may come from workflow plans, so let long or untranslated
      values wrap instead of forcing the status and timestamp off-screen. */
   .group-title {
@@ -85,7 +85,7 @@ const taskGroupListStyles = css`
 `;
 
 interface GroupTree {
-  group: TaskGroup;
+  group: Stage;
   children: GroupTree[];
   rows: TranscriptRow[];
 }
@@ -104,7 +104,7 @@ function compareRows(a: TranscriptRow, b: TranscriptRow): number {
   );
 }
 
-function compareGroups(a: TaskGroup, b: TaskGroup): number {
+function compareGroups(a: Stage, b: Stage): number {
   return compareBySeqNo(
     a,
     b,
@@ -120,7 +120,7 @@ function compareGroups(a: TaskGroup, b: TaskGroup): number {
  * a root (the transcript names only parents it holds).
  */
 function transcriptTimeline(
-  groups: readonly TaskGroup[],
+  groups: readonly Stage[],
   rows: readonly TranscriptRow[],
 ): TimelineEntry[] {
   const groupIds = new Set(groups.map((group) => group.id));
@@ -136,7 +136,7 @@ function transcriptTimeline(
     (row) => row.groupId,
   );
   const ungrouped = sortedRows.filter((row) => !isGroupedRow(row));
-  const node = (group: TaskGroup): GroupTree => ({
+  const node = (group: Stage): GroupTree => ({
     group,
     children: (children.get(group.id) ?? []).sort(compareGroups).map(node),
     rows: rowsByGroup.get(group.id) ?? [],
@@ -155,9 +155,9 @@ function transcriptTimeline(
   ].sort((a, b) => a.time - b.time);
 }
 
-@customElement('task-group-list')
-export class TaskGroupList extends LitElement {
-  static override styles = [designTokens, ...logStyles, taskGroupListStyles];
+@customElement('stage-list')
+export class StageList extends LitElement {
+  static override styles = [designTokens, ...logStyles, stageListStyles];
 
   /**
    * The stream's transcript slice. The session view appends rows and groups in
@@ -166,8 +166,8 @@ export class TaskGroupList extends LitElement {
    */
   @property({ attribute: false }) transcript: TranscriptView | null = null;
 
-  private get groups(): TranscriptView['taskGroups'] {
-    return this.transcript?.taskGroups ?? [];
+  private get groups(): TranscriptView['stages'] {
+    return this.transcript?.stages ?? [];
   }
 
   private get rows(): TranscriptView['rows'] {
@@ -232,7 +232,7 @@ export class TaskGroupList extends LitElement {
 
   /** Handle native scroll events from the log container to track user intent */
   private handleScroll = (): void => {
-    this.isSticky = this.isNearBottom(TaskGroupList.STICKY_THRESHOLD);
+    this.isSticky = this.isNearBottom(StageList.STICKY_THRESHOLD);
   };
 
   /** Public method to scroll to bottom - called by parent LogList */
@@ -594,6 +594,6 @@ export class TaskGroupList extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'task-group-list': TaskGroupList;
+    'stage-list': StageList;
   }
 }

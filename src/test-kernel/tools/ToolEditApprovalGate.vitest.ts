@@ -46,7 +46,7 @@ import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';
 // flow reads the current content through the process filesystem, so the
 // file a case stubs has to exist where the workspace says it does.
 let host: Context.Service.Shape<typeof FakeHost>;
-let workspacePath: string;
+let workspaceRoot: string;
 
 // A tool edit opens its request on a run, so every case owns a freshly
 // started one, on a session of its own.
@@ -113,7 +113,7 @@ function stubWorkspaceFile(
   filePath: string,
   options: { exists: boolean; content: string },
 ) {
-  const absolutePath = path.join(workspacePath, filePath);
+  const absolutePath = path.join(workspaceRoot, filePath);
   if (options.exists) {
     mkdirSync(path.dirname(absolutePath), { recursive: true });
     writeFileSync(absolutePath, options.content);
@@ -134,7 +134,7 @@ function inRun<A, E>(effect: Effect.Effect<A, E, PluginToolServices>) {
   return withStubbedEditFiles(effect).pipe(
     Effect.provide(
       nativeToolTestLayer({
-        workingDirectory: workspacePath,
+        workingDirectory: workspaceRoot,
         run: { runId, session, toolPolicy: {} },
       }),
     ),
@@ -151,7 +151,7 @@ const setUp = () =>
   Effect.gen(function* () {
     nextDecision = () => ({ action: 'approve' });
     host = Context.get(yield* Layer.build(FakeHost.layer()), FakeHost);
-    workspacePath = host.path('workspace');
+    workspaceRoot = host.path('workspace');
     session = yield* Effect.flatMap(
       TestSession.open(host.roots, { host: {} }),
       sessionHandleOf,
@@ -175,12 +175,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.effect('gates an edit to a dangling symlink as an existing file', () =>
       Effect.gen(function* () {
         yield* setUp();
-        mkdirSync(workspacePath, { recursive: true });
+        mkdirSync(workspaceRoot, { recursive: true });
         // A dangling symlink names a workspace entry even though stat through
         // the link fails; the read-before-edit gate must not treat it as new.
         symlinkSync(
-          path.join(workspacePath, 'gone.txt'),
-          path.join(workspacePath, 'dangling.txt'),
+          path.join(workspaceRoot, 'gone.txt'),
+          path.join(workspaceRoot, 'dangling.txt'),
         );
 
         const result = yield* inRun(

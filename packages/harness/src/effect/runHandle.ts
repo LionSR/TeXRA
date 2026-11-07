@@ -10,7 +10,7 @@ import { Context, Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import { replayTrace } from '@controllers/session/runTrace';
 import {
   type CommitOrdinal,

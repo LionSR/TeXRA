@@ -87,7 +87,7 @@ export type CliRunResult = typeof CliRunResultSchema.Type;
  * documents row reports, in place of a `structured` value), with the run's storage folder
  * and where `--output` or `--output-dir` copied the outputs.
  */
-const CliWorkflowRunResultSchema = CliRunResultSchema.mapFields(
+const CliDocumentTaskResultSchema = CliRunResultSchema.mapFields(
   Struct.assign({
     output: RunEndSchema.fields.output
       .mapFields(Struct.omit(['structured']))
@@ -97,7 +97,7 @@ const CliWorkflowRunResultSchema = CliRunResultSchema.mapFields(
     copiedOutputs: Schema.optional(Schema.Array(Schema.String)),
   }),
 );
-export type CliWorkflowRunResult = typeof CliWorkflowRunResultSchema.Type;
+export type CliDocumentTaskResult = typeof CliDocumentTaskResultSchema.Type;
 
 /** A command's result that is not a run's (`plugin`, `clone`): named by
  *  its command, its fields the command's own. */
@@ -219,7 +219,7 @@ const CliNdjsonRecordSchema = Schema.Union([
     Schema.Struct({
       kind: Schema.Literal('result'),
       result: Schema.Union([
-        CliWorkflowRunResultSchema,
+        CliDocumentTaskResultSchema,
         CliCommandResultSchema,
       ]),
     }),

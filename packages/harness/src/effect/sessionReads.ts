@@ -8,7 +8,7 @@
  */
 import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 import type { ExportNode } from '@agent/export/schemas';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
@@ -20,7 +20,7 @@ import {
   deriveResumability,
 } from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
 import { SessionRoots } from '@platform/rootedFs';
 import {

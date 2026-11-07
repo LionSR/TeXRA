@@ -8,7 +8,7 @@ import {
 import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { pairOutputsWithBases } from '@texra/agent/output/lineageMapping';
 
-describe('workflow output lineage mapping', () => {
+describe('document task output lineage mapping', () => {
   const runId = Schema.decodeUnknownSync(RunIdSchema)('abc123');
 
   function runStorageFile(relativePath: string) {

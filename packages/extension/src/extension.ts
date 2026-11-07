@@ -216,7 +216,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         },
       );
       const roots = yield* openNodeWorkspaceRoots({
-        workspacePath: workspaceRoot,
+        workspaceRoot,
         storageRoot: defaultNodeStorageRoot(),
         config,
         ...(Result.isSuccess(reached) &&

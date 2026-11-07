@@ -35,12 +35,12 @@ import type { InboxItem } from './Inbox';
 
 interface FollowUpDisplay {
   readonly text: string;
-  /** Typed workflow delivery facts logged beside the collapsed row text. */
+  /** Typed script delivery facts logged beside the collapsed row text. */
   readonly scriptSummary?: ScriptDeliverySummary;
 }
 
 /** A follow-up as its transcript row shows it: its `displayText`, else its
- *  text; a child's workflow delivery also carries its summary typed, so
+ *  text; a child's script delivery also carries its summary typed, so
  *  renderers never re-extract it from the text. */
 export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
   const text = followUp.displayText ?? followUp.text;

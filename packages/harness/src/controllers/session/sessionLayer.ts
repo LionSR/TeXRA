@@ -24,7 +24,7 @@ import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
   SESSION_CLOSE_DEADLINE_MS,
   sessionEventsLayer,
-} from '@agent/runtime/SessionEvents';
+} from '@agent/runtime/sessionEventsLayer';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import { mcpConfigPathOf } from '@common/plugins/mcpServers';
@@ -63,7 +63,7 @@ import type { Plugin } from '@tools/plugins';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { databaseLayer, globalDatabaseLayer } from './Database';
+import { databaseLayer, globalDatabaseLayer } from './databaseLayer';
 import { processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
 import {
@@ -71,9 +71,9 @@ import {
   TextChunkSource,
   TranscriptSubscriptions,
 } from './sessionSources';
-import { SessionViewService } from './SessionView';
+import { SessionViewService } from './sessionViewService';
 import { sessionOwnersLayer, stopSessionRuns } from './sessionOwners';
-import { sessionInputsLayer } from './sessionInputs';
+import { sessionInputsLayer } from './sessionInputsLayer';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 const CHANNEL = 'sessionLayer';

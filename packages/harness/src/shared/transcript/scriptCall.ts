@@ -8,7 +8,7 @@ const CALL_FILE_PREVIEW_LIMIT = 3;
  * inputs by name (bounded), then how many read-only context/media files ride
  * along; undefined when it was handed none.
  */
-export function formatWorkflowCallFiles(files: {
+export function formatScriptCallFiles(files: {
   readonly input: readonly string[];
   readonly context: readonly string[];
   readonly media: readonly string[];

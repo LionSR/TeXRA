@@ -47,7 +47,7 @@ import {
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliToolUseConfig } from '../runtime/headless/executeCli';
 import { toolUseResultText } from '../runtime/headless/terminalStatus';
-import { withExpandedRunInputs } from '../runtime/headless/workflowInputs';
+import { withExpandedRunInputs } from '../runtime/headless/documentTaskInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 interface TeamRunInit {

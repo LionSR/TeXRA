@@ -15,14 +15,14 @@ layer(FakeHost.layer(), {
     'lists unique contained entries in path order and omits missing paths',
     () =>
       Effect.gen(function* () {
-        const workspacePath = (yield* FakeHost).path('workspace');
+        const workspaceRoot = (yield* FakeHost).path('workspace');
         yield* Effect.promise(async () => {
-          await mkdir(path.join(workspacePath, 'z-dir'), { recursive: true });
-          await writeFile(path.join(workspacePath, 'a-file.tex'), 'content');
+          await mkdir(path.join(workspaceRoot, 'z-dir'), { recursive: true });
+          await writeFile(path.join(workspaceRoot, 'a-file.tex'), 'content');
         });
 
         const files = yield* listRunWorkspaceFiles(
-          { workingDirectory: workspacePath },
+          { workingDirectory: workspaceRoot },
           [
             'z-dir',
             'missing.tex',

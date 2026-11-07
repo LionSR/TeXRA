@@ -8,7 +8,7 @@ import { GrepTool } from '@tools/grep';
 import * as execUtils from '@utils/system/execUtils';
 
 layer(SessionGraph.hosted)('GrepTool run', (it) => {
-  it.layer(FakeHost.layer({ workspacePath: process.cwd() }), {
+  it.layer(FakeHost.layer({ workspaceRoot: process.cwd() }), {
     buildPerTest: true,
   })((it) => {
     afterEach(() => {

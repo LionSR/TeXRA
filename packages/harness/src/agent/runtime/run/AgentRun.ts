@@ -17,7 +17,7 @@ import {
   SynchronizedRef,
 } from 'effect';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';

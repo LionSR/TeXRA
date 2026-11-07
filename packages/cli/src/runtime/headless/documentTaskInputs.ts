@@ -22,7 +22,7 @@ const STDIN_INPUT_TOKEN = '-';
 const STDIN_TEMP_PREFIX = 'texra-stdin-';
 export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
 /**
- * One wording for "a workflow run has no input", said both by the expansion
+ * One wording for "a document task run has no input", said both by the expansion
  * below (a spec that resolves to nothing) and by `texra run`'s pre-flight guard
  * (no `--input` at all), which has to refuse before it probes an output
  * destination into existence.
@@ -42,7 +42,7 @@ const normalizeCliInputPathForRun = Effect.fn('normalizeCliInputPathForRun')(
     candidate: string,
     cwd: string,
     flagLabel: string,
-    options: WorkflowInputExpansionOptions,
+    options: DocumentTaskInputExpansionOptions,
   ): Effect.fn.Return<string, CliUsageError> {
     if (
       options.requireWorkspaceFiles === true &&
@@ -56,19 +56,19 @@ const normalizeCliInputPathForRun = Effect.fn('normalizeCliInputPathForRun')(
   },
 );
 
-function isStdinWorkflowInputSpec(inputSpec: string): boolean {
+function isStdinDocumentTaskInputSpec(inputSpec: string): boolean {
   return inputSpec.trim() === STDIN_INPUT_TOKEN;
 }
 
-interface WorkflowInputExpansionOptions {
+interface DocumentTaskInputExpansionOptions {
   readonly allowEmpty?: boolean;
   readonly requireWorkspaceFiles?: boolean;
 }
 
-type WorkflowInputExpansionEntry = readonly string[] | 'stdin';
+type DocumentTaskInputExpansionEntry = readonly string[] | 'stdin';
 
-interface PreparedWorkflowInputExpansion {
-  readonly entries: WorkflowInputExpansionEntry[];
+interface PreparedDocumentTaskInputExpansion {
+  readonly entries: DocumentTaskInputExpansionEntry[];
   readonly flagLabel: string;
 }
 
@@ -84,7 +84,7 @@ const readProcessStdinText: Effect.Effect<string, Error> = Effect.tryPromise({
   catch: ensureError,
 });
 
-export function hasMixedStdinWorkflowInputSpecs(
+export function hasMixedStdinDocumentTaskInputSpecs(
   inputSpecs: readonly string[],
 ): boolean {
   const distinctSpecs = new Set(
@@ -93,8 +93,8 @@ export function hasMixedStdinWorkflowInputSpecs(
   return distinctSpecs.has(STDIN_INPUT_TOKEN) && distinctSpecs.size > 1;
 }
 
-const materializeStdinWorkflowInput = Effect.fn(
-  'materializeStdinWorkflowInput',
+const materializeStdinDocumentTaskInput = Effect.fn(
+  'materializeStdinDocumentTaskInput',
 )(function* (
   readStdinText: Effect.Effect<string, Error>,
   tempDir: string,
@@ -129,99 +129,103 @@ const materializeStdinWorkflowInput = Effect.fn(
 /**
  * Expand a single user-supplied path spec into the absolute / cwd-relative
  * paths it resolves to. The stdin token is resolved by
- * `prepareWorkflowInputExpansion` before it gets here, so it never reaches
+ * `prepareDocumentTaskInputExpansion` before it gets here, so it never reaches
  * this function.
  *
  * `flagLabel` is the CLI flag name (e.g. `--input`, `--context`) used in
  * Usage-error messages so a missing file is attributed to the right flag.
  */
-const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
-  inputSpec: string,
-  cwd: string,
-  flagLabel: string,
-  options: WorkflowInputExpansionOptions,
-): Effect.fn.Return<string[], Error, FileSystem.FileSystem> {
-  const trimmed = inputSpec.trim();
-  if (!trimmed) return [];
+const expandDocumentTaskInputSpec = Effect.fn('expandDocumentTaskInputSpec')(
+  function* (
+    inputSpec: string,
+    cwd: string,
+    flagLabel: string,
+    options: DocumentTaskInputExpansionOptions,
+  ): Effect.fn.Return<string[], Error, FileSystem.FileSystem> {
+    const trimmed = inputSpec.trim();
+    if (!trimmed) return [];
 
-  const normalizeMatches = (matches: string[]) =>
-    Effect.forEach(
-      matches.toSorted(),
-      (match) => normalizeCliInputPathForRun(match, cwd, flagLabel, options),
-      { concurrency: 8 },
-    );
+    const normalizeMatches = (matches: string[]) =>
+      Effect.forEach(
+        matches.toSorted(),
+        (match) => normalizeCliInputPathForRun(match, cwd, flagLabel, options),
+        { concurrency: 8 },
+      );
 
-  const absolutePath = path.resolve(cwd, trimmed);
-  // Prefer an exact existing path even when its valid filename contains glob
-  // syntax. Windows glob mode deliberately has no backslash escape channel.
-  const fs = yield* FileSystem.FileSystem;
-  const stats = yield* fs
-    .stat(absolutePath)
-    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(null)));
+    const absolutePath = path.resolve(cwd, trimmed);
+    // Prefer an exact existing path even when its valid filename contains glob
+    // syntax. Windows glob mode deliberately has no backslash escape channel.
+    const fs = yield* FileSystem.FileSystem;
+    const stats = yield* fs
+      .stat(absolutePath)
+      .pipe(Effect.catchIf(absentReason, () => Effect.succeed(null)));
 
-  const globOptions = {
-    magicalBraces: true,
-    windowsPathsNoEscape: process.platform === 'win32',
-  };
-  if (!stats && hasMagic(trimmed, globOptions)) {
-    const isAbsolute = path.isAbsolute(trimmed);
-    const matches = yield* Effect.tryPromise({
-      try: () =>
-        glob(trimmed, {
-          cwd: isAbsolute ? undefined : cwd,
-          absolute: isAbsolute,
-          nodir: true,
-          ...globOptions,
-        }),
-      catch: ensureError,
-    });
-    if (matches.length === 0) {
+    const globOptions = {
+      magicalBraces: true,
+      windowsPathsNoEscape: process.platform === 'win32',
+    };
+    if (!stats && hasMagic(trimmed, globOptions)) {
+      const isAbsolute = path.isAbsolute(trimmed);
+      const matches = yield* Effect.tryPromise({
+        try: () =>
+          glob(trimmed, {
+            cwd: isAbsolute ? undefined : cwd,
+            absolute: isAbsolute,
+            nodir: true,
+            ...globOptions,
+          }),
+        catch: ensureError,
+      });
+      if (matches.length === 0) {
+        return yield* new CliUsageError({
+          message: `${flagLabel}: no files matched: ${trimmed}`,
+        });
+      }
+      return yield* normalizeMatches(matches);
+    }
+
+    if (stats?.type === 'Directory') {
+      // Validate the directory itself before globbing its contents.
+      yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options);
+      const matches = yield* Effect.tryPromise({
+        try: () =>
+          glob('**/*.tex', {
+            cwd: absolutePath,
+            absolute: true,
+            nodir: true,
+          }),
+        catch: ensureError,
+      });
+      if (matches.length === 0) {
+        return yield* new CliUsageError({
+          message: `No .tex input files found in directory: ${trimmed}`,
+        });
+      }
+      return yield* normalizeMatches(matches);
+    }
+
+    // Fail fast with a Usage error (exit 2) instead of paying full platform
+    // init + agent loading just to ENOENT inside the agent run (exit 1).
+    if (!stats) {
       return yield* new CliUsageError({
-        message: `${flagLabel}: no files matched: ${trimmed}`,
+        message: `${flagLabel}: file not found: ${trimmed}`,
       });
     }
-    return yield* normalizeMatches(matches);
-  }
+    return [
+      yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options),
+    ];
+  },
+);
 
-  if (stats?.type === 'Directory') {
-    // Validate the directory itself before globbing its contents.
-    yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options);
-    const matches = yield* Effect.tryPromise({
-      try: () =>
-        glob('**/*.tex', {
-          cwd: absolutePath,
-          absolute: true,
-          nodir: true,
-        }),
-      catch: ensureError,
-    });
-    if (matches.length === 0) {
-      return yield* new CliUsageError({
-        message: `No .tex input files found in directory: ${trimmed}`,
-      });
-    }
-    return yield* normalizeMatches(matches);
-  }
-
-  // Fail fast with a Usage error (exit 2) instead of paying full platform
-  // init + agent loading just to ENOENT inside the agent run (exit 1).
-  if (!stats) {
-    return yield* new CliUsageError({
-      message: `${flagLabel}: file not found: ${trimmed}`,
-    });
-  }
-  return [yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options)];
-});
-
-const prepareWorkflowInputExpansion = Effect.fn(
-  'prepareWorkflowInputExpansion',
+const prepareDocumentTaskInputExpansion = Effect.fn(
+  'prepareDocumentTaskInputExpansion',
 )(function* (
   inputSpecs: readonly string[],
   cwd: string,
   flagLabel: string,
-  options: WorkflowInputExpansionOptions,
+  options: DocumentTaskInputExpansionOptions,
 ): Effect.fn.Return<
-  PreparedWorkflowInputExpansion,
+  PreparedDocumentTaskInputExpansion,
   Error,
   FileSystem.FileSystem
 > {
@@ -230,10 +234,14 @@ const prepareWorkflowInputExpansion = Effect.fn(
   const expanded = yield* Effect.forEach(
     inputSpecs,
     (spec) =>
-      Effect.result<WorkflowInputExpansionEntry, Error, FileSystem.FileSystem>(
-        isStdinWorkflowInputSpec(spec)
+      Effect.result<
+        DocumentTaskInputExpansionEntry,
+        Error,
+        FileSystem.FileSystem
+      >(
+        isStdinDocumentTaskInputSpec(spec)
           ? Effect.succeed('stdin')
-          : expandWorkflowInputSpec(spec, cwd, flagLabel, options),
+          : expandDocumentTaskInputSpec(spec, cwd, flagLabel, options),
       ),
     { concurrency: 8 },
   );
@@ -243,42 +251,42 @@ const prepareWorkflowInputExpansion = Effect.fn(
   return { entries, flagLabel };
 });
 
-const finishWorkflowInputExpansion = Effect.fn('finishWorkflowInputExpansion')(
-  function* (
-    prepared: PreparedWorkflowInputExpansion,
-    cwd: string,
-    options: WorkflowInputExpansionOptions,
-    readStdinText: Effect.Effect<string, Error>,
-  ): Effect.fn.Return<
-    { readonly files: string[]; readonly stdinPath?: string },
-    Error,
-    Scope.Scope | FileSystem.FileSystem
-  > {
-    const expanded: string[] = [];
-    const stdinPath = prepared.entries.includes('stdin')
-      ? yield* normalizeCliInputPathForRun(
-          yield* materializeStdinWorkflowInput(readStdinText, cwd),
-          cwd,
-          prepared.flagLabel,
-          options,
-        )
-      : undefined;
-    for (const entry of prepared.entries) {
-      if (entry === 'stdin') {
-        if (stdinPath) expanded.push(stdinPath);
-        continue;
-      }
-      expanded.push(...entry);
+const finishDocumentTaskInputExpansion = Effect.fn(
+  'finishDocumentTaskInputExpansion',
+)(function* (
+  prepared: PreparedDocumentTaskInputExpansion,
+  cwd: string,
+  options: DocumentTaskInputExpansionOptions,
+  readStdinText: Effect.Effect<string, Error>,
+): Effect.fn.Return<
+  { readonly files: string[]; readonly stdinPath?: string },
+  Error,
+  Scope.Scope | FileSystem.FileSystem
+> {
+  const expanded: string[] = [];
+  const stdinPath = prepared.entries.includes('stdin')
+    ? yield* normalizeCliInputPathForRun(
+        yield* materializeStdinDocumentTaskInput(readStdinText, cwd),
+        cwd,
+        prepared.flagLabel,
+        options,
+      )
+    : undefined;
+  for (const entry of prepared.entries) {
+    if (entry === 'stdin') {
+      if (stdinPath) expanded.push(stdinPath);
+      continue;
     }
-    const deduped = [...new Set(expanded)];
-    if (deduped.length === 0 && options.allowEmpty !== true) {
-      return yield* new CliUsageError({
-        message: WORKFLOW_INPUT_REQUIRED_MESSAGE,
-      });
-    }
-    return { files: deduped, stdinPath };
-  },
-);
+    expanded.push(...entry);
+  }
+  const deduped = [...new Set(expanded)];
+  if (deduped.length === 0 && options.allowEmpty !== true) {
+    return yield* new CliUsageError({
+      message: WORKFLOW_INPUT_REQUIRED_MESSAGE,
+    });
+  }
+  return { files: deduped, stdinPath };
+});
 
 interface ExpandedRunInputs {
   readonly inputFiles: string[];
@@ -311,8 +319,8 @@ const expandRunInputs = Effect.fn('expandRunInputs')(function* (
   Scope.Scope | FileSystem.FileSystem
 > {
   if (
-    inputSpecs.some(isStdinWorkflowInputSpec) &&
-    contextSpecs.some(isStdinWorkflowInputSpec)
+    inputSpecs.some(isStdinDocumentTaskInputSpec) &&
+    contextSpecs.some(isStdinDocumentTaskInputSpec)
   ) {
     return yield* new CliUsageError({
       message:
@@ -322,26 +330,26 @@ const expandRunInputs = Effect.fn('expandRunInputs')(function* (
 
   const shared = { requireWorkspaceFiles: options.requireWorkspaceFiles };
   const readStdinText = options.readStdinText ?? readProcessStdinText;
-  const inputExpansion = yield* prepareWorkflowInputExpansion(
+  const inputExpansion = yield* prepareDocumentTaskInputExpansion(
     inputSpecs,
     cwd,
     '--input',
     shared,
   );
-  const contextExpansion = yield* prepareWorkflowInputExpansion(
+  const contextExpansion = yield* prepareDocumentTaskInputExpansion(
     contextSpecs,
     cwd,
     '--context',
     shared,
   );
 
-  const inputs = yield* finishWorkflowInputExpansion(
+  const inputs = yield* finishDocumentTaskInputExpansion(
     inputExpansion,
     cwd,
     { ...shared, allowEmpty: options.allowEmptyInput },
     readStdinText,
   );
-  const contexts = yield* finishWorkflowInputExpansion(
+  const contexts = yield* finishDocumentTaskInputExpansion(
     contextExpansion,
     cwd,
     { ...shared, allowEmpty: true },

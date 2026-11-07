@@ -109,7 +109,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       { discard: true },
     );
     return yield* openNodeWorkspaceRoots({
-      workspacePath: workspace,
+      workspaceRoot: workspace,
       storageRoot,
       config: {
         ...configs,

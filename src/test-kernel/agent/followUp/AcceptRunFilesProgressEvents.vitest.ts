@@ -31,7 +31,7 @@ layer(
   TestSession.layer(undefined, { host: {} }).pipe(
     Layer.provideMerge(SessionGraph.layer),
     Layer.provideMerge(
-      FakeHost.layer({ workspacePath: '/workspace', storagePath }),
+      FakeHost.layer({ workspaceRoot: '/workspace', storagePath }),
     ),
   ),
   { excludeTestServices: true },

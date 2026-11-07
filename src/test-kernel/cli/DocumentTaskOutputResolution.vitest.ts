@@ -9,18 +9,18 @@ import {
   RunIdSchema,
   type RunOutcome,
 } from '@texra-ai/harness/schemas';
-import { resolveWorkflowOutput } from '@cli/runtime/headless/workflowOutput';
+import { resolveDocumentTaskOutput } from '@cli/runtime/headless/documentTaskOutput';
 import type { CliContext } from '@cli/runtime/platform/cliContext';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-type ResolveArgs = Parameters<typeof resolveWorkflowOutput>;
+type ResolveArgs = Parameters<typeof resolveDocumentTaskOutput>;
 
-/** `resolveWorkflowOutput`, run at this suite's one Effect boundary. */
-const resolveOutput = (...args: Parameters<typeof resolveWorkflowOutput>) =>
+/** `resolveDocumentTaskOutput`, run at this suite's one Effect boundary. */
+const resolveOutput = (...args: Parameters<typeof resolveDocumentTaskOutput>) =>
   Effect.runPromise(
-    resolveWorkflowOutput(...args).pipe(Effect.provide(nodePlatformLayer)),
+    resolveDocumentTaskOutput(...args).pipe(Effect.provide(nodePlatformLayer)),
   );
 
 const tempDirs = useTempDirs();
@@ -47,7 +47,7 @@ function testContext(cwd: string): CliContext {
   });
 }
 
-function workflowResult(
+function documentTaskResult(
   outputs: Array<{
     absolutePath: string;
     relativePath: string;
@@ -79,7 +79,7 @@ function workflowResult(
   ];
 }
 
-describe('CLI workflow output resolution', () => {
+describe('CLI document task output resolution', () => {
   it('uses original-path lineage before flat generated names when basenames collide', async () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runRoot = await writeRunFile(cwd, 'root/main.tex', 'root');
@@ -88,7 +88,7 @@ describe('CLI workflow output resolution', () => {
     const result = await resolveOutput(
       undefined,
       'out',
-      ...workflowResult([
+      ...documentTaskResult([
         {
           absolutePath: runRoot,
           relativePath: 'r1/main.tex',

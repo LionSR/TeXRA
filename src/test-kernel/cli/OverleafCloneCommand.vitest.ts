@@ -95,7 +95,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
   'CLI Overleaf clone command',
   (it) => {
     const tempDirs = useTempDirs();
-    let workspacePath: string;
+    let workspaceRoot: string;
     let stdout: string;
     let stderr: string;
     let stdoutSpy: ReturnType<typeof vi.spyOn>;
@@ -122,7 +122,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     );
 
     beforeEach(async () => {
-      workspacePath = await makeTempDir('texra-clone-', tempDirs);
+      workspaceRoot = await makeTempDir('texra-clone-', tempDirs);
       stdout = '';
       stderr = '';
       stdoutSpy = spyOnStreamWrite(process.stdout, (text) => {
@@ -167,7 +167,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               'clone',
               PROJECT_ID,
               '--cwd',
-              workspacePath,
+              workspaceRoot,
               '--output-format',
               'json',
               '--no-input',
@@ -175,12 +175,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           );
 
           expect(result.exitCode).toBe(CliExitCode.Success);
-          yield* expectClonedInto(workspacePath);
+          yield* expectClonedInto(workspaceRoot);
           expect(JSON.parse(stdout)).toEqual({
             cloned: true,
             provider: 'overleaf',
             host: 'git.overleaf.com',
-            destination: workspacePath,
+            destination: workspaceRoot,
           });
           expect(`${stdout}${stderr}`).not.toContain('olp_secret');
         }),
@@ -196,7 +196,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         });
 
         const result = yield* Effect.promise(() =>
-          runCli(['clone', PROJECT_ID, '--cwd', workspacePath, '--no-input']),
+          runCli(['clone', PROJECT_ID, '--cwd', workspaceRoot, '--no-input']),
         );
 
         expect(result.exitCode).toBe(CliExitCode.AgentError);

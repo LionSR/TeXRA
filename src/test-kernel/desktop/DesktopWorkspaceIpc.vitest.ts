@@ -17,7 +17,7 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 
 let fixtureRoot = '';
-let workspacePath = '';
+let workspaceRoot = '';
 let externalPath = '';
 let missingExternalPath = '';
 
@@ -43,7 +43,7 @@ const createIpc = Effect.gen(function* () {
         disposeAll: () => {},
       },
       toWindowBounds: (bounds) => bounds,
-      getWorkspacePath: () => workspacePath,
+      getWorkspacePath: () => workspaceRoot,
     },
   );
   yield* Effect.forkScoped(ipc.followFilesWritten, { startImmediately: true });
@@ -55,21 +55,21 @@ layer(SessionGraph.hosted)('desktop workspace IPC', (it) => {
 
   beforeEach(async () => {
     fixtureRoot = await makeTempDir('texra-workspace-ipc-', tempDirs);
-    workspacePath = join(fixtureRoot, 'workspace');
+    workspaceRoot = join(fixtureRoot, 'workspace');
     externalPath = join(fixtureRoot, 'external.txt');
     missingExternalPath = join(fixtureRoot, 'missing-external.txt');
-    mkdirSync(workspacePath);
-    writeFileSync(join(workspacePath, 'paper.tex'), 'inside', 'utf8');
+    mkdirSync(workspaceRoot);
+    writeFileSync(join(workspaceRoot, 'paper.tex'), 'inside', 'utf8');
     writeFileSync(externalPath, 'outside', 'utf8');
-    symlinkSync(externalPath, join(workspacePath, 'linked.tex'));
+    symlinkSync(externalPath, join(workspaceRoot, 'linked.tex'));
     symlinkSync(
       missingExternalPath,
-      join(workspacePath, 'dangling-linked.tex'),
+      join(workspaceRoot, 'dangling-linked.tex'),
     );
   });
 
   it.layer(
-    FakeHost.layer(() => createFakeHost({ workspacePath })),
+    FakeHost.layer(() => createFakeHost({ workspaceRoot })),
     {
       buildPerTest: true,
     },
@@ -117,12 +117,12 @@ layer(SessionGraph.hosted)('desktop workspace IPC', (it) => {
           const save = (contents: string, base: string | null) =>
             ipc.file({ kind: 'write', path: 'paper.tex', contents, base });
           // A run rewrote the file while the editor held "inside".
-          writeFileSync(join(workspacePath, 'paper.tex'), 'from the run');
+          writeFileSync(join(workspaceRoot, 'paper.tex'), 'from the run');
 
           expect(yield* save('inside, edited', 'inside')).toEqual({
             kind: 'changedOnDisk',
           });
-          expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
+          expect(readFileSync(join(workspaceRoot, 'paper.tex'), 'utf8')).toBe(
             'from the run',
           );
           // Saved against what is on disk now, or overwritten on purpose.
@@ -130,7 +130,7 @@ layer(SessionGraph.hosted)('desktop workspace IPC', (it) => {
             kind: 'done',
           });
           expect(yield* save('mine', null)).toEqual({ kind: 'done' });
-          expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
+          expect(readFileSync(join(workspaceRoot, 'paper.tex'), 'utf8')).toBe(
             'mine',
           );
         }),

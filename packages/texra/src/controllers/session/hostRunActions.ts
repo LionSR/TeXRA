@@ -60,9 +60,9 @@ import {
 
 const CHANNEL = 'HostRunActions';
 
-/** What the workflow toolbar's pack or clean of a run's files did, and the
+/** What the document task toolbar's pack or clean of a run's files did, and the
  *  input file its message names. */
-interface WorkflowFileOperationResult {
+interface DocumentTaskFileOperationResult {
   readonly result: FileOpResult;
   readonly inputFile: string;
 }
@@ -137,17 +137,17 @@ export interface HostRunActions {
   /** The toolbar's latexdiff may run: the run still offers `files` and is
    *  a document task's with a saved config; else `Rejected`, which the
    *  surface presents. */
-  workflowDiffRequest(
+  documentTaskDiffRequest(
     runId: RunId,
   ): Effect.Effect<void, Rejected | Unavailable>;
-  /** Pack or clean a workflow run's files, from its saved config: the
+  /** Pack or clean a document task run's files, from its saved config: the
    *  action check, then the session's `run.files`, which the process that
    *  holds the run does with it held. A run that is not a document task's,
    *  or saved no config, is `Rejected`. */
-  workflowFileOperation(
+  documentTaskFileOperation(
     runId: RunId,
     operation: 'pack' | 'clean',
-  ): Effect.Effect<WorkflowFileOperationResult, RequestError | Unavailable>;
+  ): Effect.Effect<DocumentTaskFileOperationResult, RequestError | Unavailable>;
   /** A new task holding the run's conversation up to `at` (its latest
    *  settled point when null), continued here so it takes a message: the
    *  fork's id. */
@@ -307,20 +307,20 @@ export const createHostRunActions = Effect.fn(
   /** The saved config of a document task's run. `files` holds on every
    *  settled run, so a request on a run that saved no config, or that is
    *  not a document task's, is refused here, which the surface presents. */
-  const workflowConfig = Effect.fn('HostRunActions.workflowConfig')(function* (
-    runId: RunId,
-  ) {
-    const config = yield* readConfig(runId);
-    if (!config)
-      return yield* new Rejected({
-        reason: 'This run saved no setup to act on.',
-      });
-    if (recipeBlockOf(config) !== DOCUMENT_TASK_BLOCK.key)
-      return yield* new Rejected({
-        reason: 'This action applies to a document task.',
-      });
-    return config;
-  });
+  const savedTaskConfig = Effect.fn('HostRunActions.savedTaskConfig')(
+    function* (runId: RunId) {
+      const config = yield* readConfig(runId);
+      if (!config)
+        return yield* new Rejected({
+          reason: 'This run saved no setup to act on.',
+        });
+      if (recipeBlockOf(config) !== DOCUMENT_TASK_BLOCK.key)
+        return yield* new Rejected({
+          reason: 'This action applies to a document task.',
+        });
+      return config;
+    },
+  );
 
   /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
   const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(function* (
@@ -427,62 +427,62 @@ export const createHostRunActions = Effect.fn(
       );
       if (config !== null) yield* startAgentRequest(config);
     }),
-    workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
-      function* (runId) {
-        yield* requireAction(runId, 'files');
-        yield* workflowConfig(runId);
-      },
-    ),
-    workflowFileOperation: Effect.fn('HostRunActions.workflowFileOperation')(
-      function* (runId, operation) {
-        // `run.files` is gated and held by the session's request handler.
-        const config = yield* workflowConfig(runId);
-        const inputFile = config.inputFiles[0] ?? '';
-        // A pack names its folder for the input; a clean needs none.
-        if (operation === 'pack' && !inputFile)
-          return yield* new Rejected({
-            reason: 'Select an input file before packing.',
-          });
-        const outcome = yield* session
-          .request({
-            kind: 'run.files',
-            runId,
-            files:
-              operation === 'pack'
-                ? {
-                    op: 'copy',
-                    to: yield* packDestination({
-                      runId,
-                      inputFile,
-                      agent: config.agent,
-                      model: config.model,
-                    }),
-                  }
-                : { op: 'remove' },
-          })
-          .pipe(
-            Effect.catchTag('RunActive', () =>
-              Effect.fail(
-                new Rejected({
-                  reason: 'This run is running or held elsewhere.',
-                }),
-              ),
+    documentTaskDiffRequest: Effect.fn(
+      'HostRunActions.documentTaskDiffRequest',
+    )(function* (runId) {
+      yield* requireAction(runId, 'files');
+      yield* savedTaskConfig(runId);
+    }),
+    documentTaskFileOperation: Effect.fn(
+      'HostRunActions.documentTaskFileOperation',
+    )(function* (runId, operation) {
+      // `run.files` is gated and held by the session's request handler.
+      const config = yield* savedTaskConfig(runId);
+      const inputFile = config.inputFiles[0] ?? '';
+      // A pack names its folder for the input; a clean needs none.
+      if (operation === 'pack' && !inputFile)
+        return yield* new Rejected({
+          reason: 'Select an input file before packing.',
+        });
+      const outcome = yield* session
+        .request({
+          kind: 'run.files',
+          runId,
+          files:
+            operation === 'pack'
+              ? {
+                  op: 'copy',
+                  to: yield* packDestination({
+                    runId,
+                    inputFile,
+                    agent: config.agent,
+                    model: config.model,
+                  }),
+                }
+              : { op: 'remove' },
+        })
+        .pipe(
+          Effect.catchTag('RunActive', () =>
+            Effect.fail(
+              new Rejected({
+                reason: 'This run is running or held elsewhere.',
+              }),
             ),
-          );
-        const { result } = outcome;
-        if (result.status === 'error')
-          return yield* new Rejected({
-            reason: `Error during ${operation === 'pack' ? 'packing' : 'cleaning'}: ${result.error}`,
-          });
-        return {
-          inputFile,
-          result:
-            result.status === 'done'
-              ? { status: 'success', outputFolder: result.to }
-              : result,
-        };
-      },
-    ),
+          ),
+        );
+      const { result } = outcome;
+      if (result.status === 'error')
+        return yield* new Rejected({
+          reason: `Error during ${operation === 'pack' ? 'packing' : 'cleaning'}: ${result.error}`,
+        });
+      return {
+        inputFile,
+        result:
+          result.status === 'done'
+            ? { status: 'success', outputFolder: result.to }
+            : result,
+      };
+    }),
     runCompileFixer: Effect.fn(function* (runId) {
       if (!view().runs.has(runId)) {
         return yield* new Unavailable({

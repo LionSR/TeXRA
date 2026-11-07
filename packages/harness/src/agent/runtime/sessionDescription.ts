@@ -9,7 +9,7 @@
 
 import { Cause, Context, Effect, Exit, Fiber } from 'effect';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 import { helperCall } from '@agent/runtime/helperModel';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';

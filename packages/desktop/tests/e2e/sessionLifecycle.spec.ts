@@ -165,23 +165,23 @@ test('macOS window close detaches and activation reopens in the same process', a
 });
 
 test('a new desktop process hydrates waiting and orphaned histories without rewriting them', async () => {
-  const { workspacePath, userDataPath } = createIsolatedProfile();
+  const { workspaceRoot, userDataPath } = createIsolatedProfile();
   let currentLaunch: LaunchedApp | undefined;
 
   try {
-    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    currentLaunch = await launchTexraApp({ workspaceRoot, userDataPath });
     const firstPid = await processId(currentLaunch);
     await closeTexraApp(currentLaunch);
     currentLaunch = undefined;
 
     const storagePath = await findWorkspaceStoragePath({
       userDataPath,
-      workspacePath,
+      workspaceRoot,
     });
     const fixture = await loadDatabaseFixture(userDataPath);
     const persisted = await writeCanonicalRunFixtures(fixture, storagePath);
 
-    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    currentLaunch = await launchTexraApp({ workspaceRoot, userDataPath });
     expect(await processId(currentLaunch)).not.toBe(firstPid);
 
     await expect
@@ -210,13 +210,13 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
     expect(reloaded).toEqual(persisted);
   } finally {
     if (currentLaunch) await closeTexraApp(currentLaunch);
-    cleanupDirectory(workspacePath);
+    cleanupDirectory(workspaceRoot);
     cleanupDirectory(userDataPath);
   }
 });
 
 test('the rail deletes a finished conversation at once, and it stays deleted', async () => {
-  const { workspacePath, userDataPath } = createIsolatedProfile();
+  const { workspaceRoot, userDataPath } = createIsolatedProfile();
   let currentLaunch: LaunchedApp | undefined;
   const railRow = (launched: LaunchedApp, runId: RunId) =>
     launched.page
@@ -224,18 +224,18 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
       .filter({ has: launched.page.locator(`[data-run="${runId}"]`) });
 
   try {
-    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    currentLaunch = await launchTexraApp({ workspaceRoot, userDataPath });
     await closeTexraApp(currentLaunch);
     currentLaunch = undefined;
 
     const storagePath = await findWorkspaceStoragePath({
       userDataPath,
-      workspacePath,
+      workspaceRoot,
     });
     const fixture = await loadDatabaseFixture(userDataPath);
     await writeCanonicalRunFixtures(fixture, storagePath);
 
-    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    currentLaunch = await launchTexraApp({ workspaceRoot, userDataPath });
     await dismissOnboarding(currentLaunch.page);
     const row = railRow(currentLaunch, WAITING_RUN);
     await expect(row).toHaveCount(1);
@@ -366,7 +366,7 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
     ).toHaveText('Research workspace');
 
     await closeTexraApp(currentLaunch);
-    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    currentLaunch = await launchTexraApp({ workspaceRoot, userDataPath });
     await dismissOnboarding(currentLaunch.page);
     await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
     await expect(railRow(currentLaunch, WAITING_RUN)).toHaveCount(0);
@@ -379,7 +379,7 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
     });
   } finally {
     if (currentLaunch) await closeTexraApp(currentLaunch);
-    cleanupDirectory(workspacePath);
+    cleanupDirectory(workspaceRoot);
     cleanupDirectory(userDataPath);
   }
 });

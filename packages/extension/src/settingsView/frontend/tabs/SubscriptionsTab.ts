@@ -8,7 +8,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
-import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuth';
+import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuthStatus';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { commonViewStyles, designTokens } from '@ui/styles';

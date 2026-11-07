@@ -36,7 +36,7 @@ test('renders the dev app from a cold cache and restores the editor after reload
     if (!address || typeof address === 'string')
       throw new Error('The Vite development server did not open a port.');
     launched = await launchTexraApp({
-      workspacePath: temporary,
+      workspaceRoot: temporary,
       env: {
         ELECTRON_RENDERER_URL: `http://127.0.0.1:${address.port}`,
         NODE_ENV: 'development',

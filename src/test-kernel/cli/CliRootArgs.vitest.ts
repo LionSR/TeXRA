@@ -62,7 +62,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.layer(
       FakeHost.layer(() =>
         createFakeHost({
-          workspacePath: process.cwd(),
+          workspaceRoot: process.cwd(),
           storagePath: path.join(platformStorageRoot, 'storage'),
           globalStoragePath: path.join(platformStorageRoot, 'global-storage'),
         }),

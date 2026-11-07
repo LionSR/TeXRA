@@ -12,7 +12,7 @@ import { selectModel } from '@texra-ai/llm';
 import { AgentCatalog, missingAgentRefusal } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 import { AgentError, LaunchRefused } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';

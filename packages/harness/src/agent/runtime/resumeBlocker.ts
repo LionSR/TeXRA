@@ -17,7 +17,7 @@ import {
   AgentCatalog,
   type AgentCatalogLoadError,
 } from '@agent/index/agentCatalog';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 import type { AgentCatalogServices } from '@agent/index/agentEntry';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';

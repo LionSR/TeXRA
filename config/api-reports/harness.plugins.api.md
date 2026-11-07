@@ -39,7 +39,7 @@ Exports: 125
 - `FollowUpSenderInput` — `type FollowUpSenderInput = Exclude<FollowUpSender, { readonly kind: 'run'; }> | { readonly kind: 'run'; readonly runId: RunId; }; ≡ FollowUpSenderInput`
 - `formatDelivery` — `function formatDelivery: (delivery: ChildRunDelivery) => string`
 - `formatToolOutput` — `function formatToolOutput: (header: string, content: null | string | string[], noMatchesText?: string) => string`
-- `getGitignoreMatcher` — `const getGitignoreMatcher: (workspacePath: string | undefined) => Effect<GitignoreMatcher, PlatformError, FileSystem>`
+- `getGitignoreMatcher` — `const getGitignoreMatcher: (workspaceRoot: string | undefined) => Effect<GitignoreMatcher, PlatformError, FileSystem>`
 - `GitignoreMatcher` — `type GitignoreMatcher = { ignores: (relativePath: string) => boolean; ignoreFiles: string[]; }; ≡ GitignoreMatcher`
 - `goal` — `const goal: Plugin`
 - `harnessBuiltins` — `const harnessBuiltins: readonly Plugin[]`

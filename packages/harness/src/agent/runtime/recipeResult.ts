@@ -8,7 +8,7 @@
 import { factName } from '@shared/schemas';
 import { Effect, Result, Schema, SchemaIssue } from 'effect';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas/agentConfig';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';

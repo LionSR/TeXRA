@@ -28,7 +28,7 @@ import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 export interface NodeWorkspaceRootsInit {
   /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by
    *  the host where it reads it; undefined when no folder is open. */
-  readonly workspacePath: string | undefined;
+  readonly workspaceRoot: string | undefined;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
   /** The workspace, local and global config stores to build the file-backed
@@ -58,10 +58,10 @@ export const openNodeWorkspaceRoots: (
 ) => Effect.Effect<WorkspaceRoots, DatabaseOpenFailed, Scope.Scope> = Effect.fn(
   'openNodeWorkspaceRoots',
 )(function* (init: NodeWorkspaceRootsInit) {
-  const { workspacePath, storageRoot, stateStores } = init;
-  const storage = resolveWorkspaceStoragePath(storageRoot, workspacePath);
+  const { workspaceRoot, storageRoot, stateStores } = init;
+  const storage = resolveWorkspaceStoragePath(storageRoot, workspaceRoot);
   return {
-    workspace: workspacePath,
+    workspace: workspaceRoot,
     storageRoot,
     storage,
     globalStorage: resolveGlobalStoragePath(storageRoot),
@@ -71,8 +71,8 @@ export const openNodeWorkspaceRoots: (
         : init.config,
     workspaceState:
       init.workspaceState ??
-      (yield* stateStores.project(storage, workspacePath)),
-    repoState: yield* stateStores.repo(storage, workspacePath),
+      (yield* stateStores.project(storage, workspaceRoot)),
+    repoState: yield* stateStores.repo(storage, workspaceRoot),
     globalState: init.globalState,
   };
 });

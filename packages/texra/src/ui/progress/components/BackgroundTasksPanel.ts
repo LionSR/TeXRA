@@ -9,7 +9,7 @@
  * its stage; nested children indented under theirs), and the inquiry
  * threads the run opened. A card with no child to list is headed by its
  * inquiry threads, which the `inquiries` scope makes of any run (the
- * workflow body, whose run board already lists every call). Every row is a
+ * document task body, whose run board already lists every call). Every row is a
  * child of the session view: label, status, tone, latest line, and clock
  * facts come from `view.runs`; the host paints the glyph and the time. The
  * card's open state is the surface's (`RunSurface.groups`, key
@@ -231,7 +231,7 @@ export class BackgroundTasksPanel extends LitElement {
   /** The clock a running row's elapsed time ticks on. */
   private readonly _ticker = new TickerController(this, 1000);
 
-  /** The complete card, or only the inquiry threads (a workflow run's
+  /** The complete card, or only the inquiry threads (a document task run's
    *  body, which has no children to list). */
   @property() scope: 'all' | 'inquiries' = 'all';
 

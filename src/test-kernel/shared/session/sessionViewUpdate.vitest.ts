@@ -18,7 +18,7 @@ import {
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
+import { runHistoryRows, storedDraft } from '@agent/runtime/providerMessages';
 import { SessionRowSchema } from '@shared/schemas';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 

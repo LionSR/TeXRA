@@ -483,7 +483,7 @@ function scriptStages(
 interface ScriptStageView {
   /** The stage's id; its calls' cards carry it as their group. */
   readonly id: string;
-  readonly status: TaskGroup['status'];
+  readonly status: Stage['status'];
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly phases: readonly ScriptPhaseView[];
@@ -928,7 +928,7 @@ interface UserRow extends TranscriptRowBase {
   /** The message as its follow-up shows it: a delivery or notice is its
    *  summary (`FollowUpContent.displayText`), not its envelope. */
   readonly text: TranscriptText;
-  /** A workflow delivery's facts, typed. */
+  /** A script delivery's facts, typed. */
   readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>;
   /** Media that was sent to the model beside the text, by kind (no bytes). */
   readonly attachments?: readonly MediaAttachmentKind[];

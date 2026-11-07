@@ -17,7 +17,7 @@ import {
   databaseLayer,
   SESSION_DATABASE_FILE,
   storeOpenElsewhere,
-} from './Database';
+} from './databaseLayer';
 import { asideCopies } from './storeAside';
 import { WorkspaceRoots } from './WorkspaceRoots';
 

@@ -101,7 +101,7 @@ export const texraProcessLayer = ({
     skills: {
       resourcesPath,
       // A project's skills sit beside its `.texra/config.json`.
-      projectFolder: TEXRA_STORAGE_DIR_NAME,
+      projectDataDirName: TEXRA_STORAGE_DIR_NAME,
       skillSourceOptions,
     },
     // One credential store every host shares, announcing each key it writes.
