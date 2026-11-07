@@ -68,6 +68,7 @@ export function ConversationPane(
     stream && isDocumentTaskRun(stream)
       ? {
           stages: stream.transcript.stages,
+          run: stream,
           rounds: documentRoundsOf(stream),
         }
       : undefined;

@@ -135,7 +135,6 @@ export type {
   SessionRowDraft,
   AgentNotFoundPayload,
   Stage,
-  StageStatus,
   ToolCallStatus,
   ToolCard,
   ToolDefinition,

@@ -11,7 +11,6 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -32,7 +31,7 @@ import {
 } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { stageStatus } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 
 // Side-effect imports - register Web Awesome components
@@ -41,7 +40,6 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { terminalStatusIcon } from '@ui/wa/statusIcons';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -412,13 +410,10 @@ export class StageList extends LitElement {
       ? formatCompactDuration(group.endTime - group.startTime)
       : '';
 
-    const { status } = group;
-    const statusIcon = terminalStatusIcon(status);
+    const status = stageStatus(group, this.run);
     return html`
       <span class="group-status-icon">
-        ${waIcon(statusIcon, {
-          label: runStatusLabel(status),
-        })}
+        ${waIcon(status.glyph, { label: status.word })}
       </span>
       <bdi class="group-title">${group.name}</bdi>
       <span class="group-time">
@@ -499,13 +494,7 @@ export class StageList extends LitElement {
         @wa-show=${onToggle}
         @wa-hide=${onToggle}
       >
-        <div
-          slot="summary"
-          class=${classMap({
-            'log-group-header': true,
-            [`is-${group.status}`]: true,
-          })}
-        >
+        <div slot="summary" class="log-group-header">
           ${this.renderGroupHeader(node)}
         </div>
         <div class="log-group-content">

@@ -64,7 +64,7 @@ function applyStage(
       id: event.id,
       name: event.label,
       startTime: d.at,
-      status: 'running',
+      outcome: null,
       ...(event.parentId && d.ix.stageIndex.has(event.parentId)
         ? { parentStageId: event.parentId }
         : {}),
@@ -74,7 +74,7 @@ function applyStage(
     if (at === undefined) return;
     group = {
       ...d.next.stages[at],
-      status: event.status,
+      outcome: event.status,
       endTime: d.at,
     };
   }
@@ -322,12 +322,12 @@ function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
   const { outcome } = standing;
   if (outcome === null || !d.next.stages.some(isOpenGroup)) return;
   d.next.stages = d.next.stages.map((group) =>
-    isOpenGroup(group) ? { ...group, status: outcome, endTime: d.at } : group,
+    isOpenGroup(group) ? { ...group, outcome, endTime: d.at } : group,
   );
   d.touched = true;
 }
 
-const isOpenGroup = (group: Stage): boolean => group.status === 'running';
+const isOpenGroup = (group: Stage): boolean => group.outcome === null;
 
 /**
  * Apply one session event to a run's transcript, advancing the run's working

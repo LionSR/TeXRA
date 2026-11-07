@@ -98,7 +98,8 @@ export interface ScriptSectionView {
 export interface ScriptStageView {
   /** The stage's id; its calls' cards carry it as their group. */
   readonly id: string;
-  readonly status: Stage['status'];
+  /** The outcome its stage closed with; null while it is open. */
+  readonly outcome: Stage['outcome'];
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly sections: readonly ScriptSectionView[];
@@ -331,7 +332,7 @@ export function scriptStages(
     }
     return {
       id: stage.id,
-      status: stage.status,
+      outcome: stage.outcome,
       calls,
       sections: sectionsOf(calls),
       agents: calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length,
