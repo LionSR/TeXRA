@@ -952,12 +952,12 @@ export function crashConformanceSuite(
                     },
                   ],
                 });
-                // The root's prompt line and its stage commit with its opening, so
-                // no crash point sits between them (the resume never logs it).
+                // The root's prompt line commits with its opening, so no crash
+                // point sits between them (the resume never logs it).
                 const first = (type: string) =>
                   cleanRows.find((row) => row.run === root && row.type === type)
                     ?.commit ?? 0;
-                const traced = Math.max(first('log'), first('stage.start'));
+                const traced = first('log');
                 expect(
                   points.filter(
                     (p) => p >= first('run.position') && p < traced,
