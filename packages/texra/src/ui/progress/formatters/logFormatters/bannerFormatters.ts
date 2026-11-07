@@ -2,10 +2,6 @@
  * Banner-style formatter for thinking, scratchpad, and model response messages:
  * one collapsible `<wa-details>` shell driven by a per-message-type config.
  * Uses Lit templates with unsafeHTML for markdown content rendering.
- *
- * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
- * indentation will render with unwanted spaces in the output. Always use single-line
- * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Side-effect imports - register WA components
@@ -121,7 +117,7 @@ export function formatBannerContentTemplate(
     // The transcript has one header grid for people, assistant output and errors.
     // Keep the disclosure at the trailing edge, beside the copy action.
     // prettier-ignore
-    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}><div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('wand-magic-sparkles')}<span>Assistant</span></span><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${buildCopyButton(config.copyTitle, { content: trimmedContent, labeled: true })}</div>${contentTemplate}${cutNote}</wa-details>`;
+    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}><div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('wand-magic-sparkles')}<span>Assistant</span></span><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${buildCopyButton(config.copyTitle, trimmedContent)}</div>${contentTemplate}${cutNote}</wa-details>`;
   }
 
   // prettier-ignore

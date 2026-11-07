@@ -17,7 +17,7 @@ describe('SettingsProfileKeyController', () => {
     Effect.gen(function* () {
       const secrets = new FakeSecrets();
       const controller = new SettingsProfileKeyController({
-        prompt: createFakeUIHosts({ confirmResponses: [true] }).prompt,
+        dialogs: createFakeUIHosts({ confirmResponses: [true] }).dialogs,
         stores: makeFakeSettingsStores().stores,
       });
 

@@ -10,7 +10,7 @@ import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
 import { HttpClientError } from 'effect/http';
 
 import { apiKey } from '@texra-ai/llm';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, GLM_REGION_SETTING } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
@@ -144,8 +144,7 @@ export class SubscriptionUsageService {
           ),
       },
       glmCodingPlan: {
-        resolveVariant: () =>
-          Settings.get<boolean>(this.stores, 'glm.useChina'),
+        resolveVariant: () => Settings.get(this.stores, GLM_REGION_SETTING),
         fetch: (useChina) =>
           Effect.flatMap(lookupStoredKey('glm'), (apiKey) =>
             apiKey

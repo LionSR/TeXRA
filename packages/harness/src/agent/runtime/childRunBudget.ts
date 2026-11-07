@@ -17,9 +17,9 @@ import { Context, Effect, Semaphore } from 'effect';
 
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import {
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  CHILD_RUN_CONCURRENCY_BUDGET_RANGE,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
-} from '@shared/schemas';
+} from '@shared/state/stateSettings';
 
 /**
  * The configured budget with the `auto` sentinel resolved to this machine's
@@ -33,15 +33,15 @@ import {
 export const resolveChildRunConcurrencyBudget = Effect.fn(
   'resolveChildRunConcurrencyBudget',
 )(function* (stores: SettingsStores) {
-  const configured = yield* Settings.get<number>(
+  const configured = yield* Settings.get(
     stores,
-    CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+    CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   );
-  if (configured !== CHILD_RUN_CONCURRENCY_BUDGET_SETTING.auto) {
+  if (configured !== CHILD_RUN_CONCURRENCY_BUDGET_RANGE.auto) {
     return configured;
   }
   return Math.min(
-    CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
+    CHILD_RUN_CONCURRENCY_BUDGET_RANGE.max,
     Math.max(1, os.availableParallelism()),
   );
 });

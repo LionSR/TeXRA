@@ -2,7 +2,6 @@ import { Cause, Effect, FileSystem, Schema } from 'effect';
 import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
-import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage, escapeAttr } from '@texra-ai/harness/schemas';
 import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
 
@@ -71,8 +70,6 @@ const buildWebviewHtml = Effect.fnUntraced(function* (
  * stylesheet under `dist/`. Covers the main, progress, and settings views.
  */
 export class BundledViewContentProvider {
-  private readonly channel: string;
-
   private readonly context: vscode.ExtensionContext;
   private readonly viewName: string;
   /**
@@ -89,7 +86,6 @@ export class BundledViewContentProvider {
     this.context = context;
     this.viewName = viewName;
     this.viewFolder = viewFolder;
-    this.channel = `${viewName}ContentProvider`;
   }
 
   /** The folders the view's page may load from: its own and the shared
@@ -103,6 +99,8 @@ export class BundledViewContentProvider {
   }
 
   /**
+   * The view's page, logged on the caller's channel.
+   *
    * `attributes` are the view's own HTML tokens, escaped for an attribute
    * value: the progress view carries its session key as
    * `<progress-app data-session>`, which is how the bundle knows which
@@ -129,19 +127,14 @@ export class BundledViewContentProvider {
       attributes,
     ).pipe(
       Effect.tap(() =>
-        Effect.logDebug(`Generated HTML content for ${this.viewName}`).pipe(
-          withLogChannel(this.channel),
-        ),
+        Effect.logDebug(`Generated HTML content for ${this.viewName}`),
       ),
       // A view that cannot render its template still gets a page: the
       // failure is logged here, once, with its cause.
       Effect.catchCause((cause) =>
         Effect.logError(
-          `Error generating HTML content: ${toErrorMessage(Cause.squash(cause))}`,
-        ).pipe(
-          withLogChannel(this.channel),
-          Effect.as('<html><body>Error loading content</body></html>'),
-        ),
+          `Error generating HTML content for ${this.viewName}: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(Effect.as('<html><body>Error loading content</body></html>')),
       ),
     );
   }

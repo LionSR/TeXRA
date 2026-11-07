@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { withLogChannel, type ProcessRuntime } from '@texra-ai/harness/host';
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import type { CommandId } from '@texra/shared/commands/catalog';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { ONBOARDING_CARD_TITLE } from '@ui/copy/onboarding';
 
@@ -26,8 +26,8 @@ class WelcomeWebviewProvider implements vscode.WebviewViewProvider {
 function renderWelcomeHtml(): string {
   const openFolder = 'command:workbench.action.files.openFolder';
   const cloneRepo = 'command:git.clone';
-  const createSample = `command:${EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT}`;
-  const openWalkthrough = `command:${EXTENSION_COMMANDS.OPEN_GETTING_STARTED}`;
+  const createSample = `command:${'texra.createSampleProject' satisfies CommandId}`;
+  const openWalkthrough = `command:${'texra.openGettingStarted' satisfies CommandId}`;
   const docs = 'https://texra.ai';
 
   return /* html */ `

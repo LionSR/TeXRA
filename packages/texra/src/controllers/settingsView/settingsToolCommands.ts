@@ -1,8 +1,8 @@
 /**
  * The Plugins and LaTeX pages of the settings body: the plugin rows
- * (`./pluginRows`), TeXRA's plugin switches and their terminal commands, and
- * the LaTeX toolchain status with its install commands. Installing a VS Code
- * extension and writing VS Code's own settings stay with the host that can.
+ * (`./pluginRows`), TeXRA's plugin switches and their terminal commands, the
+ * LaTeX toolchain status with its install commands, and the host editor's
+ * extensions and recommended settings where the host has an editor.
  */
 import { Effect, Predicate, Stream, SubscriptionRef } from 'effect';
 
@@ -15,7 +15,10 @@ import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,
 } from '@texra/controllers/settingsView/LatexToolingController';
-import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
+import {
+  buildPluginRows,
+  type PluginPageRoots,
+} from '@texra/controllers/settingsView/pluginRows';
 import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 
@@ -25,22 +28,24 @@ import {
   type SettingsHostBindings,
   type SettingsPresentation,
 } from './settingsHostBindings';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** The Plugins and LaTeX pages: their arms, their pages, and the follower
  *  of the tool availability the Plugins page reads. */
 export function settingsToolCommands(ports: {
-  readonly roots: Pick<
-    WorkspaceRoots,
-    'workspace' | 'config' | 'globalState' | 'globalStorage' | 'storageRoot'
-  >;
+  readonly roots: PluginPageRoots;
   readonly bindings: SettingsHostBindings;
-  readonly present: Pick<SettingsPresentation, 'changed'>;
-  /** The host installs an editor extension a plugin card names. */
-  readonly installsExtensions: boolean;
+  readonly present: Pick<
+    SettingsPresentation,
+    'changed' | 'notice' | 'reported'
+  >;
 }) {
-  const { bindings, roots, installsExtensions } = ports;
-  const { changed } = ports.present;
+  const { bindings, roots } = ports;
+  const { editor } = bindings;
+  const { changed, notice, reported } = ports.present;
+  // The page shows no editor control on a host without one.
+  const requireEditor = editor
+    ? Effect.succeed(editor)
+    : Effect.fail(new Error('This host has no code editor.'));
   /** Probe this workspace's tools again; the rows follow what it finds. */
   const refresh = Effect.flatMap(ToolAvailability, (availability) =>
     availability.refresh(roots),
@@ -56,10 +61,7 @@ export function settingsToolCommands(ports: {
       ['plugins'],
       Effect.flatMap(ToolAvailability, (availability) =>
         Effect.flatMap(SubscriptionRef.get(availability.results), (held) =>
-          buildPluginRows(
-            { ...roots, installsExtensions },
-            held.get(roots.workspace),
-          ),
+          buildPluginRows({ ...roots, editor }, held.get(roots.workspace)),
         ),
       ).pipe(
         Effect.catch((error) =>
@@ -82,9 +84,7 @@ export function settingsToolCommands(ports: {
       'latex',
       ['latex'],
       Effect.map(
-        Effect.suspend(() =>
-          detectLatexSettingsStatus(bindings.latexEditorStatus()),
-        ),
+        Effect.suspend(() => detectLatexSettingsStatus(editor)),
         (settings) => ({ settings }),
       ),
     ),
@@ -138,6 +138,30 @@ export function settingsToolCommands(ports: {
           ),
     // The rows follow the results the re-probe publishes.
     recheckToolStatus: () => refresh,
+    // The plugin rows follow the editor's own extension-change re-probe.
+    installExtension: ({ extensionId }) =>
+      reported(
+        `Failed to install extension "${extensionId}"`,
+        Effect.gen(function* () {
+          yield* (yield* requireEditor).install(extensionId);
+          yield* notice(`Extension "${extensionId}" installed`);
+          yield* changed('latex');
+        }),
+      ),
+    applyLatexSettings: ({ field, reset = false }) =>
+      reported(
+        'Failed to update LaTeX settings',
+        Effect.gen(function* () {
+          yield* (yield* requireEditor).applyRecommended(field, reset);
+          yield* changed('latex');
+          const verb = reset ? 'reset' : 'applied';
+          yield* notice(
+            field
+              ? `LaTeX setting ${verb}`
+              : `All recommended LaTeX settings ${verb}`,
+          );
+        }),
+      ),
   } satisfies Partial<SettingsViewInboundHandlerRegistry>;
 
   return { handlers, pages, refresh, followToolAvailability };

@@ -9,7 +9,7 @@ import { CHANNEL, TEMP_EXTENSIONS } from './constants';
 import {
   collectFilesFromPatterns,
   filesystemFor,
-  generateTimestamp,
+  fileNameTimestamp,
 } from './utils';
 
 /**
@@ -100,7 +100,7 @@ export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
     const outputFolder = path.join(
       inputDir,
       'Diffs',
-      `${generateTimestamp()}_${baseName}_${commitHash}`,
+      `${yield* fileNameTimestamp}_${baseName}_${commitHash}`,
     );
 
     const outputSide = yield* filesystemFor(workspaceFs, outputFolder);

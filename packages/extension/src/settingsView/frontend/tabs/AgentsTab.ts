@@ -16,13 +16,13 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared schemas
 import {
-  GlobalStateKey,
-  WorkspaceStateKey,
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type AgentScanIssue,
+  ALLOW_ORCHESTRATOR_KILL_SETTING,
+  DETACH_SUBAGENTS_ON_STOP_SETTING,
+  GIT_WORKTREE_SUPPORT_SETTING,
   pluralize,
 } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
@@ -244,32 +244,20 @@ export class AgentsTab extends SignalWatcher(LitElement) {
   private renderAdvanced(): TemplateResult {
     return html`
       <div class="settings-section">
-        ${renderStateSettingNumberRow(
-          MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
-          {
-            min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
-            max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
-            unit: '%',
-            // Clearing the field commits 0, which is the documented way to
-            // disable compaction — not a no-op edit to be reverted.
-            revertOnEmpty: false,
-          },
-        )}
-        ${renderStateSettingNumberRow(
-          MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-          {
-            min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
-            max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
-            step: 1,
-            revertOnEmpty: false,
-          },
-        )}
-        ${renderStateSettingToggleRow(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL)}
-        ${renderStateSettingToggleRow(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP)}
-        ${renderStateSettingToggleRow(WorkspaceStateKey.GIT_WORKTREE_SUPPORT)}
-        ${renderStateSettingNumberRow(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, {
-          min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,
-          max: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
+        ${renderStateSettingNumberRow(MODEL_COMPACTION_THRESHOLD_SETTING, {
+          unit: '%',
+          // Clearing the field commits 0, which is the documented way to
+          // disable compaction — not a no-op edit to be reverted.
+          revertOnEmpty: false,
+        })}
+        ${renderStateSettingNumberRow(MODEL_RETRY_MAX_ATTEMPTS_SETTING, {
+          step: 1,
+          revertOnEmpty: false,
+        })}
+        ${renderStateSettingToggleRow(ALLOW_ORCHESTRATOR_KILL_SETTING)}
+        ${renderStateSettingToggleRow(DETACH_SUBAGENTS_ON_STOP_SETTING)}
+        ${renderStateSettingToggleRow(GIT_WORKTREE_SUPPORT_SETTING)}
+        ${renderStateSettingNumberRow(CHILD_RUN_CONCURRENCY_BUDGET_SETTING, {
           step: 1,
         })}
       </div>

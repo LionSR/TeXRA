@@ -14,6 +14,7 @@ import {
   type RegionalProviderId,
 } from '@texra-ai/llm';
 import { providerRegionSetting } from '@texra-ai/harness/schemas';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
 
 /** Whether `provider`'s region toggle picks its China platform. */
@@ -21,8 +22,14 @@ function useChinaRegion(
   stores: SettingsStores,
   provider: string,
 ): Effect.Effect<boolean, StateReadFailed> {
-  const key = providerRegionSetting(provider)?.key;
-  return key ? Settings.get<boolean>(stores, key) : Effect.succeed(false);
+  const toggle = providerRegionSetting(provider);
+  return toggle ? Settings.get(stores, toggle) : Effect.succeed(false);
+}
+
+/** Whether `provider`'s region toggle picks its China platform while unset. */
+function regionByDefault(provider: string): boolean {
+  const toggle = providerRegionSetting(provider);
+  return toggle ? Settings.defaultOf(TEXRA_SETTINGS.catalog, toggle) : false;
 }
 
 /** A value that differs between a provider's two platforms. */
@@ -96,7 +103,7 @@ export const getProviderDisplayName = Effect.fn('getProviderDisplayName')(
  */
 export function providerKeyUrl(
   provider: string,
-  chinaRegion: boolean = providerRegionSetting(provider)?.default ?? false,
+  chinaRegion: boolean = regionByDefault(provider),
 ): string | undefined {
   const page = KEY_PAGE_BY_PROVIDER.get(provider);
   if (page === undefined || typeof page === 'string') return page;

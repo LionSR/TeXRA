@@ -76,87 +76,45 @@ export interface ExternalOpener {
   openExternal(url: string): Effect.Effect<void, HostFailed>;
 }
 
-/**
- * A host capable of surfacing simple, non-blocking notifications to the
- * user. Distinct from {@link PromptHost}, which additionally supports
- * action items and awaits the user's choice; this is fire-and-forget
- * status reporting (a saved credential, a failed operation, a caveat).
- *
- * Every member is an `Effect`: a host that could not present reaches the
- * caller as {@link HostFailed} rather than as `unknown`, and a
- * caller that does not want to wait for the dialog forks the member instead
- * of `void`-ing a promise. Awaiting or forking is the caller's choice; the
- * member itself never reports a dismissal as an error, because there is
- * nothing to answer.
- */
-export interface MessageHost {
-  showInfoMessage(message: string): Effect.Effect<void, HostFailed>;
-  showWarningMessage(message: string): Effect.Effect<void, HostFailed>;
-  showErrorMessage(message: string): Effect.Effect<void, HostFailed>;
+/** How much a notice matters to the user. */
+export type NoticeLevel = 'info' | 'warning' | 'error';
+
+/** A modal question that names the action it confirms. */
+export interface ConfirmQuestion {
+  readonly message: string;
+  /** The confirm button's label: the action, never a content-free "OK". */
+  readonly action: string;
+  readonly detail?: string;
 }
 
-export type PromptMessageItem<T extends string = string> =
-  | T
-  | {
-      label: T;
-      isCloseAffordance?: boolean;
-    };
-
-/** What a message box and a confirmation both take. */
-interface BaseDialogOptions {
-  detail?: string;
-  modal?: boolean;
-}
-
-export interface PromptMessageOptions<
-  T extends string = string,
-> extends BaseDialogOptions {
-  items?: readonly PromptMessageItem<T>[];
-}
-
-export interface PromptConfirmOptions extends BaseDialogOptions {
-  /**
-   * Required so no confirmation ships with a content-free "OK"/"Yes" button:
-   * every caller must name the action being confirmed.
-   */
-  confirmLabel: string;
-}
-
-export interface PromptInputOptions {
-  prompt?: string;
-  placeHolder?: string;
-  password?: boolean;
+/** One line of text the user types. */
+export interface InputField {
+  readonly prompt: string;
+  readonly placeholder?: string;
+  /** Mask what is typed (an API key, a token). */
+  readonly secret?: boolean;
 }
 
 /**
- * The host's dialog surface: a message the user can answer, a confirmation,
- * and a text input.
+ * The host's dialogs, in the app's words: a notice nobody answers, a modal
+ * confirmation, and a text input.
  *
- * Every member is an `Effect`, so a host that could not present reaches the
- * caller through the failure channel rather than as `unknown`, and
- * interrupting the fiber that awaits a prompt dismisses it where the host has
+ * Every member is an `Effect`. A notice never fails: a host that could not
+ * show it logs the cause at warn, since a run or a page must not fail
+ * because a toast did not appear. It finishes when the host's call does (VS
+ * Code's toast when it is dismissed), so a caller that must not wait forks
+ * it. A confirmation or an input the host could not present fails with
+ * {@link HostFailed}; the user's own answer, a dismissal included, is a value.
+ * Interrupting the fiber that waits on an input closes it where the host has
  * a cancellation channel (VS Code's input box) and detaches from it where it
- * has none (native message boxes). The user's own answer — a dismissal
- * included — is a value, never an error.
- *
- * Every member fails with {@link HostFailed}.
+ * has none (native message boxes).
  */
-export interface PromptHost {
-  info<T extends string = string>(
-    message: string,
-    options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined, HostFailed>;
-  warning<T extends string = string>(
-    message: string,
-    options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined, HostFailed>;
-  confirm(
-    message: string,
-    options: PromptConfirmOptions,
-  ): Effect.Effect<boolean, HostFailed>;
-  input(
-    options: PromptInputOptions,
-  ): Effect.Effect<string | undefined, HostFailed>;
+export interface Dialogs {
+  notify(level: NoticeLevel, message: string): Effect.Effect<void>;
+  /** `false` on cancel. */
+  confirm(question: ConfirmQuestion): Effect.Effect<boolean, HostFailed>;
+  /** `undefined` on cancel. */
+  input(field: InputField): Effect.Effect<string | undefined, HostFailed>;
 }
 
 export interface TerminalRunRequest {

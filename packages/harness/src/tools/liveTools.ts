@@ -37,7 +37,6 @@ import type {
   StateReadFailed,
   StateWriteFailed,
 } from '@shared/config/settings';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { entriesOf } from '@tools/catalogEntries';
 import {
   readDisabledTools,
@@ -58,6 +57,7 @@ import {
   type ToolTable,
 } from '@tools/toolTable';
 import type { InstalledToolReader, PluginLoader } from '@tools/mcp/mcpConfig';
+import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 
 /** The process's tool catalog's identifier: what a program that reads the
  *  catalog requires. */
@@ -201,7 +201,7 @@ export const toolCatalogLayer = (
           (table.entries.get(id)?.toggle === undefined
             ? Effect.logWarning(`Plugin ${id} has no switch; nothing written.`)
             : Effect.asVoid(
-                state.modify(GlobalStateKey.DISABLED_TOOLS, (stored) =>
+                state.modify(DISABLED_TOOLS_KEY.key, (stored) =>
                   Result.map(storedDisabledTools(stored), (current) => {
                     const disabled = new Set(current);
                     if (enabled) disabled.delete(id);

@@ -26,7 +26,6 @@ const validateFilesExist = Effect.fnUntraced(function* (
   for (const [label, location] of required) {
     if (!(yield* fs.exists(location.absolutePath))) {
       yield* showLoggedMessage(
-        CHANNEL,
         `${label} file not found: ${location.absolutePath}`,
       );
       return false;
@@ -63,7 +62,7 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
         () =>
           Effect.logWarning(
             `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
+          ).pipe(Effect.as(undefined)),
       ),
     );
 
@@ -81,13 +80,12 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
 
     yield* Effect.logInfo(
       `Opened diff comparison between ${baseLocation.absolutePath} and ${editedLocation.absolutePath}`,
-    ).pipe(withLogChannel(CHANNEL));
+    );
   },
   Effect.catchCause((cause) =>
-    showLoggedErrorMessage(
-      CHANNEL,
-      'Error comparing files',
-      Cause.squash(cause),
-    ).pipe(Effect.asVoid),
+    showLoggedErrorMessage('Error comparing files', Cause.squash(cause)).pipe(
+      Effect.asVoid,
+    ),
   ),
+  withLogChannel(CHANNEL),
 );

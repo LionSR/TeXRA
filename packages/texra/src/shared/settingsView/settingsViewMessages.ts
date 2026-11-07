@@ -16,7 +16,8 @@ import {
   RunIdSchema,
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
-  WorkspaceStateKey,
+  DISABLED_SKILLS_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
 import {
   API_KEY_PROVIDER_IDS,
@@ -26,6 +27,7 @@ import {
 import { AgentModePresetSchema } from '@texra/shared/agentTeams';
 import {
   LATEX_DEPENDENCIES,
+  LATEX_RECOMMENDED_SETTINGS,
   SYSTEM_PACKAGE_MANAGERS,
 } from '@texra/shared/constants/latexToolchain';
 import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
@@ -388,16 +390,24 @@ const PRSubscriptionsPageSchema = Schema.Struct({
 // LaTeX settings data schemas
 // ============================================================
 
-/** Status of each recommended LaTeX-related VS Code setting. */
+/** The LaTeX page's status: the local tools, and the host editor's side. */
 const LatexSettingsStatusSchema = Schema.Struct({
-  outDir: Schema.Boolean,
-  autoRevealExclude: Schema.Boolean,
+  /** Whether LaTeX Workshop is installed and which recommended settings
+   *  hold; null on a host without an editor, which shows neither. */
+  editor: Schema.NullOr(
+    Schema.Struct({
+      latexWorkshopInstalled: Schema.Boolean,
+      recommended: Schema.Record(
+        Schema.Literals(Struct.keys(LATEX_RECOMMENDED_SETTINGS)),
+        Schema.Boolean,
+      ),
+    }),
+  ),
   /** Whether each dependency the LaTeX tab reports is installed. */
   installed: Schema.Record(
     Schema.Literals(Struct.keys(LATEX_DEPENDENCIES)),
     Schema.Boolean,
   ),
-  latexWorkshopInstalled: Schema.Boolean,
   platform: OsPlatformSchema,
   pdflatexPath: Schema.NullOr(Schema.String),
   latexmkPath: Schema.NullOr(Schema.String),
@@ -413,8 +423,7 @@ export type LatexSettingsStatus = typeof LatexSettingsStatusSchema.Type;
 
 /** Shared default — used by SettingsApp and LaTeXTab before backend data arrives. */
 export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = {
-  outDir: false,
-  autoRevealExclude: false,
+  editor: null,
   installed: {
     compiler: false,
     latexdiff: false,
@@ -422,7 +431,6 @@ export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = {
     texcount: false,
     image: false,
   },
-  latexWorkshopInstalled: false,
   platform: 'linux',
   pdflatexPath: null,
   latexmkPath: null,
@@ -599,8 +607,8 @@ const DeleteAgentModePresetMessageSchema = Schema.Struct({
 });
 
 // Tool dashboard inbound messages
-const InstallToolExtensionMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION),
+const InstallExtensionMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION),
   extensionId: Schema.String.check(Schema.isMinLength(1)),
 });
 const RecheckToolStatusMessageSchema = commandOnly(
@@ -658,12 +666,11 @@ const OpenPRSubscriptionStreamMessageSchema = Schema.Struct({
 // LaTeX settings inbound messages
 const ApplyLatexSettingsMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS),
-  field: Schema.optional(Schema.Literals(['outDir', 'autoRevealExclude'])),
+  field: Schema.optional(
+    Schema.Literals(Struct.keys(LATEX_RECOMMENDED_SETTINGS)),
+  ),
   reset: Schema.optional(Schema.Boolean),
 });
-const InstallLatexWorkshopMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
-);
 const RunInstallCommandMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND),
   installCommand: Schema.String.check(Schema.isMinLength(1)),
@@ -694,8 +701,8 @@ const UpdateStateSettingMessageSchema = Schema.Struct({
 const SetSkillEnabledMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED),
   key: Schema.Literals([
-    WorkspaceStateKey.DISABLED_SKILLS,
-    WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    DISABLED_SKILLS_SETTING.key,
+    DISABLED_SKILL_SOURCES_SETTING.key,
   ]),
   item: Schema.String.check(Schema.isMinLength(1)),
   enabled: Schema.Boolean,
@@ -709,14 +716,13 @@ export const SettingsViewInboundMessageSchema = Schema.Union([
   // Lifecycle
   WebviewReadyMessageSchema,
   // Tool dashboard messages
-  InstallToolExtensionMessageSchema,
+  InstallExtensionMessageSchema,
   RecheckToolStatusMessageSchema,
   ToggleToolMessageSchema,
   RunToolCommandMessageSchema,
   PluginActionMessageSchema,
   // LaTeX settings messages
   ApplyLatexSettingsMessageSchema,
-  InstallLatexWorkshopMessageSchema,
   RunInstallCommandMessageSchema,
   // Memory messages
   GetMemoryDataMessageSchema,

@@ -15,7 +15,10 @@ import {
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
 import type { WorkspaceRoots } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+
+const CHANNEL = 'SettingsViewProvider';
 
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
@@ -122,6 +125,7 @@ export class SettingsViewProvider {
             if (this._view === panel) panel.webview.html = html;
           }),
         ),
+        withLogChannel(CHANNEL),
       ),
     );
     return panel.webview.onDidReceiveMessage((message) => {

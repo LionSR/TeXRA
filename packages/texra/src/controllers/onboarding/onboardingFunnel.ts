@@ -21,41 +21,53 @@
 import { Effect, Schema, type Scope, Stream } from 'effect';
 
 import { Settings, withLogChannel } from '@texra-ai/harness/host';
-import { agentName, type SessionView } from '@texra-ai/harness/schemas';
+import {
+  agentName,
+  type SessionView,
+  type StateKey,
+} from '@texra-ai/harness/schemas';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { Session } from '@texra-ai/harness';
 import type { StateStore, StateWriteFailed } from '@texra-ai/harness/host';
-
-/** "Skip for now" on the State 0 picker. The key keeps the CLI's spelling,
- *  under which it was first stored. */
-const DECLINED_KEY = 'cli.onboardingDeclined';
-/** A real run completed, or the user skipped setup. */
-const FIRST_RUN_DONE_KEY = 'onboarding.firstRunDone';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = Schema.Boolean.pipe(
   Schema.withDecodingDefault(Effect.succeed(false)),
 );
 
+/** "Skip for now" on the State 0 picker. The key keeps the CLI's spelling,
+ *  under which it was first stored. */
+const DECLINED_KEY = {
+  key: 'cli.onboardingDeclined',
+  slot: 'globalState',
+  schema: OnboardingFlagSchema,
+} as const satisfies StateKey<boolean>;
+/** A real run completed, or the user skipped setup. */
+const FIRST_RUN_DONE_KEY = {
+  key: 'onboarding.firstRunDone',
+  slot: 'globalState',
+  schema: OnboardingFlagSchema,
+} as const satisfies StateKey<boolean>;
+
 /** Record whether the user chose "Skip for now" on the State 0 picker. */
 export function setOnboardingDeclined(
   state: StateStore,
   declined: boolean,
 ): Effect.Effect<void, StateWriteFailed> {
-  return state.update(DECLINED_KEY, declined);
+  return state.update(DECLINED_KEY.key, declined);
 }
 
 /** Whether a real run has completed (or the user skipped setup). */
 export function getFirstRunDone(state: StateStore) {
-  return Settings.state(state, FIRST_RUN_DONE_KEY, OnboardingFlagSchema);
+  return Settings.state(state, FIRST_RUN_DONE_KEY);
 }
 
 /** Record that a real run completed or the user skipped setup. */
 export function setFirstRunDone(
   state: StateStore,
 ): Effect.Effect<void, StateWriteFailed> {
-  return state.update(FIRST_RUN_DONE_KEY, true);
+  return state.update(FIRST_RUN_DONE_KEY.key, true);
 }
 
 /** Whether `view` holds a completed agent run other than the setup
@@ -108,14 +120,14 @@ export const recordFirstCompletedRun = Effect.fn('recordFirstCompletedRun')(
 /** The flags {@link readOnboardingFlags} reads, for a follower of their
  *  changes (`AppStateStore.changes`): another process may write them. */
 export const ONBOARDING_FLAG_KEYS: readonly string[] = Object.freeze([
-  DECLINED_KEY,
-  FIRST_RUN_DONE_KEY,
+  DECLINED_KEY.key,
+  FIRST_RUN_DONE_KEY.key,
 ]);
 
 /** The user's two onboarding flags. */
 export const readOnboardingFlags = (state: StateStore) =>
   Effect.all({
-    declined: Settings.state(state, DECLINED_KEY, OnboardingFlagSchema),
+    declined: Settings.state(state, DECLINED_KEY),
     firstRunDone: getFirstRunDone(state),
   });
 

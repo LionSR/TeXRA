@@ -46,10 +46,13 @@ import {
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { emitAppSignal } from '@platform/appSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { fileWatchRetrySchedule } from '@utils/files/fsEntryExists';
+import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
+import { CUSTOM_AGENT_DIR_KEY } from '@agent/index/AgentDirectoryService';
+import { ACTIVE_TEAM_ID_KEY } from '@agent/workspaceAgents/WorkspaceAgentsController';
+import { INSTALLED_PLUGINS_KEY } from '@common/plugins/installRecord';
 
 /** Register one agent directory root; a failure (an unreadable directory
  *  setting, a relative path, a path that cannot be canonicalised) is logged
@@ -165,9 +168,8 @@ export const agentCatalogFollower = Layer.effectDiscard(
     const catalog = yield* AgentCatalog;
     const directories = yield* AgentDirectories;
     const { resourcesRoot } = directories;
-    const packaged = resourcesRoot !== undefined && resourcesRoot !== '';
-    if (!packaged && !(yield* namedCustomDirectory)) return;
-    if (packaged) {
+    if (resourcesRoot === undefined && !(yield* namedCustomDirectory)) return;
+    if (resourcesRoot !== undefined) {
       yield* Effect.all(
         [
           registerRoot(directories.builtIn(), {
@@ -209,11 +211,11 @@ export const agentCatalogFollower = Layer.effectDiscard(
     // The custom directory: its registration with the file tools and its
     // watcher follow the setting, written by this process, another, or a
     // writer other than the settings view. A burst of edits reloads once.
-    yield* appState.changes([GlobalStateKey.CUSTOM_AGENT_DIR]).pipe(
+    yield* appState.changes([CUSTOM_AGENT_DIR_KEY.key]).pipe(
       Stream.switchMap(() =>
         Stream.unwrap(
           Effect.as(
-            packaged ? registerCustomAgentRoot : Effect.void,
+            resourcesRoot !== undefined ? registerCustomAgentRoot : Effect.void,
             watchCustomDirectory.pipe(
               // A launch inside the debounce loads the change itself.
               Stream.tap(() => catalog.invalidate),
@@ -230,7 +232,7 @@ export const agentCatalogFollower = Layer.effectDiscard(
     // this process or another sharing the store, a background service task's
     // among them: every agent list here repaints. The first element is the
     // subscription itself, not a change.
-    yield* appState.changes([GlobalStateKey.ACTIVE_TEAM_ID]).pipe(
+    yield* appState.changes([ACTIVE_TEAM_ID_KEY.key]).pipe(
       Stream.drop(1),
       Stream.runForEach(() =>
         emitAppSignal('workspaceAgentsChanged', undefined),
@@ -245,9 +247,9 @@ export const agentCatalogFollower = Layer.effectDiscard(
     const landed = Deferred.succeed(loaded, undefined);
     yield* appState
       .changes([
-        GlobalStateKey.DISABLED_TOOLS,
-        GlobalStateKey.INSTALLED_PLUGINS,
-        GlobalStateKey.CUSTOM_AGENT_DIR,
+        DISABLED_TOOLS_KEY.key,
+        INSTALLED_PLUGINS_KEY.key,
+        CUSTOM_AGENT_DIR_KEY.key,
       ])
       .pipe(
         Stream.runForEach(() => Effect.ensuring(reload, landed)),

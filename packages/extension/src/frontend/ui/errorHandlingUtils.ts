@@ -1,14 +1,8 @@
 // Third-party imports
 import { Effect } from 'effect';
-import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/host';
-import {
-  ensureError,
-  formatError,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { formatError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { ToolMissing } from '@texra/utils/system/toolChecks';
@@ -23,9 +17,11 @@ type DocId = 'custom-agents' | 'latex-diff';
  * machinery refusing the toast is a fault worth its own log line, not a
  * reason for every call site to grow an error arm for something it could
  * only log anyway.
+ *
+ * None of these helpers names a log channel: their lines take the channel
+ * of the program that calls them (`withLogChannel` at its entry).
  */
 export function announce<A>(
-  channel: string,
   notice: Effect.Effect<A, { readonly message: string }>,
   whenRefused: A,
 ): Effect.Effect<A> {
@@ -33,7 +29,7 @@ export function announce<A>(
     Effect.catch((failure) =>
       Effect.logError(
         `Could not show the notification: ${failure.message}`,
-      ).pipe(withLogChannel(channel), Effect.as(whenRefused)),
+      ).pipe(Effect.as(whenRefused)),
     ),
   );
 }
@@ -46,28 +42,24 @@ const INSTALL_GUIDE_ACTION = 'View Installation Guide';
  * guide: this is where the editor shows every `ToolMissing`.
  */
 export function showLoggedErrorMessage(
-  channel: string,
   prefix: string,
   err: unknown,
 ): Effect.Effect<string> {
   if (!(err instanceof ToolMissing))
-    return showLoggedMessage(channel, formatError(prefix, err));
+    return showLoggedMessage(formatError(prefix, err));
   // Whole, not truncated as `formatError` would: the install steps are the
   // point of the notice.
   const message = `${prefix}: ${err.message}`;
   return Effect.gen(function* () {
-    yield* Effect.logError(message).pipe(withLogChannel(channel));
+    yield* Effect.logError(message);
     const choice = yield* announce(
-      channel,
-      vscodeUi.error(message, { items: [INSTALL_GUIDE_ACTION] }),
+      vscodeUi.ask('error', message, { items: [INSTALL_GUIDE_ACTION] }),
       undefined,
     );
     if (choice === INSTALL_GUIDE_ACTION)
       yield* openGuidePage('installation').pipe(
         Effect.catch((error) =>
-          Effect.logError('Could not open the installation guide', error).pipe(
-            withLogChannel(channel),
-          ),
+          Effect.logError('Could not open the installation guide', error),
         ),
       );
     return message;
@@ -82,24 +74,19 @@ export function showLoggedErrorMessage(
 /** Log a pre-formatted message and display it to the user as an error,
  *  without waiting for the notice to be dismissed. */
 export const showLoggedMessage = Effect.fn('showLoggedMessage')(function* (
-  channel: string,
   message: string,
 ): Effect.fn.Return<string> {
-  yield* Effect.logError(message).pipe(withLogChannel(channel));
-  yield* Effect.forkDetach(
-    announce(channel, vscodeUi.showErrorMessage(message), undefined),
-  );
+  yield* Effect.logError(message);
+  yield* Effect.forkDetach(vscodeUi.notify('error', message));
   return message;
 });
 
 /** Log a message and display it to the user as an information notification,
  *  without waiting for the notice to be dismissed. */
 export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
-  function* (channel: string, message: string): Effect.fn.Return<string> {
-    yield* Effect.logInfo(message).pipe(withLogChannel(channel));
-    yield* Effect.forkDetach(
-      announce(channel, vscodeUi.showInfoMessage(message), undefined),
-    );
+  function* (message: string): Effect.fn.Return<string> {
+    yield* Effect.logInfo(message);
+    yield* Effect.forkDetach(vscodeUi.notify('info', message));
     return message;
   },
 );
@@ -107,29 +94,20 @@ export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
 /** Log an error message, display it with a docs action, and open the docs if selected. */
 export const showLoggedMessageWithDocs = Effect.fn('showLoggedMessageWithDocs')(
   function* (
-    channel: string,
     message: string,
     docId: DocId,
     actionLabel = 'View Docs',
   ): Effect.fn.Return<void> {
-    yield* Effect.logError(message).pipe(withLogChannel(channel));
+    yield* Effect.logError(message);
     const selection = yield* announce(
-      channel,
-      vscodeUi.error(message, { items: [actionLabel] }),
+      vscodeUi.ask('error', message, { items: [actionLabel] }),
       undefined,
     );
     if (selection !== actionLabel) return;
 
-    yield* Effect.tryPromise({
-      try: async () => {
-        await vscode.commands.executeCommand('texra.openDoc', docId);
-      },
-      catch: ensureError,
-    }).pipe(
+    yield* openGuidePage(docId).pipe(
       Effect.catch((err) =>
-        Effect.logError(
-          `Failed to open documentation: ${toErrorMessage(err)}`,
-        ).pipe(withLogChannel(channel)),
+        Effect.logError(`Failed to open documentation: ${toErrorMessage(err)}`),
       ),
     );
   },

@@ -1,7 +1,8 @@
 import { Settings } from '@texra-ai/harness/host';
 import {
-  GlobalStateKey,
   providerRegionSetting,
+  GLM_CODING_PLAN_SETTING,
+  KIMI_CODE_PREFER_SETTING,
 } from '@texra-ai/harness/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
@@ -32,16 +33,14 @@ export interface CodingPlanSubscriptionRuntime {
 
 const RUNTIME_BY_ID = {
   glmCodingPlan: {
-    getEnabled: (stores) =>
-      Settings.get<boolean>(stores, GlobalStateKey.GLM_CODING_PLAN),
+    getEnabled: (stores) => Settings.get(stores, GLM_CODING_PLAN_SETTING),
     setEnabled: (stores, enabled) =>
-      Settings.set(stores, GlobalStateKey.GLM_CODING_PLAN, enabled),
+      Settings.set(stores, GLM_CODING_PLAN_SETTING, enabled),
   },
   kimiCode: {
-    getEnabled: (stores) =>
-      Settings.get<boolean>(stores, GlobalStateKey.KIMI_CODE_PREFER),
+    getEnabled: (stores) => Settings.get(stores, KIMI_CODE_PREFER_SETTING),
     setEnabled: (stores, enabled) =>
-      Settings.set(stores, GlobalStateKey.KIMI_CODE_PREFER, enabled),
+      Settings.set(stores, KIMI_CODE_PREFER_SETTING, enabled),
   },
 } as const satisfies Record<
   CodingPlanSubscription['id'],

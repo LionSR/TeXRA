@@ -7,8 +7,6 @@ import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
-export const TEXFMT_CONFIG_KEY = 'latex.texfmtConfig';
-
 export const runTexFmt = Effect.fn('latex.runTexFmt')(function* (
   filePath: string,
   workspaceRoot: string | undefined,
@@ -21,13 +19,12 @@ export const runTexFmt = Effect.fn('latex.runTexFmt')(function* (
   ];
 
   const result = yield* runTool('tex-fmt', args, {
-    channel: CHANNEL,
     cwd: workspaceRoot,
     // The slots the caller resolved this formatter from.
     settings,
   });
   if (!result.success) return false;
 
-  yield* Effect.logInfo(`Formatted ${filePath}`).pipe(withLogChannel(CHANNEL));
+  yield* Effect.logInfo(`Formatted ${filePath}`);
   return true;
-});
+}, withLogChannel(CHANNEL));

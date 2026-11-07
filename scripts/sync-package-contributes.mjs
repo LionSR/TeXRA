@@ -11,7 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 // Code-generate the catalog-derived parts of the VS Code manifest
-// (`contributes.commands`, `contributes.keybindings`) from the command catalog
+// (`contributes.commands`, `contributes.keybindings`,
+// `contributes.menus.commandPalette`) from the command catalog
 // and `contributes.chatSkills` from the bundled skills on disk, so the
 // manifest never has to be hand-edited; `contributes.configuration` is
 // forbidden outright (native settings view). In `--check` mode this is the CI
@@ -44,7 +45,11 @@ try {
 } finally {
   await rm(bundleDir, { recursive: true, force: true });
 }
-const { packageCommandContributions, commandKeybindings } = commandCatalog;
+const {
+  packageCommandContributions,
+  packageCommandPalette,
+  commandKeybindings,
+} = commandCatalog;
 
 // One chat skill per bundled `SKILL.md`: the core `resources/skills/<name>/`
 // and each tool plugin's `resources/plugins/<id>/skills/<name>/`. The runtime
@@ -101,6 +106,10 @@ if (packageJson.contributes?.configuration !== undefined) {
 const contributes = {
   ...packageJson.contributes,
   commands: packageCommandContributions,
+  menus: {
+    ...packageJson.contributes?.menus,
+    commandPalette: packageCommandPalette,
+  },
   keybindings: commandKeybindings,
   chatSkills,
 };

@@ -6,7 +6,7 @@ import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - fs
-import { WorkspaceFs } from '@texra-ai/harness/host';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
   showLoggedErrorMessage,
@@ -21,7 +21,7 @@ const CHANNEL = 'SampleProjectCommands';
 
 /** Both entries report a failed creation the same way. */
 const reportFailure = (err: unknown) =>
-  showLoggedErrorMessage(CHANNEL, 'Failed to create sample project', err).pipe(
+  showLoggedErrorMessage('Failed to create sample project', err).pipe(
     Effect.asVoid,
   );
 
@@ -49,7 +49,6 @@ export const createSampleProjectWithoutWorkspace: (
     const dest = path.join(parentPath, 'texra-sample');
     if (yield* fs.exists(dest)) {
       yield* showLoggedInfoMessage(
-        CHANNEL,
         'A texra-sample folder already exists there — opening it.',
       );
     } else {
@@ -62,6 +61,7 @@ export const createSampleProjectWithoutWorkspace: (
   Effect.catch((error: PlatformError.PlatformError | Error) =>
     reportFailure(error),
   ),
+  withLogChannel(CHANNEL),
 );
 
 /**
@@ -81,7 +81,6 @@ export const createSampleProject: (
     const workspaceFs = yield* WorkspaceFs;
     if (!workspaceFs.root) {
       yield* showLoggedMessage(
-        CHANNEL,
         'Open a workspace to create the sample project.',
       );
       return;
@@ -90,7 +89,6 @@ export const createSampleProject: (
     const destFolder = 'texra-sample';
     if (yield* workspaceFs.exists(destFolder)) {
       yield* showLoggedInfoMessage(
-        CHANNEL,
         'Sample project already exists in workspace.',
       );
       return;
@@ -102,7 +100,7 @@ export const createSampleProject: (
     yield* workspaceFs.makeDirectory(destFolder, { recursive: true });
     yield* fs.copy(sourcePath, destPath, { overwrite: true });
 
-    yield* showLoggedInfoMessage(CHANNEL, 'Created TeXRA sample project.');
+    yield* showLoggedInfoMessage('Created TeXRA sample project.');
 
     const readmeRelativePath = path.join(destFolder, 'README.md');
     if (yield* workspaceFs.exists(readmeRelativePath)) {
@@ -113,4 +111,5 @@ export const createSampleProject: (
     // read, a failed tree copy and a failed editor open are reported alike.
   },
   Effect.catchCause((cause) => reportFailure(Cause.squash(cause))),
+  withLogChannel(CHANNEL),
 );

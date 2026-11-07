@@ -19,7 +19,7 @@ import {
   type StateReadFailed,
   type StateStore,
 } from '@shared/config/settings';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { StateKey } from '@shared/state/stateSettings';
 import type { AgentSource } from '@shared/schemas';
 import { ToolRegistry, boundFile, boundFiles } from '@tools/toolTable';
 import { isStrictlyWithin } from '@utils/core/pathCore';
@@ -35,18 +35,20 @@ import type { AgentEntry } from './agentEntry';
  * The custom agent directory the user configured, trimmed; empty when none is
  * (the host then uses its default directory).
  */
+export const CUSTOM_AGENT_DIR_KEY = {
+  key: 'customAgentDir',
+  slot: 'globalState',
+  schema: Schema.Trim.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+} as const satisfies StateKey<string>;
+
+/** {@link CUSTOM_AGENT_DIR_KEY}, read. */
 export const readCustomAgentDir = (
   state: Pick<StateStore, 'get'>,
 ): Effect.Effect<string, StateReadFailed> =>
-  Settings.state(
-    state,
-    GlobalStateKey.CUSTOM_AGENT_DIR,
-    Schema.Trim.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
-  );
+  Settings.state(state, CUSTOM_AGENT_DIR_KEY);
 
 /** What a host's agent directories are built from. */
 export interface AgentDirectoryServiceOptions {
-  channel: string;
   /**
    * Packaged resources root holding the bundled agent directories. Hosts read
    * their built-in agents straight out of the bundle they shipped with, so one
@@ -64,16 +66,18 @@ export interface AgentDirectoryServiceOptions {
   };
 }
 
+/** The log channel of the agent directories, and of the issues they report. */
+const CHANNEL = 'AgentLoad';
+
 export class AgentDirectoryService {
-  readonly resourcesRoot?: string;
+  readonly resourcesRoot: string;
   readonly teamMembers?: AgentDirectoriesPort['teamMembers'];
 
   private readonly options: AgentDirectoryServiceOptions;
   constructor(options: AgentDirectoryServiceOptions) {
     this.options = options;
     if (options.teamMembers) this.teamMembers = options.teamMembers;
-    if (options.resourcesPath !== '')
-      this.resourcesRoot = options.resourcesPath;
+    this.resourcesRoot = options.resourcesPath;
   }
 
   /**
@@ -89,7 +93,7 @@ export class AgentDirectoryService {
       );
       return Effect.logDebug(
         `Using built-in ${BUNDLED_AGENTS_DIRECTORY} directory: ${basePath}`,
-      ).pipe(withLogChannel(this.options.channel), Effect.as(basePath));
+      ).pipe(withLogChannel(CHANNEL), Effect.as(basePath));
     });
   }
 
@@ -106,6 +110,7 @@ export class AgentDirectoryService {
       if (resolvedPath != null) return resolvedPath;
       return yield* this.ensureDefaultCustomDir();
     },
+    withLogChannel(CHANNEL),
   );
 
   /** Whether `custom` resolves to the configured directory: the same
@@ -121,6 +126,7 @@ export class AgentDirectoryService {
         this.resolveConfiguredCustomDir(configured),
       ),
       Effect.map((resolved) => resolved != null),
+      withLogChannel(CHANNEL),
     );
   }
 
@@ -160,7 +166,6 @@ export class AgentDirectoryService {
             'Failed to create default custom agents directory',
           ).pipe(
             Effect.annotateLogs({ data: cause }),
-            withLogChannel(this.options.channel),
             Effect.andThen(
               Effect.fail(
                 new AgentDirectoriesFailed({
@@ -176,7 +181,7 @@ export class AgentDirectoryService {
       );
     yield* Effect.logDebug(
       `Using default custom agents directory: ${defaultPath}`,
-    ).pipe(withLogChannel(this.options.channel));
+    );
     return defaultPath;
   });
 
@@ -195,7 +200,7 @@ export class AgentDirectoryService {
       if (!path.isAbsolute(configuredPath)) {
         yield* Effect.logError(
           `Custom agents directory must be an absolute path: ${configuredPath}`,
-        ).pipe(withLogChannel(this.options.channel));
+        );
         yield* this.reportIssue(
           'Custom agents directory must be an absolute path',
         );
@@ -214,7 +219,7 @@ export class AgentDirectoryService {
       if (!parentExists) {
         yield* Effect.logError(
           `Parent directory does not exist for custom agents directory: ${parentDir}`,
-        ).pipe(withLogChannel(this.options.channel));
+        );
         yield* this.reportIssue(
           'Parent directory for custom agents directory does not exist',
         );
@@ -236,7 +241,7 @@ export class AgentDirectoryService {
         );
       yield* Effect.logDebug(
         `Using custom agents directory from setting: ${configuredPath}`,
-      ).pipe(withLogChannel(this.options.channel));
+      );
       return configuredPath;
     });
   }
@@ -247,9 +252,7 @@ export class AgentDirectoryService {
     if (this.options.issueReporter) {
       return this.options.issueReporter.report(message, 'custom-agents');
     }
-    return Effect.logWarning(
-      `${message}. See documentation: custom-agents`,
-    ).pipe(withLogChannel(this.options.channel));
+    return Effect.logWarning(`${message}. See documentation: custom-agents`);
   }
 
   /** This file's one failure shape, from whatever cause raised it. */

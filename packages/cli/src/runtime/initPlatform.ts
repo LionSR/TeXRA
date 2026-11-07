@@ -17,7 +17,7 @@ import {
   StateStores,
 } from '@texra-ai/harness/host';
 import { openNodeWorkspaceRoots, setLogSink } from '@texra-ai/harness/node';
-import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
+import { ensureError, HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import {
@@ -224,7 +224,7 @@ export function setCliHelperModel(
 ): Effect.Effect<void, StateWriteFailed> {
   // Keep the write lazy: a refused write is the caller's failure to handle,
   // not a rejection nobody reads.
-  return model ? state.update(GlobalStateKey.HELPER_MODEL, model) : Effect.void;
+  return model ? state.update(HELPER_MODEL_SETTING.key, model) : Effect.void;
 }
 
 /**

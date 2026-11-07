@@ -4,18 +4,13 @@ import {
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
-import { Skills, withLogChannel } from '@texra-ai/harness/host';
+import { Skills } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@texra-ai/harness/host';
-import { unsupported } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
-import {
-  SETTINGS_LOG_CHANNEL,
-  type SettingsHostBindings,
-} from '@texra/controllers/settingsView/settingsHostBindings';
-import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
+import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,
@@ -24,11 +19,8 @@ import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { StorageFs, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import type { DesktopSpawn } from './desktopWindows.js';
-
-const NO_EXTENSION_HOSTING =
-  'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
 
 export interface DesktopSettingsIpcOptions {
   /** This window's half of the shared settings body; the subscription
@@ -101,13 +93,9 @@ export function createDesktopSettingsIpc(
     ) =>
       present.pipe(
         Effect.catch((failure) =>
-          bindings.notify.showErrorMessage(
+          bindings.dialogs.notify(
+            'error',
             `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
-          ),
-        ),
-        Effect.catchTag('HostFailed', (notice) =>
-          Effect.logError(notice.message).pipe(
-            withLogChannel(SETTINGS_LOG_CHANNEL),
           ),
         ),
       );
@@ -158,14 +146,14 @@ export function createDesktopSettingsIpc(
           },
         });
         yield* provider.setPreferSubscription(options.roots, true);
-        yield* bindings.notify.showInfoMessage(
+        yield* bindings.dialogs.notify(
+          'info',
           ACCOUNT_OUTCOME.signedInAs(displayName, account.label),
         );
       });
     };
 
     const body = yield* makeSettingsViewBody({
-      installsExtensions: false,
       // The approval policy is the project's persisted setting: the write
       // is the change, which this session and the service both read.
       roots: options.roots,
@@ -178,17 +166,6 @@ export function createDesktopSettingsIpc(
       },
     });
 
-    const registry: SettingsViewInboundHandlerRegistry<
-      ProcessServices | StorageFs
-    > = {
-      ...body.handlers,
-      installToolExtension: unsupported(NO_EXTENSION_HOSTING),
-      installLatexWorkshop: unsupported(NO_EXTENSION_HOSTING),
-      applyLatexSettings: unsupported(
-        'Recommended VS Code settings can only be applied from the TeXRA VS Code extension.',
-      ),
-    };
-
     const subscriptions: Array<Effect.Effect<void, never, ProcessServices>> = [
       body.follow,
       // Outside VS Code a rejected token left the pollers failing in silence.
@@ -197,15 +174,7 @@ export function createDesktopSettingsIpc(
       // it would repaint the same "token set" badge.
       onAppSignal('githubTokenInvalid', ({ message }) => {
         spawn(
-          bindings.notify
-            .showErrorMessage(gitHubTokenRejectedMessage(message))
-            .pipe(
-              Effect.catchTag('HostFailed', (notice) =>
-                Effect.logError(notice.message).pipe(
-                  withLogChannel(SETTINGS_LOG_CHANNEL),
-                ),
-              ),
-            ),
+          bindings.dialogs.notify('error', gitHubTokenRejectedMessage(message)),
         );
       }),
     ];
@@ -213,7 +182,7 @@ export function createDesktopSettingsIpc(
     const settingsIpc: DesktopSettingsIpc = {
       signInSubscription: body.signInSubscription,
       route: parsedRoute(SettingsViewInboundMessageSchema, (message) =>
-        body.handleMessage(message, registry),
+        body.handleMessage(message),
       ),
     };
     yield* Effect.forEach(

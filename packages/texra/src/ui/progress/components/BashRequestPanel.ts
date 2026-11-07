@@ -36,12 +36,11 @@ export class BashRequestPanel extends BaseRequestPanel<'bash'> {
   override render(): TemplateResult {
     return this.renderCard(html`
       <div class="bash-request__command">
-        ${buildCodeBlock(this.permission.data.command, {
-          language: 'bash',
-          className: 'tool-command-input',
-          showLanguage: true,
-          showCopy: true,
-        })}
+        ${buildCodeBlock(
+          this.permission.data.command,
+          'bash',
+          'tool-command-input',
+        )}
       </div>
     `);
   }

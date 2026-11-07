@@ -101,7 +101,6 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   ChildProcessSpawner
 > {
   const result = yield* runTool('texcount', args, {
-    channel: CHANNEL,
     // The file arguments are workspace-relative, so the root the caller
     // counted for is also the directory texcount resolves them against.
     cwd: workspaceRoot,

@@ -40,7 +40,7 @@ export function createDesktopWindowHost(options: {
     openGuide: (docsPage) => openExternalInBackground(texraGuideUrl(docsPage)),
     dispatchInstructionAction: (action) => dispatchInstructionAction(action),
   });
-  const { showErrorMessage, showInfoMessage, showWarningMessage } = dialogs;
+  const { notify } = dialogs;
 
   const reportBackgroundError = (error: unknown) => {
     console.error('Desktop background operation failed:', error);
@@ -48,18 +48,7 @@ export function createDesktopWindowHost(options: {
   const reportAsyncError = (error: unknown) => {
     console.error('Desktop asynchronous operation failed:', error);
     spawn(
-      showErrorMessage(
-        `A desktop operation failed: ${toErrorMessage(error)}`,
-      ).pipe(
-        Effect.catch((notificationError: HostFailed) =>
-          Effect.sync(() => {
-            console.error(
-              'Failed to display desktop asynchronous operation error:',
-              notificationError,
-            );
-          }),
-        ),
-      ),
+      notify('error', `A desktop operation failed: ${toErrorMessage(error)}`),
     );
   };
 
@@ -86,25 +75,11 @@ export function createDesktopWindowHost(options: {
   const diffHost = createDesktopDiffHost({ runtime, postToRenderer: post });
 
   /** Run `program`, showing its failure in the window's error dialog first;
-   *  the failure still reaches the caller. A dialog that cannot be shown is
-   *  logged. */
+   *  the failure still reaches the caller. */
   const presented = <A, E extends { readonly message: string }, R>(
     program: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E, R> =>
-    program.pipe(
-      Effect.tapError((error) =>
-        showErrorMessage(error.message).pipe(
-          Effect.catch((notificationError: HostFailed) =>
-            Effect.sync(() =>
-              console.error(
-                'Failed to display a desktop error:',
-                notificationError,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    program.pipe(Effect.tapError((error) => notify('error', error.message)));
 
   /**
    * Open a documentation URL without keeping the caller waiting; the browser
@@ -261,19 +236,11 @@ export function createDesktopWindowHost(options: {
       > = {
         openPath: (filePath) => presented(previewHost.openPath(filePath)),
         confirmAcceptFile: (message) =>
-          dialogs.confirmDialog({
-            message,
-            confirmLabel: 'Replace file',
-            project: name,
-          }),
+          dialogs.confirm({ message, action: 'Replace file' }, name),
+        notify: (level, message) => notify(level, message, name),
         // Presentation failures are reported, never raised: a run must not
         // fail because a dialog could not be shown. The caller still awaits
         // the dialog, as it did before.
-        showInfoMessage: (message) =>
-          awaitOrReport(showInfoMessage(message, name)),
-        showWarningMessage: (message) => showWarningMessage(message, name),
-        showErrorMessage: (message) =>
-          awaitOrReport(showErrorMessage(message, name)),
         showErrorDialog: (message, docsPage) =>
           awaitOrReport(dialogs.showErrorDialog(message, docsPage, name)),
         showInstructionDialog: (message, actions) =>

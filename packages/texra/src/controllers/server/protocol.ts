@@ -67,7 +67,7 @@ import { BridgeErrorSchema } from '@texra/shared/session/bridgeErrors';
 import {
   HostAnswerSchema,
   HostCapabilitySchema,
-  HostFrameSchema,
+  HostAttachFrameSchema,
 } from './hostCalls';
 import { ExportNodeSchema, type ValueFamily } from '@texra-ai/harness/host';
 
@@ -339,7 +339,7 @@ export const TexraRpcs = RpcGroup.make(
       workspace,
       capabilities: Schema.Array(HostCapabilitySchema),
     },
-    success: HostFrameSchema,
+    success: HostAttachFrameSchema,
     error: TaskFailed,
     stream: true,
   }),

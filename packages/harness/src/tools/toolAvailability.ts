@@ -46,7 +46,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { subscribeAppSignal, type AppSignals } from '@platform/appSignals';
 import { Secrets } from '@platform/secrets';
 import type { StateStore } from '@shared/config/settings';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { storedDisabledTools, type Plugin } from '@tools/plugins';
 import type {
   ToolAvailabilityChecks,
@@ -61,6 +60,7 @@ import {
 import { ToolCatalog } from '@tools/liveTools';
 import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 
 const CHANNEL = 'toolAvailability';
 
@@ -95,7 +95,7 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
       .filter((plugin) => plugin.toggle === 'off')
       .map((plugin) => plugin.id);
     let seeded = false;
-    yield* state.modify(GlobalStateKey.DISABLED_TOOLS, (stored) =>
+    yield* state.modify(DISABLED_TOOLS_KEY.key, (stored) =>
       Result.map(storedDisabledTools(stored), (recorded) => {
         seeded = recorded === undefined;
         return seeded ? defaults : stored;

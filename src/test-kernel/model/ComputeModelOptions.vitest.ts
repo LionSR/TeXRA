@@ -9,15 +9,13 @@ import {
   MODEL_CONFIGS,
   OWN_KEY_ROUTE_FACTS,
 } from '@texra-ai/llm';
-import {
-  GlobalStateKey,
-  isModelOptionAvailable,
-} from '@texra-ai/harness/schemas';
+import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
 import { FakeHost } from '@test/support/testKernel';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
+import { MODEL_SELECTION_KEY } from '@model/computeModelOptions';
 
 const GPT55 = 'openai/gpt-5.5-2026-04-23';
 const KIMI_CODING = 'moonshot/kimi-for-coding';
@@ -46,7 +44,7 @@ function installAccessPlatform(options: {
   return Layer.build(
     FakeHost.layer({
       config: options.config,
-      globalState: { [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]) },
+      globalState: { [MODEL_SELECTION_KEY.key]: onlyEnabled([GPT55]) },
       secrets: options.secrets ?? OPENAI_KEY_SECRETS,
     }),
   );

@@ -73,8 +73,8 @@ export class PluginsTab extends SignalWatcher(LitElement) {
 
   /**
    * One catalog-backed select row: the allowed values, their labels, and the
-   * help text all come from the `stateSettings` entry for `key`, and the
-   * change handler writes that same key. Only the row label is passed in:
+   * help text all come from the catalog row the host names by `key`, and the
+   * change handler writes that same row. Only the row label is passed in:
    * inside a plugin card it reads bare ('Reasoning effort') where the
    * catalog title has to disambiguate in a flat list.
    */
@@ -83,7 +83,7 @@ export class PluginsTab extends SignalWatcher(LitElement) {
     if (!entry) {
       throw new Error(`No settings-view catalog row for setting "${key}"`);
     }
-    const options = catalogEnumChoices(key);
+    const options = catalogEnumChoices(entry);
     if (options.length === 0) {
       throw new Error(`Inline setting "${key}" is not an enum catalog row`);
     }
@@ -98,7 +98,7 @@ export class PluginsTab extends SignalWatcher(LitElement) {
           <wa-select
             class="setting-select"
             id=${controlId}
-            .value=${settingSignal<string>(key).get()}
+            .value=${settingSignal(entry).get()}
             @change=${(e: Event) => {
               const selected = readSelectValue(e);
               if (selected) postStateSetting(key, selected);

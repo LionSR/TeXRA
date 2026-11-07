@@ -40,7 +40,6 @@ import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { shownRun, type Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { installToolbarTooltips } from '@ui/litControllers/TooltipController';
 import {
   FILE_SELECT_CONFIGS,
   LAUNCH_FILE_LISTS,
@@ -102,11 +101,6 @@ export class ProgressApp extends LitElement {
   @property({ attribute: false }) host: HostSnapshot | null = null;
   /** Fixed by the document hosting this surface. */
   @property() placement: 'sidebar' | 'editor' | 'desktop' = 'sidebar';
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    installToolbarTooltips();
-  }
 
   private selectNew = (): void => {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'selectNew' }));

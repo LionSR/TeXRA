@@ -198,16 +198,12 @@ const program = Effect.gen(function* () {
   // 2. The ledger strategy, selected by the setting, with a cap between
   // one round's spend and two rounds' (every scripted turn costs the same).
   yield* platform.roots.config.update(
-    GOAL_STRATEGY_SETTING.configKey,
+    GOAL_STRATEGY_SETTING.key,
     'builtIn:goal-ledger',
     'global',
   );
   const cap = (a.result.spent / a.result.rounds) * 1.5;
-  yield* platform.roots.config.update(
-    GOAL_MAX_COST_SETTING.configKey,
-    cap,
-    'global',
-  );
+  yield* platform.roots.config.update(GOAL_MAX_COST_SETTING.key, cap, 'global');
   const b = yield* runGoal(session, 'Pursue goal B.');
   if (
     b.result.outcome !== 'paused' ||

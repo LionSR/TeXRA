@@ -1,9 +1,6 @@
 import { Effect, Predicate } from 'effect';
 
-import type {
-  SettingsCatalog,
-  StateSettingEntry,
-} from '@shared/state/stateSettings';
+import type { SettingRow, SettingsCatalog } from '@shared/state/stateSettings';
 import {
   ConfigWriteFailed,
   type ConfigInspection,
@@ -45,7 +42,7 @@ export interface JsonConfigProviderOptions {
  * anything but `true`.
  */
 export function projectValueIgnored(
-  row: StateSettingEntry | undefined,
+  row: SettingRow | undefined,
   value: unknown,
 ): boolean {
   if ((row?.configTarget ?? 'workspace') === 'workspace') return false;

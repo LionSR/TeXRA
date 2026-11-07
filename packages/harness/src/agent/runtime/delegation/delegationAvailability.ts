@@ -29,11 +29,11 @@ import {
   type AgentDelegationScope,
   type DelegationTargets,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { GIT_WORKTREE_SUPPORT_SETTING } from '@shared/state/stateSettings';
 
 /** The models that can run now, in picker order. */
 const availableModelNames = (options: readonly ModelOption[]): string[] =>
@@ -63,7 +63,10 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
       ({ name }) => registry.get(name)?.launchesTasks,
     );
     if (!chats && !tasks) return undefined;
-    const entries = yield* (yield* AgentCatalog).visible(stores, scope);
+    const catalog = yield* AgentCatalog;
+    const entries = scope
+      ? catalog.pinned(scope)
+      : yield* catalog.workspaceAgents(stores).visible();
     const agents = entries.flatMap(
       ({ name, description, tools: agentTools, blocks }) => {
         const task = Object.keys(blocks).length > 0;
@@ -100,10 +103,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
       agents,
       models,
       worktree: chats
-        ? yield* Settings.get<boolean>(
-            stores,
-            WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-          )
+        ? yield* Settings.get(stores, GIT_WORKTREE_SUPPORT_SETTING)
         : null,
     } satisfies DelegationTargets;
   },

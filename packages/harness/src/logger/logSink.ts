@@ -17,7 +17,7 @@
  * persisted nor exported.
  */
 // Third-party imports
-import { Logger } from 'effect';
+import { Logger, type LogLevel } from 'effect';
 
 // Local imports
 import { formatLogData } from '@logger/formatLogData';
@@ -30,10 +30,39 @@ import {
 /**
  * One diagnostic record, shaped by Effect's own structured formatter rather
  * than by a type of ours: `Logger.formatStructured` already carries level,
- * fiber, timestamp, message, cause, annotations, and spans, so the logger
- * layer maps straight onto this with no adaptation.
+ * fiber, timestamp, message, cause, annotations, and spans. Its `level` is
+ * typed `string`; here it is the call's severity, upper-cased, as the
+ * formatter writes it, so a sink's switch over it is exhaustive.
  */
-export type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
+export type LogEntry = Omit<
+  ReturnType<typeof Logger.formatStructured.log>,
+  'level'
+> & { readonly level: Uppercase<LogLevel.Severity> };
+
+const ENTRY_LEVEL = {
+  Fatal: 'FATAL',
+  Error: 'ERROR',
+  Warn: 'WARN',
+  Info: 'INFO',
+  Debug: 'DEBUG',
+  Trace: 'TRACE',
+} as const satisfies { [S in LogLevel.Severity]: Uppercase<S> };
+
+/**
+ * The entry Effect's structured formatter makes of one log call, or
+ * `undefined` for the `All` and `None` levels, which mark a minimum and
+ * name no call (`Effect.logWithLevel` takes a severity).
+ */
+export function logEntryOf(
+  options: Logger.Options<unknown>,
+): LogEntry | undefined {
+  const { logLevel } = options;
+  if (logLevel === 'All' || logLevel === 'None') return undefined;
+  return {
+    ...Logger.formatStructured.log(options),
+    level: ENTRY_LEVEL[logLevel],
+  };
+}
 
 /** Annotation naming the logical channel an entry belongs to. */
 export const LOG_CHANNEL = 'channel';
@@ -134,7 +163,7 @@ const consoleLogSink: LogSink = {
       case 'TRACE':
         console.debug(line);
         break;
-      default:
+      case 'INFO':
         console.info(line);
     }
   },

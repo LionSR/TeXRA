@@ -8,7 +8,6 @@
 // Local imports
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
 import { GOAL_PLAN_KIND } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
 import { codeSandboxLayer, ScriptTool } from '@tools/codemode/ScriptTool';
@@ -27,6 +26,10 @@ import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
 import { writeFileTool, type WriteFilter } from '@tools/WriteTool';
+import {
+  MEMORY_ENABLED_SETTING,
+  SCRIPT_ONLY_SETTING,
+} from '@shared/state/stateSettings';
 
 const fileTools = (writeFilter?: WriteFilter) =>
   [
@@ -75,7 +78,7 @@ export const web: Plugin = definePlugin({
 export const memoryWorkflow: Plugin = definePlugin({
   id: 'memory-workflow',
   tools: [MemoryTool, ExecutionsTool],
-  injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
+  injectedWhen: { memory: MEMORY_ENABLED_SETTING },
   prompt: memoryPromptSection,
 });
 
@@ -116,7 +119,7 @@ export const multiAgent: Plugin = definePlugin({
 export const codemode = definePlugin({
   id: 'codemode',
   tools: SCRIPT_TOOLS,
-  injectedWhen: { script: GlobalStateKey.SCRIPT_ONLY },
+  injectedWhen: { script: SCRIPT_ONLY_SETTING },
   sessionLayer: codeSandboxLayer,
 });
 
