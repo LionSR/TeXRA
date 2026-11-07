@@ -1932,9 +1932,9 @@ async function validateServiceChatsSeeEachOther() {
 
 /**
  * The service's build identity (D1-D4): clients of one build share its
- * service; a client of a newer build retires it and starts its own while
- * the old one finishes the task it holds; the newer service stays
- * reachable once the old one exits; a client of the older build then
+ * service; a client of a newer build retires it and waits while the old
+ * one finishes the task it holds and exits, then starts its own (one
+ * service serves a storage root); a client of the older build then
  * leaves the newer service alone. Every host stamps
  * the same workspace version, so this holds across the CLI, the extension
  * and the desktop app. The statuses each client saw are the artifact.
@@ -1997,6 +1997,7 @@ prompt: |
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   };
+  let nextList;
   try {
     // A task at work in this build's service: its model call is held.
     texraWith(
@@ -2019,19 +2020,31 @@ prompt: |
       'texra tasks list (this build, again)',
     );
     const same = status(binaryPath, 'service status (this build, again)');
-    // A newer build retires it; it drains, finishing that task, while the
-    // newer service serves.
-    texraWith(
-      nextBuildPath,
-      ['tasks', 'list'],
-      'texra tasks list (next build)',
+    // A newer build retires it and waits: one service serves a storage
+    // root, so the old one drains, finishing that task, and exits first.
+    nextList = spawn(
+      process.execPath,
+      [nextBuildPath, 'tasks', 'list', '--cwd', project.work],
+      { cwd: project.work, env: { ...process.env, CI: '1', ...env } },
     );
-    const next = status(nextBuildPath, 'service status (next build)');
-    const drainingKept = alive(first.pid);
-    // The retired service now exits: the newer one must still be found.
-    process.kill(first.pid, 'SIGTERM');
+    let nextStderr = '';
+    nextList.stderr.on('data', (chunk) => (nextStderr += chunk));
+    let nextExit = null;
+    nextList.on('exit', (code) => (nextExit = code ?? 1));
+    let draining;
+    await until('the older service to drain', () => {
+      draining = status(binaryPath, 'service status (draining)');
+      return draining.draining === true;
+    });
+    const waited = nextExit === null && alive(first.pid);
+    writeFileSync(path.join(project.work, 'golden-park.release'), '');
+    await until('the newer client to finish', () => nextExit !== null);
+    assert(
+      nextExit === 0,
+      `texra tasks list (next build) should succeed once the older service exits (exit ${nextExit})\nstderr:\n${nextStderr}`,
+    );
     await until('the retired service to exit', () => !alive(first.pid));
-    const reachable = status(nextBuildPath, 'service status (next, after)');
+    const next = status(nextBuildPath, 'service status (next build)');
     texraWith(
       binaryPath,
       ['tasks', 'list'],
@@ -2041,9 +2054,9 @@ prompt: |
     const artifactPath = writeArtifact('service-builds.json', {
       first,
       same,
+      draining,
+      waited,
       next,
-      drainingKept,
-      reachable,
       after,
     });
     assert(
@@ -2051,22 +2064,19 @@ prompt: |
       `two clients of one build should share its service (artifact: ${artifactPath})`,
     );
     assert(
+      draining.pid === first.pid && waited,
+      `a newer build should retire the older service and wait while its task works (artifact: ${artifactPath})`,
+    );
+    assert(
       next.version === NEXT_BUILD && next.pid !== first.pid,
-      `a newer build should retire the older service and start its own (artifact: ${artifactPath})`,
-    );
-    assert(
-      drainingKept,
-      `a retired service should keep running while its task works (artifact: ${artifactPath})`,
-    );
-    assert(
-      reachable.pid === next.pid,
-      `the newer service should stay reachable once the retired one exits (artifact: ${artifactPath})`,
+      `a newer build should start its own service once the older one exits (artifact: ${artifactPath})`,
     );
     assert(
       after.pid === next.pid && after.version === NEXT_BUILD,
       `an older build should leave a newer service running (artifact: ${artifactPath})`,
     );
   } finally {
+    nextList?.kill('SIGKILL');
     removeScratch(cwd);
   }
 }
