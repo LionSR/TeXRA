@@ -111,15 +111,26 @@ const TABLES = [
  * What any build adds without a bump (`CREATE … IF NOT EXISTS` at every
  * open): the projection tables, which carry their own versions in
  * `projection_state` (`projections.ts`), and the indexes, each serving one
- * lookup the reads make, named for the columns it keys. The change record
- * an earlier pre-release kept (`aggregate_change` and its triggers) is
- * dropped: nothing reads it.
+ * lookup the reads make, named for the columns it keys.
+ *
+ * `aggregate_change` and its triggers are dead: nothing reads them since the
+ * publisher publishes what it commits. They stay in the 1.0 baseline's DDL,
+ * because an open never alters a stamped store, and go with the next stamp
+ * bump.
  */
 const ADDITIVE = [
-  ...['inserted', 'closed', 'collected'].map(
-    (name) => `DROP TRIGGER IF EXISTS aggregate_${name}`,
+  `CREATE TABLE IF NOT EXISTS aggregate_change (change INTEGER PRIMARY KEY
+    AUTOINCREMENT, kind TEXT NOT NULL, logical_id TEXT NOT NULL,
+    UNIQUE (kind, logical_id)) STRICT`,
+  ...[
+    ['inserted', 'INSERT', 'NEW'],
+    ['closed', 'UPDATE OF closed_by', 'NEW'],
+    ['collected', 'DELETE', 'OLD'],
+  ].map(
+    ([name, on, row]) => `CREATE TRIGGER IF NOT EXISTS aggregate_${name}
+    AFTER ${on} ON event_sequence BEGIN INSERT OR REPLACE INTO aggregate_change
+    (kind, logical_id) VALUES (${row}.kind, ${row}.logical_id); END`,
   ),
-  'DROP TABLE IF EXISTS aggregate_change',
   `CREATE TABLE IF NOT EXISTS projection_state (
     name           TEXT PRIMARY KEY,
     version        INTEGER NOT NULL,

@@ -608,7 +608,7 @@ If the owner wants PR 2's format change inside E's batch instead, T6 moves
 there and PR 2 is T3 and T5 only.
 
 **Landed (PR 1, branch `simplify/t-store-publishes`).** T2, T1 with T7a and
-F13, and T4 with T7c, with these changes to the plan:
+F13's reader, and T4 with T7c, with these changes to the plan:
 
 - `JobOptions.order` and `ordering` stay, for streamed text and the two
   barriers (`settled`, an empty batch). A chunk must reach the text after
@@ -626,6 +626,11 @@ F13, and T4 with T7c, with these changes to the plan:
 - T1: the view's tail carries no unreadable runs: one a later read meets
   reaches the view at its next replay. A removal's closed runs come from
   the marker's `runIds`.
+- F13: `CHANGED_SINCE` and `readInputBatch`'s `since`/`change` are gone,
+  but `aggregate_change` and its triggers stay in the 1.0 baseline's DDL as
+  dead tables. An open never alters a stamped store, and moving the
+  baseline past 102 would also need the pre-1.0 detection reworked, so
+  they go with the next stamp bump.
 - The catalogue rows (step 4) are the orchestrator's catalogue PR.
 
 ## Effect-native mapping
