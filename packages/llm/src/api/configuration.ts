@@ -186,7 +186,22 @@ export function configurationFor(spec: BindSpec): {
     acceptedEfforts: acceptedEfforts(config, route),
     effort: wireEffort(config, route, options.reasoning),
   });
-  return { config, options, configuration };
+  // The configuration knows which media its route carries; the config the
+  // binding reports says the same, so a caller never sends a document the
+  // route refuses.
+  const takesDocuments =
+    configuration.protocol !== 'openai-responses' ||
+    configuration.supportsDocumentInput;
+  return {
+    config: takesDocuments
+      ? config
+      : {
+          ...config,
+          capabilities: { ...config.capabilities, supportsNativePdf: false },
+        },
+    options,
+    configuration,
+  };
 }
 
 /** Whether the configuration takes a tool choice naming one function. */

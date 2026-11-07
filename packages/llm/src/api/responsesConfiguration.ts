@@ -82,7 +82,8 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
       requestedModel: codexBackendModelId(config),
       protocol: 'openai-responses',
       background: 'unsupported',
-      supportsDocumentInput: config.capabilities.supportsNativePdf,
+      // The plan's backend takes no input files.
+      supportsDocumentInput: false,
       allowedReasoningEfforts: facts.acceptedEfforts,
       continuationInheritsInstructions: false,
       // OpenAI documents no `tool_choice` for a namespaced function.

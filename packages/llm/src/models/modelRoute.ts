@@ -313,10 +313,6 @@ export function routeConfig(
             config.contextWindow,
           ),
         ),
-        // The ChatGPT-subscription backend takes no input files, so the
-        // binding's PDF admission degrades a PDF instead of sending a shape
-        // the backend rejects.
-        capabilities: { ...config.capabilities, supportsNativePdf: false },
       };
     }
     case 'xai-subscription':
