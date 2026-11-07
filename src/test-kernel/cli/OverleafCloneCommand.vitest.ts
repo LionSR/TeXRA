@@ -6,40 +6,28 @@ import { afterEach, beforeEach, expect, vi } from 'vitest';
 // Local imports
 import { makeMachineGitEnv } from '@texra-ai/harness/node';
 import { Secrets } from '@texra-ai/harness/host';
-import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { SessionGraph } from '@test/support/testKernel';
-import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 
 const mocks = vi.hoisted(() => ({
   deleteSecret: vi.fn(),
   getSecret: vi.fn(),
-  installCliProcessRuntime: vi.fn(),
+  cliSecretsLayer: vi.fn(),
   readCliAmbientState: vi.fn(),
   setSecret: vi.fn(),
 }));
 
-// `clone` is a platform-less entry: its command entry installs the process
-// runtime and runs the clone program on what it gets back. Here that is the
-// block's runtime, and the install itself is a spy, so the suite can assert
-// what the entry hands it — `NO_PLATFORM_INSTALL`, the real one, spread in
-// from the module below. Dropping that argument is what would open the global
-// root's handle and hold the event loop past clone's own exit.
-vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
-  const { Effect: EffectModule } = await import('effect');
-  const actual =
-    await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
-  return {
-    ...actual,
-    installCliProcessRuntime: mocks.installCliProcessRuntime,
-    disposeCliProcessRuntime: EffectModule.void,
-  };
-});
+// `clone` runs without a platform, over the layer its command names. Here
+// that layer serves the block's services, so nothing is spawned or stored.
+vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>()),
+  cliSecretsLayer: mocks.cliSecretsLayer,
+}));
 
 vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/cliContext')>()),
@@ -111,37 +99,23 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     let scripted: ReturnType<typeof scriptedSpawnerLayer>;
 
     /**
-     * The block's runtime as the entry installs it, every program it runs
-     * given the scripted spawner and the store the clone caches its token in
-     * innermost, as the runtime would serve them.
+     * The layer the entry builds its runtime over: the block's services, with
+     * the scripted spawner and the store the clone caches its token in over
+     * them.
      */
-    const useCliRuntime = Effect.gen(function* () {
-      const runtime = yield* SessionGraph.runtime;
-      const runPromiseExit = runtime.runPromiseExit.bind(runtime);
-      const runtimeSpy = vi
-        .spyOn(runtime, 'runPromiseExit')
-        .mockImplementation((program, options) =>
-          runPromiseExit(
-            program.pipe(
-              Effect.provide(
-                Layer.merge(
-                  scripted.layer,
-                  Layer.mock(Secrets, {
-                    get: mocks.getSecret,
-                    delete: mocks.deleteSecret,
-                    set: mocks.setSecret,
-                  }),
-                ),
-              ),
-            ),
-            options,
-          ),
-        );
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => runtimeSpy.mockRestore()),
-      );
-      mocks.installCliProcessRuntime.mockImplementation(() => runtime);
-    });
+    const useCliRuntime = Effect.map(SessionGraph.runtime, (runtime) =>
+      mocks.cliSecretsLayer.mockImplementation(() =>
+        Layer.mergeAll(
+          Layer.effectContext(runtime.contextEffect),
+          scripted.layer,
+          Layer.mock(Secrets, {
+            get: mocks.getSecret,
+            delete: mocks.deleteSecret,
+            set: mocks.setSecret,
+          }),
+        ),
+      ),
+    );
 
     beforeEach(async () => {
       workspacePath = await makeTempDir('texra-clone-', tempDirs);
@@ -197,16 +171,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           );
 
           expect(result.exitCode).toBe(CliExitCode.Success);
-          // The platform-less handoff itself: clone opens no global state
-          // store and no global-root handle, so it holds the event loop open
-          // past nothing.
-          expect(mocks.installCliProcessRuntime).toHaveBeenCalledWith(
-            defaultNodeStorageRoot(),
-            {
-              ...NO_PLATFORM_INSTALL,
-              minimumLogLevel: 'Info',
-            },
-          );
           yield* expectClonedInto(workspacePath);
           expect(JSON.parse(stdout)).toEqual({
             cloned: true,

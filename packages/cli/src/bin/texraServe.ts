@@ -10,9 +10,7 @@ import { ensureError } from '@texra-ai/harness/schemas';
 import { runCommandForExitCode } from '../commands/_helpers/exitCode';
 import { serveCommand } from '../commands/service';
 import { readCliArgv } from '../runtime/cliContext';
-import { disposeCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatformShutdown } from '../runtime/initPlatform';
 import {
   cliErrorMessage,
   installCliPipeErrorHandlers,
@@ -38,9 +36,6 @@ await Effect.runPromise(
         writeTextStderr(`TeXRA service failed: ${cliErrorMessage(error)}`);
         process.exitCode = CliExitCode.AgentError;
       }),
-    ),
-    Effect.ensuring(
-      cliPlatformShutdown.pipe(Effect.ensuring(disposeCliProcessRuntime)),
     ),
   ),
 );

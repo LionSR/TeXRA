@@ -63,7 +63,7 @@ type CliRunRequest = Required<
 >;
 
 export interface CliExecuteOptions {
-  /** The `initCliPlatform` services the run uses, from the command that
+  /** The `CliPlatform` services the run uses, from the command that
    *  holds them: `session`, where the run starts, resumes, stops and asks
    *  its host, and whose records and rows its output reads; `runtime`,
    *  which the shutdown

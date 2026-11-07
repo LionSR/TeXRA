@@ -2,6 +2,7 @@ import { Effect, Predicate } from 'effect';
 import { defineCommand } from 'citty';
 
 import { AgentCatalog, type ProcessServices } from '@texra-ai/harness/host';
+import type { Sessions } from '@texra-ai/harness';
 import { canLaunchTeam, planTeamRuns } from '@texra/shared/teamLaunch';
 import { findTeamPreset, planTeamRun } from '@texra/shared/teamPlan';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
@@ -14,7 +15,8 @@ import {
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
-  initCliPlatform,
+  cliPlatform,
+  type CliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -125,13 +127,17 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
 const runTeam = Effect.fn('runTeam')(function* (
   context: CliContext,
   init: TeamRunInit,
-): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
+): Effect.fn.Return<
+  number,
+  Error,
+  ProcessServices | Sessions | CliPlatform | CliInvocation
+> {
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   const hasInstruction = instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInstruction) {
     return yield* failUsage(TEAM_TASK_REQUIRED_MESSAGE);
   }
-  const services = yield* initCliPlatform(context);
+  const services = yield* cliPlatform;
 
   // The policy the team's launch runs under: an Ask request under a Block
   // project runs under Block, which needs no prompt.
@@ -247,8 +253,8 @@ const teamListCommand = defineCliCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  run: Effect.fn('team.run')(function* (context) {
-    const services = yield* initCliPlatform(context);
+  run: Effect.fn('team.run')(function* () {
+    const services = yield* cliPlatform;
     return yield* runTeamList(services);
   }),
 });
@@ -267,7 +273,7 @@ const teamShowCommand = defineCliCommand({
     },
   },
   run: Effect.fn('team.run')(function* (context, ctx) {
-    const services = yield* initCliPlatform(context);
+    const services = yield* cliPlatform;
     return yield* runTeamShow(ctx.args.team, services);
   }),
 });

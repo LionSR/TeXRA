@@ -41,7 +41,8 @@ import {
   resolveCliRunAgent,
 } from '../runtime/agents';
 import {
-  initCliPlatform,
+  cliPlatform,
+  type CliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
 
@@ -78,6 +79,7 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
+import type { Sessions } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
@@ -121,7 +123,11 @@ function classifyInputFiles(files: readonly string[]) {
 export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   context: CliContext,
   init: HeadlessRunInit,
-): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
+): Effect.fn.Return<
+  number,
+  Error,
+  ProcessServices | Sessions | CliPlatform | CliInvocation
+> {
   if (init.output && init.outputDir) {
     return yield* failUsage('Use either --output or --output-dir, not both.');
   }
@@ -135,7 +141,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     );
   }
 
-  const services = yield* initCliPlatform(context);
+  const services = yield* cliPlatform;
   // Resolve once, before stdin is read or the runtime host starts; the run
   // pins the resolved source.
   const agent = yield* resolveCliRunAgent(services, init.agent);

@@ -16,7 +16,7 @@ import {
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { cliExit, leaveAtOnce, runCliExit } from '@cli/runtime/initPlatform';
+import { leaveAtOnce, runCliExit } from '@cli/runtime/initPlatform';
 import { writeTextStderrAndWait, writeTextStdout } from '@cli/runtime/logSinks';
 import { holdSignals, type SignalPolicy } from '@cli/runtime/processSignals';
 import {
@@ -74,6 +74,8 @@ interface SessionExitControllerContext {
   readonly terminal: TuiTerminal;
   /** The process runtime the exit drain runs on: one run per exit path. */
   readonly runtime: ProcessRuntime;
+  /** The platform's exit: its shutdown, the flushes, then `process.exit`. */
+  readonly leaveProcess: (code: number) => Effect.Effect<never>;
   /** Finishes once every message the chat was sending is sent (or started
    *  its run); a graceful exit waits on it before it returns. */
   readonly submitted: Effect.Effect<void>;
@@ -162,7 +164,7 @@ export function createSessionExitController(
       // `persistSession` and the shutdown sequence catch their own failures,
       // so the exit is unconditional.
       yield* withProcessServices(ctx.runtime, persistSession);
-      return yield* cliExit(cause.exitCode);
+      return yield* ctx.leaveProcess(cause.exitCode);
     }
     // The drain starts once Ink has unmounted, and reads the view before
     // closing ctx.chatScope ends the session's subscriptions: the resume
@@ -233,7 +235,7 @@ export function createSessionExitController(
           `[error] [cli.sessionExit] Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
         );
       }
-      return yield* cliExit(
+      return yield* ctx.leaveProcess(
         disposalFailure ? CliExitCode.AgentError : exitCode,
       );
     }

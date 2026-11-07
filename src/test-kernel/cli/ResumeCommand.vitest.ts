@@ -11,6 +11,10 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { provideCliInvocation, type CliContext } from '@cli/runtime/cliContext';
+import {
+  CliPlatform,
+  type CliPlatformServices,
+} from '@cli/runtime/initPlatform';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
@@ -21,16 +25,9 @@ import {
 } from '@test/support/testKernel';
 
 const mocks = vi.hoisted(() => ({
-  initCliPlatform: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
-// `texra resume` reopens the chat TUI for tool-use sessions, so it must never
-// pass `installSignalHandlers: false` — that leaves the TUI as the sole
-// SIGINT/SIGTERM owner once it mounts (see initPlatform.ts).
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: mocks.initCliPlatform,
-}));
 // The platform links the service a conversation continues in; none here.
 vi.mock('@cli/runtime/cliService', () => ({
   isLinked: (link: { readonly none?: string }) => !('none' in link),
@@ -49,21 +46,11 @@ const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 });
 
 /** Seed the real (fake-platform-backed) run records and run aggregate into
- *  the test's session, which the command resolves off the services the
- *  init returns; the seeded session's handle comes back. */
+ *  the test's session, which the command resolves off its platform; the
+ *  seeded session's handle comes back. */
 const seedRunRecord = (config: AgentConfig | null) =>
   Effect.gen(function* () {
-    const session = yield* TestSession;
-    const handle = yield* sessionHandleOf(session);
-    // `runResumeCommand` reads the session off the services the init returns.
-    mocks.initCliPlatform.mockReturnValue(
-      Effect.succeed({
-        runtime: yield* SessionGraph.runtime,
-        session: Effect.succeed(session),
-        runSession: Effect.succeed(session),
-        service: { none: 'no service in this test' },
-      }),
-    );
+    const handle = yield* sessionHandleOf(yield* TestSession);
     yield* Context.get(handle, SessionLog).transact([
       {
         type: 'run.start',
@@ -101,13 +88,26 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
-/** The command's program, run the way `defineCliCommand` runs it. */
+/** The command's program, run the way `defineCliCommand` runs it, over a
+ *  platform that is the test's session and links no service. */
 const run = (context: CliContext, id: RunId = RUN_ID) =>
-  Effect.flatMap(
-    Effect.promise(() => import('@cli/commands/resumeRun')),
-    ({ runResumeCommand }) =>
-      runResumeCommand(context, id).pipe(provideCliInvocation(context)),
-  );
+  Effect.gen(function* () {
+    const session = yield* TestSession;
+    const { runResumeCommand } = yield* Effect.promise(
+      () => import('@cli/commands/resumeRun'),
+    );
+    // cast: the command reads only these members of its platform.
+    const platform = {
+      runtime: yield* SessionGraph.runtime,
+      session: Effect.succeed(session),
+      runSession: Effect.succeed(session),
+      service: { none: 'no service in this test' },
+    } as unknown as CliPlatformServices;
+    return yield* runResumeCommand(context, id).pipe(
+      provideCliInvocation(context),
+      Effect.provideService(CliPlatform, Effect.succeed(platform)),
+    );
+  });
 
 // Live clock: the command runs as its entry runs it.
 layer(SessionGraph.hosted, { excludeTestServices: true })(

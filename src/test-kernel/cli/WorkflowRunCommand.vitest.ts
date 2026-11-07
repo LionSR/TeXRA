@@ -3,11 +3,6 @@ import * as path from 'node:path';
 
 import { beforeEach, expect, vi } from 'vitest';
 
-// Shared mock registrations must evaluate before anything that loads
-// the mocked modules — keep these imports immediately after the vitest
-// import.
-import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
-
 import { layer } from '@effect/vitest';
 import { Effect, Context, Schema } from 'effect';
 import {
@@ -20,6 +15,10 @@ import {
 } from '@texra/shared/plugins/documents';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { provideCliInvocation, type CliContext } from '@cli/runtime/cliContext';
+import {
+  CliPlatform,
+  type CliPlatformServices,
+} from '@cli/runtime/initPlatform';
 import type {
   CliExecuteOptions,
   CliConfigExecuteResult,
@@ -122,8 +121,8 @@ let pendingRunStarts: { runId: RunId; rounds: readonly RoundOutput[] }[] = [];
 
 /**
  * The workflow command's program over the shared happy-path inputs, on the
- * test's session: the CLI init hands its caller the platform's stores, and
- * the commands under test read `secrets`/`globalState` off what it returns.
+ * test's session: its platform hands the command the host's stores, and
+ * the commands under test read `secrets`/`globalState` off them.
  */
 function workflowProgram(
   init: Partial<WorkflowRunInit> = {},
@@ -138,13 +137,12 @@ function workflowProgram(
   return Effect.gen(function* () {
     const session = yield* TestSession;
     const handle = yield* sessionHandleOf(session);
-    cliInitPlatformMock.initCliPlatform.mockReturnValue(
-      Effect.succeed({
-        ...installedHost().platform,
-        session: Effect.succeed(session),
-        runtime: yield* SessionGraph.runtime,
-      }),
-    );
+    // cast: the command reads only these members of its platform.
+    const platform = {
+      ...installedHost().platform,
+      session: Effect.succeed(session),
+      runtime: yield* SessionGraph.runtime,
+    } as unknown as CliPlatformServices;
     yield* Effect.forEach(
       starts,
       ({ runId, rounds }) => seedStartedRun(handle, runId, rounds),
@@ -157,7 +155,10 @@ function workflowProgram(
       instruction: '',
       options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
       ...init,
-    }).pipe(provideCliInvocation(context));
+    }).pipe(
+      provideCliInvocation(context),
+      Effect.provideService(CliPlatform, Effect.succeed(platform)),
+    );
   });
 }
 

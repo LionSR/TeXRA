@@ -18,7 +18,7 @@ import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { isLinked } from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { cliPlatform } from '../runtime/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
 import { resolveCliRunAgent } from '../runtime/agents';
@@ -93,7 +93,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   // of: the platform starts it when none runs. A document task resumes
   // headless, in this process; a service this process holds none of is
   // said, since nothing after this would say it.
-  const stores = yield* initCliPlatform({ ...context, startsService: true });
+  const stores = yield* cliPlatform;
   if (!isLinked(stores.service))
     writeTextStderr(`This task runs here: ${stores.service.none}`);
   const runSession = yield* stores.runSession;

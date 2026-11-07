@@ -3,7 +3,7 @@ import { Cause, Effect } from 'effect';
 
 import { CliInvocation } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { initCliPlatform } from '@cli/runtime/initPlatform';
+import { cliPlatform } from '@cli/runtime/initPlatform';
 import { writeErrorStderr } from '@cli/runtime/logSinks';
 import {
   shouldUseSubscriptionDeviceCode,
@@ -72,7 +72,7 @@ export function defineSubscriptionAuthCommand(
     return Effect.gen(function* () {
       const { context } = yield* CliInvocation;
       const writeProgress = yield* cliProgressWriter;
-      const services = yield* initCliPlatform(context);
+      const services = yield* cliPlatform;
       const signInResult = yield* withCliAuthError(
         signInCliSubscription(
           options.providerId,
@@ -134,8 +134,8 @@ export function defineSubscriptionAuthCommand(
       description: options.logoutDescription,
     },
     args: { ...GLOBAL_ARGS },
-    run: Effect.fn('subscriptionAuthCommand.run')(function* (context) {
-      const services = yield* initCliPlatform(context);
+    run: Effect.fn('subscriptionAuthCommand.run')(function* () {
+      const services = yield* cliPlatform;
       const signOutResult = yield* withCliAuthError(
         signOutCliSubscription(services, options.providerId),
       );
@@ -163,8 +163,8 @@ export function defineSubscriptionAuthCommand(
       description: options.statusDescription,
     },
     args: { ...GLOBAL_ARGS },
-    run: Effect.fn('subscriptionAuthCommand.run')(function* (context) {
-      yield* initCliPlatform(context);
+    run: Effect.fn('subscriptionAuthCommand.run')(function* () {
+      yield* cliPlatform;
       const statusResult = yield* withCliAuthError(provider.getStatus());
       if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
       const { label, ...status } = statusResult.value;

@@ -92,7 +92,7 @@ export interface CliContext {
   readonly resourcesPath: string;
   /**
    * The one config provider of this process, opened before the platform and
-   * installed as the workspace roots' config by `initCliPlatform`: every
+   * installed as the workspace roots' config by `CliPlatform`: every
    * setting read after startup resolves through this same pair of stores.
    */
   readonly config: ConfigProvider;
@@ -239,7 +239,7 @@ const decodeCliPackageManifest = Schema.decodeUnknownResult(
 /**
  * The CLI's `package.json`, read once and synchronously: a few hundred bytes
  * off the package root, needed before any runtime exists (`--version`, the
- * process-runtime install, the crash report), so it has no Promise or Effect
+ * process-runtime build, the crash report), so it has no Promise or Effect
  * face to keep in step with.
  */
 function readCliPackageManifest(): CliPackageManifest | undefined {
@@ -432,7 +432,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     const storageRoot = init.storageRoot ?? defaultNodeStorageRoot();
     // The project file over the user file, resolved by the same
     // `JsonConfigProvider` that `roots.config` gives the extension and desktop
-    // hosts — and, from `initCliPlatform` on, this host too. This is the
+    // hosts — and, from `CliPlatform` on, this host too. This is the
     // pre-runtime open, which is why it goes through `loadCliStartupConfig`
     // rather than the process runtime.
     const { config, warnings, degradations } = yield* loadCliStartupConfig(

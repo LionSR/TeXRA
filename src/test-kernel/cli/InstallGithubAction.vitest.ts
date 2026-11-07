@@ -26,17 +26,18 @@ vi.mock('@cli/runtime/browser', () => ({
   tryOpenBrowser: browserMocks.tryOpenBrowser,
 }));
 
-// The command brings no platform up, but its entry still installs the process
-// runtime its program runs on. Here that is the block's, so the suite never
-// builds a real one.
+// The command brings no platform up, but its entry still builds the runtime
+// its program runs on. Here that runtime serves the block's services, so the
+// suite never builds a real one.
 vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
+  const { Layer } = await import('effect');
   return {
     ...actual,
-    installCliProcessRuntime: () => {
+    cliSecretsLayer: () => {
       if (!installed.runtime) throw new Error('No test runtime is installed.');
-      return installed.runtime;
+      return Layer.effectContext(installed.runtime.contextEffect);
     },
   };
 });

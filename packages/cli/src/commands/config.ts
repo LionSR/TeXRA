@@ -21,10 +21,7 @@ import {
   readCliWorkspaceAgents,
 } from '../runtime/workspaceAgents';
 import { CliExitCode } from '../runtime/exitCodes';
-import {
-  initCliPlatform,
-  type CliPlatformServices,
-} from '../runtime/initPlatform';
+import { cliPlatform, type CliPlatformServices } from '../runtime/initPlatform';
 import { writeErrorStderr } from '../runtime/logSinks';
 
 import { setWorkspaceCliChatAgent } from '../runtime/cliConfig';
@@ -205,7 +202,7 @@ const configAgentsCommand = defineCliCommand({
     },
   },
   run: Effect.fn('config.run')(function* (context, ctx) {
-    const services = yield* initCliPlatform(context);
+    const services = yield* cliPlatform;
     return yield* configureWorkspaceAgents(services, {
       agents: optString(ctx.args.agents),
       defaultTeam: optString(ctx.args['default-team']),
@@ -217,8 +214,8 @@ const configAgentsCommand = defineCliCommand({
 const configShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show effective CLI configuration' },
   args: { ...GLOBAL_ARGS },
-  run: Effect.fn('config.run')(function* (context) {
-    const services = yield* initCliPlatform(context);
+  run: Effect.fn('config.run')(function* () {
+    const services = yield* cliPlatform;
     return yield* showConfig(services);
   }),
 });
@@ -240,7 +237,7 @@ const configEditCommand = defineCliCommand({
       });
     }
     return Effect.gen(function* () {
-      const services = yield* initCliPlatform(context);
+      const services = yield* cliPlatform;
       // The config TUI's module is loaded lazily, so a headless `config show`
       // in the same process never pays for Ink. The TUI itself is part of
       // this program rather than a second run past a Promise edge: its Ink

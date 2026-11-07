@@ -16,6 +16,7 @@ import {
 } from '@texra/utils/git/gitReads';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { cliSecretsLayer } from '../runtime/cliProcessRuntime';
 import { tryOpenBrowser } from '../runtime/browser';
 import {
   cliErrorMessage,
@@ -397,9 +398,8 @@ export const installGithubActionCommand = defineCliCommand({
     description: 'Install the TeXRA GitHub App and scaffold code review',
   },
   // The command brings no platform up: it only scaffolds a workflow file in a
-  // git repository, so the runtime its entry installs for the program serves
-  // the refusing state store and global-root handle `clone` takes.
-  install: 'noPlatform',
+  // git repository.
+  layer: cliSecretsLayer,
   args: {
     ...GLOBAL_ARGS,
     branch: {

@@ -37,7 +37,7 @@ import {
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
+import { openLocalSession } from '@texra/controllers/session/openProjectSession';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import { type ServiceInfo } from '@texra/controllers/server/protocol';
@@ -179,11 +179,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     // session closes as the project is released, before its roots
     // (registered after them, so released first); the service's exit
     // closes every session ahead of that (`serve`'s settle).
-    const session = yield* Effect.acquireRelease(
-      sessions.open(roots, { persistent: true, host: {} }),
-      (opened) => Effect.asVoid(sessions.close(opened.roots)),
-    );
-    yield* recordFirstCompletedRun(session).pipe(Scope.provide(projectScope));
+    const session = yield* openLocalSession(sessions, roots);
     // A store moved aside at open (pre-1.0 or corrupt) is said once, in
     // the service's log and to the project's first window: the windows
     // open no store of their own to notice it.
@@ -259,7 +255,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
 });
 
 /** A client prints its own result; its process's log lines go nowhere, as
- *  a platform command's do (`initCliPlatform`). The service keeps its own
+ *  a platform command's do (`CliPlatform`). The service keeps its own
  *  log. */
 const quietClient = Effect.sync(() =>
   setLogSink(silentLogSink, { trusted: true }),

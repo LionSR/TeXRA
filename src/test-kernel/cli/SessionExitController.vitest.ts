@@ -9,7 +9,7 @@ import { boundTestSessionView } from './fixtures/sessionViewFixture';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const mocks = vi.hoisted(() => ({
-  cliExit: vi.fn(),
+  leaveProcess: vi.fn(),
   writeTextStderrAndWait: vi.fn(),
   writeTextStdout: vi.fn(),
 }));
@@ -19,7 +19,6 @@ vi.mock('@cli/runtime/cliContext', () => ({
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
-  cliExit: mocks.cliExit,
   leaveAtOnce: {},
   runCliExit: (exit: Effect.Effect<void, unknown>) => Effect.runPromise(exit),
 }));
@@ -53,6 +52,7 @@ const createController = (session: TuiSession) =>
       chatScope: Scope.makeUnsafe(),
       terminal,
       runtime,
+      leaveProcess: mocks.leaveProcess,
       submitted: Effect.void,
       getApprovalPolicy: () => 'ask',
       flushArtifacts: Effect.fail(new Error('disk full')),
@@ -68,7 +68,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
 })('chat TUI session exit controller', (it) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.cliExit.mockReturnValue(Effect.void);
+    mocks.leaveProcess.mockReturnValue(Effect.void);
     mocks.writeTextStderrAndWait.mockReturnValue(Effect.void);
   });
 

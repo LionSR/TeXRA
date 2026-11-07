@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { Skills } from '@texra-ai/harness/host';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { cliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliSkillIssue,
@@ -28,7 +28,7 @@ const listSkills = Effect.fn('listSkills')(function* (
     readonly additionalPaths: readonly string[];
   },
 ) {
-  const services = yield* initCliPlatform(context);
+  const services = yield* cliPlatform;
   const roots = services.roots;
   const result = yield* Skills.enabled(roots, options);
   const exitCode = result.issues.some(

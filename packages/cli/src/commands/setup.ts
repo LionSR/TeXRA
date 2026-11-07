@@ -16,7 +16,7 @@ import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 /** The command's program builder; the command's `run` is its only caller. */
 function runSetup(context: CliContext) {
-  // Refused in the builder, before the runtime installs (see
+  // Refused in the builder, before the runtime is built (see
   // `defineCliCommand`).
   const terminalFailure = interactiveTerminalFailure(context);
   if (terminalFailure) {
@@ -49,6 +49,8 @@ export const setupCommand = withUsageSections(
       ...INTERACTIVE_GLOBAL_ARGS,
     },
     setup: (ctx) => rejectHeadlessOnlyFlags(ctx.rawArgs, 'setup'),
+    // The same chat platform as `texra chat`.
+    platform: { startsService: true, presentsStoreMovedAside: true },
     run: runSetup,
   }),
   [

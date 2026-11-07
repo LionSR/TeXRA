@@ -8,8 +8,8 @@ import { pickGlobalArgs, type ParsedGlobalArgs } from './globalArgs';
 
 /**
  * The CLI's pre-runtime context program. It opens the project and user
- * `config.json` stores BEFORE `initCliPlatform` (and with it
- * `installCliProcessRuntime`), so there is no process runtime to borrow yet;
+ * `config.json` stores BEFORE the command's runtime is
+ * built, so there is no process runtime to borrow yet;
  * it needs the filesystem and the process environment (as a ConfigProvider),
  * which it provides itself: the Node file services (the `--cwd` check) and the
  * same env ConfigProvider the process runtime serves, so the context's env

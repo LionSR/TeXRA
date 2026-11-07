@@ -11,10 +11,7 @@ import {
   setCliModelEnabled,
 } from '../runtime/enabledModels';
 import { CliExitCode } from '../runtime/exitCodes';
-import {
-  initCliPlatform,
-  type CliPlatformServices,
-} from '../runtime/initPlatform';
+import { cliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   cliModelRecord,
@@ -30,13 +27,13 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
-import { CliInvocation, type CliContext } from '../runtime/cliContext';
+import type { CliContext } from '../runtime/cliContext';
 
 /**
  * The report every model command gives when its platform cannot come up: one
  * stderr line and `ModelOrNetworkError`. Each command hands it to
  * `defineCliCommand` as its `catchExitCode`, so a failure of the process
- * runtime install — which happens before any program below can handle it —
+ * runtime build — which happens before any program below can handle it —
  * reads the same way an init failure inside one does.
  */
 function reportModelPlatformFailure(cause: unknown): number {
@@ -59,7 +56,7 @@ const listModels = Effect.fn('listModels')(function* (
 ) {
   const outcome = yield* Effect.exit(
     Effect.gen(function* () {
-      const services = yield* initCliPlatform(context);
+      const services = yield* cliPlatform;
       return yield* getCliModelAccessList({
         stores: services,
         models: options.includeUnavailable === true ? MODELS : undefined,
@@ -87,10 +84,9 @@ const listModels = Effect.fn('listModels')(function* (
 });
 
 const showModel = Effect.fn('showModel')(function* (id: string) {
-  const { context } = yield* CliInvocation;
   const outcome = yield* Effect.exit(
     Effect.gen(function* () {
-      const services = yield* initCliPlatform(context);
+      const services = yield* cliPlatform;
       return yield* loadCliModelAccessEntry(id, { stores: services });
     }),
   );
@@ -147,17 +143,11 @@ const modelsShowCommand = defineCliCommand({
  * defects and interruption included, exactly as the rejection this replaces
  * reached the caller.
  */
-const initModelCommandPlatform: Effect.Effect<
-  CliPlatformServices | { readonly exitCode: number },
-  never,
-  CliInvocation
-> = CliInvocation.use(({ context }) =>
-  initCliPlatform(context).pipe(
-    Effect.catchCause((cause) =>
-      Effect.sync(() => ({
-        exitCode: reportModelPlatformFailure(Cause.squash(cause)),
-      })),
-    ),
+const initModelCommandPlatform = cliPlatform.pipe(
+  Effect.catchCause((cause) =>
+    Effect.sync(() => ({
+      exitCode: reportModelPlatformFailure(Cause.squash(cause)),
+    })),
   ),
 );
 

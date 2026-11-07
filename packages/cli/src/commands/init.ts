@@ -18,7 +18,7 @@ import {
   type InitAnswers,
   type InitConfigShape,
 } from '../runtime/initConfig';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { cliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliNoAvailableModelsRecovery,
@@ -142,7 +142,7 @@ const runInit = Effect.fn('runInit')(function* (
 ) {
   // The init call hands back the stores it just wired, so the model list is
   // computed from the same pair the rest of this command writes through.
-  const services = yield* initCliPlatform(context);
+  const services = yield* cliPlatform;
 
   const filePath = workspaceTexraConfigPath(context.cwd);
   if (

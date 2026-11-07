@@ -19,19 +19,19 @@ import {
   type CliAgentListOptions,
 } from '../runtime/agents';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { cliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
-import { CliInvocation, type CliContext } from '../runtime/cliContext';
+import type { CliContext } from '../runtime/cliContext';
 
 const listAgents = Effect.fn('listAgents')(function* (
   context: CliContext,
   options: CliAgentListOptions = {},
 ) {
-  const services = yield* initCliPlatform(context);
+  const services = yield* cliPlatform;
   const result = yield* loadCliAgentList(services, options);
 
   if (!context.quietLogs) {
@@ -69,7 +69,7 @@ const showAgent = Effect.fn('showAgent')(function* (
   context: CliContext,
   name: string,
 ) {
-  yield* initCliPlatform(context);
+  yield* cliPlatform;
   const catalog = yield* AgentCatalog;
   const entry = catalog.get(name);
   if (!entry) {
@@ -116,7 +116,7 @@ function refuse(message: string) {
 
 /** Copy a bundled agent into the custom agents directory, stamped `basedOn`. */
 const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
-  yield* initCliPlatform((yield* CliInvocation).context);
+  yield* cliPlatform;
   const builtIn = yield* bundledAgentNamed(name);
   if (!builtIn) return refuse(`No built-in agent named ${name}.`);
   return yield* (yield* AgentCatalog).customize(builtIn, 'copy').pipe(
@@ -136,7 +136,7 @@ const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
 
 /** Delete the custom copy that overrides a bundled agent. */
 const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
-  const services = yield* initCliPlatform((yield* CliInvocation).context);
+  const services = yield* cliPlatform;
   const catalog = yield* AgentCatalog;
   const custom = catalog.get(agentKey('custom', name));
   if (!custom || !(yield* bundledAgentNamed(name))) {
@@ -163,7 +163,7 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
 
 /** Keep the custom copy and dismiss its newer-built-in notice. */
 const keepAgent = Effect.fn('keepAgent')(function* (name: string) {
-  yield* initCliPlatform((yield* CliInvocation).context);
+  yield* cliPlatform;
   const catalog = yield* AgentCatalog;
   const custom = catalog.get(agentKey('custom', name));
   const kept =

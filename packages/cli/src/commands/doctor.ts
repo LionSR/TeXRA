@@ -1,9 +1,9 @@
 import { defineCommand } from 'citty';
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import { withProcessServices } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { nodePlatformServices } from '@texra-ai/harness/node';
+import { nodePlatformServices, setLogSink } from '@texra-ai/harness/node';
 import { usageLoggingOptOut } from '@telemetry/UsageLogService';
 import {
   buildDoctorReport,
@@ -11,8 +11,10 @@ import {
   writeDoctorReport,
   type DoctorReport,
 } from '../runtime/doctor';
+import { makeCliProcessRuntime } from '../runtime/cliProcessRuntime';
+import { silentLogSink } from '../runtime/logSinks';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { cliPlatform } from '../runtime/initPlatform';
 import { pruneStorage } from '../runtime/pruneStorage';
 
 import { getCliModelAccessList } from '../runtime/modelAccess';
@@ -23,51 +25,56 @@ import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
 
-/**
- * The whole command as one program: the init and the report it feeds,
- * with no Promise between them.
- */
-const doctorReport = Effect.fn('doctorReport')(function* (
-  context: CliContext,
-): Effect.fn.Return<DoctorReport> {
-  // The one step that cannot run on the process runtime, because it is what
-  // builds it. Its failure is a row in the report rather than a throw, so
-  // it is caught here and handed to the builder as data — over the whole
-  // cause, because a platform that dies on the way up is as much "no
-  // platform" as one that fails.
-  const init = yield* Effect.exit(initCliPlatform(context));
-  if (Exit.isFailure(init)) {
-    // A failed init disposed the runtime it installed (see
-    // `initPlatform.ts`), so the degraded report — node, workspace,
-    // resources, LaTeX, config and the platform-failure row — renders
-    // with only the Node platform services its LaTeX probes spawn on.
-    // Nothing in it logs through Effect.
-    return yield* buildDoctorReport(context, {
-      kind: 'degraded',
-      initError: ensureError(Cause.squash(init.cause)),
-    }).pipe(Effect.provide(nodePlatformServices));
-  }
-  const services = init.value;
-  // The healthy report runs on the root's own context — the provision
-  // `services.runtime.runPromise` made before this became one program — so
-  // the account read's Effect logs reach the CLI's own sink.
-  return yield* withProcessServices(
-    services.runtime,
+/** The healthy report, on the command's runtime once its platform is up. */
+const readyReport = (context: CliContext) =>
+  Effect.flatMap(cliPlatform, (services) =>
     buildDoctorReport(context, {
       kind: 'ready',
       modelAccessList: withProcessServices(
         services.runtime,
         getCliModelAccessList({ stores: services }),
       ),
-      // Consent is read from the workspace configuration the init
-      // installed.
+      // Consent is read from the workspace configuration the platform
+      // opened.
       usageLoggingOptOut: withProcessServices(
         services.runtime,
         usageLoggingOptOut(services.roots.config),
       ),
     }),
   );
-});
+
+/**
+ * The whole report. A runtime or platform that fails to come up is a row in
+ * the report rather than a throw, so it is caught here over the whole cause
+ * (one that dies on the way up is as much "no platform" as one that fails),
+ * once the runtime is disposed: the degraded report — node, workspace,
+ * resources, LaTeX, config and the platform-failure row — renders with only
+ * the Node platform services its LaTeX probes spawn on, and nothing in it
+ * logs through Effect.
+ */
+const doctorReport = (context: CliContext): Effect.Effect<DoctorReport> =>
+  Effect.try({
+    try: () => {
+      // The report is the whole output, so the runtime's log lines go nowhere
+      // from its build on, as a platform's do.
+      setLogSink(silentLogSink, { trusted: true });
+      return makeCliProcessRuntime(context);
+    },
+    catch: ensureError,
+  }).pipe(
+    Effect.flatMap((runtime) =>
+      Effect.promise(() => runtime.runPromiseExit(readyReport(context))).pipe(
+        Effect.ensuring(runtime.disposeEffect),
+      ),
+    ),
+    Effect.flatten,
+    Effect.catchCause((cause) =>
+      buildDoctorReport(context, {
+        kind: 'degraded',
+        initError: ensureError(Cause.squash(cause)),
+      }).pipe(Effect.provide(nodePlatformServices)),
+    ),
+  );
 
 const DOCTOR_ARGS = {
   ...GLOBAL_ARGS,
@@ -96,12 +103,9 @@ const pruneStorageCommand = defineCliCommand({
 export const doctorCommand = defineCommand({
   meta: { name: 'doctor', description: 'Check CLI runtime dependencies' },
   args: DOCTOR_ARGS,
-  // The one command that cannot take `defineCliCommand`: that helper installs
-  // the process runtime and runs the command's program on it, and this report
-  // can borrow a runtime at neither end — none exists when the init
-  // begins, and an init that fails disposes the one it installed before it
-  // re-raises. So the whole command, context build included, is one program
-  // run here, before any process runtime exists.
+  // The one command that cannot take `defineCliCommand`: that helper reports
+  // a runtime that fails to build as a failure, where this command reports it
+  // as a row of its report.
   async run(ctx) {
     if (ctx.args['prune-storage'] === true)
       return pruneStorageCommand.run?.(ctx);

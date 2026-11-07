@@ -171,7 +171,7 @@ function launchedRunId(): RunId {
 type WithoutSession<O> = Omit<O, 'services'>;
 
 /**
- * The command under test. The commands thread `initCliPlatform`'s session,
+ * The command under test. The commands thread their platform's session,
  * runtime and shutdown scope in; here the test's session stands in for the
  * first, the block's graph for the second and the test host's shutdown
  * scope for the third.
