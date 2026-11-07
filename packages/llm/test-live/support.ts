@@ -201,7 +201,8 @@ function bind(spec: LiveProtocol, apiKey: string): Model {
     options: {
       maxOutputTokens: 2048,
       temperature: 0,
-      reasoning: chooseReasoning(selected.config, selected.request),
+      // Chosen on the route, as a run's binding chooses it.
+      reasoning: chooseReasoning(selected.config, selected.request, { route }),
       serverState: true,
     },
   });

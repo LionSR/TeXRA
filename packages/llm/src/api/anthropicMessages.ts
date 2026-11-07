@@ -381,9 +381,11 @@ function blockPart(
 /**
  * One response's Messages events as parts: message_start carries the
  * identity, message_delta the stop and cumulative usage, and message_stop
- * finishes them. Block order and placement are the assembly's to refuse;
- * this keeps only what the Messages framing alone knows, that a thinking
- * block ends signed.
+ * finishes them. Where each block lands is the assembly's to refuse (a gap,
+ * a reopened position, progress outside an open block, a block left open
+ * at the finish); the order blocks arrive in is not checked, since the
+ * content is keyed by index. This keeps only what the Messages framing
+ * alone knows, that a thinking block ends signed.
  */
 function anthropicWire() {
   let started = false;
