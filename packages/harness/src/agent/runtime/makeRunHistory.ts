@@ -5,7 +5,7 @@
  * once the view has applied them) or the job a cell was opened within, and
  * `applyRunRows` rebuilds the state on both paths.
  */
-import { Effect, Predicate, Result, SynchronizedRef } from 'effect';
+import { Effect, Predicate, Result, SynchronizedRef, absurd } from 'effect';
 
 import {
   qualifyAggregateId,
@@ -107,8 +107,15 @@ function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
         ? [p.turn.requestedOrigin]
         : [p.turn.requestedOrigin, continuation.origin];
     }
-    default:
+    // These carry no origin: a new kind is placed here or above.
+    case 'identified':
+    case 'failed':
+    case 'cancelled':
+    case 'handed-down':
+    case 'append':
       return [];
+    default:
+      return absurd(p);
   }
 }
 
