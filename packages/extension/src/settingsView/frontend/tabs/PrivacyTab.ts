@@ -6,7 +6,7 @@ import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared webview
-import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
+import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settingsView/texraSettings';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
@@ -36,7 +36,7 @@ export class PrivacyTab extends SignalWatcher(LitElement) {
             icon: 'shield',
           })}
           <div class="settings-section">
-            ${renderStateSettingToggleRow(TELEMETRY_ENABLED_KEY)}
+            ${renderStateSettingToggleRow(TELEMETRY_ENABLED_SETTING)}
           </div>
         </section>
       </div>

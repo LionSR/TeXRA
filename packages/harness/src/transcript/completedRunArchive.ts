@@ -6,7 +6,6 @@ import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 
 import { Settings, type ConfigProvider } from '@shared/config/settings';
 import {
-  DEBUG_MODE_KEY,
   TOOL_CALL_STATUS,
   ToolResultSchema,
   type RunId,
@@ -15,6 +14,7 @@ import {
 import { SessionLog } from '@shared/session/runHistory';
 import type { TranscriptView } from '@shared/session/sessionView';
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';
+import { DEBUG_MODE_SETTING } from '@shared/state/stateSettings';
 
 // ============================================================================
 // Conversation
@@ -140,7 +140,7 @@ export const readCompletedRunConversation = Effect.fn(
   // reads now; empty when the run never existed or was removed.
   const transcript = buildRunTranscript(
     yield* (yield* SessionLog).display(runId),
-    Settings.getConfig<boolean>(config, DEBUG_MODE_KEY),
+    Settings.getConfig(config, DEBUG_MODE_SETTING),
   );
   return transcript.rows.flatMap(conversationNodesForRow);
 });

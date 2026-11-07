@@ -24,7 +24,7 @@ export const buildSettingsSnapshotMessage = Effect.fn(
     snapshot,
     values: Object.fromEntries(
       yield* Effect.forEach(TEXRA_SETTINGS.snapshotEntries(snapshot), (entry) =>
-        Settings.get(stores, entry.key).pipe(
+        Settings.get(stores, entry).pipe(
           Effect.map((value) => [entry.key, value] as const),
         ),
       ),

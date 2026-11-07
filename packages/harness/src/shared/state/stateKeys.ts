@@ -10,58 +10,24 @@
  */
 import { Result, Schema } from 'effect';
 
-/** The harness's workspace-scoped state keys (`roots.workspaceState`). */
+/** The harness's repository-scoped state keys (`roots.repoState`). */
 export const WorkspaceStateKey = Object.freeze({
-  // Agent visibility
   /** Workspace agents selection; the `custom` member carries a category-keyed record. */
   WORKSPACE_AGENTS: 'workspaceAgents',
   /** Custom agents the user turned off; every other custom agent is shown. */
   HIDDEN_CUSTOM_AGENTS: 'hiddenCustomAgents',
-
-  // Skill availability
-  DISABLED_SKILLS: 'skills.disabled',
-  DISABLED_SKILL_SOURCES: 'skills.disabledSources',
-
-  // Git commit author settings
-  GIT_MARK_COMMITS: 'git.markCommits',
-  GIT_AUTHOR_NAME: 'git.authorName',
-  GIT_AUTHOR_EMAIL: 'git.authorEmail',
-
-  // Git worktree support
-  GIT_WORKTREE_SUPPORT: 'git.worktreeSupport',
-
-  // Tool path safety
-  TOOL_PATH_PROTECTION_ENABLED: 'tools.restrictPathsToWorkingDirectory',
 } as const);
 export type WorkspaceStateKey =
   (typeof WorkspaceStateKey)[keyof typeof WorkspaceStateKey];
 
 export const GlobalStateKey = Object.freeze({
-  MEMORY_ENABLED: 'memory.enabled',
-  /** Code mode's "only" stage: every chat run gets `script`, and the model
-   *  sees no other tool; the rest are callable from scripts alone. */
-  SCRIPT_ONLY: 'codeMode.scriptOnly',
-
-  // Child-work policy. Global rather than per-workspace: these describe how the
-  // user wants their own child runs handled, not anything about a checkout.
-  ALLOW_ORCHESTRATOR_KILL: 'allowOrchestratorKill',
-  DETACH_SUBAGENTS_ON_STOP: 'detachSubagentsOnStop',
-
   // Model selection settings
   /** `{ enabledExtras, disabledDefaults }`: the user's delta over `DEFAULT_MODELS`. */
   MODEL_SELECTION: 'modelSelection',
-  HELPER_MODEL: 'helperModel',
   REASONING_LEVELS: 'reasoningLevels',
 
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR: 'customAgentDir',
-
-  // Coding plan settings
-  GLM_CODING_PLAN: 'glm.codingPlan',
-  KIMI_CODE_PREFER: 'kimiCode.prefer',
-
-  // Transport settings
-  WEBSOCKET_OPENAI: 'websocket.openai',
 
   // Tool settings
   DISABLED_TOOLS: 'tools.disabled',

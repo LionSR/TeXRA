@@ -23,6 +23,7 @@
 
 import { Schema } from 'effect';
 
+import type { SettingRow } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { SettingsHostState } from '@texra/shared/settingsView/settingsViewMessages';
 import type {
@@ -53,16 +54,24 @@ const CATALOG_SIGNALS = new Map<string, Signal.State<unknown>>();
  *
  * The row already owns the default (decoding `undefined` yields its
  * `withDecodingDefault` value), so a caller restates neither the default nor
- * the wire field name; it names the key and the value type it renders. Being
- * keyed is what lets {@link applySettingsSnapshot} apply a whole
- * catalog-derived snapshot without a per-setting `.set()` line, and lets the
- * row renderers (`stateSettingRows.ts`) and tabs read a setting by key alone,
- * with no per-setting declaration or property passed down to them.
- *
- * Throws on a key with no settings-view catalog row: a signal that no snapshot
- * can ever reach would silently render its default forever.
+ * the wire field name; it names the row, whose schema types the value. The
+ * signals are keyed by the row's key, which is what lets
+ * {@link applySettingsSnapshot} apply a whole catalog-derived snapshot
+ * without a per-setting `.set()` line, and lets the row renderers
+ * (`stateSettingRows.ts`) and tabs read a setting by its row alone, with no
+ * per-setting declaration or property passed down to them.
  */
-export function settingSignal<T>(key: string): Signal.State<T> {
+export function settingSignal<A>(row: SettingRow<A>): Signal.State<A> {
+  // cast: the signal under the row's key holds values its schema parsed.
+  return signalFor(row.key) as Signal.State<A>;
+}
+
+/**
+ * The signal under a wire key. Throws on a key with no settings-view catalog
+ * row: a signal that no snapshot can ever reach would silently render its
+ * default forever.
+ */
+function signalFor(key: string): Signal.State<unknown> {
   let state = CATALOG_SIGNALS.get(key);
   if (!state) {
     const entry = TEXRA_SETTINGS.settingsViewByKey(key);
@@ -74,8 +83,7 @@ export function settingSignal<T>(key: string): Signal.State<T> {
     );
     CATALOG_SIGNALS.set(key, state);
   }
-  // cast: the key's catalog row types the signal's value; the caller names T for it.
-  return state as Signal.State<T>;
+  return state;
 }
 
 /**
@@ -88,7 +96,7 @@ export function applySettingsSnapshot(
   values: Readonly<Record<string, unknown>>,
 ): void {
   for (const [key, value] of Object.entries(values)) {
-    settingSignal<unknown>(key).set(value);
+    signalFor(key).set(value);
   }
 }
 

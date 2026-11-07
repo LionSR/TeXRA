@@ -22,8 +22,9 @@ Browser-safe Effect Schemas, derived types, and pure read helpers for
   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
   [`RunIdSchema`](#runidschema), [`StartRequestSchema`](#startrequestschema).
 - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
-  [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
-  [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
+  the harness's setting rows ([`SettingRow`](#settingrow)),
+  [`GlobalStateKey`](#globalstatekey), [`WorkspaceStateKey`](#workspacestatekey),
+  [`TraceDocumentSchema`](#tracedocumentschema).
 
 ## acceptsFollowUp
 
@@ -54,10 +55,12 @@ a scope added here is representable everywhere.
 const ActiveSkillSourceScopeSchema: Literals<readonly ["bundled", "user", "project", "interop", "custom"]>
 ```
 
-## AGENT_SKILLS_CONFIG_KEY
+## AGENT_SKILLS_ENABLED_SETTING
+
+Whether agents receive the skills discovered from every source.
 
 ```ts
-const AGENT_SKILLS_CONFIG_KEY: "skills.enabled"
+const AGENT_SKILLS_ENABLED_SETTING: { readonly key: "skills.enabled"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Enable skills for agents"; readonly description: "Expose enabled built-in and imported skills to agent prompts. Skills are off by default."; readonly category: "tools"; }
 ```
 
 ## AGENT_SOURCE
@@ -231,6 +234,12 @@ type AggregateKind = typeof AggregateKindSchema.Type;
 type AggregateState = typeof AggregateStateSchema.Type;
 ```
 
+## ALLOW_ORCHESTRATOR_KILL_SETTING
+
+```ts
+const ALLOW_ORCHESTRATOR_KILL_SETTING: { readonly key: "allowOrchestratorKill"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Let a task stop its agents"; readonly description: "Allow a task to stop the agents it started once they are no longer needed."; readonly category: "agents"; }
+```
+
 ## APPROVAL_BYPASS_KINDS
 
 ```ts
@@ -241,14 +250,6 @@ const APPROVAL_BYPASS_KINDS: readonly ["bash", "toolEdit", "superYolo"]
 
 ```ts
 const APPROVAL_POLICIES: readonly ["never", "ask", "yolo"]
-```
-
-## APPROVAL_POLICY_CONFIG_KEY
-
-The approval policy's config key, the same on every host.
-
-```ts
-const APPROVAL_POLICY_CONFIG_KEY: "approvalPolicy"
 ```
 
 ## APPROVAL_POLICY_DEFAULT
@@ -268,6 +269,18 @@ Changing that requires changing headless discipline, not just this constant.
 
 ```ts
 const APPROVAL_POLICY_NO_INPUT_DEFAULT: ApprovalPolicy
+```
+
+## APPROVAL_POLICY_SETTING
+
+The approval policy. Strict on purpose: `settingEnumOptions` derives the
+dropdown from a literal-list row, and the tolerant spelling belongs to
+`parseApprovalPolicy`, which every reader of typed-in text (the env var,
+`--approval-policy`, `/approval`, the dropdown) calls before a value ever
+reaches this row.
+
+```ts
+const APPROVAL_POLICY_SETTING: { readonly key: "approvalPolicy"; readonly slot: "config"; readonly schema: withDecodingDefault<Literals<readonly ["never", "ask", "yolo"]>, never>; readonly title: "Approval policy"; readonly description: "Whether agents ask before running shell commands and editing files."; readonly category: "tools"; readonly configTarget: "local"; readonly enumLabels: readonly ["Block", "Ask", "Auto-approve"]; }
 ```
 
 ## ApprovalBypassKind
@@ -382,8 +395,8 @@ class Cancelled extends Schema.TaggedError<Cancelled>()(
 
 ## CHATGPT_CODEX_CONTEXT_WINDOW_SETTING
 
-Bounds and copy for the ChatGPT-subscription input budget; unset, each
-model takes the window the Codex backend grants it.
+The ChatGPT-subscription input budget; unset, each model takes the window
+the Codex backend grants it.
 
 The stored unit is **thousands of tokens**, and the key says so. Every
 budget in play is a round multiple of 1000 (272K, 400K, 872K), so a raw
@@ -393,26 +406,15 @@ lands inside the valid range instead of being rejected: `872` entered for
 and the failure then names a number the user never meant to set.
 
 ```ts
-const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING: Readonly<{ readonly configKey: "chatgptCodex.contextWindowK"; readonly tokensPerUnit: 1000; readonly min: 1; readonly max: 872; readonly unitLabel: "K tokens"; readonly description: "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it (500 for GPT-6.1 Sol, 272 for the others); a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery."; }>
-```
-
-## CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY
-
-Config key for the per-session child-run concurrency budget.
-
-```ts
-const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY: "childRunConcurrencyBudget"
+const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING: { readonly key: "chatgptCodex.contextWindowK"; readonly slot: "config"; readonly schema: withDecodingDefault<NullOr<Int>, never>; readonly title: "Subscription input token budget (K tokens)"; readonly description: "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it (500 for GPT-6.1 Sol, 272 for the others); a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery."; readonly category: "model"; }
 ```
 
 ## CHILD_RUN_CONCURRENCY_BUDGET_SETTING
 
-Bounds, default, and copy for `childRunConcurrencyBudget`. The value caps the
-number of live native child model conversations one session runs at once.
-Shared by the catalog row and the runtime reader so the two cannot disagree
-about the range.
+How many native child model conversations one session runs at once.
 
 ```ts
-const CHILD_RUN_CONCURRENCY_BUDGET_SETTING: Readonly<{ readonly auto: 0; readonly defaultValue: 0; readonly min: 0; readonly max: 100; readonly description: "Maximum number of agents one task may run at once in the background; a script's agent() calls also run at most this many at once. 0 (the default) sizes it to this machine's CPU count. Agents beyond the budget wait for a slot to free."; }>
+const CHILD_RUN_CONCURRENCY_BUDGET_SETTING: { readonly key: "childRunConcurrencyBudget"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Agents at once"; readonly description: "Maximum number of agents one task may run at once in the background; a script's agent() calls also run at most this many at once. 0 (the default) sizes it to this machine's CPU count. Agents beyond the budget wait for a slot to free."; readonly category: "agents"; }
 ```
 
 ## CompactionActivityData
@@ -452,18 +454,6 @@ the project; `global` is the user's file for every workspace.
 type ConfigTarget = 'global' | 'workspace' | 'local';
 ```
 
-## configTreeRows
-
-Config-file-backed rows from a record keyed by dotted path: the key and the
-uniform `config` slot are derived, not restated. The record's declaration
-order is the catalog order.
-
-```ts
-function configTreeRows(
-  rows: Readonly<Record<string, Omit<StateSettingEntry, 'key' | 'slot'>>>,
-): StateSettingEntry[]
-```
-
 ## ContextManagementData
 
 ```ts
@@ -499,6 +489,12 @@ re-derives it from the error.
 
 ```ts
 const CredentialSwitchSchema: Union<readonly [Struct<{ readonly kind: Literal<"decline-route">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; readonly automatic: Boolean; }>, Struct<{ readonly kind: Literal<"new-key">; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; }>]>
+```
+
+## DASHSCOPE_REGION_SETTING
+
+```ts
+const DASHSCOPE_REGION_SETTING: { readonly provider: "dashscope"; readonly key: "dashscope.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Qwen China region (Bailian)"; readonly description: "Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to \"Bailian\"."; readonly category: "model"; readonly slot: "globalState"; }
 ```
 
 ## DatabaseAggregateClosed
@@ -554,6 +550,12 @@ function descendantRuns(
 ): readonly RunId[]
 ```
 
+## DETACH_SUBAGENTS_ON_STOP_SETTING
+
+```ts
+const DETACH_SUBAGENTS_ON_STOP_SETTING: { readonly key: "detachSubagentsOnStop"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Keep agents running"; readonly description: "Let a task's agents continue when the task is stopped."; readonly category: "agents"; }
+```
+
 ## DiffStats
 
 ```ts
@@ -566,6 +568,18 @@ Schema for diff statistics where one side may be absent.
 
 ```ts
 const DiffStatsSchema: Struct<{ readonly added: optional<Int>; readonly removed: optional<Int>; }>
+```
+
+## DISABLED_SKILL_SOURCES_SETTING
+
+```ts
+const DISABLED_SKILL_SOURCES_SETTING: { readonly key: "skills.disabledSources"; readonly slot: "config"; readonly schema: withDecodingDefault<$Array<Literals<readonly ["bundled", "user", "project", "interop", "custom"]>>, never>; readonly title: "Skill sources"; readonly description: "Enable or disable skill source groups in this workspace."; readonly category: "tools"; }
+```
+
+## DISABLED_SKILLS_SETTING
+
+```ts
+const DISABLED_SKILLS_SETTING: { readonly key: "skills.disabled"; readonly slot: "config"; readonly schema: withDecodingDefault<$Array<String>, never>; readonly title: "Skills"; readonly description: "Enable or disable individual skills in this workspace."; readonly category: "tools"; }
 ```
 
 ## DispatchFacts
@@ -770,33 +784,66 @@ function getProposalFileGroups(
 ): ProposalFileGroup[]
 ```
 
+## GIT_AUTHOR_EMAIL_SETTING
+
+```ts
+const GIT_AUTHOR_EMAIL_SETTING: { readonly key: "git.authorEmail"; readonly slot: "repoState"; readonly schema: withDecodingDefault<String, never>; readonly title: "Agent commit email"; readonly description: "Author and committer email used for agent-authored commits when commit marking is enabled."; readonly category: "git"; }
+```
+
+## GIT_AUTHOR_NAME_SETTING
+
+```ts
+const GIT_AUTHOR_NAME_SETTING: { readonly key: "git.authorName"; readonly slot: "repoState"; readonly schema: withDecodingDefault<String, never>; readonly title: "Agent commit author"; readonly description: "Author and committer name used for agent-authored commits when commit marking is enabled."; readonly category: "git"; }
+```
+
+## GIT_COMMITS_TO_SHOW_SETTING
+
+The launcher's commit picker reads the count through the host snapshot on
+both GUI hosts; the CLI only writes it, through the setup assistant's
+`update_config`.
+
+```ts
+const GIT_COMMITS_TO_SHOW_SETTING: { readonly key: "git.numberOfCommitsToShow"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly description: "Number of recent commits to show in the commit selection dropdown"; }
+```
+
+## GIT_MARK_COMMITS_SETTING
+
+```ts
+const GIT_MARK_COMMITS_SETTING: { readonly key: "git.markCommits"; readonly slot: "repoState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Mark agent commits"; readonly description: "Attribute agent-authored git commits to the agent commit author so they are distinguishable from your own commits."; readonly category: "git"; }
+```
+
+## GIT_WORKTREE_SUPPORT_SETTING
+
+```ts
+const GIT_WORKTREE_SUPPORT_SETTING: { readonly key: "git.worktreeSupport"; readonly slot: "repoState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Subagent worktrees"; readonly description: "Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict."; readonly category: "git"; }
+```
+
+## GLM_CODING_PLAN_SETTING
+
+```ts
+const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM Coding Plan"; readonly description: "Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits."; readonly category: "model"; }
+```
+
+## GLM_REGION_SETTING
+
+```ts
+const GLM_REGION_SETTING: { readonly provider: "glm"; readonly key: "glm.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM China region"; readonly description: "Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint."; readonly category: "model"; readonly slot: "globalState"; }
+```
+
 ## GlobalStateKey
 
 ```ts
-const GlobalStateKey: Readonly<{ readonly MEMORY_ENABLED: "memory.enabled"; readonly SCRIPT_ONLY: "codeMode.scriptOnly"; readonly ALLOW_ORCHESTRATOR_KILL: "allowOrchestratorKill"; readonly DETACH_SUBAGENTS_ON_STOP: "detachSubagentsOnStop"; readonly MODEL_SELECTION: "modelSelection"; readonly HELPER_MODEL: "helperModel"; readonly REASONING_LEVELS: "reasoningLevels"; readonly CUSTOM_AGENT_DIR: "customAgentDir"; readonly GLM_CODING_PLAN: "glm.codingPlan"; readonly KIMI_CODE_PREFER: "kimiCode.prefer"; readonly WEBSOCKET_OPENAI: "websocket.openai"; readonly DISABLED_TOOLS: "tools.disabled"; readonly MCP_REVISION_KEY: "mcp.revisionKey"; readonly INSTALLED_PLUGINS: "plugins.installed"; readonly ACTIVE_TEAM_ID: "onboarding.defaultTeamId"; }>
+const GlobalStateKey: Readonly<{ readonly MODEL_SELECTION: "modelSelection"; readonly REASONING_LEVELS: "reasoningLevels"; readonly CUSTOM_AGENT_DIR: "customAgentDir"; readonly DISABLED_TOOLS: "tools.disabled"; readonly MCP_REVISION_KEY: "mcp.revisionKey"; readonly INSTALLED_PLUGINS: "plugins.installed"; readonly ACTIVE_TEAM_ID: "onboarding.defaultTeamId"; }>
 ```
 
 ## GOAL_MAX_COST_SETTING
 
-Bounds, default, and copy for `goal.maxCostUsd`: what a goal's rounds may
-spend before it pauses instead of starting another round, and `0`
-disables the cap. Read when the goal launches, into its script. Shared by
-the catalog row and the goal launch so the two cannot disagree about the
-range.
+What a goal's rounds may spend before it pauses instead of starting another
+round; `0` disables the cap. Read when the goal launches, into its script.
+Global: a committed project config must not raise or remove the user's cap.
 
 ```ts
-const GOAL_MAX_COST_SETTING: Readonly<{ readonly configKey: "goal.maxCostUsd"; readonly defaultValue: 5; readonly min: 0; readonly max: 10000; readonly description: "Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key)."; }>
-```
-
-## GOAL_STRATEGY_SETTING
-
-Default and copy for `goal.strategy`: the script module whose `goal`
-export a plan run as a goal calls. The default is the goal plugin's own
-module; a `scriptModules` entry of any plugin that is on may replace it. Read when
-the goal launches.
-
-```ts
-const GOAL_STRATEGY_SETTING: Readonly<{ readonly configKey: "goal.strategy"; readonly defaultValue: "builtIn:goal"; readonly description: "The script module a plan run as a goal runs, by its import specifier (`builtIn:<module>`): its `goal(objective, { maxCostUsd })` export decides the rounds, what context each starts from and when to stop, and resolves to the goal's result. Defaults to the goal plugin's own module."; }>
+const GOAL_MAX_COST_SETTING: { readonly key: "goal.maxCostUsd"; readonly slot: "config"; readonly schema: withDecodingDefault<Number, never>; readonly configTarget: "global"; readonly title: "Goal spend cap (USD)"; readonly description: "Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key)."; readonly category: "tools"; }
 ```
 
 ## GoalResultSchema
@@ -809,6 +856,12 @@ waiting run: work continues through a new goal or a new turn.
 
 ```ts
 const GoalResultSchema: Union<readonly [Struct<{ readonly rounds: Int; readonly spent: Finite; readonly report: String; readonly outcome: Literal<"completed">; }>, Struct<{ readonly rounds: Int; readonly spent: Finite; readonly report: String; readonly outcome: Literal<"paused">; readonly pause: Union<readonly [Struct<{ readonly reason: Literal<"needs_user">; }>, Struct<{ readonly reason: Literal<"round_failed">; readonly error: Struct<{ readonly name: String; readonly message: String; }>; }>, Struct<{ readonly reason: Literal<"no_verdict">; readonly response: String; }>, Struct<{ readonly reason: Literal<"spend_cap">; readonly maxCostUsd: Finite; }>]>; }>]>
+```
+
+## GOOGLE_INTERACTIONS_SERVER_STATE_SETTING
+
+```ts
+const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING: { readonly key: "model.useGoogleInteractionsServerState"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly configTarget: "global"; readonly title: "Server-side conversation state"; readonly description: "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round."; readonly category: "model"; }
 ```
 
 ## HARNESS_INSTRUCTION_KEY
@@ -828,6 +881,16 @@ const HARNESS_INSTRUCTION_KEY: { readonly MISSING_API_KEY: "missingApiKey"; read
 ```ts
 type HarnessInstructionKey =
   (typeof HARNESS_INSTRUCTION_KEY)[keyof typeof HARNESS_INSTRUCTION_KEY];
+```
+
+## HELPER_MODEL_SETTING
+
+No default here: absent means none is configured, and a helper call uses
+the run's own model. An app names its own (`settingsCatalog`'s
+`defaults`).
+
+```ts
+const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globalState"; readonly schema: UndefinedOr<String>; readonly title: "Helper model"; readonly description: "Model used for auxiliary tasks: instruction polishing, merges, and session descriptions. When unset, a run's helper calls use the run's own model."; readonly category: "model"; }
 ```
 
 ## HookEvent
@@ -996,6 +1059,12 @@ same contract instead of re-declaring it per module.
 const JsonValueSchema: Codec<Json, Json, never, never>
 ```
 
+## KIMI_CODE_PREFER_SETTING
+
+```ts
+const KIMI_CODE_PREFER_SETTING: { readonly key: "kimiCode.prefer"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Kimi Code subscription"; readonly description: "Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform."; readonly category: "model"; }
+```
+
 ## LaunchApproval
 
 ```ts
@@ -1100,6 +1169,15 @@ type McpToolOutput = typeof McpToolOutputSchema.Type;
 type MediaAttachmentKind = typeof MediaAttachmentKindSchema.Type;
 ```
 
+## MEMORY_ENABLED_SETTING
+
+Every host's runtime honors the row through the `memory` entry of the
+memory-workflow plugin's `injectedWhen` (`@tools/plugins`).
+
+```ts
+const MEMORY_ENABLED_SETTING: { readonly key: "memory.enabled"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Enable memory for chat agents"; readonly description: "Remember useful details across chat sessions."; readonly category: "tools"; }
+```
+
 ## MemoryViewItem
 
 ```ts
@@ -1124,6 +1202,12 @@ const MESSAGE_TYPES: { readonly THINKING: "thinking"; readonly SCRATCHPAD: "scra
 type MessageType = typeof MessageTypeSchema.Type;
 ```
 
+## MINIMAX_REGION_SETTING
+
+```ts
+const MINIMAX_REGION_SETTING: { readonly provider: "minimax"; readonly key: "minimax.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "MiniMax China region"; readonly description: "Use the China region endpoint (api.minimax.cn) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region."; readonly category: "model"; readonly slot: "globalState"; }
+```
+
 ## MODEL_AVAILABILITY_STATUS
 
 What a kind means: whether a run can use the model, and whether the block is
@@ -1143,23 +1227,22 @@ const MODEL_AVAILABILITY_STATUS: { readonly 'provider-key': { readonly available
 
 ## MODEL_COMPACTION_THRESHOLD_SETTING
 
-Bounds, default, and copy for `model.compactionThresholdPercent`. The value
-is the share of the model's context window that triggers automatic
-compaction, and `0` disables it. Shared by the catalog row and the runtime
-reader so the two cannot disagree about the range.
+The share of the model's context window that triggers automatic
+compaction; `0` disables it. No `configTarget`: both runtime readers
+resolve the merged config value through `Settings.get`, so narrowing the
+row to the global scope would hide (and block writes to) a workspace
+override the runtime honors.
 
 ```ts
-const MODEL_COMPACTION_THRESHOLD_SETTING: Readonly<{ readonly configKey: "model.compactionThresholdPercent"; readonly defaultValue: 75; readonly min: 0; readonly max: 100; readonly description: "When the conversation reaches this percentage of the model's context limit, earlier messages are summarized automatically to free up space. Lower values trigger summarization sooner. Set to 0 to disable."; }>
+const MODEL_COMPACTION_THRESHOLD_SETTING: { readonly key: "model.compactionThresholdPercent"; readonly slot: "config"; readonly schema: withDecodingDefault<Number, never>; readonly title: "Compaction threshold"; readonly description: "When the conversation reaches this percentage of the model's context limit, earlier messages are summarized automatically to free up space. Lower values trigger summarization sooner. Set to 0 to disable."; readonly category: "model"; }
 ```
 
 ## MODEL_RETRY_MAX_ATTEMPTS_SETTING
 
-Bounds, default, and copy for `model.retry.maxAttempts`. The value is the
-number of automatic retries after the initial model request. Shared by the
-catalog row's schema and its copy so the two cannot disagree about the range.
+The number of automatic retries after the initial model request.
 
 ```ts
-const MODEL_RETRY_MAX_ATTEMPTS_SETTING: Readonly<{ readonly configKey: "model.retry.maxAttempts"; readonly defaultValue: 2; readonly min: 0; readonly max: 5; readonly description: "Additional automatic retries after the initial model request (0–5). A resumed request keeps the retries it already used."; }>
+const MODEL_RETRY_MAX_ATTEMPTS_SETTING: { readonly key: "model.retry.maxAttempts"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Automatic retries"; readonly description: "Additional automatic retries after the initial model request (0–5). A resumed request keeps the retries it already used."; readonly category: "model"; }
 ```
 
 ## ModelAvailabilityKind
@@ -1184,6 +1267,12 @@ Who serves a run's conversation ({@link ModelBackendSchema}).
 
 ```ts
 type ModelBackend = typeof ModelBackendSchema.Type;
+```
+
+## MOONSHOT_REGION_SETTING
+
+```ts
+const MOONSHOT_REGION_SETTING: { readonly provider: "moonshot"; readonly key: "moonshot.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Kimi/Moonshot China region"; readonly description: "Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai."; readonly category: "model"; readonly slot: "globalState"; }
 ```
 
 ## needsUser
@@ -1255,6 +1344,12 @@ and every grant the run holds is checked against.
 
 ```ts
 const offeredGrant: (payload: { readonly kind: "toolEdit"; readonly data: { readonly requestId: string; readonly allowBypass: boolean; readonly runId: "" | (string & Brand<"RunId">); readonly path: string; readonly relativePath: string; readonly sourceTool: string; readonly addedLines: number; readonly removedLines: number; readonly content: string; }; } | { readonly kind: "bash"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly command: string; readonly cwd?: string | undefined; }; } | { readonly kind: "retry"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly operation: string; readonly errorDetails: { readonly message: string; readonly statusCode?: number | undefined; readonly statusText?: string | undefined; readonly provider?: string | undefined; readonly classification?: { readonly kind: "missing-api-key" | "context-window" | "upstream-credit"; } | { readonly kind: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly planType?: string | undefined; readonly resetsInMs?: number | undefined; } | { readonly kind: "subscription-session"; readonly route: "chatgpt-subscription" | "xai-subscription"; readonly needsReauth: boolean; readonly sessionError: string; } | undefined; readonly requestId?: string | undefined; readonly partialText?: string | undefined; }; readonly model?: string | undefined; readonly credentialSwitch?: { readonly kind: "decline-route"; readonly route: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; readonly automatic: boolean; } | { readonly kind: "new-key"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; } | null | undefined; }; } | { readonly kind: "proposal"; readonly data: { readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly allowBypass: boolean; readonly task: boolean; readonly script?: { readonly title: string | null; readonly source: string; readonly calls: readonly { readonly toolName: string; readonly preview: string; }[]; } | null | undefined; readonly workingDirectory?: string | null | undefined; readonly agentSource?: "plugin" | "custom" | "builtIn" | "inline" | null | undefined; readonly persona?: { readonly name: string; readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; } | null | undefined; readonly rootUserInstruction?: string | null | undefined; readonly options?: { readonly [x: string]: Json; } | null | undefined; }; } | { readonly kind: "planApproval"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly plan: { readonly objective: string; }; }; } | { readonly kind: "userQuestion"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly questions: readonly { readonly options: readonly { readonly label: string; readonly description?: string | null | undefined; }[]; readonly question: string; readonly header?: string | null | undefined; readonly multiSelect?: boolean | null | undefined; readonly allowFreeText?: boolean | null | undefined; }[]; readonly context?: string | null | undefined; }; } | { readonly kind: "plugin"; readonly plugin: string; readonly blocksCaller: boolean; readonly answers: readonly ("retry" | "approve" | "approve_and_goal" | "submit" | "answer" | "skip")[]; readonly data: { readonly [x: string]: Json; readonly requestId: string; readonly runId: string & Brand<"RunId">; }; }) => "bash" | "toolEdit" | "superYolo" | null
+```
+
+## OPENAI_FAST_TIER_SETTING
+
+```ts
+const OPENAI_FAST_TIER_SETTING: { readonly key: "model.openaiFastTier"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly configTarget: "global"; readonly title: "Fast mode"; readonly description: "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect."; readonly category: "model"; }
 ```
 
 ## OpenFilePayload
@@ -1393,22 +1488,22 @@ interface ProposalFileGroup {
 }
 ```
 
-## PROVIDER_ENDPOINT_STATE_ENTRIES
+## PROVIDER_ENDPOINT_SETTINGS
 
-The providers with a custom-endpoint setting, in catalog order.
+The providers' custom-endpoint rows, in catalog order.
 
 ```ts
-const PROVIDER_ENDPOINT_STATE_ENTRIES: readonly [{ id: "openai"; displayName: string; endpointKey: "endpoint.openai"; }, { id: "anthropic"; displayName: string; endpointKey: "endpoint.anthropic"; }, { id: "google"; displayName: string; endpointKey: "endpoint.google"; }, { id: "xai"; displayName: string; endpointKey: "endpoint.xai"; }, { id: "deepseek"; displayName: string; endpointKey: "endpoint.deepseek"; }, { id: "moonshot"; displayName: string; endpointKey: "endpoint.moonshot"; }, { id: "dashscope"; displayName: string; endpointKey: "endpoint.dashscope"; }, { id: "minimax"; displayName: string; endpointKey: "endpoint.minimax"; }, { id: "glm"; displayName: string; endpointKey: "endpoint.glm"; }, { id: "meta"; displayName: string; endpointKey: "endpoint.meta"; }]
+const PROVIDER_ENDPOINT_SETTINGS: readonly [{ readonly id: "openai"; readonly key: "endpoint.openai"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }, { readonly id: "anthropic"; readonly key: "endpoint.anthropic"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }, { readonly id: "google"; readonly key: "endpoint.google"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }, { readonly id: "xai"; readonly key: "endpoint.xai"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }, { readonly id: "deepseek"; readonly key: "endpoint.deepseek"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }, { readonly id: "moonshot"; readonly key: "endpoint.moonshot"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }, { readonly id: "dashscope"; readonly key: "endpoint.dashscope"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }, { readonly id: "minimax"; readonly key: "endpoint.minimax"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }, { readonly id: "glm"; readonly key: "endpoint.glm"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }, { readonly id: "meta"; readonly key: "endpoint.meta"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly category: "model"; readonly slot: "globalState"; }]
 ```
 
-## providerEndpointKey
+## providerEndpointSetting
 
-The custom-endpoint setting key of a provider, if it offers one.
+A provider's custom-endpoint row, if it offers one.
 
 ```ts
-function providerEndpointKey(
+function providerEndpointSetting(
   provider: string,
-): (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['endpointKey'] | undefined
+): (typeof PROVIDER_ENDPOINT_SETTINGS)[number] | undefined
 ```
 
 ## ProviderError
@@ -1941,6 +2036,18 @@ A workspace file a run edited, as it stands now.
 const RunWorkspaceFileSchema: Struct<{ readonly path: String; readonly size: Int; readonly isDirectory: Boolean; }>
 ```
 
+## SCRIPT_ONLY_SETTING
+
+Code mode's "only" stage: every chat run gets `script`, and the model sees
+no other tool; the rest are callable from scripts alone. The codemode
+plugin's `injectedWhen` reads the row to inject `script`; the step reads it
+to send the model `script` and the run's own tools alone, recorded per tool
+on its `tools.offered` row.
+
+```ts
+const SCRIPT_ONLY_SETTING: { readonly key: "codeMode.scriptOnly"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Script-only tools"; readonly description: "Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Off by default while the comparison against direct tool calls runs."; readonly category: "agents"; }
+```
+
 ## ScriptDeliverySummary
 
 ```ts
@@ -2026,6 +2133,48 @@ One session's view at one moment: its runs, requests and grants.
 const SessionViewSchema: Struct<{ readonly key: String; readonly runs: $ReadonlyMap<brand<String, "RunId">, Struct<{ readonly id: brand<String, "RunId">; readonly identity: Union<readonly [Struct<{ readonly kind: Literal<"agent">; readonly agent: String; readonly tool: optional<String>; }>, Struct<{ readonly kind: Literal<"process">; readonly tool: String; }>, Struct<{ readonly kind: Literal<"script">; readonly title: String; }>]>; readonly label: String; readonly description: NullOr<String>; readonly descriptionBy: NullOr<Literals<readonly ["model", "user"]>>; readonly title: String; readonly model: NullOr<String>; readonly modelLabel: NullOr<String>; readonly command: NullOr<String>; readonly inputFiles: $Array<String>; readonly agentScope: optional<NullOr<$Array<String>>>; readonly facts: $Record<String, Codec<Json, Json, never, never>>; readonly worktree: NullOr<Struct<{ readonly workingDirectory: String; }>>; readonly position: Literals<readonly ["ready", "running", "waiting"]>; readonly outcome: NullOr<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; readonly holder: Literals<readonly ["here", "none"]>; readonly output: NullOr<Struct<{ readonly response: String; readonly files: $Array<String>; readonly structured: optional<Codec<Json, Json, never, never>>; }>>; readonly statusNotice: NullOr<Union<readonly [Struct<{ readonly kind: Literals<readonly ["damaged", "earlierBuild"]>; }>, Struct<{ readonly kind: Literal<"lost">; readonly message: String; }>]>>; readonly lost: NullOr<String>; readonly createdAt: Int; readonly launchedAt: Int; readonly turnStartedAt: NullOr<Int>; readonly runStartedAt: NullOr<Int>; readonly lastTimestamp: Number; readonly turn: NullOr<Int>; readonly takesFollowUps: Boolean; readonly context: NullOr<Struct<{ readonly inputTokens: Int; readonly contextWindow: Int; readonly utilizationPercent: Number; }>>; readonly parentId: NullOr<brand<String, "RunId">>; readonly launchParentId: NullOr<brand<String, "RunId">>; readonly forkedFrom: NullOr<Struct<{ readonly id: brand<String, "RunId">; readonly at: Int; }>>; readonly forkPoint: NullOr<Int>; readonly parentCard: NullOr<String>; readonly ancestors: $Array<Struct<{ readonly id: brand<String, "RunId">; readonly label: String; }>>; readonly childIds: $Array<brand<String, "RunId">>; readonly rollup: Struct<{ readonly total: Int; readonly running: Int; readonly finished: Int; }>; readonly approval: Literals<readonly ["none", "own", "descendant"]>; readonly actions: $Array<Literals<readonly ["stop", "grant", "compact", "resume", "runAgain", "fork", "files", "delete", "rename", "openRunStorage", "export", "copy"]>>; readonly usage: Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cachedInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheWriteTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly toolUsePromptTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; }>; readonly treeUsage: Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cachedInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheWriteTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly toolUsePromptTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; }>; readonly thinkingActive: Boolean; readonly compactingActive: Boolean; readonly latestLine: NullOr<String>; readonly transcript: Struct<{ readonly rows: $Array<declare<TranscriptRow, TranscriptRow>>; readonly taskGroups: $Array<Struct<{ readonly id: String; readonly name: String; readonly startTime: Number; readonly endTime: optional<Number>; readonly status: Union<readonly [Literal<"running">, Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>]>; readonly parentGroupId: optional<String>; readonly kind: optional<Literals<readonly ["run", "session", "script"]>>; }>>; readonly settledRows: Int; }>; readonly recipe: NullOr<String>; }>>; readonly order: $Array<brand<String, "RunId">>; readonly cursor: Int; readonly debug: Boolean; readonly transcriptSeq: $ReadonlyMap<brand<String, "AggregateId">, Int>; readonly rollup: Struct<{ readonly running: Int; readonly waiting: Int; readonly interrupted: Int; }>; readonly requests: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly requestId: String; readonly payload: Union<readonly [Struct<{ readonly kind: Literal<"toolEdit">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly path: String; readonly relativePath: String; readonly sourceTool: String; readonly addedLines: Int; readonly removedLines: Int; readonly content: String; }>; }>, Struct<{ readonly kind: Literal<"bash">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly command: String; readonly cwd: optional<String>; }>; }>, Struct<{ readonly kind: Literal<"retry">; readonly data: Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; readonly operation: String; readonly model: optional<String>; readonly errorDetails: Struct<{ readonly message: String; readonly statusCode: optional<Int>; readonly statusText: optional<String>; readonly provider: optional<String>; readonly classification: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["missing-api-key", "context-window", "upstream-credit"]>; }>, Struct<{ readonly kind: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly planType: optional<String>; readonly resetsInMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"subscription-session">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription"]>; readonly needsReauth: Boolean; readonly sessionError: String; }>]>>; readonly requestId: optional<String>; readonly partialText: optional<String>; }>; readonly credentialSwitch: optional<NullOr<Union<readonly [Struct<{ readonly kind: Literal<"decline-route">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; readonly automatic: Boolean; }>, Struct<{ readonly kind: Literal<"new-key">; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; }>]>>>; }>; }>, Struct<{ readonly kind: Literal<"proposal">; readonly data: Struct<{ readonly agent: String; readonly model: String; readonly instruction: String; readonly script: optional<NullOr<Struct<{ readonly title: NullOr<String>; readonly source: String; readonly calls: $Array<Struct<{ readonly toolName: String; readonly preview: String; }>>; }>>>; readonly workingDirectory: optional<NullOr<String>>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly options: optional<NullOr<$Record<String, Codec<Json, Json, never, never>>>>; readonly task: Boolean; readonly rootUserInstruction: optional<NullOr<String>>; readonly requestId: String; readonly allowBypass: Boolean; readonly runId: brand<String, "RunId">; }>; }>, Struct<{ readonly kind: Literal<"planApproval">; readonly data: Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; readonly plan: Struct<{ readonly objective: String; }>; }>; }>, Struct<{ readonly kind: Literal<"userQuestion">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly questions: $Array<Struct<{ readonly question: String; readonly header: optional<NullOr<String>>; readonly options: $Array<Struct<{ readonly label: String; readonly description: optional<NullOr<String>>; }>>; readonly multiSelect: optional<NullOr<Boolean>>; readonly allowFreeText: optional<NullOr<Boolean>>; }>>; readonly context: optional<NullOr<String>>; }>; }>, Struct<{ readonly kind: Literal<"plugin">; readonly plugin: String; readonly blocksCaller: Boolean; readonly answers: $Array<Literals<readonly ["approve", "approve_and_goal", "submit", "answer", "skip", "retry"]>>; readonly data: StructWithRest<Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; }>, readonly [$Record<String, Codec<Json, Json, never, never>>]>; }>]>; }>>; readonly policy: $ReadonlyMap<brand<String, "RunId">, Struct<{ readonly own: $Record<Literals<readonly ["bash", "toolEdit", "superYolo"]>, optionalKey<Literals<readonly ["on", "off", "parent"]>>>; readonly goal: $Array<Literals<readonly ["bash", "toolEdit", "superYolo"]>>; readonly limit: optional<Literals<readonly ["never", "ask"]>>; }>>; readonly pluginFacts: $Array<Struct<{ readonly kind: String; readonly parent: NullOr<brand<String, "RunId">>; readonly plugin: String; readonly stageId: optional<String>; readonly type: Literal<"plugin.fact">; readonly version: Int; readonly value: Codec<Json, Json, never, never>; readonly aggregateId: brand<String, "AggregateId">; }>>; readonly queuedFollowUps: $ReadonlyMap<brand<String, "RunId">, $Array<Struct<{ readonly followUpId: String; readonly text: String; }>>>; }>
 ```
 
+## SettingRow
+
+One setting, whose schema decodes its stored value to an `A`.
+
+```ts
+interface SettingRow<A = unknown> {
+  /** The row's key, relative to its catalog's namespace (`memory.enabled`),
+   *  which the stores add (`<namespace>.memory.enabled`). */
+  readonly key: string;
+  /**
+   * The row's schema, carrying validation, any bounds, and the decoding
+   * default applied when the key is absent: decoding `undefined` yields that
+   * default.
+   */
+  readonly schema: Schema.Codec<A, unknown>;
+  /** Short label for compact settings UIs; falls back to the stripped key. */
+  readonly title?: string;
+  /** Human-readable description, shared across every host that renders it. */
+  readonly description?: string;
+  /** Grouping label for settings UIs. Required once a UI renders the row. */
+  readonly category?: string;
+  /** Where the value is stored, the same on every host. */
+  readonly slot: SettingStore;
+  /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
+  readonly configTarget?: 'global' | 'workspace' | 'local';
+  /**
+   * A `global` row a project file may still switch off: its project value
+   * counts unless it is `true`, so a repository can opt out (telemetry) but
+   * never opt in. A malformed project value counts too, and fails closed.
+   */
+  readonly projectMayOptOut?: true;
+  /**
+   * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
+   * enum options (a host's settings UI derives them). The option *values* are
+   * derived from the schema, not restated here.
+   */
+  readonly enumDescriptions?: readonly string[];
+  /** Display labels for enum options, aligned 1:1 with the schema options. */
+  readonly enumLabels?: readonly string[];
+}
+```
+
 ## settingsCatalog
 
 The harness's rows, then `rows` (an app's own, its plugins' included),
@@ -2035,7 +2184,7 @@ so does a `defaults` key that names no harness row.
 ```ts
 function settingsCatalog(options: {
   readonly namespace: string;
-  readonly rows: readonly StateSettingEntry[];
+  readonly rows: readonly SettingRow[];
   /** The app's own defaults for harness rows, by key: the value an absent
    *  key reads as (the helper model, which the harness leaves unset). */
   readonly defaults?: Readonly<Record<string, unknown>>;
@@ -2052,11 +2201,11 @@ interface SettingsCatalog {
    *  stores write a row's relative key as `<namespace>.<key>`. */
   readonly namespace: string;
   /** Every row, in catalog order. */
-  readonly rows: readonly StateSettingEntry[];
+  readonly rows: readonly SettingRow[];
   /** Look up any row, config-file-backed or state-backed, by its key. */
-  readonly byKey: (key: string) => StateSettingEntry | undefined;
+  readonly byKey: (key: string) => SettingRow | undefined;
   /** Look up a row by its stored key, as a store lists it. */
-  readonly byStoredKey: (storedKey: string) => StateSettingEntry | undefined;
+  readonly byStoredKey: (storedKey: string) => SettingRow | undefined;
   /**
    * A fresh copy of a config-file-backed row's default, or `undefined` for a
    * key no such row owns: what every `ConfigProvider` answers for an absent
@@ -2119,6 +2268,12 @@ Canonical grammar for discovered and persisted skill names.
 const SkillNameSchema: decodeTo<String, String, never, never>
 ```
 
+## SOX_PATH_SETTING
+
+```ts
+const SOX_PATH_SETTING: { readonly key: "audio.soxPath"; readonly slot: "config"; readonly schema: withDecodingDefault<String, never>; readonly description: "Path to the SoX executable. Overrides automatic detection."; }
+```
+
 ## splitContentLines
 
 Normalize line endings and split into content lines.
@@ -2142,45 +2297,6 @@ already resolved. A host sends it to a service as it is.
 
 ```ts
 const StartRequestSchema: Union<readonly [Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Union<readonly [Literal<"autoApprove">, Literals<readonly ["never", "ask"]>]>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly agent: Union<readonly [String, toEncoded<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>]>; readonly instruction: String; readonly model: optional<String>; }>, Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Union<readonly [Literal<"autoApprove">, Literals<readonly ["never", "ask"]>]>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly config: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>; }>]>
-```
-
-## StateSettingEntry
-
-```ts
-interface StateSettingEntry {
-  /** The row's key, relative to its catalog's namespace (`memory.enabled`),
-   *  which the stores add (`<namespace>.memory.enabled`). */
-  readonly key: string;
-  /**
-   * The row's schema, carrying both validation and the decoding default
-   * applied when the key is absent: decoding `undefined` yields that default.
-   */
-  readonly schema: Schema.Codec<unknown, unknown>;
-  /** Short label for compact settings UIs; falls back to the stripped key. */
-  readonly title?: string;
-  /** Human-readable description, shared across every host that renders it. */
-  readonly description?: string;
-  /** Grouping label for settings UIs. Required once a UI renders the row. */
-  readonly category?: string;
-  /** Where the value is stored, the same on every host. */
-  readonly slot: SettingStore;
-  /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
-  readonly configTarget?: 'global' | 'workspace' | 'local';
-  /**
-   * A `global` row a project file may still switch off: its project value
-   * counts unless it is `true`, so a repository can opt out (telemetry) but
-   * never opt in. A malformed project value counts too, and fails closed.
-   */
-  readonly projectMayOptOut?: true;
-  /**
-   * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
-   * enum options (a host's settings UI derives them). The option *values* are
-   * derived from the schema, not restated here.
-   */
-  readonly enumDescriptions?: readonly string[];
-  /** Display labels for enum options, aligned 1:1 with the schema options. */
-  readonly enumLabels?: readonly string[];
-}
 ```
 
 ## StoredMedia
@@ -2287,6 +2403,15 @@ side-channel error flag beside it.
 
 ```ts
 const TOOL_CALL_STATUS: { readonly IN_PROGRESS: "in_progress"; readonly COMPLETED: "completed"; readonly FAILED: "failed"; }
+```
+
+## TOOL_PATH_PROTECTION_SETTING
+
+Keep file-oriented tools inside the active working directory unless the
+user explicitly grants them access to arbitrary filesystem paths.
+
+```ts
+const TOOL_PATH_PROTECTION_SETTING: { readonly key: "tools.restrictPathsToWorkingDirectory"; readonly slot: "workspaceState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Restrict tool paths to the working directory"; readonly description: "Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths."; readonly category: "tools"; }
 ```
 
 ## ToolCallStatus
@@ -2464,6 +2589,14 @@ const UserQuestionPromptSchema: Struct<{ readonly question: String; readonly hea
 type UserQuestionRequest = (typeof UserQuestionRequestSchema)['Type'];
 ```
 
+## WEBSOCKET_OPENAI_SETTING
+
+The OpenAI WebSocket transport (experimental).
+
+```ts
+const WEBSOCKET_OPENAI_SETTING: { readonly key: "websocket.openai"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "OpenAI WebSocket"; readonly description: "EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default."; readonly category: "model"; }
+```
+
 ## WorkspaceAgentsSelection
 
 ```ts
@@ -2479,10 +2612,10 @@ type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
 
 ## WorkspaceStateKey
 
-The harness's workspace-scoped state keys (`roots.workspaceState`).
+The harness's repository-scoped state keys (`roots.repoState`).
 
 ```ts
-const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "workspaceAgents"; readonly HIDDEN_CUSTOM_AGENTS: "hiddenCustomAgents"; readonly DISABLED_SKILLS: "skills.disabled"; readonly DISABLED_SKILL_SOURCES: "skills.disabledSources"; readonly GIT_MARK_COMMITS: "git.markCommits"; readonly GIT_AUTHOR_NAME: "git.authorName"; readonly GIT_AUTHOR_EMAIL: "git.authorEmail"; readonly GIT_WORKTREE_SUPPORT: "git.worktreeSupport"; readonly TOOL_PATH_PROTECTION_ENABLED: "tools.restrictPathsToWorkingDirectory"; }>
+const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "workspaceAgents"; readonly HIDDEN_CUSTOM_AGENTS: "hiddenCustomAgents"; }>
 ```
 
 ## WorktreeInfo

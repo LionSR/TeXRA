@@ -85,7 +85,6 @@ import {
 import { describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import {
   rootRun,
@@ -119,6 +118,7 @@ import {
 } from '@test/support/storeFaults';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { DETACH_SUBAGENTS_ON_STOP_SETTING } from '@texra-ai/harness/schemas';
 
 /** A file's lines, none when it is absent. */
 const linesOf = (file: string): string[] =>
@@ -1282,7 +1282,7 @@ export function crashConformanceSuite(
                       // "Keep agents running".
                       yield* Settings.set(
                         roots,
-                        GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+                        DETACH_SUBAGENTS_ON_STOP_SETTING,
                         true,
                       );
                       yield* requests.request({

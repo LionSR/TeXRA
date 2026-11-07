@@ -23,8 +23,6 @@ import {
   revisionLayout,
   stripWorkflowRoundDir,
 } from '@texra/shared/constants/workflowOutput';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
 import {
   type CompileFailure,
   isGenericOutputStem,
@@ -39,6 +37,10 @@ import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import {
+  WORKFLOW_AUTO_COMPILE_SETTING,
+  WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */
@@ -47,8 +49,6 @@ interface CompileCheckContext {
   logger: AgentTrace;
   runId: RunId;
 }
-
-const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
 /** A round's check: the outputs that failed and the PDFs of those that
  *  built, or why it checked nothing, which is never zero failures. A check
@@ -71,19 +71,6 @@ const skipped = (reason: string, unverified = false): CompileCheckResult => ({
   _tag: 'skipped',
   reason,
   unverified,
-});
-
-/** Workflow auto-compile timeout, floored at the config-range minimum. */
-export const getWorkflowAutoCompileTimeoutMs = Effect.fn(
-  'getWorkflowAutoCompileTimeoutMs',
-)(function* (roots: WorkspaceRoots) {
-  return Math.max(
-    MIN_TIMEOUT_MS,
-    yield* Settings.get<number>(
-      roots,
-      DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-    ),
-  );
 });
 
 /**
@@ -139,12 +126,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     currentRound: number,
     outputs: readonly OutputFileInfo[],
   ) {
-    if (
-      !(yield* Settings.get<boolean>(
-        ctx.roots,
-        DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
-      ))
-    ) {
+    if (!(yield* Settings.get(ctx.roots, WORKFLOW_AUTO_COMPILE_SETTING))) {
       return skipped('auto-compile is off');
     }
 
@@ -156,7 +138,10 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     if (texOutputs.length === 0)
       return skipped('the revision wrote no .tex output');
 
-    const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(ctx.roots);
+    const timeoutMs = yield* Settings.get(
+      ctx.roots,
+      WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+    );
     const failures: CompileFailure[] = [];
     const artifacts: RunStorageFileLocation[] = [];
 

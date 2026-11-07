@@ -29,11 +29,11 @@ import {
   type AgentDelegationScope,
   type DelegationTargets,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { GIT_WORKTREE_SUPPORT_SETTING } from '@shared/state/stateSettings';
 
 /** The models that can run now, in picker order. */
 const availableModelNames = (options: readonly ModelOption[]): string[] =>
@@ -103,10 +103,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
       agents,
       models,
       worktree: chats
-        ? yield* Settings.get<boolean>(
-            stores,
-            WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-          )
+        ? yield* Settings.get(stores, GIT_WORKTREE_SUPPORT_SETTING)
         : null,
     } satisfies DelegationTargets;
   },

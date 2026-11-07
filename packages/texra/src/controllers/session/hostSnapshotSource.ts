@@ -37,8 +37,8 @@ import {
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
+  APPROVAL_POLICY_SETTING,
+  GIT_COMMITS_TO_SHOW_SETTING,
 } from '@texra-ai/harness/schemas';
 import { loadTeamOptions } from '@texra/shared/teamLaunch';
 import type {
@@ -303,7 +303,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         if (options.root === undefined) return;
         const commits = yield* readRecentCommits(
           options.root,
-          yield* Settings.get<number>(stores, 'git.numberOfCommitsToShow'),
+          yield* Settings.get(stores, GIT_COMMITS_TO_SHOW_SETTING),
           { settings: stores },
         ).pipe(withLogChannel(CHANNEL));
         yield* write({ commits });
@@ -372,9 +372,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const snapshotOf = (s: Inputs): HostSnapshot => ({
       project: options.project,
       tools: options.tools,
-      approvalPolicy: Settings.getConfig<ApprovalPolicy>(
+      approvalPolicy: Settings.getConfig(
         stores.config,
-        APPROVAL_POLICY_CONFIG_KEY,
+        APPROVAL_POLICY_SETTING,
       ),
       ...s.catalogs,
       workspaceRoots: s.workspaceRoots,

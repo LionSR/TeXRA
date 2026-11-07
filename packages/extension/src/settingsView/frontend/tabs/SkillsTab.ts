@@ -5,12 +5,13 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 import {
-  WorkspaceStateKey,
-  AGENT_SKILLS_CONFIG_KEY,
+  AGENT_SKILLS_ENABLED_SETTING,
   ActiveSkillSourceScopeSchema,
   type ActiveSkillSourceScope,
   type SkillDisplayIssue,
   type SkillDisplayItem,
+  DISABLED_SKILLS_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -78,21 +79,19 @@ export class SkillsTab extends SignalWatcher(LitElement) {
   @state() private selectedKey: string | null = null;
 
   private get masterEnabled(): boolean {
-    return settingSignal<boolean>(AGENT_SKILLS_CONFIG_KEY).get();
+    return settingSignal(AGENT_SKILLS_ENABLED_SETTING).get();
   }
 
   private get disabledSources(): readonly string[] {
-    return settingSignal<readonly string[]>(
-      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-    ).get();
+    return settingSignal(DISABLED_SKILL_SOURCES_SETTING).get();
   }
 
   /** A delta, not the list: the host applies it to the list it holds, so a
    *  second switch before this one's snapshot returns cannot undo it. */
   private setEnabled(
     key:
-      | typeof WorkspaceStateKey.DISABLED_SKILLS
-      | typeof WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+      | typeof DISABLED_SKILLS_SETTING.key
+      | typeof DISABLED_SKILL_SOURCES_SETTING.key,
     item: string,
     enabled: boolean,
   ): void {
@@ -111,7 +110,7 @@ export class SkillsTab extends SignalWatcher(LitElement) {
       @change=${(event: Event) => {
         if (event.target instanceof WaSwitch)
           this.setEnabled(
-            WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+            DISABLED_SKILL_SOURCES_SETTING.key,
             scope,
             event.target.checked,
           );
@@ -139,7 +138,7 @@ export class SkillsTab extends SignalWatcher(LitElement) {
         onClick: (event) => {
           event.stopPropagation();
           this.setEnabled(
-            WorkspaceStateKey.DISABLED_SKILLS,
+            DISABLED_SKILLS_SETTING.key,
             item.name,
             !item.enabled,
           );
@@ -163,7 +162,7 @@ export class SkillsTab extends SignalWatcher(LitElement) {
         onChange: (event: Event) => {
           if (event.target instanceof WaSwitch)
             this.setEnabled(
-              WorkspaceStateKey.DISABLED_SKILLS,
+              DISABLED_SKILLS_SETTING.key,
               item.name,
               event.target.checked,
             );
@@ -184,7 +183,7 @@ export class SkillsTab extends SignalWatcher(LitElement) {
       this.skills[0];
     return html`
       <div class="settings-section">
-        ${renderStateSettingToggleRow(AGENT_SKILLS_CONFIG_KEY)}
+        ${renderStateSettingToggleRow(AGENT_SKILLS_ENABLED_SETTING)}
       </div>
       <settings-catalog
         label="Skills"

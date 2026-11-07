@@ -24,7 +24,7 @@ import {
   type StorageFs,
   type WorkspaceFs,
 } from '@texra-ai/harness/host';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId, SettingRow } from '@texra-ai/harness/schemas';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import {
   latexdiffPackMessage,
@@ -32,16 +32,18 @@ import {
 } from '@housekeeping/packLatexdiffvc';
 import type { Dialogs, NoticeLevel } from '@texra/hosts/uiHosts';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
-import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 
 // Local file imports
 import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import { latexdiffPairs } from './diffOperations';
 import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  LATEXDIFF_BETWEEN_ROUNDS_SETTING,
+  LATEXDIFF_MATH_MARKUP_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
 type LatexdiffCommitAction = Extract<
@@ -149,13 +151,11 @@ export function latexdiffVerbs(parts: {
     const rounds = documentRoundsOf(
       session.view.current().runs.get(runId) ?? { facts: {} },
     );
-    const setting = <A>(key: string) =>
-      Settings.get<A>(roots, key).pipe(
+    const setting = <A>(row: SettingRow<A>) =>
+      Settings.get(roots, row).pipe(
         Effect.mapError((cause) => hostFailure('runLatexdiff', cause)),
       );
-    const mathMarkup = yield* setting<LatexdiffMathMarkupValue>(
-      DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-    );
+    const mathMarkup = yield* setting(LATEXDIFF_MATH_MARKUP_SETTING);
     // A round whose recorded diffs all succeeded under the markup set now
     // opens them; a round that recorded none, a failed one, or one made
     // under another markup is diffed again.
@@ -174,7 +174,7 @@ export function latexdiffVerbs(parts: {
     );
     const betweenRounds =
       unrecorded.length > 0 &&
-      (yield* setting<boolean>(DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS));
+      (yield* setting(LATEXDIFF_BETWEEN_ROUNDS_SETTING));
     const pairs = unrecorded.flatMap(({ round, outputs }) =>
       latexdiffPairs(
         outputs,

@@ -30,12 +30,10 @@ import {
   emptyTranscript,
   emptyTranscriptIndexes,
 } from '@shared/session/transcriptState';
-import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-} from '@shared/approvalPolicy';
+import { type ApprovalPolicy } from '@shared/approvalPolicy';
 import { generateRunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
 
 /**
  * Enqueue rows on the session's publisher and return at once, as a detached
@@ -171,5 +169,5 @@ export function setTestApprovalPolicy(
   policy: ApprovalPolicy,
   { config }: Pick<WorkspaceRoots, 'config'> = testWorkspaceRoots(),
 ): void {
-  Effect.runSync(config.update(APPROVAL_POLICY_CONFIG_KEY, policy, 'local'));
+  Effect.runSync(config.update(APPROVAL_POLICY_SETTING.key, policy, 'local'));
 }

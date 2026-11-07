@@ -7,8 +7,6 @@ import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
-export const TEXFMT_CONFIG_KEY = 'latex.texfmtConfig';
-
 export const runTexFmt = Effect.fn('latex.runTexFmt')(function* (
   filePath: string,
   workspaceRoot: string | undefined,

@@ -17,6 +17,10 @@ import { runTool, type ToolMissing } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import {
+  INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
+  TIKZ_INPUT_DIRECTORY_SETTING,
+} from '@texra/shared/settingsView/texraSettings';
 
 // Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
 // tex compile logs are noisy and heuristic parsing is a losing game, so every
@@ -218,13 +222,13 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // revised sibling wins over the original source fallback.
     const documentDir = path.dirname(latexFile);
 
-    const tikzInputDirectory = yield* Settings.get<string>(
+    const tikzInputDirectory = yield* Settings.get(
       roots,
-      'latex.tikzInputDirectory',
+      TIKZ_INPUT_DIRECTORY_SETTING,
     );
-    const includeWorkspace = yield* Settings.get<boolean>(
+    const includeWorkspace = yield* Settings.get(
       roots,
-      'latex.includeWorkspaceInTexinputs',
+      INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
     );
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir,

@@ -26,7 +26,7 @@ import {
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_SETTING,
   APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseApprovalPolicy,
   launchPolicy,
@@ -46,6 +46,7 @@ import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
 import { interactiveTerminalFailure } from './terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 type CliMode = 'headless' | 'interactive';
 
@@ -478,7 +479,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
           Schema.is(CliOutputFormatSchema)(format) ? format : undefined,
         configWarnings,
       )) ??
-      Settings.getConfig<CliOutputFormat>(config, 'outputFormat');
+      Settings.getConfig(config, CLI_OUTPUT_FORMAT_SETTING);
     let minimumLogLevel: LogLevel.LogLevel = 'Info';
     if (init.globalArgs.quiet) minimumLogLevel = 'None';
     else if (init.globalArgs.verbose) minimumLogLevel = 'Debug';
@@ -532,7 +533,7 @@ export function launchApproval(
 /** The project's persisted approval policy, as the session reads it at each
  *  decision. */
 export function projectApprovalPolicy(config: ConfigProvider): ApprovalPolicy {
-  return Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
+  return Settings.getConfig(config, APPROVAL_POLICY_SETTING);
 }
 
 /** The policy a launch runs under: the harness's rule (`launchPolicy`)

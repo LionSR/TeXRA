@@ -27,7 +27,7 @@ import {
   absentReason,
   pathExists,
 } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { ensureError, SOX_PATH_SETTING } from '@texra-ai/harness/schemas';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import {
   findCommand,
@@ -101,10 +101,7 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
   AudioRecorderError,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
-  const configuredPath = Settings.getConfig<string>(
-    roots.config,
-    'audio.soxPath',
-  );
+  const configuredPath = Settings.getConfig(roots.config, SOX_PATH_SETTING);
   if (configuredPath) {
     // The path is validated before being probed, so a non-absolute
     // `soxPath` fails "Path must be absolute: ..." and the recording

@@ -9,8 +9,6 @@ import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
-export const LATEXINDENT_CONFIG_KEY = 'latex.latexindentConfig';
-
 const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
   logPath: string,
 ) {

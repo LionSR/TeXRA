@@ -185,7 +185,9 @@ function boundModel(): BoundModel {
     background: false,
     serviceTier: null,
     routes: routePolicies(['wire'], GPT54),
-    automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+    automaticRetries: Schema.decodeUnknownSync(
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema,
+    )(undefined),
     textOnly: false,
   };
 }

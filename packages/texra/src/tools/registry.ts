@@ -113,6 +113,7 @@ import { zotero } from './zotero/plugin';
 import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import type { WriteFilter } from '@texra-ai/harness/plugins';
 import type { Plugin } from '@texra-ai/harness';
+import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {
@@ -233,7 +234,7 @@ const core = (
       LeanLoogleTool,
     ],
     prompt: ({ config }) => {
-      const bibPath = Settings.getConfig<string>(config, 'bib.defaultPath');
+      const bibPath = Settings.getConfig(config, BIB_DEFAULT_PATH_SETTING);
       return bibPath
         ? `${TEX_INSTRUCTIONS}\nThe default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
         : TEX_INSTRUCTIONS;

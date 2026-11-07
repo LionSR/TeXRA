@@ -11,9 +11,12 @@ import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { TEXRA_APP } from '@test/support/texraApp';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import type { runCompileCheck } from '@texra/agent/output/compileCheck';
 import type { FileLocation, RunId } from '@texra-ai/harness/schemas';
+import {
+  WORKFLOW_AUTO_COMPILE_SETTING,
+  WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 export const storagePath = fakePath('storage');
 export const workspacePath = fakePath('workspace');
@@ -76,8 +79,8 @@ export function latexHost(files: Record<string, string>) {
     storagePath,
     workspacePath,
     workspaceState: {
-      [DocumentsStateKey.WORKFLOW_AUTO_COMPILE]: true,
-      [DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
+      [WORKFLOW_AUTO_COMPILE_SETTING.key]: true,
+      [WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING.key]: 30_000,
     },
   });
 }

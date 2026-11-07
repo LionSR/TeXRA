@@ -10,6 +10,7 @@ import {
   type ConfigProvider,
   type SettingsStores,
 } from '@texra-ai/harness/host';
+import type { SettingRow } from '@texra-ai/harness/schemas';
 import {
   JsonConfigProvider,
   nodeFileServices,
@@ -18,7 +19,13 @@ import {
 
 // Local imports - shared
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import {
+  CLI_AGENT_SETTING,
+  CLI_CHAT_SETTING,
+  CLI_MODEL_SETTING,
+  CLI_RUN_SETTING,
+  TEXRA_SETTINGS,
+} from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools
 
@@ -37,7 +44,11 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 export const CLI_CHEAP_START_MODEL = 'deepseek/deepseek-v4-pro';
 
 /** The `texra.*` command sections: `texra.chat` and `texra.run`. */
-type CliCommandRole = 'chat' | 'run';
+const COMMAND_SECTIONS = {
+  chat: CLI_CHAT_SETTING,
+  run: CLI_RUN_SETTING,
+} as const;
+type CliCommandRole = keyof typeof COMMAND_SECTIONS;
 
 /** Agent and model for one command, after the section/top-level fallthrough. */
 interface CliCommandDefaults {
@@ -125,26 +136,22 @@ export function cliCommandDefaults(
   stores: SettingsStores,
   role: CliCommandRole,
 ): CliCommandDefaults {
-  const sectionKey = role;
-  const section =
-    Settings.getConfig<CliCommandDefaults | undefined>(
-      stores.config,
-      sectionKey,
-    ) ?? {};
-  const modelKey = section.model ? sectionKey : 'model';
+  const sectionRow: SettingRow<
+    { readonly agent?: string; readonly model?: string } | undefined
+  > = COMMAND_SECTIONS[role];
+  const section = Settings.getConfig(stores.config, sectionRow) ?? {};
+  const modelRow = section.model ? sectionRow : CLI_MODEL_SETTING;
   const model =
-    section.model ??
-    Settings.getConfig<string | undefined>(stores.config, modelKey);
+    section.model ?? Settings.getConfig(stores.config, CLI_MODEL_SETTING);
   return {
     agent:
-      section.agent ??
-      Settings.getConfig<string | undefined>(stores.config, 'agent'),
+      section.agent ?? Settings.getConfig(stores.config, CLI_AGENT_SETTING),
     model,
     ...(model === undefined
       ? {}
       : {
           modelScope:
-            stores.config.inspect(modelKey).workspaceValue === undefined
+            stores.config.inspect(modelRow.key).workspaceValue === undefined
               ? ('user-config' as const)
               : ('workspace-config' as const),
         }),
@@ -166,13 +173,14 @@ export const setWorkspaceCliChatAgent = Effect.fn(
       new Error('The default chat agent must not be empty.'),
     );
   }
-  const sectionKey = 'chat';
   // The workspace file's own section, not the merged read: the write below
   // lands in the workspace target, so seeding from `workspace over user` would
   // copy a user-level `texra.chat.model` into the project file and pin it
   // above every later user-level edit.
   // A section its row rejects (a string, an array) seeds nothing.
-  const stored = stores.config.inspect<unknown>(sectionKey).workspaceValue;
+  const stored = stores.config.inspect<unknown>(
+    CLI_CHAT_SETTING.key,
+  ).workspaceValue;
   const next: { agent?: string; model?: string } = Predicate.isObject(stored)
     ? { ...stored }
     : {};
@@ -180,7 +188,7 @@ export const setWorkspaceCliChatAgent = Effect.fn(
   else delete next.agent;
   yield* Settings.set(
     stores,
-    sectionKey,
+    CLI_CHAT_SETTING,
     Object.keys(next).length > 0 ? next : undefined,
   );
 });

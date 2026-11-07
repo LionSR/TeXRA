@@ -14,11 +14,7 @@ import {
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import {
-  decodeDisabledTools,
-  GlobalStateKey,
-  WorkspaceStateKey,
-} from '@shared/state/stateKeys';
+import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
@@ -41,6 +37,10 @@ import {
   type SkillSourceContribution,
   type SkillSourceOptions,
 } from './skillSources';
+import {
+  DISABLED_SKILLS_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
+} from '@shared/state/stateSettings';
 
 /**
  * The skill contributions this process discovers, served by `processLayer`
@@ -141,11 +141,8 @@ function isSkillDisabled(
  */
 function readSkillSwitches(stores: SettingsStores) {
   return Effect.all({
-    names: Settings.get<string[]>(stores, WorkspaceStateKey.DISABLED_SKILLS),
-    scopes: Settings.get<ActiveSkillSourceScope[]>(
-      stores,
-      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-    ),
+    names: Settings.get(stores, DISABLED_SKILLS_SETTING),
+    scopes: Settings.get(stores, DISABLED_SKILL_SOURCES_SETTING),
   });
 }
 

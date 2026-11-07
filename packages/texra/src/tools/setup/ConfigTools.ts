@@ -19,7 +19,7 @@ import {
   ToolError,
 } from '@texra-ai/harness/plugins';
 import { Settings, type ConfigProvider } from '@texra-ai/harness/host';
-import { type StateSettingEntry } from '@texra-ai/harness/schemas';
+import { type SettingRow } from '@texra-ai/harness/schemas';
 import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';
 
 /**
@@ -41,10 +41,7 @@ const UPDATABLE_KEY_LIST = [
 
 type UpdatableKey = (typeof UPDATABLE_KEY_LIST)[number];
 
-function catalogEntry(
-  config: ConfigProvider,
-  key: UpdatableKey,
-): StateSettingEntry {
+function catalogEntry(config: ConfigProvider, key: UpdatableKey): SettingRow {
   const entry = config.catalog.byStoredKey(key);
   if (!entry) {
     throw new Error(`update_config allowlist key ${key} is not in the catalog`);
@@ -125,7 +122,7 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
 
   const previous = roots.config.get(entry.key);
   const target = input.target === 'workspace' ? 'workspace' : 'global';
-  yield* Settings.set(roots, entry.key, value, target);
+  yield* Settings.set(roots, entry, value, target);
 
   const before = JSON.stringify(previous);
   const after = JSON.stringify(value);

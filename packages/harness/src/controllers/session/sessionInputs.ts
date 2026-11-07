@@ -12,7 +12,6 @@ import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
-  DEBUG_MODE_KEY,
   referencedAggregates,
   isDisplaySessionEvent,
   type AggregateId,
@@ -35,6 +34,7 @@ import {
   type InflightText,
 } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
+import { DEBUG_MODE_SETTING } from '@shared/state/stateSettings';
 
 /**
  * A read the view cannot continue without. A failure is logged and retried
@@ -71,7 +71,7 @@ export const sessionInputsLayer = Layer.effect(
         Stream.unwrap(
           Effect.gen(function* () {
             const debug = roots.config
-              ? Settings.getConfig<boolean>(roots.config, DEBUG_MODE_KEY)
+              ? Settings.getConfig(roots.config, DEBUG_MODE_SETTING)
               : false;
             const reset = debug !== previousDebug;
             const effectiveAggregates = reset

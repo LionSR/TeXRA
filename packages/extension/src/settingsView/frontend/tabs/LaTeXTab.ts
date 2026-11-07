@@ -14,8 +14,6 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -55,6 +53,18 @@ import {
 } from '../components/shared/stateSettingRows';
 import { settingSignal } from '../settingsState';
 import { latexTabStyles } from './LaTeXTab.styles';
+import {
+  INLINE_CRITICISM_SETTING,
+  LATEX_FORMATTER_SETTING,
+} from '@texra/shared/settingsView/texraSettings';
+import {
+  LATEXDIFF_BETWEEN_ROUNDS_SETTING,
+  LATEXDIFF_CHANGES_ONLY_SETTING,
+  LATEXDIFF_MATH_MARKUP_SETTING,
+  WORKFLOW_AUTO_COMPILE_SETTING,
+  WORKFLOW_AUTO_OPEN_PDF_SETTING,
+  WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey = Extract<keyof LatexSettingsStatus, `${string}Path`>;
@@ -441,9 +451,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
   }
 
   private renderCompileDiffSettings(): TemplateResult {
-    const autoCompile = settingSignal<boolean>(
-      DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
-    ).get();
+    const autoCompile = settingSignal(WORKFLOW_AUTO_COMPILE_SETTING).get();
     return html`
       <div class="settings-section">
         ${renderSettingsSectionHeading({
@@ -452,18 +460,17 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
             'What TeXRA does with the LaTeX an agent writes in this workspace.',
           icon: 'bolt',
         })}
-        ${renderStateSettingToggleRow(DocumentsStateKey.WORKFLOW_AUTO_COMPILE)}
+        ${renderStateSettingToggleRow(WORKFLOW_AUTO_COMPILE_SETTING)}
+        ${renderStateSettingToggleRow(WORKFLOW_AUTO_OPEN_PDF_SETTING, {
+          disabled: !autoCompile,
+        })}
         ${renderStateSettingToggleRow(
-          DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
+          WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING,
           { disabled: !autoCompile },
         )}
-        ${renderStateSettingToggleRow(
-          DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-          { disabled: !autoCompile },
-        )}
-        ${renderStateSettingToggleRow(DocumentsStateKey.LATEXDIFF_CHANGES_ONLY)}
-        ${renderStateSettingSelectRow(DocumentsStateKey.LATEXDIFF_MATH_MARKUP)}
-        ${renderStateSettingToggleRow(DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS)}
+        ${renderStateSettingToggleRow(LATEXDIFF_CHANGES_ONLY_SETTING)}
+        ${renderStateSettingSelectRow(LATEXDIFF_MATH_MARKUP_SETTING)}
+        ${renderStateSettingToggleRow(LATEXDIFF_BETWEEN_ROUNDS_SETTING)}
       </div>
     `;
   }
@@ -475,14 +482,12 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
           title: 'Formatting and review',
           icon: 'wand-magic-sparkles',
         })}
-        ${renderStateSettingSelectRow(TexraStateKey.LATEX_FORMATTER)}
+        ${renderStateSettingSelectRow(LATEX_FORMATTER_SETTING)}
         ${
           // Inline criticism is an editor's diagnostics: shown where there is
           // an editor.
           this.settings.editor
-            ? renderStateSettingToggleRow(
-                TexraStateKey.INLINE_CRITICISM_ENABLED,
-              )
+            ? renderStateSettingToggleRow(INLINE_CRITICISM_SETTING)
             : nothing
         }
       </div>

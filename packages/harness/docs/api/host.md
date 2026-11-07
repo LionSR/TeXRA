@@ -700,8 +700,8 @@ interface ConfigProvider {
    *
    * It is synchronous, and it casts: the value it returns is whatever the
    * store holds. A reader that needs the value checked reads through
-   * `Settings.get`, which resolves the key's catalog row and safe-parses the
-   * stored value against the row's schema; a hand-edited `"false"` in a
+   * `Settings.get`, which safe-parses the stored value against the row's
+   * schema; a hand-edited `"false"` in a
    * boolean row is a truthy string here and silently means the opposite.
    * Nothing may cache what either read returns: a setting the user changes
    * mid-process is read on the next call.
@@ -2307,7 +2307,7 @@ function setModelEnabled(input: {
 Every read and write of a setting; see the module comment.
 
 ```ts
-const Settings: Readonly<{ readonly get: <T>(stores: SettingsStores, key: string) => Effect<T, StateReadFailed, never>; readonly inspect: <T>(stores: SettingsStores, key: string) => Effect<StoredSetting<T>, StateReadFailed, never>; readonly getConfig: <T>(config: ConfigProvider, key: string) => T; readonly defaultOf: <T>(catalog: SettingsCatalog, key: string) => T; readonly set: (stores: SettingsStores, key: string, value: unknown, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly reset: (stores: SettingsStores, key: string, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly state: <S extends Schema.Codec<unknown, unknown>>(store: Pick<StateStore, "get">, key: string, schema: S) => Effect<S["Type"], StateReadFailed, never>; }>
+const Settings: Readonly<{ readonly get: <A>(stores: SettingsStores, row: SettingRow<A>) => Effect<A, StateReadFailed, never>; readonly inspect: <A>(stores: SettingsStores, row: SettingRow<A>) => Effect<StoredSetting<A>, StateReadFailed, never>; readonly getConfig: <A>(config: ConfigProvider, row: SettingRow<A>) => A; readonly defaultOf: <A>(catalog: SettingsCatalog, row: SettingRow<A>) => A; readonly set: <A>(stores: SettingsStores, row: SettingRow<A>, value: A, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly reset: (stores: SettingsStores, row: SettingRow<unknown>, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly state: <S extends Schema.Codec<unknown, unknown>>(store: Pick<StateStore, "get">, key: string, schema: S) => Effect<S["Type"], StateReadFailed, never>; }>
 ```
 
 ## SettingsStores

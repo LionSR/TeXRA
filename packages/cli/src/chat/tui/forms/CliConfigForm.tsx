@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 
 import { apiKeyOrigins } from '@texra-ai/llm';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_SETTING,
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -89,7 +89,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       Effect.map(
         Effect.forEach(TEXRA_SETTINGS.cliRows, (entry) =>
           Effect.map(
-            Settings.get(roots, entry.key),
+            Settings.get(roots, entry),
             (value) => [entry.key, value] as const,
           ),
         ),
@@ -142,9 +142,9 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     if (entry.onWrite?.invalidatesModelOptions) {
       yield* emitAppSignal('modelAccessChanged', undefined);
     }
-    if (entry.key === APPROVAL_POLICY_CONFIG_KEY) {
+    if (entry.key === APPROVAL_POLICY_SETTING.key) {
       // The value is written: a failed repaint is reported, never rolled back.
-      yield* Settings.get<ApprovalPolicy>(roots, entry.key).pipe(
+      yield* Settings.get(roots, APPROVAL_POLICY_SETTING).pipe(
         Effect.flatMap((policy) =>
           Effect.try({
             try: () => props.onApprovalPolicyChanged?.(policy),

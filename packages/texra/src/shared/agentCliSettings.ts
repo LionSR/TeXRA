@@ -75,19 +75,19 @@ export type AgentCliEffort = typeof AgentCliEffortSchema.Type;
 const AGENT_CLI_EFFORT_DEFAULT: AgentCliEffort = ReasoningEffort.MEDIUM;
 
 /** Value facts of the settings rows: the schema with its default, and the picker labels. */
-export const CLAUDE_AGENT_MODEL_SETTING = {
+export const CLAUDE_AGENT_MODEL_VALUES = {
   schema: ClaudeAgentModelSchema.pipe(
     Schema.withDecodingDefault(Effect.succeed(CLAUDE_AGENT_DEFAULT_MODEL)),
   ),
   enumLabels: claudeCodeModels.labels,
 };
-export const CODEX_MODEL_SETTING = {
+export const CODEX_MODEL_VALUES = {
   schema: CodexModelSchema.pipe(
     Schema.withDecodingDefault(Effect.succeed(CODEX_DEFAULT_MODEL)),
   ),
   enumLabels: codexModels.labels,
 };
-export const AGENT_CLI_EFFORT_SETTING = {
+export const AGENT_CLI_EFFORT_VALUES = {
   schema: AgentCliEffortSchema.pipe(
     Schema.withDecodingDefault(Effect.succeed(AGENT_CLI_EFFORT_DEFAULT)),
   ),

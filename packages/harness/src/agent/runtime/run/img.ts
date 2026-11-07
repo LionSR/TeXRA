@@ -13,6 +13,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
 import { detectImageTool } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
+import { MAX_IMAGE_DIMENSION_SETTING } from '@shared/state/stateSettings';
 
 const CHANNEL = 'ImgUtils';
 
@@ -94,7 +95,7 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const maxDimension = Math.min(
-    Settings.getConfig<number>(config, 'maxImageDimension'),
+    Settings.getConfig(config, MAX_IMAGE_DIMENSION_SETTING),
     API_MAX_IMAGE_DIMENSION,
   );
   // One read: the bytes that are measured are the bytes returned.

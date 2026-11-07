@@ -16,7 +16,8 @@ import {
   RunIdSchema,
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
-  WorkspaceStateKey,
+  DISABLED_SKILLS_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
 import {
   API_KEY_PROVIDER_IDS,
@@ -700,8 +701,8 @@ const UpdateStateSettingMessageSchema = Schema.Struct({
 const SetSkillEnabledMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED),
   key: Schema.Literals([
-    WorkspaceStateKey.DISABLED_SKILLS,
-    WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    DISABLED_SKILLS_SETTING.key,
+    DISABLED_SKILL_SOURCES_SETTING.key,
   ]),
   item: Schema.String.check(Schema.isMinLength(1)),
   enabled: Schema.Boolean,

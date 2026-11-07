@@ -72,7 +72,7 @@ const showConfig = Effect.fn('showConfig')(function* (
   // Named as `.texra/config.json` spells them.
   const settings = Object.fromEntries(
     yield* Effect.forEach(cliRows, (entry) =>
-      Effect.map(Settings.get(stores, entry.key), (value) => [
+      Effect.map(Settings.get(stores, entry), (value) => [
         `${catalog.namespace}.${entry.key}`,
         value,
       ]),

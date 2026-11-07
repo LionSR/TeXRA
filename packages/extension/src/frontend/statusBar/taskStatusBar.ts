@@ -9,12 +9,11 @@ import {
   type AppSignals,
 } from '@texra-ai/harness/host';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_SETTING,
   descendantRuns,
   isWorking,
   sessionActivity,
   sumUsageStats,
-  type ApprovalPolicy,
   type SessionTitleState,
   type SessionView,
   type TokenUsageStats,
@@ -70,10 +69,7 @@ function paint(
 ): void {
   // The project's persisted policy: what a run here, or the service's for
   // this project, decides under.
-  const policy = Settings.getConfig<ApprovalPolicy>(
-    config,
-    APPROVAL_POLICY_CONFIG_KEY,
-  );
+  const policy = Settings.getConfig(config, APPROVAL_POLICY_SETTING);
   const policyLine = `Approval policy: ${approvalPolicyLabel(policy)} — ${formatApprovalPolicy(policy)}`;
   const { cost, inputTokens, outputTokens } = usage;
   if (cost === 0 && inputTokens === 0 && outputTokens === 0) {

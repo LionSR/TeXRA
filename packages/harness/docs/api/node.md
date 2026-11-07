@@ -607,7 +607,7 @@ anything but `true`.
 
 ```ts
 function projectValueIgnored(
-  row: StateSettingEntry | undefined,
+  row: SettingRow | undefined,
   value: unknown,
 ): boolean
 ```

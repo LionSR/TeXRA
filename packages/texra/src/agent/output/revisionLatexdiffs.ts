@@ -29,21 +29,22 @@ import {
   WORKFLOW_OUTPUT_BASENAME,
   revisionLayout,
 } from '@texra/shared/constants/workflowOutput';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 
 import {
   publishCompiledPdfArtifact,
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
-import {
-  getWorkflowAutoCompileTimeoutMs,
-  resolveWorkspaceSourceDir,
-} from './compileCheck';
+import { resolveWorkspaceSourceDir } from './compileCheck';
 import { recoverOutputFailure } from './outputOperations';
 import type { OutputDependencies } from './outputFileExtraction';
 import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import {
+  LATEXDIFF_BETWEEN_ROUNDS_SETTING,
+  LATEXDIFF_MATH_MARKUP_SETTING,
+  WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 /** What a diff pass reads of the run: its trace, its storage and its
  *  session roots (the workspace and setting stores). */
@@ -143,9 +144,9 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
       data: outputFiles.map((f) => f.location.absolutePath),
     });
 
-    const generateBetweenRoundDiffs = yield* Settings.get<boolean>(
+    const generateBetweenRoundDiffs = yield* Settings.get(
       roots,
-      DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+      LATEXDIFF_BETWEEN_ROUNDS_SETTING,
     );
     if (!generateBetweenRoundDiffs) {
       logger.debug(
@@ -153,9 +154,9 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
       );
     }
     // One markup for the whole pass, recorded with each diff.
-    const mathMarkup = yield* Settings.get<LatexdiffMathMarkupValue>(
+    const mathMarkup = yield* Settings.get(
       roots,
-      DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
+      LATEXDIFF_MATH_MARKUP_SETTING,
     );
     const candidatePairs = latexdiffPairs(
       outputFiles,
@@ -332,7 +333,10 @@ const compileDiff = Effect.fn('documents.compileDiff')(function* (
   const buildDir = path.join(path.dirname(diffLocation.absolutePath), 'build');
   // Reuse the workflow compile-check timeout so a hanging diff build
   // is torn down by its scope instead of orphaning latexmk/pdflatex.
-  const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(roots);
+  const timeoutMs = yield* Settings.get(
+    roots,
+    WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+  );
   // The diff `.tex` is written under `diff/r{round}/`, away from both the
   // revised round output and the live workspace source. Search the revised
   // round directory first so same-round sibling edits win, then fall back

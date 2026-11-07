@@ -7,7 +7,6 @@ import * as CommandLine from 'effect/process/CommandLine';
 import { withLogChannel } from '@logger/effectLog';
 import type { ExecResult } from '@shared/schemas';
 import { Settings, type SettingsStores } from '@shared/config/settings';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
@@ -17,6 +16,11 @@ import type {
   ChildProcessSpawner,
 } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
+import {
+  GIT_AUTHOR_EMAIL_SETTING,
+  GIT_AUTHOR_NAME_SETTING,
+  GIT_MARK_COMMITS_SETTING,
+} from '@shared/state/stateSettings';
 
 const CHANNEL = 'execUtils';
 
@@ -80,22 +84,11 @@ const gitAuthorEnv = Effect.fn('gitAuthorEnv')(function* (
   settings: SettingsStores | undefined,
 ) {
   if (!settings) return {};
-  if (
-    !(yield* Settings.get<boolean>(
-      settings,
-      WorkspaceStateKey.GIT_MARK_COMMITS,
-    ))
-  ) {
+  if (!(yield* Settings.get(settings, GIT_MARK_COMMITS_SETTING))) {
     return {};
   }
-  const name = yield* Settings.get<string>(
-    settings,
-    WorkspaceStateKey.GIT_AUTHOR_NAME,
-  );
-  const email = yield* Settings.get<string>(
-    settings,
-    WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-  );
+  const name = yield* Settings.get(settings, GIT_AUTHOR_NAME_SETTING);
+  const email = yield* Settings.get(settings, GIT_AUTHOR_EMAIL_SETTING);
   return {
     GIT_AUTHOR_NAME: name,
     GIT_AUTHOR_EMAIL: email,

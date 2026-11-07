@@ -3,13 +3,13 @@ import { Effect, Result } from 'effect';
 import { AppState, type ConfigProvider } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
-  TELEMETRY_ENABLED_KEY,
+  TELEMETRY_ENABLED_SETTING,
   TexraStateKey,
 } from '@texra/shared/settingsView/texraSettings';
 
 import { usageLoggingOptOut } from './UsageLogService';
 
-const TELEMETRY_NOTICE = `TeXRA sends anonymous usage metadata (agent, model, token counts, duration, host, version) with a random anonymous install ID. It never sends prompts, document content, file paths or error text. Turn it off with "${TELEMETRY_ENABLED_KEY}": false, TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1. A custom agent is reported only as "custom". The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
+const TELEMETRY_NOTICE = `TeXRA sends anonymous usage metadata (agent, model, token counts, duration, host, version) with a random anonymous install ID. It never sends prompts, document content, file paths or error text. Turn it off with "${TELEMETRY_ENABLED_SETTING.key}": false, TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1. A custom agent is reported only as "custom". The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
 
 /**
  * The first-run notice, or null. It is due once per machine while telemetry

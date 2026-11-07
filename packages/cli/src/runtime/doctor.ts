@@ -9,7 +9,7 @@ import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { probeLatexToolchain } from '@latex/latexToolchain';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
-import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
+import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 // Local file imports
 import { CliExitCode } from './exitCodes';
@@ -338,7 +338,7 @@ function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
         return skip(
           'telemetry',
           'Usage logging',
-          `Off (${TELEMETRY_ENABLED_KEY}).`,
+          `Off (${TELEMETRY_ENABLED_SETTING.key}).`,
         );
       }
       return check(
@@ -346,7 +346,7 @@ function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
         'Usage logging',
         'pass',
         'On: anonymous model, agent, token counts and duration per round, with a random install ID (no account). No prompt, path or document text.',
-        `Turn it off with TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or "${TELEMETRY_ENABLED_KEY}": false in ~/.texra/v1/global-storage/config.json.`,
+        `Turn it off with TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or "${TELEMETRY_ENABLED_SETTING.key}": false in ~/.texra/v1/global-storage/config.json.`,
       );
     }),
     Effect.catch((failure) =>

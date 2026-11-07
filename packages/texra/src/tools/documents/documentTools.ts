@@ -43,7 +43,6 @@ import { recoverOutputFailure } from '@texra/agent/output/outputOperations';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 import { ensureCorrectXmlStructure } from '@texra/agent/output/replyDocuments';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { revisionLayout } from '@texra/shared/constants/workflowOutput';
 import {
   keepReply,
@@ -63,6 +62,10 @@ import {
   type CompileOutcome,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
+import {
+  WORKFLOW_AUTO_OPEN_PDF_SETTING,
+  WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 /** A revision of a document task, by its zero-based index. */
 export const RevisionSchema = Schema.Int.check(
@@ -91,10 +94,7 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
   );
 
 const autoOpensPdf = (docs: Documents) =>
-  Settings.get<boolean>(
-    docs.deps.roots,
-    DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
-  );
+  Settings.get(docs.deps.roots, WORKFLOW_AUTO_OPEN_PDF_SETTING);
 
 /**
  * What the first revision checks before the task does any work, whichever
@@ -405,9 +405,9 @@ export const DocumentCompileTool = defineTool({
     );
     // What a failed compile means for the task is decided here, once, and
     // recorded with the revision.
-    const rejects = yield* Settings.get<boolean>(
+    const rejects = yield* Settings.get(
       roots,
-      DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING,
     );
     const compile: CompileOutcome =
       check._tag === 'skipped'

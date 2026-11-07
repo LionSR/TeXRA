@@ -23,8 +23,10 @@ import {
   withSessionFs,
 } from '@texra-ai/harness/host';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_SETTING,
   SUBSCRIPTION_AUTH_PROVIDERS,
+  DISABLED_SKILLS_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
 import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
@@ -258,7 +260,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* changed('usage');
       }
-      if (key === APPROVAL_POLICY_CONFIG_KEY) {
+      if (key === APPROVAL_POLICY_SETTING.key) {
         yield* bindings.refreshCatalogs();
         yield* emitAppSignal('approvalPolicyChanged', undefined);
       }
@@ -267,14 +269,28 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     // One read-modify-write at a time per list: two switches handled at once
     // would each read the list without the other's item.
     const skillListLanes = new Map<string, PerKeyLane>();
-    const setSkillEnabled = (key: string, item: string, enabled: boolean) =>
-      Effect.flatMap(Settings.get<readonly string[]>(roots, key), (disabled) =>
-        updateStateSetting(
-          key,
-          enabled
-            ? disabled.filter((candidate) => candidate !== item)
-            : [...new Set([...disabled, item])],
+    const setSkillEnabled = (
+      key: (
+        | typeof DISABLED_SKILLS_SETTING
+        | typeof DISABLED_SKILL_SOURCES_SETTING
+      )['key'],
+      item: string,
+      enabled: boolean,
+    ) =>
+      Effect.flatMap(
+        Settings.get(
+          roots,
+          key === DISABLED_SKILLS_SETTING.key
+            ? DISABLED_SKILLS_SETTING
+            : DISABLED_SKILL_SOURCES_SETTING,
         ),
+        (disabled: readonly string[]) =>
+          updateStateSetting(
+            key,
+            enabled
+              ? disabled.filter((candidate) => candidate !== item)
+              : [...new Set([...disabled, item])],
+          ),
       ).pipe(withPerKeyLane(skillListLanes, key));
 
     const profileKeys = new SettingsProfileKeyController({

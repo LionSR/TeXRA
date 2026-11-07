@@ -77,11 +77,10 @@ cleanly if its parent is cancelled.
 
 ## The setting
 
-- Key `texra.childRunConcurrencyBudget` (`CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY`),
-  bounds and copy in `CHILD_RUN_CONCURRENCY_BUDGET_SETTING`
-  (`packages/harness/src/shared/schemas/coreSettings.ts`), catalog row
-  `childRunConcurrencyBudget` in `shared/state/stateSettings.ts`, shown in the
-  settings view's Agents tab and the CLI `/config` panel.
+- Key `texra.childRunConcurrencyBudget`: the catalog row
+  `CHILD_RUN_CONCURRENCY_BUDGET_SETTING`, with its bounds in its schema, in
+  `packages/harness/src/shared/state/stateSettings.ts`, shown in the settings
+  view's Agents tab and the CLI `/config` panel.
 - `0` (the default) means auto: `os.availableParallelism()` clamped to
   1–100. Explicit values are integers 1–100. Model conversations are network
   bound, so the core count is a floor for useful parallelism, not a ceiling.

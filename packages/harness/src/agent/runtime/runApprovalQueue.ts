@@ -13,10 +13,6 @@
 import { Effect, SubscriptionRef } from 'effect';
 import { SessionRoots } from '@platform/rootedFs';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-} from '@shared/approvalPolicy';
-import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
   resolveBypass,
@@ -44,6 +40,7 @@ import {
 } from '@shared/session/runHistory';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { decideRequest } from './requests';
+import { APPROVAL_POLICY_SETTING } from '@shared/state/stateSettings';
 
 /**
  * A run's grants once it activates again, or null when they stand as
@@ -189,10 +186,7 @@ export const sessionApprovals: Effect.Effect<
     bypass,
     policy: (runId) =>
       runPolicy(
-        Settings.getConfig<ApprovalPolicy>(
-          roots.config,
-          APPROVAL_POLICY_CONFIG_KEY,
-        ),
+        Settings.getConfig(roots.config, APPROVAL_POLICY_SETTING),
         view(),
         runId,
       ),
