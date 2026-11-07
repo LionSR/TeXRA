@@ -28,8 +28,8 @@ Deno.test('parseApprovalDecision rejects non-boolean values', () => {
   );
 });
 
-// The poll endpoint over a fake project: index.ts serves on import, so
-// `Deno.serve` is captured and every Supabase call goes to `fetch` below.
+// The poll endpoint over a fake project: every Supabase call goes to `fetch`
+// below.
 Deno.test('a transient owner lookup failure keeps an approved request for the next poll', async () => {
   const projectUrl = 'https://project.example.test';
   for (const [name, value] of Object.entries({
@@ -49,10 +49,6 @@ Deno.test('a transient owner lookup failure keeps an approved request for the ne
   };
   const deletes: string[] = [];
   const realFetch = globalThis.fetch;
-  const realServe = Deno.serve;
-  let serve: (req: Request) => Response | Promise<Response> = () => {
-    throw new Error('index.ts did not serve');
-  };
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
     const { pathname } = new URL(request.url);
@@ -71,13 +67,9 @@ Deno.test('a transient owner lookup failure keeps an approved request for the ne
     }
     return Promise.resolve(new Response('unexpected', { status: 599 }));
   };
-  // cast: index.ts passes one handler and never reads the server back.
-  Deno.serve = ((handler: typeof serve) => {
-    serve = handler;
-  }) as unknown as typeof Deno.serve;
   try {
-    await import('./index.ts');
-    const response = await serve(
+    const { app } = await import('./index.ts');
+    const response = await app.fetch(
       new Request('https://project.example.test/auth-device/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,6 +80,5 @@ Deno.test('a transient owner lookup failure keeps an approved request for the ne
     deepStrictEqual(deletes, []);
   } finally {
     globalThis.fetch = realFetch;
-    Deno.serve = realServe;
   }
 });

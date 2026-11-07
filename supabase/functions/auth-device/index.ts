@@ -84,7 +84,7 @@ const PAGE_SDK_INTEGRITY =
 
 // The edge runtime hands over paths including the function slug
 // (/auth-device/code).
-const app = new Hono().basePath('/auth-device');
+export const app = new Hono().basePath('/auth-device');
 
 // CORS middleware. The verification page is served from this same origin, so
 // same-origin browser fetches (which may carry a *.supabase.co Origin not in
@@ -441,7 +441,7 @@ app.get('/verify', (c) => {
 // 404 for other routes
 app.all('*', (c) => errorResponse(c.req.raw, 'Not found', 404));
 
-Deno.serve(app.fetch);
+if (import.meta.main) Deno.serve(app.fetch);
 
 // =============================================================================
 // Verification page
