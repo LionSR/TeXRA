@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Predicate } from 'effect';
 
 import { createRunStorageLocation } from '@texra-ai/harness/host';
-import { entryTypeIn } from '@texra-ai/harness/node';
+import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   fileLocationDisplayPath,
@@ -250,13 +250,24 @@ const diffPair = (
 
     // latexdiff runs in the revised file's own folder, with symlinks
     // resolved so a mirrored dependency's relative `\input{}` still points
-    // at real siblings; a path that cannot be canonicalized (removed under
-    // us, a link cycle) is used as given.
+    // at real siblings. A path that cannot be canonicalized is used as
+    // given: silently when it is gone (latexdiff then reports it), with a
+    // warning for any other failure (a link cycle, a denied component), since
+    // relative inputs may then miss their siblings.
     const fs = yield* FileSystem.FileSystem;
+    const asGiven = revised.location.absolutePath;
     const cwd = path.dirname(
-      yield* fs
-        .realPath(revised.location.absolutePath)
-        .pipe(Effect.orElseSucceed(() => revised.location.absolutePath)),
+      yield* fs.realPath(asGiven).pipe(
+        Effect.catchIf(absentReason, () => Effect.succeed(asGiven)),
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            logger.warn(
+              `Could not resolve links in ${asGiven}; latexdiff runs beside the path as given, so relative inputs may not resolve: ${error.message}`,
+            );
+            return asGiven;
+          }),
+        ),
+      ),
     );
     const diffPath = yield* latexdiff(base, revised.location, {
       roots,
