@@ -77,6 +77,21 @@ It touches `src/test-kernel/{agent,tools}/**`,
 `packages/harness/test/{agent,tools}/**` and
 `src/test-kernel/support/childProcessTestLayer.ts`.
 
+Status of PR 1: ranked 1, 2 and 7 landed; ranked 6 and 10's parts landed
+(`ToolEditApprovalGate`, `ConfigTools`, `helperModelPreference`, and
+`BashTool`'s fork, now a yielded `closeInput`). Ranked 8 landed for `grep`
+and `BashTool`'s foreground case. Left: `BashTool`'s two background cases
+and `ExecutionsToolOutput` keep their `executeCommand` stubs, because a
+background run forks on the session's context, whose spawner
+`ownerProcessLayer` builds itself (`nodePlatformServices`), so no layer a
+suite provides reaches it. Moving them needs the session graph to take a
+spawner, which belongs with L2 F1's `processLayer` options. Two waits are
+left: `ToolUseDispatchParallel`'s barrier case holds its first read for at
+most 200 ms of live time, because no row marks a write that is waiting and
+the call's prelude does real I/O; and `ToolUseFollowUp`'s ordering case does
+not fail with the send lane removed (neither did the old one). `toolCallTurn`
+in `src/test-kernel/support/scriptedRunLayers.ts` now takes a call's input.
+
 **PR 2, tiers, the desktop e2e specs, edge functions and test-only knobs**
 (G):
 
