@@ -17,11 +17,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import {
-  isRequestRefusal,
-  type RunStopReason,
-  type Session,
-} from '@texra-ai/harness';
+import { type RunStopReason, type Session } from '@texra-ai/harness';
 import {
   launchNoticeOf,
   normalizeProviderError,
@@ -98,6 +94,7 @@ import {
 import type { ModelConnection } from './tui/modelConnection';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { SettingsStores } from '@texra-ai/harness/host';
+import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 // ---------------------------------------------------------------------------
 // Controller

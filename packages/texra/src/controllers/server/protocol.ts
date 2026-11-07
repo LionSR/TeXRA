@@ -63,6 +63,7 @@ import {
   EventsFrameSchema,
   SubscribeSchema,
 } from '@texra/shared/session/sessionFrames';
+import { BridgeErrorSchema } from '@texra/shared/session/bridgeErrors';
 import {
   HostAnswerSchema,
   HostCapabilitySchema,
@@ -196,7 +197,7 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('task.request', {
     payload: { workspace, request: RuntimeRequestSchema },
     success: OutcomeSchema,
-    error: RequestErrorSchema,
+    error: BridgeErrorSchema,
   }),
   Rpc.make('task.start', {
     /** The start as the window's `session.start` took it, less the window's

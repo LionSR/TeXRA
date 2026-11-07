@@ -23,11 +23,11 @@ import {
   type RunId,
   acceptsFollowUp,
   Rejected,
-  type RequestError,
   type SessionView,
   type RunView,
   type StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
+import type { BridgeError } from './bridgeErrors';
 import {
   InquiryDraftSchema,
   type InquiryDraft,
@@ -201,7 +201,7 @@ type WorkbenchLayout = Readonly<Record<string, unknown>>;
  * A failed request a surface paints. Cancellation is the user's own
  * doing, so it stays quiet and never reaches a surface field.
  */
-type SurfaceRejection = Exclude<RequestError, { _tag: 'Cancelled' }>;
+type SurfaceRejection = Exclude<BridgeError, { _tag: 'Cancelled' }>;
 
 export interface Surface {
   /** Which project this surface is for; the layer key. Never persisted. */

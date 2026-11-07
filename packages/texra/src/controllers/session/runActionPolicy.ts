@@ -7,14 +7,16 @@
 import { Effect } from 'effect';
 
 import {
-  isRequestRefusal,
   Unavailable,
-  type RequestRefusal,
   type Run,
   type RunFailure,
   type Session,
 } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
+import {
+  isRequestRefusal,
+  type RequestRefusal,
+} from '@texra/controllers/session/hostCallFailure';
 
 /**
  * Resume `runId` on `session`: the run that continues (the one asked for,

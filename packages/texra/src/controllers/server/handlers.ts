@@ -24,7 +24,6 @@ import {
 } from 'effect';
 
 import {
-  Internal,
   type LocalSession,
   Rejected,
   type RunRecords,
@@ -45,6 +44,7 @@ import {
 
 import { HostWindows } from './hostWindows';
 import { listTasks } from './taskList';
+import { Internal } from '@texra/shared/session/bridgeErrors';
 
 /** A project the service serves: its session, as every host drives it. */
 export interface ServiceProject {

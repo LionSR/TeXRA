@@ -24,10 +24,9 @@ import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 
-import type { HostRequestFailure } from '@texra-ai/harness';
-
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
+import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
 
 type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,

@@ -2,7 +2,7 @@ import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
 import { planOf, runBypasses } from '@texra-ai/harness/schemas';
-import { isRequestRefusal, type Session } from '@texra-ai/harness';
+import { type Session } from '@texra-ai/harness';
 import { readModelOptions } from '@texra-ai/harness/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -44,6 +44,7 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
+import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 export function showCliSlashCommandHelp(): void {
   openInfoPane(

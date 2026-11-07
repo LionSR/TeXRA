@@ -38,18 +38,9 @@ import {
   Stream,
 } from 'effect';
 
-import {
-  type HostRequestFailure,
-  Internal,
-  isRequestRefusal,
-  type Session,
-} from '@texra-ai/harness';
+import { type Session } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness/host';
-import {
-  Invalid,
-  RequestErrorSchema,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
@@ -62,6 +53,16 @@ import {
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { ProcessServices } from '@texra-ai/harness/host';
+import {
+  isRequestRefusal,
+  type HostRequestFailure,
+} from '@texra/controllers/session/hostCallFailure';
+import {
+  BridgeErrorSchema,
+  Internal,
+  Invalid,
+  type BridgeError,
+} from '@texra/shared/session/bridgeErrors';
 
 const CHANNEL = 'SessionBridge';
 
@@ -128,11 +129,12 @@ class SessionBridgeClosedError extends Schema.TaggedError<SessionBridgeClosedErr
 
 /** A request error as the wire carries it: the class's fields, which the
  *  surface decodes back (a `postMessage` keeps no Error prototype). */
-const wireError = Schema.encodeSync(RequestErrorSchema);
+const wireError = Schema.encodeSync(BridgeErrorSchema);
 
-const refused = (
-  error: typeof RequestErrorSchema.Type,
-): Response['result'] => ({ ok: false, error: wireError(error) });
+const refused = (error: BridgeError): Response['result'] => ({
+  ok: false,
+  error: wireError(error),
+});
 
 const response = (
   session: string,

@@ -21,7 +21,6 @@ import {
 } from 'effect';
 
 import {
-  Invalid,
   Rejected,
   qualifyAggregateId,
   type RunId,
@@ -44,6 +43,7 @@ import {
   WebviewSessions,
 } from '@texra/shared/session/webviewSessionLayer';
 import type { SessionView } from '@texra-ai/harness/schemas';
+import { Invalid } from '@texra/shared/session/bridgeErrors';
 
 /** One session's graph as `WebviewSessions.open` hands it out. */
 type WebviewGraph = Effect.Success<ReturnType<typeof WebviewSessions.open>>;

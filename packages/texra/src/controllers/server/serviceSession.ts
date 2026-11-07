@@ -46,6 +46,7 @@ import {
   replayTrace,
 } from '@texra-ai/harness/host';
 import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
+import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { attachWindowHost } from './windowHost';
 import {
@@ -412,15 +413,22 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       (reason) => new Rejected({ reason }),
       (client) =>
         requestOnService(client, workspace, runtimeRequest).pipe(
-          // A transport failure is a refusal worded for the user; the
-          // service's own refusal arrives as the class it failed with.
-          Effect.mapError((error) =>
-            error._tag === 'RpcClientError'
-              ? new Rejected({
+          // A transport failure is a refusal worded for the user, and so is
+          // the service's own bridge error (a request it could not parse, a
+          // handler that died); a runtime refusal arrives as its class.
+          Effect.mapError((error) => {
+            switch (error._tag) {
+              case 'RpcClientError':
+                return new Rejected({
                   reason: `The TeXRA service did not answer: ${error.message}`,
-                })
-              : error,
-          ),
+                });
+              case 'Invalid':
+              case 'Internal':
+                return new Rejected({ reason: requestErrorText(error) });
+              default:
+                return error;
+            }
+          }),
         ),
     );
   // The watch names its runs to this window's own view too, so the view

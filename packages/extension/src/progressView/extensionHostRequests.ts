@@ -16,8 +16,6 @@ import { Effect, FiberHandle, Scope } from 'effect';
 import {
   Cancelled,
   Rejected,
-  type HostRequestFailure,
-  type RequestRefusal,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -92,6 +90,10 @@ import type {
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
+import {
+  type HostRequestFailure,
+  type RequestRefusal,
+} from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ExtensionHostRequests';
 

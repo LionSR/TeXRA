@@ -28,7 +28,6 @@ import {
 
 import {
   OutcomeSchema,
-  RequestErrorSchema,
   RuntimeRequestSchema,
   RunIdSchema,
   StoredMediaSchema,
@@ -40,6 +39,7 @@ import {
   TranscriptSubscriptionSchema,
   type SessionViewInput,
 } from '@texra-ai/harness/transcript';
+import { BridgeErrorSchema } from './bridgeErrors';
 import { HostRequestSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
 import { LaunchPatchSchema } from './surface';
@@ -124,11 +124,11 @@ const ResponseSchema = Schema.Struct({
     }),
     /** The request error the session answered with, as its fields: a
      *  `postMessage` keeps no Error prototype, so the surface decodes the
-     *  class back with `RequestErrorSchema`. `Internal` is a handler defect
+     *  class back with `BridgeErrorSchema`. `Internal` is a handler defect
      *  whose cause stays in the host log under `ref`, the request id. */
     Schema.Struct({
       ok: Schema.Literal(false),
-      error: Schema.toEncoded(RequestErrorSchema),
+      error: Schema.toEncoded(BridgeErrorSchema),
     }),
   ]),
 });

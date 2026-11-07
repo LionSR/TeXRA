@@ -11,7 +11,7 @@
 import { signal, type Signal } from '@lit-labs/signals';
 import { Effect, Schema } from 'effect';
 
-import { RequestErrorSchema } from '@texra-ai/harness/schemas';
+import { BridgeErrorSchema } from '@texra/shared/session/bridgeErrors';
 
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
@@ -248,7 +248,7 @@ export function createSessionSurfaces(options: {
    *  the error's wire form always decodes: a failure here is a defect. */
   function refusal(result: Response['result']): Surface['requestError'] {
     if (result.ok) return null;
-    const error = Schema.decodeUnknownSync(RequestErrorSchema)(result.error);
+    const error = Schema.decodeUnknownSync(BridgeErrorSchema)(result.error);
     return error._tag === 'Cancelled' ? null : error;
   }
 
