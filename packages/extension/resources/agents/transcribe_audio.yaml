@@ -41,7 +41,7 @@ task:
       {{ INSTRUCTION }}
       </instruction>
 
-      Analyze the attached audio content and any provided context, then generate the initial audio transcript with timestamps, speaker identification, sectioning, and LaTeX equations. Do not use markdown. Write each utterance as `[HH:MM:SS:MS] SpeakerName: text`.
+      Analyze the attached audio content and any provided context, then generate the initial audio transcript with timestamps, speaker identification, sectioning, and LaTeX equations. Do not use markdown. Write each utterance as `[HH:MM:SS] SpeakerName: text`.
     - |
       Review the initial transcription and produce a final, refined transcript. Check the following aspects and fix any issues found:
       \begin{itemize}
@@ -57,4 +57,4 @@ task:
 
       If the transcript already meets all of these requirements, reproduce it unchanged rather than rewording it.
 
-      Output the final, refined audio transcript with improved accuracy, correct speaker identification with timestamps, LaTeX equations, sectioning, and formatting. Ensure no markdown is used. Write each utterance as `[HH:MM:SS:MS] SpeakerName: text`.
+      Output the final, refined audio transcript with improved accuracy, correct speaker identification with timestamps, LaTeX equations, sectioning, and formatting. Ensure no markdown is used. Write each utterance as `[HH:MM:SS] SpeakerName: text`.
