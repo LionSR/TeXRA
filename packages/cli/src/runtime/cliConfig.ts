@@ -171,9 +171,11 @@ export const setWorkspaceCliChatAgent = Effect.fn(
   // lands in the workspace target, so seeding from `workspace over user` would
   // copy a user-level `texra.chat.model` into the project file and pin it
   // above every later user-level edit.
-  const existing =
-    stores.config.inspect<CliCommandDefaults>(sectionKey).workspaceValue ?? {};
-  const next: { agent?: string; model?: string } = { ...existing };
+  // A section its row rejects (a string, an array) seeds nothing.
+  const stored = stores.config.inspect<unknown>(sectionKey).workspaceValue;
+  const next: { agent?: string; model?: string } = Predicate.isObject(stored)
+    ? { ...stored }
+    : {};
   if (trimmed) next.agent = trimmed;
   else delete next.agent;
   yield* Settings.set(
@@ -196,7 +198,8 @@ const COMMAND_SECTION_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
  * Names the config-file entries that cannot apply. An unknown project key (a
  * typo such as `texra.modle` or `texra.chat.modle`) is a setting that silently
  * never applies, and so is a known key whose value its catalog row rejects:
- * it reads as its row's default. Unknown keys are reported for the
+ * a typed read gets its row's default, and a fail-closed reader its own
+ * reading (telemetry reads as off). Unknown keys are reported for the
  * project file only: the user file is shared by all three hosts and holds rows
  * the CLI does not honor, so its unrecognized keys are not the CLI's to report.
  * Invalid values are reported for both files, since the CLI reads both.
