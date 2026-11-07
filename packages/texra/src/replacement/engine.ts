@@ -15,6 +15,7 @@ import type {
 import {
   ReplacementRuleSet,
   NonRegexRuleSet,
+  OrderedRuleSet,
   RegexRuleSet,
   ReplacementValue,
 } from './types';
@@ -176,13 +177,11 @@ const replacementEngine = {
 };
 
 /**
- * The rules behind every non-regex category name the config accepts, in the
- * order the engine applies them. A `Record` over that universe: a name with no
- * rules here, or rules here under a name the config rejects, fails to
- * typecheck, so the engine can neither accept a no-op category nor run one
- * nobody can enable. Application order is this declaration's key order, which
- * is behavior — a category applied later wins a duplicated pattern key — so
- * there is no second list to keep in step with it.
+ * The rules behind every non-regex category name the config accepts. A
+ * `Record` over that universe: a name with no rules here, or rules here under
+ * a name the config rejects, fails to typecheck, so the engine can neither
+ * accept a no-op category nor run one nobody can enable. A key two
+ * categories share takes the later category's value.
  */
 const NON_REGEX_RULES: Record<NonRegexReplacementCategory, NonRegexRuleSet> = {
   // LaTeX content formatting
@@ -220,10 +219,11 @@ const REGEX_RULES: Record<RegexReplacementCategory, RegexRuleSet> = {
 };
 
 /**
- * Combine every enabled non-regex category into a single category. Custom
- * replacements from user settings take precedence over predefined rules.
+ * Every enabled non-regex category as one ordered rule set. A custom
+ * replacement from user settings replaces the value of a predefined rule
+ * with its key; the order is the rule set's own (longest `from` first).
  */
-function getAllReplacements(config: ConfigProvider): NonRegexRuleSet {
+function getAllReplacements(config: ConfigProvider): OrderedRuleSet {
   const enabled = new Set(
     Settings.getConfig<string[]>(config, 'latex.enabledReplacements'),
   );
@@ -240,7 +240,10 @@ function getAllReplacements(config: ConfigProvider): NonRegexRuleSet {
     customReplacements,
   );
 
-  return { patterns };
+  // Sorted once, stably: rules of one length keep their declaration order.
+  return {
+    rules: Object.entries(patterns).toSorted(([a], [b]) => b.length - a.length),
+  };
 }
 
 /**
@@ -340,8 +343,8 @@ export function applyReplacements(
         }
       }
     } else {
-      for (const [old, newText] of Object.entries(category.patterns)) {
-        result = result.replaceAll(old, newText);
+      for (const [from, to] of category.rules) {
+        result = result.replaceAll(from, to);
       }
     }
   }
