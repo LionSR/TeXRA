@@ -1,11 +1,15 @@
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
-import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import { pathToLocationIn } from '@texra-ai/harness/host';
 
 // Local imports - tools
-import { resolveToolPath, formatToolOutput } from '@texra-ai/harness/plugins';
+import {
+  resolveToolPath,
+  formatToolOutput,
+  defineTool,
+  type ToolResult,
+} from '@texra-ai/harness/plugins';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 

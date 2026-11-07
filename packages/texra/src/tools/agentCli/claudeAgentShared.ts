@@ -8,7 +8,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { Effect, Predicate } from 'effect';
 
-import { withLogChannel, Settings } from '@texra-ai/harness/host';
 import { isClaudeCodeModel } from '@texra/shared/agentCliSettings';
 import type { AgentCliEffort } from '@texra/shared/agentCliSettings';
 
@@ -18,8 +17,14 @@ import {
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
-import type { AgentTrace, ToolError } from '@texra-ai/harness/plugins';
-import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
+import {
+  type AgentTrace,
+  type ToolError,
+  withLogChannel,
+  Settings,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
+import type { StateReadFailed } from '@texra-ai/harness/host';
 import type { ModelConfig } from '@texra-ai/llm';
 
 import type {

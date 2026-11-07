@@ -7,7 +7,7 @@ import { Clock, Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports
 import { absentReason, relativeToRoot } from '@texra-ai/harness/node';
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 
 import { CHANNEL } from './constants';
 import type { RootedFileSystem } from '@texra-ai/harness/host';

@@ -1,6 +1,5 @@
 import { Cause, Effect, Result, Schema, Scope, Struct } from 'effect';
 
-import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
 import {
   callerRun,
@@ -9,6 +8,8 @@ import {
   executed,
   nullishWithDefault,
   ToolError,
+  defineTool,
+  type ToolResult,
 } from '@texra-ai/harness/plugins';
 import { toErrorMessage, formatResultCount } from '@texra-ai/harness/schemas';
 import {

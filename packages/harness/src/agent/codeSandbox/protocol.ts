@@ -49,8 +49,8 @@ const IssuedOpSchema = Schema.Struct({
   name: Schema.String,
   /** The guest's argument, as JSON text on the wire. */
   input: JsonText,
-  /** The title of the guest's latest `phase()` call when it issued this. */
-  phase: Schema.NullOr(Schema.String),
+  /** The title of the guest's latest `section()` call when it issued this. */
+  section: Schema.NullOr(Schema.String),
 });
 
 const ScriptEndSchema = Schema.Union([

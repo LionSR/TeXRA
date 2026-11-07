@@ -130,7 +130,7 @@ export {
   scriptStages,
   type ScriptCallStatus,
   type ScriptCallView,
-  type ScriptPhaseView,
+  type ScriptSectionView,
   type ScriptStageView,
 } from '@shared/transcript/scriptStage';
 // Delivery envelopes inside assistant text, collapsed to their summaries,

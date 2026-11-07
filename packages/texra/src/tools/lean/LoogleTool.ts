@@ -11,14 +11,15 @@ import {
 import { Array as Arr, Cause, Effect, Schema } from 'effect';
 import { HttpClientResponse } from 'effect/http';
 
-import { defineTool, ToolResult } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness/host';
 import {
   errorResult,
   executed,
   nullishWithDefault,
   retryTransientFetch,
   scopedOkClient,
+  defineTool,
+  ToolResult,
+  withLogChannel,
 } from '@texra-ai/harness/plugins';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s

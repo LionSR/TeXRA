@@ -37,7 +37,7 @@ const ORDER_SCRIPT = `
 const left = tools.echo({ v: 'a' }).then((r) => tools.echo({ v: r.v + '1' }));
 const right = tools.echo({ v: 'b' }).then((r) => tools.echo({ v: r.v + '2' }));
 let caught = null;
-phase('Check');
+section('Check');
 try {
   await tools.fail({});
 } catch (error) {
@@ -110,22 +110,22 @@ it.layer(SandboxLayer, { excludeTestServices: true })('CodeSandbox', (it) => {
         const again = yield* runInOrder([2, 1, 0, 3, 4]);
         const inIssueOrder = yield* runInOrder([0, 1, 2, 3, 4]);
 
-        // An op carries the phase the guest had entered when it issued it.
+        // An op carries the section the guest had entered when it issued it.
         const issuedBefore = [
-          { seq: 0, name: 'echo', input: { v: 'a' }, phase: null },
-          { seq: 1, name: 'echo', input: { v: 'b' }, phase: null },
-          { seq: 2, name: 'fail', input: {}, phase: 'Check' },
+          { seq: 0, name: 'echo', input: { v: 'a' }, section: null },
+          { seq: 1, name: 'echo', input: { v: 'b' }, section: null },
+          { seq: 2, name: 'fail', input: {}, section: 'Check' },
         ];
         expect(failFirst.ops).toEqual([
           ...issuedBefore,
-          { seq: 3, name: 'echo', input: { v: 'b2' }, phase: 'Check' },
-          { seq: 4, name: 'echo', input: { v: 'a1' }, phase: 'Check' },
+          { seq: 3, name: 'echo', input: { v: 'b2' }, section: 'Check' },
+          { seq: 4, name: 'echo', input: { v: 'a1' }, section: 'Check' },
         ]);
         expect(again.ops).toEqual(failFirst.ops);
         expect(inIssueOrder.ops).toEqual([
           ...issuedBefore,
-          { seq: 3, name: 'echo', input: { v: 'a1' }, phase: 'Check' },
-          { seq: 4, name: 'echo', input: { v: 'b2' }, phase: 'Check' },
+          { seq: 3, name: 'echo', input: { v: 'a1' }, section: 'Check' },
+          { seq: 4, name: 'echo', input: { v: 'b2' }, section: 'Check' },
         ]);
         for (const run of [failFirst, again, inIssueOrder]) {
           expect(run.result).toEqual({

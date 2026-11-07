@@ -13,7 +13,8 @@
  *   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
  *   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
  *   `Sessions.layer({ platform, plugins })`.
- * - **Plugin & tool authoring**: [`definePlugin`](#defineplugin) and the
+ * - **Plugin & tool authoring**: [`defineTool`](#definetool),
+ *   [`definePlugin`](#defineplugin) and the
  *   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
  *   [`executed`](#executed), [`errorResult`](#errorresult),
  *   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
@@ -66,7 +67,15 @@ export {
   type SessionPluginLayer,
   type ToolTable,
 } from '@tools/toolTable';
-export type { DefineToolOptions } from '@tools/core/definition';
+// A tool: defined once, passed to a run as `start({ tools })` or listed by
+// a plugin, and the result its body answers with.
+export {
+  defineTool,
+  type DefinedTool,
+  type DefineToolOptions,
+} from '@tools/core/definition';
+export type { ITool } from '@agent/core/tools/ToolTypes';
+export type { ToolResult } from '@shared/schemas';
 // A plugin's availability check, and the one failure a probe raises.
 export {
   ToolProbeFailed,
@@ -144,6 +153,16 @@ export {
   type ChildRunsShape,
   type PluginToolServices,
 } from '@agent/runtime/ToolServices';
+// What a tool body and a plugin layer read beyond their call: the rooted
+// file systems, catalog settings against the caller's stores, the
+// process's secrets and app signals, the log channel its entries name, and
+// the budget a session close gives a plugin's drain.
+export { StorageFs, WorkspaceFs } from '@platform/rootedFs';
+export { Settings, type SettingsStores } from '@shared/config/settings';
+export { Secrets, type PlatformSecrets } from '@platform/secrets';
+export { AppSignals, emitAppSignal } from '@platform/appSignals';
+export { withLogChannel } from '@logger/effectLog';
+export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionEvents';
 // What `ChildRuns` launches: an agent's child, or an external process's
 // with the one turn it runs. A tool that launches children takes the
 // call fields every child launch takes (`CALL_FIELDS`) and its file lists

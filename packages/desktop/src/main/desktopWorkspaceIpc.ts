@@ -32,7 +32,8 @@ import {
   entryTypeIn,
   readDirectoryTypedTolerant,
 } from '@texra-ai/harness/node';
-import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
+import { onAppSignal } from '@texra-ai/harness/host';
+import type { AppSignals } from '@texra-ai/harness/plugins';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostCommand } from '@texra/shared/session/hostRequest';

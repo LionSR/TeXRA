@@ -6,7 +6,7 @@ import {
 } from '@texra-ai/harness/host';
 import { cliCommandDefaults } from './platform/cliConfig';
 import type { WorkspaceAgentsSelection } from '@texra-ai/harness/schemas';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 /** The workspace agents controller's own snapshot shape — derived, never restated. */
 type WorkspaceAgentsSnapshot = Effect.Success<

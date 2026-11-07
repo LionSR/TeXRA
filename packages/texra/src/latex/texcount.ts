@@ -1,16 +1,12 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
-import {
-  withLogChannel,
-  hasExtension,
-  pathToLocationIn,
-} from '@texra-ai/harness/host';
+import { hasExtension, pathToLocationIn } from '@texra-ai/harness/host';
 import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
 
 const CHINESE_PACKAGES = [
   'xeCJK',

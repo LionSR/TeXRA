@@ -6,7 +6,7 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
-import { Secrets, type SettingsStores } from '@texra-ai/harness/host';
+import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { formatSubscriptionUsageSummary } from '@texra/shared/subscriptionUsagePresentation';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';

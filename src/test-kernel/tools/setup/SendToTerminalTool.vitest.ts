@@ -8,9 +8,6 @@ import { layer } from '@effect/vitest';
 import { Effect, Layer, Context } from 'effect';
 
 // Local imports
-
-import type { RunId } from '@texra-ai/harness/schemas';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -31,11 +28,12 @@ interface RunRecord {
   timeoutMs: number;
 }
 
-/** Install, for the test's scope, a host whose terminal runs the case
- *  reads back, open a session over its roots, and start a run on it. */
+/** Build, for the test's scope, a host whose terminal runs the case reads
+ *  back, open a session over its roots, start a run on it, and return a
+ *  tool call made over that host. */
 const setupTool = Effect.gen(function* () {
   const runs: RunRecord[] = [];
-  yield* Layer.build(
+  const host = yield* Layer.build(
     FakeHost.layer(
       {},
       {
@@ -49,28 +47,24 @@ const setupTool = Effect.gen(function* () {
     ),
   );
   const session = yield* Effect.flatMap(
-    TestSession.open(undefined, { host: {} }),
+    TestSession.open(Context.get(host, FakeHost).roots, { host: {} }),
     sessionHandleOf,
   );
   const runId = yield* publishTestRunStart(session);
   yield* Context.get(session, SessionLog).settled;
-  return { runs, session, runId };
-});
-
-const callTool = (
-  session: Context.Context<SessionServices>,
-  runId: RunId,
-  input: unknown,
-) =>
-  SendToTerminalTool.call(input).pipe(
-    Effect.provide(
-      withSetup(
-        nativeToolTestLayer({
-          run: { runId, session, toolPolicy: {} },
-        }),
+  const callTool = (input: unknown) =>
+    SendToTerminalTool.call(input).pipe(
+      Effect.provide(
+        withSetup(
+          nativeToolTestLayer({
+            run: { runId, session, toolPolicy: {} },
+          }),
+        ),
       ),
-    ),
-  );
+      Effect.provide(host),
+    );
+  return { runs, callTool };
+});
 
 // Live clock: the session's publisher and readers run on real turns.
 layer(SessionGraph.hosted, { excludeTestServices: true })(
@@ -78,21 +72,35 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
   (it) => {
     it.effect('rejects commands containing newlines', () =>
       Effect.gen(function* () {
-        const { runs, session, runId } = yield* setupTool;
+        const { runs, callTool } = yield* setupTool;
 
         for (const command of [
           'sudo apt-get install -y perl\nrm -rf /tmp/leak',
           'sudo apt-get install -y perl\r\necho pwned',
           'first\rsecond',
         ]) {
-          const result = yield* callTool(session, runId, { command });
+          const result = yield* callTool({ command });
           assert.equal(
             result.status,
             'error',
             `must reject ${JSON.stringify(command)}`,
           );
+          assert.match(
+            String(result.error),
+            /command must not contain newline \/ carriage-return characters/,
+          );
         }
         assert.equal(runs.length, 0);
+        // A one-line command reaches the host's terminal: the refusals above
+        // were the newlines', not a host without one.
+        assert.equal(
+          (yield* callTool({ command: 'sudo apt-get install -y perl' })).status,
+          'executed',
+        );
+        assert.deepEqual(
+          runs.map(({ command }) => command),
+          ['sudo apt-get install -y perl'],
+        );
       }),
     );
   },

@@ -6,9 +6,8 @@
  */
 import { Effect, FileSystem, Schema } from 'effect';
 
-import { defineTool } from '@texra-ai/harness';
 import { absentReason } from '@texra-ai/harness/node';
-import { executed, renderPrompt } from '@texra-ai/harness/plugins';
+import { executed, renderPrompt, defineTool } from '@texra-ai/harness/plugins';
 import { fileLocationDisplayPath } from '@texra-ai/harness/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
 import {

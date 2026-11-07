@@ -7,7 +7,6 @@
  */
 import { Effect, Record as Rec, Schema } from 'effect';
 
-import { defineTool } from '@texra-ai/harness';
 import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   requireRun,
@@ -15,6 +14,7 @@ import {
   ChildRuns,
   CALL_FIELDS,
   fileList,
+  defineTool,
 } from '@texra-ai/harness/plugins';
 import { agentMatchesIdentifier } from '@texra-ai/harness/schemas';
 import { DOCUMENT_TASK_OPTIONS } from '@texra/shared/plugins/documents';
@@ -116,11 +116,11 @@ export const DocumentTaskTool = defineTool({
   lane: 'own',
   scriptGlobal: { positional: 'prompt' },
   scriptReturns:
-    "{ response: string; changes: { path: string; absolutePath: string; base: string | null; added: number | null; removed: number | null }[]; runId: string; outcome: 'completed'; cost: number } | { runId: string }",
+    "{ response: string; changes: { path: string; absolutePath: string; base: string | null; added: number | null; removed: number | null }[]; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
   slow: true,
   description: `Run a named agent's document task over files, as a child of this run: it revises every file in \`inputFiles\` in the fixed revisions its task defines, with compile checks and diffs, and proposes one revised document each.
 
-From a script, \`document_task(prompt, opts)\` waits for the task and resolves to its result: \`{ changes, runId, outcome, cost }\`, where \`changes\` lists every revision's files in order (\`path\` the workspace file, \`absolutePath\` the revised copy). It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. Called directly, the task runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.`,
+From a script, \`document_task(prompt, opts)\` waits for the task and resolves to its result: \`{ response, changes, runId, outcome, cost, spent }\`, where \`changes\` lists every revision's files in order (\`path\` the workspace file, \`absolutePath\` the revised copy), \`cost\` is what the task spent and \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, \`Skipped\`, \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. Called directly, the task runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.`,
   schema: DocumentTaskInputSchema,
   execute: runDocumentTask,
 });

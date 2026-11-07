@@ -5,9 +5,9 @@
  * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
  * their own versions (`rowVersions.ts`), and the kinds a store holds are
  * gated by `rowCodec.ts`, so it moves only for a change an older build
- * cannot write around. The 1.0 baseline is 101; a file below it holding
- * tables is pre-1.0 (100 was a pre-release that never shipped), read by no
- * build and moved aside whole. This module knows no row kind or payload field.
+ * cannot write around. The 1.0 baseline is 102; a file below it holding
+ * tables is pre-1.0 (100 and 101 were pre-releases that never shipped),
+ * read by no build and moved aside whole. This module knows no row kind or payload field.
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
@@ -29,10 +29,10 @@ import {
 const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
-const SCHEMA_VERSION = 101;
+const SCHEMA_VERSION = 102;
 /** The first stamp a released build wrote. Fixed for good: a store stamped
  *  below it is pre-1.0 and moved aside; one at or above it is kept. */
-const BASELINE_1_0 = 101;
+const BASELINE_1_0 = 102;
 /** `TeXR`: a harness store, told apart from a foreign SQLite file before
  *  anything in it is touched. */
 const APPLICATION_ID = 0x54655852;
@@ -46,11 +46,14 @@ const APPLICATION_ID = 0x54655852;
  * outside the file), the `(kind, logical_id)` the codec maps an
  * `AggregateId` to, the durable `uid`, its sequence counter, its parent
  * edge, and two lifecycle facts written by the transaction that makes
- * them (`owner_id` is unused: one process holds a store, so no writer is
- * recorded per run; the column stays so stamp 101 keeps opening): `start_commit` (the commit of seq 1) and `closed_by` (the
+ * them: `start_commit` (the commit of seq 1) and `closed_by` (the
  * deletion marker's commit, `NULL` while open). The foreign keys are the
  * collection mechanism: deleting an aggregate cascades to its dependents,
  * its events, its projections and their projected rows.
+ *
+ * `event_blob` links a row to each blob it needs kept: `inline` is 1 for a
+ * string the codec moved out of the row, which a read inflates back, and 0
+ * for a media address the row names, never inflated.
  */
 const TABLES = [
   `CREATE TABLE IF NOT EXISTS event_sequence (
@@ -60,7 +63,6 @@ const TABLES = [
     uid          TEXT NOT NULL UNIQUE,
     seq          INTEGER NOT NULL CHECK (seq >= 1),
     start_commit INTEGER,
-    owner_id     TEXT,
     parent_id    INTEGER REFERENCES event_sequence(id) ON DELETE CASCADE,
     closed_by    INTEGER,
     UNIQUE (kind, logical_id)
@@ -83,6 +85,7 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS event_blob (
     "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
     digest   TEXT NOT NULL REFERENCES blob(digest),
+    inline   INTEGER NOT NULL CHECK (inline IN (0, 1)),
     PRIMARY KEY ("commit", digest)
   ) STRICT, WITHOUT ROWID`,
   `CREATE TABLE IF NOT EXISTS stored_kind (
@@ -111,8 +114,7 @@ const TABLES = [
  * lookup the reads make, named for the columns it keys, and the change
  * record: each aggregate's last insert, close or collection (a collection
  * leaves no row of its own) under an ordinal AUTOINCREMENT never reuses,
- * kept by triggers for every writer (the `claimed` trigger keeps its name:
- * stamp 101 stores hold it, and it fires on `closed_by` as it always has).
+ * kept by triggers for every writer.
  */
 const ADDITIVE = [
   `CREATE TABLE IF NOT EXISTS aggregate_change (change INTEGER PRIMARY KEY
@@ -120,7 +122,7 @@ const ADDITIVE = [
     UNIQUE (kind, logical_id)) STRICT`,
   ...[
     ['inserted', 'INSERT', 'NEW'],
-    ['claimed', 'UPDATE OF owner_id, closed_by', 'NEW'],
+    ['closed', 'UPDATE OF closed_by', 'NEW'],
     ['collected', 'DELETE', 'OLD'],
   ].map(
     ([name, on, row]) => `CREATE TRIGGER IF NOT EXISTS aggregate_${name}
@@ -229,6 +231,10 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   return pre1;
 });
 
+/** The filename SQLite opens as a store held in memory, not in a file: it
+ *  journals in memory, is never vacuumed and is never moved aside. */
+export const IN_MEMORY_STORE = ':memory:';
+
 /**
  * Bring an open connection to the store this build writes: pragmas, a pre-1.0
  * store moved aside, the schema stamped; answering what it moved aside.
@@ -247,17 +253,13 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
  */
 const prepareStore = Effect.fnUntraced(function* (
   sql: Sql,
-  mode: 'persistent' | 'ephemeral',
   path: string,
   filename: string,
 ) {
+  const persistent = filename !== IN_MEMORY_STORE;
   yield* run(sql, 'PRAGMA foreign_keys = ON');
   yield* run(sql, 'PRAGMA synchronous = NORMAL');
-  yield* verifyPragma(
-    sql,
-    'journal_mode',
-    mode === 'persistent' ? 'wal' : 'memory',
-  );
+  yield* verifyPragma(sql, 'journal_mode', persistent ? 'wal' : 'memory');
   yield* verifyPragma(sql, 'foreign_keys', 1);
   let movedAside: SessionStoreMovedAside | null = null;
   for (;;) {
@@ -265,7 +267,7 @@ const prepareStore = Effect.fnUntraced(function* (
     const stored = Number(yield* pragmaValue(sql, 'user_version'));
     if (stored === SCHEMA_VERSION) break;
     if (!pre1) {
-      if (mode === 'persistent') yield* incrementalVacuum(sql);
+      if (persistent) yield* incrementalVacuum(sql);
       yield* Effect.gen(function* () {
         // Another process stamped the file while this one waited: the
         // loop checks it again.
@@ -299,7 +301,7 @@ const prepareStore = Effect.fnUntraced(function* (
     movedAside = { path, aside, reason: 'pre-1.0' };
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
-  if (mode === 'persistent') {
+  if (persistent) {
     yield* run(sql, 'PRAGMA journal_size_limit = 1048576');
   }
   yield* run(sql, 'PRAGMA busy_timeout = 25');
@@ -350,14 +352,14 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   connect: Effect.Effect<Sql, E, R | Scope.Scope>,
   /** A read-only connection that changes nothing in the file. */
   probe: Effect.Effect<Sql, E, R | Scope.Scope>,
-  mode: 'persistent' | 'ephemeral',
   path: string,
   filename: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
+  const persistent = filename !== IN_MEMORY_STORE;
   // A file the probe cannot open (none yet) is the open's to create; one
   // SQLite reads as damaged (cut short in its first page) is moved below.
-  if (mode === 'persistent')
+  if (persistent)
     yield* Effect.scoped(
       Effect.flatMap(probe, (sql) => checkStamps(sql, path)),
     ).pipe(
@@ -371,7 +373,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   const first = yield* Scope.fork(outer, 'sequential');
   const attempt = yield* connect.pipe(
     Effect.flatMap((sql) =>
-      Effect.map(prepareStore(sql, mode, path, filename), (movedAside) => ({
+      Effect.map(prepareStore(sql, path, filename), (movedAside) => ({
         sql,
         movedAside,
       })),
@@ -380,7 +382,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     Effect.catchCause((cause) => Effect.succeed({ cause })),
   );
   if ('sql' in attempt) return attempt;
-  if (mode !== 'persistent' || !isDamaged(attempt.cause)) {
+  if (!persistent || !isDamaged(attempt.cause)) {
     return yield* Effect.failCause(attempt.cause);
   }
   yield* Scope.close(first, Exit.void);
@@ -400,7 +402,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   );
   if (!stillDamaged || seen === null || (yield* identity) !== seen) {
     const sql = yield* connect;
-    return { sql, movedAside: yield* prepareStore(sql, mode, path, filename) };
+    return { sql, movedAside: yield* prepareStore(sql, path, filename) };
   }
   const aside = yield* freeName(
     asideName.corrupt(filename, yield* Clock.currentTimeMillis),
@@ -413,7 +415,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     `Session store ${path} is damaged; it was moved to ${aside} and a fresh store opened.`,
   ).pipe(withLogChannel(CHANNEL));
   const sql = yield* connect;
-  yield* prepareStore(sql, mode, path, filename);
+  yield* prepareStore(sql, path, filename);
   return {
     sql,
     movedAside: { path, aside, reason: 'corrupt' as const },

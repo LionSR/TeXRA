@@ -32,12 +32,13 @@
  * - [`@texra-ai/harness/transcript`](./transcript): browser-safe transcript row
  *   projections and `RemoteSessionView` for UI renderers.
  * - [`@texra-ai/harness/plugins`](./plugins): built-in plugins (`harnessBuiltins`)
- *   and what a tool or plugin is written with (`definePlugin`, `ToolContext`).
+ *   and what a tool or plugin is written with (`defineTool`, `definePlugin`,
+ *   `ToolContext`, `Settings`, `WorkspaceFs`).
  * - [`@texra-ai/harness/node`](./node): `nodePlatform(options)` and Node.js
  *   filesystem, SQLite, and process building blocks.
  * - [`@texra-ai/harness/host`](./host): what a full application host (TeXRA's
  *   editor, desktop and terminal apps) composes beyond this entry:
- *   `processLayer`, the agent catalog, settings, stores and secrets.
+ *   `processLayer`, the agent catalog, and the config and state stores.
  */
 
 // Building the process and opening sessions.
@@ -61,7 +62,7 @@ export type {
 } from './effect/sessions.js';
 // What a session's methods take and hand out: a run's id
 // (`session.resume`), a commit position and a display event (`view`), a
-// stored conversation's nodes (`records(runId).readConversation()`), a
+// stored conversation's nodes (`records(runId).readConversation`), a
 // request (`session.request`), and the request an `ApprovalHandler` is
 // asked with and the decision it answers.
 
@@ -77,10 +78,6 @@ export type {
   RunRecords,
 } from './effect/sessionReads.js';
 
-// A custom tool, passed to a run as `start({ tools })`.
-export { defineTool, type DefinedTool } from '@tools/core/definition';
-export type { ITool } from '@agent/core/tools/ToolTypes';
-export type { ToolResult } from '@shared/schemas';
 // The tables `executions` `query` reads (a script's SQL over its session's
 // runs and calls) and their columns.
 export { HISTORY_TABLES } from '@agent/runtime/historyQuery/views';

@@ -10,7 +10,8 @@ import {
   OWN_KEY_ROUTE_FACTS,
 } from '@texra-ai/llm';
 import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
-import { readModelOptions, Secrets } from '@texra-ai/harness/host';
+import { readModelOptions } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import { FakeHost } from '@test/support/testKernel';
 import { modelOptionsFrom } from '@texra/model/modelOptions';

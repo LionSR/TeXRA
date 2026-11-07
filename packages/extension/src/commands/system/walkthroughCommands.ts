@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 
 const GETTING_STARTED_WALKTHROUGH_ID = 'texra.gettingStarted';

@@ -2,11 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Predicate } from 'effect';
 
-import {
-  createRunStorageLocation,
-  Settings,
-  withLogChannel,
-} from '@texra-ai/harness/host';
+import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -37,7 +33,11 @@ import {
 } from './compiledPdfArtifacts';
 import { resolveWorkspaceSourceDir } from './compileCheck';
 import type { OutputDependencies } from './outputFileExtraction';
-import type { WorkspaceFs } from '@texra-ai/harness/host';
+import {
+  Settings,
+  withLogChannel,
+  type WorkspaceFs,
+} from '@texra-ai/harness/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,

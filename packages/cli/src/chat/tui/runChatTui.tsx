@@ -16,10 +16,7 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import {
-  AgentCatalog,
-  SESSION_CLOSE_DEADLINE_MS,
-} from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   type RuntimeCommand,
   qualifyAggregateId,
@@ -30,7 +27,10 @@ import {
 } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
 import { FileSecrets, secretsDirectory } from '@texra-ai/harness/node';
-import { emitAppSignal } from '@texra-ai/harness/host';
+import {
+  SESSION_CLOSE_DEADLINE_MS,
+  emitAppSignal,
+} from '@texra-ai/harness/plugins';
 import {
   CliUsageError,
   effectiveApprovalPolicy,

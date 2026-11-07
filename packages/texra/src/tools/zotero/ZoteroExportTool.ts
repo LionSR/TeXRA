@@ -9,8 +9,7 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports - core
-import { defineTool } from '@texra-ai/harness';
-import { executed, ToolError } from '@texra-ai/harness/plugins';
+import { executed, ToolError, defineTool } from '@texra-ai/harness/plugins';
 import { pluralize } from '@texra-ai/harness/schemas';
 
 // Local imports - zotero

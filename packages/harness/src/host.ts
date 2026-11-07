@@ -131,20 +131,15 @@ export {
   AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-export { Secrets, type PlatformSecrets } from '@platform/secrets';
 // App-lifecycle signals: the process's hub, which `ProcessServices` serves,
 // and what hosts and the app publish and follow on it.
 export {
-  AppSignals,
   appSignalStream,
-  emitAppSignal,
   onAppSignal,
   type AppSignal,
   type AppSignalEvent,
   type AppSignalPayloads,
 } from '@platform/appSignals';
-// The budget a session close waits for its runs: a plugin's drain fits it.
-export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionEvents';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
 // The canned model a package-validation build provides beneath the process.
@@ -185,13 +180,12 @@ export {
   UsageLogEntrySchema,
   type UsageLogEntry,
 } from '@shared/usageLog';
-// The rooted file systems plugins read, and their layers outside a run.
+// The rooted file system a host reads, and the layers of the ones plugins
+// read (`./plugins`) outside a run.
 export {
   GlobalStorageFs,
   sessionFsLayer,
-  StorageFs,
   withSessionFs,
-  WorkspaceFs,
 } from '@platform/rootedFs';
 export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 // A `FileLocation` by its root: workspace, run storage, external, or relative.
@@ -272,21 +266,15 @@ export {
 } from '@tools/toolAvailabilityService';
 // The tool catalog: enabled built-ins, plugin services and switches.
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
-// The channel an Effect's log entries name (`entryChannel`, `/node`).
-export { withLogChannel } from '@logger/effectLog';
 // The write path's redaction, for host text shown outside it.
 export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
-// The config and state store ports a host implements, their failures, and
-// `Settings`: every read and write of a catalog setting against the stores a
-// caller holds (a session's roots), and the typed read of a non-catalog
-// state key.
+// The config and state store ports a host implements and their failures
+// (`Settings`, which reads and writes through them, is on `./plugins`).
 export {
   ConfigWriteFailed,
-  Settings,
   StateReadFailed,
   StateWriteFailed,
   type ConfigProvider,
-  type SettingsStores,
   type StateStore,
   type StoredSetting,
 } from '@shared/config/settings';

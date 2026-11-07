@@ -21,7 +21,7 @@ Use [`defineTool`](./harness/#definetool) to declare a tool's Effect Schema, con
 
 ```ts
 import { Effect, Schema } from 'effect';
-import { defineTool } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness/plugins';
 import { executed, nullishWithDefault } from '@texra-ai/harness/plugins';
 
 export const countEquationsTool = defineTool({

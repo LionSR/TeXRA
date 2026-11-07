@@ -9,7 +9,7 @@ import {
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
 import { type Session } from '@texra-ai/harness';
-import { Secrets } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import { Rejected, Unavailable } from '@texra-ai/harness/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';

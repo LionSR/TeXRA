@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Config, Effect, FileSystem, Option, Schema } from 'effect';
 
 // Local imports
-import { WorkspaceFs, Settings } from '@texra-ai/harness/host';
+import { WorkspaceFs, Settings } from '@texra-ai/harness/plugins';
 import { absentReason } from '@texra-ai/harness/node';
 import {
   toErrorMessage,

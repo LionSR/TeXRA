@@ -14,7 +14,8 @@ import {
   Stream,
 } from 'effect';
 
-import { AgentCatalog, withLogChannel } from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
+import { withLogChannel, AppSignals } from '@texra-ai/harness/plugins';
 import {
   ensureError,
   toErrorMessage,
@@ -22,7 +23,7 @@ import {
   type FileLocation,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { AppSignals, appSignalStream } from '@texra-ai/harness/host';
+import { appSignalStream } from '@texra-ai/harness/host';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import {
   createAgentPresentationHost,

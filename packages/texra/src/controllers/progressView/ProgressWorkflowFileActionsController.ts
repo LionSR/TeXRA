@@ -9,10 +9,13 @@ import {
   pathToLocationIn,
   reportDiffTimeout,
   unifiedDiffText,
-  withLogChannel,
 } from '@texra-ai/harness/host';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import {
+  RunFileService,
+  withLogChannel,
+  type AppSignals,
+} from '@texra-ai/harness/plugins';
 import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -21,7 +24,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
-import type { AppSignals, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
 import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';

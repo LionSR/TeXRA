@@ -6,8 +6,11 @@ import { Config, Effect, Option } from 'effect';
 
 // Local imports
 import { apiKey, apiKeyEnvName } from '@texra-ai/llm';
-import { Secrets, withLogChannel } from '@texra-ai/harness/host';
-import { definePlugin } from '@texra-ai/harness/plugins';
+import {
+  definePlugin,
+  Secrets,
+  withLogChannel,
+} from '@texra-ai/harness/plugins';
 import { CLAUDE_AGENT_SETTINGS } from '@texra/shared/settingsView/integrationSettings';
 import {
   ClaudeAgentSessions,

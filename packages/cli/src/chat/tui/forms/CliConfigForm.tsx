@@ -1,4 +1,9 @@
-import { emitAppSignal, Secrets, Settings } from '@texra-ai/harness/host';
+import {
+  emitAppSignal,
+  Secrets,
+  Settings,
+  type AppSignals,
+} from '@texra-ai/harness/plugins';
 import { Effect } from 'effect';
 
 import { apiKeyOrigins } from '@texra-ai/llm';
@@ -34,7 +39,7 @@ import {
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { AppSignals, ProcessRuntime } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;

@@ -16,10 +16,10 @@ import {
   errorResult,
   AGENT_TOOL_NAME,
   TEMPLATE_INPUT_NAMES,
-} from '@texra-ai/harness/plugins';
-import { type ToolResult } from '@texra-ai/harness';
-import {
+  type ToolResult,
   withLogChannel,
+} from '@texra-ai/harness/plugins';
+import {
   hasExtension,
   AgentCatalog,
   type AgentEntry,

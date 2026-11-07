@@ -19,9 +19,9 @@ import {
   AppState,
   processLayer,
   type ProcessServices,
-  Secrets,
   type SkillSourceOptions,
 } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import {
   CommandDirs,
   FileSecrets,

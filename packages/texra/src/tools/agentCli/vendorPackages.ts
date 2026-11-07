@@ -24,7 +24,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Predicate, SynchronizedRef } from 'effect';
 import which from 'which';
 
-import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness/host';
+import { isModuleNotFoundError } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { executeCommand, withExtendedPath } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';

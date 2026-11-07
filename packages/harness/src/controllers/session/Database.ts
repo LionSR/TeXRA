@@ -89,7 +89,7 @@ import {
   settleCards,
 } from './rowReader';
 import { isBusy, isDamaged, retryBusy } from './storeAside';
-import { openStore, reclaimFreePages } from './storeSchema';
+import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
 export const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
@@ -119,7 +119,8 @@ RETURNING "commit" AS "commit"
 /** A blob is stored once per store, whichever run wrote it first. */
 const INSERT_BLOB = `INSERT INTO blob (digest, value) VALUES (?, ?)
   ON CONFLICT(digest) DO NOTHING`;
-const INSERT_REF = 'INSERT INTO event_blob ("commit", digest) VALUES (?, ?)';
+const INSERT_REF = `INSERT INTO event_blob ("commit", digest, inline)
+  VALUES (?, ?, ?)`;
 const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
@@ -204,7 +205,7 @@ export const databaseLayer = (
       const identity = yield* ProcessIdentity;
       const path =
         mode === 'ephemeral'
-          ? ':memory:'
+          ? IN_MEMORY_STORE
           : join(roots.storage, SESSION_DATABASE_FILE);
       const openFailed = (cause: unknown): DatabaseOpenFailed =>
         new DatabaseOpenFailed({ path, cause });
@@ -212,7 +213,7 @@ export const databaseLayer = (
       const exclusive = mode === 'persistent' || mode === 'existing';
       const filename =
         mode === 'ephemeral'
-          ? ':memory:'
+          ? IN_MEMORY_STORE
           : yield* localDatabasePath(
               roots.storage,
               SESSION_DATABASE_FILE,
@@ -236,7 +237,6 @@ export const databaseLayer = (
           disableWAL: true,
           busyTimeout,
         }),
-        mode === 'ephemeral' ? mode : 'persistent',
         path,
         filename,
       ).pipe(
@@ -688,13 +688,13 @@ export const databaseLayer = (
           return yield* invariant(
             `No commit assigned for aggregate ${draft.aggregateId}`,
           );
-        for (const { digest, value } of encoded.blobs) {
+        for (const { digest, value, inline } of encoded.blobs) {
           yield* exec(INSERT_BLOB, [digest, value]);
-          yield* exec(INSERT_REF, [commit, digest]);
+          yield* exec(INSERT_REF, [commit, digest, inline ? 1 : 0]);
         }
         // Linked, not written: the foreign key refuses a blob that is gone.
         for (const digest of encoded.references)
-          yield* exec(INSERT_REF, [commit, digest]);
+          yield* exec(INSERT_REF, [commit, digest, 0]);
         if (seq === 1) {
           yield* exec(
             'UPDATE event_sequence SET start_commit = ? WHERE id = ?',

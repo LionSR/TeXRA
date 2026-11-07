@@ -14,11 +14,10 @@
 import { Cause, Effect, Exit, FiberSet, Scope } from 'effect';
 
 import {
-  withLogChannel,
   type HostInteractions,
   type ProcessRuntime,
-  type SettingsStores,
 } from '@texra-ai/harness/host';
+import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/platform/cliContext';

@@ -81,7 +81,7 @@ export const traceHtml = Effect.fn('traceHtml')(function* (
   TraceUnavailable | TraceViewerMissing | PlatformError.PlatformError | Error,
   FileSystem.FileSystem
 > {
-  const result = yield* session.records(runId).readTrace();
+  const result = yield* session.records(runId).readTrace;
   if (result.status !== 'ok')
     return yield* new TraceUnavailable({ status: result.status });
   const templatePath = path.join(resourcesPath, 'traceViewer', 'index.html');

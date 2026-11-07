@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, vi } from 'vitest';
 
 // Local imports
 import { makeMachineGitEnv } from '@texra-ai/harness/node';
-import { Secrets } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';

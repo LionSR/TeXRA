@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Logger } from 'effect';
+import { Effect, Layer, Logger, References } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
@@ -39,6 +39,8 @@ describe('Sessions.layer', () => {
       Effect.scoped,
       Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
       Effect.provide(Logger.layer([captured])),
+      // The catalog's load time is a debug line.
+      Effect.provide(Layer.succeed(References.MinimumLogLevel)('Debug')),
     );
   });
 });

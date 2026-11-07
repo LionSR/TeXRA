@@ -19,9 +19,9 @@ import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
 import {
   UsageLog,
   UsageLogEntrySchema,
-  withLogChannel,
   type UsageLogEntry,
 } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { envFlag } from '@texra-ai/harness/node';
 import { extractErrorMessage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';

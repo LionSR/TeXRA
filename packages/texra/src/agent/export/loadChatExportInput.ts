@@ -77,12 +77,12 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   const records = session.records(id);
   const [config, conversation, view] = yield* Effect.all(
     [
-      records
-        .readConfig()
-        .pipe(Effect.mapError((cause) => unreadable('config', cause))),
-      records
-        .readConversation()
-        .pipe(Effect.mapError((cause) => unreadable('conversation', cause))),
+      records.readConfig.pipe(
+        Effect.mapError((cause) => unreadable('config', cause)),
+      ),
+      records.readConversation.pipe(
+        Effect.mapError((cause) => unreadable('conversation', cause)),
+      ),
       session.view
         .read([])
         .pipe(Effect.mapError((cause) => unreadable('view', cause))),

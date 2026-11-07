@@ -142,7 +142,7 @@ function record(d: Draft, event: TraceRowFields): void {
         status: TOOL_CALL_STATUS.IN_PROGRESS,
       } satisfies ToolUseLog;
       const call = {
-        ...(event.phase !== undefined ? { phase: event.phase } : {}),
+        ...(event.section !== undefined ? { section: event.section } : {}),
         ...(event.attempt !== undefined ? { attempt: event.attempt } : {}),
       };
       const slot = ix.slots.get(event.logId);

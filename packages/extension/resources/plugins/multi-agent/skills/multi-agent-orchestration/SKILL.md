@@ -41,7 +41,7 @@ over `inputFiles` and resolves to `{ response, changes, runId, outcome,
 cost }`: `changes` lists every revision's files in order, each with `path`
 (the workspace file) and `absolutePath` (the revised copy, which you can pass
 to the next call).
-`Promise.all` runs calls together, `try`/`catch` recovers, `phase(title)`
+`Promise.all` runs calls together, `try`/`catch` recovers, `section(title)`
 labels the calls that follow, and `console.log` lines come
 back with the result (the last 80). There are no timers, no `Date.now()`
 and no `Math.random()`, and a static `import` line does not parse
@@ -109,8 +109,8 @@ other. Flatten, map, and filter do not need a barrier.
 - A completed call is reused, not run again, by a later identical call in
   this run. Rerunning a fixed script re-sends the code, and every call that
   already finished comes back free.
-- `phase(title)` labels the calls issued after it. Branches interleave their
-  steps, so a branched stretch of work is one phase; tell its steps apart
+- `section(title)` labels the calls issued after it. Branches interleave their
+  steps, so a branched stretch of work is one section; tell its steps apart
   with `label` (for example `Find: intro.tex`, `Verify: intro.tex #2`).
 - `schema` is an `agent` option and takes no file options. Put file paths
   in the prompt; the agent reads them with its own tools.
@@ -242,7 +242,7 @@ async function referee(claim, key) {
 }
 
 // One branch per section: find its claims, then referee each claim.
-phase('Review');
+section('Review');
 const perSection = await Promise.all(
   SECTIONS.map(async (path) => {
     try {

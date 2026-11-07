@@ -1,6 +1,6 @@
 import { Effect, Schema, SchemaIssue } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   AgentConfigSchema,
   type AgentConfig,

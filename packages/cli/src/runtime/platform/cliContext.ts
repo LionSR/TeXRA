@@ -17,8 +17,8 @@ import { DatabaseOpenFailed } from '@texra-ai/harness';
 import {
   type ConfigProvider,
   type SkillSourceOptions,
-  Settings,
 } from '@texra-ai/harness/host';
+import { Settings } from '@texra-ai/harness/plugins';
 import { modelConfig } from '@texra-ai/llm';
 import {
   absentReason,

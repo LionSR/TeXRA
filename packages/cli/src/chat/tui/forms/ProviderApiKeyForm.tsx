@@ -15,7 +15,8 @@ import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { ProcessRuntime, Secrets } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { Secrets } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
 
 type ProviderApiKeyStatuses = Partial<

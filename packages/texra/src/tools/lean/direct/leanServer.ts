@@ -44,17 +44,14 @@ import {
 } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
-import {
-  type PerKeyLane,
-  withLogChannel,
-  withPerKeyLane,
-} from '@texra-ai/harness/host';
+import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   makeJsonRpcConnection,
   type JsonRpcConnection,
   type JsonRpcConnectionDisposed,
   type JsonRpcRequestError,
+  withLogChannel,
 } from '@texra-ai/harness/plugins';
 import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticFormatting';
 import type { LeanServerInfo } from '../leanServerInfo';

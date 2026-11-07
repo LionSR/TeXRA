@@ -2,12 +2,11 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
 import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
   logPath: string,

@@ -185,10 +185,7 @@ export interface Session {
   readonly records: (runId: RunId) => RunRecords;
   /** The runs a person started (not child runs), newest first, each with
    *  its saved setup. */
-  readonly listRuns: () => Effect.Effect<
-    readonly AgentRunListingEntry[],
-    Error
-  >;
+  readonly listRuns: Effect.Effect<readonly AgentRunListingEntry[], Error>;
   /**
    * Delete one run, or every stored run (`'all'`), each as a `run.delete`
    * request would. A run this session is running is skipped and reported

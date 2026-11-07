@@ -98,7 +98,7 @@ import {
 } from './tui/input/draftAttachments';
 import type { ModelConnection } from './tui/modelConnection';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 // ---------------------------------------------------------------------------
@@ -521,7 +521,7 @@ export function createChatSessionController(
           // The durable record carries the config the TUI adopts before the run.
           const store = init.runSession.records(id);
           const [config, exists] = yield* Effect.all(
-            [store.readConfig(), store.exists()],
+            [store.readConfig, store.exists],
             { concurrency: 2 },
           );
           if (!config || !exists) {
@@ -581,7 +581,7 @@ export function createChatSessionController(
           const adoptedConfig =
             run.runId === id
               ? config
-              : yield* init.runSession.records(run.runId).readConfig();
+              : yield* init.runSession.records(run.runId).readConfig;
           if (adoptedConfig === null)
             return yield* Effect.fail(
               new Error(`Run ${run.runId} has no configuration to resume`),
@@ -619,7 +619,7 @@ export function createChatSessionController(
    *  chat's model and settings may not be the run's. */
   const adoptRunRecord = (runId: RunId) =>
     Effect.gen(function* () {
-      const config = yield* init.runSession.records(runId).readConfig();
+      const config = yield* init.runSession.records(runId).readConfig;
       if (!config)
         return yield* Effect.fail(new Error('it has no stored configuration'));
       yield* adoptRunConfig(config, 'history');

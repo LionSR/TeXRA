@@ -3,6 +3,7 @@ import { createGunzip } from 'node:zlib';
 import {
   randomizedExponentialBackoff,
   isTransientHttpStatus,
+  withLogChannel,
 } from '@texra-ai/harness/plugins';
 import {
   readDirectoryTypedTolerant,
@@ -28,7 +29,7 @@ import { Headers, HttpClient } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
-import { withLogChannel, hasExtension } from '@texra-ai/harness/host';
+import { hasExtension } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import {

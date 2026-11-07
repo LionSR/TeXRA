@@ -2,8 +2,7 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { defineTool } from '@texra-ai/harness';
-import { executed, ToolError } from '@texra-ai/harness/plugins';
+import { executed, ToolError, defineTool } from '@texra-ai/harness/plugins';
 import type { CommandId } from '@texra/shared/commands/catalog';
 
 // Local file imports

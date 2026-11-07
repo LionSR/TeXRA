@@ -21,9 +21,7 @@
 
 // Third-party imports
 import { Effect, type FileSystem, Schema, type Scope, Stream } from 'effect';
-import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
-import { Secrets } from '@texra-ai/harness/host';
 
 // Local imports
 import {
@@ -40,6 +38,9 @@ import {
   type AgentTrace,
   type PluginToolServices,
   type ProcessTurn,
+  defineTool,
+  type ToolResult,
+  Secrets,
 } from '@texra-ai/harness/plugins';
 import {
   AgentCliEffortSchema,
@@ -479,7 +480,7 @@ export const ClaudeAgentTool = defineTool({
     'Auth: ANTHROPIC_API_KEY (via TeXRA Settings → API Keys or env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the session_id). ' +
     'Pass session_id on a later call to continue that session with a follow-up, one turn per call. ' +
-    'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like `agent`. codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
+    'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in the working directory of the calling agent, with independent file editing, search, and shell access, async and multi-turn like `agent`; it takes no directory argument, so give parallel coders disjoint files to edit. codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',
   schema: ClaudeAgentInputSchema,
   guard: {
     command: {

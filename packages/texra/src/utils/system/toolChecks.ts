@@ -9,7 +9,7 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   executeCommand,

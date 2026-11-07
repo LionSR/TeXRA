@@ -26,10 +26,13 @@ import {
   type GlobalValues,
   withProcessServices,
   StateStores,
-  withLogChannel,
   ToolAvailability,
-  Settings,
 } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  Settings,
+  emitAppSignal,
+} from '@texra-ai/harness/plugins';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   openNodeWorkspaceRoots,
@@ -40,7 +43,7 @@ import {
   setLogSink,
 } from '@texra-ai/harness/node';
 import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
-import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
+import { appSignalStream } from '@texra-ai/harness/host';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';

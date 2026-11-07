@@ -83,7 +83,8 @@ import {
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
 import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 import type { InputHistory } from './history/inputHistory';
 import { EMPTY_DRAFT, type Draft } from './input/draftAttachments';

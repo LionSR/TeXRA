@@ -14,9 +14,9 @@ function compactText(value: string | undefined): string | undefined {
   return value?.slice(0, TEXT_LENGTH);
 }
 
-/** A background script's calls by phase, bounded for a model's context:
- *  phases still working first, then those with a failure, then issue
- *  order; within a phase, the calls needing attention first. */
+/** A background script's calls by section, bounded for a model's context:
+ *  sections still working first, then those with a failure, then issue
+ *  order; within a section, the calls needing attention first. */
 export function scriptCallsView(
   calls: readonly ScriptCallCard[],
   live: boolean,
@@ -29,14 +29,14 @@ export function scriptCallsView(
     if (call.status === 'failed') return 1;
     return 2;
   };
-  const phases = [
-    ...Map.groupBy(calls, (call) => call.phase ?? '').entries(),
+  const sections = [
+    ...Map.groupBy(calls, (call) => call.section ?? '').entries(),
   ].map(([title, members]) => ({
     title,
     members,
     rank: Math.min(...members.map(rank)),
   }));
-  const shown = phases
+  const shown = sections
     .toSorted((left, right) => left.rank - right.rank)
     .slice(0, MAX_ENTRIES);
   const callView = (call: ScriptCallCard) => ({
@@ -49,7 +49,7 @@ export function scriptCallsView(
   });
   return {
     calls: calls.length,
-    phases: shown.map(({ title, members }) => {
+    sections: shown.map(({ title, members }) => {
       const listed = members
         .toSorted((left, right) => rank(left) - rank(right))
         .slice(0, MAX_ENTRIES);
@@ -61,12 +61,12 @@ export function scriptCallsView(
         }),
       };
     }),
-    ...(phases.length > shown.length && {
-      omittedPhases: phases.length - shown.length,
+    ...(sections.length > shown.length && {
+      omittedSections: sections.length - shown.length,
     }),
     responseBounds: {
-      maxPhases: MAX_ENTRIES,
-      maxCallsPerPhase: MAX_ENTRIES,
+      maxSections: MAX_ENTRIES,
+      maxCallsPerSection: MAX_ENTRIES,
     },
   };
 }

@@ -4,12 +4,11 @@ import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
 // Local imports - platform
 import { modelConfig, MODELS } from '@texra-ai/llm';
 import {
-  Settings,
   mcpConfigPathOf,
   readMcpConfig,
   type ConfigProvider,
-  type SettingsStores,
 } from '@texra-ai/harness/host';
+import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
 import type { SettingRow } from '@texra-ai/harness/schemas';
 import {
   JsonConfigProvider,

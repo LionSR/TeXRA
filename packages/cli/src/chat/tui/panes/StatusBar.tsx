@@ -37,11 +37,8 @@ import {
   statusBarRunTarget,
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  SettingsStores,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 // Polling re-reads what another process changed; an in-process change to
 // model access is followed at once.

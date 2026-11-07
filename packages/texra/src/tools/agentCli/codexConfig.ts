@@ -6,12 +6,7 @@ import {
   EFFORT_SCALE,
   ReasoningEffort,
 } from '@texra-ai/llm';
-import {
-  withLogChannel,
-  withPerKeyLane,
-  type PerKeyLane,
-  Settings,
-} from '@texra-ai/harness/host';
+import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
 import { executeCommand } from '@texra-ai/harness/node';
 import {
   isCodexModel,
@@ -23,8 +18,13 @@ import {
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
-import type { ToolError } from '@texra-ai/harness/plugins';
-import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
+import {
+  type ToolError,
+  withLogChannel,
+  Settings,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
+import type { StateReadFailed } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Type-only imports

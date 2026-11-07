@@ -1,8 +1,11 @@
 import { Effect, Schema } from 'effect';
 
-import { defineTool } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness/host';
-import { requireRun, executed } from '@texra-ai/harness/plugins';
+import {
+  requireRun,
+  executed,
+  defineTool,
+  withLogChannel,
+} from '@texra-ai/harness/plugins';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,

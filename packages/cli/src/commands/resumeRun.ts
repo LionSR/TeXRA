@@ -100,9 +100,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   if (!isLinked(stores.service))
     writeTextStderr(`This task runs here: ${stores.service.none}`);
   const runSession = yield* stores.runSession;
-  const configResult = yield* Effect.result(
-    runSession.records(id).readConfig(),
-  );
+  const configResult = yield* Effect.result(runSession.records(id).readConfig);
   if (Result.isFailure(configResult)) {
     writeTextStderr(loadFailureMessage(id, configResult.failure));
     return CliExitCode.AgentError;
@@ -139,7 +137,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       return CliExitCode.Usage;
     }
     const forkId = forked.success;
-    const forkConfig = yield* runSession.records(forkId).readConfig();
+    const forkConfig = yield* runSession.records(forkId).readConfig;
     if (!forkConfig) {
       writeTextStderr(`Task ${forkId} was forked without a configuration.`);
       return CliExitCode.AgentError;

@@ -13,7 +13,8 @@ import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
 import type { CredentialOrigin } from '@texra-ai/llm';
-import type { ProcessRuntime, Secrets } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { Secrets } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
 
 /** Which source backs the GitHub token, as `resolveGitHubTokenSource`

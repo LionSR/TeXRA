@@ -45,20 +45,28 @@ export const nodeSpawnerLayer: Layer.Layer<ChildProcessSpawner> = Layer.effect(
   }),
 );
 
+/** Output a scripted command writes: one chunk of text, or the byte
+ *  chunks exactly as the pipe would deliver them. */
+type ScriptedOutput = string | Stream.Stream<Uint8Array, PlatformError>;
+
 /** What a scripted command does: its output and exit code (a
  *  `PlatformError` there is a death by signal), a spawn failure, or never
  *  ending. */
 type ScriptedAnswer =
   | {
-      readonly stdout?: string;
-      readonly stderr?: string;
+      readonly stdout?: ScriptedOutput;
+      readonly stderr?: ScriptedOutput;
       readonly exitCode?: number | PlatformError;
     }
   | PlatformError
   | 'hang';
 
-const bytes = (text: string | undefined): Stream.Stream<Uint8Array> =>
-  text ? Stream.make(new TextEncoder().encode(text)) : Stream.empty;
+const bytes = (
+  output: ScriptedOutput | undefined,
+): Stream.Stream<Uint8Array, PlatformError> => {
+  if (typeof output !== 'string') return output ?? Stream.empty;
+  return output ? Stream.make(new TextEncoder().encode(output)) : Stream.empty;
+};
 
 /**
  * A spawner that answers each command from `script` and spawns nothing.

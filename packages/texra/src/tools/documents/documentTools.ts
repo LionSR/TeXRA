@@ -13,13 +13,14 @@ import { dirname, join } from 'node:path';
 // Third-party imports
 import { Effect, Exit, FileSystem, Schema } from 'effect';
 
-import { defineTool } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness/host';
 import {
+  boundFile,
   ChildRuns,
   requireRun,
   executed,
   ToolError,
+  defineTool,
+  Settings,
 } from '@texra-ai/harness/plugins';
 import {
   fileLocationDisplayPath,
@@ -226,18 +227,14 @@ const revisionContext = Effect.fn('documents.revisionContext')(function* (
         `The task has ${revisions} revisions; revision ${revision} is not one of them.`,
       ),
     );
-  const revised = yield* revisionPrompt(docs, revision);
+  const revised = yield* revisionPrompt(docs, revision, critique);
   if (stageId !== undefined && revised.loaded.length > 0)
     docs.run.logger.info('', {
       messageType: MESSAGE_TYPES.FILE_LIST,
       data: revised.loaded,
       stageId,
     });
-  // The critic's review of the last revision, after this one's request.
-  const review = critique?.trim();
-  const prompt = review
-    ? `${revised.prompt}\n\nA reviewer read your last revision. Apply the corrections that hold, and the suggested improvement where it serves this request:\n<critique revision="${revision}">\n${review}\n</critique>`
-    : revised.prompt;
+  const { prompt } = revised;
   return {
     ...executed(prompt, `Revision ${revision + 1} of ${revisions}`),
     value: {
@@ -382,8 +379,18 @@ export const DocumentCompileTool = defineTool({
     const docs = yield* documentsOfCall('document_compile');
     const { roots, fileService, logger } = docs.deps;
     const recorded = roundOf(docs.rounds, revision);
+    // The compile searches where the task's bound files live (`task.files`,
+    // read from beside its agent file), so a template's theme files resolve
+    // as they do for the prompt.
+    const inputDirs = [
+      ...new Set(
+        Object.values(docs.task.files)
+          .filter((file): file is string => Boolean(file))
+          .map((file) => dirname(boundFile(docs.entry.path, file).path)),
+      ),
+    ];
     const check = yield* runCompileCheck(
-      { roots, fileService, logger, runId: docs.run.runId },
+      { roots, fileService, logger, runId: docs.run.runId, inputDirs },
       revision,
       recorded?.outputs ?? [],
     ).pipe(

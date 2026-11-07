@@ -31,13 +31,14 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
-import { defineTool, Sessions, type LocalSession } from '@texra-ai/harness';
+import { Sessions, type LocalSession } from '@texra-ai/harness';
 import {
   definePlugin,
   errorResult,
   executed,
   harnessBuiltins,
   type Plugin,
+  defineTool,
 } from '@texra-ai/harness/plugins';
 import {
   qualifyAggregateId,
@@ -211,7 +212,7 @@ const codemode = (dir: string) =>
       for (const child of children)
         if (child.outcome === 'completed')
           verdicts.push(
-            (yield* session.records(child.id).readRunEnd())?.output.structured,
+            (yield* session.records(child.id).readRunEnd)?.output.structured,
           );
       const ok = (tool: string, input?: (input: unknown) => boolean) =>
         evidence.calls.some(
@@ -298,7 +299,7 @@ const plugin = (dir: string) =>
       });
       const outcome = yield* endOf(session, run);
       const evidence = yield* writeEvidence(dir, session, run.runId, workspace);
-      const exported = yield* session.records(run.runId).readTrace();
+      const exported = yield* session.records(run.runId).readTrace;
       const facts =
         exported.status === 'ok'
           ? exported.trace.events.flatMap((event) =>
@@ -528,7 +529,7 @@ const crashResume = (dir: string) =>
         if (run.outcome !== null)
           before.set(
             run.id,
-            (yield* session.records(run.id).readConversation()).length,
+            (yield* session.records(run.id).readConversation).length,
           );
 
       const resumed = yield* session.resume(runId);
@@ -537,7 +538,7 @@ const crashResume = (dir: string) =>
       const children = childrenOf(session, runId);
       const unchanged: string[] = [];
       for (const [id, length] of before) {
-        const after = (yield* session.records(id as RunId).readConversation())
+        const after = (yield* session.records(id as RunId).readConversation)
           .length;
         if (after === length) unchanged.push(id);
       }

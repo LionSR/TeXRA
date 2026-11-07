@@ -15,12 +15,12 @@
 import { Clock, Duration, Effect, Random, Ref, Schedule, Schema } from 'effect';
 
 // Local imports
-import { jitteredExponentialBackoffMs } from '@texra-ai/harness/plugins';
 import {
+  jitteredExponentialBackoffMs,
   emitAppSignal,
   withLogChannel,
   type AppSignals,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness/plugins';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import { shouldDropBotEvent } from './botFilter';
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';

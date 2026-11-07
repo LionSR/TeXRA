@@ -71,8 +71,8 @@ import type {
   GlobalValues,
   ProcessRuntime,
   ProcessServices,
-  SettingsStores,
 } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;

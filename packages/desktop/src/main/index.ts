@@ -2,11 +2,8 @@ import { Cause, Effect, Exit, Result, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
 import { Sessions } from '@texra-ai/harness';
-import {
-  GlobalValues,
-  withLogChannel,
-  withProcessServices,
-} from '@texra-ai/harness/host';
+import { GlobalValues, withProcessServices } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { HostFailed } from '@texra/hosts/uiHosts';

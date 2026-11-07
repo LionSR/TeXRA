@@ -7,11 +7,10 @@ import { Effect } from 'effect';
 import { apiKeyOrigins } from '@texra-ai/llm';
 
 import {
-  Secrets,
   type ProcessRuntime,
   type ProcessServices,
-  type SettingsStores,
 } from '@texra-ai/harness/host';
+import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import type { CliModelAccessSelection } from '@cli/runtime/models/modelAccessRoute';
 import {
   type CliLogoutTarget,

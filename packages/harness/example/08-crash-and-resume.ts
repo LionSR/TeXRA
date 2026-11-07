@@ -18,11 +18,12 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
-import { defineTool, Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/harness';
 import {
   definePlugin,
   executed,
   harnessBuiltins,
+  defineTool,
 } from '@texra-ai/harness/plugins';
 import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
 
@@ -175,7 +176,7 @@ const resumeProgram = Effect.gen(function* () {
   const children = [...session.view.current().runs.values()].filter(
     (run) => run.parentId === runId,
   );
-  const conversation = yield* session.records(runId).readConversation();
+  const conversation = yield* session.records(runId).readConversation;
   const results = scriptReturnsOf(conversation);
   const returned = results.at(-1) as {
     verdicts: string[];

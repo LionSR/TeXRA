@@ -13,7 +13,7 @@ import {
   apiKey,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import { Secrets, withLogChannel } from '@texra-ai/harness/host';
+import { Secrets, withLogChannel } from '@texra-ai/harness/plugins';
 import {
   executeCommand,
   homeDirectory,

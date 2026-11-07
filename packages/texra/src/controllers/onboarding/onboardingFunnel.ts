@@ -20,7 +20,7 @@
 
 import { Effect, Schema, type Scope, Stream } from 'effect';
 
-import { Settings, withLogChannel } from '@texra-ai/harness/host';
+import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
 import {
   agentName,
   type SessionView,

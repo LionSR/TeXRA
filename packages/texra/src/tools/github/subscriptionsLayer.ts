@@ -14,12 +14,13 @@ import * as RateLimiter from 'effect/persistence/RateLimiter';
 
 // Local imports
 import {
+  ToolError,
+  type RunInbox,
   AppSignals,
   emitAppSignal,
   SESSION_CLOSE_DEADLINE_MS,
   withLogChannel,
-} from '@texra-ai/harness/host';
-import { ToolError, type RunInbox } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';

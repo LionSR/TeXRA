@@ -1,7 +1,10 @@
 import { Context, type Effect } from 'effect';
 
-import type { AppSignals } from '@texra-ai/harness/host';
-import type { RunInbox, ToolError } from '@texra-ai/harness/plugins';
+import type {
+  RunInbox,
+  ToolError,
+  AppSignals,
+} from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';

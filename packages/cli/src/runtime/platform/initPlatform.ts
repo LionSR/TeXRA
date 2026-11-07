@@ -12,11 +12,11 @@ import {
 import {
   AppState,
   type ProcessServices,
-  type SettingsStores,
   type StateStore,
   type StateWriteFailed,
   StateStores,
 } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { openNodeWorkspaceRoots, setLogSink } from '@texra-ai/harness/node';
 import { HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';

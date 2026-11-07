@@ -23,8 +23,12 @@
  * read the goal's result.
  */
 import { Effect, Layer, Schema, Stream } from 'effect';
-import { defineTool, Sessions, type LocalSession } from '@texra-ai/harness';
-import { definePlugin, harnessBuiltins } from '@texra-ai/harness/plugins';
+import { Sessions, type LocalSession } from '@texra-ai/harness';
+import {
+  definePlugin,
+  harnessBuiltins,
+  defineTool,
+} from '@texra-ai/harness/plugins';
 import {
   GOAL_MAX_COST_SETTING,
   GOAL_STRATEGY_SETTING,
@@ -58,7 +62,7 @@ export const goal = async (objective, { maxCostUsd }) => {
   const ledger = [];
   let spent = 0;
   for (let round = 1; ; round += 1) {
-    phase('Round ' + round);
+    section('Round ' + round);
     const report = () => ledger.length === 0 ? '' : ledger[ledger.length - 1];
     const paused = (pause) => ({ outcome: 'paused', pause, rounds: round, spent, report: report() });
     const earlier = ledger.map((entry, index) => '\\nRound ' + (index + 1) + ': ' + entry).join('');

@@ -10,7 +10,6 @@
 
 // Third-party imports
 import { Effect, Layer } from 'effect';
-import { Settings } from '@texra-ai/harness/host';
 import {
   HostCapabilities,
   codemode,
@@ -112,7 +111,7 @@ import {
 import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
 import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
-import type { WriteFilter } from '@texra-ai/harness/plugins';
+import { type WriteFilter, Settings } from '@texra-ai/harness/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
@@ -218,7 +217,7 @@ const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.
  * Tools every host offers without setup that no dashboard card lists:
  * review annotations, the PDF viewer, the user-question dialog, and Loogle
  * search (network only, so not gated on the Lean 4 plugin's probe). Its
- * prompt section, at every step of every run, finds the TeX sources, says how
+ * prompt section, at every step that offers a tool, finds the TeX sources, says how
  * replies write math, and names the configured default bibliography.
  */
 const core = (
@@ -233,7 +232,11 @@ const core = (
       AskUserQuestionTool,
       LeanLoogleTool,
     ],
-    prompt: ({ config }) => {
+    // The section finds sources with bash and writes math for a rendered
+    // reply: a run that writes a document, with no tool offered, gets none
+    // of it (`$$\\begin{align}` inside a .tex file does not compile).
+    prompt: ({ config, offered }) => {
+      if (offered.length === 0) return '';
       const bibPath = Settings.getConfig(config, BIB_DEFAULT_PATH_SETTING);
       return bibPath
         ? `${TEX_INSTRUCTIONS}\nThe default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
@@ -308,9 +311,9 @@ const documents: TexraPlugin = {
   prompt: ({ offered }) =>
     offered.includes('document_task')
       ? [
-          'An agent marked (task) in the available agents also runs a document task over files with `document_task`.',
+          'An agent marked (task) in the available agents runs a document task over files with `document_task`.',
           'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the task started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
-          "The host compiles each .tex the task writes: a file that failed to build leaves `compile/<name>.log` among the run's files (list them at `/executions/{id}/files`), and no log means every build passed or no LaTeX toolchain is installed.",
+          "The host compiles each .tex the task writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
           ...(offered.includes('script')
             ? [
                 "In a script, `const { revise, from } = await import('builtIn:documents')`: `revise(agentName, args)` runs a task (`args` as `document_task`'s) and resolves to its result; `from(result, args)` is `args` with that result's revised files as the input files, to chain tasks.",

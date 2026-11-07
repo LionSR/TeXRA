@@ -13,7 +13,8 @@ import * as vscode from 'vscode';
 
 import { Cause, Clock, Effect, Fiber, Result, Schema } from 'effect';
 
-import { withLogChannel, isStrictlyWithin } from '@texra-ai/harness/host';
+import { isStrictlyWithin } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { withCancellationToken } from '@frontend/hosts/VscodeUiHost';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';

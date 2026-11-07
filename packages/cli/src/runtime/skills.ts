@@ -2,12 +2,8 @@
 import { Effect } from 'effect';
 
 // Local imports - skills
-import {
-  Settings,
-  type EnabledSkill,
-  type SettingsStores,
-  type SkillLoadIssue,
-} from '@texra-ai/harness/host';
+import { type EnabledSkill, type SkillLoadIssue } from '@texra-ai/harness/host';
+import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
 import { AGENT_SKILLS_ENABLED_SETTING } from '@texra-ai/harness/schemas';
 
 /**

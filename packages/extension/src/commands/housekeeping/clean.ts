@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { glob } from 'glob';
 
 // Internal imports
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 
 // Local file imports
 import { CHANNEL } from '@housekeeping/constants';

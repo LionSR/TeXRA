@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Internal imports
-import { Secrets, type PlatformSecrets } from '@texra-ai/harness/host';
+import { Secrets, type PlatformSecrets } from '@texra-ai/harness/plugins';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   cloneOverleafProject,
@@ -94,7 +94,7 @@ function buildOverleafClonePorts(
     showWorkspaceNotEmpty: () =>
       Effect.sync(() => {
         writeTextStderr(
-          `The destination directory ${workspacePath} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./paper`,
+          `The destination directory ${workspacePath} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./project`,
         );
       }),
 
@@ -217,7 +217,7 @@ export const cloneCommand = withUsageSections(
       title: 'EXAMPLES',
       rows: [
         [
-          'texra clone 0123456789abcdef01234567 ./paper',
+          'texra clone 0123456789abcdef01234567 ./project',
           'create a directory and clone an Overleaf project into it',
         ],
         [

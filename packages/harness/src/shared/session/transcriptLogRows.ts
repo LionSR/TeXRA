@@ -11,6 +11,7 @@ import {
   type MessageType,
   type TraceRowFields,
 } from '@shared/schemas';
+import { outputGapNotice } from '@shared/toolUse';
 import type { StreamingTextRow } from '@shared/transcript/transcriptRow';
 
 import { open, write, type Draft } from './transcriptState';
@@ -25,7 +26,8 @@ export const STREAMING_TEXT_ROW_KIND: Partial<
 };
 
 /** One chunk of a process run's output onto the transcript: a plain log
- *  row, its stderr at the warning level. */
+ *  row, its stderr at the warning level, led by the gap a capped log left
+ *  before it. */
 export function recordProcessOutputRow(
   d: Draft,
   event: Extract<TraceRowFields, { type: 'process.output' }>,
@@ -42,7 +44,10 @@ export function recordProcessOutputRow(
   write(d, {
     kind: 'log',
     base,
-    text: event.text,
+    text:
+      event.elided === undefined
+        ? event.text
+        : `${outputGapNotice(event.elided)}\n${event.text}`,
     payload: { messageType: MESSAGE_TYPES.DEFAULT, data: undefined },
   });
 }

@@ -19,10 +19,9 @@ import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
-  withLogChannel,
-  WorkspaceFs,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   toErrorMessage,

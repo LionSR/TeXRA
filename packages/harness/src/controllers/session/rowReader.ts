@@ -32,7 +32,6 @@ import { sha256Hex } from '@utils/core/idHash';
 
 import {
   aggregateOf,
-  decodable,
   decodeRow,
   EARLIER_RUNS,
   factKindOf,
@@ -107,19 +106,13 @@ function inflateBlob(value: Uint8Array, digest: string): string {
   if (sha256Hex(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
   return decodeBlobText(text);
 }
-/** The blobs a batch of selected rows inflates: each `{"$b": digest}` in
- *  the data of the rows this build decodes. A payload's own `$b` key is
- *  stored `$$b`, so it never matches; a media part's address is not a
- *  reference, so its bytes are never fetched. */
-function blobDigests(rows: readonly SqlRow[]): string[] {
-  const digests = new Set<string>();
-  for (const row of rows) {
-    if (typeof row.data !== 'string' || !decodable(row)) continue;
-    for (const match of row.data.matchAll(/"\$b":"([0-9a-f]{64})"/g))
-      digests.add(match[1] ?? '');
-  }
-  return [...digests];
-}
+/** The blobs a batch of rows inflates, by the rows' commits: the strings
+ *  the codec moved out of them (`event_blob.inline`). A media address is
+ *  linked too, but its bytes are never fetched. */
+const INLINE_BLOBS = `SELECT DISTINCT b.digest AS digest, b.value AS value
+  FROM event_blob l JOIN blob b ON b.digest = l.digest
+  WHERE l.inline = 1 AND l."commit" IN (SELECT value FROM json_each(?))`;
+const decodeCommit = Schema.decodeUnknownSync(Schema.Int);
 
 /** An earlier-build run row, as `EARLIER_RUNS` selects it. */
 const EarlierRowSchema = Schema.Struct({
@@ -247,10 +240,11 @@ export function rowReader<E>(
     }
     scanned = true;
   });
-  const stored = (digests: readonly string[]) =>
-    digests.length === 0
+  /** The blobs `statement` selects by the keys it is given, inflated. */
+  const inflated = (statement: string, keys: readonly unknown[]) =>
+    keys.length === 0
       ? Effect.succeed(new Map<string, string>())
-      : Effect.map(exec(READ_BLOBS, [JSON.stringify(digests)]), (rows) => {
+      : Effect.map(exec(statement, [JSON.stringify(keys)]), (rows) => {
           // A damaged blob is left out: the row naming it reads as damaged,
           // a strict read of it fails by name.
           const texts = new Map<string, string>();
@@ -266,7 +260,7 @@ export function rowReader<E>(
           return texts;
         });
   const blobs = (digests: readonly string[]) =>
-    Effect.map(stored(digests), (texts) => {
+    Effect.map(inflated(READ_BLOBS, digests), (texts) => {
       const missing = digests.filter((digest) => !texts.has(digest));
       if (missing.length > 0)
         throw new Error(`${path} holds no readable blob ${missing.join(', ')}`);
@@ -287,8 +281,15 @@ export function rowReader<E>(
       });
       if (refusal !== undefined) return yield* refusal;
     }
-    // The batch's blobs in one statement: a row carries addresses only.
-    const texts: Blobs = yield* stored(blobDigests(rows));
+    // The batch's blobs in one statement: a row carries addresses only. A
+    // projected row (no version) holds none, and its commit is its source
+    // row's, whose strings it would fetch for nothing.
+    const texts: Blobs = yield* inflated(
+      INLINE_BLOBS,
+      rows.flatMap((row) =>
+        row.version === null ? [] : [decodeCommit(row.commit)],
+      ),
+    );
     const events: SessionRow[] = [];
     for (const row of rows) {
       const decoded = decodeRow(row, factKinds, texts);

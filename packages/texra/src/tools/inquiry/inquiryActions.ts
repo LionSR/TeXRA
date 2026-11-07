@@ -17,7 +17,6 @@ import { Effect } from 'effect';
  */
 
 // Local imports - agent
-import { withLogChannel } from '@texra-ai/harness/host';
 
 // Local imports - shared
 import {
@@ -28,7 +27,11 @@ import {
   type InquiryThreadRecord,
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
-import type { RunInbox, RequestDecisionHook } from '@texra-ai/harness/plugins';
+import {
+  type RunInbox,
+  type RequestDecisionHook,
+  withLogChannel,
+} from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'InquiryTool';
 

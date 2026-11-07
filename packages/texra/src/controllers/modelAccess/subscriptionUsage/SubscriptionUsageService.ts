@@ -6,7 +6,12 @@ import {
   Effect,
   Record as EffectRecord,
 } from 'effect';
-import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
+import {
+  Secrets,
+  Settings,
+  withLogChannel,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 import { HttpClientError } from 'effect/http';
 
 import { apiKey } from '@texra-ai/llm';
@@ -27,7 +32,6 @@ import {
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
-import type { SettingsStores } from '@texra-ai/harness/host';
 import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/http';
 

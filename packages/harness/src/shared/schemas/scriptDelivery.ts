@@ -27,7 +27,7 @@ const ScriptDeliveryFileSchema = Schema.Struct({
 export const ScriptDeliverySummarySchema = Schema.Struct({
   name: Schema.String,
   outcome: Schema.Literals(['completed', 'failed', 'stopped']),
-  phaseCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  sectionCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   tally: ScriptTallySchema,
   costUsd: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
   durationMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
