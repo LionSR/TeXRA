@@ -1,5 +1,5 @@
 import { layer } from '@effect/vitest';
-import { beforeEach, expect, vi } from 'vitest';
+import { assert, beforeEach, expect, vi } from 'vitest';
 
 import { Effect, Layer, Scope } from 'effect';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
@@ -34,7 +34,10 @@ vi.mock('@cli/tui/terminalCleanup', () => ({
 }));
 
 /** The controller over the block's runtime, as the chat entry builds it. */
-const createController = (session: TuiSession) =>
+const createController = (
+  session: TuiSession,
+  submitted: Effect.Effect<void> = Effect.void,
+) =>
   Effect.map(SessionGraph.runtime, (runtime) => {
     const terminal = { suspend: vi.fn(), resume: vi.fn(), release: vi.fn() };
     const controller = createSessionExitController({
@@ -54,7 +57,7 @@ const createController = (session: TuiSession) =>
       terminal,
       runtime,
       leaveProcess: mocks.leaveProcess,
-      submitted: Effect.void,
+      submitted,
       rootRunEnded: Effect.void,
       getApprovalPolicy: () => 'ask',
       flushArtifacts: Effect.fail(new Error('disk full')),
@@ -93,5 +96,27 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           expect.stringContaining('texra resume exec-graceful-flush'),
         );
       }),
+  );
+
+  it.effect('names the run a launch the exit drained reached', () =>
+    Effect.gen(function* () {
+      const session = new TuiSession();
+      const launched = session.claimLaunch();
+      assert(launched !== undefined, 'no root is in flight');
+      // The exit's drain is what lets the launch reach its run.
+      const { controller } = yield* createController(
+        session,
+        Effect.sync(() =>
+          // cast: the exit hint prints the id as held; nothing decodes it.
+          session.endLaunch(launched, { runId: 'exec-launched' as RunId }),
+        ),
+      );
+
+      yield* Effect.promise(() => controller.exit());
+
+      expect(mocks.writeTextStdout).toHaveBeenCalledWith(
+        expect.stringContaining('texra resume exec-launched'),
+      );
+    }),
   );
 });

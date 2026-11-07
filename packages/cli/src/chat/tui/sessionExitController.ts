@@ -38,21 +38,13 @@ import {
 } from './state/cliState';
 import { currentView } from './state/sessionView';
 
-interface ResumeHintSnapshot {
-  readonly view: SessionView;
-  readonly rootRunId: RunId | undefined;
-}
 import { collectResumeUsage, formatResumeHint } from './state/resumeHint';
 import {
   canStopRootRun,
   type ChatExit,
   type TuiSession,
 } from './state/sessionRunState';
-import type {
-  ApprovalPolicy,
-  SessionView,
-  RunId,
-} from '@texra-ai/harness/schemas';
+import type { ApprovalPolicy, SessionView } from '@texra-ai/harness/schemas';
 import type { RunStopReason } from '@texra-ai/harness';
 import type { Instance as InkInstance } from 'ink';
 
@@ -129,18 +121,15 @@ export function createSessionExitController(
   );
   const terminalJobControlSupported = supportsTerminalJobControl();
   // Persist the reopen hint to native scrollback: the session's root run,
-  // through which its children resume too. The view (for the task's usage)
-  // is read before resetCliState() clears it, as a snapshot taken while the
-  // session adapter was still bound.
-  const snapshotResumeHint = (): ResumeHintSnapshot => ({
-    view: currentView(),
-    rootRunId: rootRunIdSignal.get(),
-  });
-  const printResumeHintOnExit = (snapshot: ResumeHintSnapshot): void => {
-    if (!snapshot.rootRunId) return;
+  // through which its children resume too, read as the hint prints, so a
+  // launch the drain waited for names its run. The view (for the task's
+  // usage) is a snapshot taken while the session adapter was still bound.
+  const printResumeHintOnExit = (view: SessionView): void => {
+    const rootRunId = rootRunIdSignal.get();
+    if (!rootRunId) return;
     const hint = formatResumeHint(
-      snapshot.rootRunId,
-      collectResumeUsage(snapshot.view, snapshot.rootRunId),
+      rootRunId,
+      collectResumeUsage(view, rootRunId),
       ctx.commandName,
       {
         cwd: ctx.cwd,
@@ -181,7 +170,7 @@ export function createSessionExitController(
     yield* Effect.promise(async () => {
       await ink.waitUntilExit();
     });
-    const resumeHint = snapshotResumeHint();
+    const resumeHintView = currentView();
     // A suspended (idle/WAITING) root session is resumable, so it takes no
     // stop: the checkpoint survives either way, and the session's close
     // ends the generation on its own. See TuiSession.isResumableIdle for
@@ -227,7 +216,7 @@ export function createSessionExitController(
     const exitCode = session.exitCode;
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.
-    printResumeHintOnExit(resumeHint);
+    printResumeHintOnExit(resumeHintView);
     resetCliState();
     if (resumableIdle) {
       // The run waiting at the WAIT node keeps the event loop alive, so a
@@ -264,7 +253,7 @@ export function createSessionExitController(
     ink.unmount();
     if (cause.kind === 'signal') {
       ctx.terminal.release();
-      printResumeHintOnExit(snapshotResumeHint());
+      printResumeHintOnExit(currentView());
     }
     return (session.exited = runCliExit(exitProgram(cause)));
   };
