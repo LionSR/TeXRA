@@ -312,6 +312,7 @@ const documents: TexraPlugin = {
   prompt: ({ offered }) =>
     offered.includes('document_task')
       ? [
+          'An agent marked (task) in the available agents runs a document task over files with `document_task`.',
           'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the task started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
           "The host compiles each .tex the task writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
           ...(offered.includes('script')
