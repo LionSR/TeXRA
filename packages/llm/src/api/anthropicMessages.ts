@@ -599,8 +599,12 @@ export function anthropicMessagesModel(
   const uploads = filesApiUploads({
     providerName: 'Anthropic',
     model: origin.requestedModel,
-    failure: (cause) =>
-      fillModelError(sdkFailure(cause), { model: origin.requestedModel }),
+    request: (call) =>
+      Effect.tryPromise({
+        try: (signal) => call(signal, {}),
+        catch: (cause) =>
+          fillModelError(sdkFailure(cause), { model: origin.requestedModel }),
+      }),
     parseUploaded: (raw) => Schema.decodeUnknownResult(UploadedFileSchema)(raw),
     create: async (upload, signal) =>
       client.files.upload(

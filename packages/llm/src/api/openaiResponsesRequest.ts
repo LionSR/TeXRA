@@ -2,7 +2,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
@@ -17,6 +17,7 @@ import { ModelError } from '../errors.js';
 import { responseInput, toolNamespaceOf } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
+import type { ModelCredential, SessionToken } from '../node.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 type ResponsesTransport = Extract<
@@ -194,52 +195,79 @@ export const openaiAbortMatch = (
   cause === signal.reason ||
   (cause instanceof OpenAI.APIUserAbortError && cause.cause === signal.reason);
 
-export const ResponseAuthenticationSchema = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal('api-key'),
-    apiKey: Schema.String.check(Schema.isMinLength(1)).check(
-      Schema.isPattern(/^[^\r\n]+$/),
-    ),
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('chatgpt'),
-    accessToken: Schema.String.check(Schema.isMinLength(1)).check(
-      Schema.isPattern(/^[^\r\n]+$/),
-    ),
-  }),
-]);
+/** A bearer token, as a header value takes one. */
+const BearerTokenSchema = Schema.String.check(Schema.isMinLength(1)).check(
+  Schema.isPattern(/^[^\r\n]+$/),
+);
 
-/** Secrets are captured together and never become prepared request controls. */
-export function responseAuthentication(
-  input: typeof ResponseAuthenticationSchema.Type,
-) {
+/** The token `bearer` holds now, checked as a header value. */
+const tokenOf = (bearer: string | SessionToken) =>
+  (typeof bearer === 'string' ? Effect.succeed(bearer) : bearer.current).pipe(
+    Effect.flatMap((token) =>
+      Effect.mapError(
+        Schema.decodeUnknownEffect(BearerTokenSchema)(token),
+        () =>
+          new ModelError({
+            kind: 'invalid-request',
+            message: 'The Responses credential is not a single-line token.',
+          }),
+      ),
+    ),
+  );
+
+/** The bearer a Responses credential sends. */
+export const bearerOf = (credential: ModelCredential): string | SessionToken =>
+  credential.kind === 'api-key' ? credential.apiKey : credential.accessToken;
+
+/**
+ * Send `request` with `bearer`'s token. A session token the provider
+ * rejects is handed back once and the request sent again on the next one;
+ * the rejected request was not billed, and a second rejection stands.
+ */
+export const authorized = <A, R>(
+  bearer: string | SessionToken,
+  request: (token: string) => Effect.Effect<A, ModelError, R>,
+): Effect.Effect<A, ModelError, R> =>
+  Effect.gen(function* () {
+    const token = yield* tokenOf(bearer);
+    if (typeof bearer === 'string') return yield* request(token);
+    const first = yield* Effect.result(request(token));
+    if (Result.isSuccess(first)) return first.success;
+    if (first.failure.kind !== 'authentication')
+      return yield* Effect.fail(first.failure);
+    yield* bearer.rejected(token);
+    return yield* request(yield* tokenOf(bearer));
+  });
+
+/** The `Authorization` header a request sends `token` in. */
+export const bearerHeaders = (token: string) => ({
+  Authorization: `Bearer ${token}`,
+});
+
+/** Ambient OpenAI headers would override the selected deployment. */
+export function refuseAmbientHeaders(): void {
   if (process.env.OPENAI_CUSTOM_HEADERS)
     throw new ModelError({
       kind: 'invalid-request',
       message:
         'Ambient OpenAI headers cannot override the selected deployment.',
     });
-  const authentication = Schema.decodeUnknownSync(ResponseAuthenticationSchema)(
-    input,
-  );
-  return {
-    token:
-      authentication.kind === 'api-key'
-        ? authentication.apiKey
-        : authentication.accessToken,
-    headers: {},
-  };
 }
 
-/** The SDK client for one selected Responses deployment: no retries, no ambient organization. */
+/**
+ * The SDK client for one selected Responses deployment: no retries, no
+ * ambient organization. A request names its token in its own headers
+ * (`bearerHeaders`); the client's key is a fixed key's, for the Files API,
+ * which only a fixed key reaches.
+ */
 export const openaiClient = (
   endpoint: string,
-  authentication: ReturnType<typeof responseAuthentication>,
+  bearer: string | SessionToken,
   fetch?: typeof globalThis.fetch,
 ) =>
   new OpenAI({
-    apiKey: authentication.token,
-    defaultHeaders: authentication.headers,
+    // A session's requests each carry their token; this one is never sent.
+    apiKey: typeof bearer === 'string' ? bearer : 'per-request',
     baseURL: endpoint,
     fetch,
     maxRetries: 0,

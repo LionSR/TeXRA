@@ -209,12 +209,28 @@ class LoopbackTransportUnavailableError extends Schema.TaggedError<LoopbackTrans
 
 The credential a binding sends: an API key (or any bearer token the
 endpoint takes as one), or a ChatGPT plan's access token, which the
-Responses protocol alone serves, under that plan's request rules.
+Responses protocol alone serves, under that plan's request rules. Either
+is a fixed string or a {@link SessionToken}.
 
 ```ts
 type ModelCredential =
-  | { readonly kind: 'api-key'; readonly apiKey: string }
-  | { readonly kind: 'chatgpt'; readonly accessToken: string };
+  | { readonly kind: 'api-key'; readonly apiKey: string | SessionToken }
+  | { readonly kind: 'chatgpt'; readonly accessToken: string | SessionToken };
+```
+
+## SessionToken
+
+A subscription session's token, which the caller renews: read before
+every request, and, when the provider rejects the one sent (a 401 before
+its stored expiry), handed back as `rejected` once, after which the
+request goes again on the next `current`. A rejected request was not
+billed. The Responses protocol alone takes one.
+
+```ts
+interface SessionToken {
+  readonly current: Effect.Effect<string, ModelError>;
+  readonly rejected: (token: string) => Effect.Effect<void, ModelError>;
+}
 ```
 
 ## SharedAttempt

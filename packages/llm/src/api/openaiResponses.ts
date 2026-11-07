@@ -42,43 +42,53 @@ import {
 } from './openaiResponsesWire.js';
 import { assembleTurn, turnAssembly } from './assembleTurn.js';
 import {
-  ResponseAuthenticationSchema,
+  authorized,
+  bearerHeaders,
+  bearerOf,
   openaiAbortMatch,
   openaiClient,
   prepareResponsesTurn,
-  responseAuthentication,
+  refuseAmbientHeaders,
   responseParameters,
 } from './openaiResponsesRequest.js';
+import type { ModelCredential } from '../node.js';
 
 /** Direct Responses operations, with no application model adapter. */
 export function openaiResponsesModel(
   config: OpenAIResponsesConfiguration,
   transport: {
-    readonly authentication: typeof ResponseAuthenticationSchema.Type;
+    readonly authentication: ModelCredential;
     readonly fetch?: typeof fetch;
   },
 ): Model {
   const origin = originOf(config);
   const http = { kind: 'http' } as const;
-  const authentication = responseAuthentication(transport.authentication);
+  refuseAmbientHeaders();
+  const bearer = bearerOf(transport.authentication);
   const client = openaiClient(
     config.deployment.endpoint,
-    authentication,
+    bearer,
     transport.fetch,
   );
-  // Uploads need a files endpoint and a stable account: an API-key binding.
-  // A subscription token rotates and its backend serves no files endpoint.
+  // Uploads need a files endpoint: an API-key route's. The ChatGPT plan's
+  // backend serves none.
   const uploads =
     transport.authentication.kind === 'api-key'
       ? filesApiUploads({
           providerName: 'OpenAI',
           model: origin.requestedModel,
-          failure: (cause) =>
-            fillModelError(openaiFailure(cause), {
-              model: origin.requestedModel,
-            }),
+          request: (call) =>
+            authorized(bearer, (token) =>
+              Effect.tryPromise({
+                try: (signal) => call(signal, bearerHeaders(token)),
+                catch: (cause) =>
+                  fillModelError(openaiFailure(cause), {
+                    model: origin.requestedModel,
+                  }),
+              }),
+            ),
           parseUploaded: decodeUploadedFile,
-          create: async (upload, signal) =>
+          create: async (upload, signal, headers) =>
             client.files.create(
               {
                 file: await OpenAI.toFile(
@@ -92,9 +102,10 @@ export function openaiResponsesModel(
                   seconds: FILE_UPLOAD_LIFETIME_SECONDS,
                 },
               },
-              { signal },
+              { signal, headers },
             ),
-          remove: (fileId, signal) => client.files.delete(fileId, { signal }),
+          remove: (fileId, signal, headers) =>
+            client.files.delete(fileId, { signal, headers }),
         })
       : null;
   const prepareTurn: Model['prepareTurn'] = (request) =>
@@ -113,20 +124,22 @@ export function openaiResponsesModel(
       uploads,
     );
     const signal = yield* Effect.abortSignal;
-    const opened = yield* Effect.tryPromise({
-      try: () =>
-        client.responses
-          .create(
-            {
-              ...parameters,
-              stream: true,
-              ...(mode === 'background' ? { background: true } : {}),
-            },
-            { signal },
-          )
-          .withResponse(),
-      catch: openaiFailure,
-    });
+    const opened = yield* authorized(bearer, (token) =>
+      Effect.tryPromise({
+        try: () =>
+          client.responses
+            .create(
+              {
+                ...parameters,
+                stream: true,
+                ...(mode === 'background' ? { background: true } : {}),
+              },
+              { signal, headers: bearerHeaders(token) },
+            )
+            .withResponse(),
+        catch: openaiFailure,
+      }),
+    );
     return { turn, opened };
   });
 
@@ -223,20 +236,25 @@ export function openaiResponsesModel(
         Stream.unwrap(
           Effect.gen(function* () {
             const signal = yield* Effect.abortSignal;
-            const opened = yield* Effect.tryPromise({
-              try: () =>
-                client.responses
-                  .retrieve(
-                    operation.providerResponseId,
-                    // From the stream's start: the operation records no
-                    // position, and the replayed opening events only restate
-                    // the identity.
-                    { stream: true, include: ['reasoning.encrypted_content'] },
-                    { signal },
-                  )
-                  .withResponse(),
-              catch: openaiFailure,
-            });
+            const opened = yield* authorized(bearer, (token) =>
+              Effect.tryPromise({
+                try: () =>
+                  client.responses
+                    .retrieve(
+                      operation.providerResponseId,
+                      // From the stream's start: the operation records no
+                      // position, and the replayed opening events only
+                      // restate the identity.
+                      {
+                        stream: true,
+                        include: ['reasoning.encrypted_content'],
+                      },
+                      { signal, headers: bearerHeaders(token) },
+                    )
+                    .withResponse(),
+                catch: openaiFailure,
+              }),
+            );
             yield* Ref.update(learned, (known) => ({
               ...known,
               requestId: opened.request_id ?? undefined,
@@ -287,18 +305,23 @@ export function openaiResponsesModel(
         ),
     },
     cancel: Effect.fnUntraced(function* (operation, learned) {
-      const reply = yield* ownedAbortSafeRequest(
-        async (signal) => {
-          const response = await client.responses
-            .cancel(operation.providerResponseId, { signal })
-            .asResponse();
-          return {
-            requestId: response.headers.get('x-request-id') ?? undefined,
-            body: await response.text(),
-          };
-        },
-        openaiFailure,
-        { isAbortMatch: openaiAbortMatch },
+      const reply = yield* authorized(bearer, (token) =>
+        ownedAbortSafeRequest(
+          async (signal) => {
+            const response = await client.responses
+              .cancel(operation.providerResponseId, {
+                signal,
+                headers: bearerHeaders(token),
+              })
+              .asResponse();
+            return {
+              requestId: response.headers.get('x-request-id') ?? undefined,
+              body: await response.text(),
+            };
+          },
+          openaiFailure,
+          { isAbortMatch: openaiAbortMatch },
+        ),
       );
       yield* Ref.update(learned, (known) => ({
         ...known,

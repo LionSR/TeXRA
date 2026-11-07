@@ -143,12 +143,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       message: `Model "${requested.label}" has no direct API-key provider.`,
     });
   }
-  const credential = yield* routeCredential(
-    route,
-    requested,
-    facts,
-    request.rejected,
-  );
+  const credential = yield* routeCredential(route, requested, facts);
   const chatgpt = credential.route === 'chatgpt-subscription';
   const reasoning = yield* reasoningOf(plan, requested);
   const turn = { protocol, textOnly: request.textOnly };
@@ -181,20 +176,21 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     ...commonOf(plan),
     ...bound,
     route,
-    ...(credential.route === 'api-key'
-      ? {}
-      : { subscriptionToken: credential.bearer }),
     ...(chatgpt && credential.plan ? { plan: credential.plan } : {}),
     routes: routePolicies(
       [
         bound.config.provider,
         credential.route,
         credential.endpoint,
-        hash(
-          'sha256',
-          `${credential.route}\0${credential.bearer}`,
-          'base64url',
-        ),
+        // A key cools its own route; a session is one per signed-in
+        // account, whose token rotates under it.
+        typeof credential.bearer === 'string'
+          ? hash(
+              'sha256',
+              `${credential.route}\0${credential.bearer}`,
+              'base64url',
+            )
+          : 'session',
       ],
       bound.config.id,
     ),

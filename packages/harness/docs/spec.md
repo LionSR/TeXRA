@@ -469,9 +469,8 @@ end queues its report on its parent's input in the same transaction, under
 unless the parent's call awaits it or the child was detached.
 
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
-commit a `failed` row whose `next` is the move after it; a renewed observation
-of an accepted operation repeats without one (section 6), and a call off the
-rows records none (`agent/runtime/run/modelCall.ts#callModel`)
+commit a `failed` row whose `next` is the move after it; a call off the rows
+records none (`agent/runtime/run/modelCall.ts#callModel`)
 (`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#failedRows`). A
 `failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request
@@ -561,8 +560,7 @@ be refused when the run already holds history state
 A turn's model call MUST go through one loop over its rows,
 `ModelInvoker.invoke` (`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`).
 Its next move is `nextAttempt(invocation, requests, retries)`, read off the
-invocation's rows before every move but the repeat of a renewed observation
-(`shared/session/inFlight.ts#nextAttempt`). A call off the rows (a compaction
+invocation's rows before every move (`shared/session/inFlight.ts#nextAttempt`). A call off the rows (a compaction
 summary, a helper call) is the other loop, `callModel`
 (`agent/runtime/run/modelCall.ts#callModel`): `Effect.retry` while llm says the
 same request can succeed, under the same gate, with no row and no person:
@@ -583,10 +581,9 @@ same request can succeed, under the same gate, with no row and no person:
 | `failed` with `ask`, any other decision                          | end the invocation cancelled                |
 
 The move a `failed` row records is decided once, by `failedNext`
-(`shared/session/inFlight.ts#failedNext`), except for two rows that name their
-move themselves: a renewed credential's resend, `retry`
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`), and a re-ask, `ask` under a
-fresh request id (`agent/runtime/ModelInvoker.ts#'ModelInvoker.reask'`):
+(`shared/session/inFlight.ts#failedNext`), except for the row of a re-ask,
+which names its move itself, `ask` under a fresh request id
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.reask'`):
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
   `unchain`, once per invocation (`shared/session/inFlight.ts#failedNext`,
@@ -611,9 +608,7 @@ fresh request id (`agent/runtime/ModelInvoker.ts#'ModelInvoker.reask'`):
   request id; where nobody can be asked, `stop`
   (`shared/session/inFlight.ts#failedNext`).
 - A failed observation of an accepted operation never resubmits it automatically
-  (`agent/runtime/ModelInvoker.ts#moveAfter`). The one automatic repeat is a
-  renewed observation after a rejected subscription token, which observes the
-  same operation again (`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`).
+  (`agent/runtime/ModelInvoker.ts#moveAfter`).
 
 Every automatic send MUST run under the process's `ModelRetryGate`
 (`agent/runtime/ModelRetryGate.ts#RouteRetries`,
@@ -649,14 +644,14 @@ admitted, whose outcome no row recorded, is resent only while automatic retries
 remain; otherwise it is asked about again
 (`shared/session/inFlight.ts#nextAttempt`).
 
-A rejected subscription token MAY be renewed once per execution of the loop
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`,
-`agent/runtime/run/modelCall.ts#callModel`). The limit is held in memory, not
-in a row, so a resume may renew the same invocation again. On a send, the
-renewal records a `failed` row with `next: retry` (a call off the rows records
-none) and the attempt is resent; while observing an accepted operation, the
-renewed observation repeats with no row and is never a resend. In both loops the
-renewed resend spends one automatic retry and waits as any resend does.
+A subscription session's token is llm's to renew, inside the request: the
+binding hands the transport the session's token
+(`agent/runtime/modelAccess/credentials.ts#subscriptionCredential`), which llm
+reads before each request and, when the provider rejects it, renews once and
+sends the request again; the rejected request was not billed, and neither loop
+sees it. A session that cannot give or renew a token fails the attempt as the
+route's own failure, which says how to sign in again
+(`agent/runtime/modelAccess/failureInfo.ts#routeFailureOf`).
 
 ## 7. One process per project store
 
