@@ -269,6 +269,19 @@
           "signature": "export function createDesktopWindows(options: {…}): DesktopWindows {…}"
         }
       ]
+    },
+    {
+      "id": "RT-desktop-projects-rcmap",
+      "candidate": "the desktop's open projects as an RcMap keyed by root (open as RcMap.get, close as RcMap.invalidate), the bindings as a second RcMap, deleting the per-root lanes, the uninterruptible hand-offs and the projects list",
+      "why": "RcMap.invalidate removes an entry but closes it only once no scope holds a reference (node_modules/effect/dist/RcMap.js invalidate: `if (entry.refCount > 0) return`). A desktop project is held for as long as it is open, past any window (macOS keeps the projects when the window closes), so its holder is the process scope, and close would never release it unless each project kept a scope of its own for the lookup to be held in: the per-project scope the registry already opens and closes. The reference count would be a second count beside the registry's ordered list, which the rail and the selection need anyway (an RcMap keeps no order). What was a hand-rolled primitive is gone instead: the Symbol-keyed lane is one Semaphore(1).",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
+      "symbols": [
+        {
+          "file": "packages/desktop/src/main/desktopProjects.ts",
+          "symbol": "openDesktopProjectRegistry",
+          "signature": "export const openDesktopProjectRegistry: ( options: DesktopProjectRegistryOptions, ) => Effect.Effect< DesktopProjectRegistry, Error, DesktopProjectRecords | StateStores | Sessions | HostWindows > = Effect.fn('openDesktopProjectRegistry')(…);"
+        }
+      ]
     }
   ]
 }

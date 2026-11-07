@@ -12,6 +12,7 @@ import {
   FileSystem,
   Result,
   Scope,
+  Semaphore,
   SubscriptionRef,
   type Path,
 } from 'effect';
@@ -298,8 +299,10 @@ export const openDesktopProjectRegistry: (
       );
     const records = yield* DesktopProjectRecords;
     const stateStores = yield* StateStores;
-    const lanes = new Map<string | symbol, PerKeyLane>();
-    const selection = Symbol();
+    // One open or close of a root at a time; and one write of the selection
+    // and the recent list at a time, across roots.
+    const lanes = new Map<string, PerKeyLane>();
+    const selectionLane = yield* Semaphore.make(1);
     const fallback = yield* Effect.uninterruptible(
       openProject(
         undefined,
@@ -328,17 +331,16 @@ export const openDesktopProjectRegistry: (
     const syncRecent = Effect.gen(function* () {
       const recent = yield* records.readRecent;
       yield* SubscriptionRef.update(state, (s) => ({ ...s, recent }));
-    }).pipe(withPerKeyLane(lanes, selection));
-    const activate = Effect.fn('activate')(
-      function* (root: string | undefined) {
-        const next = root === undefined ? undefined : byRoot(root);
-        if (next?.root !== undefined) yield* records.activate(next.root);
-        const activeKey = (next ?? fallback).key;
-        if (activeKey === current().activeKey) return;
-        yield* SubscriptionRef.update(state, (s) => ({ ...s, activeKey }));
-      },
-      withPerKeyLane(lanes, selection),
-    );
+    }).pipe(selectionLane.withPermit);
+    const activate = Effect.fn('activate')(function* (
+      root: string | undefined,
+    ) {
+      const next = root === undefined ? undefined : byRoot(root);
+      if (next?.root !== undefined) yield* records.activate(next.root);
+      const activeKey = (next ?? fallback).key;
+      if (activeKey === current().activeKey) return;
+      yield* SubscriptionRef.update(state, (s) => ({ ...s, activeKey }));
+    }, selectionLane.withPermit);
     return {
       state,
       open(rootInput) {
@@ -380,17 +382,14 @@ export const openDesktopProjectRegistry: (
             return yield* Effect.uninterruptible(
               openProject(root, roots, projectScope, options.service).pipe(
                 Effect.tap(
-                  Effect.fnUntraced(
-                    function* (project) {
-                      const recent = yield* records.readRecent;
-                      yield* SubscriptionRef.update(state, (s) => ({
-                        ...s,
-                        projects: [...s.projects, project],
-                        recent,
-                      }));
-                    },
-                    withPerKeyLane(lanes, selection),
-                  ),
+                  Effect.fnUntraced(function* (project) {
+                    const recent = yield* records.readRecent;
+                    yield* SubscriptionRef.update(state, (s) => ({
+                      ...s,
+                      projects: [...s.projects, project],
+                      recent,
+                    }));
+                  }, selectionLane.withPermit),
                 ),
               ),
             );
@@ -439,7 +438,7 @@ export const openDesktopProjectRegistry: (
                 recent,
               }));
               yield* project.dispose();
-            }).pipe(withPerKeyLane(lanes, selection)),
+            }).pipe(selectionLane.withPermit),
           );
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
       },
