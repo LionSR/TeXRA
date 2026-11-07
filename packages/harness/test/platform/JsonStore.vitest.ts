@@ -10,14 +10,9 @@ import { describe, expect } from 'vitest';
 // Local imports - test support
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { loadSourceModule } from './loadSourceModule.ts';
 
-async function loadJsonStore(): Promise<
-  typeof import('@platform/defaults/jsonStore').JsonStore
-> {
-  const { JsonStore } = await loadSourceModule('@platform/defaults/jsonStore');
-  return JsonStore;
-}
+// Local imports - platform
+import { JsonStore } from '@texra-ai/harness/node';
 
 async function readStoredJson(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, 'utf8'));
@@ -41,7 +36,6 @@ describe('shared JsonStore', () => {
     'rejects a mutation when the file becomes corrupt and preserves its bytes',
     () =>
       Effect.gen(function* () {
-        const JsonStore = yield* Effect.promise(() => loadJsonStore());
         const filePath = yield* Effect.promise(() =>
           createTempFile('state.json', '{"keep": 1}\n'),
         );
@@ -64,7 +58,6 @@ describe('shared JsonStore', () => {
     'serializes overlapping writes from separate instances on the same file',
     () =>
       Effect.gen(function* () {
-        const JsonStore = yield* Effect.promise(() => loadJsonStore());
         const filePath = yield* Effect.promise(() =>
           createTempFile('state.json', '{}\n'),
         );
