@@ -2,7 +2,7 @@
 // Host-agnostic, VS Code-free.
 
 // Third-party imports
-import { Clock, Effect, Schema, type Context } from 'effect';
+import { Clock, Effect, Exit, Schema, Scope, type Context } from 'effect';
 
 // Local imports
 import { type ToolResult } from '@texra-ai/harness';
@@ -27,7 +27,7 @@ import {
   type ToolUseLog,
 } from '@texra-ai/harness/schemas';
 
-import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import type { ClaimThread } from './agentCliSessionStores';
 
 /**
  * The tool cards one streamed agent-CLI turn opens, keyed by the id its SDK
@@ -148,24 +148,23 @@ export const launchAgentCliSession = Effect.fn(
 /**
  * The shared execute() dispatch of an agent-CLI tool, run as the tool's
  * whole `execute()`: refuse a call that has no run to launch under or
- * cannot collect the result, claim the thread the call continues for the
- * turn's life, and launch the provider's turn. The command each tool gets
+ * cannot collect the result, claim the thread the call continues, and
+ * launch the provider's turn, which holds the claim for its life. The command each tool gets
  * approved is the loop-side guard each declares, not a step in here.
  */
 export function dispatchAgentCliTool<R = never, S = never>(params: {
   agentName: string;
-  /** The plugin's session registry, served by the step that pinned it. */
-  store: Context.Key<S, AgentCliSessionRegistry>;
+  /** The plugin's thread claims, served by the step that pinned it. */
+  store: Context.Key<S, ClaimThread>;
   /** The thread or session the call continues, if any. */
   resumeId: string | undefined;
   /** What a thread is called in a refusal ("Codex thread"). */
   threadLabel: string;
-  /** The provider's launch. It reads the tool call and the session registry
-   *  from context, as this dispatch does; `release` ends the claim on the
-   *  thread the call continues, to run once its turn is over (undefined
-   *  for a fresh launch). */
+  /** The provider's launch. It reads the tool call from context, as this
+   *  dispatch does; `claim` is the claim on the thread the call continues,
+   *  which its turn closes as it ends (undefined for a fresh launch). */
   launch: (
-    release: (() => void) | undefined,
+    claim: Scope.Closeable | undefined,
   ) => Effect.Effect<ToolResult, ToolError, R>;
 }): Effect.Effect<ToolResult, ToolError, R | S | ToolContext> {
   const { agentName, store, resumeId, threadLabel, launch } = params;
@@ -185,17 +184,17 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
       );
     }
     if (resumeId === undefined) return yield* launch(undefined);
-    const release = (yield* store).claim(resumeId);
-    if (release === undefined)
+    const claim = yield* (yield* store)(resumeId);
+    if (claim === undefined)
       return yield* Effect.fail(
         new ToolError(
           `${threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
         ),
       );
-    // A launch that fails before its turn started releases the claim; the
-    // turn releases it as it ends.
-    return yield* Effect.suspend(() => launch(release)).pipe(
-      Effect.onError(() => Effect.sync(() => release())),
+    // A launch that fails before its turn started closes the claim; the
+    // turn closes it as it ends.
+    return yield* Effect.suspend(() => launch(claim)).pipe(
+      Effect.onError((cause) => Scope.close(claim, Exit.failCause(cause))),
     );
   });
 }
@@ -208,8 +207,8 @@ interface AgentCliTurnParams<TTurn> {
   logger: AgentTrace;
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   stageLabel: string;
-  /** The claim on the thread this turn continues, released as it ends. */
-  release: (() => void) | undefined;
+  /** The claim on the thread this turn continues, closed as it ends. */
+  claim: Scope.Closeable | undefined;
   /** The provider's turn: its own foreign edge (the provider SDK's
    *  streamed turn), wrapped once. A stop interrupts it: each provider
    *  hands its SDK a signal that interruption aborts
@@ -229,7 +228,7 @@ interface AgentCliTurnParams<TTurn> {
  * The agent-CLI child's one turn ({@link ProcessTurn}), common to every
  * provider (codex, claudeAgent): the provider's turn with its wall time,
  * its usage on the child's trace, its delivery or error report, and the
- * thread's claim released as the turn ends. Callers supply only their
+ * thread's claim closed as the turn ends. Callers supply only their
  * provider-specific turn and its formatting.
  */
 export function buildAgentCliTurn<TTurn>(
@@ -238,7 +237,7 @@ export function buildAgentCliTurn<TTurn>(
   const {
     logger,
     stageLabel,
-    release,
+    claim,
     runProviderTurn,
     getUsage,
     formatDelivery,
@@ -269,7 +268,11 @@ export function buildAgentCliTurn<TTurn>(
       return { report: formatError(turn, null), failure };
     }
     return { report: formatDelivery(turn, wallTimeMs) };
-  }).pipe(Effect.ensuring(Effect.sync(() => release?.())));
+  }).pipe(
+    Effect.onExit((exit) =>
+      claim === undefined ? Effect.void : Scope.close(claim, exit),
+    ),
+  );
   return {
     stageLabel,
     run,

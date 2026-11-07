@@ -20,7 +20,7 @@
  */
 
 // Third-party imports
-import { Effect, type FileSystem, Schema, Stream } from 'effect';
+import { Effect, type FileSystem, Schema, type Scope, Stream } from 'effect';
 import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
 import { Secrets } from '@texra-ai/harness/host';
@@ -385,14 +385,14 @@ function buildClaudeAgentTurn(params: {
   forkSession: boolean;
   /** The session this turn continues (the SDK's `resume` option). */
   resumeSessionId: string | undefined;
-  /** The claim on that session, released as the turn ends. */
-  release: (() => void) | undefined;
+  /** The claim on that session, closed as the turn ends. */
+  claim: Scope.Closeable | undefined;
 }): ProcessTurn {
   const { logger, runId, prompt } = params;
   return buildAgentCliTurn({
     logger,
     stageLabel: 'Claude Code session',
-    release: params.release,
+    claim: params.claim,
     runProviderTurn: runStreamedTurn({
       prompt,
       logger,
@@ -465,8 +465,8 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
     resumeId:
       input.fork_session === true ? undefined : (input.session_id ?? undefined),
     threadLabel: 'Claude Code session',
-    launch: (release) =>
-      launchClaudeAgentSession(input, permissionMode, claudeRun, release),
+    launch: (claim) =>
+      launchClaudeAgentSession(input, permissionMode, claudeRun, claim),
   });
 });
 
@@ -496,7 +496,7 @@ const launchClaudeAgentSession = Effect.fn(
   input: ClaudeAgentInput,
   permissionMode: ClaudePermissionMode,
   claudeRun: ClaudeCodeRun,
-  release: (() => void) | undefined,
+  claim: Scope.Closeable | undefined,
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
@@ -550,7 +550,7 @@ const launchClaudeAgentSession = Effect.fn(
         pathToClaudeCodeExecutable,
         resumeSessionId: input.session_id ?? undefined,
         forkSession: input.fork_session === true,
-        release,
+        claim,
       }),
     summaryLabel: 'Claude Code CLI',
     launchedLine: `Claude Code agent launched (model: ${claudeRun.ref}, effort: ${claudeRun.effort ?? 'none'}, permission: ${permissionMode}).${claudeRun.note ? ` ${claudeRun.note}` : ''}`,

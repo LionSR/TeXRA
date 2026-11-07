@@ -250,11 +250,12 @@ rather than per finding:
   by name is a special case written as data; the checker could instead
   require a cited row to exist in the vocabulary before reading a token as a
   citation.
-- **`AgentCliSessionRegistry`** is a `Set<string>` with a `claim` that returns
-  a release: a shallow module kept as a service tag per plugin
-  (`CodexThreads`, `ClaudeAgentSessions`) so the session layer owns its
-  lifetime. A `Context.Reference` on the plugin's session layer would be the
-  same with less.
+- **`AgentCliSessionRegistry`, ended in lane 9.** It was a `Set<string>`
+  with a `claim` that returned a release: a shallow class under a service
+  tag per plugin. The tags (`CodexThreads`, `ClaudeAgentSessions`) now serve
+  a `ClaimThread` function (`agentCliSessionStores.ts`); the class is gone.
+  A `Context.Reference` would have made the claims a process singleton (its
+  default is cached on the reference), so the session layer keeps them.
 - **`USER_FOLLOW_UP_SUPPORT`, ended in lane 9.** It was two values
   (`unsupported`, `nativeInteractive`) for one boolean fact, carried on
   `run.start`. It is `run.start.takesFollowUps` now (the row at v4, the
@@ -283,11 +284,12 @@ rather than per finding:
   the five seconds before the timeout starts. One deadline over both
   would need the stop writes interruptible, which a durable append is not
   by design.
-- **An agent-CLI plugin switched off mid-turn** releases its session
-  registry (the busy set); switched on again, a second call on the same
-  thread passes the claim. A hold per running turn would keep the
-  registry; recorded, not fixed (§1.2 asks whether the registry stays at
-  all).
+- **An agent-CLI plugin switched off mid-turn, ended in lane 9.** It
+  released its session registry (the busy set); switched on again, a second
+  call on the same thread passed the claim. A claim is a scope the turn
+  closes with its exit now, and while it stands it holds the plugin's
+  session services (`PluginHold`, which had no user), so the claims outlive
+  the switch.
 - **`ProcessReport.failure` beside `ProcessReport.exit`**: a failed exit is
   said twice, as the exit code and as the failure message the end records.
   One reading (`exit.code !== 0` is the failure, the message its report)
@@ -316,7 +318,7 @@ rather than per finding:
     `stop` already cascades a stop row to every held descendant; what is
     left is a tool call interrupted for another reason);
   - the close deadline over the stop writes;
-  - a hold per agent-CLI turn.
+  - a hold per agent-CLI turn (ended in lane 9).
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.
 - The CLI service and its sessions, read after this PR's review rounds:
