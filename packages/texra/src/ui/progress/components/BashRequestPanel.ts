@@ -4,9 +4,6 @@
 import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-// Local imports - shared vocabulary
-import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
-
 // Local imports - progress view styles
 import { codeBlockStyles } from '../styles/codeBlockStyles';
 
@@ -14,7 +11,7 @@ import { codeBlockStyles } from '../styles/codeBlockStyles';
 import { buildCodeBlock } from '../formatters/htmlBuilders';
 
 // Local imports - base class
-import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
+import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - styles
 import { bashRequestPanelStyles } from './BashRequestPanel.styles';
@@ -26,14 +23,6 @@ export class BashRequestPanel extends BaseRequestPanel<'bash'> {
     codeBlockStyles,
     bashRequestPanelStyles,
   ];
-
-  // A prompt for another tool's call offers no grant: the one a command
-  // prompt can turn on is the run's shell bypass.
-  protected override get grant(): RunGrant | null {
-    return this.permission.data.allowBypass
-      ? { label: RUN_GRANT_LABEL.bash }
-      : null;
-  }
 
   // The directory a command runs in is the security-relevant field of this
   // prompt, so it sits in the ask rather than in small print under it.

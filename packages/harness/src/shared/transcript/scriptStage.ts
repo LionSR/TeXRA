@@ -16,7 +16,7 @@ import { Predicate } from 'effect';
 import {
   agentName,
   TOOL_CALL_STATUS,
-  type PermissionPayload,
+  type RequestPayload,
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
@@ -71,7 +71,7 @@ export interface ScriptCallView {
     | { readonly kind: 'notRun' | 'interrupted' }
     | {
         readonly kind: 'request';
-        readonly payload: ReadonlyDeep<PermissionPayload>;
+        readonly payload: ReadonlyDeep<RequestPayload>;
       };
   /** The child run an `agent` call launched: the row opens it. */
   readonly childRunId?: RunId;

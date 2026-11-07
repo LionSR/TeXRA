@@ -13,13 +13,9 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
-import { AgentError } from '@common/errors/agentErrors';
+import { LaunchRefused } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  aggregateTarget,
-  type LaunchNotice,
-  type SessionEvent,
-} from '@shared/schemas';
+import { aggregateTarget, type SessionEvent } from '@shared/schemas';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -352,18 +348,8 @@ const primaryFailure = (error: unknown): unknown =>
   );
 
 /**
- * The notice a refused launch carries for its caller to show
- * (`AgentError.notice`), read through a `Session` start's `RunFailure`;
- * undefined for any other failure, which its caller words itself.
- */
-export function launchNoticeOf(error: unknown): LaunchNotice | undefined {
-  const primary = primaryFailure(error);
-  return primary instanceof AgentError ? primary.notice : undefined;
-}
-
-/**
  * Present a failed run from its raw error, replayed to a surface that
- * attaches later: a refused launch's notice ({@link launchNoticeOf}), or
+ * attaches later: a refused launch's notice (`LaunchRefused.notice`), or
  * else the primary failure as `prefix` plus its text (a `Rejected`
  * request's reason). With no prefix, a model failure is shown as its run
  * would record it, its classification beside, which a host may word in its
@@ -382,7 +368,7 @@ export function presentRunFailure(
   const reason =
     primary instanceof Rejected ? primary.reason : toErrorMessage(primary);
   const text = `${prefix}${reason}`;
-  const notice = launchNoticeOf(primary);
+  const notice = primary instanceof LaunchRefused ? primary.notice : undefined;
   if (notice !== undefined)
     return interactions.emit(notice.event, notice.payload, {
       fallbackMessage: text,

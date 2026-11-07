@@ -129,7 +129,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
                 instruction: 'Run the command.',
               }),
               runId,
-              approval: { delegated: true },
+              approval: 'autoApprove',
             }).pipe(Effect.provide(session));
             // A reader keeps the running run's transcript in the view.
             yield* Context.get(session, SessionViewAccess).subscribe('reader', [

@@ -24,6 +24,15 @@ type OwnGrant = 'on' | 'off' | 'parent';
 export const APPROVAL_POLICY_LIMITS = ['never', 'ask'] as const;
 export type ApprovalPolicyLimit = (typeof APPROVAL_POLICY_LIMITS)[number];
 
+/** What a launch asks of its run's approvals: Auto-approve (its run starts
+ *  with every bypass on, recorded on the run, never on the project), or a
+ *  policy it narrows the run to. Absent, the run follows the project's. */
+export const LaunchApprovalSchema = Schema.Union([
+  Schema.Literal('autoApprove'),
+  Schema.Literals(APPROVAL_POLICY_LIMITS),
+]);
+export type LaunchApproval = typeof LaunchApprovalSchema.Type;
+
 /**
  * A run's own approval grants, the one record of them (its latest
  * `approval.policy` row, else its `run.start`): what the run itself
@@ -60,6 +69,18 @@ export function stricterPolicy(
   b: ApprovalPolicy,
 ): ApprovalPolicy {
   return STRICTNESS[a] <= STRICTNESS[b] ? a : b;
+}
+
+/** The policy a launch's run runs under: the project's, narrowed by the
+ *  limit the launch asks for, or Auto-approve, which widens its own task
+ *  but never over Block. */
+export function launchPolicy(
+  project: ApprovalPolicy,
+  approval: LaunchApproval | undefined,
+): ApprovalPolicy {
+  if (approval === undefined) return project;
+  if (approval === 'autoApprove') return project === 'never' ? 'never' : 'yolo';
+  return stricterPolicy(project, approval);
 }
 
 /** A run's policy: the project's (`project`), narrowed by the strictest

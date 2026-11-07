@@ -10,7 +10,7 @@ import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
 import {
   attentionRequests,
   currentApproval,
-  type ApprovalPayload,
+  type TuiRequest,
 } from '@cli/chat/tui/state/approvalQueue';
 import {
   resetCliState,
@@ -33,7 +33,7 @@ function bashPayload(runId: RunId, requestId = `bash-${runId}`) {
   return {
     kind: 'bash',
     data: { requestId, allowBypass: true, runId, command: 'echo ok' },
-  } satisfies ApprovalPayload;
+  } satisfies TuiRequest;
 }
 
 // The view is bound on a runtime over the session graph, as the chat entry

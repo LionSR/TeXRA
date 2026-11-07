@@ -32,13 +32,13 @@ import {
 import { BaseTextInput } from '../input/BaseTextInput';
 import type {
   UserQuestionAnswers,
-  UserQuestionPermission,
+  UserQuestionRequest,
   UserQuestionPrompt,
 } from '@texra-ai/harness/schemas';
 
 interface UserQuestionProps {
   readonly availableRows?: number;
-  readonly payload: UserQuestionPermission;
+  readonly payload: UserQuestionRequest;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
@@ -243,7 +243,7 @@ function boundedUserQuestionPromptLines({
 
 interface QuestionVariantProps {
   readonly availableRows?: number;
-  readonly payload: UserQuestionPermission;
+  readonly payload: UserQuestionRequest;
   readonly question: UserQuestionPrompt;
   readonly index: number;
   readonly onSubmit: (answer: string | string[] | undefined) => void;

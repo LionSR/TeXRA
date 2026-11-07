@@ -9,11 +9,7 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Cause, Stream } from 'effect';
-import {
-  isInterrupted,
-  type RunId,
-  type RunOutcome,
-} from '@texra-ai/harness/schemas';
+import { isInterrupted, type RunId } from '@texra-ai/harness/schemas';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import type {
   RunView,
@@ -110,17 +106,6 @@ export function resumableRunId(run: RunView | undefined): RunId | undefined {
  *  session view's label below it. */
 export function runLabelOf(run: RunView): string {
   return run.parentId === null ? 'main' : run.label;
-}
-
-/** Where the run stands: its outcome once it ended, else its loop
- *  position; undefined before its first activation is applied. */
-export type RunPhase = RunOutcome | 'running' | 'waiting';
-
-/** The run's phase ({@link RunPhase}). */
-export function runPhaseOf(run: RunView | undefined): RunPhase | undefined {
-  if (run === undefined) return undefined;
-  if (run.outcome !== null) return run.outcome;
-  return run.position === 'ready' ? undefined : run.position;
 }
 
 /**

@@ -8,7 +8,7 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 import type {
-  BashPermission,
+  BashRequest,
   RunId,
   RuntimeRequest,
 } from '@texra-ai/harness/schemas';
@@ -21,7 +21,7 @@ describe('bash-request-panel', () => {
   );
 
   it('rejects on one "n", sends an opened note with it, and never answers on Escape', async () => {
-    const permission: BashPermission = {
+    const permission: BashRequest = {
       requestId: 'bash-request-1',
       allowBypass: false,
       // cast: a fixture run id; the panel only echoes it in its answer.

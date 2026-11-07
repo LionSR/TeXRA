@@ -23,6 +23,7 @@ import {
   type ModelBackend,
   type DeclinableUsageRoute,
   type OfferedTool,
+  type PositionAt,
   qualifyAggregateId,
   type RetryErrorInfo,
   type RunId,
@@ -30,12 +31,11 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import { phaseAfter, type RunLoopPhase } from '@shared/runs/runStatus';
 import { closedBy, NO_FACTS, withInput, type RunFacts } from './runFacts';
 import {
   applyRunRow,
   type BatchCopies,
-  freshRunPosition,
+  freshRunRowState,
   ownCopy,
   type SharedRunRow,
 } from './runRows';
@@ -47,7 +47,7 @@ import {
   type PendingResponse,
 } from './inFlight';
 import { TURN_ROW_HANDLERS } from './turnRowHandlers';
-import type { RunPosition } from './runRowsShape';
+import type { RunRowState } from './runRowsShape';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 
 /** The rows `RunCell.append` commits: the run history rows, and the display
@@ -92,11 +92,45 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
 ) {}
 
 /**
+ * Where the loop stands, as its own branches read it: between turns
+ * (`waiting`, `turn.ended`) or somewhere inside a turn. Never written: derived
+ * from the run's `run.position` rows.
+ */
+export type RunLoopPhase =
+  | 'model.ready'
+  | 'model.submitted'
+  | 'results.ready'
+  | 'waiting'
+  | 'turn.ended';
+
+/**
+ * The phase a position leaves an opened loop in. A stop writes no
+ * position: the loop stops in the phase its newest position names, so a
+ * resume continues from there. `turn.ready` is input consumed while
+ * waiting, still between turns; a `turn.end` that no `waiting` or
+ * `turn.begin` follows in its batch is the round loop's last round closed,
+ * the run concluded before its terminal row. A run's first position opens
+ * it: its opening batch's `turn.ready`, or a fork's `waiting`.
+ */
+const PHASE_AT: Readonly<Record<PositionAt, RunLoopPhase>> = {
+  'turn.ready': 'waiting',
+  'turn.begin': 'model.ready',
+  'response.ready': 'model.submitted',
+  'results.ready': 'results.ready',
+  'turn.end': 'turn.ended',
+  waiting: 'waiting',
+};
+const phaseAfter = (
+  phase: RunLoopPhase | null,
+  at: PositionAt | null | undefined,
+): RunLoopPhase | null => (at == null ? phase : PHASE_AT[at]);
+
+/**
  * What the loop continues from. A plain type with no schema of its own,
  * because giving it one invites persisting it. Every field is derived
  * from the row that produced it.
  */
-export type RunState = RunPosition &
+export type RunState = RunRowState &
   RunFacts & {
     readonly commit: CommitOrdinal;
     /** A run history row was applied, not only requests, config, activation. */
@@ -183,7 +217,7 @@ export type RunInputDraft = Exclude<
 /** The state a run starts from: every field at its zero, no family bound
  *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
-  ...freshRunPosition(),
+  ...freshRunRowState(),
   commit,
   hasHistoryRows: false,
   phase: null,

@@ -15,7 +15,6 @@ import {
   CliUsageError,
   failUsage,
   readCliAmbientState,
-  type CliContext,
 } from '../runtime/cliContext';
 import {
   formatCliWorkspaceAgents,
@@ -62,7 +61,6 @@ function asTeamUsageError<E>(error: E): E | CliUsageError {
 }
 
 const showConfig = Effect.fn('showConfig')(function* (
-  context: CliContext,
   services: CliPlatformServices,
 ) {
   const stores = services.roots;
@@ -78,7 +76,7 @@ const showConfig = Effect.fn('showConfig')(function* (
     ),
   );
   const record = { settings, agents };
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: record,
     ndjson: { kind: 'config', config: record },
     text: [
@@ -94,7 +92,6 @@ const showConfig = Effect.fn('showConfig')(function* (
 
 const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
   function* (
-    context: CliContext,
     services: CliPlatformServices,
     input: {
       readonly agents?: string;
@@ -172,7 +169,7 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
     }
 
     const record = yield* readCliWorkspaceAgents(roots);
-    emitCliResult(context, {
+    yield* emitCliResult({
       json: record,
       ndjson: { kind: 'workspace-agents', agents: record },
       text: formatCliWorkspaceAgents(record),
@@ -209,7 +206,7 @@ const configAgentsCommand = defineCliCommand({
   },
   run: Effect.fn('config.run')(function* (context, ctx) {
     const services = yield* initCliPlatform(context);
-    return yield* configureWorkspaceAgents(context, services, {
+    return yield* configureWorkspaceAgents(services, {
       agents: optString(ctx.args.agents),
       defaultTeam: optString(ctx.args['default-team']),
       defaultAgent: optString(ctx.args['default-agent']),
@@ -222,7 +219,7 @@ const configShowCommand = defineCliCommand({
   args: { ...GLOBAL_ARGS },
   run: Effect.fn('config.run')(function* (context) {
     const services = yield* initCliPlatform(context);
-    return yield* showConfig(context, services);
+    return yield* showConfig(services);
   }),
 });
 

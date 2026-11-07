@@ -1,16 +1,15 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Effect } from 'effect';
 
-import { isWorking, type RunId } from '@texra-ai/harness/schemas';
+import {
+  isWorking,
+  type RunId,
+  type RunStanding,
+} from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 
 import { registerCliStateResetHook, sessionViewFailure } from './cliState';
-import {
-  runPhaseOf,
-  runViewOf,
-  sessionView,
-  type RunPhase,
-} from './sessionView';
+import { runViewOf, sessionView } from './sessionView';
 
 /**
  * The claimed root run's end, as the slot holds it: the program that
@@ -66,7 +65,7 @@ export const runStopFacts = computed((): ChatTuiRunStopFacts => {
   return {
     runPending: chatTuiRunPending(claim),
     runId: claim.runId,
-    status: runPhaseOf(run),
+    standing: run,
     working: run != null && isWorking(run),
   };
 });
@@ -189,9 +188,9 @@ export class TuiSession {
     return true;
   }
 
-  /** The claimed run's phase, as the session view derives it. */
-  status(): RunPhase | undefined {
-    return runStopFacts.get().status;
+  /** Where the claimed run stands, as the session view derives it. */
+  standing(): RunStanding | undefined {
+    return runStopFacts.get().standing;
   }
 
   /** Whether the claimed run is live, as the session view derives it: what
@@ -205,7 +204,7 @@ export class TuiSession {
   canSelectModel(): boolean {
     return (
       chatTuiCanStartRootRun(this) ||
-      (this.status() === 'waiting' && this.runLive())
+      (this.standing()?.position === 'waiting' && this.runLive())
     );
   }
 
@@ -245,14 +244,18 @@ type PendingTuiRunSessionState = Pick<
 interface ChatTuiRunStopFacts {
   readonly runPending: boolean;
   readonly runId: RunId | undefined;
-  readonly status: RunPhase | undefined;
+  readonly standing: RunStanding | undefined;
   readonly working: boolean;
 }
 
 export function chatTuiCanStopActiveRun(facts: ChatTuiRunStopFacts): boolean {
   if (!facts.runPending) return false;
   if (!facts.runId) return true;
-  return facts.status === undefined || facts.working;
+  return (
+    facts.standing === undefined ||
+    (facts.standing.position === 'ready' && facts.standing.outcome === null) ||
+    facts.working
+  );
 }
 
 export function chatTuiCanStopVisibleRun(facts: ChatTuiRunStopFacts): boolean {

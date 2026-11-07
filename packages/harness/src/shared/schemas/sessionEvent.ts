@@ -38,7 +38,7 @@ import {
 } from './runRecords';
 import { RunIdSchema } from './identifiers';
 import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
-import { PermissionPayloadSchema, RequestDecisionSchema } from './request';
+import { RequestPayloadSchema, RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import { NormalizedUsageSchema, RunBindingSchema } from './runInput';
 import {
@@ -294,7 +294,7 @@ const DisplayRowDraftSchema = Schema.Union([
    *  Pending is opened without decided. */
   durable('request.opened', {
     requestId: Schema.String.check(Schema.isMinLength(1)),
-    payload: PermissionPayloadSchema,
+    payload: RequestPayloadSchema,
   }),
   /**
    * The answer, whatever surface gave it and whatever its provenance. The

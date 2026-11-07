@@ -7,7 +7,7 @@ import {
 } from '@texra/shared/cliOutputFormat';
 import { cliEnvValue, readCliVersion } from '../runtime/cliContext';
 
-import { emitCliResult } from './_helpers/output';
+import { writeCliResult } from './_helpers/output';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 
 const isCliOutputFormat = Schema.is(CliOutputFormatSchema);
@@ -25,13 +25,10 @@ export const versionCommand = defineCommand({
   },
   run(ctx) {
     const version = readCliVersion();
-    emitCliResult(
-      { outputFormat: parseVersionOutputFormat(ctx.args['output-format']) },
-      {
-        json: { version },
-        ndjson: { kind: 'version', version },
-        text: version,
-      },
-    );
+    writeCliResult(parseVersionOutputFormat(ctx.args['output-format']), {
+      json: { version },
+      ndjson: { kind: 'version', version },
+      text: version,
+    });
   },
 });

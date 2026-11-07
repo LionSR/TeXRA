@@ -10,11 +10,11 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import type { BashPermission } from '@texra-ai/harness/schemas';
+import { offeredGrant, type RequestPayload } from '@texra-ai/harness/schemas';
 
-interface BashApprovalProps {
+interface BashRequestProps {
   readonly availableRows?: number;
-  readonly payload: BashPermission;
+  readonly payload: Extract<RequestPayload, { kind: 'bash' }>['data'];
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
@@ -33,7 +33,7 @@ function bashCwdDisplayLine({
   return truncateToWidth(`Directory: ${trimmedCwd}`, width);
 }
 
-export function BashApproval(props: BashApprovalProps): React.JSX.Element {
+export function BashRequest(props: BashRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const commandWidth = confirmCardContentWidth(columns);
   const cwdLine = bashCwdDisplayLine({
@@ -52,11 +52,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       color={COLOR_WARNING}
       title={COMMAND_APPROVAL_TITLE}
       kind="bash"
-      // Another tool's call offers no grant: the one this prompt could turn
-      // on is the run's shell bypass.
-      alwaysAllowLabel={
-        props.payload.allowBypass ? 'approve commands for session' : undefined
-      }
+      grant={offeredGrant({ kind: 'bash', data: props.payload })}
       onDecide={props.onDecide}
     >
       {cwdLine && <Text dimColor>{cwdLine}</Text>}

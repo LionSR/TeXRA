@@ -41,7 +41,7 @@ import { NO_FACTS } from '@shared/session/runFacts';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
-  type PermissionPayload,
+  type RequestPayload,
 } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -176,7 +176,7 @@ export function nativeToolTestLayer(
           // loop to bind them to.
           requests: {
             nextId: (prefix: string) => `${prefix}-${crypto.randomUUID()}`,
-            open: <P extends PermissionPayload>(
+            open: <P extends RequestPayload>(
               payload: P,
               blobs?: readonly DraftBlob[],
             ) =>
@@ -191,13 +191,13 @@ export function nativeToolTestLayer(
                 Effect.map((decision) => ({
                   // cast: the answer is to the request supplied, of its kind.
                   payload: payload as Extract<
-                    PermissionPayload,
+                    RequestPayload,
                     { kind: P['kind'] }
                   >,
                   decision,
                 })),
               ),
-            post: (requestId: string, payload: PermissionPayload) =>
+            post: (requestId: string, payload: RequestPayload) =>
               Context.get(session, RunHistory)
                 .open(toolRun.runId)
                 .pipe(

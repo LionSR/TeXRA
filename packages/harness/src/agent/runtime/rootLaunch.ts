@@ -119,14 +119,16 @@ export const rootRun = Effect.fn('rootRun')(function* (
           continues,
         )
       : NO_APPROVAL_GRANTS;
-  const { limit: _previous, ...grants } = approval?.delegated
+  const autoApprove = approval === 'autoApprove';
+  const { limit: _previous, ...grants } = autoApprove
     ? humanGrant(APPROVAL_BYPASS_KINDS, true)(inherited)
     : inherited;
-  // A policy the launch asked for, Auto-approve aside, is the run's
-  // limit whatever the project's is now, so widening the project's
-  // policy later never widens this run.
-  const limit: ApprovalPolicyLimit | undefined =
-    approval?.policy === 'yolo' ? undefined : approval?.policy;
+  // A policy the launch narrows to is the run's limit whatever the
+  // project's is now, so widening the project's policy later never widens
+  // this run.
+  const limit: ApprovalPolicyLimit | undefined = autoApprove
+    ? undefined
+    : approval;
   // The model (the helper model swap reads the enabled-model list and the
   // routing switches from this session's setting slots), the agent and its
   // tools resolve in the opening, each refused before any run is registered.

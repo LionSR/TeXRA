@@ -12,6 +12,7 @@ import { PROTOCOL, type ServiceInfo } from '@texra/controllers/server/protocol';
 
 import {
   adoptLoginShellEnvironment,
+  CliInvocation,
   CliUsageError,
   type CliContext,
 } from '../runtime/cliContext';
@@ -161,14 +162,15 @@ function statusText(info: ServiceInfo | null, context: CliContext): string {
   ].join('\n');
 }
 
-function emitStatus(context: CliContext, info: ServiceInfo | null): void {
-  const service = { ...info, online: info !== null };
-  emitCliResult(context, {
-    json: service,
-    ndjson: { kind: 'service', service },
-    text: statusText(info, context),
+const emitStatus = (info: ServiceInfo | null) =>
+  CliInvocation.use(({ context }) => {
+    const service = { ...info, online: info !== null };
+    return emitCliResult({
+      json: service,
+      ndjson: { kind: 'service', service },
+      text: statusText(info, context),
+    });
   });
-}
 
 /** Ask the service to stop and wait until it is gone: its socket closes
  *  as it exits. */
@@ -205,12 +207,10 @@ const statusCommand = defineCliCommand({
   args: { ...GLOBAL_ARGS },
   install: 'service',
   catchExitCode: CliExitCode.AgentError,
-  run: (context) =>
+  run: () =>
     probeCliService.pipe(
-      Effect.map((info) => {
-        emitStatus(context, info);
-        return CliExitCode.Success;
-      }),
+      Effect.flatMap(emitStatus),
+      Effect.as(CliExitCode.Success),
     ),
 });
 
@@ -255,7 +255,7 @@ const restartCommand = defineCliCommand({
           : Effect.fail(new Error(link.none)),
       ),
     );
-    emitStatus(context, info);
+    yield* emitStatus(info);
     return CliExitCode.Success;
   }),
 });

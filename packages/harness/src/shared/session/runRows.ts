@@ -22,7 +22,7 @@
  * shared rows they select through here too.
  */
 import type { SessionEvent } from '@shared/schemas';
-import type { RunPosition, RunRowVerdict, SharedRunRows } from './runRowsShape';
+import type { RunRowState, RunRowVerdict, SharedRunRows } from './runRowsShape';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
  *  here and not handled by `applyRunRow` is a compile error there. */
@@ -103,8 +103,8 @@ export function ownCopy<T extends object, W extends T>(
   return fresh;
 }
 
-/** The position before any of these rows. */
-export const freshRunPosition = (): RunPosition => ({
+/** The row state before any of these rows. */
+export const freshRunRowState = (): RunRowState => ({
   family: null,
   at: null,
   outcome: null,
@@ -114,7 +114,7 @@ export const freshRunPosition = (): RunPosition => ({
 
 /** The `SharedRunRows` before any row. */
 export const freshSharedRunRows = (): SharedRunRows => ({
-  ...freshRunPosition(),
+  ...freshRunRowState(),
   followUps: [],
   taken: new Map(),
 });
@@ -124,16 +124,16 @@ const applied = (rows: Partial<SharedRunRows>): RunRowVerdict => ({
   rows,
 });
 
-/** The shared rows that change a run's pending input, not its position. */
+/** The shared rows that change a run's pending input, not its row state. */
 type FollowUpRow = Extract<
   SharedRunRow,
   { type: 'followup.queued' | 'followup.consumed' }
 >;
 
-/** A follow-up row handed to a reader that keeps only the position. */
-const positionOnly = (row: FollowUpRow): RunRowVerdict => ({
+/** A follow-up row handed to a reader that keeps only the row state. */
+const rowStateOnly = (row: FollowUpRow): RunRowVerdict => ({
   kind: 'contradiction',
-  detail: `${row.type} reached a reader that keeps only the run's position`,
+  detail: `${row.type} reached a reader that keeps only the run's row state`,
 });
 
 const copyMap = <V>(entries: ReadonlyMap<string, V>) => new Map(entries);
@@ -142,13 +142,13 @@ const copyMap = <V>(entries: ReadonlyMap<string, V>) => new Map(entries);
  * Apply one shared row. `current` is `null` for a reader that holds nothing
  * for the run yet: queued input and the loop's own position start it, while
  * a request or a consumption needs it and changes nothing without it. A
- * reader that keeps only the position (`RunState`) passes only the rows
+ * reader that keeps only the row state (`RunState`) passes only the rows
  * that change it. A reader applying a batch passes its `copies`, and the
  * containers the result carries are then the batch's own, changed in place
  * by later rows of the batch.
  */
 export function applyRunRow(
-  current: RunPosition | null,
+  current: RunRowState | null,
   row: Exclude<SharedRunRow, FollowUpRow>,
   copies?: BatchCopies,
 ): RunRowVerdict;
@@ -158,12 +158,13 @@ export function applyRunRow(
   copies?: BatchCopies,
 ): RunRowVerdict;
 export function applyRunRow(
-  current: SharedRunRows | RunPosition | null,
+  current: SharedRunRows | RunRowState | null,
   row: SharedRunRow,
   copies?: BatchCopies,
 ): RunRowVerdict {
   // A follow-up row enters only through the `SharedRunRows` overload, so it meets
-  // a `SharedRunRows` or nothing; `undefined` is a position-only reader's state.
+  // a `SharedRunRows` or nothing; `undefined` is a row-state-only reader's
+  // state.
   const slice =
     current === null || 'followUps' in current ? current : undefined;
   switch (row.type) {
@@ -215,7 +216,7 @@ export function applyRunRow(
     case 'followup.queued': {
       // Queued input may come before everything else a run writes, so it
       // starts the reader's state; a replayed delivery id is queued once.
-      if (slice === undefined) return positionOnly(row);
+      if (slice === undefined) return rowStateOnly(row);
       const rows = slice ?? freshSharedRunRows();
       const seen = rows.followUps.some((f) => f.followUpId === row.followUpId);
       if (seen || rows.taken.has(row.followUpId)) return { kind: 'unchanged' };
@@ -235,7 +236,7 @@ export function applyRunRow(
       // while the loop ran, or not carried by the read that delivered this
       // row) consumes nothing and is recorded, so the queuing cannot land twice.
       const { followUpId, disposition, commit } = row;
-      if (slice === undefined) return positionOnly(row);
+      if (slice === undefined) return rowStateOnly(row);
       if (slice === null || slice.taken.has(followUpId))
         return { kind: 'unchanged' };
       const followUps = slice.followUps.filter(
