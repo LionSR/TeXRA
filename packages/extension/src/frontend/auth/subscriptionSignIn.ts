@@ -76,7 +76,8 @@ function vscodePresenter(
           ),
         );
         const openLabel = `Open ${displayName}`;
-        const choice = yield* vscodeUi.info(
+        const choice = yield* vscodeUi.ask(
+          'info',
           `Enter ${displayName} code ${prompt.userCode} at ${prompt.verificationUrl}.${copied ? ' The code was copied to the clipboard.' : ''}`,
           { items: [openLabel] },
         );
@@ -103,7 +104,8 @@ function vscodePresenter(
         // toast — users whose subscription lives in a different browser (e.g.
         // default is Safari but the provider is signed in on Chrome) get a
         // link they can paste there instead.
-        const choice = yield* vscodeUi.info(
+        const choice = yield* vscodeUi.ask(
+          'info',
           `Sign in with ${displayName}. If your ${sessionName} session is in a different browser than your OS default, copy the link and open it there instead.`,
           { modal: true, items: [OPEN_DEFAULT_BROWSER, COPY_SIGN_IN_LINK] },
         );

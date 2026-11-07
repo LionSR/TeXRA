@@ -38,10 +38,11 @@ export const confirmCleanBuild = Effect.gen(function* () {
   const confirm = `Delete ${directories.length} ${noun}`;
   const confirmed = yield* announce(
     CHANNEL,
-    vscodeUi.confirm(
-      `Delete ${directories.length} build/ ${noun} and everything in them?`,
-      { detail, confirmLabel: confirm },
-    ),
+    vscodeUi.confirm({
+      message: `Delete ${directories.length} build/ ${noun} and everything in them?`,
+      action: confirm,
+      detail,
+    }),
     false,
   );
   if (!confirmed) return;

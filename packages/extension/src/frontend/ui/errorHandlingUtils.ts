@@ -54,7 +54,7 @@ export function showLoggedErrorMessage(
     yield* Effect.logError(message).pipe(withLogChannel(channel));
     const choice = yield* announce(
       channel,
-      vscodeUi.error(message, { items: [INSTALL_GUIDE_ACTION] }),
+      vscodeUi.ask('error', message, { items: [INSTALL_GUIDE_ACTION] }),
       undefined,
     );
     if (choice === INSTALL_GUIDE_ACTION)
@@ -81,9 +81,7 @@ export const showLoggedMessage = Effect.fn('showLoggedMessage')(function* (
   message: string,
 ): Effect.fn.Return<string> {
   yield* Effect.logError(message).pipe(withLogChannel(channel));
-  yield* Effect.forkDetach(
-    announce(channel, vscodeUi.showErrorMessage(message), undefined),
-  );
+  yield* Effect.forkDetach(vscodeUi.notify('error', message));
   return message;
 });
 
@@ -92,9 +90,7 @@ export const showLoggedMessage = Effect.fn('showLoggedMessage')(function* (
 export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
   function* (channel: string, message: string): Effect.fn.Return<string> {
     yield* Effect.logInfo(message).pipe(withLogChannel(channel));
-    yield* Effect.forkDetach(
-      announce(channel, vscodeUi.showInfoMessage(message), undefined),
-    );
+    yield* Effect.forkDetach(vscodeUi.notify('info', message));
     return message;
   },
 );
@@ -110,7 +106,7 @@ export const showLoggedMessageWithDocs = Effect.fn('showLoggedMessageWithDocs')(
     yield* Effect.logError(message).pipe(withLogChannel(channel));
     const selection = yield* announce(
       channel,
-      vscodeUi.error(message, { items: [actionLabel] }),
+      vscodeUi.ask('error', message, { items: [actionLabel] }),
       undefined,
     );
     if (selection !== actionLabel) return;

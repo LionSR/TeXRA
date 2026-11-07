@@ -1,16 +1,14 @@
-// The chat TUI's dialog surface: the members of the host-neutral
-// {@link PromptHost} its settings controllers ask for (`info`, `confirm`,
-// `input`).
+// The chat TUI's dialog surface, the host-neutral {@link Dialogs}.
 //
-// A message is a local transcript notice — the CLI's fire-and-forget surface,
+// A notice is a local transcript notice — the CLI's fire-and-forget surface,
 // which is why it cannot fail and answers `Effect.sync`.
 // A dialog is a foreground form: it takes the App's one `activeForm` slot, so
 // a host dialog obeys the same one-modal-at-a-time promotion the approval
 // queue does, and a second one waits on this module's lane rather than
 // painting over the first. A slash form already in that slot is waited on
 // too, through the slot owner in `cliState`. Cancelling is a value, never a failure: `confirm`
-// answers `false`, `input` and an answerable message answer `undefined`,
-// exactly as the two graphical hosts do.
+// answers `false` and `input` answers `undefined`, exactly as the two
+// graphical hosts do.
 
 // Third-party imports
 import { Effect, Semaphore } from 'effect';
@@ -18,12 +16,11 @@ import { Text } from 'ink';
 
 // Local imports
 import type {
+  ConfirmQuestion,
+  Dialogs,
   HostFailed,
-  PromptConfirmOptions,
-  PromptHost,
-  PromptInputOptions,
-  PromptMessageItem,
-  PromptMessageOptions,
+  InputField,
+  NoticeLevel,
 } from '@texra/hosts/uiHosts';
 
 import { TextEntryForm } from '../forms/_shared/TextEntryForm';
@@ -37,11 +34,6 @@ import { appendLocalNotice } from '../state/transcript';
  * interruptible while it waits — an interrupted waiter never takes the slot.
  */
 const dialogLane = Semaphore.makeUnsafe(1);
-
-/** The button label of an item, whichever shape the caller wrote it in. */
-function labelOf<T extends string>(item: PromptMessageItem<T>): T {
-  return typeof item === 'string' ? item : item.label;
-}
 
 /**
  * Put one form in the App's foreground slot and wait for the answer it
@@ -81,22 +73,17 @@ function openDialog<T>(
 }
 
 /** Pick one of the caller's own labels, or dismiss. */
-function chooseItem<T extends string>(
+function chooseItem(
   title: string,
-  options: PromptMessageOptions<T>,
-  items: readonly PromptMessageItem<T>[],
-): Effect.Effect<T | undefined> {
-  return openDialog<T>('message', (answer, availableRows) => (
-    <ListForm<T>
+  detail: string | undefined,
+  labels: readonly string[],
+): Effect.Effect<string | undefined> {
+  return openDialog<string>('message', (answer, availableRows) => (
+    <ListForm<string>
       title={title}
       availableRows={availableRows}
-      items={items.map((item) => ({
-        value: labelOf(item),
-        label: labelOf(item),
-      }))}
-      description={
-        options.detail ? <Text dimColor>{options.detail}</Text> : undefined
-      }
+      items={labels.map((label) => ({ value: label, label }))}
+      description={detail ? <Text dimColor>{detail}</Text> : undefined}
       action="select"
       escapeAction="dismiss"
       onSelect={answer}
@@ -106,61 +93,41 @@ function chooseItem<T extends string>(
 }
 
 /**
- * The CLI's own {@link PromptHost} members. Stateless — the transcript and
- * the foreground slot are module-level signals the App reads — so the
- * surfaces that present on it share this one instance, as the VS Code host's
- * surfaces share `vscodeUi`.
+ * The CLI's {@link Dialogs}. Stateless — the transcript and the foreground
+ * slot are module-level signals the App reads — so the surfaces that present
+ * on it share this one instance, as the VS Code host's surfaces share
+ * `vscodeUi`.
  */
-class TuiUiHost implements Pick<PromptHost, 'info' | 'confirm' | 'input'> {
-  /** A message with no items is a transcript notice; one with items is a
-   *  picker whose answer is the label the user chose. */
-  info<T extends string = string>(
-    message: string,
-    options: PromptMessageOptions<T> = {},
-  ): Effect.Effect<T | undefined, HostFailed> {
-    const items = options.items ?? [];
-    if (items.length === 0) {
-      return Effect.sync(() => {
-        appendLocalNotice(
-          options.detail ? `${message}\n${options.detail}` : message,
-        );
-        return undefined;
-      });
-    }
-    return chooseItem(message, options, items);
+class TuiUiHost implements Dialogs {
+  /** A transcript notice; its level reads from the words. */
+  notify(_level: NoticeLevel, message: string): Effect.Effect<void> {
+    return Effect.sync(() => appendLocalNotice(message));
   }
 
   /**
-   * A confirmation is the caller's two labels in the same picker an
-   * answerable message uses, so `y`/`n` stay out of the vocabulary here: the
+   * A confirmation is the action and Cancel in a picker, so `y`/`n` stay
+   * out of the vocabulary here: the
    * approval modals own that pair, and a settings confirmation that borrowed
    * it would read as one of them. Escape is the cancel label's answer, which
    * is what makes a dismissal `false` rather than a failure.
    */
-  confirm(
-    message: string,
-    options: PromptConfirmOptions,
-  ): Effect.Effect<boolean, HostFailed> {
-    const confirmLabel = options.confirmLabel;
-    return chooseItem<string>(message, { detail: options.detail }, [
-      confirmLabel,
+  confirm(question: ConfirmQuestion): Effect.Effect<boolean, HostFailed> {
+    return chooseItem(question.message, question.detail, [
+      question.action,
       'Cancel',
-    ]).pipe(Effect.map((selected) => selected === confirmLabel));
+    ]).pipe(Effect.map((selected) => selected === question.action));
   }
 
   /**
-   * Ask for one line of text. `password` masks the entry, which is what every
-   * caller of this member in the tree asks for (a provider key, a token), and
-   * the unmasked form is the same entry without the mask.
+   * Ask for one line of text; `secret` masks the entry (a provider key, a
+   * token).
    */
-  input(
-    options: PromptInputOptions,
-  ): Effect.Effect<string | undefined, HostFailed> {
+  input(field: InputField): Effect.Effect<string | undefined, HostFailed> {
     return openDialog<string>('input', (answer) => (
       <TextEntryForm
-        title={options.prompt ?? 'Enter a value'}
-        masked={options.password ?? false}
-        placeholder={options.placeHolder ?? ''}
+        title={field.prompt}
+        masked={field.secret ?? false}
+        placeholder={field.placeholder ?? ''}
         hint="Press Enter to submit."
         onSubmit={answer}
         onCancel={() => answer(undefined)}

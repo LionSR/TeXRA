@@ -199,13 +199,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           runtime.runFork(
             Effect.logWarning(message).pipe(
               withLogChannel(EXTENSION_CHANNEL),
-              Effect.andThen(
-                announce(
-                  EXTENSION_CHANNEL,
-                  vscodeUi.showWarningMessage(message),
-                  undefined,
-                ),
-              ),
+              Effect.andThen(vscodeUi.notify('warning', message)),
             ),
           );
         },
@@ -226,14 +220,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const notice = vscode.env.isTelemetryEnabled
         ? yield* telemetryNoticeIfDue(roots.config)
         : null;
-      if (notice)
-        yield* Effect.forkDetach(
-          announce(
-            EXTENSION_CHANNEL,
-            vscodeUi.showInfoMessage(notice),
-            undefined,
-          ),
-        );
+      if (notice) yield* Effect.forkDetach(vscodeUi.notify('info', notice));
       return { runtime, roots, hosts: yield* HostWindows, reached };
     }),
   );
@@ -282,7 +269,8 @@ const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
   function* (extensionPath: string) {
     const openFolder = 'Open Folder';
     const createSample = 'Create Sample Project';
-    const choice = yield* vscodeUi.info(
+    const choice = yield* vscodeUi.ask(
+      'info',
       'TeXRA agents run inside a single-folder workspace. Open your LaTeX project folder or create the sample project first.',
       { items: [openFolder, createSample] },
     );
@@ -416,15 +404,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // tasks here, and says so once. While the link is down, the service's
   // session answers with the offline refusal.
   const warn = (message: string) =>
-    Effect.asVoid(
-      Effect.forkDetach(
-        announce(
-          EXTENSION_CHANNEL,
-          vscodeUi.showWarningMessage(message),
-          undefined,
-        ),
-      ),
-    );
+    Effect.asVoid(Effect.forkDetach(vscodeUi.notify('warning', message)));
   const windowSession: GuiSession = yield* openProjectSession(
     roots,
     Result.isSuccess(reached) ? reached.success : undefined,
@@ -536,7 +516,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       Stream.runForEach(({ message }) =>
         announce(
           EXTENSION_CHANNEL,
-          vscodeUi.error(gitHubTokenRejectedMessage(message), {
+          vscodeUi.ask('error', gitHubTokenRejectedMessage(message), {
             items: [openSettings],
           }),
           undefined,

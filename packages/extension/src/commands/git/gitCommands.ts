@@ -60,13 +60,7 @@ const promptInput = Effect.fn('promptInput')(function* (
   if (!trimmed) {
     // Show cancellation message only if user dismissed with empty string (not Escape)
     if (val !== undefined) {
-      yield* Effect.forkDetach(
-        announce(
-          CHANNEL,
-          vscodeUi.showWarningMessage('Clone cancelled.'),
-          undefined,
-        ),
-      );
+      yield* Effect.forkDetach(vscodeUi.notify('warning', 'Clone cancelled.'));
     }
     return null;
   }
@@ -113,7 +107,7 @@ const promptGitMissing = Effect.fnUntraced(function* () {
   yield* Effect.logError(message).pipe(withLogChannel(CHANNEL));
   const selected = yield* announce(
     CHANNEL,
-    vscodeUi.error(message, { items: actions }),
+    vscodeUi.ask('error', message, { items: actions }),
     undefined,
   );
   if (selected === 'Copy Command' && command) {
@@ -162,7 +156,7 @@ function buildOverleafClonePorts(
         Effect.andThen(
           announce(
             CHANNEL,
-            vscodeUi.error(message, {
+            vscodeUi.ask('error', message, {
               items: spec.tokenHint ? ['How to get a token'] : [],
             }),
             undefined,
@@ -185,11 +179,7 @@ function buildOverleafClonePorts(
         withLogChannel(CHANNEL),
         Effect.andThen(
           Effect.forkDetach(
-            announce(
-              CHANNEL,
-              vscodeUi.showErrorMessage('Cannot read workspace folder.'),
-              undefined,
-            ),
+            vscodeUi.notify('error', 'Cannot read workspace folder.'),
           ),
         ),
       ),
@@ -208,11 +198,7 @@ function buildOverleafClonePorts(
       ),
     showCloneSucceeded: (label) =>
       Effect.forkDetach(
-        announce(
-          CHANNEL,
-          vscodeUi.showInfoMessage(`${label} project cloned.`),
-          undefined,
-        ),
+        vscodeUi.notify('info', `${label} project cloned.`),
       ).pipe(Effect.asVoid),
     showAuthFailure: Effect.fn('gitCommands.showAuthFailure')(function* (r) {
       const detail = r.isOverleaf
@@ -220,7 +206,7 @@ function buildOverleafClonePorts(
         : 'Check your credentials.';
       const selected = yield* announce(
         CHANNEL,
-        vscodeUi.error(`Clone failed: authentication error. ${detail}`, {
+        vscodeUi.ask('error', `Clone failed: authentication error. ${detail}`, {
           items: r.isOverleaf
             ? ['Get New Token', 'How to get a token']
             : ['Retry'],
@@ -234,9 +220,7 @@ function buildOverleafClonePorts(
       }
     }),
     showCloneFailed: (message) =>
-      Effect.forkDetach(
-        announce(CHANNEL, vscodeUi.showErrorMessage(message), undefined),
-      ).pipe(Effect.asVoid),
+      Effect.forkDetach(vscodeUi.notify('error', message)).pipe(Effect.asVoid),
     logCloneError: (message) =>
       Effect.logError(`Clone failed: ${message}`).pipe(withLogChannel(CHANNEL)),
   };

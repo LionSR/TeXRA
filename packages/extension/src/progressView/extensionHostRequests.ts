@@ -37,7 +37,6 @@ import { openBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
-import { announce } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
@@ -54,7 +53,7 @@ import type {
   HostRequest,
 } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import { HostFailed, type NoticeLevel } from '@texra/hosts/uiHosts';
 
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
@@ -261,12 +260,9 @@ export const createExtensionHostRequests = Effect.fn(
           });
         } else {
           yield* Effect.forkDetach(
-            announce(
-              CHANNEL,
-              vscodeUi.showInfoMessage(
-                `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
-              ),
-              undefined,
+            vscodeUi.notify(
+              'info',
+              `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
             ),
           );
         }
@@ -287,12 +283,9 @@ export const createExtensionHostRequests = Effect.fn(
           } satisfies HostOutcome;
         }
         yield* Effect.forkDetach(
-          announce(
-            CHANNEL,
-            vscodeUi.showInfoMessage(
-              `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
-            ),
-            undefined,
+          vscodeUi.notify(
+            'info',
+            `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
           ),
         );
       }
@@ -439,9 +432,8 @@ export const createExtensionHostRequests = Effect.fn(
     own,
     window: options.window,
     // The host's members read `this`, so they cross the boundary bound.
-    showInfoMessage: (message: string) => vscodeUi.showInfoMessage(message),
-    showWarningMessage: (message: string) =>
-      vscodeUi.showWarningMessage(message),
+    notify: (level: NoticeLevel, message: string) =>
+      vscodeUi.notify(level, message),
     runs: {
       revealProgress: options.revealProgress,
       openFinalOutput: previewFinalOutput,
@@ -454,7 +446,7 @@ export const createExtensionHostRequests = Effect.fn(
           handleCompare(at(base), at(edited), title, diffRefresh),
         ),
       confirmAccept: (message: string) =>
-        vscodeUi.confirm(message, { confirmLabel: 'Replace file' }),
+        vscodeUi.confirm({ message, action: 'Replace file' }),
       openDirectory: revealFileInOS,
     },
     export: {

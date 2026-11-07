@@ -33,12 +33,10 @@ const noOpEffect = (): Effect.Effect<void> => Effect.void;
 function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
   return {
     post: noOpEffect,
-    notify: { showInfoMessage: noOpEffect, showErrorMessage: noOpEffect },
-    prompt: {
+    dialogs: {
+      notify: noOpEffect,
       input: () => Effect.succeed(undefined),
       confirm: () => Effect.succeed(true),
-      info: () => Effect.succeed(undefined),
-      warning: () => Effect.succeed(undefined),
     },
     externalOpener: { openExternal: noOpEffect },
     openPath: noOpEffect,

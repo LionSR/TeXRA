@@ -258,7 +258,7 @@ void Effect.runPromise(
               ),
             catch: (cause) =>
               new HostFailed({
-                member: 'showWarningMessage',
+                member: 'dialog.showMessageBox',
                 message: 'The unopened-projects warning could not be shown.',
                 cause,
               }),

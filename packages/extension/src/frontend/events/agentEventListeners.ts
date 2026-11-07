@@ -100,7 +100,9 @@ function handleRequestShowError(
   // (the extension host tearing down) are reported there rather than
   // becoming an unhandled rejection. A docs page is offered as a button.
   return vscodeUi
-    .error(modelFailureText(failure), { items: docsPage ? ['View Docs'] : [] })
+    .ask('error', modelFailureText(failure), {
+      items: docsPage ? ['View Docs'] : [],
+    })
     .pipe(
       Effect.flatMap((choice) =>
         choice && docsPage
@@ -199,7 +201,7 @@ export const revealProgressView = Effect.fn('revealProgressView')(function* (
   // The toast is the delivered surface when the view cannot be made
   // visible: a successful handoff means the run was presented even if the
   // user dismisses it without retrying the reveal.
-  const selection = yield* vscodeUi.info(launchNotice(config), {
+  const selection = yield* vscodeUi.ask('info', launchNotice(config), {
     modal: false,
     detail:
       'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',

@@ -121,7 +121,8 @@ export const downloadArXivSource: (
       return;
     }
 
-    const result = yield* vscodeUi.info(
+    const result = yield* vscodeUi.ask(
+      'info',
       `arXiv source downloaded to ${path.basename(extractedPath.value)}${
         autoIndent ? ' with LaTeX files indented' : ''
       }`,

@@ -5,10 +5,7 @@ import { Cause, Effect } from 'effect';
 // Local imports
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import {
-  announce,
-  showLoggedInfoMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { launchSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
@@ -70,12 +67,9 @@ export const launchSetupAssistant = Effect.fn('launchSetupAssistant')(
       withLogChannel(CHANNEL),
       Effect.andThen(
         Effect.forkDetach(
-          announce(
-            CHANNEL,
-            vscodeUi.showErrorMessage(
-              `Failed to launch setup assistant: ${toErrorMessage(error)}`,
-            ),
-            undefined,
+          vscodeUi.notify(
+            'error',
+            `Failed to launch setup assistant: ${toErrorMessage(error)}`,
           ),
         ),
       ),

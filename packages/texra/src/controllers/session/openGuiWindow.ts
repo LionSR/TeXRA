@@ -44,7 +44,7 @@ import type {
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import type { MessageHost } from '@texra/hosts/uiHosts';
+import type { Dialogs } from '@texra/hosts/uiHosts';
 import type { TexraPlugin } from '@texra/tools/registry';
 import {
   ToolEditApprovalController,
@@ -189,10 +189,9 @@ interface GuiWindowParts {
 
 /** What a host does for its window: the shared body's verbs, the requests
  *  it answers its own way, and the host verbs of the window's parts. */
-interface GuiWindowHost extends Pick<
-  MessageHost,
-  'showInfoMessage' | 'showWarningMessage'
-> {
+interface GuiWindowHost {
+  /** The window's notices. */
+  readonly notify: Dialogs['notify'];
   readonly bindings: SharedHostRequestBindings;
   readonly own: OwnHostArms;
   /** What the window does for its project's runs, here or in the service. */
@@ -345,8 +344,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     roots,
     present,
     session,
-    showInfo: host.showInfoMessage,
-    showWarning: host.showWarningMessage,
+    notify: host.notify,
   });
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     rounds: (runId) => {
@@ -355,7 +353,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     },
     storageRoot: roots.storage,
     workspace: roots.workspace,
-    host: { ...host.files, showInfo: host.showInfoMessage },
+    host: {
+      ...host.files,
+      showInfo: (message) => host.notify('info', message),
+    },
     runs: runActions,
   });
 
@@ -381,14 +382,13 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     host: bindings.latexdiff,
     roots,
     session,
-    messages: host,
+    notify: host.notify,
   });
   const exportTranscript = (runId: RunId) =>
     exportRunTranscript(runId, {
       pickFormat: host.export.pickFormat,
       openPath: host.export.openPath,
-      showInfo: host.showInfoMessage,
-      showWarning: host.showWarningMessage,
+      notify: host.notify,
       roots,
       session,
       latexPreamble: host.export.latexPreamble,
@@ -478,15 +478,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           );
           if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
             yield* Effect.forkDetach(
-              host
-                .showInfoMessage(
-                  `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
-                )
-                .pipe(
-                  Effect.catch((cause) =>
-                    Effect.logWarning('Dropped-file notice failed', cause),
-                  ),
-                ),
+              host.notify(
+                'info',
+                `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+              ),
             );
           }
           return { kind: 'files', paths: attached.paths };
@@ -609,7 +604,8 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             request.runId,
             request.kind,
           );
-          yield* host.showInfoMessage(
+          yield* host.notify(
+            'info',
             fileOpResultMessage(request.kind, files.result, files.inputFile),
           );
           return done;

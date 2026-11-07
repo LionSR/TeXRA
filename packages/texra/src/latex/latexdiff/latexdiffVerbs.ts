@@ -30,7 +30,7 @@ import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
-import type { MessageHost } from '@texra/hosts/uiHosts';
+import type { Dialogs, NoticeLevel } from '@texra/hosts/uiHosts';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
@@ -79,24 +79,15 @@ export function latexdiffVerbs(parts: {
   readonly roots: WorkspaceRoots;
   /** The window's session: its view holds the runs' recorded documents. */
   readonly session: Session;
-  readonly messages: Pick<
-    MessageHost,
-    'showInfoMessage' | 'showWarningMessage'
-  >;
+  readonly notify: Dialogs['notify'];
 }) {
-  const { host, roots, session, messages } = parts;
+  const { host, roots, session } = parts;
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
 
   /** A notice the request does not wait on: a VS Code toast answers only
    *  when it is dismissed. */
-  const notify = (notice: Effect.Effect<void, HostRequestFailure>) =>
-    Effect.forkDetach(
-      notice.pipe(
-        Effect.catch((cause) =>
-          Effect.logWarning('LaTeX diff notice failed', cause),
-        ),
-      ),
-    );
+  const notify = (level: NoticeLevel, message: string) =>
+    Effect.forkDetach(parts.notify(level, message));
 
   /** A generated diff opens; a failed one is refused with its message. */
   const open = <E extends Error, R>(diff: Effect.Effect<string, E, R>) =>
@@ -144,7 +135,7 @@ export function latexdiffVerbs(parts: {
         action === 'cleanLatexdiffvc',
       ),
     );
-    if (message) yield* notify(messages.showInfoMessage(message));
+    if (message) yield* notify('info', message);
   }, withLogChannel(CHANNEL));
 
   /**
@@ -195,11 +186,7 @@ export function latexdiffVerbs(parts: {
     );
     const total = recorded.length + pairs.length;
     if (total === 0) {
-      yield* notify(
-        messages.showInfoMessage(
-          'No LaTeX diff operations available for this run.',
-        ),
-      );
+      yield* notify('info', 'No LaTeX diff operations available for this run.');
       return;
     }
 
@@ -248,13 +235,12 @@ export function latexdiffVerbs(parts: {
         reason: 'All LaTeX diff operations failed',
       });
     }
-    yield* notify(
-      diffPaths.length < total
-        ? messages.showWarningMessage(
-            `${diffPaths.length} of ${total} LaTeX diff operations completed successfully`,
-          )
-        : messages.showInfoMessage('All LaTeX diffs completed successfully'),
-    );
+    yield* diffPaths.length < total
+      ? notify(
+          'warning',
+          `${diffPaths.length} of ${total} LaTeX diff operations completed successfully`,
+        )
+      : notify('info', 'All LaTeX diffs completed successfully');
     yield* host.openDiffs(diffPaths);
   }, withLogChannel(CHANNEL));
 

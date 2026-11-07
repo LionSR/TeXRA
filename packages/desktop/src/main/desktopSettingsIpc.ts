@@ -4,17 +4,14 @@ import {
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
-import { Skills, withLogChannel } from '@texra-ai/harness/host';
+import { Skills } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@texra-ai/harness/host';
 import { unsupported } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
-import {
-  SETTINGS_LOG_CHANNEL,
-  type SettingsHostBindings,
-} from '@texra/controllers/settingsView/settingsHostBindings';
+import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import {
   subscriptionProvider,
@@ -101,13 +98,9 @@ export function createDesktopSettingsIpc(
     ) =>
       present.pipe(
         Effect.catch((failure) =>
-          bindings.notify.showErrorMessage(
+          bindings.dialogs.notify(
+            'error',
             `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
-          ),
-        ),
-        Effect.catchTag('HostFailed', (notice) =>
-          Effect.logError(notice.message).pipe(
-            withLogChannel(SETTINGS_LOG_CHANNEL),
           ),
         ),
       );
@@ -158,7 +151,8 @@ export function createDesktopSettingsIpc(
           },
         });
         yield* provider.setPreferSubscription(options.roots, true);
-        yield* bindings.notify.showInfoMessage(
+        yield* bindings.dialogs.notify(
+          'info',
           ACCOUNT_OUTCOME.signedInAs(displayName, account.label),
         );
       });
@@ -197,15 +191,7 @@ export function createDesktopSettingsIpc(
       // it would repaint the same "token set" badge.
       onAppSignal('githubTokenInvalid', ({ message }) => {
         spawn(
-          bindings.notify
-            .showErrorMessage(gitHubTokenRejectedMessage(message))
-            .pipe(
-              Effect.catchTag('HostFailed', (notice) =>
-                Effect.logError(notice.message).pipe(
-                  withLogChannel(SETTINGS_LOG_CHANNEL),
-                ),
-              ),
-            ),
+          bindings.dialogs.notify('error', gitHubTokenRejectedMessage(message)),
         );
       }),
     ];

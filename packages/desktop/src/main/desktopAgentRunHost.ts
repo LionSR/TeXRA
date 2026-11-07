@@ -1,8 +1,4 @@
-import type {
-  DiffViewHost,
-  MessageHost,
-  HostFailed,
-} from '@texra/hosts/uiHosts';
+import type { Dialogs, DiffViewHost, HostFailed } from '@texra/hosts/uiHosts';
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
@@ -12,7 +8,9 @@ import type { Effect } from 'effect';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 
 /** Required desktop capabilities used throughout an agent run. */
-export interface DesktopAgentRunHost extends MessageHost {
+export interface DesktopAgentRunHost {
+  /** A notice naming the run's project. */
+  readonly notify: Dialogs['notify'];
   /**
    * Presents an instruction (e.g. a missing API key) as an actionable
    * dialog: each token in `actions` becomes a button — dispatched to the
@@ -29,7 +27,7 @@ export interface DesktopAgentRunHost extends MessageHost {
    * `Rejected`) adds a guide button opening the matching docs page — the
    * native form of the link the extension's request-error callout renders.
    * A dialog that could not be shown is reported by the implementation, as
-   * `showErrorMessage` is: this program has no failure of its own.
+   * a notice's is: this program has no failure of its own.
    */
   showErrorDialog(message: string, docsPage?: string): Effect.Effect<void>;
   /** The export's format dialog. The Electron dialog behind it is a

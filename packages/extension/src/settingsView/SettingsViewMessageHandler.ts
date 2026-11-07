@@ -109,8 +109,7 @@ export class SettingsViewMessageHandler {
             this.withActiveWebview((webview) =>
               Effect.flatMap(message, (built) => postToWebview(webview, built)),
             ),
-          notify: vscodeUi,
-          prompt: vscodeUi,
+          dialogs: vscodeUi,
           externalOpener: new VscodeExternalOpener(),
           // Markdown opens in preview mode, the read-only rendered view.
           openPath: (filePath) =>

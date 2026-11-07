@@ -32,7 +32,7 @@ interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
 function createProfileKeyController(
   stores: SettingsStores,
 ): SettingsProfileKeyController {
-  return new SettingsProfileKeyController({ prompt: vscodeUi, stores });
+  return new SettingsProfileKeyController({ dialogs: vscodeUi, stores });
 }
 
 /**

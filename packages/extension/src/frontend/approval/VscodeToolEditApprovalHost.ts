@@ -19,7 +19,7 @@ import {
 } from '@frontend/approval/VscodeDiffViewHost';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuilt } from '@frontend/latex/openBuild';
-import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   fromHost,
   hostFailure,
@@ -104,9 +104,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     this.runtime.runFork(
       Effect.logWarning(message).pipe(
         withLogChannel(CHANNEL),
-        Effect.andThen(
-          announce(CHANNEL, vscodeUi.showWarningMessage(message), undefined),
-        ),
+        Effect.andThen(vscodeUi.notify('warning', message)),
       ),
     );
   };

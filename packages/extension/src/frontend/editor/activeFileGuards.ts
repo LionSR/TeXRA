@@ -66,12 +66,13 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
   ): Effect.fn.Return<ActiveFileGuardResult, HostFailed> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-      yield* vscodeUi.showWarningMessage(GUARD_FAILURE_MESSAGES.noEditor.user);
+      yield* vscodeUi.notify('warning', GUARD_FAILURE_MESSAGES.noEditor.user);
       return { status: 'noEditor' } satisfies ActiveFileGuardResult;
     }
 
     if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-      yield* vscodeUi.showWarningMessage(
+      yield* vscodeUi.notify(
+        'warning',
         GUARD_FAILURE_MESSAGES.unsupportedExtension.user,
       );
       return { status: 'unsupportedExtension' } satisfies ActiveFileGuardResult;

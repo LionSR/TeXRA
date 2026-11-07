@@ -275,8 +275,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         toolEdits: new DesktopToolEditApprovalHost({
           ui: {
             ...hosts.toolEditPreview,
-            showErrorMessage: hosts.run.showErrorMessage,
-            showWarningMessage: hosts.run.showWarningMessage,
+            notify: hosts.run.notify,
           },
           spawn,
           focused: () => shown() && host.window.isFocused(),

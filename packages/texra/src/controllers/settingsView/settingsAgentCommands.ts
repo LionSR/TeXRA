@@ -262,24 +262,22 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           }
 
           // A copy already there is replaced only on the user's say-so.
-          const targetPath = yield* catalog
-            .customize(entry, 'copy')
-            .pipe(
-              Effect.catchTag('AgentCustomizeRefused', (refused) =>
-                refused.reason === 'exists' && refused.path !== undefined
-                  ? Effect.flatMap(
-                      bindings.prompt.confirm(
-                        `A custom copy already exists: ${path.basename(refused.path)}`,
-                        { modal: true, confirmLabel: 'Overwrite' },
-                      ),
-                      (overwrite) =>
-                        overwrite
-                          ? catalog.customize(entry, 'overwrite')
-                          : Effect.succeed(undefined),
-                    )
-                  : Effect.as(present.alert(refused.message), undefined),
-              ),
-            );
+          const targetPath = yield* catalog.customize(entry, 'copy').pipe(
+            Effect.catchTag('AgentCustomizeRefused', (refused) =>
+              refused.reason === 'exists' && refused.path !== undefined
+                ? Effect.flatMap(
+                    bindings.dialogs.confirm({
+                      message: `A custom copy already exists: ${path.basename(refused.path)}`,
+                      action: 'Overwrite',
+                    }),
+                    (overwrite) =>
+                      overwrite
+                        ? catalog.customize(entry, 'overwrite')
+                        : Effect.succeed(undefined),
+                  )
+                : Effect.as(present.alert(refused.message), undefined),
+            ),
+          );
           if (targetPath === undefined) return;
 
           yield* agentFilesChanged;
@@ -312,10 +310,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
               );
             }
 
-            const confirmed = yield* bindings.prompt.confirm(
-              `Delete "${message.agentName}"? This cannot be undone.`,
-              { modal: true, confirmLabel: 'Delete' },
-            );
+            const confirmed = yield* bindings.dialogs.confirm({
+              message: `Delete "${message.agentName}"? This cannot be undone.`,
+              action: 'Delete',
+            });
             if (!confirmed) return;
 
             const fs = yield* FileSystem.FileSystem;
@@ -381,9 +379,9 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to create agent',
         Effect.gen(function* () {
-          const name = yield* bindings.prompt.input({
+          const name = yield* bindings.dialogs.input({
             prompt: `Enter a name for the new ${message.task ? 'document task' : 'chat'} agent (without .yaml extension)`,
-            placeHolder: 'my_agent',
+            placeholder: 'my_agent',
           });
           if (!name) return;
           const invalid = validateTemplateAgentName(name);
@@ -471,9 +469,9 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to save agent team',
         Effect.gen(function* () {
-          const name = yield* bindings.prompt.input({
+          const name = yield* bindings.dialogs.input({
             prompt: 'Name for the new team',
-            placeHolder: 'e.g. My Research Team',
+            placeholder: 'e.g. My Research Team',
           });
           if (!name?.trim()) return;
           const { catalog } = yield* page;
@@ -493,10 +491,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
               `Unknown custom team: ${message.presetId}`,
             );
           }
-          const confirmed = yield* bindings.prompt.confirm(
-            `Delete team "${target.name}"?`,
-            { modal: true, confirmLabel: 'Delete' },
-          );
+          const confirmed = yield* bindings.dialogs.confirm({
+            message: `Delete team "${target.name}"?`,
+            action: 'Delete',
+          });
           if (!confirmed) return;
           yield* catalog.deleteCustomPreset(message.presetId);
           yield* agentsChanged();

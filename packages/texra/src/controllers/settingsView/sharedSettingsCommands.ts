@@ -288,7 +288,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       ).pipe(withPerKeyLane(skillListLanes, key));
 
     const profileKeys = new SettingsProfileKeyController({
-      prompt: bindings.prompt,
+      dialogs: bindings.dialogs,
       stores: roots,
     });
     // A failed key write is reported, and the profile and the Models page
