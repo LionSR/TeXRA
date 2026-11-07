@@ -345,7 +345,11 @@ export default defineConfig({
       },
     },
     {
-      files: ['src/test-kernel/**', 'packages/*/test/**'],
+      files: [
+        'src/test-kernel/**',
+        'packages/*/test/**',
+        'packages/*/tests/**',
+      ],
       rules: {
         'typescript/no-non-null-assertion': 'error',
       },

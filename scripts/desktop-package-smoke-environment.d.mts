@@ -1,6 +1,5 @@
 export interface DesktopSmokePaths {
   profile: string;
-  userData: string;
 }
 
 export function buildDesktopSmokeEnvironment(
@@ -38,12 +37,11 @@ export type DatabaseFixture = Pick<
     typeof import('@platform/defaults/nodePlatform'),
     'nodePlatformServices'
   > &
-  Pick<typeof import('@tools/toolTable'), 'ToolRegistry' | 'toolTable'>;
+  Pick<typeof import('@tools/toolTable'), 'ToolRegistry' | 'toolTable'> &
+  Pick<typeof import('@texra/controllers/server/discovery'), 'servicePaths'>;
 
-export function loadDatabaseFixture(
-  userDataPath: string,
-): Promise<DatabaseFixture>;
+export function loadDatabaseFixture(): Promise<DatabaseFixture>;
 export function rememberOpenProject(
-  userDataPath: string,
+  dataRoot: string,
   workspacePath: string,
 ): Promise<void>;

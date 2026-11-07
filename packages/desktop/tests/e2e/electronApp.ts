@@ -1,53 +1,156 @@
-import { existsSync, mkdtempSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  symlinkSync,
+} from 'node:fs';
+import type { ChildProcess } from 'node:child_process';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron, expect } from '@playwright/test';
+import { _electron as electron, test as base, expect } from '@playwright/test';
 import {
   loadDatabaseFixture,
   rememberOpenProject,
 } from '../../../../scripts/desktop-package-smoke-environment.mjs';
+import { isolatedHomeEnv } from '../../../../scripts/isolated-home.mjs';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
-import type { ElectronApplication, Page } from '@playwright/test';
+import type { ElectronApplication, Locator, Page } from '@playwright/test';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(HERE, '..', '..');
 const MAIN_ENTRY = join(PACKAGE_ROOT, 'dist', 'main', 'index.js');
 const HEADLESS = process.env.TEXRA_DESKTOP_E2E_HEADED !== '1';
 
-interface LaunchOptions {
-  /**
-   * Workspace folder the app opens at launch, seeded into the profile's
-   * remembered projects (there is no launch flag; the app reopens what it
-   * remembers). If omitted, a fresh temp directory is created so the app
-   * shows a project rather than the empty state at startup.
-   */
-  workspacePath?: string;
-  /**
-   * Electron user-data directory. Supplying this lets a test relaunch the
-   * desktop app against the same profile so app-scoped stores persist.
-   */
-  userDataPath?: string;
-  /**
-   * Extra environment variables to pass to the Electron child process.
-   * Useful for stubbing out keychain access.
-   */
-  env?: Record<string, string>;
+/**
+ * What one test's app runs over: a temporary home, whose `~/.texra` is the
+ * data root the app, its background service and a CLI share as they do for a
+ * user, and the project the app opens. Electron's own profile is kept in the
+ * home too (`--user-data-dir`), so nothing a launch writes leaves it.
+ */
+export interface Profile {
+  readonly home: string;
+  readonly dataRoot: string;
+  readonly workspacePath: string;
+}
+
+/** A fresh profile with an empty project; {@link removeProfile} ends it. */
+export function createProfile(): Profile {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'texra-e2e-home-')));
+  const workspacePath = join(home, 'project');
+  mkdirSync(workspacePath);
+  // Chromium on Linux reads the certificates it trusts from the user's NSS
+  // database; that is the machine's configuration, not TeXRA data, so the
+  // home keeps it (a TLS proxy's root, say, for a page a test loads).
+  const trust = join(homedir(), '.pki');
+  if (existsSync(trust)) symlinkSync(trust, join(home, '.pki'));
+  return { home, dataRoot: join(home, '.texra'), workspacePath };
+}
+
+/** The background services of `dataRoot`: each listens on a socket named
+ *  by its process id. */
+async function servicePids(dataRoot: string): Promise<number[]> {
+  const { servicePaths } = await loadDatabaseFixture();
+  const { socketDirectory } = servicePaths(dataRoot);
+  return (existsSync(socketDirectory) ? readdirSync(socketDirectory) : [])
+    .map((name) => /^serve-(\d+)\.sock$/.exec(name)?.[1])
+    .filter((pid) => pid !== undefined)
+    .map((pid) => Number.parseInt(pid, 10))
+    .filter(alive);
+}
+
+/**
+ * Stop the background services of `dataRoot`, which outlive the app that
+ * started them; a test that writes the store a service holds stops it first.
+ */
+export async function stopServices(dataRoot: string): Promise<void> {
+  const pids = await servicePids(dataRoot);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Already gone.
+    }
+  }
+  await expect.poll(() => pids.filter(alive), { timeout: 30_000 }).toEqual([]);
+}
+
+/** Whether process `pid` still runs. */
+export function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Stop the profile's services and remove its home. */
+export async function removeProfile(profile: Profile): Promise<void> {
+  await stopServices(profile.dataRoot);
+  cleanupDirectory(profile.home);
 }
 
 export interface LaunchedApp {
-  app: ElectronApplication;
-  page: Page;
-  workspacePath: string;
-  userDataPath: string;
-  /**
-   * True when `launchTexraApp()` allocated a temp workspace itself (caller
-   * did not supply one). `closeTexraApp()` cleans this up so repeated CI
-   * runs do not litter the system temp directory.
-   */
-  ownsWorkspace: boolean;
-  /** True when `launchTexraApp()` allocated an isolated desktop profile. */
-  ownsUserData: boolean;
+  readonly app: ElectronApplication;
+  /** The app's main process, which outlives Playwright's handle on it. */
+  readonly process: ChildProcess;
+  readonly page: Page;
+  readonly profile: Profile;
+  /** The renderer's uncaught errors, which a test's teardown expects none of. */
+  readonly rendererErrors: string[];
+}
+
+type Launch = (env?: Record<string, string>) => Promise<LaunchedApp>;
+
+/**
+ * The runner owns each app's lifetime: `profile` is the test's own,
+ * `launch` starts the app over it (again after a close, for a relaunch), and
+ * `launched` is the first launch. After the test every app still open is
+ * closed, the renderers must have thrown nothing, and the profile's services
+ * stop. `launchEnv` adds environment variables to every launch of a file
+ * (`test.use({ launchEnv })`).
+ */
+export const test = base.extend<{
+  launchEnv: Record<string, string>;
+  profile: Profile;
+  launch: Launch;
+  launched: LaunchedApp;
+}>({
+  launchEnv: [{}, { option: true }],
+  // oxlint-disable-next-line no-empty-pattern -- Playwright reads the fixture's dependencies from this pattern.
+  profile: async ({}, use) => {
+    const profile = createProfile();
+    try {
+      await use(profile);
+    } finally {
+      await removeProfile(profile);
+    }
+  },
+  launch: async ({ profile, launchEnv }, use) => {
+    const apps: LaunchedApp[] = [];
+    await use(async (env = {}) => {
+      const launched = await launchTexraApp(profile, { ...launchEnv, ...env });
+      apps.push(launched);
+      return launched;
+    });
+    for (const launched of apps) await closeTexraApp(launched);
+    expect(apps.flatMap((launched) => launched.rendererErrors)).toEqual([]);
+  },
+  launched: async ({ launch }, use) => {
+    await use(await launch());
+  },
+});
+
+export { expect };
+
+/** `locator`'s bounding box, which a visible element has. */
+export async function box(locator: Locator) {
+  const found = await locator.boundingBox();
+  if (found === null) throw new Error(`${String(locator)} has no bounding box`);
+  return found;
 }
 
 export async function openDesktopAppearance(page: Page) {
@@ -79,19 +182,18 @@ export async function chooseDesktopTheme(
 }
 
 /** Resolve project storage through the production path function in the fixture bundle. */
-export async function findWorkspaceStoragePath(input: {
-  userDataPath: string;
-  workspacePath: string;
-}): Promise<string> {
-  const fixture = await loadDatabaseFixture(input.userDataPath);
+export async function findWorkspaceStoragePath(
+  profile: Profile,
+): Promise<string> {
+  const fixture = await loadDatabaseFixture();
   return fixture.resolveWorkspaceStoragePath(
-    input.userDataPath,
-    realpathSync(input.workspacePath),
+    profile.dataRoot,
+    realpathSync(profile.workspacePath),
   );
 }
 
 /**
- * Launch the TeXRA Electron desktop app for e2e testing.
+ * Launch the TeXRA Electron desktop app over `profile`, opening its project.
  *
  * Assumes the renderer + main bundles are already built (`pnpm --filter
  * @texra/desktop build` or the individual `build:main`/`build:preload`/
@@ -99,7 +201,8 @@ export async function findWorkspaceStoragePath(input: {
  * every test — that would blow the per-suite budget.
  */
 export async function launchTexraApp(
-  options: LaunchOptions = {},
+  profile: Profile,
+  env: Record<string, string> = {},
 ): Promise<LaunchedApp> {
   if (!existsSync(MAIN_ENTRY)) {
     throw new Error(
@@ -108,24 +211,21 @@ export async function launchTexraApp(
     );
   }
 
-  const ownsWorkspace = options.workspacePath === undefined;
-  const workspacePath =
-    options.workspacePath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-'));
-  const ownsUserData = options.userDataPath === undefined;
-  const userDataPath =
-    options.userDataPath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
-
-  await rememberOpenProject(userDataPath, workspacePath);
+  // The app reopens what the profile remembers; there is no launch flag.
+  await rememberOpenProject(profile.dataRoot, profile.workspacePath);
   const app = await electron.launch({
-    args: [MAIN_ENTRY],
+    args: [
+      MAIN_ENTRY,
+      `--user-data-dir=${join(profile.home, 'electron-profile')}`,
+    ],
     cwd: PACKAGE_ROOT,
     env: {
       ...process.env,
+      ...isolatedHomeEnv(profile.home),
       // Test runs never report usage (and never raise the first-run notice).
       TEXRA_NO_TELEMETRY: '1',
-      TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath,
       NODE_ENV: 'production',
-      ...options.env,
+      ...env,
       // Electron's offscreen renderer keeps native windows, Dock and focus
       // out of the developer's session. Playwright's headless option alone
       // does not control an application launched through _electron.
@@ -134,22 +234,29 @@ export async function launchTexraApp(
   });
 
   const page = await app.firstWindow();
+  const rendererErrors: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error')
       console.error(`[desktop renderer] ${message.text()}`);
   });
-  page.on('pageerror', (error) => console.error('[desktop renderer]', error));
+  page.on('pageerror', (error) => {
+    console.error('[desktop renderer]', error);
+    rendererErrors.push(error.message);
+  });
   // Resize the native window, not Playwright's renderer viewport. Calling
   // page.setViewportSize() installs a fixed emulation viewport in Electron:
   // the BrowserWindow can then grow while CSS `vw`/`vh` stay frozen at the
   // original size, leaving a dead white region on the right and bottom.
   // Keeping the canonical capture size at the BrowserWindow layer preserves
   // deterministic screenshots while exercising real desktop resize behavior.
-  await app.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows().at(0);
-    if (!window) throw new Error('TeXRA window was not found.');
-    window.setContentSize(1280, 800);
-  });
+  const launched = {
+    app,
+    process: app.process(),
+    page,
+    profile,
+    rendererErrors,
+  };
+  await resizeWindow(launched, 1280, 800);
   // Wait for the actual renderer, independently of native window visibility.
   await page.waitForSelector('#app', { state: 'attached' });
   await page.waitForFunction(
@@ -157,6 +264,14 @@ export async function launchTexraApp(
     undefined,
     { timeout: 20_000 },
   );
+  // Every launch is the service's client, as a user's is; the service it
+  // starts listens before the test begins, so the teardown finds it.
+  if (process.platform !== 'win32')
+    await expect
+      .poll(async () => (await servicePids(profile.dataRoot)).length, {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
   if (HEADLESS) await assertOffscreen(app);
   else
     await expect
@@ -167,14 +282,23 @@ export async function launchTexraApp(
         ),
       )
       .toBe(true);
-  return {
-    app,
-    page,
-    workspacePath,
-    userDataPath,
-    ownsWorkspace,
-    ownsUserData,
-  };
+  return launched;
+}
+
+/** Set the native window's content size (see {@link launchTexraApp}). */
+export async function resizeWindow(
+  { app }: LaunchedApp,
+  width: number,
+  height: number,
+): Promise<void> {
+  await app.evaluate(
+    ({ BrowserWindow }, size) => {
+      const window = BrowserWindow.getAllWindows().at(0);
+      if (!window) throw new Error('TeXRA window was not found.');
+      window.setContentSize(size.width, size.height);
+    },
+    { width, height },
+  );
 }
 
 async function assertOffscreen(app: ElectronApplication): Promise<void> {
@@ -189,16 +313,27 @@ async function assertOffscreen(app: ElectronApplication): Promise<void> {
     expect(window).toEqual({ visible: false, focused: false, offscreen: true });
 }
 
+/**
+ * Close `launched`'s app, unless it has already exited, and wait for its
+ * process to exit. Playwright's own close also waits for every process that
+ * holds the app's pipes to it, and the background service the app started
+ * inherits them, so that close finishes only once the profile's services stop
+ * ({@link removeProfile}).
+ */
 export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
+  const child = launched.process;
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) =>
+    child.once('exit', () => resolve()),
+  );
   try {
     if (HEADLESS) await assertOffscreen(launched.app);
   } finally {
-    await launched.app.close();
+    launched.app.close().catch((error: unknown) => {
+      console.error('[desktop e2e] close', error);
+    });
+    await exited;
   }
-  // Clean up only auto-allocated directories. Caller-supplied workspace and
-  // profile paths may be reused across relaunches and remain caller-owned.
-  if (launched.ownsWorkspace) cleanupDirectory(launched.workspacePath);
-  if (launched.ownsUserData) cleanupDirectory(launched.userDataPath);
 }
 
 export async function dismissOnboarding(page: Page): Promise<void> {

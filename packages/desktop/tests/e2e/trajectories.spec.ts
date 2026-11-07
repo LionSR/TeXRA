@@ -1,32 +1,52 @@
-import { test, expect } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 
 import {
+  box,
+  chooseDesktopTheme,
   closeTexraApp,
+  createProfile,
   dismissOnboarding,
+  expect,
+  findWorkspaceStoragePath,
   launchTexraApp,
+  openDesktopAppearance,
   openWorkbench,
-  showLauncher,
+  removeProfile,
+  resizeWindow,
   setSettingsTab,
+  showLauncher,
+  test,
   type LaunchedApp,
+  type Profile,
 } from './electronApp.js';
 
 /**
- * Standalone-trajectory audit suite.
- *
- * These tests don't replace `screenshots.spec.ts`; they walk through the
- * critical user journeys identified in issue #3643 (auth, workspace open,
- * settings persistence, agent run) and assert the renderer surfaces a sane
- * UI for each. When a step is a known stub or partial integration the test
- * documents the gap with a soft assertion rather than failing — the goal is
- * a regression guard for the trajectory itself, not the full feature.
+ * Standalone-trajectory audit suite: one launch walks the critical user
+ * journeys identified in issue #3643 (workspace open, settings, the
+ * workbenches) and asserts the renderer surfaces a sane UI for each.
+ * `screenshots.spec.ts` captures the same surfaces for visual review.
  */
 
+const MEMORY_FILE_NAME = 'trajectory-memory.md';
+const MEMORY_TEXT = 'A memory the Memory tab lists for this project.';
+
+let profile: Profile;
 let launched: LaunchedApp;
 
 test.beforeAll(async () => {
-  launched = await launchTexraApp();
+  profile = createProfile();
+  // A memory file in the project's storage, for the Memory tab to list.
+  const memories = join(await findWorkspaceStoragePath(profile), 'memories');
+  mkdirSync(memories, { recursive: true });
+  writeFileSync(join(memories, MEMORY_FILE_NAME), `${MEMORY_TEXT}\n`);
+  launched = await launchTexraApp(profile);
   // Dismiss the first-run walkthrough so it doesn't intercept clicks.
   await dismissOnboarding(launched.page);
+  // The app opens the project the profile remembers, under its name.
+  await expect(
+    launched.page.locator('.shell-project-name').first(),
+  ).toContainText(basename(profile.workspacePath));
 });
 
 // The Settings popup is modal; a journey that opened it must not leave it
@@ -53,37 +73,13 @@ test.afterEach(async () => {
 });
 
 test.afterAll(async () => {
-  if (launched) await closeTexraApp(launched);
-});
-
-/**
- * Trajectory 1 — first launch on an empty workspace.
- * The launcher must mount without crashing the renderer.
- */
-test('first launch shows a usable launcher chrome', async () => {
-  await showLauncher(launched);
-  // The workspace directory and the Commands entry must be reachable.
-  const workspaceDirectory =
-    launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
-  const directoryLabel = await launched.page
-    .locator('.shell-project-name')
-    .first()
-    .innerText();
-  expect(directoryLabel).toContain(workspaceDirectory);
-  await expect(
-    launched.page
-      .locator('.shell-sidebar-primary .shell-sidebar-action')
-      .filter({ hasText: 'Commands' }),
-  ).toBeVisible();
-  // The conversation view renders the launcher or the no-workspace empty
-  // state — both are valid first-launch outcomes. The audit doc tracks which
-  // one each user actually hits.
-  const mainSection = launched.page.locator('.shell-dock-agent');
-  await expect(mainSection).toBeVisible();
+  await closeTexraApp(launched);
+  await removeProfile(profile);
+  expect(launched.rendererErrors).toEqual([]);
 });
 
 test('approval menu shows the current policy and keeps selection marks inside its rows', async () => {
-  const { page, app } = launched;
+  const { page } = launched;
   for (const [value, label] of [
     ['never', 'Block'],
     ['ask', 'Ask'],
@@ -106,7 +102,8 @@ test('approval menu shows the current policy and keeps selection marks inside it
     await expect(selected).toHaveJSProperty('checked', true);
     await expect(selected).toContainText(`Use settings · ${label}`);
     const contained = await selected.evaluate((item) => {
-      const check = item.shadowRoot!.querySelector('#check')!;
+      const check = item.shadowRoot?.querySelector('#check');
+      if (!check) throw new Error('The selection mark was not rendered.');
       const row = item.getBoundingClientRect();
       const mark = check.getBoundingClientRect();
       return mark.left >= row.left && mark.right <= row.right;
@@ -121,9 +118,7 @@ test('approval menu shows the current policy and keeps selection marks inside it
     await page.keyboard.press('Escape');
   }
   // The same shared gutter applies to other checkbox menus at narrow widths.
-  await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]!.setContentSize(760, 700);
-  });
+  await resizeWindow(launched, 760, 700);
   await page.locator('#composer-agent').click();
   const selectedAgent = page
     .locator('session-composer')
@@ -132,10 +127,10 @@ test('approval menu shows the current policy and keeps selection marks inside it
   await expect(selectedAgent).toHaveJSProperty('checked', true);
   expect(
     await selectedAgent.evaluate((item) => {
+      const check = item.shadowRoot?.querySelector('#check');
+      if (!check) throw new Error('The selection mark was not rendered.');
       const row = item.getBoundingClientRect();
-      const mark = item
-        .shadowRoot!.querySelector('#check')!
-        .getBoundingClientRect();
+      const mark = check.getBoundingClientRect();
       return mark.left >= row.left && mark.right <= row.right;
     }),
   ).toBe(true);
@@ -146,23 +141,22 @@ test('approval menu shows the current policy and keeps selection marks inside it
     path: test.info().outputPath('agent-menu-narrow.png'),
   });
   await page.keyboard.press('Escape');
-  await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]!.setContentSize(1280, 800);
-  });
+  await resizeWindow(launched, 1280, 800);
 });
 
 /**
- * Trajectory 2 — Settings: Models tab carries model access + provider keys.
- *
- * Models is the single home for connecting a model: provider keys and
- * subscription sign-in.
+ * Trajectory 3 — the Memory tab lists the project's memory files, and a
+ * file's contents open under it.
  */
-
-/**
- * Trajectory 3 — Memory settings page. Cross-launch
- * persistence is covered by `settingsPersistence.spec.ts`, which relaunches
- * the desktop app on a shared Electron user-data directory.
- */
+test('the Memory tab lists a memory file of the project', async () => {
+  await setSettingsTab(launched, 'memory');
+  const item = launched.page
+    .locator('memory-item')
+    .filter({ hasText: `/memories/${MEMORY_FILE_NAME}` });
+  await expect(item).toHaveCount(1);
+  await item.getByText('Contents', { exact: true }).click();
+  await expect(item).toContainText(MEMORY_TEXT);
+});
 
 /**
  * Trajectory 4 — Logs view: ensure the Logs workbench renders the desktop log
@@ -225,34 +219,10 @@ test('logs workbench renders the desktop log viewer', async () => {
     host: { x: 0, y: 0 },
     svg: { x: 0, y: 0 },
   });
-});
-
-/**
- * Trajectory 5 — Tools settings: confirms the tab mounts so the user can
- * see the install/check tool surface. The actual install flow is captured
- * as a partial-integration finding in the audit doc (Electron currently
- * surfaces a copy-the-command dialog rather than running it for the user).
- */
-
-/**
- * Trajectory 6 — settings tab switching smoke. Drive the tab a few times and
- * confirm the inner panels do not crash. Failures here would be the kind of
- * "renderer threw mid-tab-switch" regression that breaks the standalone story;
- * covering it cheaply is worth the few hundred ms.
- */
-test('rapid settings-tab switching does not crash the renderer', async () => {
-  for (const tab of [
-    'memory',
-    'models',
-    'agents',
-    'general',
-    'latex',
-  ] as const) {
-    await setSettingsTab(launched, tab);
-  }
-  // The chrome must still be alive after the burst.
-  await expect(launched.page.locator('.shell-project-name')).toBeVisible();
-  await expect(launched.page.locator('.shell-conversation')).toBeVisible();
+  // Closed from its own tab, so the next workbench has the dock.
+  const logsTab = launched.page.locator('.shell-dock-tab[data-kind="logs"]');
+  await logsTab.locator('.shell-dock-tab-close wa-button').click();
+  await expect(logsTab).toHaveCount(0);
 });
 
 /**
@@ -261,11 +231,8 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
  * `desktopDiffHost` posts `desktop:showDiff` to the renderer; the renderer
  * opens a persistent Review tab containing `<texra-diff-view>` and a changed
  * file tree. We simulate the IPC by `window.postMessage`-ing the same payload
- * and assert the workbench opens and carries the supplied title + content.
- *
- * Monaco is heavy (workers + WASM) so we don't wait for the editor to
- * finish loading — only that the workbench and the `<texra-diff-view>`
- * element exist with the right props.
+ * and assert the workbench opens and shows the supplied title and both sides
+ * of the change.
  */
 test('desktop:showDiff opens the in-app Review workbench', async () => {
   const payload = {
@@ -301,29 +268,10 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   );
   await expect(review.locator('.desktop-review-counts')).toContainText('+1');
   await expect(review.locator('.desktop-review-counts')).toContainText('-1');
-  // The diff component element exists with the right props (we don't
-  // wait for Monaco to finish loading — verifying the contract is enough).
-  const diffViewProps = await launched.page.evaluate(() => {
-    const el = document.querySelector(
-      '.desktop-review-pane texra-diff-view',
-    ) as
-      | (HTMLElement & {
-          originalText: string;
-          proposedText: string;
-          language: string;
-        })
-      | null;
-    if (!el) return null;
-    return {
-      originalText: el.originalText,
-      proposedText: el.proposedText,
-      language: el.language,
-    };
-  });
-  expect(diffViewProps).not.toBeNull();
-  expect(diffViewProps?.originalText).toContain('old body');
-  expect(diffViewProps?.proposedText).toContain('new body');
-  expect(diffViewProps?.language).toBe('latex');
+  // Both sides of the change, as the diff editor renders them.
+  const diff = review.locator('.monaco-diff-editor');
+  await expect(diff).toContainText('old body');
+  await expect(diff).toContainText('new body');
 
   // A close for a diff the pane no longer holds leaves the tab standing.
   await launched.page.evaluate(() => {
@@ -420,4 +368,119 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   await pdfTab.locator('.shell-dock-tab-close wa-button').click();
   await expect(pdfTab).toHaveCount(0);
   await expect(frame).toHaveCount(0);
+});
+
+test('command palette opens and dismisses', async () => {
+  const { page } = launched;
+  await showLauncher(launched);
+  await page
+    .locator('.shell-sidebar-primary .shell-sidebar-action')
+    .filter({ hasText: 'Commands' })
+    .click();
+  const palette = page.locator('.desktop-command-palette');
+  await expect(palette).toHaveAttribute('open');
+  await expect(palette.getByRole('option').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.desktop-command-palette[open]')).toHaveCount(0);
+});
+
+// The vertical settings navigation must remain operable by keyboard, and
+// its controls must stay reachable when the native window shrinks.
+test('settings navigation works by keyboard and stays reachable in a small window', async () => {
+  const { page } = launched;
+  await setSettingsTab(launched, 'general');
+  const settings = page.locator('wa-dialog.desktop-settings-overlay');
+  const pages = settings.getByRole('tablist', { name: 'Settings pages' });
+  await expect(pages).toHaveAttribute('aria-orientation', 'vertical');
+  const tabs = pages.getByRole('tab');
+  await expect(tabs.first()).toHaveAccessibleName('General');
+  await tabs.first().focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+  // Crossing a visual group heading still advances to the next page.
+  await page.keyboard.press('ArrowDown');
+  await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Home');
+  await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
+
+  await resizeWindow(launched, 960, 640);
+  try {
+    await expect(settings.getByRole('tabpanel')).toBeVisible();
+    await settings.getByRole('tab', { name: 'Agents', exact: true }).click();
+    await expect(
+      settings
+        .locator('agent-selection-panel')
+        .getByRole('textbox', { name: 'Search agents', exact: true }),
+    ).toBeVisible();
+    await settings.getByRole('tab', { name: 'Plugins', exact: true }).click();
+    await settings
+      .getByRole('button', { name: 'Goal Mode', exact: true })
+      .click();
+    // A toggle row keeps its switch beside its label, centred on it.
+    const availability = settings.locator(
+      'plugin-card .settings-row.is-toggle',
+    );
+    const label = await box(availability.locator('.settings-row-label'));
+    const toggle = await box(
+      settings.getByRole('switch', {
+        name: 'Available to agents',
+        exact: true,
+      }),
+    );
+    expect(toggle.x).toBeGreaterThan(label.x + label.width);
+    expect(
+      Math.abs(label.y + label.height / 2 - (toggle.y + toggle.height / 2)),
+    ).toBeLessThan(2);
+  } finally {
+    await resizeWindow(launched, 1280, 800);
+  }
+});
+
+// Last: it reloads the renderer and leaves the theme on "system".
+test('appearance settings override the system and remember the choice', async () => {
+  const { page } = launched;
+  async function expectTheme(theme: 'light' | 'dark') {
+    await expect(page.locator('body')).toHaveClass(
+      new RegExp(`vscode-${theme}`),
+    );
+    await expect(page.locator('html')).toHaveCSS('color-scheme', theme);
+  }
+
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expectTheme('light');
+  const lightBackground = await page
+    .locator('.shell-frame')
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
+  await chooseDesktopTheme(page, 'dark');
+  await expectTheme('dark');
+  await expect(page.locator('.shell-frame')).not.toHaveCSS(
+    'background-color',
+    lightBackground,
+  );
+  // Selecting the current choice must retain a valid single selection.
+  await chooseDesktopTheme(page, 'dark');
+  await page.reload();
+  await expectTheme('dark');
+  const themeControl = await openDesktopAppearance(page);
+  await expect(themeControl).toHaveJSProperty('value', 'dark');
+  await page.locator('.desktop-settings-close').click();
+
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await chooseDesktopTheme(page, 'light');
+  await expectTheme('light');
+  await expect(page.locator('.shell-frame')).toHaveCSS(
+    'background-color',
+    lightBackground,
+  );
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expectTheme('light');
+  await chooseDesktopTheme(page, 'system');
+  await expectTheme('dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expectTheme('light');
+  await page.emulateMedia({ forcedColors: 'active' });
+  await expect(page.locator('body')).toHaveClass(/vscode-high-contrast/);
+  await page.emulateMedia({ forcedColors: 'none', colorScheme: 'dark' });
+  await expectTheme('dark');
 });

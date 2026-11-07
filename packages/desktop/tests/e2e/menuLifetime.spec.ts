@@ -1,34 +1,16 @@
-import { mkdtempSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { basename } from 'node:path';
 
-import { expect, test } from '@playwright/test';
+import { dismissOnboarding, expect, test } from './electronApp.js';
 
-import {
-  closeTexraApp,
-  dismissOnboarding,
-  launchTexraApp,
-  type LaunchedApp,
-} from './electronApp.js';
-import { cleanupDirectory } from './workspaceStorageFixture.js';
-
-let launched: LaunchedApp | undefined;
-let userDataPath: string | undefined;
-
-test.afterEach(async () => {
-  if (launched) await closeTexraApp(launched);
-  launched = undefined;
-  if (userDataPath) cleanupDirectory(userDataPath);
-  userDataPath = undefined;
-});
-
-test('application menu releases a closed window and binds once to its replacement', async () => {
+test('application menu releases a closed window and binds once to its replacement', async ({
+  launch,
+}) => {
   test.skip(
     process.platform !== 'darwin',
     'The application menu outlives the last window only on macOS.',
   );
-  userDataPath = mkdtempSync(join(tmpdir(), 'texra-menu-lifetime-'));
-  launched = await launchTexraApp({ userDataPath });
+  const launched = await launch();
 
   const windowAId = await launched.app.evaluate(({ BrowserWindow, Menu }) => {
     const window = BrowserWindow.getAllWindows()[0];
@@ -39,13 +21,13 @@ test('application menu releases a closed window and binds once to its replacemen
   });
 
   await launched.page.close();
-  await expect.poll(() => launched?.app.windows().length).toBe(0);
+  await expect.poll(() => launched.app.windows().length).toBe(0);
   // The renderer goes before the main process's `closed` handler swaps in
   // the window-less menu, so wait for the main process's own view of the
   // release rather than the page count alone.
   await expect
     .poll(() =>
-      launched?.app.evaluate(({ BrowserWindow, Menu }) => {
+      launched.app.evaluate(({ BrowserWindow, Menu }) => {
         const items = (Menu.getApplicationMenu()?.items ?? []).flatMap(
           (item) => item.submenu?.items ?? [],
         );
@@ -139,10 +121,11 @@ test('application menu releases a closed window and binds once to its replacemen
     .toBe('1');
 });
 
-test('a closed project is offered in the empty rail and reopens from it', async () => {
-  userDataPath = mkdtempSync(join(tmpdir(), 'texra-recent-projects-'));
-  launched = await launchTexraApp({ userDataPath });
-  const { page, app, workspacePath } = launched;
+test('a closed project is offered in the empty rail and reopens from it', async ({
+  launched,
+}) => {
+  const { page, app, profile } = launched;
+  const { workspacePath } = profile;
   await dismissOnboarding(page);
   const name = basename(workspacePath);
   // The app stores the folder canonicalized (macOS: /tmp is /private/tmp).

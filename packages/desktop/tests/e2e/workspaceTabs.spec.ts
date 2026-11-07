@@ -2,21 +2,26 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { test, expect, type Locator } from '@playwright/test';
+import type { Locator } from '@playwright/test';
 
 import {
+  box,
   closeTexraApp,
+  createProfile,
   dismissOnboarding,
+  expect,
   launchTexraApp,
+  removeProfile,
+  test,
   type LaunchedApp,
+  type Profile,
 } from './electronApp.js';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 
 // Real offscreen Electron: exercise grid changes at resource boundaries, not
 // screenshots of a mocked layout or implementation-shaped reducer assertions.
+let profile: Profile;
 let launched: LaunchedApp;
-let workspacePath: string;
-const rendererErrors: string[] = [];
 test.describe.configure({ mode: 'serial' });
 const panel = (kind: string) =>
   launched.page.locator(
@@ -37,6 +42,23 @@ function groupOf(tab: Locator) {
     'xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " dv-groupview ")]',
   );
 }
+/** Set the native window's outer size. */
+async function setWindowSize(width: number, height: number) {
+  await launched.app.evaluate(
+    ({ BrowserWindow }, size) => {
+      const window = BrowserWindow.getAllWindows().at(0);
+      if (!window) throw new Error('TeXRA window was not found.');
+      window.setSize(size.width, size.height);
+    },
+    { width, height },
+  );
+}
+/** A project row's title, the project's path. */
+async function titleOf(row: Locator): Promise<string> {
+  const title = await row.getAttribute('title');
+  if (title === null) throw new Error('The project row has no title.');
+  return title;
+}
 async function openFile(name: string) {
   await launched.page.locator('#shellToggleSidePanel').click();
   await panel('files')
@@ -49,9 +71,9 @@ async function moveTab(
   edge: 'right' | 'bottom' | 'center',
   inspectPreview = false,
 ) {
-  const a = (await source.boundingBox())!;
-  const b = (await destination.boundingBox())!;
-  const targetGroup = (await groupOf(source).boundingBox())!;
+  const a = await box(source);
+  const b = await box(destination);
+  const targetGroup = await box(groupOf(source));
   await launched.page.mouse.move(
     a.x + Math.min(a.width / 2, 45),
     a.y + a.height / 2,
@@ -77,7 +99,7 @@ async function moveTab(
           'background-color',
           'rgba(0, 0, 0, 0)',
         );
-        const r = (await preview.boundingBox())!;
+        const r = await box(preview);
         const horizontal = side === 'left' || side === 'right';
         expect(
           Math.abs(r.width - targetGroup.width / (horizontal ? 2 : 1)),
@@ -113,13 +135,13 @@ async function moveTab(
     { steps: 15 },
   );
   await expect(preview).toBeVisible();
-  const previewBounds = (await preview.boundingBox())!;
+  const previewBounds = await box(preview);
   await launched.page.mouse.up();
   await expect(preview).toHaveCount(0);
   if (inspectPreview) {
     await expect
       .poll(async () => {
-        const result = (await groupOf(source).boundingBox())!;
+        const result = await box(groupOf(source));
         return Object.entries(previewBounds).every(
           ([key, value]) =>
             Math.abs(result[key as keyof typeof result] - value) < 2,
@@ -130,7 +152,8 @@ async function moveTab(
 }
 
 test.beforeAll(async () => {
-  workspacePath = mkdtempSync(join(tmpdir(), 'texra-docking-e2e-'));
+  profile = createProfile();
+  const { workspacePath } = profile;
   writeFileSync(
     join(workspacePath, 'first.ts'),
     'export const firstDocument = true;\n',
@@ -144,19 +167,18 @@ test.beforeAll(async () => {
       join(workspacePath, `${name}.ts`),
       `export const ${name}Document = true;\n`,
     );
-  launched = await launchTexraApp({ workspacePath });
-  launched.page.on('pageerror', (error) => rendererErrors.push(error.message));
+  launched = await launchTexraApp(profile);
   await dismissOnboarding(launched.page);
 });
 
 test.afterAll(async () => {
-  if (launched) await closeTexraApp(launched);
-  if (workspacePath) cleanupDirectory(workspacePath);
-  expect(rendererErrors).toEqual([]);
+  await closeTexraApp(launched);
+  await removeProfile(profile);
+  expect(launched.rendererErrors).toEqual([]);
 });
 
 test('splits in both directions, keeps the explorer and agent, and restores the grid', async () => {
-  const { page, app } = launched;
+  const { page } = launched;
   await expect(panel('agent').locator('session-composer')).toBeVisible();
   // An explicitly split empty group must offer an immediate way to remove it.
   const groupsBeforeSplit = await page.locator('.dv-groupview').count();
@@ -185,7 +207,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   // Main's file-refresh fix must survive the dock migration: reactivating a
   // cached clean document reads external edits into the existing model.
   writeFileSync(
-    join(workspacePath, 'first.ts'),
+    join(profile.workspacePath, 'first.ts'),
     'export const firstDocument = true; // external update\n',
   );
   await openFile('first.ts');
@@ -200,14 +222,12 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   await moveTab(second, panel('editor'), 'bottom', true);
   await expect(panel('editor')).toHaveCount(2);
   const editors = panel('editor');
-  const editorBoxes = await editors.evaluateAll((nodes) =>
-    nodes.map((node) => {
-      const r = node.getBoundingClientRect();
-      return { x: r.x, y: r.y, width: r.width, height: r.height };
-    }),
-  );
-  expect(Math.abs(editorBoxes[0]!.x - editorBoxes[1]!.x)).toBeLessThan(2);
-  expect(Math.abs(editorBoxes[0]!.y - editorBoxes[1]!.y)).toBeGreaterThan(100);
+  const [upper, lower] = await Promise.all([
+    box(editors.first()),
+    box(editors.nth(1)),
+  ]);
+  expect(Math.abs(upper.x - lower.x)).toBeLessThan(2);
+  expect(Math.abs(upper.y - lower.y)).toBeGreaterThan(100);
   const first = page.locator(
     '.shell-dock-tab[data-tab-id="workbench:editor:first.ts"]',
   );
@@ -220,13 +240,13 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   );
   await expect
     .poll(async () => {
-      const a = (await groupOf(first).boundingBox())!;
-      const b = (await groupOf(second).boundingBox())!;
+      const a = await box(groupOf(first));
+      const b = await box(groupOf(second));
       return Math.abs(a.y - b.y) < 2 && b.x > a.x + 100;
     })
     .toBe(true);
   // A right-click uses viewport coordinates even inside an offset split group.
-  const clickedTab = (await first.boundingBox())!;
+  const clickedTab = await box(first);
   const clickPoint = {
     x: clickedTab.x + 12,
     y: clickedTab.y + clickedTab.height / 2,
@@ -236,13 +256,13 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   await expect(contextMenu.getByRole('menu')).toBeVisible();
   await expect
     .poll(async () => {
-      const bounds = (await contextMenu.getByRole('menu').boundingBox())!;
+      const bounds = await box(contextMenu.getByRole('menu'));
       return Math.abs(bounds.x - clickPoint.x);
     })
     .toBeLessThan(2);
   await expect
     .poll(async () => {
-      const bounds = (await contextMenu.getByRole('menu').boundingBox())!;
+      const bounds = await box(contextMenu.getByRole('menu'));
       return Math.abs(bounds.y - clickPoint.y);
     })
     .toBeLessThan(3);
@@ -267,8 +287,8 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   await expect(panel('editor')).toHaveCount(2);
   // The outer edge makes a full-height column alongside the whole workspace,
   // independently of the nested editor split under the pointer.
-  const workspace = (await page.locator('.shell-dock:visible').boundingBox())!;
-  const sourceTab = (await second.boundingBox())!;
+  const workspace = await box(page.locator('.shell-dock:visible'));
+  const sourceTab = await box(second);
   await page.mouse.move(sourceTab.x + 24, sourceTab.y + sourceTab.height / 2);
   await page.mouse.down();
   await page.mouse.move(
@@ -278,7 +298,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   );
   const columnPreview = page.locator('.dv-drop-target-anchor:visible');
   await expect(columnPreview).toBeVisible();
-  const columnBounds = (await columnPreview.boundingBox())!;
+  const columnBounds = await box(columnPreview);
   expect(columnBounds.width).toBeGreaterThan(160);
   expect(Math.abs(columnBounds.height - workspace.height)).toBeLessThan(2);
   await page.screenshot({
@@ -288,7 +308,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   await page.mouse.up();
   await expect
     .poll(async () => {
-      const result = (await groupOf(second).boundingBox())!;
+      const result = await box(groupOf(second));
       return Object.entries(columnBounds).every(
         ([key, value]) =>
           Math.abs(result[key as keyof typeof result] - value) < 2,
@@ -297,7 +317,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
     .toBe(true);
   // Resize the actual sash and keep this grid across a reload.
   const sash = page.locator('.shell-dock .dv-sash.dv-enabled:visible').first();
-  const bounds = (await sash.boundingBox())!;
+  const bounds = await box(sash);
   await page.mouse.move(
     bounds.x + bounds.width / 2,
     bounds.y + bounds.height / 2,
@@ -321,6 +341,11 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   );
   await page.reload();
   await expect(panel('editor')).toHaveCount(2);
+  // Each restored editor shows its document again.
+  for (const editor of await panel('editor').all())
+    await expect(editor.locator('.view-lines')).toContainText(
+      'Document = true',
+    );
   await expect
     .poll(async () => {
       const after = await panel('editor').evaluateAll((nodes) =>
@@ -332,7 +357,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
       return after.every((r, i) =>
         Object.entries(r).every(
           ([key, value]) =>
-            Math.abs(value - before[i]![key as keyof typeof r]) < 3,
+            Math.abs(value - (before[i]?.[key as keyof typeof r] ?? NaN)) < 3,
         ),
       );
     })
@@ -342,17 +367,13 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
   await page.getByRole('button', { name: 'New task', exact: true }).click();
   await expect(panel('agent').locator('session-composer')).toBeVisible();
   await expect(panel('editor')).toHaveCount(2);
-  await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0]!.setSize(960, 760),
-  );
+  await setWindowSize(960, 760);
   await expect(panel('editor')).toHaveCount(2);
   await page.screenshot({
     path: test.info().outputPath('docked-compact.png'),
     animations: 'disabled',
   });
-  await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0]!.setSize(1280, 860),
-  );
+  await setWindowSize(1280, 860);
 });
 
 test('moves live terminals and unsaved editors without recreating resources', async () => {
@@ -375,7 +396,7 @@ test('moves live terminals and unsaved editors without recreating resources', as
   const terminalSurface1 = page.locator(
     '.shell-dock-terminal[data-panel-id="workbench:terminal:1"] .desktop-terminal-surface',
   );
-  const pidPath = join(workspacePath, 'terminal.pid');
+  const pidPath = join(profile.workspacePath, 'terminal.pid');
   await terminalSurface1.locator('.xterm').click();
   await page.keyboard.type(`printf '%s' "$$" > '${pidPath}'`);
   await page.keyboard.press('Enter');
@@ -460,7 +481,7 @@ test('restarts an exited terminal in its own tab', async () => {
   await restart.click();
   await expect(restart).toHaveCount(0);
   // The new shell takes input: it writes its pid where the test can read it.
-  const pidPath = join(workspacePath, 'restarted.pid');
+  const pidPath = join(profile.workspacePath, 'restarted.pid');
   await page.keyboard.type(`printf '%s' "$$" > '${pidPath}'`);
   await page.keyboard.press('Enter');
   await expect
@@ -475,7 +496,7 @@ test('keeps browser menus above native content and close controls inside tab bou
   const attachedViews = () =>
     app.evaluate(
       ({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows()[0]!.contentView.children.length,
+        BrowserWindow.getAllWindows().at(0)?.contentView.children.length ?? 0,
     );
   const baseline = await attachedViews();
   await menu(groupOf(tab('editor').first()), 'browser');
@@ -541,7 +562,7 @@ test('preserves each project’s grid and unsaved editor when switching projects
     'export const otherProject = true;\n',
   );
   const activeRow = page.locator('.shell-project-row[aria-current="true"]');
-  const projectA = (await activeRow.getAttribute('title'))!;
+  const projectA = await titleOf(activeRow);
   await openFile('first.ts');
   const editorA = panel('editor').filter({
     has: page.locator('[title="first.ts"]'),
@@ -564,7 +585,7 @@ test('preserves each project’s grid and unsaved editor when switching projects
       .getByRole('button', { name: 'Open project folder', exact: true })
       .click();
     await expect(page.locator('.shell-project-row')).toHaveCount(2);
-    const projectB = (await activeRow.getAttribute('title'))!;
+    const projectB = await titleOf(activeRow);
     expect(projectB).not.toBe(projectA);
     await expect(panel('agent')).toBeVisible();
     await expect(tab('terminal')).toHaveCount(0);
@@ -573,7 +594,7 @@ test('preserves each project’s grid and unsaved editor when switching projects
       'otherProject',
     );
     // An explicit command addressed to an offscreen project still runs there.
-    const commandOutput = join(workspacePath, 'background-command.txt');
+    const commandOutput = join(profile.workspacePath, 'background-command.txt');
     await page.evaluate(
       ({ session, initialCommand }) => {
         window.postMessage(
@@ -634,16 +655,16 @@ test('Close group asks about each unsaved editor in turn', async () => {
   await expect(dialog).toContainText('has unsaved changes');
   const asked = (await dialog.textContent()) ?? '';
   const [discarded, kept] = asked.includes('third.ts')
-    ? names
-    : names.toReversed();
+    ? ['third.ts', 'fourth.ts']
+    : ['fourth.ts', 'third.ts'];
   await dialog.locator('.desktop-discard-confirm').click();
-  await expect(editorTab(discarded!)).toHaveCount(0);
+  await expect(editorTab(discarded)).toHaveCount(0);
   await expect(dialog).toContainText(`${kept} has unsaved changes`);
   await dialog.locator('.desktop-discard-cancel').click();
   await expect(dialog).toHaveCount(0);
-  await expect(editorTab(kept!)).toHaveCount(1);
+  await expect(editorTab(kept)).toHaveCount(1);
   // Leave nothing unsaved behind: discard the kept editor too.
-  await editorTab(kept!).locator('.shell-dock-tab-close wa-button').click();
+  await editorTab(kept).locator('.shell-dock-tab-close wa-button').click();
   await dialog.locator('.desktop-discard-confirm').click();
-  await expect(editorTab(kept!)).toHaveCount(0);
+  await expect(editorTab(kept)).toHaveCount(0);
 });
