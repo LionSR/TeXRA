@@ -8,10 +8,9 @@
  */
 import { Effect, Layer, SubscriptionRef } from 'effect';
 import {
-  isInFlightPhase,
-  isTerminalOutcomePhase,
   blocksCaller,
-  RUN_PHASE,
+  isInterrupted,
+  rollupOf as viewRollupOf,
   type RunId,
   type RunView,
   type SessionView,
@@ -20,7 +19,6 @@ import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
 import { emptySessionView } from '@shared/session/sessionView';
 import { runActions } from '@shared/session/runActions';
-import { runStatus } from '@shared/runs/runStatusDisplay';
 import { SessionGraph } from '@test/support/testKernel';
 
 /**
@@ -47,8 +45,8 @@ export function seedView(view: SessionView): void {
 
 type RunViewOverrides = Partial<RunView> & Pick<RunView, 'id'>;
 
-/** One stream as the fold would state it; every field explicit. The key,
- *  tone, and group follow the status the way the fold derives them, and the
+/** One stream as the fold would state it; every field explicit. A run
+ *  with no outcome is held here unless the case says otherwise, and the
  *  actions follow the final fields through the fold's own rule. */
 export function makeRunView(over: RunViewOverrides): RunView {
   const run = runViewFields(over);
@@ -61,10 +59,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
 
 function runViewFields(over: RunViewOverrides): RunView {
   const { id } = over;
-  const status = over.status ?? RUN_PHASE.RUNNING;
-  const copy = runStatus(status, {
-    substate: over.substate ?? undefined,
-  });
+  const outcome = over.outcome ?? null;
   const common = {
     id,
     identity: { kind: 'agent' as const, agent: 'agent' },
@@ -77,17 +72,14 @@ function runViewFields(over: RunViewOverrides): RunView {
     inputFiles: [],
     agentScope: null,
     worktree: null,
-    status,
-    substate: null,
-    durableOutcome: null,
+    position: 'running' as const,
+    outcome,
+    holder: outcome === null ? ('here' as const) : ('none' as const),
     statusNotice: null,
-    statusKey: copy.statusKey,
-    tone: copy.tone,
     createdAt: 1,
     launchedAt: 1,
     turnStartedAt: null,
     runStartedAt: null,
-    working: false,
     lastTimestamp: 1,
     turn: null,
     takesFollowUps: true,
@@ -98,8 +90,6 @@ function runViewFields(over: RunViewOverrides): RunView {
     rollup: { total: 0, running: 0, finished: 0 },
     approval: 'none' as const,
     actions: [],
-    forceExpanded: false,
-    group: isInFlightPhase(status) ? ('running' as const) : ('recent' as const),
     usage: { inputTokens: 0, outputTokens: 0, cost: 0 },
     treeUsage: { inputTokens: 0, outputTokens: 0, cost: 0 },
     thinkingActive: false,
@@ -111,10 +101,6 @@ function runViewFields(over: RunViewOverrides): RunView {
       settledRows: 0,
     },
   };
-  // A held run unless the case says otherwise, as the fold reads it.
-  const ended = isTerminalOutcomePhase(status);
-  const group = over.group ?? common.group;
-  const live = over.live ?? (!ended && group !== 'interrupted');
   // cast: every field is stated above; a case's override may blank one.
   return {
     ...common,
@@ -123,11 +109,6 @@ function runViewFields(over: RunViewOverrides): RunView {
     ...over,
     id,
     title: over.title ?? (over.description || (over.label ?? over.id)),
-    live,
-    runsHere: over.runsHere ?? false,
-    turnOver:
-      over.turnOver ??
-      (ended || status === RUN_PHASE.WAITING || group === 'interrupted'),
   } as RunView;
 }
 
@@ -170,52 +151,26 @@ export function viewWith(
       ),
     });
   }
-  const rollupOf = (
-    stream: RunView,
-  ): { total: number; running: number; finished: number } => {
-    const rollup = { total: 0, running: 0, finished: 0 };
-    for (const childId of stream.childIds) {
-      const child = byId.get(childId);
-      if (!child) continue;
-      const nested = rollupOf(child);
-      rollup.total += 1 + nested.total;
-      const idle =
-        child.status === RUN_PHASE.WAITING && child.group === 'running';
-      rollup.running +=
-        (isInFlightPhase(child.status) && !idle ? 1 : 0) + nested.running;
-      rollup.finished +=
-        (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) +
-        nested.finished;
-    }
-    return rollup;
-  };
   // A held run with a request that parks its caller is waiting on it, as the
-  // fold's aggregates derive it, label and tone included (the same
-  // `runStatus` reading `withAggregates` makes). Fixture runs model runs
-  // this process holds; one built interrupted (unheld) or with its own
-  // approval keeps it.
+  // fold's aggregates derive it. Fixture runs model runs this process holds;
+  // one built interrupted (unheld) or with its own approval keeps it.
   for (const request of over.requests ?? []) {
     const run = byId.get(request.runId);
     if (
       !run ||
       run.approval !== 'none' ||
-      run.group === 'interrupted' ||
+      isInterrupted(run) ||
       !blocksCaller(request.payload)
     )
       continue;
-    byId.set(run.id, {
-      ...run,
-      ...runStatus(run.status, {
-        substate: run.substate ?? undefined,
-        waiting: true,
-      }),
-      approval: 'own',
-      group: 'waiting',
-    });
+    byId.set(run.id, { ...run, approval: 'own' });
   }
   for (const stream of [...byId.values()]) {
     if (stream.childIds.length === 0) continue;
-    byId.set(stream.id, { ...stream, rollup: rollupOf(stream) });
+    byId.set(stream.id, {
+      ...stream,
+      rollup: viewRollupOf(stream.childIds.flatMap((id) => byId.get(id) ?? [])),
+    });
   }
   return {
     ...emptySessionView('test'),

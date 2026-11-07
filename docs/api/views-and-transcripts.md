@@ -74,7 +74,7 @@ Committed rows feed two separate reducers:
 
 Runtime execution never reads `SessionView`. Every emitted `SessionView` is deeply read-only (`ReadonlyDeep`) and shares unchanged subtrees structurally across emissions.
 
-Where a run stands is a field of its `RunView`, decided once by the reducer: `live` (somebody holds it and it has neither ended nor come to rest, unlike an interrupted run whose durable status a dead owner left in flight), `working` (inside a turn right now; `runStartedAt` is set only while it is), and `turnOver` (it waits, ended, rests, or nobody holds it, so its transcript rows are final).
+Where a run stands is three facts on its `RunView`, decided once by the reducer: `position` (`ready` before its first activation and after an end, `running` inside a turn, `waiting` between turns), `outcome` (how its `run.end` ended it, or `null`), and `holder` (`here` while a launch in this process drives it, until its end). A run with no outcome that nobody holds is interrupted (`isInterrupted`); one held here inside a turn is working (`isWorking`; `runStartedAt` is set only while it is). Words, tones and list sections are the host's, read from these facts.
 
 ### Pure view queries (`@texra-ai/harness/schemas`)
 

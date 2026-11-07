@@ -191,7 +191,11 @@ export function applyRunRow(
         };
       }
       const requests = ownCopy(copies, current.requests, copyById);
-      requests[row.requestId] = { payload: row.payload, decision: null };
+      requests[row.requestId] = {
+        payload: row.payload,
+        decision: null,
+        decidedAt: null,
+      };
       return applied({ requests });
     }
     case 'request.decided': {
@@ -201,7 +205,11 @@ export function applyRunRow(
         return { kind: 'unresolved', requestId: row.requestId };
       }
       const requests = ownCopy(copies, current.requests, copyById);
-      requests[row.requestId] = { ...request, decision: row.decision };
+      requests[row.requestId] = {
+        ...request,
+        decision: row.decision,
+        decidedAt: row.seq,
+      };
       return applied({ requests });
     }
     case 'followup.queued': {

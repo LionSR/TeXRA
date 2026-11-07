@@ -190,7 +190,7 @@ const codemode = (dir: string) =>
       const evidence = yield* writeEvidence(dir, session, run.runId, workspace);
       const children = childrenOf(session, run.runId);
       const completed = children.filter(
-        (child) => child.durableOutcome === 'completed',
+        (child) => child.outcome === 'completed',
       ).length;
       // The object the task asked for: a later script that only checks
       // something (a query, a listing, the count alone) does not replace it.
@@ -202,7 +202,7 @@ const codemode = (dir: string) =>
       // Each finished round's structured verdict, as its run ended with it.
       const verdicts: unknown[] = [];
       for (const child of children)
-        if (child.durableOutcome === 'completed')
+        if (child.outcome === 'completed')
           verdicts.push(
             (yield* session.records(child.id).readRunEnd())?.output.structured,
           );
@@ -512,13 +512,13 @@ const crashResume = (dir: string) =>
           ),
           (view) =>
             [...view.runs.values()].some(
-              (run) => run.parentId === runId && run.durableOutcome !== null,
+              (run) => run.parentId === runId && run.outcome !== null,
             ),
         ),
       ).pipe(Effect.timeoutOption('10 seconds'));
       const before = new Map<string, number>();
       for (const run of childrenOf(session, runId))
-        if (run.durableOutcome !== null)
+        if (run.outcome !== null)
           before.set(
             run.id,
             (yield* session.records(run.id).readConversation()).length,
@@ -558,10 +558,9 @@ const crashResume = (dir: string) =>
           check(
             'a second round ran and completed after the resume',
             children.some(
-              (run) =>
-                !before.has(run.id) && run.durableOutcome === 'completed',
+              (run) => !before.has(run.id) && run.outcome === 'completed',
             ),
-            children.map((run) => `${run.id}:${run.durableOutcome}`),
+            children.map((run) => `${run.id}:${run.outcome}`),
           ),
           check(
             'the interrupted script finished from its saved source',

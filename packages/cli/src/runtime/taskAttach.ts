@@ -174,12 +174,12 @@ export const attachTask = Effect.fn('attachTask')(function* (
   }).pipe(
     Stream.map((view) => view.runs.get(task.runId)),
     Stream.filter(Predicate.isNotUndefined),
-    Stream.takeUntil((run) => run.durableOutcome !== null),
+    Stream.takeUntil((run) => run.outcome !== null),
     Stream.tap((run) => Effect.sync(() => printSettled(run))),
     Stream.runLast,
   );
   return Option.match(last, {
     onNone: () => null,
-    onSome: (run) => run.durableOutcome,
+    onSome: (run) => run.outcome,
   });
 });

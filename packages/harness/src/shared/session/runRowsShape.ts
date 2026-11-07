@@ -21,6 +21,9 @@ type RequestState = {
   /** The recorded decision: the `request.decided` row's, null while
    *  the request is open. */
   readonly decision: RequestDecision | null;
+  /** The `seq` of that `request.decided` row, null while the request is
+   *  open: the run's rows order a decision against its activation. */
+  readonly decidedAt: number | null;
 };
 
 /**

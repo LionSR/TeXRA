@@ -165,14 +165,15 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   `run.end` with its `outcome`. One record with no session event behind it,
   `event: "run.children"`, reports a parent run's live children as
   `{ runId, children }`, each child carrying its `childRunId`, `identity`,
-  `agentName`, and `status` — the run phase, or `ready` before the child's
-  first activation. A child that reached a terminal outcome leaves the
+  `agentName`, and `status` — where its loop stands: `running`,
+  `waiting`, or `ready` before the child's first activation. A child that reached a terminal outcome leaves the
   list; its `run.end` record carries the outcome.
 - `kind: "agent-result"`, `kind: "result"`, and `kind: "team-result"`
   carry the run result described above under `result`, with `runId`.
-- History records (`history-entry`, `history-detail`) spell a terminal
-  outcome as `completed`, `interrupted`, or `error`; `resumable` and
-  `unknown` pass through unchanged.
+- History records (`history-entry`, `history-detail`) carry the run's
+  `outcome` (`completed`, `cancelled`, `failed`, or `null` when none was
+  recorded) and, separately, whether `texra resume` continues it
+  (`resumable`).
 
 ## Authentication
 

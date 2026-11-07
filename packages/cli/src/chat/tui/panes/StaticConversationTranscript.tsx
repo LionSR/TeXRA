@@ -39,6 +39,7 @@ import {
 import { TranscriptEntry } from './TranscriptEntry';
 import { transcriptColumns } from './transcriptEntryLayout';
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
+import { isWorking } from '@texra-ai/harness/schemas';
 
 function shortenCwd(cwd: string): string {
   let home: string;
@@ -200,7 +201,7 @@ export function StaticConversationTranscript({
           ? undefined
           : merged.rows,
       settledRows: merged.settledRows,
-      working: stream?.working === true,
+      working: stream != null && isWorking(stream),
       waitingForChildIdentity:
         stream !== undefined &&
         stream.parentId !== null &&

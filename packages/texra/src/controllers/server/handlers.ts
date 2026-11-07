@@ -30,11 +30,7 @@ import {
   type RunRecords,
 } from '@texra-ai/harness';
 import { launchNoticeOf } from '@texra-ai/harness/host';
-import {
-  type RunId,
-  RUN_PHASE,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 
@@ -116,8 +112,7 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
   for (const session of (yield* projects.opened).values()) {
     const { runs } = session.view.current();
     for (const { runId } of session.held())
-      if (!atWork || runs.get(runId)?.status !== RUN_PHASE.WAITING)
-        running += 1;
+      if (!atWork || runs.get(runId)?.position !== 'waiting') running += 1;
   }
   return running;
 });

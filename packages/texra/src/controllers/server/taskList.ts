@@ -17,6 +17,8 @@ import {
   WORKSPACE_STORES,
 } from '@texra-ai/harness/node';
 
+import { runStatus } from '@ui/copy/runStatus';
+
 import type { TaskSummary } from './protocol';
 
 /** The newest tasks `tasks.list` returns, live ones always included. */
@@ -36,9 +38,9 @@ function summaries(view: SessionView, workspace: string): TaskSummary[] {
       runId: run.id,
       label: run.label,
       description: run.description,
-      statusKey: run.statusKey,
+      statusKey: runStatus(run).key,
       launchedAt: run.launchedAt,
-      live: run.runsHere,
+      live: run.holder === 'here',
     }));
 }
 

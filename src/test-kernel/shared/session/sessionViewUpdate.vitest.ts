@@ -9,9 +9,10 @@ import { describe, expect, it } from 'vitest';
 import { Result, Schema } from 'effect';
 
 import {
+  isInterrupted,
   MESSAGE_TYPES,
+  needsUser,
   qualifyAggregateId,
-  RUN_PHASE,
   type RunId,
   RunIdSchema,
   type RunView,
@@ -52,12 +53,12 @@ describe('session view update', () => {
 
   it('reads a pending approval as waiting only with a held owner', () => {
     const withOwner = viewOf([...scenario.pending, alive]);
-    expect(runView(withOwner, CHILD).group).toBe('waiting');
+    expect(runView(withOwner, CHILD).holder).toBe('here');
     expect(runView(withOwner, CHILD).approval).toBe('own');
     expect(runView(withOwner, ROOT).approval).toBe('descendant');
-    expect(runView(withOwner, ROOT).group).toBe('running');
+    expect(runView(withOwner, ROOT).holder).toBe('here');
     // The path to the decision is forced open.
-    expect(runView(withOwner, ROOT).forceExpanded).toBe(true);
+    expect(needsUser(runView(withOwner, ROOT), withOwner.runs)).toBe(true);
     expect(withOwner.requests.map((r) => r.requestId)).toStrictEqual(['req-1']);
 
     // The same log with nobody holding the owner: every in-flight run is
@@ -66,17 +67,17 @@ describe('session view update', () => {
     // forced open too.
     const interrupted = viewOf([...scenario.pending, nobody]);
     const child = runView(interrupted, CHILD);
-    expect(child.group).toBe('interrupted');
+    expect(isInterrupted(child)).toBe(true);
     expect(child.approval).toBe('none');
-    expect(child.status).toBe(RUN_PHASE.RUNNING);
-    expect(runView(interrupted, ROOT).group).toBe('interrupted');
-    expect(runView(interrupted, ROOT).forceExpanded).toBe(true);
+    expect(child.position).toBe('running');
+    expect(isInterrupted(runView(interrupted, ROOT))).toBe(true);
+    expect(needsUser(runView(interrupted, ROOT), interrupted.runs)).toBe(true);
     expect(interrupted.requests).toHaveLength(1);
     // A run with only its run.start (its process died before the first
     // activation) is non-terminal and ownerless: interrupted, and resumable.
-    expect(runView(interrupted, PROCESS).status).toBe('ready');
-    expect(runView(interrupted, PROCESS).group).toBe('interrupted');
-    expect(runView(withOwner, PROCESS).group).toBe('recent');
+    expect(runView(interrupted, PROCESS).position).toBe('ready');
+    expect(isInterrupted(runView(interrupted, PROCESS))).toBe(true);
+    expect(runView(withOwner, PROCESS).holder).toBe('here');
     expect(interrupted.rollup).toStrictEqual({
       running: 0,
       waiting: 0,
@@ -114,8 +115,7 @@ describe('session view update', () => {
     // No row says the turn ended; the owner's death alone ends it, so the
     // open compaction finishes and the scrollback may print every row.
     const lost = runView(viewOf([nobody], updater), ROOT);
-    expect(lost.group).toBe('interrupted');
-    expect(lost.turnOver).toBe(true);
+    expect(isInterrupted(lost)).toBe(true);
     expect(lost.compactingActive).toBe(false);
     expect(lost.transcript.rows).toHaveLength(1);
     expect(lost.transcript.settledRows).toBe(1);

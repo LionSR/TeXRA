@@ -21,14 +21,14 @@ const rows = [
     id: 'c4e19b07a52d',
     ts: '2025-11-04T11:02:44.917Z',
     agent: 'research',
-    status: 'resumable',
+    status: 'no outcome (resumable)',
     input: 'sections/intro.tex',
   },
   {
     id: 'e2c70a94b18f',
     ts: '2025-11-03T17:45:13.208Z',
     agent: 'correct',
-    status: 'error',
+    status: 'failed',
     input: 'appendices.tex',
   },
 ];
@@ -50,8 +50,8 @@ const rows = [
         <span
           class="chh-status"
           :class="{
-            'chh-status--bad': r.status === 'error',
-            'chh-status--resume': r.status === 'resumable',
+            'chh-status--bad': r.status === 'failed',
+            'chh-status--resume': r.status.endsWith('(resumable)'),
           }"
           >{{ r.status }}</span
         >

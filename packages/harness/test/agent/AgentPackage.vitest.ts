@@ -29,7 +29,7 @@ interface FakeRunView {
   readonly id: string;
   readonly ancestors: readonly { readonly id: string }[];
   readonly childIds: readonly string[];
-  readonly durableOutcome: 'completed' | null;
+  readonly outcome: 'completed' | null;
 }
 type FakeSessionView = Omit<RuntimeSessionView, 'runs'> & {
   readonly runs: Map<string, FakeRunView>;
@@ -98,7 +98,7 @@ class FakeSession {
         id: RUN_ID,
         ancestors: [],
         childIds: [],
-        durableOutcome: null,
+        outcome: null,
       }),
     })).pipe(Effect.as(0));
   }

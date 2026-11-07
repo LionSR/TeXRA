@@ -65,7 +65,7 @@ export class WorkflowRunContent extends BaseRunContent {
         </div>
       </div>
       ${
-        run.live
+        run.holder === 'here'
           ? nothing
           : html`<div class="conversation-composer-dock">
               <div class="conversation-column">

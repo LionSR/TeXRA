@@ -196,25 +196,16 @@ export const recordsOf = (
   return runRowsFrom(rows.filter((row) => row.aggregateId === id));
 };
 
-/** The row that bounds run `runId`'s current lifecycle in `rows`: its last
- *  `run.end` or `run.activate` (an activate after an end starts a new
- *  lifecycle, so a resumed run never carries the end of one it left). */
-export function lastLifecycleRow(
-  rows: readonly SessionEvent[],
+/** Whether `row` bounds a lifecycle of run `runId`: its `run.activate`
+ *  starts one, its `run.end` ends it. The pair a lifecycle's rows lie
+ *  between is `recordsOf`'s `activation` and `end` (an activation clears the
+ *  end of the lifecycle before it). */
+export const boundsLifecycle = (
+  row: Pick<SessionEvent, 'aggregateId' | 'type'>,
   runId: RunId,
-): Extract<SessionEvent, { type: 'run.end' | 'run.activate' }> | undefined {
-  const { end, activation } = recordsOf(rows, runId);
-  return end ?? activation ?? undefined;
-}
-
-/** The run's terminal fact for its current lifecycle, or null: the scope
- *  `finalizeRun`, the row's one writer, and every reader share. */
-export function runEndFromEvents(
-  rows: readonly SessionEvent[],
-  runId: RunId,
-): Extract<SessionEvent, { type: 'run.end' }> | null {
-  return recordsOf(rows, runId).end;
-}
+): boolean =>
+  row.aggregateId === qualifyAggregateId('run', runId) &&
+  (row.type === 'run.activate' || row.type === 'run.end');
 
 /** `invocation` once a shutdown stopped its open attempt (a `run.stop` whose
  *  `reason` is `shutdown`): none, or one with a recorded outcome, is as it was. */
