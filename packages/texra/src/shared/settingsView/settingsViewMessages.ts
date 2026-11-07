@@ -438,7 +438,7 @@ const LatexStatusPageSchema = Schema.Struct({
  * loaded" from an empty value. The host sends each field as its inputs
  * change (`UPDATE_HOST_STATE`), and the view keeps the latest of each.
  */
-export const SettingsHostStateSchema = Schema.Struct({
+const SettingsHostStateSchema = Schema.Struct({
   memory: MemoryPageSchema,
   profile: ProfilePageSchema,
   models: ModelSelectionPageSchema,

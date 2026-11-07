@@ -128,8 +128,11 @@ interface Inputs {
   readonly dismissed: ReadonlySet<DismissibleBanner>;
   /** Whether a usable credential exists; undefined until a check answers. */
   readonly credential: boolean | undefined;
-  readonly declined: boolean;
-  readonly firstRunDone: boolean;
+  /** The user's onboarding flags; undefined until a read answers, which is
+   *  not "never skipped, no run yet". */
+  readonly flags:
+    | { readonly declined: boolean; readonly firstRunDone: boolean }
+    | undefined;
 }
 
 export interface HostSnapshotSource {
@@ -225,8 +228,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       serviceOffline: null,
       dismissed: new Set(),
       credential: undefined,
-      declined: false,
-      firstRunDone: false,
+      flags: undefined,
     });
     /** Write `patch` when it changes a field, so an unchanged write
      *  publishes nothing. */
@@ -324,7 +326,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     );
     const loadFlags = yield* producer(
       'the onboarding flags',
-      Effect.flatMap(readOnboardingFlags(appState), write),
+      Effect.flatMap(readOnboardingFlags(appState), (flags) =>
+        write({ flags }),
+      ),
     );
 
     const catalogs = Effect.all([loadAgents, loadTeams, loadModels], {
@@ -349,7 +353,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     // Configuring a credential clears a previous "Skip for now", so a user
     // who later loses every credential sees the picker again.
     yield* SubscriptionRef.changes(inputs).pipe(
-      Stream.map((s) => s.declined && s.credential === true),
+      Stream.map((s) => s.flags?.declined === true && s.credential === true),
       Stream.changes,
       Stream.filter(Boolean),
       Stream.runForEach(() =>
@@ -387,7 +391,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
           visible:
             options.shows.apiKeyBanner &&
             s.credential === false &&
-            s.firstRunDone,
+            s.flags?.firstRunDone === true,
         },
         agentConfig: s.agentConfig,
         dependency: {
@@ -400,15 +404,14 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
           !s.dismissed.has('gettingStarted'),
         serviceOffline: s.serviceOffline,
       },
-      // An unanswered check is not "no credential": until one answers, the
-      // funnel stays out of the way.
+      // An unanswered check or flag read is not "no credential" or "not
+      // done": until both answer, the funnel stays out of the way.
       onboarding:
-        s.credential === undefined
+        s.credential === undefined || s.flags === undefined
           ? 'done'
           : deriveOnboardingFunnelState({
               hasCredential: s.credential,
-              declined: s.declined,
-              firstRunDone: s.firstRunDone,
+              ...s.flags,
             }),
     });
 
