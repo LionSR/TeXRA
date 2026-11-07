@@ -342,7 +342,8 @@ inside one plugin).
 **Lane 8, sweeps by package** (package F; one PR per package).
 
 1. S3, module-level facts: M7's eleven in the harness (two of them deciding
-   the proxy policy differently), H10's and G11's and I12's in the app, K4's
+   the proxy policy differently), G11's and I12's in the app (H10's is
+   step 4.4's), K4's
    and round 1's F7 in the CLI (`registerCliStateResetHook`'s ten singletons),
    N11's in the desktop. `Context.Reference` for a defaulted value,
    `Effect.cachedWithTTL` with an `Exit`-computed lifetime for a probe,
