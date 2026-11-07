@@ -13,7 +13,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   RequestError,
   OutcomeOf,
-  RuntimeRequest,
+  RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 import type { Effect } from 'effect';
 
@@ -49,7 +49,7 @@ export interface SessionHandleInit {
  */
 export interface SessionRequestsShape {
   /** Answer a surface's request once: its kind's {@link OutcomeOf}, or an error. */
-  readonly request: <R extends RuntimeRequest>(
+  readonly request: <R extends RuntimeCommand>(
     req: R,
   ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError, SessionServices>;
 }

@@ -32,7 +32,7 @@ import { gt as semverGt, lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { isOutcomeOf, Rejected } from '@texra-ai/harness';
-import { ensureError, type RuntimeRequest } from '@texra-ai/harness/schemas';
+import { ensureError, type RuntimeCommand } from '@texra-ai/harness/schemas';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
@@ -61,7 +61,7 @@ export type ServiceClient = RpcClient.FromGroup<
  * kind is answered with. An answer of another kind (a service from another
  * build) is `Rejected`.
  */
-export const requestOnService = <R extends RuntimeRequest>(
+export const requestOnService = <R extends RuntimeCommand>(
   client: ServiceClient,
   workspace: string,
   request: R,

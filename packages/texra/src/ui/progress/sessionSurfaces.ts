@@ -13,7 +13,7 @@ import { Effect, Schema } from 'effect';
 
 import { RequestErrorSchema } from '@texra-ai/harness/schemas';
 
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Response, UpMessage } from '@texra/shared/session/sessionFrames';
 import {
@@ -44,7 +44,7 @@ import {
 } from './sessionTransport';
 import type {
   SessionView,
-  RuntimeRequest,
+  RuntimeCommand,
   RunId,
 } from '@texra-ai/harness/schemas';
 
@@ -84,8 +84,8 @@ export interface SessionSurfaces {
   get(key: string): SessionSurface | undefined;
   /** Apply a surface action to one session's surface. */
   act(key: string, action: SurfaceAction): void;
-  runtimeRequest(key: string, request: RuntimeRequest): void;
-  hostRequest(key: string, request: HostRequest): void;
+  runtimeRequest(key: string, request: RuntimeCommand): void;
+  hostRequest(key: string, request: HostCommand): void;
   /** A host request answered to its caller, not presented on the surface. */
   answer: WebviewTransport['answer'];
   /** The composer's Send for the resolved selection: a follow-up to the
@@ -108,7 +108,7 @@ const SINGLE_FILE_FIELDS = { base: 'baseFile', edited: 'editedFile' } as const;
 /** Where a picked path list lands on the launch surface. */
 function withPickedPaths(
   launch: Surface['launch'],
-  fileType: Extract<HostRequest, { kind: 'useCurrentFile' }>['fileType'],
+  fileType: Extract<HostCommand, { kind: 'useCurrentFile' }>['fileType'],
   paths: readonly string[],
 ): Partial<Surface['launch']> {
   if (fileType === 'base' || fileType === 'edited') {
@@ -259,7 +259,7 @@ export function createSessionSurfaces(options: {
   /** The response of a `host.request`, applied to the surface. */
   function settleHost(
     entry: Held,
-    request: HostRequest,
+    request: HostCommand,
     origin: DraftOrigin,
     result: Response['result'],
   ): void {
@@ -342,7 +342,7 @@ export function createSessionSurfaces(options: {
    *  its reason and its guide link. */
   function settleHostResponse(
     entry: Held,
-    request: HostRequest,
+    request: HostCommand,
     origin: DraftOrigin,
     result: Response['result'],
   ): void {
@@ -370,7 +370,7 @@ export function createSessionSurfaces(options: {
     );
   }
 
-  function hostRequestFor(entry: Held, request: HostRequest): void {
+  function hostRequestFor(entry: Held, request: HostCommand): void {
     const surface = entry.surface$.get();
     let runId = surface.selected;
     if (request.kind === 'record' && request.action.kind === 'start') {
@@ -406,7 +406,7 @@ export function createSessionSurfaces(options: {
     transport.run(entry.key, exchange);
   }
 
-  function runtimeRequestFor(entry: Held, request: RuntimeRequest): void {
+  function runtimeRequestFor(entry: Held, request: RuntimeCommand): void {
     const { key } = entry;
     const runId = 'runId' in request ? request.runId : null;
     if (
@@ -455,7 +455,7 @@ export function createSessionSurfaces(options: {
 
   function settleRuntimeResponse(
     entry: Held,
-    request: RuntimeRequest,
+    request: RuntimeCommand,
     result: Response['result'],
     submitted: ReturnType<Surface['drafts']['get']>,
     fromForm: boolean,

@@ -11,8 +11,8 @@
  *   and pure queries ([`acceptsFollowUp`](#acceptsfollowup),
  *   [`attentionOf`](#attentionof), [`sessionActivity`](#sessionactivity),
  *   [`descendantRuns`](#descendantruns), [`runActionRefusal`](#runactionrefusal)).
- * - **Commands & approvals**: [`RuntimeRequestSchema`](#runtimerequestschema)
- *   ([`RuntimeRequest`](#runtimerequest)), [`RequestDecision`](#requestdecision),
+ * - **Commands & approvals**: [`RuntimeCommandSchema`](#runtimecommandschema)
+ *   ([`RuntimeCommand`](#runtimecommand)), [`RequestDecision`](#requestdecision),
  *   [`OutcomeSchema`](#outcomeschema), [`RequestErrorSchema`](#requesterrorschema),
  *   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
  * - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
@@ -181,10 +181,10 @@ export {
   OutcomeSchema,
   Rejected,
   RequestErrorSchema,
-  RuntimeRequestSchema,
+  RuntimeCommandSchema,
   StartRequestSchema,
   type RequestError,
-  type RuntimeRequest,
+  type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 // A memory as a memory list shows it.
 export {

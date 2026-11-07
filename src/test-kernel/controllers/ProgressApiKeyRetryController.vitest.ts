@@ -5,7 +5,7 @@ import { expect } from 'vitest';
 import { apiKeySecretName, type ApiKeyProviderId } from '@texra-ai/llm';
 import type { Session } from '@texra-ai/harness';
 import { Secrets } from '@texra-ai/harness/host';
-import { RunIdSchema, type RuntimeRequest } from '@texra-ai/harness/schemas';
+import { RunIdSchema, type RuntimeCommand } from '@texra-ai/harness/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { SessionGraph } from '@test/support/testKernel';
@@ -20,7 +20,7 @@ layer(SessionGraph.hosted)('ProgressApiKeyRetryController', (it) => {
       const runId = Schema.decodeUnknownSync(RunIdSchema)('a0000a');
       return Effect.gen(function* () {
         const prompts: ApiKeyProviderId[] = [];
-        const sent: RuntimeRequest[] = [];
+        const sent: RuntimeCommand[] = [];
         // The controller reads only the pending retry and sends its decision.
         // cast: a test double of those two members.
         const session = {
@@ -31,7 +31,7 @@ layer(SessionGraph.hosted)('ProgressApiKeyRetryController', (it) => {
               ],
             }),
           },
-          request: (request: RuntimeRequest) =>
+          request: (request: RuntimeCommand) =>
             Effect.sync(() => {
               sent.push(request);
             }),

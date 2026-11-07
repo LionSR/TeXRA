@@ -236,7 +236,7 @@ rebuilt store renumbers it.
 const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call_position", "kind", "name", "model", "description", "started_at", "status", "outcome", "cost", "input_tokens", "output_tokens", "calls_unreadable"]; run_tree: readonly ["ancestor_id", "id", "depth"]; tool_calls: readonly ["position", "run_id", "call_id", "script_call_id", "tool", "input", "attempt", "status", "output", "value", "error", "issued_at", "started_at", "ended_at"]; model_calls: readonly ["position", "run_id", "invocation_id", "attempt", "model", "status", "output", "error", "input_tokens", "output_tokens", "cost", "started_at", "ended_at"]; }>
 ```
 
-## HostRequestFailure
+## HostCommandFailure
 
 How a host's request handler fails: with a tagged error, always. Four tags are the refusals the bridge folds
 onto the wire ({@link RequestRefusal}); every other tag is a defect it
@@ -247,7 +247,7 @@ housekeeping); what every host owes this channel is that each of them is
 a tag, so a bare `new Error(...)` can no longer reach the fold.
 
 ```ts
-interface HostRequestFailure extends Error {
+interface HostCommandFailure extends Error {
   readonly _tag: string;
 }
 ```
@@ -269,7 +269,7 @@ Whether `outcome` answers a request of `kind`: how a client reads an
 answer that crossed a process boundary.
 
 ```ts
-const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
+const isOutcomeOf: <K extends RuntimeCommand["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
 ```
 
 ## isRequestRefusal
@@ -516,7 +516,7 @@ What a request of kind `K` is answered with: `done` unless it is one of
 the kinds above.
 
 ```ts
-type OutcomeOf<K extends RuntimeRequest['kind']> = Extract<
+type OutcomeOf<K extends RuntimeCommand['kind']> = Extract<
   Outcome,
   {
     kind: K extends keyof typeof OUTCOME_KIND
@@ -844,12 +844,12 @@ Why a run stops: a `user` stop or this process's `shutdown`.
 type RunStopReason = typeof RunStopReasonSchema.Type;
 ```
 
-## RuntimeRequest
+## RuntimeCommand
 
 One request a surface issues to its session's runtime.
 
 ```ts
-type RuntimeRequest = typeof RuntimeRequestSchema.Type;
+type RuntimeCommand = typeof RuntimeCommandSchema.Type;
 ```
 
 ## Session
@@ -925,12 +925,12 @@ interface Session {
     input?: ResumeInput,
   ) => Effect.Effect<Run, ResumeRefused | LaunchError | RunFailure>;
   /** Everything else you ask of the session, as one typed request
-   *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
+   *  (`RuntimeCommand` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
    *  Answered exactly once, with the outcome its kind is answered with
    *  (`OutcomeOf`) or a {@link RequestError}. A decision a request's kind
    *  does not take is `Rejected`. */
-  readonly request: <R extends RuntimeRequest>(
+  readonly request: <R extends RuntimeCommand>(
     request: R,
   ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
   /** Attach `host` until the caller's scope closes: it shows notices, and

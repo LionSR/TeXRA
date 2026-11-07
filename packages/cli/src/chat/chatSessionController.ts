@@ -30,7 +30,7 @@ import {
   type ProcessServices,
 } from '@texra-ai/harness/host';
 import {
-  type RuntimeRequest,
+  type RuntimeCommand,
   type RunView,
   type SessionView,
   AgentConfigSchema,
@@ -315,7 +315,7 @@ export function createChatSessionController(
 
   /** Issue one request to the session's runtime and read its Effect result
    *  as the response (PRD 7.6): the refusal text, or undefined on success. */
-  const request = (req: RuntimeRequest): Effect.Effect<string | undefined> =>
+  const request = (req: RuntimeCommand): Effect.Effect<string | undefined> =>
     requests.request(req).pipe(
       Effect.match({
         onFailure: requestErrorText,

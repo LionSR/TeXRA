@@ -23,7 +23,7 @@ import {
   approvalDecisionArm,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { ToolEditPreviewRead } from '@texra/controllers/approval/ToolEditApprovalController';
 
 import { registerCliStateResetHook, sessionRunIds } from './cliState';
@@ -35,7 +35,7 @@ import {
 } from './transcript';
 import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
-import type { RuntimeRequest, SessionView } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand, SessionView } from '@texra-ai/harness/schemas';
 
 interface TuiApprovalAdornments {
   /** What a tool edit's card shows: the preview staged for it, or why there
@@ -130,10 +130,10 @@ const promoted = signal<RunId | undefined>(undefined);
  * attached. A capability named while nothing is attached cannot be dropped
  * quietly — the request would stay pending with nobody working on it.
  */
-let hostCapability: ((arm: HostRequest) => void) | undefined;
+let hostCapability: ((arm: HostCommand) => void) | undefined;
 
 export function useHostCapability(
-  execute: (arm: HostRequest) => void,
+  execute: (arm: HostCommand) => void,
 ): () => void {
   hostCapability = execute;
   return () => {
@@ -308,7 +308,7 @@ function issue(
   runtime: ProcessRuntime,
   runId: RunId,
   requestId: string,
-  request: RuntimeRequest,
+  request: RuntimeCommand,
 ): void {
   const reopen = (): void => reopenRequest(requestId);
   runtime.runFork(
