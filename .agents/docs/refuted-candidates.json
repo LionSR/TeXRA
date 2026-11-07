@@ -443,6 +443,32 @@
           "signature": "export function generatePastedImageName(ext: string): string {…}"
         }
       ]
+    },
+    {
+      "id": "UI-request-card-declaration-record",
+      "candidate": "BaseRequestPanel's hooks replaced by a declaration record (ask, primary, decline, grant, keys) that each card returns to one request-card element",
+      "why": "Every card stays an element either way: the inquiry card holds its form and validation, the proposal card its model picker and edit form, the tool-edit card its preview verbs, and the base its note. A record of callbacks moves each override into a record field one for one: the four hooks one card fills (primaryIcon for retry, notePrompt for the user question, declineTakesNote for the inquiry, emitRuntimeArm for the tool edit) become four optional fields with the same defaults, read at the same points. No decision moves to its owner and no code goes; the class keeps the one action row, keyboard routing and read-only gate in one place. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
+      "symbols": [
+        {
+          "file": "packages/texra/src/ui/progress/components/BaseRequestPanel.ts",
+          "symbol": "BaseRequestPanel",
+          "signature": "export abstract class BaseRequestPanel< K extends PermissionPayload['kind'] = PermissionPayload['kind'], > extends LitElement {…}"
+        }
+      ]
+    },
+    {
+      "id": "UI-signal-watcher-as-streams",
+      "candidate": "subscribeToSignalChanges replaced by Streams over the SubscriptionRefs behind the signals it watches",
+      "why": "Three of its four consumers are the terminal client's: React's useSyncExternalStore over a signal (useSignal), the terminal title over a computed signal, and the approval announcer over a computed signal. None has a SubscriptionRef behind it, so the watcher stays as the one signal-to-callback bridge (the inverse of toSignal). Moving the fourth, the progress view's surface reconciliation over view$, surface$ and host$, onto Streams would add a second mechanism beside it and delete nothing. Found in J-b (round 2, J-ui-kit.md); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
+      "symbols": [
+        {
+          "file": "packages/texra/src/shared/signals.ts",
+          "symbol": "subscribeToSignalChanges",
+          "signature": "export function subscribeToSignalChanges( signals: readonly WatchableSignal[], notify: () => void, ): () => void {…}"
+        }
+      ]
     }
   ]
 }
