@@ -55,7 +55,9 @@ export const UsageLogEntrySchema = Schema.Struct({
   inputTokens: Count,
   outputTokens: Count,
   /** What the call costs at the catalog's list prices, in USD, whatever
-   *  the route billed: a plan's call is covered by its subscription. */
+   *  the route billed: a plan's call is covered by its subscription. A
+   *  model the catalog lists only for a plan (Kimi Code's
+   *  `kimi-for-coding*`) has no list price, so its calls report 0. */
   listCost: Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)),
   responseTimeMs: Schema.optional(Count),
   cachedInputTokens: Schema.optional(Count),
