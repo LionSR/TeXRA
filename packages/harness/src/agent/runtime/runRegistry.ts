@@ -134,7 +134,8 @@ export class RunRegistry implements RunsShape {
   private readonly stopping = new Set<RunId>();
   /** Stops asked of a run id with no rows yet: a launch whose caller minted
    *  the id and has not registered it. Its start takes the stop as one
-   *  asked while it opened, so the run ends CANCELLED instead of running. */
+   *  asked while it opened, so the run ends CANCELLED instead of running.
+   *  An entry lives until that start or the session's close. */
   private readonly stoppedBeforeStart = new Map<RunId, RunStopReason>();
   /** The runs a file operation or a deletion holds, for its lifetime
    *  ({@link withInactiveRun}): a launch arriving meanwhile waits for it. */
@@ -522,6 +523,8 @@ export class RunRegistry implements RunsShape {
   stopAll(): Effect.Effect<void> {
     return Effect.suspend(() => {
       this.closing = true;
+      // A launch that never started is refused from here on anyway.
+      this.stoppedBeforeStart.clear();
       const held = this.heldIds();
       // The held forest's roots: each run's cascade covers what is under it.
       const roots = held.filter(
