@@ -379,15 +379,17 @@ function blockPart(
 }
 
 /**
- * One response's Messages events as parts. The wire opens one block at a
- * time, in order; message_delta carries the stop and cumulative usage, and
- * message_stop finishes them.
+ * One response's Messages events as parts: message_start carries the
+ * identity, message_delta the stop and cumulative usage, and message_stop
+ * finishes them. Block order and placement are the assembly's to refuse;
+ * this keeps only what the Messages framing alone knows, that a thinking
+ * block ends signed.
  */
 function anthropicWire() {
   let started = false;
   let stopped = false;
-  let next = 0;
-  let open: { index: number; type: string; signed: boolean } | undefined;
+  /** Thinking blocks opened and not yet signed, by index. */
+  const unsigned = new Set<number>();
   let stop: typeof StopSchema.Type = {};
   let usage: typeof UsageSchema.Type = {};
 
@@ -415,7 +417,7 @@ function anthropicWire() {
     if (!started)
       return yield* fail('Anthropic emitted content before message identity.');
     if (event.type === 'message_delta') {
-      if (open || event.delta.container != null)
+      if (event.delta.container != null)
         return yield* fail(
           'Anthropic returned unsettled content.',
           'invalid-request',
@@ -432,7 +434,7 @@ function anthropicWire() {
     }
     if (event.type === 'message_stop') {
       const reason = stop.stop_reason;
-      if (open || reason == null)
+      if (reason == null)
         return yield* fail(
           'Anthropic stopped without complete content and a terminal reason.',
         );
@@ -478,10 +480,6 @@ function anthropicWire() {
       );
     if (event.type === 'content_block_start') {
       const block = event.content_block;
-      if (open || event.index !== next)
-        return yield* fail(
-          'Anthropic content blocks are not complete and ordered.',
-        );
       if (
         (block.type === 'text' && (block.citations?.length ?? 0) > 0) ||
         (block.type === 'tool_use' &&
@@ -491,11 +489,8 @@ function anthropicWire() {
           'Anthropic citations, toolsets and nonempty streamed argument placeholders are unsupported.',
           'invalid-request',
         );
-      open = {
-        index: next++,
-        type: block.type,
-        signed: block.type === 'thinking' && block.signature.length > 0,
-      };
+      if (block.type === 'thinking' && block.signature.length === 0)
+        unsigned.add(event.index);
       const initial =
         (block.type === 'text' && block.text) ||
         (block.type === 'thinking' && block.thinking);
@@ -513,23 +508,19 @@ function anthropicWire() {
           : []),
       ];
     }
-    if (open?.index !== event.index)
-      return yield* fail('Anthropic updated a block that is not open.');
+    const { index } = event;
     if (event.type === 'content_block_stop') {
-      if (open.type === 'thinking' && !open.signed)
+      if (unsigned.has(index))
         return yield* fail('Anthropic thinking ended without its signature.');
-      open = undefined;
-      return [{ kind: 'close', index: event.index }];
+      return [{ kind: 'close', index }];
     }
     const delta = event.delta;
     if (delta.type === 'signature_delta') {
-      if (open.type !== 'thinking')
-        return yield* fail('Anthropic emitted a mismatched content delta.');
-      open.signed = true;
+      unsigned.delete(index);
       return [
         {
           kind: 'evidence',
-          index: event.index,
+          index,
           evidence: {
             kind: 'anthropic-thinking-signature',
             signature: delta.signature,
@@ -541,7 +532,7 @@ function anthropicWire() {
       return [
         {
           kind: 'append',
-          index: open.index,
+          index,
           channel: 'text',
           text: delta.text,
         },
@@ -550,7 +541,7 @@ function anthropicWire() {
       return [
         {
           kind: 'append',
-          index: open.index,
+          index,
           channel: 'reasoning',
           text: delta.thinking,
         },
@@ -558,7 +549,7 @@ function anthropicWire() {
     return [
       {
         kind: 'append',
-        index: open.index,
+        index,
         channel: 'arguments',
         text: delta.partial_json,
       },
