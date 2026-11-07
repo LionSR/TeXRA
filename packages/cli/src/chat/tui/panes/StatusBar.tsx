@@ -56,7 +56,11 @@ const QUOTA_REFRESH = '30 seconds';
 const modelAccessChanges: Stream.Stream<void, never, ProcessServices> =
   Stream.merge(
     appSignalStream('credentialChanged').pipe(
-      Stream.filter(({ key }) => apiKeyEntry(key) !== undefined),
+      Stream.filter(({ key }) => {
+        // An unknown provider's key routes no model.
+        const provider = apiKeyEntry(key);
+        return provider !== undefined && provider !== 'unknown';
+      }),
     ),
     appSignalStream('modelAccessChanged'),
   ).pipe(Stream.as(undefined));
