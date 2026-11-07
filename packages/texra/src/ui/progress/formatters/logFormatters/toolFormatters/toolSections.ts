@@ -22,6 +22,7 @@ import {
   buildStatusBadge,
 } from '@ui/progress/formatters/htmlBuilders';
 import { getLanguageFromPath } from '@ui/progress/formatters/constants';
+import { TOOL_STATUS_WORD } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildToolSection } from './helpers';
@@ -169,8 +170,8 @@ function renderToolSection(
         section.label,
         buildStatusBadge(
           section.status === 'failed' ? 'circle-exclamation' : 'check',
-          section.status,
-          section.status === 'running' || section.status === 'in_progress',
+          TOOL_STATUS_WORD[section.status],
+          section.status === 'in_progress',
         ),
       );
     default:

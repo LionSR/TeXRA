@@ -429,7 +429,7 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
   const otherBlocks = blocks.filter((block) => !isMcpTextBlock(block));
   let structured = false;
 
-  if (typeof parsed?.status === 'string') {
+  if (parsed?.status != null) {
     sections.push({ kind: 'status', label: 'Status:', status: parsed.status });
     structured = true;
   }
