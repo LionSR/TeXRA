@@ -9,11 +9,13 @@
  */
 import { Effect, type Scope } from 'effect';
 
+import { getHelperModelName } from '@agent/runtime/helperModelName';
 import type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 import {
   modelAccessLayer,
   ModelAccess,
 } from '@agent/runtime/modelAccess/ModelAccess';
+import { RouteUnavailable } from '@common/errors/agentErrors';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
 import type { NormalizedUsage } from '@shared/schemas';
@@ -64,7 +66,23 @@ export const helperCall = Effect.fn('helperCall')(
     Scope.Scope | HttpClient.HttpClient | UsageLog | RouteRetries | Secrets
   > {
     const access = yield* Effect.provide(ModelAccess, modelAccessLayer(stores));
-    const bound = yield* access.bind({ purpose: 'helper', runModel });
+    const modelId =
+      (yield* Effect.mapError(
+        getHelperModelName(stores),
+        RouteUnavailable.of,
+      )) ?? runModel;
+    if (modelId === undefined)
+      return yield* RouteUnavailable.of(
+        new Error('No helper model is configured, and no run model to use.'),
+      );
+    // One-shot deterministic text: the whole output budget, never sampled.
+    // Its bind decides whether it can serve now, as a run's does.
+    const bound = yield* access.bind({
+      modelId,
+      declinedRoutes: [],
+      textOnly: true,
+      temperature: 0,
+    });
     const { turn, usage } = yield* callModel({
       binding: Effect.succeed(bound),
       ...(retries === undefined ? {} : { retries }),
