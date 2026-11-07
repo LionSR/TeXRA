@@ -77,9 +77,6 @@ const DEFAULT_ANNOTATION_LEVEL_DESCRIPTION =
 const SUBSCRIPTION_PATH_DESCRIPTION =
   'Subscription target, mirroring GitHub\'s REST URL shape: "owner/repo" (repo-wide, coarse), "owner/repo/pulls/N" (per-PR, nuanced), or "owner/repo/issues/N" (per-issue).';
 
-// Provider schema flattening advertises one object across commands, and
-// OpenAI-compatible providers null-fill the other branches' fields; a plain
-// `Struct` branch ignores those keys.
 const GitHubSubscriptionInputSchema = Schema.Union([
   Schema.Struct({
     command: Schema.Literal('subscribe').annotate({
@@ -185,18 +182,7 @@ function slugOf(target: { owner: string; repo: string }): string {
 const PATH_FORMS =
   '"owner/repo", "owner/repo/pulls/N", or "owner/repo/issues/N"';
 
-function requirePath(input: {
-  command: string;
-  path: string;
-}): Effect.Effect<ParsedPath, ToolError> {
-  const raw = input.path;
-  if (!raw) {
-    return Effect.fail(
-      new ToolError(
-        `command="${input.command}" requires a path (${PATH_FORMS}).`,
-      ),
-    );
-  }
+function parsePath(raw: string): Effect.Effect<ParsedPath, ToolError> {
   const match = PATH_RE.exec(raw.trim());
   if (!match) {
     return Effect.fail(
@@ -230,7 +216,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
 ) {
   yield* requireToken();
   const subscriptions = yield* GitHubSubscriptions;
-  const target = yield* requirePath(input);
+  const target = yield* parsePath(input.path);
   const minAnnotationLevel = input.min_annotation_level;
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
@@ -353,7 +339,7 @@ const resolveIssueIsPR = (
 const execUnsubscribe = Effect.fn('GitHubSubscriptionTool.unsubscribe')(
   function* (input: UnsubscribeInput, runId: RunId) {
     const subscriptions = yield* GitHubSubscriptions;
-    const target = yield* requirePath(input);
+    const target = yield* parsePath(input.path);
     const slug = slugOf(target);
     let removed: boolean;
     let label: string;

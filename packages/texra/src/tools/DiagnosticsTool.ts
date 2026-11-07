@@ -39,9 +39,10 @@ interface DiagnosticsPorts {
   readonly addCriticism: EditorCapabilities['addCriticism'];
 }
 
-const DiagnosticsPathSchema = Schema.Trim.check(Schema.isMinLength(1)).annotate(
-  { description: 'Workspace-relative or absolute file path.' },
-);
+// Described on the encoded side, the one the model's JSON Schema shows.
+const DiagnosticsPathSchema = Schema.String.annotate({
+  description: 'Workspace-relative or absolute file path.',
+}).pipe(Schema.decodeTo(Schema.Trim.check(Schema.isMinLength(1))));
 
 const DiagnosticsInputSchema = Schema.Union([
   Schema.Struct({

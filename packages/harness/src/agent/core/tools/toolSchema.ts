@@ -42,90 +42,172 @@ function schemaLiteralValue(schema: JSONSchemaObject): unknown {
   return members?.length === 1 ? schemaLiteralValue(members[0]) : undefined;
 }
 
+/** A field's description and value schema: the schema with its description
+ *  and the `null` member of a nullable optional field taken off, which is
+ *  what one field's copies on different branches are compared by. */
+function splitField(schema: JSONSchemaObject): {
+  readonly description: string | undefined;
+  readonly shape: JSONSchemaObject;
+} {
+  const { description, anyOf, ...rest } = schema;
+  const members = anyOf?.filter((member) => member.type !== 'null');
+  if (members === undefined || members.length === 0) {
+    return { description, shape: anyOf ? { ...rest, anyOf } : rest };
+  }
+  if (members.length > 1) {
+    return { description, shape: { ...rest, anyOf: members } };
+  }
+  const { description: inner, ...member } = members[0];
+  return { description: description ?? inner, shape: { ...rest, ...member } };
+}
+
+/** "a", "a or b", "a, b, or c": the discriminator values a field is used with. */
+const DISJUNCTION = new Intl.ListFormat('en', { type: 'disjunction' });
+
+/** `schema` that also admits `null`. */
+const nullable = (schema: JSONSchemaObject): JSONSchemaObject => ({
+  anyOf: [
+    ...(Object.keys(schema).length === 1 && schema.anyOf
+      ? schema.anyOf
+      : [schema]),
+    { type: 'null' },
+  ],
+});
+
+/** The property every branch pins to its own literal, with each branch's
+ *  value, if the union has one. */
+function discriminatorOf(
+  branches: readonly Record<string, JSONSchemaObject>[],
+): { readonly name: string; readonly values: unknown[] } | undefined {
+  for (const name of Object.keys(branches[0])) {
+    const values = branches.map((properties) =>
+      properties[name] === undefined
+        ? undefined
+        : schemaLiteralValue(properties[name]),
+    );
+    if (
+      values.every(Predicate.isNotUndefined) &&
+      new Set(values).size === values.length
+    ) {
+      return { name, values };
+    }
+  }
+  return undefined;
+}
+
 /**
  * Function-calling APIs reject a parameters schema whose top-level node is
- * `oneOf`/`anyOf`/`allOf` (HTTP 400: `schema must have type 'object' and
- * not contain 'oneOf'/'anyOf'/'allOf' at the top level`). Effect Schema
- * emits a union of structs as a top-level `anyOf`. Flatten such
- * unions into a single object schema by merging the union of all branch
- * properties, keeping only properties required by every branch as
- * `required`, and collapsing discriminator literals from every branch into
- * an `enum`. Properties that exist on multiple branches with conflicting
- * non-literal shapes fall back to the first branch's shape; the discriminator
- * enum is what the model actually selects between.
+ * `oneOf`/`anyOf` (HTTP 400: `schema must have type 'object' and not
+ * contain 'oneOf'/'anyOf'/'allOf' at the top level`), and Effect Schema
+ * emits a union of structs as a top-level `anyOf`. So a tool's input is
+ * written as its natural union of tagged structs, dispatch decodes with that
+ * union, and the model is shown one object built from it here:
+ *
+ * - the discriminator (the property every branch pins to a literal of its
+ *   own) as an `enum` of those literals, each branch's description under its
+ *   value;
+ * - every other branch property once, a field two branches spell differently
+ *   as the `anyOf` of their shapes, its description labelled with the
+ *   discriminator values that take it unless every branch shares it;
+ * - `required` only for a property every branch requires, and every other
+ *   property nullable, since a field another branch requires is optional
+ *   here and OpenAI-compatible APIs send an omitted field as `null` (a
+ *   branch's struct ignores the keys it does not declare).
  */
 function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
   if (schema.type === 'object') return schema;
-  const rawVariants = [schema.oneOf, schema.anyOf, schema.allOf].find((v) =>
-    Array.isArray(v),
-  );
-  if (!rawVariants) return schema;
-
-  const variants = rawVariants.filter(
-    (v) => Predicate.isObject(v) && v.type === 'object',
-  );
-  if (variants.length === 0 || variants.length !== rawVariants.length) {
+  const variants = schema.anyOf ?? schema.oneOf;
+  if (
+    variants === undefined ||
+    variants.length === 0 ||
+    !variants.every((v) => Predicate.isObject(v) && v.type === 'object')
+  ) {
     return schema;
   }
 
-  const variantProperties: Record<string, JSONSchemaObject>[] = variants.map(
-    (v) => v.properties ?? {},
+  const branches = variants.map((v) => v.properties ?? {});
+  const requiredBy = variants.map((v) => new Set(v.required ?? []));
+  const names = [...new Set(branches.flatMap((p) => Object.keys(p)))];
+  const required = names.filter((name) =>
+    requiredBy.every((set) => set.has(name)),
   );
+  const discriminator = discriminatorOf(branches);
+  const valueOf = (index: number) =>
+    JSON.stringify(discriminator?.values[index]);
 
-  const allPropNames = new Set(
-    variantProperties.flatMap((props) => Object.keys(props)),
-  );
+  /** One field's copies, by the branch that declares each. */
+  type Copies = readonly {
+    readonly index: number;
+    readonly description: string | undefined;
+    readonly shape: JSONSchemaObject;
+  }[];
 
-  const mergedProperties: Record<string, JSONSchemaObject> = {};
-  for (const name of allPropNames) {
-    const branchSchemas = variantProperties
-      .map((props) => props[name])
-      .filter(Predicate.isNotUndefined);
-    if (branchSchemas.length === 1) {
-      mergedProperties[name] = branchSchemas[0];
-      continue;
+  /** The field's description: the one its copies share, else each
+   *  wording under the discriminator values whose branches use it. */
+  const describe = (copies: Copies): string | undefined => {
+    const byText = new Map<string, number[]>();
+    for (const { index, description } of copies) {
+      const text = description ?? '';
+      byText.set(text, [...(byText.get(text) ?? []), index]);
     }
-    // Discriminator: every branch pins this prop to a literal value.
-    const constValues = branchSchemas
-      .map(schemaLiteralValue)
-      .filter(Predicate.isNotUndefined);
-    if (constValues.length === branchSchemas.length) {
-      const descriptions = branchSchemas
-        .map((s) => s.description)
-        .filter(Predicate.isString);
-      // Infer the discriminator type from the branch shapes rather than
-      // hardcoding 'string': a literal discriminator may also be a number
-      // or a boolean.
-      const branchType = branchSchemas
-        .map((s) => (typeof s.type === 'string' ? s.type : undefined))
-        .find(Predicate.isNotUndefined);
-      const inferredType = branchType ?? typeof constValues[0];
-      const merged: JSONSchemaObject = {
-        type: inferredType,
-        enum: constValues,
+    const texts = [...byText.keys()].filter((text) => text !== '');
+    if (copies.length === branches.length && texts.length <= 1) {
+      return texts[0];
+    }
+    if (discriminator === undefined) return texts.join(' | ') || undefined;
+    return [...byText]
+      .map(([text, indexes]) => {
+        const values = DISJUNCTION.format(indexes.map(valueOf));
+        return `With ${discriminator.name} ${values}${text === '' ? '.' : `: ${text}`}`;
+      })
+      .join(' ');
+  };
+
+  const property = (name: string): JSONSchemaObject => {
+    const copies: Copies = branches.flatMap((properties, index) =>
+      properties[name] === undefined
+        ? []
+        : [{ index, ...splitField(properties[name]) }],
+    );
+    let value: JSONSchemaObject;
+    let description: string | undefined;
+    if (name === discriminator?.name) {
+      // A literal discriminator may also be a number or a boolean.
+      const type = copies
+        .map(({ shape }) => shape.type)
+        .find(Predicate.isString);
+      value = {
+        type: type ?? typeof discriminator.values[0],
+        enum: discriminator.values,
       };
-      if (descriptions.length) {
-        merged.description = descriptions.join(' | ');
-      }
-      mergedProperties[name] = merged;
-      continue;
+      description =
+        copies
+          .flatMap(({ index, description: text }) =>
+            text === undefined ? [] : [`${valueOf(index)}: ${text}`],
+          )
+          .join(' | ') || undefined;
+    } else {
+      const shapes = [
+        ...new Map(
+          copies.map(({ shape }) => [JSON.stringify(shape), shape]),
+        ).values(),
+      ];
+      value = shapes.length === 1 ? shapes[0] : { anyOf: shapes };
+      description = describe(copies);
     }
-    mergedProperties[name] = branchSchemas[0];
-  }
-
-  const requiredSets = variants.map((v) => new Set<string>(v.required ?? []));
-  const commonRequired = [...allPropNames].filter((p) =>
-    requiredSets.every((s) => s.has(p)),
-  );
+    if (!required.includes(name)) value = nullable(value);
+    return description === undefined ? value : { ...value, description };
+  };
 
   const flat: JSONSchemaObject = {
     type: 'object',
-    properties: mergedProperties,
+    properties: Object.fromEntries(names.map((name) => [name, property(name)])),
   };
-  if (commonRequired.length) flat.required = commonRequired;
+  if (required.length > 0) flat.required = required;
   if (typeof schema.description === 'string') {
     flat.description = schema.description;
   }
+  if (schema.$defs !== undefined) flat.$defs = schema.$defs;
   return flat;
 }
 
