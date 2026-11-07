@@ -33,6 +33,11 @@ function fileVersion(filePath: string): string {
     : `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
 }
 
+/** {@link fileVersion} as an effect: a file that cannot be probed (an
+ *  untraversable directory, a symlink loop) fails it rather than dying. */
+const probeVersion = (filePath: string): Effect.Effect<string, Error> =>
+  Effect.try({ try: () => fileVersion(filePath), catch: ensureError });
+
 /** The file's record, read synchronously as a read follows the file. */
 function readJsonRecordSync(filePath: string): JsonRecord {
   let content: string;
@@ -201,15 +206,17 @@ export class JsonStore {
     const storePath = path.resolve(filePath);
     // The version is taken before the read, so a write landing during it
     // is read again at the first `get`.
-    const version = fileVersion(storePath);
+    const version = yield* probeVersion(storePath);
     const data = yield* readJsonRecord(storePath);
     return new JsonStore(storePath, data, version);
   });
 
   /**
    * The store over a file that exists but cannot be read as a JSON object
-   * (`open` failed on it): an empty view held at the file's current version,
-   * so it reads the file again once the file changes. Writes still re-read
+   * (`open` failed on it, and its caller reported why): an empty view held
+   * at the file's current version, so it reads the file again once the file
+   * changes; one that cannot even be probed holds no version, so each read
+   * tries it again and logs a new failure once. Writes still re-read
    * the file in {@link flush}, so they fail rather than overwrite what could
    * not be parsed.
    */
@@ -218,7 +225,10 @@ export class JsonStore {
   ) {
     const path = yield* Path.Path;
     const storePath = path.resolve(filePath);
-    return new JsonStore(storePath, {}, fileVersion(storePath));
+    const version = yield* probeVersion(storePath).pipe(
+      Effect.orElseSucceed(() => undefined),
+    );
+    return new JsonStore(storePath, {}, version);
   });
 
   get(key: string): unknown {
