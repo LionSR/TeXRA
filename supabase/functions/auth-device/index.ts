@@ -192,7 +192,7 @@ app.post('/code', async (c) => {
         device_code: deviceCode,
         user_code: displayCode,
         verification_uri: verifyUri,
-        verification_uri_complete: `${verifyUri}?device_code=${encodeURIComponent(
+        verification_uri_complete: `${verifyUri}?user_code=${encodeURIComponent(
           displayCode,
         )}`,
         expires_in: DEVICE_CODE_TTL_SECONDS,
@@ -453,11 +453,11 @@ function verifyPageHtml(
   scriptNonce: string,
 ): string {
   // Static page: sign in with the normal Supabase OAuth web flow (redirecting
-  // back here, keeping ?device_code= through the round trip), then approve or
+  // back here, keeping ?user_code= through the round trip), then approve or
   // deny the code with the signed-in user's JWT. Supabase owns ?code= for the
-  // OAuth PKCE callback, so the device user code must use a distinct query
-  // key. Despite the name, ?device_code= carries the short DISPLAY code the
-  // user enters (XXXX-XXXX), never the high-entropy device-code secret.
+  // OAuth PKCE callback, so the short display code the user enters
+  // (XXXX-XXXX) rides as ?user_code=; the device-code secret never reaches
+  // the page.
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -506,7 +506,7 @@ function verifyPageHtml(
   const signedIn = document.getElementById('signed-in');
 
   const params = new URLSearchParams(window.location.search);
-  if (params.get('device_code')) codeInput.value = params.get('device_code');
+  if (params.get('user_code')) codeInput.value = params.get('user_code');
 
   function setStatus(message, kind) {
     statusEl.textContent = message;
@@ -538,7 +538,7 @@ function verifyPageHtml(
       const code = requireCode();
       if (!code) return;
       const redirectTo = window.location.origin + window.location.pathname +
-        '?device_code=' + encodeURIComponent(code);
+        '?user_code=' + encodeURIComponent(code);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: button.dataset.provider,
         options: { redirectTo },
