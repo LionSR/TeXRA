@@ -42,7 +42,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
-  WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+  DOCUMENTS_COMPILE_TIMEOUT_SETTING,
 } from '@texra/shared/settingsView/documentsSettings';
 
 /** What a diff pass reads of the run: its trace, its storage and its
@@ -330,7 +330,7 @@ const compileDiff = Effect.fn('documents.compileDiff')(function* (
   // is torn down by its scope instead of orphaning latexmk/pdflatex.
   const timeoutMs = yield* Settings.get(
     roots,
-    WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+    DOCUMENTS_COMPILE_TIMEOUT_SETTING,
   );
   // The diff `.tex` is written under `diff/r{round}/`, away from both the
   // revised round output and the live workspace source. Search the revised

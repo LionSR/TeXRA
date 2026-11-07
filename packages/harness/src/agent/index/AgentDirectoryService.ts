@@ -21,7 +21,7 @@ import {
 } from '@shared/config/settings';
 import type { StateKey } from '@shared/state/stateSettings';
 import type { AgentSource } from '@shared/schemas';
-import { ToolRegistry, boundFiles } from '@tools/toolTable';
+import { ToolRegistry, boundFile, boundFiles } from '@tools/toolTable';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -363,7 +363,9 @@ const copyTarget = Effect.fn('AgentDirectoryService.copyTarget')(function* (
 });
 
 /** Apply `change` to the custom copy of `entry`; `newerBuiltIn` is the
- *  changed bundled version a `keep` re-stamps with. The copy's path. */
+ *  changed bundled version a `keep` re-stamps with. The copy's path, and
+ *  the bound files (as the agent names them) that were already beside it
+ *  and were kept although they differ from the originals. */
 export const customizeCopy = Effect.fn('customizeCopy')(function* (
   entry: AgentEntry,
   change: AgentCustomization,
@@ -394,15 +396,18 @@ export const customizeCopy = Effect.fn('customizeCopy')(function* (
     change === 'keep'
       ? []
       : boundFiles(entry.blocks, blocks).map((file) => ({
-          from: path.resolve(fromDir, file),
-          to: path.resolve(path.dirname(target), file),
+          file,
+          from: boundFile(entry.path, file),
+          to: boundFile(target, file),
         }));
-  const escaping = bound.find(({ from }) => !isStrictlyWithin(fromDir, from));
+  const escaping = bound.find(
+    ({ from }) => !isStrictlyWithin(fromDir, from.path),
+  );
   if (escaping)
     return yield* new AgentCustomizeRefused({
       reason: 'escapes',
-      path: escaping.from,
-      message: `Refusing to copy: ${escaping.from}, a file the agent binds, is outside its directory.`,
+      path: escaping.from.path,
+      message: `Refusing to copy: ${escaping.from.path}, a file the agent binds, is outside its directory.`,
     });
   const fs = yield* FileSystem.FileSystem;
   if (change === 'copy' && (yield* fs.exists(target)))
@@ -413,12 +418,18 @@ export const customizeCopy = Effect.fn('customizeCopy')(function* (
     });
   // A bound file already beside the copy is kept as it is, in every mode:
   // several agents can bind one file, and another customized agent, or the
-  // person, may have edited it.
-  for (const { from, to } of bound) {
-    if (yield* fs.exists(to)) continue;
-    yield* fs.makeDirectory(path.dirname(to), { recursive: true });
-    yield* fs.copyFile(from, to);
+  // person, may have edited it. The stamp still names the bundled version,
+  // whose digest covers the original, so a kept file that differs is
+  // returned for the caller to tell the person; nothing else would.
+  const keptDiffering: string[] = [];
+  for (const { file, from, to } of bound) {
+    if (yield* fs.exists(to.path)) {
+      if ((yield* from.read) !== (yield* to.read)) keptDiffering.push(file);
+      continue;
+    }
+    yield* fs.makeDirectory(path.dirname(to.path), { recursive: true });
+    yield* fs.copyFile(from.path, to.path);
   }
   yield* writeStampedCopy(entry.path, target, base.digest);
-  return target;
+  return { path: target, keptDiffering };
 });

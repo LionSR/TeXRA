@@ -1,6 +1,6 @@
 /**
  * The documents plugin's setting rows: the compile check after a revision
- * (`workflow.*`) and the diffs between revisions (`latexdiff.*`), which
+ * (`documents.*`) and the diffs between revisions (`latexdiff.*`), which
  * TeXRA's catalog lists (`./texraSettings`). They live here, in a
  * browser-safe module, because the settings view's webview renders them.
  */
@@ -12,50 +12,50 @@ import { Effect, Schema } from 'effect';
 import { LATEXDIFF_MATH_MARKUP_VALUES } from '@texra/shared/constants/latexConfig';
 import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 
-export const WORKFLOW_AUTO_COMPILE_SETTING = {
-  key: 'workflow.autoCompileAfterOutput',
+export const DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING = {
+  key: 'documents.compileAfterOutput',
   schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   title: 'Auto-compile outputs',
   description:
     'Compile the LaTeX project automatically after a document task writes its output.',
-  category: 'workflow',
+  category: 'documents',
   slot: 'workspaceState',
   surfaces: { settingsView: 'latex', cliConfig: true },
 } as const satisfies TexraSettingRow<boolean>;
 
-export const WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING = {
-  key: 'workflow.autoCompileTimeoutMs',
+export const DOCUMENTS_COMPILE_TIMEOUT_SETTING = {
+  key: 'documents.compileTimeoutMs',
   schema: Schema.Int.check(Schema.isGreaterThanOrEqualTo(10_000)).pipe(
     Schema.withDecodingDefault(Effect.succeed(120_000)),
   ),
   title: 'Auto-compile timeout',
   description:
     'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
-  category: 'workflow',
+  category: 'documents',
   slot: 'workspaceState',
   surfaces: { cliConfig: true },
 } as const satisfies TexraSettingRow<number>;
 
-export const WORKFLOW_AUTO_OPEN_PDF_SETTING = {
-  key: 'workflow.autoOpenPdf',
+export const DOCUMENTS_OPEN_PDF_SETTING = {
+  key: 'documents.openPdf',
   schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   title: 'Open the compiled PDF',
   description:
     'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
-  category: 'workflow',
+  category: 'documents',
   slot: 'workspaceState',
   // Read by the documents plugin, but the emitted `openFile` notice has no
   // CLI handler (headless), so the CLI ignores it.
   surfaces: { settingsView: 'latex' },
 } as const satisfies TexraSettingRow<boolean>;
 
-export const WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING = {
-  key: 'workflow.rejectOnCompileFailure',
+export const DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING = {
+  key: 'documents.rejectOnCompileFailure',
   schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   title: 'Repair failed compiles',
   description:
     'When the automatic compile fails, spend the next revision repairing the output from the compile log.',
-  category: 'workflow',
+  category: 'documents',
   slot: 'workspaceState',
   surfaces: { settingsView: 'latex', cliConfig: true },
 } as const satisfies TexraSettingRow<boolean>;
@@ -123,10 +123,10 @@ export const LATEXDIFF_CHANGES_ONLY_SETTING = {
 
 /** The documents plugin's rows, in catalog order. */
 export const DOCUMENTS_SETTINGS: readonly TexraSettingRow[] = [
-  WORKFLOW_AUTO_COMPILE_SETTING,
-  WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
-  WORKFLOW_AUTO_OPEN_PDF_SETTING,
-  WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING,
+  DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
+  DOCUMENTS_COMPILE_TIMEOUT_SETTING,
+  DOCUMENTS_OPEN_PDF_SETTING,
+  DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_TIMEOUT_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,

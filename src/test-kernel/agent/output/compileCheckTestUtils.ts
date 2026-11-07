@@ -14,8 +14,8 @@ import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { runCompileCheck } from '@texra/agent/output/compileCheck';
 import type { FileLocation, RunId } from '@texra-ai/harness/schemas';
 import {
-  WORKFLOW_AUTO_COMPILE_SETTING,
-  WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+  DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
+  DOCUMENTS_COMPILE_TIMEOUT_SETTING,
 } from '@texra/shared/settingsView/documentsSettings';
 
 export const storagePath = fakePath('storage');
@@ -79,8 +79,8 @@ export function latexHost(files: Record<string, string>) {
     storagePath,
     workspacePath,
     workspaceState: {
-      [WORKFLOW_AUTO_COMPILE_SETTING.key]: true,
-      [WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING.key]: 30_000,
+      [DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING.key]: true,
+      [DOCUMENTS_COMPILE_TIMEOUT_SETTING.key]: 30_000,
     },
   });
 }

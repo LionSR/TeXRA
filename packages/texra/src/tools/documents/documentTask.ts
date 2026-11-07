@@ -12,11 +12,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 import {
   agentBlockOf,
+  boundFile,
   errorResult,
   AGENT_TOOL_NAME,
   TEMPLATE_INPUT_NAMES,
 } from '@texra-ai/harness/plugins';
-import { readNormalizedFile } from '@texra-ai/harness/node';
 import { type ToolResult } from '@texra-ai/harness';
 import {
   withLogChannel,
@@ -94,7 +94,6 @@ export const taskFileVars = Effect.fn('documents.taskFileVars')(function* (
   task: DocumentTask,
   agentPath: string,
 ) {
-  const fs = yield* FileSystem.FileSystem;
   const vars: Record<string, string> = {};
   const entries: FileListEntry[] = [];
   for (const [varName, filePath] of Object.entries(task.files)) {
@@ -106,10 +105,8 @@ export const taskFileVars = Effect.fn('documents.taskFileVars')(function* (
             `task.files name "${varName}" generates "${generated}", which collides with a fixed template variable. Rename the variable.`,
           ),
         );
-    // Resolved against the agent's own directory; an absolute path as
-    // written.
-    const fullPath = path.resolve(path.dirname(agentPath), filePath);
-    const content = yield* readNormalizedFile(fs, fullPath).pipe(
+    const { path: fullPath, read } = boundFile(agentPath, filePath);
+    const content = yield* read.pipe(
       Effect.catch((error) =>
         // The variable is simply absent from the prompt after this, so a
         // mistyped path and a permission error must not read like a real

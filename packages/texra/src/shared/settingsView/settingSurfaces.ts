@@ -103,7 +103,7 @@ export const SettingCategorySchema = Schema.Literals([
   'git',
   'agents',
   'ai-agents',
-  'workflow',
+  'documents',
   'model',
   'latex',
   'latexdiff',

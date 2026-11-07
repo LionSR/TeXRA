@@ -39,8 +39,8 @@ import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
-  WORKFLOW_AUTO_COMPILE_SETTING,
-  WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+  DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
+  DOCUMENTS_COMPILE_TIMEOUT_SETTING,
 } from '@texra/shared/settingsView/documentsSettings';
 
 interface CompileCheckContext {
@@ -126,7 +126,9 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     currentRound: number,
     outputs: readonly OutputFileInfo[],
   ) {
-    if (!(yield* Settings.get(ctx.roots, WORKFLOW_AUTO_COMPILE_SETTING))) {
+    if (
+      !(yield* Settings.get(ctx.roots, DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING))
+    ) {
       return skipped('auto-compile is off');
     }
 
@@ -140,7 +142,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
 
     const timeoutMs = yield* Settings.get(
       ctx.roots,
-      WORKFLOW_AUTO_COMPILE_TIMEOUT_SETTING,
+      DOCUMENTS_COMPILE_TIMEOUT_SETTING,
     );
     const failures: CompileFailure[] = [];
     const artifacts: RunStorageFileLocation[] = [];

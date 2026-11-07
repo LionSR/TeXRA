@@ -61,9 +61,9 @@ import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_CHANGES_ONLY_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
-  WORKFLOW_AUTO_COMPILE_SETTING,
-  WORKFLOW_AUTO_OPEN_PDF_SETTING,
-  WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING,
+  DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
+  DOCUMENTS_OPEN_PDF_SETTING,
+  DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
 } from '@texra/shared/settingsView/documentsSettings';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
@@ -451,7 +451,9 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
   }
 
   private renderCompileDiffSettings(): TemplateResult {
-    const autoCompile = settingSignal(WORKFLOW_AUTO_COMPILE_SETTING).get();
+    const autoCompile = settingSignal(
+      DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
+    ).get();
     return html`
       <div class="settings-section">
         ${renderSettingsSectionHeading({
@@ -460,12 +462,12 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
             'What TeXRA does with the LaTeX an agent writes in this workspace.',
           icon: 'bolt',
         })}
-        ${renderStateSettingToggleRow(WORKFLOW_AUTO_COMPILE_SETTING)}
-        ${renderStateSettingToggleRow(WORKFLOW_AUTO_OPEN_PDF_SETTING, {
+        ${renderStateSettingToggleRow(DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING)}
+        ${renderStateSettingToggleRow(DOCUMENTS_OPEN_PDF_SETTING, {
           disabled: !autoCompile,
         })}
         ${renderStateSettingToggleRow(
-          WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING,
+          DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
           { disabled: !autoCompile },
         )}
         ${renderStateSettingToggleRow(LATEXDIFF_CHANGES_ONLY_SETTING)}

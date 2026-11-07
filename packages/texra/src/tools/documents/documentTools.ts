@@ -62,8 +62,8 @@ import {
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import {
-  WORKFLOW_AUTO_OPEN_PDF_SETTING,
-  WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING,
+  DOCUMENTS_OPEN_PDF_SETTING,
+  DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
 } from '@texra/shared/settingsView/documentsSettings';
 
 /** A revision of a document task, by its zero-based index. */
@@ -93,7 +93,7 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
   );
 
 const autoOpensPdf = (docs: Documents) =>
-  Settings.get(docs.deps.roots, WORKFLOW_AUTO_OPEN_PDF_SETTING);
+  Settings.get(docs.deps.roots, DOCUMENTS_OPEN_PDF_SETTING);
 
 /**
  * What the first revision checks before the task does any work, whichever
@@ -403,7 +403,7 @@ export const DocumentCompileTool = defineTool({
     // recorded with the revision.
     const rejects = yield* Settings.get(
       roots,
-      WORKFLOW_REJECT_ON_COMPILE_FAILURE_SETTING,
+      DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
     );
     const compile: CompileOutcome =
       check._tag === 'skipped'
