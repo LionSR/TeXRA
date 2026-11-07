@@ -76,13 +76,18 @@ export interface SettingRow<A = unknown> extends StateKey<A> {
    */
   readonly projectMayOptOut?: true;
   /**
-   * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
-   * enum options (a host's settings UI derives them). The option *values* are
-   * derived from the schema, not restated here.
+   * Display copy for each value of an enum setting, keyed by the value, so
+   * the record is total over the schema's values by type. The values
+   * themselves are read off the schema, not restated here; a value without
+   * a label shows as itself.
    */
-  readonly enumDescriptions?: readonly string[];
-  /** Display labels for enum options, aligned 1:1 with the schema options. */
-  readonly enumLabels?: readonly string[];
+  readonly choices?: { readonly [V in A & string]: SettingChoiceCopy };
+}
+
+/** How a settings UI shows one value of an enum setting. */
+export interface SettingChoiceCopy {
+  readonly label?: string;
+  readonly description?: string;
 }
 
 // ============================================================================
@@ -363,7 +368,11 @@ export const APPROVAL_POLICY_SETTING = {
   description:
     'Whether agents ask before running shell commands and editing files.',
   configTarget: 'local',
-  enumLabels: ['Block', 'Ask', 'Auto-approve'],
+  choices: {
+    never: { label: 'Block' },
+    ask: { label: 'Ask' },
+    yolo: { label: 'Auto-approve' },
+  },
 } as const satisfies SettingRow<typeof ApprovalPolicySchema.Type>;
 
 export const DISABLED_SKILLS_SETTING = {

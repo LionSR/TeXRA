@@ -134,12 +134,10 @@ function buildConfigListItems(
 }
 
 function buildEnumItems(entry: TexraSettingRow): Array<SelectItem<string>> {
-  const values = settingEnumOptions(entry) ?? [];
-  const descriptions = entry.enumDescriptions ?? [];
-  return values.map((value, index) => ({
+  return (settingEnumOptions(entry) ?? []).map((value) => ({
     value,
     label: value,
-    description: descriptions[index],
+    description: entry.choices?.[value]?.description,
   }));
 }
 

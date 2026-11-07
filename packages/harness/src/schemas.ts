@@ -248,6 +248,7 @@ export {
   TOOL_PATH_PROTECTION_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   type HarnessRowKey,
+  type SettingChoiceCopy,
   type SettingRow,
   type SettingsCatalog,
   type SettingStore,

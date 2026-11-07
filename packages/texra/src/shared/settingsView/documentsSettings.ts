@@ -99,12 +99,12 @@ export const LATEXDIFF_MATH_MARKUP_SETTING = {
   description: 'How latexdiff marks up changes inside math environments.',
   category: 'latexdiff',
   slot: 'workspaceState',
-  enumDescriptions: [
-    'suppress markup',
-    'equation-level',
-    'within equations',
-    'small changes inside equations',
-  ],
+  choices: {
+    off: { description: 'suppress markup' },
+    whole: { description: 'equation-level' },
+    coarse: { description: 'within equations' },
+    fine: { description: 'small changes inside equations' },
+  },
   surfaces: { settingsView: 'latex' },
 } as const satisfies TexraSettingRow<
   (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number]

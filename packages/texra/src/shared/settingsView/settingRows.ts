@@ -30,8 +30,8 @@ export function settingSchemaWithoutDefault(
  * Enum option values for a setting, read off its `Schema.Literals(...)` AST (a
  * union whose members are all string literals) rather than restated on the
  * row, or `undefined` for non-enum settings. The schema stays the single
- * source of the allowed values; only the per-value prose (`enumDescriptions`)
- * is editorial.
+ * source of the allowed values; only the per-value copy (`choices`) is
+ * editorial.
  */
 export function settingEnumOptions(
   entry: SettingRow,
@@ -72,24 +72,24 @@ export function settingNumberBounds(entry: SettingRow): {
   };
 }
 
-export interface SettingEnumChoice<T extends string = string> {
-  readonly value: T;
+export interface SettingEnumChoice {
+  readonly value: string;
   readonly label: string;
   readonly description?: string;
 }
 
-/** Enum values paired with display metadata for settings UIs. */
-export function settingEnumChoices<T extends string = string>(
+/** Enum values paired with the row's copy for each, for settings UIs. */
+export function settingEnumChoices(
   entry: SettingRow,
-): readonly SettingEnumChoice<T>[] | undefined {
-  const values = settingEnumOptions(entry);
-  if (!values) return undefined;
-  return values.map((value, index) => ({
-    // cast: `T` is the caller's name for this entry's literal union, read here off its AST.
-    value: value as T,
-    label: entry.enumLabels?.[index] ?? value,
-    ...(entry.enumDescriptions?.[index] && {
-      description: entry.enumDescriptions[index],
-    }),
-  }));
+): readonly SettingEnumChoice[] | undefined {
+  return settingEnumOptions(entry)?.map((value) => {
+    const copy = entry.choices?.[value];
+    return {
+      value,
+      label: copy?.label ?? value,
+      ...(copy?.description !== undefined && {
+        description: copy.description,
+      }),
+    };
+  });
 }

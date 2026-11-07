@@ -267,12 +267,11 @@ export const LATEX_FORMATTER_SETTING = {
   description: 'Which formatter to run when formatting LaTeX source.',
   category: 'latex',
   slot: 'workspaceState',
-  enumLabels: ['latexindent', 'tex-fmt', 'None'],
-  enumDescriptions: [
-    'needs Perl',
-    'standalone Rust binary',
-    'leave formatting unchanged',
-  ],
+  choices: {
+    latexindent: { description: 'needs Perl' },
+    'tex-fmt': { description: 'standalone Rust binary' },
+    none: { label: 'None', description: 'leave formatting unchanged' },
+  },
   surfaces: { settingsView: 'latex' },
 } as const satisfies TexraSettingRow<(typeof LATEX_FORMATTER_VALUES)[number]>;
 
