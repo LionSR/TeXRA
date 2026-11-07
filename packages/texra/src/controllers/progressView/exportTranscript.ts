@@ -44,7 +44,9 @@ export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
   readonly description: string;
 }>;
 
-type TranscriptExportPorts = Parameters<typeof writeTranscript>[2] & {
+/** What a host does for a transcript export: ask for a format and open
+ *  what was written. */
+export interface TranscriptExportHost {
   /** A cancelled format picker answers `undefined`. */
   readonly pickFormat: Effect.Effect<
     TranscriptExportFormat | undefined,
@@ -54,9 +56,13 @@ type TranscriptExportPorts = Parameters<typeof writeTranscript>[2] & {
     filePath: string,
     kind: TranscriptExportOpenKind,
   ): Effect.Effect<void, ExternalOpenFailed>;
-  showInfo: MessageHost['showInfoMessage'];
-  showWarning: MessageHost['showWarningMessage'];
-};
+}
+
+type TranscriptExportPorts = Parameters<typeof writeTranscript>[2] &
+  TranscriptExportHost & {
+    showInfo: MessageHost['showInfoMessage'];
+    showWarning: MessageHost['showWarningMessage'];
+  };
 
 /** Ask for a format, write the export, and open it using the host's viewer. */
 export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (

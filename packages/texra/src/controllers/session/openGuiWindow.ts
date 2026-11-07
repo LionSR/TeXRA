@@ -13,6 +13,8 @@
  * editor's current file, its tab pop-out), so its switch stays exhaustive
  * and the compiler still names a kind it forgot.
  */
+import * as path from 'node:path';
+
 import { formatResultCount } from '@texra-ai/harness/transcript';
 
 import {
@@ -35,7 +37,6 @@ import {
 } from '@texra-ai/harness';
 import {
   AgentDirectories,
-  Secrets,
   SessionHostInteractions,
   sessionFsLayer,
   workspaceEnvironmentLayer,
@@ -67,9 +68,15 @@ import {
   launchFormOf,
   prepareSurfaceLaunch,
 } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
-import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
+import {
+  exportRunTranscript,
+  type TranscriptExportHost,
+} from '@texra/controllers/progressView/exportTranscript';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
-import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import {
+  ProgressWorkflowFileActionsController,
+  type ProgressWorkflowFileActionsHost,
+} from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
@@ -80,7 +87,8 @@ import {
   type WindowClient,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
-import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { documentsOf } from '@texra/shared/plugins/documents';
+import { texraGuideUrl } from '@ui/copy/guide';
 import {
   latexdiffVerbs,
   type LatexdiffHost,
@@ -106,46 +114,28 @@ export interface GuiSession {
   readonly link: ServiceLink<WindowClient>;
 }
 
-/** The kinds the shared body answers. */
-const SHARED_HOST_REQUEST_KINDS = [
-  'agentConfigBanner',
-  'apiKeyBanner',
-  'attachDroppedFiles',
-  'clean',
-  'dismissBanner',
-  'exportTranscript',
-  'fileAction',
-  'fork',
-  'launch',
-  'latexdiff',
-  'latexdiffs',
-  'onboarding',
-  'openFile',
-  'openInstallGuide',
-  'openLabel',
-  'openRunStorage',
-  'openSettings',
-  'pack',
-  'polish',
-  'recheckDependencies',
-  'record',
-  'refreshCommits',
-  'refreshFiles',
-  'resume',
-  'runCompileFixer',
-  'runAgain',
-  'savePastedImage',
-  'toolEdit',
-  'useOwnApiKey',
-] as const satisfies readonly HostRequest['kind'][];
-
-type SharedHostRequest = Extract<
-  HostRequest,
-  { kind: (typeof SHARED_HOST_REQUEST_KINDS)[number] }
->;
+/** The kinds a host answers its own way, and what the refusal of one a
+ *  host lacks names; the shared body answers every other kind. */
+const OWN_REQUEST_LABEL = {
+  popOut: 'Pop-out to editor',
+  popBack: 'Pop-out to editor',
+  pickFiles: 'The file picker',
+  useCurrentFile: "The editor's current file",
+  addOpenedFiles: "The editor's open files",
+  gettingStarted: 'Starting a project',
+  workspaceFile: 'The file editor',
+} as const satisfies Partial<Record<HostRequest['kind'], string>>;
 
 /** The requests a host answers its own way. */
-export type OwnHostRequest = Exclude<HostRequest, SharedHostRequest>;
+export type OwnHostRequest = Extract<
+  HostRequest,
+  { kind: keyof typeof OWN_REQUEST_LABEL }
+>;
+
+type SharedHostRequest = Exclude<HostRequest, OwnHostRequest>;
+
+const isOwnHostRequest = (request: HostRequest): request is OwnHostRequest =>
+  Object.hasOwn(OWN_REQUEST_LABEL, request.kind);
 
 /** The arms a host answers its own way, by kind. A kind a host leaves
  *  out is refused by the shared router, worded once for both hosts. */
@@ -156,25 +146,6 @@ export type OwnHostArms = {
   ) => HostVerb<HostOutcome>;
 };
 
-/** What the refusal of an own kind a host lacks names. */
-const OWN_REQUEST_LABEL: Readonly<Record<OwnHostRequest['kind'], string>> = {
-  popOut: 'Pop-out to editor',
-  popBack: 'Pop-out to editor',
-  pickFiles: 'The file picker',
-  useCurrentFile: "The editor's current file",
-  addOpenedFiles: "The editor's open files",
-  gettingStarted: 'Starting a project',
-  workspaceFile: 'The file editor',
-};
-
-const sharedHostRequestKinds: ReadonlySet<HostRequest['kind']> = new Set(
-  SHARED_HOST_REQUEST_KINDS,
-);
-
-const isSharedHostRequest = (
-  request: HostRequest,
-): request is SharedHostRequest => sharedHostRequestKinds.has(request.kind);
-
 /** A verb a host binds: it runs on the fiber the window's dispatch owns, and
  *  its failure is the value the case answers with. */
 type HostVerb<A> = Effect.Effect<
@@ -183,7 +154,6 @@ type HostVerb<A> = Effect.Effect<
   ProcessServices | StorageFs | WorkspaceFs
 >;
 
-type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 type LatexdiffsRequest = Extract<HostRequest, { kind: 'latexdiffs' }>;
 
 /**
@@ -196,10 +166,6 @@ export interface SharedHostRequestBindings {
   openPath(file: string, line: number | undefined): HostVerb<void>;
   /** Reveal the first file defining `label`; `false` when none does. */
   openLabel(label: string): HostVerb<boolean>;
-  /** Admit a launch this host cannot run as asked, with the refusal that
-   *  says why; the extension names only open workspace folders as a working
-   *  directory. */
-  admitLaunch(form: LaunchRequest['launch']): HostVerb<void>;
   /** How a generated diff opens and a diff run shows its progress. */
   readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
@@ -208,9 +174,8 @@ export interface SharedHostRequestBindings {
    *  prompt on one host, the Models tab on the other. The caller re-reads
    *  the secret store after this returns. */
   setApiKey(provider?: ApiKeyProviderId): HostVerb<void>;
-  /** Open the guide's `page` in the browser, at its section `anchor` when
-   *  one is named (`texraGuideUrl`). */
-  openGuide(page: string, anchor?: string): HostVerb<void>;
+  /** Open a web address in the browser. */
+  openExternal(url: string): HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
   readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
@@ -242,19 +207,11 @@ interface GuiWindowHost extends Pick<
   /** What the window does for its project's runs, here or in the service. */
   readonly window: WindowHost;
   readonly runs: Pick<HostRunActionPorts, 'openFinalOutput' | 'revealProgress'>;
-  readonly files: Omit<
-    ConstructorParameters<
-      typeof ProgressWorkflowFileActionsController
-    >[0]['host'],
-    'showInfo'
-  >;
+  readonly files: Omit<ProgressWorkflowFileActionsHost, 'showInfo'>;
   /** The transcript export's format picker and opener, the LaTeX export's
    *  preamble, and the host's resources directory, which holds the
    *  standalone trace viewer's template. */
-  readonly export: Pick<
-    Parameters<typeof exportRunTranscript>[1],
-    'pickFormat' | 'openPath'
-  > & {
+  readonly export: TranscriptExportHost & {
     readonly latexPreamble: string;
     readonly resourcesPath: string;
   };
@@ -283,37 +240,19 @@ interface GuiWindowPorts {
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
-/** What the window tells the user after a pack or clean, at which severity
- *  (the latexdiff pack's counterpart is `latexdiffPackMessage`). */
+/** What the window tells the user after a pack or clean (the latexdiff
+ *  pack's counterpart is `latexdiffPackMessage`). */
 function fileOpResultMessage(
   operation: 'pack' | 'clean',
   result: FileOpResult,
   inputFile: string,
-): { readonly level: 'info' | 'error'; readonly text: string } {
-  const gerund = operation === 'pack' ? 'packing' : 'cleaning';
-  switch (result.status) {
-    case 'success':
-      if (operation === 'clean')
-        return { level: 'info', text: `Cleanup complete for ${inputFile}` };
-      return {
-        level: 'info',
-        text: result.outputFolder
-          ? `Files packed into ${result.outputFolder}`
-          : 'Files packed.',
-      };
-    case 'noFiles':
-      return {
-        level: 'info',
-        text: `No files found to ${operation} for ${inputFile}`,
-      };
-    case 'missingParams':
-      return { level: 'error', text: `Select an input file before ${gerund}.` };
-    case 'error':
-      return {
-        level: 'error',
-        text: `Error during ${gerund}: ${result.error}`,
-      };
-  }
+): string {
+  if (result.status === 'noFiles')
+    return `No files found to ${operation} for ${inputFile}`;
+  if (operation === 'clean') return `Cleanup complete for ${inputFile}`;
+  return result.outputFolder
+    ? `Files packed into ${result.outputFolder}`
+    : 'Files packed.';
 }
 
 /**
@@ -329,8 +268,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
 ) {
   const { runs, roots } = ports;
   const { session } = runs;
-  const scope = yield* Scope.Scope;
-  const secrets = yield* Secrets;
   // The project's `.env` over the process's: what this window asks about its
   // project (model options, a polish's helper model) answers from it, as the
   // project's runs do.
@@ -414,20 +351,16 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         }),
       ).pipe(Effect.andThen(snapshot.clearAgentConfigBanner)),
     roots,
-    readConfig: (runId: RunId) => session.records(runId).readConfig(),
     present,
     session,
-    scope,
-    loadModelOptions: () =>
-      loadModelOptions(roots).pipe(
-        Effect.provide(env),
-        Effect.provideService(Secrets, secrets),
-      ),
     showInfo: host.showInfoMessage,
     showWarning: host.showWarningMessage,
   });
   const workflowFileActions = new ProgressWorkflowFileActionsController({
-    state: runActions.runOutputs,
+    outputFiles: (runId) => {
+      const run = session.view.current().runs.get(runId);
+      return run === undefined ? {} : documentsOf(run).files;
+    },
     storageRoot: roots.storage,
     host: { ...host.files, showInfo: host.showInfoMessage },
     runs: runActions,
@@ -457,33 +390,293 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     session,
     messages: host,
   });
-  const shared = (request: SharedHostRequest, port: string) =>
-    answerShared(request, port, {
-      bridge,
-      snapshot,
-      runActions,
-      apiKeyRetry,
-      workflowFileActions,
-      draftRequests,
-      toolEditApprovals,
-      session,
-      roots,
-      bindings,
-      latexdiff,
+  const exportTranscript = (runId: RunId) =>
+    exportRunTranscript(runId, {
+      pickFormat: host.export.pickFormat,
+      openPath: host.export.openPath,
       showInfo: host.showInfoMessage,
-      openDirectory: host.files.openDirectory,
-      exportTranscript: (runId) =>
-        exportRunTranscript(runId, {
-          pickFormat: host.export.pickFormat,
-          openPath: host.export.openPath,
-          showInfo: host.showInfoMessage,
-          showWarning: host.showWarningMessage,
-          roots,
-          session,
-          latexPreamble: host.export.latexPreamble,
-          templatePath: traceViewerTemplatePath(host.export.resourcesPath),
-        }),
+      showWarning: host.showWarningMessage,
+      roots,
+      session,
+      latexPreamble: host.export.latexPreamble,
+      templatePath: traceViewerTemplatePath(host.export.resourcesPath),
     });
+  /**
+   * One program per shared request, as a host's own arms are: it runs on the
+   * fiber the window's dispatch already owns and finishes nothing, so its
+   * failure reaches the bridge's view as the value the port carried.
+   */
+  function shared(
+    request: SharedHostRequest,
+    port: string,
+  ): HostVerb<HostOutcome> {
+    /** The Tools sheet's verbs over the launcher's base and edited files. */
+    const latexdiffs = Effect.fn('latexdiffs')(function* (
+      sheet: LatexdiffsRequest,
+    ) {
+      const { action } = sheet;
+      const baseFile = sheet.baseFile ?? '';
+      const editedFile = sheet.editedFile ?? '';
+      if (
+        action === 'latexdiffvc' ||
+        action === 'packLatexdiffvc' ||
+        action === 'cleanLatexdiffvc'
+      ) {
+        yield* latexdiff.againstCommit(
+          action,
+          baseFile,
+          sheet.commit ?? 'HEAD',
+        );
+        return;
+      }
+      if (!baseFile || !editedFile) {
+        return yield* new Rejected({
+          reason: 'Choose a base file and an edited file first.',
+        });
+      }
+      switch (action) {
+        case 'compare':
+          yield* workflowFileActions.compareOriginal(editedFile, baseFile);
+          return;
+        case 'accept':
+          yield* workflowFileActions.acceptFile(editedFile, baseFile);
+          return;
+        case 'merge':
+          yield* workflowFileActions.mergeFile(editedFile, baseFile);
+          return;
+        case 'latexdiff':
+          yield* latexdiff.file(baseFile, editedFile);
+          return;
+      }
+    });
+
+    return Effect.gen(function* () {
+      switch (request.kind) {
+        case 'openFile':
+          yield* bindings.openPath(request.path, request.line ?? undefined);
+          return done;
+        case 'openLabel': {
+          // The "not found" message belongs to the request, not to either
+          // host's search: both word it the same way.
+          const opened = yield* bindings.openLabel(request.label);
+          if (!opened) {
+            return yield* new Rejected({
+              reason: `No file defines the label ${request.label}.`,
+            });
+          }
+          return done;
+        }
+        case 'openRunStorage':
+          yield* workflowFileActions.openRunStorage(request.runId);
+          return done;
+        case 'attachDroppedFiles': {
+          const attached = yield* attachDroppedFiles(
+            roots.workspace,
+            request.paths,
+            getIncludedExtensions(request.category),
+          );
+          if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
+            yield* Effect.forkDetach(
+              host
+                .showInfoMessage(
+                  `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+                )
+                .pipe(
+                  Effect.catch((cause) =>
+                    Effect.logWarning('Dropped-file notice failed', cause),
+                  ),
+                ),
+            );
+          }
+          return { kind: 'files', paths: attached.paths };
+        }
+        case 'launch': {
+          // A working directory must be one of the host's open workspace
+          // folders, as the composer lists them.
+          const asked = request.launch.workingDirectory.trim();
+          const folders = (yield* SubscriptionRef.get(hostSnapshot))
+            ?.workspaceRoots;
+          if (
+            asked !== '' &&
+            !(folders ?? []).some(
+              (folder) => path.resolve(folder.value) === path.resolve(asked),
+            )
+          )
+            return yield* new Rejected({
+              reason:
+                'Choose one of the open workspace folders as the working directory.',
+            });
+          const config = yield* prepareSurfaceLaunch(request, roots);
+          // The launcher has told, in this window, why a run did not start:
+          // `Cancelled` is the answer the form shows nothing for, and it keeps
+          // the instruction to send again.
+          yield* runActions
+            .runValidated(config, launchApprovalOptions(request))
+            .pipe(Effect.mapError(() => new Cancelled()));
+          return done;
+        }
+        case 'resume':
+          yield* runActions.resume(request.runId);
+          return done;
+        case 'runAgain': {
+          // The form opens on the run's setup; the person changes it and
+          // starts it, so nothing launches here.
+          const form = yield* launchFormOf(
+            yield* runActions.runAgain(request.runId),
+          );
+          bridge.surfaceAction({ kind: 'selectNew' });
+          bridge.surfaceAction({ kind: 'launch', patch: form });
+          return done;
+        }
+        case 'fork': {
+          const forked = yield* runActions.fork(
+            request.runId,
+            request.at ?? null,
+          );
+          const { draft } = request;
+          if (draft != null) {
+            // The composer keeps an image while its text holds the image's
+            // `[name]` chip, the attached file's name. A send from the CLI
+            // names it `[Image #N]` instead, so a missing chip is added.
+            const images = (request.media ?? []).map((media) => ({
+              fileName: media.name,
+              media,
+            }));
+            const chips = images
+              .map(({ fileName }) => `[${fileName}]`)
+              .filter((chip) => !draft.includes(chip));
+            bridge.surfaceAction({
+              kind: 'draft',
+              runId: forked,
+              text: [draft, ...chips].join(' '),
+              images,
+            });
+          }
+          bridge.surfaceAction({ kind: 'select', runId: forked });
+          return done;
+        }
+        case 'runCompileFixer':
+          yield* runActions.runCompileFixer(request.runId);
+          return done;
+        case 'useOwnApiKey':
+          yield* apiKeyRetry.useOwnApiKey(request);
+          return done;
+        case 'record':
+        case 'polish':
+        case 'savePastedImage':
+          return yield* draftRequests.handle(request, port);
+        case 'refreshCommits':
+          yield* snapshot.refreshCommits;
+          return done;
+        case 'refreshFiles':
+          yield* snapshot.refreshFiles;
+          return done;
+        case 'dismissBanner':
+          yield* snapshot.dismissBanner(request.banner);
+          return done;
+        case 'toolEdit':
+          yield* toolEditApprovals.handleAction(request);
+          return done;
+        case 'fileAction':
+          yield* request.action === 'latexdiff'
+            ? latexdiff.file(request.base ?? '', request.file)
+            : workflowFileActions.handle({
+                ...request,
+                action: request.action,
+              });
+          return done;
+        case 'exportTranscript':
+          if (!session.view.current().runs.has(request.runId))
+            return yield* new Unavailable({
+              runId: request.runId,
+              reason: 'The run is no longer open.',
+            });
+          yield* exportTranscript(request.runId);
+          return done;
+        case 'latexdiff':
+          yield* runActions.workflowDiffRequest(request.runId);
+          yield* latexdiff.run(request.runId);
+          return done;
+        case 'pack':
+        case 'clean': {
+          const files = yield* runActions.workflowFileOperation(
+            request.runId,
+            request.kind,
+          );
+          yield* host.showInfoMessage(
+            fileOpResultMessage(request.kind, files.result, files.inputFile),
+          );
+          return done;
+        }
+        case 'latexdiffs':
+          yield* latexdiffs(request);
+          return done;
+        case 'openSettings':
+          yield* bindings.openSettings(request.target ?? undefined);
+          return done;
+        case 'apiKeyBanner':
+          yield* request.action === 'set'
+            ? bindings.setApiKey()
+            : bindings.openExternal(
+                texraGuideUrl('installation', 'setting-up-api-keys'),
+              );
+          return done;
+        case 'agentConfigBanner':
+          switch (request.action) {
+            case 'edit':
+              yield* bindings.openSettings('agents/library');
+              return done;
+            case 'dir': {
+              // Without a custom directory there is nothing to reveal, so the
+              // banner's link is the agent settings instead.
+              if (request.customDirSet !== true) {
+                yield* bindings.openSettings('agents/library');
+                return done;
+              }
+              const directory = yield* (yield* AgentDirectories).custom();
+              if (!directory)
+                return yield* new Rejected({
+                  reason: 'No custom agent directory is set.',
+                });
+              yield* host.files.openDirectory(directory);
+              return done;
+            }
+            case 'docs':
+              yield* bindings.openExternal(texraGuideUrl('custom-agents'));
+              return done;
+          }
+          return done;
+        case 'recheckDependencies':
+          yield* bindings.recheckDependencies;
+          return done;
+        case 'openInstallGuide':
+          yield* bindings.openInstallGuide;
+          return done;
+        case 'onboarding':
+          switch (request.action) {
+            case 'signInChatGpt':
+              yield* bindings.onboarding.signInChatGpt;
+              return done;
+            case 'setApiKey':
+              yield* bindings.setApiKey();
+              return done;
+            case 'skip':
+              yield* bindings.onboarding.skip;
+              return done;
+            case 'runSetup':
+              yield* bindings.onboarding.runSetup;
+              return done;
+            case 'skipSetup':
+              yield* bindings.onboarding.skipSetup;
+              return done;
+            case 'openGettingStarted':
+              yield* bindings.onboarding.openGettingStarted;
+              return done;
+          }
+          return done;
+      }
+    });
+  }
   /** An own kind the host binds runs its arm; one it leaves out is
    *  refused, worded here for both hosts. */
   const own = (
@@ -507,300 +700,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     port: string,
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
     return Effect.provide(
-      isSharedHostRequest(request) ? shared(request, port) : own(request, port),
+      isOwnHostRequest(request) ? own(request, port) : shared(request, port),
       requestLayer,
     );
   }
 
   return { bridge, snapshot, present, runValidated: runActions.runValidated };
 });
-
-/** What the shared arms act on. */
-interface SharedParts extends GuiWindowParts {
-  readonly runActions: Effect.Success<ReturnType<typeof createHostRunActions>>;
-  readonly apiKeyRetry: ProgressApiKeyRetryController;
-  readonly workflowFileActions: ProgressWorkflowFileActionsController;
-  readonly draftRequests: Effect.Success<
-    ReturnType<HostDraftRequests['attach']>
-  >;
-  readonly toolEditApprovals: ToolEditApprovalController;
-  readonly session: Session;
-  readonly roots: WorkspaceRoots;
-  readonly bindings: SharedHostRequestBindings;
-  readonly latexdiff: ReturnType<typeof latexdiffVerbs>;
-  readonly showInfo: MessageHost['showInfoMessage'];
-  /** Reveal a directory in the host's file manager. */
-  readonly openDirectory: GuiWindowHost['files']['openDirectory'];
-  exportTranscript(runId: RunId): HostVerb<void>;
-}
-
-/**
- * One program per shared request, as a host's own arms are: it runs on the
- * fiber the window's dispatch already owns and finishes nothing, so its
- * failure reaches the bridge's view as the value the port carried.
- */
-function answerShared(
-  request: SharedHostRequest,
-  port: string,
-  parts: SharedParts,
-): HostVerb<HostOutcome> {
-  const { bindings: host, bridge } = parts;
-
-  /** The Tools sheet's verbs over the launcher's base and edited files. */
-  const latexdiffs = Effect.fn('latexdiffs')(function* (
-    sheet: LatexdiffsRequest,
-  ) {
-    const { action } = sheet;
-    const baseFile = sheet.baseFile ?? '';
-    const editedFile = sheet.editedFile ?? '';
-    if (
-      action === 'latexdiffvc' ||
-      action === 'packLatexdiffvc' ||
-      action === 'cleanLatexdiffvc'
-    ) {
-      yield* parts.latexdiff.againstCommit(
-        action,
-        baseFile,
-        sheet.commit ?? 'HEAD',
-      );
-      return;
-    }
-    if (!baseFile || !editedFile) {
-      return yield* new Rejected({
-        reason: 'Choose a base file and an edited file first.',
-      });
-    }
-    switch (action) {
-      case 'compare':
-        yield* parts.workflowFileActions.compareOriginal(editedFile, baseFile);
-        return;
-      case 'accept':
-        yield* parts.workflowFileActions.acceptFile(editedFile, baseFile);
-        return;
-      case 'merge':
-        yield* parts.workflowFileActions.mergeFile(editedFile, baseFile);
-        return;
-      case 'latexdiff':
-        yield* parts.latexdiff.file(baseFile, editedFile);
-        return;
-    }
-  });
-
-  return Effect.gen(function* () {
-    switch (request.kind) {
-      case 'openFile':
-        yield* host.openPath(request.path, request.line ?? undefined);
-        return done;
-      case 'openLabel': {
-        // The "not found" message belongs to the request, not to either
-        // host's search: both word it the same way.
-        const opened = yield* host.openLabel(request.label);
-        if (!opened) {
-          return yield* new Rejected({
-            reason: `No file defines the label ${request.label}.`,
-          });
-        }
-        return done;
-      }
-      case 'openRunStorage':
-        yield* parts.workflowFileActions.openRunStorage(request.runId);
-        return done;
-      case 'attachDroppedFiles': {
-        const attached = yield* attachDroppedFiles(
-          parts.roots.workspace,
-          request.paths,
-          getIncludedExtensions(request.category),
-        );
-        if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
-          yield* Effect.forkDetach(
-            parts
-              .showInfo(
-                `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
-              )
-              .pipe(
-                Effect.catch((cause) =>
-                  Effect.logWarning('Dropped-file notice failed', cause),
-                ),
-              ),
-          );
-        }
-        return { kind: 'files', paths: attached.paths };
-      }
-      case 'launch': {
-        yield* host.admitLaunch(request.launch);
-        const config = yield* prepareSurfaceLaunch(request, parts.roots);
-        // The launcher has told, in this window, why a run did not start:
-        // `Cancelled` is the answer the form shows nothing for, and it keeps
-        // the instruction to send again.
-        yield* parts.runActions
-          .runValidated(config, launchApprovalOptions(request))
-          .pipe(Effect.mapError(() => new Cancelled()));
-        return done;
-      }
-      case 'resume':
-        yield* parts.runActions.resume(request.runId);
-        return done;
-      case 'runAgain': {
-        // The form opens on the run's setup; the person changes it and
-        // starts it, so nothing launches here.
-        const form = yield* launchFormOf(
-          yield* parts.runActions.runAgain(request.runId),
-        );
-        bridge.surfaceAction({ kind: 'selectNew' });
-        bridge.surfaceAction({ kind: 'launch', patch: form });
-        return done;
-      }
-      case 'fork': {
-        const forked = yield* parts.runActions.fork(
-          request.runId,
-          request.at ?? null,
-        );
-        const { draft } = request;
-        if (draft != null) {
-          // The composer keeps an image while its text holds the image's
-          // `[name]` chip, the attached file's name. A send from the CLI
-          // names it `[Image #N]` instead, so a missing chip is added.
-          const images = (request.media ?? []).map((media) => ({
-            fileName: media.name,
-            media,
-          }));
-          const chips = images
-            .map(({ fileName }) => `[${fileName}]`)
-            .filter((chip) => !draft.includes(chip));
-          bridge.surfaceAction({
-            kind: 'draft',
-            runId: forked,
-            text: [draft, ...chips].join(' '),
-            images,
-          });
-        }
-        bridge.surfaceAction({ kind: 'select', runId: forked });
-        return done;
-      }
-      case 'runCompileFixer':
-        yield* parts.runActions.runCompileFixer(request.runId);
-        return done;
-      case 'useOwnApiKey':
-        yield* parts.apiKeyRetry.useOwnApiKey(request);
-        return done;
-      case 'record':
-      case 'polish':
-      case 'savePastedImage':
-        return yield* parts.draftRequests.handle(request, port);
-      case 'refreshCommits':
-        yield* parts.snapshot.refreshCommits;
-        return done;
-      case 'refreshFiles':
-        yield* parts.snapshot.refreshFiles;
-        return done;
-      case 'dismissBanner':
-        yield* parts.snapshot.dismissBanner(request.banner);
-        return done;
-      case 'toolEdit':
-        yield* parts.toolEditApprovals.handleAction(request);
-        return done;
-      case 'fileAction':
-        yield* request.action === 'latexdiff'
-          ? parts.latexdiff.file(request.base ?? '', request.file)
-          : parts.workflowFileActions.handle({
-              ...request,
-              action: request.action,
-            });
-        return done;
-      case 'exportTranscript':
-        if (!parts.session.view.current().runs.has(request.runId))
-          return yield* new Unavailable({
-            runId: request.runId,
-            reason: 'The run is no longer open.',
-          });
-        yield* parts.exportTranscript(request.runId);
-        return done;
-      case 'latexdiff':
-        yield* parts.runActions.workflowDiffRequest(request.runId);
-        yield* parts.latexdiff.run(request.runId);
-        return done;
-      case 'pack':
-      case 'clean': {
-        const files = yield* parts.runActions.workflowFileOperation(
-          request.runId,
-          request.kind,
-        );
-        // An info result is shown; an error result rejects the request,
-        // which the surface presents.
-        const message = fileOpResultMessage(
-          request.kind,
-          files.result,
-          files.inputFile,
-        );
-        if (message.level === 'error')
-          return yield* new Rejected({ reason: message.text });
-        yield* parts.showInfo(message.text);
-        return done;
-      }
-      case 'latexdiffs':
-        yield* latexdiffs(request);
-        return done;
-      case 'openSettings':
-        yield* host.openSettings(request.target ?? undefined);
-        return done;
-      case 'apiKeyBanner':
-        yield* request.action === 'set'
-          ? host.setApiKey()
-          : host.openGuide('installation', 'setting-up-api-keys');
-        return done;
-      case 'agentConfigBanner':
-        switch (request.action) {
-          case 'edit':
-            yield* host.openSettings('agents/library');
-            return done;
-          case 'dir': {
-            // Without a custom directory there is nothing to reveal, so the
-            // banner's link is the agent settings instead.
-            if (request.customDirSet !== true) {
-              yield* host.openSettings('agents/library');
-              return done;
-            }
-            const directory = yield* (yield* AgentDirectories).custom();
-            if (!directory)
-              return yield* new Rejected({
-                reason: 'No custom agent directory is set.',
-              });
-            yield* parts.openDirectory(directory);
-            return done;
-          }
-          case 'docs':
-            yield* host.openGuide('custom-agents');
-            return done;
-        }
-        return done;
-      case 'recheckDependencies':
-        yield* host.recheckDependencies;
-        return done;
-      case 'openInstallGuide':
-        yield* host.openInstallGuide;
-        return done;
-      case 'onboarding':
-        switch (request.action) {
-          case 'signInChatGpt':
-            yield* host.onboarding.signInChatGpt;
-            return done;
-          case 'setApiKey':
-            yield* host.setApiKey();
-            return done;
-          case 'skip':
-            yield* host.onboarding.skip;
-            return done;
-          case 'runSetup':
-            yield* host.onboarding.runSetup;
-            return done;
-          case 'skipSetup':
-            yield* host.onboarding.skipSetup;
-            return done;
-          case 'openGettingStarted':
-            yield* host.onboarding.openGettingStarted;
-            return done;
-        }
-        return done;
-    }
-  });
-}

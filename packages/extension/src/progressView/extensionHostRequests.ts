@@ -18,7 +18,6 @@ import {
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
-  type RunEnd,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -60,7 +59,7 @@ import { quickPick } from '@frontend/ui/dialogs';
 import { announce } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
+import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
@@ -95,7 +94,6 @@ import type {
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
-import { texraGuideUrl } from '@ui/copy/guide';
 
 const CHANNEL = 'ExtensionHostRequests';
 
@@ -226,24 +224,6 @@ export const createExtensionHostRequests = Effect.fn(
     command: string,
     handler: Effect.Effect<A, E, ProcessServices>,
   ) => withProcessServices(runtime, runHandler(command, handler));
-
-  /** A working directory outside the open workspace folders cannot launch. */
-  const admitLaunch: SharedHostRequestBindings['admitLaunch'] = (form) => {
-    const requestedWorkingDirectory = form.workingDirectory.trim();
-    return requestedWorkingDirectory &&
-      !vscode.workspace.workspaceFolders?.some(
-        (folder) =>
-          path.resolve(folder.uri.fsPath) ===
-          path.resolve(requestedWorkingDirectory),
-      )
-      ? Effect.fail(
-          new Rejected({
-            reason:
-              'Choose one of the open workspace folders as the working directory.',
-          }),
-        )
-      : Effect.void;
-  };
 
   function getOpenedFiles(): Effect.Effect<string[]> {
     const workspaceRoot = roots.workspace;
@@ -389,7 +369,6 @@ export const createExtensionHostRequests = Effect.fn(
   const bindings: SharedHostRequestBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
     openLabel: (label) => runHandler('openLabel', openLabel(roots, label)),
-    admitLaunch,
     latexdiff: {
       // The viewer a diff schedules opens in the view's scope, so a close
       // of the view cancels a delayed open.
@@ -416,12 +395,10 @@ export const createExtensionHostRequests = Effect.fn(
       runHandler('setApiKey', setApiKey(roots, provider)).pipe(
         Effect.andThen(refreshOnboardingFunnel),
       ),
-    openGuide: (page, anchor) =>
+    openExternal: (url) =>
       Effect.asVoid(
         fromHost('env.openExternal', () =>
-          vscode.env.openExternal(
-            vscode.Uri.parse(texraGuideUrl(page, anchor)),
-          ),
+          vscode.env.openExternal(vscode.Uri.parse(url)),
         ),
       ),
     // The banner refresh probes the dependencies again; the banner shows
@@ -504,8 +481,7 @@ export const createExtensionHostRequests = Effect.fn(
     showWarningMessage: vscodeUi.showWarningMessage,
     runs: {
       revealProgress: options.revealProgress,
-      openFinalOutput: (config: AgentConfig, result: RunEnd) =>
-        openFinalOutputIfAvailable(roots, config)(result),
+      openFinalOutput: previewFinalOutput,
     },
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {

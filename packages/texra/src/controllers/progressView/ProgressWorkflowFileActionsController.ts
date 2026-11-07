@@ -18,6 +18,7 @@ import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { modelOutputCopyPath } from '@texra/shared/constants/workflowOutput';
 import type { AppSignals, ProcessServices } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
+import type { documentsOf } from '@texra/shared/plugins/documents';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
 
@@ -38,7 +39,8 @@ type FileAction<A> = Effect.Effect<
 
 type FileActionRequest = Extract<HostRequest, { kind: 'fileAction' }>;
 
-interface ProgressWorkflowFileActionsHost {
+/** The workflow toolbar's file verbs a host performs. */
+export interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): FileAction<void>;
   acceptEditedFile(
     baseFile: string,
@@ -49,7 +51,8 @@ interface ProgressWorkflowFileActionsHost {
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {
-  state: HostRunActions['runOutputs'];
+  /** A run's output files, by round, as the session view holds them. */
+  outputFiles: (runId: RunId) => ReturnType<typeof documentsOf>['files'];
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
@@ -219,7 +222,7 @@ export class ProgressWorkflowFileActionsController {
    *  workspace path across rounds, so the first match would name an
    *  earlier round. */
   private latestOutput(stream: RunId, file: string) {
-    return Object.values(this.deps.state.getOutputFiles(stream))
+    return Object.values(this.deps.outputFiles(stream))
       .flat()
       .filter((info) => info.location.absolutePath === file)
       .toSorted((a, b) => b.round - a.round)
