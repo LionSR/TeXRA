@@ -125,10 +125,12 @@ zero.
    copy of a flow (S4) or a hand-rolled twin of a scope (S1) removes the most
    change amplification and the most fiber-fighting calls per line changed.
 4. **An open PR's files after it merges.** 14713 and 14777 above.
-5. **One PR per cluster, named by the primitive it introduces, deleting the
-   hand-rolled version in the same PR** (AGENTS.md "New ports, facades and
-   template methods delete what they replace in the same PR"). A PR body cites
-   the finding ids it closes and the ones in its files it leaves, with why.
+5. **Few PRs: one per package, a second only where a step waits on another
+   PR** (owner, 2026-11-07: PR count is the cost, not the safety). Each PR
+   deletes the hand-rolled version of what it replaces (AGENTS.md "New ports,
+   facades and template methods delete what they replace in the same PR"),
+   and its body cites the finding ids it closes, one section per step, and
+   the ones in its files it leaves, with why.
 
 ### Step 0: one small fix, any time
 
@@ -198,8 +200,8 @@ lists the findings it closes and the primitive.
    bag), G5 (a refused launch presented from three sites, final output opened
    from two, three pass-through ports), N2 (binding tables carrying whole
    flows), K5 (the chat's exit decided in one place and run from three) and
-   K9's controller half. After PR 14713 for `hostRunActions.ts`. Two PRs, as
-   the root note splits it.
+   K9's controller half. After PR 14713 for `hostRunActions.ts`; one PR with
+   step 2.3.
 3. **R8's second half**, with M8 (platform ports carrying app facts as
    optional members; `WorkspaceRoots` restating `GlobalStorageFs` and
    `AppState` as fields).
@@ -399,10 +401,12 @@ waits on what, and when the package is done.
   before using it. There is no `Layer.scoped`; `Layer.effect` already
   provides a `Scope`. `Scope.addFinalizer` on a closed scope runs the
   finalizer at once, and finalizers run in reverse order of addition.
-- **One PR per step.** Cite the finding ids it closes, delete the
-  hand-rolled version in the same PR, fill the PR template (`Net elements
-  (R6)` and `Consumer counts (R8)` for a simplify PR), and name any finding
-  in your files that you leave.
+- **Few PRs.** A package lands as one PR, or two where a step waits on
+  another PR (the owner's ruling: PR count is the cost). Commit per step
+  inside it, so a reviewer reads one step at a time. The body cites the
+  finding ids each step closes, deletes the hand-rolled version in the same
+  PR, fills the PR template (`Net elements (R6)` and `Consumer counts (R8)`
+  for a simplify PR), and names any finding in its files that it leaves.
 - **Tests:** zero new tests by default; a bug fix gets one regression test
   that fails first on the old code; a behaviour-preserving change adds none.
   Before a push: `npm run typecheck`, `npm run lint`, `npm run format:check`,
@@ -435,8 +439,9 @@ waits on what, and when the package is done.
 - **Then (2.2, R10):** `createHostRunActions` as the one action body for all
   three hosts, the exit code as one function at the process edge, the NDJSON
   drainer as one bounded read, with G4, G5, N2, K5 and K9's controller half.
-  Two PRs, after R6 and after PR 14713. **Then (2.3):** R8's second half
-  with M8. **Last (6.5):** K9's registry half, which waits on 2.2.
+  **Then (2.3):** R8's second half with M8. **Last (6.5):** K9's registry
+  half. **PRs:** two. R6 now; R10, R8's second half and K9's registry half
+  together once R6 and PR 14713 have landed.
 - **Files:** `packages/harness/src/shared/session/` (the view and its
   update), `packages/harness/src/shared/schemas/run.ts`, `packages/texra/src/ui/copy/`,
   `packages/texra/src/controllers/session/` (`openGuiWindow.ts`,
@@ -468,6 +473,7 @@ waits on what, and when the package is done.
   and `openGuiWindow.ts`, `packages/texra/src/ui/progress/`,
   `packages/texra/src/shared/`, `packages/desktop/src/`,
   `packages/extension/src/progressView/` and `settingsView/`.
+- **PRs:** one, with a commit per step.
 - **Done when:** steps 3.2 to 3.7 have landed or been refused with a
   record, and the fiber-fighting count in `packages/texra/src`,
   `packages/desktop/src` and `packages/extension/src` (49, 18, 9 at
@@ -486,6 +492,8 @@ waits on what, and when the package is done.
   `shared/constants/latexToolchain.ts`, and the Lean port's host halves in
   `packages/extension/src/frontend/lean/` and the desktop.
 - **Leave to F:** `latex/arxivProcessor.ts` and `tools/arxiv/` (I8 + H10).
+- **PRs:** two. GitHub, Lean, I6 and I10 now; the document task's record
+  once PR 14713 has landed.
 - **Done when:** the steps have landed or been refused with a record; H's
   23 `Deferred`s (15 in `leanServer.ts`) have mostly gone.
 
@@ -502,6 +510,7 @@ waits on what, and when the package is done.
 - **Read first:** the repo's `texra-cli` skill (`.claude/skills/texra-cli/`).
 - **Files:** `packages/cli/src/chat/tui/`. **Leave to A:** the chat
   controller's run reads, the exit path and the progress drainer.
+- **PRs:** one, with a commit per step.
 - **Done when:** the four steps have landed or been refused with a record,
   and the module-level `let`s in `packages/cli/src` (16 at `24df986`) that
   belong to the TUI are gone.
@@ -515,8 +524,8 @@ before touching them.
 
 ### F. Small items (this session)
 
-In this order, one PR each, any of them refused with a record when it does
-not hold up on `main`:
+One PR for items 1 to 6, one commit each, any of them refused with a record
+when it does not hold up on `main`; item 7 waits on the other packages:
 
 1. M2: the MCP pool's failed start as a failing `RcMap` lookup.
 2. G10 + H3: error tags and fields nothing branches on, added to the
