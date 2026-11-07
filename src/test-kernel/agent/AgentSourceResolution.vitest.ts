@@ -151,4 +151,25 @@ layer(
       );
     }),
   );
+  // Failure mode: several bundled tasks bind one shared file. Customizing a
+  // second one must not be refused for, or overwrite, the copy the first
+  // customization already placed beside the custom agents.
+  it.effect('customizes a second task that binds a shared file', () =>
+    Effect.gen(function* () {
+      const catalog = yield* loadCatalog;
+      const criticize = catalog.get('builtIn:criticize');
+      const enhance = catalog.get('builtIn:enhance');
+      assert(criticize && enhance, 'the bundled criticize and enhance tasks');
+
+      const first = yield* catalog.customize(criticize, 'copy');
+      const shared = resolve(dirname(first), 'criticize.tex');
+      yield* Effect.promise(() => writeFile(shared, '% edited\n'));
+
+      yield* catalog.customize(enhance, 'copy');
+
+      expect(yield* Effect.promise(() => readFile(shared, 'utf8'))).toBe(
+        '% edited\n',
+      );
+    }),
+  );
 });

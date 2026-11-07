@@ -402,15 +402,17 @@ export const customizeCopy = Effect.fn('customizeCopy')(function* (
       message: `Refusing to copy: ${escaping.from}, a file the agent binds, is outside its directory.`,
     });
   const fs = yield* FileSystem.FileSystem;
-  if (change === 'copy')
-    for (const to of [target, ...bound.map((file) => file.to)])
-      if (yield* fs.exists(to))
-        return yield* new AgentCustomizeRefused({
-          reason: 'exists',
-          path: to,
-          message: `A custom copy already exists: ${to}`,
-        });
+  if (change === 'copy' && (yield* fs.exists(target)))
+    return yield* new AgentCustomizeRefused({
+      reason: 'exists',
+      path: target,
+      message: `A custom copy already exists: ${target}`,
+    });
+  // A bound file already beside the copy is kept as it is, in every mode:
+  // several agents can bind one file, and another customized agent, or the
+  // person, may have edited it.
   for (const { from, to } of bound) {
+    if (yield* fs.exists(to)) continue;
     yield* fs.makeDirectory(path.dirname(to), { recursive: true });
     yield* fs.copyFile(from, to);
   }
