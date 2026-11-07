@@ -274,6 +274,7 @@ export const toolAvailabilityLayer: Layer.Layer<
             // wait as it ends every probe.
             return yield* Option.match(answer, {
               onNone: () => Effect.interrupt,
+              // `probed` is an `Exit`: an `Effect` that ends as it records.
               onSome: ({ probed }) => probed,
             });
           }),
