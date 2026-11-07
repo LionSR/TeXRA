@@ -31,7 +31,7 @@ import {
   SYSTEM_PACKAGE_MANAGERS,
 } from '@texra/shared/constants/latexToolchain';
 import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
-import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
+import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuthStatus';
 import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
 import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';
 import {

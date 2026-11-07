@@ -20,7 +20,7 @@ import {
   getRunRecords,
   owningCall,
   persistedParentRunId,
-} from '@agent/storage/runRecords';
+} from '@agent/storage/runOwnership';
 import { withLogChannel } from '@logger/effectLog';
 import {
   type CommitOrdinal,

@@ -50,7 +50,7 @@ const setUp = (
 ) =>
   Effect.gen(function* () {
     const host = Context.get(yield* Layer.build(FakeHost.layer()), FakeHost);
-    const workspacePath = host.path('workspace');
+    const workspaceRoot = host.path('workspace');
     const session = yield* Effect.flatMap(
       TestSession.open(host.roots, { host: {} }),
       sessionHandleOf,
@@ -84,7 +84,7 @@ const setUp = (
     >();
 
     return {
-      workspacePath,
+      workspaceRoot,
       session,
       runId,
       approvalPolicy,
@@ -99,7 +99,7 @@ const setUp = (
         filePath: string,
         options: { exists: boolean; content: string },
       ) => {
-        const absolutePath = path.join(workspacePath, filePath);
+        const absolutePath = path.join(workspaceRoot, filePath);
         if (options.exists) {
           mkdirSync(path.dirname(absolutePath), { recursive: true });
           writeFileSync(absolutePath, options.content);
@@ -138,7 +138,7 @@ const setUp = (
         }).pipe(
           Effect.provide(
             nativeToolTestLayer({
-              workingDirectory: workspacePath,
+              workingDirectory: workspaceRoot,
               run: { runId, session, toolPolicy: {} },
             }),
           ),
@@ -152,13 +152,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
   (it) => {
     it.effect('gates an edit to a dangling symlink as an existing file', () =>
       Effect.gen(function* () {
-        const { workspacePath, inRun, writes, openedEdits } = yield* setUp();
-        mkdirSync(workspacePath, { recursive: true });
+        const { workspaceRoot, inRun, writes, openedEdits } = yield* setUp();
+        mkdirSync(workspaceRoot, { recursive: true });
         // A dangling symlink names a workspace entry even though stat through
         // the link fails; the read-before-edit gate must not treat it as new.
         symlinkSync(
-          path.join(workspacePath, 'gone.txt'),
-          path.join(workspacePath, 'dangling.txt'),
+          path.join(workspaceRoot, 'gone.txt'),
+          path.join(workspaceRoot, 'dangling.txt'),
         );
 
         const result = yield* inRun(

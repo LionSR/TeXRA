@@ -64,7 +64,7 @@ test('first launch shows a usable launcher chrome', async () => {
   await showLauncher(launched);
   // The workspace directory and the Commands entry must be reachable.
   const workspaceDirectory =
-    launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
+    launched.workspaceRoot.split(/[\\/]/).at(-1) ?? launched.workspaceRoot;
   const directoryLabel = await launched.page
     .locator('.shell-project-name')
     .first()

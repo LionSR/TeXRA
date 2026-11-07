@@ -4,7 +4,7 @@ import { Deferred, Effect, FileSystem, Fiber, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { GlobalValues } from '@texra-ai/harness/host';
-import { globalDatabaseLayer } from '@controllers/session/Database';
+import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';

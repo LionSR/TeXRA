@@ -26,7 +26,6 @@ import {
   sessionMeta,
   setTransientNotice,
 } from './state/cliState';
-import { chatTuiCanStartRootRun } from './state/sessionRunState';
 import {
   appendLocalErrorTranscript,
   appendLocalNotice,
@@ -151,7 +150,7 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
       yield* setCliHelperModel(stores.globalState, selection.success.model);
       appendLocalNotice(`Model connected: ${selection.success.model}.`);
     }
-    if (setupAgent && chatTuiCanStartRootRun(context.session)) {
+    if (setupAgent && context.session.canStartRootRun()) {
       yield* applyInitialCliAgentSelection(setupAgent, context);
       appendLocalNotice(SETUP_AGENT_HANDOFF_NOTICE);
     }

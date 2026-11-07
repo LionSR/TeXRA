@@ -54,7 +54,7 @@ export interface OverleafCloneWorkflowPorts {
   showGitMissing(): Effect.Effect<void>;
   /** Fails when the directory can't be read at all. */
   listWorkspaceEntries(
-    workspacePath: string,
+    workspaceRoot: string,
   ): Effect.Effect<Iterable<string>, Error, FileSystem.FileSystem>;
   showWorkspaceUnreadable(error: unknown): Effect.Effect<void>;
   showWorkspaceNotEmpty(): Effect.Effect<void>;
@@ -62,7 +62,7 @@ export interface OverleafCloneWorkflowPorts {
   /** Run {@link gitClone} for `clone`. Fails when `git clone` does. */
   runClone(
     clone: OverleafGitClone,
-    workspacePath: string,
+    workspaceRoot: string,
   ): Effect.Effect<void, Error, CloneServices>;
   showCloneSucceeded(label: string): Effect.Effect<void>;
   /** The clone failed for what looks like an auth reason (bad/expired token). */
@@ -122,7 +122,7 @@ const resolveOverleafToken = Effect.fn('overleaf.resolveToken')(function* (
 const checkOverleafClonePreconditions = Effect.fn(
   'overleaf.checkClonePreconditions',
 )(function* (
-  workspacePath: string,
+  workspaceRoot: string,
   ports: OverleafCloneWorkflowPorts,
 ): Effect.fn.Return<ClonePreconditionFailure | null, never, CloneServices> {
   // Directory-independent: the clone target may not exist yet.
@@ -137,7 +137,7 @@ const checkOverleafClonePreconditions = Effect.fn(
   }
 
   const entries = yield* ports
-    .listWorkspaceEntries(workspacePath)
+    .listWorkspaceEntries(workspaceRoot)
     .pipe(
       Effect.catch((error) =>
         ports
@@ -274,11 +274,11 @@ const isCloneAuthError = (error: Error): boolean =>
 export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
   function* (
     remote: OverleafRemote,
-    workspacePath: string,
+    workspaceRoot: string,
     ports: OverleafCloneWorkflowPorts,
   ): Effect.fn.Return<OverleafCloneOutcome, Error, CloneServices> {
     const preconditionFailure = yield* checkOverleafClonePreconditions(
-      workspacePath,
+      workspaceRoot,
       ports,
     );
     if (preconditionFailure) return preconditionFailure;
@@ -289,7 +289,7 @@ export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
     const label = remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
 
     return yield* ports
-      .runClone(overleafGitClone(remote, token.token), workspacePath)
+      .runClone(overleafGitClone(remote, token.token), workspaceRoot)
       .pipe(
         Effect.flatMap(() =>
           ports

@@ -63,7 +63,7 @@ export const registerFileDecorations = Effect.fn('registerFileDecorations')(
           // Only mark the primary output location. Lineage entries (base,
           // document) are reference points; marking them would badge the
           // source file as "Modified by TeXRA" before the user has actually
-          // accepted the workflow output.
+          // accepted the document task output.
           const paths = new Set<string>();
           for (const info of files) {
             if (info.location.kind === 'workspace') {

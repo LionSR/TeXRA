@@ -57,6 +57,7 @@ import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { CliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import {
   SessionLog,
@@ -140,14 +141,13 @@ const tui = Effect.gen(function* () {
   } as unknown as CliRuntimeHost;
   const session = yield* sessionHandle;
   yield* Effect.addFinalizer(() => cancelOpenRequests);
-  yield* attachInteractions(
-    Context.get(session, Interactions),
-    createTuiHostInteractions(presentationHost, cliContext, {
-      requests: yield* TestSession,
-      settings: settingsStores.stores,
-      runtime: yield* SessionGraph.runtime,
-    }),
-  );
+  const interactions = createTuiHostInteractions(presentationHost, cliContext, {
+    requests: yield* TestSession,
+    settings: settingsStores.stores,
+    runtime: yield* SessionGraph.runtime,
+  });
+  yield* attachInteractions(Context.get(session, Interactions), interactions);
+  return interactions.performHost;
 });
 
 /** Run ids are hex-branded, so a readable case label hashes to a stable one. */
@@ -221,12 +221,21 @@ function chatGptSubscriptionRetry(label: string): RetryRequest {
   };
 }
 
-/** Answer the request the modal is showing. */
-const decideCurrent = (decision: SurfaceDecision) =>
+/** Answer the request the modal is showing, with the attached host's
+ *  `performHost`. */
+const decideCurrent = (
+  performHost: (command: HostCommand) => void,
+  decision: SurfaceDecision,
+) =>
   Effect.gen(function* () {
-    currentApproval
-      .get()
-      ?.decide(yield* TestSession, yield* SessionGraph.runtime, decision);
+    currentApproval.get()?.decide(
+      {
+        requests: yield* TestSession,
+        runtime: yield* SessionGraph.runtime,
+        performHost,
+      },
+      decision,
+    );
   });
 
 /** The decision a retry on the user's own key lands. */
@@ -297,7 +306,7 @@ layer(
 
   it.effect('sets the run bash bypass at the approval decision site', () =>
     Effect.gen(function* () {
-      yield* tui;
+      const performHost = yield* tui;
       const runId = runIdFor('bash-bypass');
       const pending = yield* Effect.forkChild(
         openRequest(runId, {
@@ -307,7 +316,7 @@ layer(
       );
 
       yield* waitForApproval('bash', { runId });
-      yield* decideCurrent({ action: APPROVE_SESSION_ACTION });
+      yield* decideCurrent(performHost, { action: APPROVE_SESSION_ACTION });
 
       expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
       const session = yield* sessionHandle;
@@ -324,7 +333,7 @@ layer(
     () =>
       Effect.gen(function* () {
         yield* (yield* FakeHost).secrets.set(OPENAI_KEY, 'sk-own-key');
-        yield* tui;
+        const performHost = yield* tui;
         const pending = yield* Effect.forkChild(
           openRetry(chatGptSubscriptionRetry('s3')),
         );
@@ -337,7 +346,7 @@ layer(
         });
         expect(openAiKeyChecks()).toBe(0);
 
-        yield* decideCurrent(PERSONAL_KEY_RETRY);
+        yield* decideCurrent(performHost, PERSONAL_KEY_RETRY);
 
         expect(yield* Fiber.join(pending)).toEqual(PERSONAL_KEY_RETRY);
         // The decision is the whole switch: the run declines the exhausted

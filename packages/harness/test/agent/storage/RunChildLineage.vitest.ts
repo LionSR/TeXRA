@@ -14,7 +14,7 @@ import {
 layer(
   Layer.provideMerge(
     SessionGraph.layer,
-    FakeHost.layer({ workspacePath: '/workspace' }),
+    FakeHost.layer({ workspaceRoot: '/workspace' }),
   ),
   { excludeTestServices: true },
 )('persisted parent edge', (it) => {

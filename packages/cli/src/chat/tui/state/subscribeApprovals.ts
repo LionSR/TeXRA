@@ -14,17 +14,16 @@
 import { Cause, Effect, Exit, FiberSet, Scope } from 'effect';
 
 import {
-  followPendingRequests,
   type HostInteractions,
   type ProcessRuntime,
 } from '@texra-ai/harness/host';
 import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
-import { toErrorMessage, type PendingRequest } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/platform/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import { readToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
+import { followToolEditPreviews } from '@texra/controllers/approval/ToolEditApprovalController';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
@@ -40,7 +39,6 @@ import {
   pruneToLive,
   reopenRequest,
   stagePresentation,
-  useHostCapability,
 } from './approvalQueue';
 import {
   appendLocalErrorTranscript,
@@ -72,20 +70,18 @@ interface TuiApprovalStores {
   readonly runtime: ProcessRuntime;
 }
 
-/** A tool edit this host stages a card for until the view drops it. */
-type StagedRequest = PendingRequest & {
-  readonly payload: Extract<
-    PendingRequest['payload'],
-    { readonly kind: 'toolEdit' }
-  >;
-};
+/** The TUI's presentation host, and the host commands it performs for the
+ *  chat's decisions while it is attached. */
+export interface TuiHostInteractions extends HostInteractions {
+  readonly performHost: (command: HostCommand) => void;
+}
 
 /** Create the TUI's presentation host. */
 export function createTuiHostInteractions(
   host: CliRuntimeHost,
   context: CliContext,
   stores: TuiApprovalStores,
-): HostInteractions {
+): TuiHostInteractions {
   const apiKeyRetry = new ProgressApiKeyRetryController({
     promptForApiKey: (provider) =>
       promptForCliProviderApiKey(stores.settings, provider).pipe(
@@ -153,7 +149,7 @@ export function createTuiHostInteractions(
     );
   };
 
-  const performHostCapability = (arm: HostCommand): void => {
+  const performHost = (arm: HostCommand): void => {
     if (arm.kind === 'useOwnApiKey') {
       useOwnApiKey(arm);
       return;
@@ -173,33 +169,21 @@ export function createTuiHostInteractions(
    * request was listed, so what is listed waits for a person. A preview
    * that could not be read is said on the card itself.
    */
-  const stage = ({ payload, runId, requestId }: StagedRequest) =>
-    readToolEditPreview(stores.requests, runId, requestId).pipe(
-      Effect.map((tui) =>
-        stagePresentation({ kind: 'toolEdit', data: payload.data, tui }),
-      ),
-      Effect.andThen(Effect.never),
-      Effect.ensuring(dropPresentation(requestId)),
-    );
   stores.runtime.runFork(
     Effect.forkIn(
-      Effect.scoped(
-        followPendingRequests(
-          stores.requests.view,
-          (view) =>
-            view.requests.filter(
-              (request): request is StagedRequest =>
-                request.payload.kind === 'toolEdit',
-            ),
-          stage,
+      followToolEditPreviews(stores.requests, ({ payload, requestId }, tui) =>
+        Effect.acquireRelease(
+          Effect.sync(() =>
+            stagePresentation({ kind: 'toolEdit', data: payload.data, tui }),
+          ),
+          () => dropPresentation(requestId),
         ),
       ),
       attached,
     ),
   );
-  const releaseCapability = useHostCapability(performHostCapability);
-
   return {
+    performHost,
     // The CLI host renders the notice itself and says whether it rendered a
     // user-visible record; there is no program for the session to fork.
     emit: (event, payload) => {
@@ -207,7 +191,6 @@ export function createTuiHostInteractions(
     },
     dispose() {
       stores.runtime.runFork(Scope.close(attached, Exit.void));
-      releaseCapability();
     },
   };
 }

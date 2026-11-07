@@ -38,21 +38,13 @@ import {
 } from './state/cliState';
 import { currentView } from './state/sessionView';
 
-interface ResumeHintSnapshot {
-  readonly view: SessionView;
-  readonly rootRunId: RunId | undefined;
-}
 import { collectResumeUsage, formatResumeHint } from './state/resumeHint';
 import {
-  chatTuiRunPending,
+  canStopRootRun,
   type ChatExit,
   type TuiSession,
 } from './state/sessionRunState';
-import type {
-  ApprovalPolicy,
-  SessionView,
-  RunId,
-} from '@texra-ai/harness/schemas';
+import type { ApprovalPolicy, SessionView } from '@texra-ai/harness/schemas';
 import type { RunStopReason } from '@texra-ai/harness';
 import type { Instance as InkInstance } from 'ink';
 
@@ -85,6 +77,9 @@ interface SessionExitControllerContext {
   /** Finishes once every message the chat was sending is sent (or started
    *  its run); a graceful exit waits on it before it returns. */
   readonly submitted: Effect.Effect<void>;
+  /** Finishes once the chat's root run is no longer live here: what a
+   *  graceful exit that stopped it waits for. */
+  readonly rootRunEnded: Effect.Effect<void>;
   /** Reads the live approval policy for the resume hint. */
   readonly getApprovalPolicy: () => ApprovalPolicy;
   /** Materialize buffered trace chunks and drain queued publications. */
@@ -126,18 +121,15 @@ export function createSessionExitController(
   );
   const terminalJobControlSupported = supportsTerminalJobControl();
   // Persist the reopen hint to native scrollback: the session's root run,
-  // through which its children resume too. The view (for the task's usage)
-  // is read before resetCliState() clears it, as a snapshot taken while the
-  // session adapter was still bound.
-  const snapshotResumeHint = (): ResumeHintSnapshot => ({
-    view: currentView(),
-    rootRunId: rootRunIdSignal.get(),
-  });
-  const printResumeHintOnExit = (snapshot: ResumeHintSnapshot): void => {
-    if (!session.runId) return;
+  // through which its children resume too, read as the hint prints, so a
+  // launch the drain waited for names its run. The view (for the task's
+  // usage) is a snapshot taken while the session adapter was still bound.
+  const printResumeHintOnExit = (view: SessionView): void => {
+    const rootRunId = rootRunIdSignal.get();
+    if (!rootRunId) return;
     const hint = formatResumeHint(
-      session.runId,
-      collectResumeUsage(snapshot.view, snapshot.rootRunId),
+      rootRunId,
+      collectResumeUsage(view, rootRunId),
       ctx.commandName,
       {
         cwd: ctx.cwd,
@@ -178,17 +170,16 @@ export function createSessionExitController(
     yield* Effect.promise(async () => {
       await ink.waitUntilExit();
     });
-    const resumeHint = snapshotResumeHint();
+    const resumeHintView = currentView();
     // A suspended (idle/WAITING) root session is resumable, so it takes no
     // stop: the checkpoint survives either way, and the session's close
     // ends the generation on its own. See TuiSession.isResumableIdle for
-    // the live-flow check that distinguishes this state from a resume slot
-    // that is still rehydrating. This is the one stop policy of a graceful
+    // the live-flow check that distinguishes this state from a resume that
+    // is still rehydrating. This is the one stop policy of a graceful
     // exit (`/exit` and Ctrl-C alike); a signal exit stops the run in its
     // handler, before it leaves.
     const interruptPendingRun = (): boolean => {
-      if (!chatTuiRunPending(session) || session.isResumableIdle())
-        return false;
+      if (session.canStartRootRun() || session.isResumableIdle()) return false;
       ctx.interruptActive('shutdown');
       return true;
     };
@@ -214,20 +205,18 @@ export function createSessionExitController(
         // run is waiting at the WAIT node and never finishes, so awaiting it
         // would hang the process here. The run's own outcome is not the exit's
         // concern: an interrupt-only finish must not skip the teardown below.
-        if (interrupted && session.runSettled) {
-          yield* Effect.ignoreCause(session.runSettled);
-        }
+        if (interrupted) yield* ctx.rootRunEnded;
         yield* persistSession;
         return { disposalFailure, resumableIdle: idle };
       }),
     );
     ctx.terminal.release();
-    // The code the chat ends with: the drain above awaited the run, so the
-    // claim's code is final, and resetCliState() below clears the claim.
+    // The code the chat ends with: the drain above awaited the run, so its
+    // outcome is final, and resetCliState() below clears the root.
     const exitCode = session.exitCode;
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.
-    printResumeHintOnExit(resumeHint);
+    printResumeHintOnExit(resumeHintView);
     resetCliState();
     if (resumableIdle) {
       // The run waiting at the WAIT node keeps the event loop alive, so a
@@ -264,14 +253,14 @@ export function createSessionExitController(
     ink.unmount();
     if (cause.kind === 'signal') {
       ctx.terminal.release();
-      printResumeHintOnExit(snapshotResumeHint());
+      printResumeHintOnExit(currentView());
     }
     return (session.exited = runCliExit(exitProgram(cause)));
   };
   const waitForSecondCtrlC = (): void => {
     setTransientNotice('Press Ctrl-C again to exit', {
       kind: 'exit',
-      resumeId: session.runId,
+      resumeId: rootRunIdSignal.get(),
       ttlMs: EXIT_CONFIRMATION_TTL_MS,
     });
     ctx.runtime.runSync(
@@ -282,7 +271,7 @@ export function createSessionExitController(
     // A second Ctrl-C inside the confirmation window forces the exit.
     if (Option.isSome(FiberHandle.getUnsafe(confirmation))) {
       void leave({ kind: 'signal', exitCode: CliExitCode.Interrupted });
-    } else if (session.canStopVisibleRun()) {
+    } else if (canStopRootRun.get()) {
       ctx.interruptActive('user');
       waitForSecondCtrlC();
     } else if (session.isResumableIdle()) {
@@ -300,7 +289,7 @@ export function createSessionExitController(
   // Only interrupt an actively-running turn; an idle/WAITING session is left
   // suspended so its rows stay resumable (see handleSigint).
   const handleTermSignal = (exitCode: number) => (): void => {
-    if (session.canStopVisibleRun()) {
+    if (canStopRootRun.get()) {
       ctx.interruptActive('shutdown');
     }
     void leave({ kind: 'signal', exitCode });

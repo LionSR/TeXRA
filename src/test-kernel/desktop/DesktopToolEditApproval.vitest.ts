@@ -61,7 +61,7 @@ const review = Effect.gen(function* () {
   ) => Effect.promise(() => runtime.runPromise(program));
   const localSession = yield* TestSession.open(undefined, { host: {} });
   const session = yield* sessionHandleOf(localSession);
-  const roots = createFakeWorkspaceRoots({ workspacePath: '/workspace' });
+  const roots = createFakeWorkspaceRoots({ workspaceRoot: '/workspace' });
   /** One desktop window following the session's tool edits. */
   const openWindow = (focused: boolean) =>
     Effect.gen(function* () {

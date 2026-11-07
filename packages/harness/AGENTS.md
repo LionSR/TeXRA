@@ -60,7 +60,7 @@ The known exceptions: the settings-reading system helper in `utils/` (`execUtils
 
 A run is one Effect program in `packages/harness/src/agent/runtime/loop/`, with no cursor and no graph:
 
-- **One program**: `runToolUse` (`loop/toolUse.ts`, `loop/toolUseDispatch.ts`). A task (an agent carrying a plugin's block, `AgentBlock`) runs it on its plugin's recipe script (`script.kind: 'recipe'`); the harness reads nothing inside the block. `loop/rows.ts` builds every draft the loop appends; `core/tools/toolCallParsing.ts` parses tool calls.
+- **One program**: `runToolUse` (`loop/runLoop.ts`, `loop/toolUseDispatch.ts`). A task (an agent carrying a plugin's block, `AgentBlock`) runs it on its plugin's recipe script (`script.kind: 'recipe'`); the harness reads nothing inside the block. `loop/rows.ts` builds every draft the loop appends; `core/tools/toolCallParsing.ts` parses tool calls.
 - **State is row data.** The loop holds no copy of the conversation: it continues from the `RunState` (`packages/harness/src/shared/session/runState.ts`) that `RunCell.append` (`shared/session/runHistory.ts`) returns, so live and resume are one function.
 - **Services come from context**: `AgentRun` (`runtime/run/AgentRun.ts`) and `ModelInvoker` (the only caller of the `packages/llm` `Model`), provided once at the `executeAgent` boundary; the session's own services (`SessionServices`: its `RunHistory`, `Runs`, log, view and the rest) from the fiber `RunRegistry.start` forks, whose context the session layer captured. No services bag.
 - **A run's input queue is its own.** A run opens its follow-up reader in its own scope (`claimFollowUps`, `runtime/FollowUps.ts`). A child's launch opens in its parent's tool-call fiber, so a queue taken from context would be the parent's.

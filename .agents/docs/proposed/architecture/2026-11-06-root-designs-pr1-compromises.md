@@ -315,10 +315,10 @@ rather than per finding:
 
 ## 4. Follow-ups
 
-- Hosts' PR (R6+R10): §1.1 (TUI `approve`; moot while the TUI is a
-  client of the service, whose windows answer prompts through
-  `request.decide`), §1.5 (R8's second half), §1.4 (denied-request
-  notice). §3's one reading of a grant landed there (PR 14772).
+- Hosts' PR (R6+R10): §1.5 (R8's second half), §1.4 (denied-request
+  notice). §1.1 (TUI `approve`) is refused: every window, the TUI
+  included, answers through `request.decide`
+  (`RT-tui-approve-handler` in `.agents/docs/refuted-candidates.json`). §3's one reading of a grant landed there (PR 14772).
 - Harness, small, taken by lane 9 (each item's §3 entry says how it
   ended):
   - one delivery-id shape (ended in lane 9);

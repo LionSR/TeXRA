@@ -12,11 +12,10 @@ import { selectModel } from '@texra-ai/llm';
 import { AgentCatalog, missingAgentRefusal } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentError, LaunchRefused } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
-import { HARNESS_INSTRUCTION_KEY } from '@shared/schemas';
+import { HARNESS_INSTRUCTION_KEY, type AgentConfig } from '@shared/schemas';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ToolRegistry } from '@tools/toolTable';
 

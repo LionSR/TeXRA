@@ -12,7 +12,7 @@
  *   `agentsDir`, `storageDir`, `workspaceDir`, and `settings`.
  * - **Workspace roots & paths**:
  *   [`openNodeWorkspaceRoots`](#opennodeworkspaceroots),
- *   [`canonicalizeWorkspacePath`](#canonicalizeworkspacepath),
+ *   [`canonicalizeWorkspaceRoot`](#canonicalizeworkspacepath),
  *   [`workspaceRelativePath`](#workspacerelativepath),
  *   [`resolveGlobalStoragePath`](#resolveglobalstoragepath), and
  *   [`resolveWorkspaceStoragePath`](#resolveworkspacestoragepath).
@@ -56,7 +56,7 @@ export {
 export type { ProcessIdentity } from '@shared/session/sessionEvents';
 export type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 export {
-  canonicalizeWorkspacePath,
+  canonicalizeWorkspaceRoot,
   relativeToRoot,
 } from '@utils/system/nodeWorkspace';
 export { workspaceRelativePath } from '@utils/files/workspaceFS';

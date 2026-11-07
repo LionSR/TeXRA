@@ -18,11 +18,11 @@ export function cleanupDirectory(path: string): void {
  * both paths with `cleanupDirectory` once the app under test is closed.
  */
 export function createIsolatedProfile(): {
-  workspacePath: string;
+  workspaceRoot: string;
   userDataPath: string;
 } {
   return {
-    workspacePath: mkdtempSync(join(tmpdir(), 'texra-e2e-workspace-')),
+    workspaceRoot: mkdtempSync(join(tmpdir(), 'texra-e2e-workspace-')),
     userDataPath: mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-')),
   };
 }

@@ -163,7 +163,7 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
   try {
     const launched = await launchTexraApp({
       userDataPath: dataRoot,
-      workspacePath: work,
+      workspaceRoot: work,
       // The runner's own keys are blanked: the project's `.env` is the one
       // credential, so the launcher's onboarding answer comes from it.
       env: {

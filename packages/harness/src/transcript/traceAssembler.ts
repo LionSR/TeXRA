@@ -13,7 +13,7 @@
  */
 import { Effect } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 
 import {
   isDisplayRow,

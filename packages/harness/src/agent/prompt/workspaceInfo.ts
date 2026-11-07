@@ -59,10 +59,10 @@ function getPlatformLabel(): string {
  * Returns null if the workspace is not a git repo or git is unavailable.
  */
 const getGitInfo = Effect.fn(function* (
-  workspacePath: string,
+  workspaceRoot: string,
   settings: SettingsStores | undefined,
 ) {
-  const opts = { cwd: workspacePath, settings, timeout: GIT_TIMEOUT_MS };
+  const opts = { cwd: workspaceRoot, settings, timeout: GIT_TIMEOUT_MS };
   const runGit = (...args: string[]) => executeCommand(['git', ...args], opts);
 
   // Deliberately not isGitRepository(): that also requires stdout === 'true',

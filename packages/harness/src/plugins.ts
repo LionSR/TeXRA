@@ -162,7 +162,7 @@ export { Settings, type SettingsStores } from '@shared/config/settings';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
 export { AppSignals, emitAppSignal } from '@platform/appSignals';
 export { withLogChannel } from '@logger/effectLog';
-export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionEvents';
+export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
 // What `ChildRuns` launches: an agent's child, or an external process's
 // with the one turn it runs. A tool that launches children takes the
 // call fields every child launch takes (`CALL_FIELDS`) and its file lists

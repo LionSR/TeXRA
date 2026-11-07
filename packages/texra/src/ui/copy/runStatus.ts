@@ -146,7 +146,7 @@ function sectionOf(run: RunStatusFacts): RunSection {
     : 'recent';
 }
 
-/** The word a status key reads as: a task group's status is a key too. */
+/** The word a status key reads as: a stage's status is a key too. */
 export function runStatusLabel(key: RunStatusKey): string {
   return RUN_STATUS[key].word;
 }

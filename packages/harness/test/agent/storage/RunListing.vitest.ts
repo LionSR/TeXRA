@@ -50,7 +50,7 @@ const writeRun = (session: Session, id: RunId, agent: string) =>
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'run listing normalization',
   (it) => {
-    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+    it.layer(FakeHost.layer({ workspaceRoot: '/workspace' }), {
       buildPerTest: true,
     })((it) => {
       // A row is dropped only when the facts it is built from are

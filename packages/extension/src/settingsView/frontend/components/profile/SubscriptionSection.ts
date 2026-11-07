@@ -20,7 +20,7 @@ import {
   codexAccountLabel,
   type SubscriptionAuthStatus,
   xaiAccountLabel,
-} from '@texra/shared/model/subscriptionAuth';
+} from '@texra/shared/model/subscriptionAuthStatus';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';

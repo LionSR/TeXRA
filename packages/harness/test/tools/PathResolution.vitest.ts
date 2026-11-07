@@ -26,9 +26,9 @@ describe('assertNoParentTraversal', () => {
   );
 });
 
-const workspacePath = path.resolve(path.sep, 'workspace');
+const workspaceRoot = path.resolve(path.sep, 'workspace');
 
-layer(FakeHost.layer({ workspacePath }), { buildPerTest: true })(
+layer(FakeHost.layer({ workspaceRoot }), { buildPerTest: true })(
   'resolveToolPath path protection',
   (it) => {
     const outsidePath = path.resolve(path.sep, 'outside', 'file.tex');
@@ -40,7 +40,7 @@ layer(FakeHost.layer({ workspacePath }), { buildPerTest: true })(
         expect(
           yield* Effect.flip(
             resolveToolPath(
-              { roots, workingDirectory: workspacePath },
+              { roots, workingDirectory: workspaceRoot },
               outsidePath,
             ),
           ),
@@ -62,7 +62,7 @@ layer(FakeHost.layer({ workspacePath }), { buildPerTest: true })(
           mkdirSync(workspace);
           symlinkSync('..', path.join(workspace, 'up'));
           const { roots } = Context.get(
-            yield* Layer.build(FakeHost.layer({ workspacePath: workspace })),
+            yield* Layer.build(FakeHost.layer({ workspaceRoot: workspace })),
             FakeHost,
           );
           const call = { roots: { ...roots, workspace } };
@@ -87,7 +87,7 @@ layer(FakeHost.layer({ workspacePath }), { buildPerTest: true })(
         Effect.gen(function* () {
           const { roots } = yield* FakeHost;
           const packagedAgents = path.join(
-            workspacePath,
+            workspaceRoot,
             'packages',
             'extension',
             'resources',

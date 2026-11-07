@@ -14,11 +14,10 @@
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import { RunCall, noLaterTurn, requireToolRun } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
@@ -33,6 +32,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
   type ToolResult,
+  type AgentConfig,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import {

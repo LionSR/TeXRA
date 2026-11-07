@@ -57,7 +57,7 @@ import { resolveActivations } from './loop/step';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { AgentRunShape } from './run/AgentRun';
 import type { SessionServices } from './rootLaunch';
-import type { AppendedMessage } from './storedTurn';
+import type { AppendedMessage } from './providerMessages';
 
 /** A batch as the rows that consume it: its message's `append` carries what
  *  the delivery changes (the instruction it stores, the skills it

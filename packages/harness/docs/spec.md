@@ -42,12 +42,12 @@ its kind is its `type` column.
   (`shared/schemas/identifiers.ts#AggregateKindSchema`).
 - **Run**: One `run` aggregate. It exists while its `run.start` row exists and
   no `run.removed` has closed it
-  (`controllers/session/Database.ts#A run must begin with exactly one run.start`,
+  (`controllers/session/databaseLayer.ts#A run must begin with exactly one run.start`,
   `#closeDependents`).
 - **Turn**: One loop cycle, delimited by `turn.begin` and `turn.end`; usually
   one input answered by the model, but a script's handed-down call or a failed
   or cancelled invocation ends a turn with no answer
-  (`agent/runtime/loop/toolUse.ts#runTurn`, `#loopBody`).
+  (`agent/runtime/loop/runLoop.ts#runTurn`, `#loopBody`).
 - **Invocation**: One model call of a turn, a compaction summary or a helper,
   identified by `invocationId`; a helper's invocation lives in memory only and
   records no rows (`shared/schemas/runHistoryEvent.ts#InvocationRefSchema`,
@@ -75,7 +75,7 @@ its kind is its `type` column.
   `RunState` the loop continues from
   (`shared/session/runState.ts#applyRunRows`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
-  (`agent/runtime/SessionEvents.ts#sessionEventsLayer`).
+  (`agent/runtime/sessionEventsLayer.ts#sessionEventsLayer`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
   within an aggregate
   (`controllers/session/storeSchema.ts#CREATE TABLE IF NOT EXISTS event`).
@@ -85,7 +85,7 @@ its kind is its `type` column.
 ### 2.1 One file per storage root
 
 The store is one SQLite file named `texra.db` under the storage root
-(`controllers/session/Database.ts#SESSION_DATABASE_FILE`); the file name and the
+(`controllers/session/databaseLayer.ts#SESSION_DATABASE_FILE`); the file name and the
 application id (`TeXR`) carry the product's name. An ephemeral session runs the
 same schema in memory (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
@@ -104,7 +104,7 @@ damaged at open SHALL be moved, with its WAL and shared-memory files, to
 A persistent store runs in WAL mode with `synchronous = NORMAL` and foreign keys
 on (`controllers/session/storeSchema.ts#prepareStore`). Every write transaction
 the database's transaction wrapper runs MUST begin with `BEGIN IMMEDIATE`
-(`controllers/session/Database.ts#'BEGIN IMMEDIATE'`). File maintenance runs
+(`controllers/session/databaseLayer.ts#'BEGIN IMMEDIATE'`). File maintenance runs
 outside it: the one-time `VACUUM` at setup, page reclaim in autocommit
 `incremental_vacuum` steps, and the `VACUUM INTO` copy a store moved aside
 takes, none of which writes a row
@@ -120,21 +120,21 @@ row carries an envelope that the store stamps and no caller supplies:
 - `commit`: SQLite `AUTOINCREMENT` key: strictly increasing across the store,
   never reused
   (`controllers/session/storeSchema.ts#CREATE TABLE IF NOT EXISTS event`).
-- `seq`: Dense from 1 per aggregate (`controllers/session/Database.ts#NEXT_SEQ`).
+- `seq`: Dense from 1 per aggregate (`controllers/session/databaseLayer.ts#NEXT_SEQ`).
 - `origin`: The writing process's identity
-  (`controllers/session/Database.ts#INSERT_EVENT`).
+  (`controllers/session/databaseLayer.ts#INSERT_EVENT`).
 - `at`: Publish clock in whole milliseconds, one value for a whole batch;
-  informational only (`controllers/session/Database.ts#'Database.appendAll'`).
+  informational only (`controllers/session/databaseLayer.ts#'Database.appendAll'`).
 
 The first row of a `run` aggregate MUST be its `run.start`, and seq 1 MUST NOT
 hold any other row
-(`controllers/session/Database.ts#A run must begin with exactly one run.start`).
+(`controllers/session/databaseLayer.ts#A run must begin with exactly one run.start`).
 A child's `run.start` MUST name an open parent; the store stamps the parent's
 incarnation `uid` in the child's creation transaction
-(`controllers/session/Database.ts#Child creation requires an open parent`). A
+(`controllers/session/databaseLayer.ts#Child creation requires an open parent`). A
 `run.removed` row closes its aggregate and every dependent, and a row MUST NOT
 be appended to a closed aggregate
-(`controllers/session/Database.ts#closeDependents`, `#NEXT_SEQ`).
+(`controllers/session/databaseLayer.ts#closeDependents`, `#NEXT_SEQ`).
 
 A payload string of 4096 or more characters is stored once per store as a zstd
 blob under the sha256 of its JSON text; the row keeps a reference, and the read
@@ -145,35 +145,35 @@ verifies the digest (`controllers/session/rowCodec.ts#encodeDraft`,
 
 Every row a session writes is written by a job on one inbox drained by one
 fiber. Jobs SHALL run in the order they were enqueued, one at a time, and the
-table's commit order is that order (`agent/runtime/SessionEvents.ts#consumer`).
+table's commit order is that order (`agent/runtime/sessionEventsLayer.ts#consumer`).
 A job other than an ordering barrier (`transact(job, order)`, below) is one
 SQLite transaction: its appends commit together or not at all
-(`agent/runtime/SessionEvents.ts#inTransaction`,
-`controllers/session/Database.ts#job`).
+(`agent/runtime/sessionEventsLayer.ts#inTransaction`,
+`controllers/session/databaseLayer.ts#job`).
 
 The publisher offers these doors:
 
 - `transact(job)`: Enqueue a job and wait for its value
-  (`agent/runtime/SessionEvents.ts#'transact'`).
+  (`agent/runtime/sessionEventsLayer.ts#'transact'`).
 - `transact(job, order)`: A barrier with no transaction; its `append` is a
-  defect (`agent/runtime/SessionEvents.ts#'An ordering job appends nothing'`,
+  defect (`agent/runtime/sessionEventsLayer.ts#'An ordering job appends nothing'`,
   `#inTransaction`).
 - `detach(job)`: Enqueue a job and return at once, for a producer with no fiber;
-  its order is the moment of the call (`agent/runtime/SessionEvents.ts#detach`).
+  its order is the moment of the call (`agent/runtime/sessionEventsLayer.ts#detach`).
 - `removeRun`: Commit a run's deletion marker (`run.removed`) as the next
   job, refused unless the run's start commit is the one the caller read
-  (`agent/runtime/SessionEvents.ts#removeRun`).
+  (`agent/runtime/sessionEventsLayer.ts#removeRun`).
 - `drain`: End the inbox and run what it holds within the close deadline of
-  5,000 ms (`agent/runtime/SessionEvents.ts#drain`,
+  5,000 ms (`agent/runtime/sessionEventsLayer.ts#drain`,
   `#SESSION_CLOSE_DEADLINE_MS`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
-(`agent/runtime/SessionEvents.ts#reentered`). A job body MUST be
+(`agent/runtime/sessionEventsLayer.ts#reentered`). A job body MUST be
 database-only: what must follow its commit runs after the transaction
-returns (`agent/runtime/SessionEvents.ts#inTransaction`). At the close deadline the running job is cut and every queued
-job refused (`agent/runtime/SessionEvents.ts#drain`). An awaited job enqueued
+returns (`agent/runtime/sessionEventsLayer.ts#inTransaction`). At the close deadline the running job is cut and every queued
+job refused (`agent/runtime/sessionEventsLayer.ts#drain`). An awaited job enqueued
 after close is a defect; a detached one is logged and dropped
-(`agent/runtime/SessionEvents.ts#'Session publication after the plane closed'`,
+(`agent/runtime/sessionEventsLayer.ts#'Session publication after the plane closed'`,
 `#'Session publication dropped: the plane has closed'`).
 
 Above the publisher, the session's own door (`SessionLog.transact`) SHALL return
@@ -183,7 +183,7 @@ A trace row emitted on its own reaches the publisher through
 `SessionLog.publish` (`shared/session/sessionLog.ts#SessionLogShape`); a call's
 card rows and a turn's closing rows commit inside the run's own batches instead
 (`agent/runtime/loop/toolUseDispatch.ts#cardRows`,
-`agent/runtime/loop/toolUse.ts#log.closure`). `SessionLog.settled` is the
+`agent/runtime/loop/runLoop.ts#log.closure`). `SessionLog.settled` is the
 barrier after every job enqueued before it
 (`controllers/session/sessionStore.ts#settled`).
 
@@ -193,7 +193,7 @@ Each row kind carries its own version
 (`shared/schemas/rowVersions.ts#ROW_KINDS`). A row MUST be written at its kind's
 current version (`controllers/session/rowCodec.ts#prepareEventDraft`). The
 `stored_kind` table records the highest version each kind was written at
-(`controllers/session/Database.ts#UPSERT_KIND`).
+(`controllers/session/databaseLayer.ts#UPSERT_KIND`).
 
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
@@ -201,7 +201,7 @@ known kind at a version above the one this build reads
 build lacks passes the gate; its rows read as written, marked unavailable
 (below). The
 gate MUST run at open, so no build opens a store holding core rows it cannot
-read, or writes beside them (`controllers/session/Database.ts#storeGate`); a
+read, or writes beside them (`controllers/session/databaseLayer.ts#storeGate`); a
 project store's one writer is the process that opened it (section 7), so what
 the store holds cannot change under it. A core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts#readableVersion`). Kinds a build deleted are
@@ -363,7 +363,7 @@ The transcript tier is display rows too
 stores none), `context.state`, `stream.start`, `stream.end`, and
 `response.finalized` (the final text of one provider response; a loop turn that
 asks for its final tool may record another,
-`agent/runtime/loop/toolUse.ts#afterTextResponse`). `response.finalized` is read
+`agent/runtime/loop/runLoop.ts#afterTextResponse`). `response.finalized` is read
 by the fold, which marks that response's answer final
 (`shared/session/runState.ts#answerFinalized`).
 
@@ -373,7 +373,7 @@ and never a row (`agent/runtime/loop/toolUseDispatch.ts#'stream.chunk'`).
 ## 4. Write points
 
 A run's history is written through its run cell, `RunCell.append`, which commits
-one batch per call (`agent/runtime/RunHistory.ts#'RunCell.commit'`). The loop's
+one batch per call (`agent/runtime/makeRunHistory.ts#'RunCell.commit'`). The loop's
 write points are normative:
 
 - **W1**, `model.message` `attempt`: for a turn, commits before the billed
@@ -382,7 +382,7 @@ write points are normative:
 - **W2**, `model.message` `response`: commits, with `run.position`
   `response.ready`, before any tool call dispatches
   (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`;
-  `agent/runtime/loop/toolUse.ts#dispatchPendingResponse`).
+  `agent/runtime/loop/runLoop.ts#dispatchPendingResponse`).
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
   (`agent/runtime/loop/toolUseDispatch.ts#bodyStarts`;
@@ -392,7 +392,7 @@ write points are normative:
   `#'toolUse.deliver'`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
-  (`agent/runtime/loop/toolUse.ts#positionRow`;
+  (`agent/runtime/loop/runLoop.ts#positionRow`;
   `agent/storage/runLifecycle.ts#endIn`).
 - **W6**, `model.message` `failed`: for a turn, commits for every recorded
   failure, naming the next move
@@ -419,7 +419,7 @@ dispatch fact per local call (`agent/runtime/run/tools.ts#dispatchFactsFor`)
 (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`,
 `shared/schemas/runHistoryEvent.ts#DispatchFactsSchema`). The loop MUST dispatch
 only the pending response its fold holds
-(`agent/runtime/loop/toolUse.ts#dispatchPendingResponse`). W2 does not cover a
+(`agent/runtime/loop/runLoop.ts#dispatchPendingResponse`). W2 does not cover a
 compaction summary, whose answer its caller lands as a `context.edit`, or a
 helper call, which records no row (W1).
 
@@ -445,7 +445,7 @@ card's close, and its open for a fast tool
 commit only once every call of the response has settled, as one tool group bound
 to the response (`agent/runtime/loop/toolUseDispatch.ts#'toolUse.deliver'`). A
 delivery its settlements do not match is a defect
-(`agent/runtime/RunHistory.ts#'mismatched-delivery'`).
+(`agent/runtime/makeRunHistory.ts#'mismatched-delivery'`).
 
 **W5.** The positions are `turn.ready`, `turn.begin`, `response.ready`,
 `results.ready`, `turn.end` and `waiting`
@@ -504,7 +504,7 @@ row it cannot apply (`shared/session/runState.ts#applyRow`).
 
 A run is opened by its first `run.position`. Run history rows without an opening
 position MUST fail the load as `inconsistent`
-(`agent/runtime/RunHistory.ts#'RunHistory.loaded'`).
+(`agent/runtime/makeRunHistory.ts#'RunHistory.loaded'`).
 
 ### 5.3 Phases
 
@@ -521,29 +521,29 @@ from the phase the last `run.position` recorded
 
 `RunCell.append` MUST fold the batch onto the cell's state before it publishes,
 and MUST refuse, with nothing committed, a batch the fold rejects
-(`agent/runtime/RunHistory.ts#'RunCell.commit'`). It MUST check the assembled
+(`agent/runtime/makeRunHistory.ts#'RunCell.commit'`). It MUST check the assembled
 message history against `PreparedHistorySchema` from where the batch changes it
-(`agent/runtime/RunHistory.ts#unprepared`). It MUST refuse a durable model
+(`agent/runtime/makeRunHistory.ts#unprepared`). It MUST refuse a durable model
 origin carrying userinfo, a query string or a fragment
-(`agent/runtime/RunHistory.ts#unsafeEndpoint`). After the commit it folds the
+(`agent/runtime/makeRunHistory.ts#unsafeEndpoint`). After the commit it folds the
 committed rows, at the commits the store assigned, and that state is the one the
-loop continues from (`agent/runtime/RunHistory.ts#applyStored`). The
+loop continues from (`agent/runtime/makeRunHistory.ts#applyStored`). The
 read-append-fold region is uninterruptible and serialized per cell
-(`agent/runtime/RunHistory.ts#'RunHistory.open'`); rows another writer commits
+(`agent/runtime/makeRunHistory.ts#'RunHistory.open'`); rows another writer commits
 to the run (a decision, a run's end through a cell of its own) are ordered by
 the publisher, and a cell folds them on `refresh`
-(`agent/runtime/RunHistory.ts#refresh`,
+(`agent/runtime/makeRunHistory.ts#refresh`,
 `agent/storage/runLifecycle.ts#endIn`).
 
 A batch that carries a `context.edit` with a `response` MUST place the edit
 immediately before the response, and an edit MUST be the first message-bearing
-row of its batch (`agent/runtime/RunHistory.ts#contractViolation`).
+row of its batch (`agent/runtime/makeRunHistory.ts#contractViolation`).
 
 ### 5.5 Resume is the same function
 
 The loop holds no copy of the conversation. It reads every branch off the fold,
 so the live path and the resume path are the same steps
-(`agent/runtime/loop/toolUse.ts#loopBody`, `#runTurn`). A resume enters the
+(`agent/runtime/loop/runLoop.ts#loopBody`, `#runTurn`). A resume enters the
 same program, `runToolUse`, with `resume: true`, through the same run program as
 a fresh launch, `executeAgent` without a registration
 (`agent/runtime/executeAgent.ts#executeAgent`), reached from `resumeRun`
@@ -658,20 +658,20 @@ There is no daemon and no claim. A project store is held by the one process
 that opened it, for its connection's life: the open takes
 `locking_mode = EXCLUSIVE` and the first write lock, and a second opener is
 refused at once with `STORE_HELD_MESSAGE`, never waited for
-(`controllers/session/Database.ts#STORE_HELD_MESSAGE`, `#exclusive`). The
+(`controllers/session/databaseLayer.ts#STORE_HELD_MESSAGE`, `#exclusive`). The
 holder is the store's one writer and one reader; a cold listing of a held
 project fails the same way (`controllers/session/readSessionView.ts`). The
 global store is shared across processes, which see each other's commits through
 a 250 ms poll of SQLite's `data_version`
-(`controllers/session/Database.ts#'PRAGMA data_version'`); a project store
+(`controllers/session/databaseLayer.ts#'PRAGMA data_version'`); a project store
 runs no poll.
 
 ### 7.1 Aggregates
 
 The first append to an aggregate creates it
-(`controllers/session/Database.ts#NEXT_SEQ`). A later append MUST be refused
+(`controllers/session/databaseLayer.ts#NEXT_SEQ`). A later append MUST be refused
 with `DatabaseAggregateClosed`, and nothing written, once the aggregate is
-closed (`controllers/session/Database.ts#NEXT_SEQ`, `#refuseWriter`). Which
+closed (`controllers/session/databaseLayer.ts#NEXT_SEQ`, `#refuseWriter`). Which
 runs this process drives is the session's run registry's one fact, published
 to the fold as `runsHere` (`agent/runtime/runRegistry.ts#runsHere`,
 `shared/schemas/sessionViewInput.ts#LocalRuntimeStateSchema`): a run that has
@@ -701,7 +701,7 @@ resume a wake took follows it itself, whoever opened it,
 
 The activation is one transaction: it folds the stored rows and commits the
 activation rows with a `request.decided` `cancel` for every request the
-previous process left unbound (`agent/runtime/RunHistory.ts#activate`). A
+previous process left unbound (`agent/runtime/makeRunHistory.ts#activate`). A
 request is unbound unless it is the turn's open retry ask, the request a
 pending call's resumed attempt re-enters, the request a pending `script`
 call's guest calls share (attempt 0), or one that does not block its caller
@@ -711,7 +711,7 @@ call's guest calls share (attempt 0), or one that does not block its caller
 
 A write to a closed aggregate gets `RunHistoryRefused` `not-owner` from the
 run's next append, with nothing written
-(`agent/runtime/RunHistory.ts#notOwner`,
+(`agent/runtime/makeRunHistory.ts#notOwner`,
 `shared/session/runHistory.ts#runRefusal`). A tool call that meets a storage
 refusal fails the dispatch instead of settling
 (`agent/runtime/loop/toolUseDispatch.ts#findStorageRefusal`). A request on a
@@ -843,7 +843,7 @@ What survives at each commit point follows from sections 2 to 8:
 - `accepted`: The operation is observed under its recorded deadline, not
   resubmitted (`shared/session/inFlight.ts#nextAttempt`).
 - `response`: The response is reused; no new invocation is made for it
-  (`agent/runtime/loop/toolUse.ts#runTurn`).
+  (`agent/runtime/loop/runLoop.ts#runTurn`).
 - **a call's requests, no intent**: The call re-enters the request it asked
   (`shared/session/inFlight.ts#resumedAttempt`).
 - `tool.intent`, no result: If the call opened a request that still stands, or
