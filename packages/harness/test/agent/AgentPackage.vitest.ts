@@ -71,11 +71,14 @@ class FakeSession {
       Stream.fromEffect(Effect.suspend(() => Deferred.await(this.foldDeath))),
     ),
     // A subscription's replay lands as a level holding its transcripts.
-    subscribe: (_port: string, set: readonly TranscriptSubscription[]) =>
-      SubscriptionRef.update(this.viewRef, (current) => ({
-        ...current,
-        transcriptSeq: new Map(set.map(({ id }) => [id, 0])),
-      })),
+    subscribe: (set: readonly TranscriptSubscription[]) => {
+      const land = (next: readonly TranscriptSubscription[]) =>
+        SubscriptionRef.update(this.viewRef, (current) => ({
+          ...current,
+          transcriptSeq: new Map(next.map(({ id }) => [id, 0])),
+        }));
+      return Effect.as(land(set), { set: land });
+    },
     inputs: () => Stream.empty,
   };
 

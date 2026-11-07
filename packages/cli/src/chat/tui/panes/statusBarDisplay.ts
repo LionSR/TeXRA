@@ -1,9 +1,3 @@
-import {
-  formatCompactDuration,
-  formatCompactTokenCount,
-  formatCostUsd,
-  formatResultCount,
-} from '@texra-ai/harness/transcript';
 import { absurd, Predicate } from 'effect';
 import {
   runBypasses,
@@ -11,6 +5,10 @@ import {
   type RunId,
   type TokenUsageStats,
   type UsageRoute,
+  formatCompactDuration,
+  formatCompactTokenCount,
+  formatCostUsd,
+  formatResultCount,
 } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';

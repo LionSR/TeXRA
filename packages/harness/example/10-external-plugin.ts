@@ -176,7 +176,11 @@ await Effect.runPromise(
         wait: true,
       })
       .pipe(Effect.timeout('10 seconds'));
-    yield* resumed.interrupt;
+    yield* session.request({
+      kind: 'run.stop',
+      runId: resumed.runId,
+      reason: 'user',
+    });
     yield* session.settled;
     const { notes: after } = yield* notesOf(withPlugin.platform, runId);
     if (

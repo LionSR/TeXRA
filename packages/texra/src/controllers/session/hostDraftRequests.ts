@@ -13,7 +13,7 @@ import {
 } from 'effect';
 import { MODEL_CONFIGS } from '@texra-ai/llm';
 
-import { Cancelled, Rejected, type WorkspaceRoots } from '@texra-ai/harness';
+import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
   ownKeyCredential,
@@ -36,6 +36,7 @@ import {
   type PastedImageSaveFailed,
 } from '@texra/utils/files/pastedImageUtils';
 import type { StorageFs } from '@texra-ai/harness/host';
+import { Cancelled, Rejected } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'HostDraftRequests';

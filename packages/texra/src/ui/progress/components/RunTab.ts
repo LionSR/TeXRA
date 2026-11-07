@@ -2,8 +2,7 @@
 // row actions (expand, and, where the list is `removable`, delete). An
 // interrupted row says so; its one Resume is on the task's ended line, which
 // the row opens. `run-tabs` lays the rows out.
-import { formatResultCount } from '@texra-ai/harness/transcript';
-import { getBasename } from '@texra-ai/harness/schemas';
+import { getBasename, formatResultCount } from '@texra-ai/harness/schemas';
 import {
   LitElement,
   html,

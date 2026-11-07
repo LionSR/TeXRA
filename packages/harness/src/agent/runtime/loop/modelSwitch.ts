@@ -13,6 +13,7 @@ import type { RunState } from '@shared/session/runState';
 
 import type { RunCell } from '@shared/session/runHistory';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
+import type { BackgroundCompaction } from '../run/compaction';
 import { configRow, consumedRows } from './rows';
 
 /** Apply the model switches the run's input queues (the latest wins): the
@@ -23,9 +24,9 @@ import { configRow, consumedRows } from './rows';
 export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   function* (
     cell: RunCell,
-    /** What must settle before the old binding closes: a background
-     *  compaction on it, which lands or stops. */
-    beforeSwap: (cell: RunCell) => Effect.Effect<RunState, Error>,
+    /** The run's background compaction: a summary in flight runs on the
+     *  binding this switch closes, so it lands or is cut first. */
+    compaction: Pick<BackgroundCompaction, 'landPending'>,
     /** The run's pending requests; its model switches are applied. */
     controls: readonly QueuedFollowUp[],
   ): Effect.fn.Return<RunState, Error, AgentRun | ModelAccess> {
@@ -51,7 +52,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     if (!selected) {
       return yield* Effect.fail(new Error(`Model ${model} is not registered`));
     }
-    const state = yield* beforeSwap(cell);
+    const state = yield* compaction.landPending(cell, 'the model is switching');
     let switched = state;
     // The ref masks its acquisition; a stop must still cut a bind in
     // progress. The rows commit inside it, so the new binding goes into

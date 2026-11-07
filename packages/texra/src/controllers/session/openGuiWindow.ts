@@ -15,17 +15,9 @@
  */
 import * as path from 'node:path';
 
-import { formatResultCount } from '@texra-ai/harness/transcript';
-
 import { Effect, Exit, Layer, Scope, Stream, SubscriptionRef } from 'effect';
 
-import {
-  Cancelled,
-  Rejected,
-  Unavailable,
-  type Session,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentDirectories,
   presenterOn,
@@ -92,6 +84,12 @@ import {
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
 import type { RunId } from '@texra-ai/harness/schemas';
+import {
+  formatResultCount,
+  Cancelled,
+  Rejected,
+  Unavailable,
+} from '@texra-ai/harness/schemas';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';

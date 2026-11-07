@@ -1,6 +1,6 @@
 import { absurd, Effect, Result, Schema, SchemaIssue } from 'effect';
 
-import { Rejected, type StartInput } from '@texra-ai/harness';
+import { type StartInput } from '@texra-ai/harness';
 import {
   AgentCatalog,
   type StateReadFailed,
@@ -13,6 +13,7 @@ import {
   agentKeyOf,
   agentName,
   type AgentConfig,
+  Rejected,
 } from '@texra-ai/harness/schemas';
 import {
   formatTeamLaunchBlockedMessage,

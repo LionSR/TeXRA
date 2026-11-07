@@ -11,7 +11,6 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { pluralize } from '@texra-ai/harness/transcript';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 
@@ -26,6 +25,7 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 // Local imports - styles
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
+import { pluralize } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('tool-edit-request-panel')

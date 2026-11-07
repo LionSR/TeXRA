@@ -32,7 +32,7 @@ import {
   RunWorkspaceFilesSchema,
   type RunEnd,
   type RunResult,
-  type SessionEvent,
+  type SessionRow,
   type RunId,
 } from '@shared/schemas';
 import { deriveRunId } from '@utils/core/idHash';
@@ -180,8 +180,8 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
 const runEndOf = Effect.fn('runEndOf')(function* (
   runId: RunId,
   held: RunRows,
-  lifecycles: readonly SessionEvent[],
-  history: readonly SessionEvent[],
+  lifecycles: readonly SessionRow[],
+  history: readonly SessionRow[],
 ): Effect.fn.Return<
   RunEnd | null,
   DatabaseReadFailed,
@@ -235,7 +235,7 @@ const runEndOf = Effect.fn('runEndOf')(function* (
               (facts) => {
                 if (facts === null || !during(facts.start?.commit ?? -1))
                   return Effect.succeed(null);
-                const asOf = (row: SessionEvent) => row.commit <= end.commit;
+                const asOf = (row: SessionRow) => row.commit <= end.commit;
                 return Effect.flatMap(rowsOf(child), (rows) =>
                   runEndOf(
                     child,

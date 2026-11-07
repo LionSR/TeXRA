@@ -5,7 +5,6 @@
  * that completes, here or in the service, plays the chime. The card stays
  * the one place to answer; nothing here decides a request.
  */
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Stream } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/host';
@@ -13,6 +12,7 @@ import {
   attentionOf,
   ensureError,
   toErrorMessage,
+  formatResultCount,
 } from '@texra-ai/harness/schemas';
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { Session } from '@texra-ai/harness';

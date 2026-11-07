@@ -37,13 +37,13 @@ import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   CURRENT_VALUE_VERSION,
   edgesOf,
-  isDisplaySessionEvent,
+  isDisplayRow,
   RunIdSchema,
   aggregateTarget,
   type AggregateId,
   type RunParent,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
 } from '@shared/schemas';
 import { InPublisherJob, ProcessIdentity } from '@shared/session/sessionEvents';
 import {
@@ -577,7 +577,7 @@ export const databaseLayer = (
         return committed;
       });
       const appendRow = Effect.fn('appendRow')(function* (
-        draft: SessionEventDraft,
+        draft: SessionRowDraft,
         row: EncodedRow,
         at: number,
       ) {
@@ -727,7 +727,7 @@ export const databaseLayer = (
         currentCommit: query(currentCommit),
         readDisplay: (fromCommit) => {
           // Pages are separate snapshots: a deletion marker seen stays in view.
-          const tombstones = new Map<number, SessionEvent>();
+          const tombstones = new Map<number, SessionRow>();
           return Stream.paginate(fromCommit, (from) =>
             projected(
               Effect.gen(function* () {
@@ -752,7 +752,7 @@ export const databaseLayer = (
                 return [
                   [...rows, ...kept]
                     .sort((x, y) => x.commit - y.commit)
-                    .filter(isDisplaySessionEvent),
+                    .filter(isDisplayRow),
                   through < top ? Option.some(through) : Option.none(),
                 ] as const;
               }),
@@ -787,7 +787,7 @@ export const databaseLayer = (
               DISPLAY_READ_TYPES,
               ...aggregateColumns(id),
               fromSeq,
-            ]).pipe(Effect.map((rows) => rows.filter(isDisplaySessionEvent))),
+            ]).pipe(Effect.map((rows) => rows.filter(isDisplayRow))),
           ),
         aggregateState: (ids) => query(readState(ids)),
         readInputBatch: (ids, fromCommit, checkedIds, since) =>

@@ -5,7 +5,7 @@ import {
   ContextManagementDataSchema,
   MESSAGE_TYPES,
   type CompactionActivityOutcome,
-  type TranscriptEvent,
+  type TraceRowFields,
 } from '@shared/schemas';
 
 export type CompactionActivityStatus =
@@ -109,7 +109,7 @@ function applyFreed(
  */
 export function applyCompactionActivityEvent(
   projection: CompactionActivityProjection,
-  event: TranscriptEvent,
+  event: TraceRowFields,
   position: number,
   at: number,
 ): readonly number[] {

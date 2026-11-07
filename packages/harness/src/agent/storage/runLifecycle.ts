@@ -14,7 +14,7 @@ import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
   qualifyAggregateId,
-  type SessionEventDraft,
+  type SessionRowDraft,
   type RunEnd,
   type RunEndOutput,
   type RunId,
@@ -66,7 +66,7 @@ type OpenServices = SessionLog | SessionRoots | Approvals;
 export const activationRows = Effect.fn('activationRows')(function* (
   runId: RunId,
   config: RunRecord,
-): Effect.fn.Return<readonly SessionEventDraft[], Error, OpenServices> {
+): Effect.fn.Return<readonly SessionRowDraft[], Error, OpenServices> {
   const stored = yield* getRunRecords(runId).readRunRecord();
   const next = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
     pinRunWorkingDirectory(

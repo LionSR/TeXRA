@@ -1,5 +1,4 @@
 // Third-party imports
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, type FileSystem, Schema } from 'effect';
 import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
@@ -18,6 +17,7 @@ import {
   texPathField,
 } from './figureExtractionShared';
 import type { WorkspaceFs } from '@texra-ai/harness/host';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const ExtractTikzInputSchema = Schema.Struct({

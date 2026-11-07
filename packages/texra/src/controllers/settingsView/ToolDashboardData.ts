@@ -11,8 +11,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { type Plugin } from '@texra-ai/harness';
-import { type ToolProbeInputs } from '@texra-ai/harness/plugins';
+import { type ToolProbeInputs, type Plugin } from '@texra-ai/harness/plugins';
 import {
   ToolAvailability,
   ToolCatalog,

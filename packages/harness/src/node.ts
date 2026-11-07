@@ -64,9 +64,6 @@ export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-// The global root's record of each workspace store under a storage root,
-// keyed by its storage directory's name: the root it serves.
-export { WORKSPACE_STORES } from '@shared/session/valueFamily';
 // Running a program on this machine: run it, and extend the PATH for any
 // other child with the directories an app adds.
 // The home directory, logged at warn where none resolves.
@@ -103,6 +100,7 @@ export {
 export {
   absentReason,
   entryTypeIn,
+  isNotADirectoryError,
   pathExists,
 } from '@utils/files/fsEntryExists';
 // The harness's log path as Effect diagnostics (its logger over the installed

@@ -48,7 +48,6 @@ import type {
   Registration,
 } from '@shared/session/runFacts';
 import { RunHistory } from '@shared/session/runHistory';
-import type { RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { ProjectTools, type OpenStep } from '../loop/step';
@@ -63,10 +62,8 @@ const sessionModelAccess = Layer.unwrap(
 /**
  * How a launch enters its run's cell: a fresh run's `registration` rides
  * its opening batch (null: a resume, whose cell activates the run), on the
- * history a fork is born with when it has a `seed`, with
- * the trace held until then (`opening`), and `entered` runs once that
- * batch commits, with the state it left: its `commit` is the activation's
- * (a resume's, its `run.activate` batch). `initialUserMessage`: a fresh
+ * history a fork is born with when it has a `seed`, and `enter` commits
+ * that batch with the trace held until then. `initialUserMessage`: a fresh
  * run's instruction, logged once its opening inserted the launch's media.
  */
 interface LaunchEntry {
@@ -80,9 +77,13 @@ interface LaunchEntry {
   readonly awaited: boolean;
   readonly registration: Registration | null;
   readonly seed?: RegisterRunOptions['seed'] | null;
-  readonly opening: Alongside;
-  /** Fails when a fresh run's claim, its birth's, cannot be held. */
-  readonly entered: (state: RunState) => Effect.Effect<void>;
+  /** Run `commit`, the batch that enters the run, uninterruptibly: the
+   *  trace events held up to the first stream ride it as its alongside
+   *  (a resume's activation takes none), and the rest publish once it
+   *  commits. Every entry goes through here, so none holds the trace. */
+  readonly enter: <A, E, R>(
+    commit: (alongside: Alongside) => Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
   readonly initialUserMessage: string | undefined;
 }
 

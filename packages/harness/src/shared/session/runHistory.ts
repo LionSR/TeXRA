@@ -15,11 +15,7 @@
  */
 import { Cause, Context, type Effect, Schema } from 'effect';
 
-import {
-  RunIdSchema,
-  type RunId,
-  type SessionEventDraft,
-} from '@shared/schemas';
+import { RunIdSchema, type RunId, type SessionRowDraft } from '@shared/schemas';
 import { causeChain } from '@utils/errors/errorMessage';
 import {
   DatabaseAggregateClosed,
@@ -138,7 +134,7 @@ export function runRefusal(
  *  session's requests (`request.opened`/`decided`) alone. */
 export const runStateAppend = (
   append: Append,
-): ((events: readonly SessionEventDraft[]) => ReturnType<Append>) =>
+): ((events: readonly SessionRowDraft[]) => ReturnType<Append>) =>
   // cast: one function; the narrowing is the type fence, not a runtime one.
   append as never;
 
@@ -247,7 +243,7 @@ export interface RunOpening<E = never> {
    * of the cell's first append, which it rides: the run exists with what
    * that append writes or not at all.
    */
-  readonly registration?: Effect.Effect<readonly SessionEventDraft[]>;
+  readonly registration?: Effect.Effect<readonly SessionRowDraft[]>;
   /**
    * A resume: commit, in one batch, the cancellation of every request the
    * previous launch left unbound and the rows this decides from the stored
@@ -255,7 +251,7 @@ export interface RunOpening<E = never> {
    */
   readonly activation?: (
     state: RunState | null,
-  ) => Effect.Effect<readonly SessionEventDraft[], E>;
+  ) => Effect.Effect<readonly SessionRowDraft[], E>;
   /**
    * The publisher job the caller is inside: the cell reads the run's rows
    * in that job and appends through its transaction, never a nested one,

@@ -21,10 +21,10 @@ import {
   isWorking,
   type RunId,
   type TaskGroup,
-} from '@texra-ai/harness/schemas';
-import {
   formatCompactDuration,
   pluralize,
+} from '@texra-ai/harness/schemas';
+import {
   compareBySeqNo,
   scriptStages,
   type ScriptStageView,

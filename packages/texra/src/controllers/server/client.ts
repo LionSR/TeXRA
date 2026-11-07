@@ -31,8 +31,13 @@ import {
 import { gt as semverGt, lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
-import { isOutcomeOf, Rejected } from '@texra-ai/harness';
-import { ensureError, type RuntimeCommand } from '@texra-ai/harness/schemas';
+import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
+import { isOutcomeOf } from '@texra-ai/harness';
+import {
+  ensureError,
+  type RuntimeCommand,
+  Rejected,
+} from '@texra-ai/harness/schemas';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
@@ -57,16 +62,37 @@ export type ServiceClient = RpcClient.FromGroup<
 >;
 
 /**
+ * The provider API keys this process's environment holds, as a start, a
+ * resume or a message sends them to the service (`StartOptions.apiKeys`): a
+ * key a terminal or a window was given reaches the task it asks for,
+ * wherever the task runs.
+ */
+export const environmentApiKeys = (): Readonly<Record<string, string>> =>
+  Object.fromEntries(
+    API_KEY_ENV_NAMES.flatMap((name) => {
+      const value = process.env[name]?.trim();
+      return value ? [[name, value]] : [];
+    }),
+  );
+
+/**
  * `request` to the session of `workspace` the service holds: the outcome its
- * kind is answered with. An answer of another kind (a service from another
- * build) is `Rejected`.
+ * kind is answered with. A message carries this process's keys, which the
+ * run resumes with if the message wakes it. An answer of another kind (a
+ * service from another build) is `Rejected`.
  */
 export const requestOnService = <R extends RuntimeCommand>(
   client: ServiceClient,
   workspace: string,
   request: R,
 ) =>
-  client['task.request']({ workspace, request }).pipe(
+  client['task.request']({
+    workspace,
+    request:
+      request.kind === 'followUp.send'
+        ? { ...request, apiKeys: request.apiKeys ?? environmentApiKeys() }
+        : request,
+  }).pipe(
     Effect.filterOrFail(
       (outcome) => isOutcomeOf<R['kind']>(request.kind, outcome),
       (outcome) =>

@@ -31,9 +31,6 @@ import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 import { writeNdjsonStdout, writeTextStdout } from '../platform/logSinks';
 import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 
-/** The subscription port of this client's session view. */
-const ATTACH_PORT = 'attach';
-
 /** How the attached task is printed. */
 interface TaskAttachOutput {
   readonly format: 'text' | 'ndjson';
@@ -103,7 +100,7 @@ export function watchTask(
       // Begin the generation and name the transcript before the first
       // frame, as a webview shell does before it posts its `Subscribe`.
       yield* graph.frames.begin(generation);
-      yield* graph.view.subscribe(ATTACH_PORT, aggregates);
+      yield* graph.view.subscribe(aggregates);
       const { debug } = graph.view.current();
       const feeding = yield* client['task.watch']({
         workspace: task.workspace,

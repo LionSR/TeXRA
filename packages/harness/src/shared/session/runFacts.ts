@@ -32,8 +32,8 @@ import {
   type RunOutcome,
   type RunParent,
   type RunProvenance,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
   STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResultPayload,
 } from '@shared/schemas';
@@ -89,7 +89,7 @@ export type RunFacts = {
     Record<
       string,
       Pick<DispatchFacts, 'toolName' | 'logId'> &
-        Pick<SessionEvent, 'commit' | 'seq'> & { readonly responseId: string }
+        Pick<SessionRow, 'commit' | 'seq'> & { readonly responseId: string }
     >
   >;
 };
@@ -189,7 +189,7 @@ export const consumedRow = (
 
 /** Run `runId`'s record rows among `rows`, folded (`runRowsFrom`). */
 export const recordsOf = (
-  rows: readonly SessionEvent[],
+  rows: readonly SessionRow[],
   runId: RunId,
 ): RunRows => {
   const id = qualifyAggregateId('run', runId);
@@ -201,7 +201,7 @@ export const recordsOf = (
  *  between is `recordsOf`'s `activation` and `end` (an activation clears the
  *  end of the lifecycle before it). */
 export const boundsLifecycle = (
-  row: Pick<SessionEvent, 'aggregateId' | 'type'>,
+  row: Pick<SessionRow, 'aggregateId' | 'type'>,
   runId: RunId,
 ): boolean =>
   row.aggregateId === qualifyAggregateId('run', runId) &&
@@ -240,13 +240,13 @@ export interface RegisterRunOptions {
   };
 }
 
-type RunConfigRow = Extract<SessionEventDraft, { readonly type: 'run.config' }>;
+type RunConfigRow = Extract<SessionRowDraft, { readonly type: 'run.config' }>;
 
 /** The rows that register a run, and the `run.start` among them of a run
  *  they give birth to (null: the run exists, and they re-register it). */
 export interface Registration {
-  readonly rows: readonly SessionEventDraft[];
-  readonly start: Extract<SessionEventDraft, { type: 'run.start' }> | null;
+  readonly rows: readonly SessionRowDraft[];
+  readonly start: Extract<SessionRowDraft, { type: 'run.start' }> | null;
 }
 
 /** The row that titles `runId`: the model's summary, or the user's rename. */
@@ -254,7 +254,7 @@ export const descriptionRow = (
   runId: RunId,
   description: string,
   by: 'model' | 'user',
-): Extract<SessionEventDraft, { type: 'run.description' }> => ({
+): Extract<SessionRowDraft, { type: 'run.description' }> => ({
   type: 'run.description',
   aggregateId: qualifyAggregateId('run', runId),
   description,
@@ -269,7 +269,7 @@ export function registrationDrafts(
   config: RunConfigRow['config'],
   options: RegisterRunOptions,
   born: boolean,
-  ended: readonly SessionEventDraft[],
+  ended: readonly SessionRowDraft[],
 ): Registration {
   const target = qualifyAggregateId('run', runId);
   const worktree = config.workingDirectory?.trim();
@@ -286,7 +286,7 @@ export function registrationDrafts(
     provenance: options.provenance ?? null,
     approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
   };
-  const rows: SessionEventDraft[] = [
+  const rows: SessionRowDraft[] = [
     ...(born ? [start] : []),
     { type: 'run.config', aggregateId: target, config },
     { type: 'run.activate', aggregateId: target },
@@ -301,9 +301,9 @@ export function registrationDrafts(
  *  (`ended`), and its configuration when that changed (`config`). */
 export function activationDrafts(
   runId: RunId,
-  ended: readonly SessionEventDraft[],
+  ended: readonly SessionRowDraft[],
   config: RunConfigRow['config'] | null,
-): SessionEventDraft[] {
+): SessionRowDraft[] {
   const target = qualifyAggregateId('run', runId);
   const changed: RunConfigRow[] =
     config === null

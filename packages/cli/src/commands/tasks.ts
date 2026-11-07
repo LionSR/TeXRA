@@ -17,6 +17,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
+  environmentApiKeys,
   requestOnService,
   type ServiceClient,
 } from '@texra/controllers/server/client';
@@ -31,7 +32,6 @@ import {
   projectApprovalPolicy,
 } from '../runtime/platform/cliContext';
 import { isLinked, linkClient } from '../runtime/platform/cliService';
-import { environmentApiKeys } from '@texra/controllers/server/serviceSession';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import {

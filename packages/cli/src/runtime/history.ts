@@ -9,12 +9,10 @@ import {
   type RunId,
   type RunOutcome,
   serializeFilteredConfig,
+  type AgentRunListingEntry,
+  type RunResult,
 } from '@texra-ai/harness/schemas';
-import type {
-  AgentRunListingEntry,
-  RunResult,
-  Session,
-} from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,

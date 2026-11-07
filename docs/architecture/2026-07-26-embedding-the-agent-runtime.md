@@ -102,7 +102,7 @@ and `plan` injections are present either way.
 ### Step 2 — credential resolution
 
 There is no model-access bootstrap call. A run binds its model through `ModelAccess`
-(`packages/harness/src/agent/runtime/models/modelAccess/`), which resolves the route's one credential
+(`packages/harness/src/agent/runtime/modelAccess/`), which resolves the route's one credential
 in `credentials.ts` (an API key, or the ChatGPT or Grok subscription session).
 
 Credential resolution uses the caller's own provider API keys or subscription

@@ -31,7 +31,7 @@ const ORPHAN_RUN = 'baddad' as RunId;
 const canonicalRows = (fixture: DatabaseFixture) =>
   Effect.gen(function* () {
     const database = yield* fixture.Database;
-    const types = fixture.SessionEventSchema.members.map(
+    const types = fixture.SessionRowSchema.members.map(
       (schema) => schema.fields.type.literal,
     );
     return {

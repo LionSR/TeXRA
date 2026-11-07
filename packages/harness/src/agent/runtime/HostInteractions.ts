@@ -15,7 +15,7 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { LaunchRefused } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
-import { aggregateTarget, type SessionEvent } from '@shared/schemas';
+import { aggregateTarget, type SessionRow } from '@shared/schemas';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -329,7 +329,7 @@ function presentAgentFailure(
  */
 export const presentTerminalResult = Effect.fn('presentTerminalResult')(
   function* (
-    row: SessionEvent,
+    row: SessionRow,
   ): Effect.fn.Return<void, never, SessionViewAccess | Interactions> {
     const target = aggregateTarget(row.aggregateId);
     if (target.kind !== 'run' || row.type !== 'run.end' || !row.error) return;

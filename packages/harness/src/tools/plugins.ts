@@ -30,8 +30,8 @@ import {
   qualifyAggregateId,
   type JsonValue,
   type RunId,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
   type ToolFact,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
@@ -206,7 +206,7 @@ export function readDisabledTools(store: StateStore) {
  */
 export const announceWrites = (
   factKinds: FactKinds,
-): ((row: SessionEvent) => Effect.Effect<void, never, AppSignals>) => {
+): ((row: SessionRow) => Effect.Effect<void, never, AppSignals>) => {
   const writing = new Map(
     Object.entries(factKinds).flatMap(([name, { writes }]) =>
       writes === undefined ? [] : [[name, writes] as const],
@@ -296,7 +296,7 @@ export function checkOwnFacts(
   }
 }
 
-type OwnFactRow = Extract<SessionEventDraft, { type: 'plugin.fact' }>;
+type OwnFactRow = Extract<SessionRowDraft, { type: 'plugin.fact' }>;
 
 /** A fact about its plugin's own aggregate, as its row hung under
  *  `runId`: a call's (`factRows`) or a decision's (`Plugin.decision`). */

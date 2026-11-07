@@ -27,7 +27,7 @@ import {
   sumUsageStats,
   TokenUsageStatsSchema,
   type AggregateId,
-  type SessionEvent,
+  type SessionRow,
   type TokenUsageStats,
 } from '@shared/schemas';
 import {
@@ -77,14 +77,14 @@ interface Projector {
   readonly table: 'listing_entry' | 'run_usage';
   readonly projects: readonly 'usage'[];
   readonly project: (
-    event: SessionEvent,
+    event: SessionRow,
     prior: ProjectionPrior,
   ) => readonly ProjectionOp[];
 }
 
 /** A priced row's spend as the `usage` display row carries it: its counts,
  *  cost, route and plan, without the call's surface and response time. */
-function pricedUsage(event: SessionEvent): TokenUsageStats | null {
+function pricedUsage(event: SessionRow): TokenUsageStats | null {
   let priced = null;
   if (event.type === 'context.edit') priced = event.payload.usage;
   if (
@@ -255,7 +255,7 @@ export function projectionUpkeep<E>(
   /** Run the named projectors over decoded events: a projector with a
    *  prior row reads it back first. */
   const project = (
-    events: readonly SessionEvent[],
+    events: readonly SessionRow[],
     names: readonly ProjectionName[],
   ) =>
     Effect.forEach(events, (event) =>
@@ -331,7 +331,7 @@ export function projectionUpkeep<E>(
     /** A batch committed after `before`: a projection current through
      *  `before` follows it; any other catches up on its owner's next read. */
     follow: Effect.fn('projections.follow')(function* (
-      events: readonly SessionEvent[],
+      events: readonly SessionRow[],
       before: number,
     ) {
       const through = events.at(-1)?.commit ?? before;

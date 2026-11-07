@@ -14,7 +14,7 @@ import {
   type FollowUpReceipt,
   type RunOutcome,
   type RunPosition,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
@@ -27,12 +27,12 @@ import {
 import type { RowOf, RunRows, SharedRunRows } from './runRowsShape';
 
 /** One read: the kinds it selects and what it makes of those rows. */
-interface RowRead<K extends SessionEvent['type'], A> {
+interface RowRead<K extends SessionRow['type'], A> {
   readonly kinds: readonly K[];
   readonly fold: (rows: readonly RowOf<K>[]) => A;
 }
 
-const rowRead = <const K extends SessionEvent['type'], A>(
+const rowRead = <const K extends SessionRow['type'], A>(
   kinds: readonly K[],
   fold: (rows: readonly RowOf<K>[]) => A,
 ): RowRead<K, A> => ({ kinds, fold });
@@ -125,20 +125,20 @@ export type RunRowsRead<R extends RunRowRead> = ReturnType<
 /** Read `read` over `rows`: the rows of its kinds among them, folded. */
 export function foldRunRows<R extends RunRowRead>(
   read: R,
-  rows: readonly SessionEvent[],
+  rows: readonly SessionRow[],
 ): RunRowsRead<R> {
   const { kinds, fold } = RUN_ROW_READS[read];
   const selected: readonly string[] = kinds;
   // cast: the rows kept are of the read's kinds, which its fold takes;
   // TypeScript cannot tie a generic key to its own entry's parameter.
-  return (fold as (rows: readonly SessionEvent[]) => RunRowsRead<R>)(
+  return (fold as (rows: readonly SessionRow[]) => RunRowsRead<R>)(
     rows.filter((row) => selected.includes(row.type)),
   );
 }
 
 /** What one record row changes on `rows`. Every kind has a case, so a new
  *  kind does not compile until it is decided here. */
-function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
+function recordFacts(rows: RunRows, row: SessionRow): Partial<RunRows> {
   switch (row.type) {
     case 'run.start': {
       const grants = row.approvalPolicy ?? NO_APPROVAL_GRANTS;
@@ -208,7 +208,7 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
  * (`SessionLog.facts`), or the lifecycle rows a read selects. Every other
  * row records nothing.
  */
-export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
+export function runRowsFrom(rows: readonly SessionRow[]): RunRows {
   let record: RunRows = {
     start: null,
     parent: null,
@@ -231,7 +231,7 @@ export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
 
 /** Whether `row` decides a request: what a waiter on a request reads off
  *  the tail, and what an export redacts. */
-export const isRequestDecision = <R extends Pick<SessionEvent, 'type'>>(
+export const isRequestDecision = <R extends Pick<SessionRow, 'type'>>(
   row: R,
 ): row is Extract<R, { type: 'request.decided' }> =>
   row.type === 'request.decided';
@@ -251,7 +251,7 @@ export interface RunStanding {
  * view's position and outcome, the transcript boundary, the held chunk text
  * and the publisher's open streams all follow it.
  */
-export function standingAfter(row: SessionEvent): RunStanding | null {
+export function standingAfter(row: SessionRow): RunStanding | null {
   switch (row.type) {
     case 'run.activate':
       return { position: 'running', outcome: null };
@@ -269,7 +269,7 @@ export function standingAfter(row: SessionEvent): RunStanding | null {
 
 /** Whether the row rests or ends the run: the change that closes its run
  *  window, every open stream and every held chunk with it. */
-export function closesRunWindow(row: SessionEvent): boolean {
+export function closesRunWindow(row: SessionRow): boolean {
   const standing = standingAfter(row);
   return standing !== null && standing.position !== 'running';
 }
@@ -283,7 +283,7 @@ export const RECEIPT_ROW_TYPES = [
   'run.stop',
   'run.end',
   'run.removed',
-] as const satisfies readonly SessionEvent['type'][];
+] as const satisfies readonly SessionRow['type'][];
 
 /** One input as its run's rows record it: the `followup.queued` row it was
  *  accepted as, and where it stands now. */
@@ -302,7 +302,7 @@ export interface FollowUpRecord {
  * continues the turn, and its input with it.
  */
 export function followUpReceipt(
-  rows: readonly SessionEvent[],
+  rows: readonly SessionRow[],
   followUpId: string,
 ): FollowUpRecord | 'unknown' | 'deleted' {
   if (rows.some((row) => row.type === 'run.removed')) return 'deleted';
@@ -338,7 +338,7 @@ export function followUpReceipt(
 
 /** Where an input of turn `turn` stands, from the rows after it joined. */
 function turnReceipt(
-  after: readonly SessionEvent[],
+  after: readonly SessionRow[],
   turn: number,
 ): FollowUpReceipt {
   let end: RowOf<'run.end'> | null = null;

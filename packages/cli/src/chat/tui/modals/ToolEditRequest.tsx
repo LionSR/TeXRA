@@ -1,4 +1,3 @@
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
@@ -20,7 +19,11 @@ import {
   scrollPageRows,
 } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
-import { offeredGrant, type ToolEditContent } from '@texra-ai/harness/schemas';
+import {
+  offeredGrant,
+  type ToolEditContent,
+  formatResultCount,
+} from '@texra-ai/harness/schemas';
 import type { ToolEditTuiRequest } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;

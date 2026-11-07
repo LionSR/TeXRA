@@ -17,20 +17,16 @@
  * with a core message type; a plugin's own facts are `plugin.fact` rows
  * (`ToolResult.facts`), never a log payload.
  */
-import type {
-  RunId,
-  SessionEventDraft,
-  TRACE_ROW_TYPES,
-} from '@shared/schemas';
+import type { RunId, SessionRowDraft, TRACE_ROW_TYPES } from '@shared/schemas';
 
 /** One session arm as the trace carries it, distributive over `T`: an
  *  {@link AgentEvent} arm, or the `run.end` a {@link ResultEvent} names. A
  *  row the run's state is folded from is never one: the trace is the
  *  display door, and those rows commit through the run's cell
  *  (`runEventDraft`, typed to an unfolded draft, refuses any other). */
-export type TraceArm<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
+export type TraceRow<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
   T extends unknown
-    ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
+    ? Omit<Extract<SessionRowDraft, { type: T }>, 'aggregateId'>
     : never;
 
 /**
@@ -40,7 +36,7 @@ export type TraceArm<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
  * run's end (`endRunRows`, `agent/storage/runLifecycle.ts`), never emitted on
  * a trace.
  */
-export type ResultEvent = TraceArm<'run.end'> & { readonly runId: RunId };
+export type ResultEvent = TraceRow<'run.end'> & { readonly runId: RunId };
 
 /**
  * Chunk appended to an open stream. Transient: `runEventDraft` returns null
@@ -55,5 +51,5 @@ export interface StreamChunkEvent {
 
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =
-  | TraceArm<(typeof TRACE_ROW_TYPES)[number]>
+  | TraceRow<(typeof TRACE_ROW_TYPES)[number]>
   | StreamChunkEvent;

@@ -31,12 +31,13 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import { rollupOf, type RunId } from '@texra-ai/harness/schemas';
 import {
-  dispatchedChildren,
+  rollupOf,
+  type RunId,
   formatCompactDuration,
   formatResultCount,
-} from '@texra-ai/harness/transcript';
+} from '@texra-ai/harness/schemas';
+import { dispatchedChildren } from '@texra-ai/harness/transcript';
 import type { Surface } from '@texra/shared/session/surface';
 import {
   inquiryThreadsUnder,

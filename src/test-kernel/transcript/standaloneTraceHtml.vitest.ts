@@ -8,7 +8,7 @@ import {
   type TraceDocument,
   TraceDocumentSchema,
 } from '@texra-ai/harness/schemas';
-import { DisplaySessionEventSchema } from '@texra-ai/harness/transcript';
+import { DisplayRowSchema } from '@texra-ai/harness/transcript';
 import { LOG_LEVELS } from '@shared/schemas';
 import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
 
@@ -18,7 +18,7 @@ function trace(message = 'hello'): TraceDocument {
   return {
     runId: RUN_ID,
     events: [
-      Schema.decodeUnknownSync(DisplaySessionEventSchema)({
+      Schema.decodeUnknownSync(DisplayRowSchema)({
         aggregateId: qualifyAggregateId('run', RUN_ID),
         seq: 1,
         commit: 1,

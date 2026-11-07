@@ -8,12 +8,12 @@
 import type {
   AggregateId,
   CommitOrdinal,
-  DisplaySessionEvent,
+  DisplayRow,
   RunEnd,
   RunId,
   RunOutcome,
-  SessionEvent,
-  SessionEventDraft,
+  SessionRow,
+  SessionRowDraft,
 } from '@shared/schemas';
 import type { Effect, Stream, SubscriptionRef } from 'effect';
 import type { AgentEvent } from './agentEvent';
@@ -35,7 +35,7 @@ export type StreamClosure = Extract<RunHistoryDraft, { type: 'stream.end' }>;
  *  outcome its stages too. */
 export type ClosureFact =
   | StreamClosure
-  | Extract<SessionEventDraft, { type: 'stage.end' }>;
+  | Extract<SessionRowDraft, { type: 'stage.end' }>;
 
 /** A write the store refused: nothing was written. */
 export type LogWriteError = DatabaseAggregateClosed | DatabaseWriteFailed;
@@ -60,7 +60,7 @@ export interface SessionLogShape {
    *  between. A refusal wrote nothing, comes back typed, never retried. */
   transact(
     events: readonly UnfoldedDraft[],
-  ): Effect.Effect<readonly SessionEvent[], LogWriteError>;
+  ): Effect.Effect<readonly SessionRow[], LogWriteError>;
   transact<A, E>(
     job: (tx: SessionTransaction) => Effect.Effect<A, E>,
   ): Effect.Effect<A, E | LogWriteError>;
@@ -87,8 +87,8 @@ export interface SessionLogShape {
   history(
     id: AggregateId,
     fromSeq?: number,
-    types?: readonly SessionEvent['type'][],
-  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    types?: readonly SessionRow['type'][],
+  ): Effect.Effect<readonly SessionRow[], DatabaseReadFailed>;
   /** What one read (`RUN_ROW_READS`) makes of the rows of its kinds, read
    *  through the type index of a run's aggregate or a plugin's own; with
    *  `through`, of its rows up to that seq alone (a fork's cut). */
@@ -110,16 +110,16 @@ export interface SessionLogShape {
    *  the run never existed or was removed. */
   display(
     runId: RunId,
-  ): Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
+  ): Effect.Effect<readonly DisplayRow[], DatabaseReadFailed>;
   /** Every display row above `fromCommit` in commit order, then the live
    *  tail. `drained` receives the commit each forward read covered. */
   tail(
     fromCommit: CommitOrdinal,
     drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-  ): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+  ): Stream.Stream<DisplayRow, DatabaseReadFailed>;
   /** The cold listing: the latest row per aggregate and listing type, plus
    *  the outstanding approvals; completes. */
-  listing(): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+  listing(): Stream.Stream<DisplayRow, DatabaseReadFailed>;
   /** Set when opening the store moved an older build's rows aside; the
    *  host that opened the session presents it once. */
   readonly movedAside: SessionStoreMovedAside | null;

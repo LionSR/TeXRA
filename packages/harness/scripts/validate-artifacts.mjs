@@ -15,7 +15,7 @@ import {
 
 // The built package to check: this package, or the one a build names (the
 // llm build passes its own root). Each is checked against what it publishes:
-// `publishConfig.exports` when the workspace `exports` name sources.
+// `publishConfig.exports`, as the workspace `exports` name sources.
 const packageRoot = path.resolve(
   process.argv[2] ?? fileURLToPath(new URL('..', import.meta.url)),
 );
@@ -30,7 +30,7 @@ const rootTsconfig = JSON.parse(
 
 // The code entries: `./package.json` exports the manifest itself.
 const publishedExports = Object.fromEntries(
-  Object.entries(manifest.publishConfig?.exports ?? manifest.exports).filter(
+  Object.entries(manifest.publishConfig.exports).filter(
     ([, target]) => typeof target !== 'string',
   ),
 );

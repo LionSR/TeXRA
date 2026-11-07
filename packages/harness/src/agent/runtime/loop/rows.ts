@@ -21,7 +21,7 @@ import {
   type RunId,
   type RunInput,
   type RunOutcome,
-  type SessionEventDraft,
+  type SessionRowDraft,
 } from '@shared/schemas';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
@@ -143,7 +143,7 @@ export function displayRow(
   runId: RunId,
   draft: Unqualified<
     Extract<
-      SessionEventDraft,
+      SessionRowDraft,
       { type: 'tool.start' | 'tool.end' | 'stage.start' | 'stage.end' }
     >
   >,

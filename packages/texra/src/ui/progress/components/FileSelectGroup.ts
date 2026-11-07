@@ -1,5 +1,8 @@
-import { formatResultCount } from '@texra-ai/harness/transcript';
-import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
+import {
+  getBasename,
+  normalizeFilePath,
+  formatResultCount,
+} from '@texra-ai/harness/schemas';
 import { Record as Rec, Schema, String as Str } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';

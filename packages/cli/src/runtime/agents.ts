@@ -1,4 +1,3 @@
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect } from 'effect';
 
 import {
@@ -6,7 +5,7 @@ import {
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
-import { agentKeyOf } from '@texra-ai/harness/schemas';
+import { agentKeyOf, formatResultCount } from '@texra-ai/harness/schemas';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 
 import { CliUsageError } from './platform/cliContext';
