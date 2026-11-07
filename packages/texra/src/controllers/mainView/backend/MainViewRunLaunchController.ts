@@ -55,19 +55,15 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
   // agent-config banner. A failed load refuses the launch: the catalog may
   // still serve the agent, which would then run as a chat without its task.
   const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
-  const resolved = team
-    ? { entry: null }
+  const entry = team
+    ? null
     : yield* workspaceAgents.forLaunch(agent).pipe(
-        Effect.map((entry) => ({ entry })),
         Effect.catchTags({
-          LaunchRefused: () => Effect.succeed({ entry: null }),
+          LaunchRefused: () => Effect.succeed(null),
           AgentCatalogLoadError: (failed) =>
-            Effect.succeed({ failed: failed.message }),
+            Effect.fail(new Rejected({ reason: failed.message })),
         }),
       );
-  if ('failed' in resolved)
-    return yield* new Rejected({ reason: resolved.failed });
-  const { entry } = resolved;
   // The form lists the workspace's visible agents (`agentOptionsData`) and
   // reads the mode from the one its selection names, so a launch runs only
   // one of them. The catalog also finds an agent hidden since it was chosen
@@ -163,8 +159,8 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
     roots: LaunchRoots,
   ): Effect.fn.Return<AgentConfig, Rejected | StateReadFailed, AgentCatalog> {
     if (launch.launchTarget !== 'team') {
-      // AgentConfigSchema defaults agent/model; reject missing UI selections
-      // before schema parsing so the user sees the real form problem.
+      // The form sends an empty agent or model while nothing is selected;
+      // say so in the form's words rather than as a schema issue.
       if (!launch.agent || !launch.model)
         return yield* new Rejected({
           reason: 'Choose an agent and a model first.',
