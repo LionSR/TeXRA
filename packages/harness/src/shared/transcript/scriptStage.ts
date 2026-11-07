@@ -269,9 +269,12 @@ function firstLine(text: string): string {
  * loop's script dispatch puts a card under a stage, so the stages that hold
  * one are a run's script stages.
  */
-export function isScriptCall(
-  row: ReadonlyDeep<TranscriptRow>,
-): row is ToolRow & { readonly groupId: string } {
+export function isScriptCall(row: ReadonlyDeep<TranscriptRow>): row is Extract<
+  TranscriptRow,
+  { kind: 'tool' }
+> & {
+  readonly groupId: string;
+} {
   return row.kind === 'tool' && row.groupId !== undefined;
 }
 

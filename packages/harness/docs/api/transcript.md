@@ -305,9 +305,12 @@ loop's script dispatch puts a card under a stage, so the stages that hold
 one are a run's script stages.
 
 ```ts
-function isScriptCall(
-  row: ReadonlyDeep<TranscriptRow>,
-): row is ToolRow & { readonly groupId: string }
+function isScriptCall(row: ReadonlyDeep<TranscriptRow>): row is Extract<
+  TranscriptRow,
+  { kind: 'tool' }
+> & {
+  readonly groupId: string;
+}
 ```
 
 ## LoadedMediaRef

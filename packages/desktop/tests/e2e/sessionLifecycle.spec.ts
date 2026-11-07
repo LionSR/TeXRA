@@ -107,13 +107,6 @@ async function writeCanonicalRunFixtures(
           },
           { type: 'run.activate', aggregateId: id },
           {
-            type: 'stage.start',
-            aggregateId: id,
-            id: `${runFixture.runId}-running-group`,
-            label: 'Persisted turn',
-            kind: 'session',
-          },
-          {
             type: 'response.finalized',
             aggregateId: id,
             text: `Saved history for ${runFixture.agent}.`,
