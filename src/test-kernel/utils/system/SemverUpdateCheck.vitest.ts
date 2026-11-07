@@ -64,7 +64,6 @@ describe('runDailyUpdateCheck', () => {
               runDailyUpdateCheck({
                 currentVersion: '1.0.0',
                 host: 'desktop',
-                notifyOnce: true,
                 fetchLatest: Effect.succeed({
                   version: '1.1.0',
                   refreshed: true,

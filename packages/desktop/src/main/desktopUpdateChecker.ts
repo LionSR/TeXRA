@@ -70,7 +70,6 @@ export const checkForDesktopUpdate = Effect.fn('checkForDesktopUpdate')(
     yield* runDailyUpdateCheck({
       currentVersion,
       host: 'desktop',
-      notifyOnce: true,
       fetchLatest: fetchLatestDesktopRelease().pipe(
         Effect.map((release) => ({
           version: release?.version,
