@@ -213,6 +213,7 @@ export class GitTab extends SignalWatcher(LitElement) {
   private renderTokenStatusBadge(): TemplateResult {
     return renderSetStatusIcon({
       status: this.githubTokenStatus,
+      success: 'secret',
       title: credentialOriginLabel('secret', 'token'),
       fallbacks: {
         env: {

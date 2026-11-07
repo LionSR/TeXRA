@@ -1,12 +1,23 @@
 import { fileURLToPath } from 'node:url';
 
-import { Cause, Effect, Exit, Option, Result, Schema } from 'effect';
+import {
+  Cause,
+  type Context,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  Result,
+  Schema,
+} from 'effect';
 import { executeCommand, envFlag } from '@texra-ai/harness/node';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   fetchJsonStringField,
   UPDATE_CHECK_SKIP_ENV,
   runDailyUpdateCheck,
+  UpdateCheckRecords,
   type UpdateCheckFetchResult,
 } from '@texra/utils/system/updateCheck';
 
@@ -234,6 +245,27 @@ function runCliUpdate(
 let updateNotifyStarted = false;
 
 /**
+ * The CLI's update-check records. Its check runs before a command, which a
+ * check time it cannot save must not fail, nor cost the update the person
+ * just agreed to: that write warns and the check goes on (the next launch
+ * checks again).
+ */
+const cliUpdateCheckRecords = Layer.effect(
+  UpdateCheckRecords,
+  Effect.gen(function* () {
+    const records = yield* UpdateCheckRecords;
+    return {
+      ...records,
+      recordChecked: (host, at) =>
+        Effect.ignore(records.recordChecked(host, at), {
+          log: 'Warn',
+          message: 'The update check time was not saved',
+        }).pipe(withLogChannel('updateCheck')),
+    } satisfies Context.Service.Shape<typeof UpdateCheckRecords>;
+  }),
+).pipe(Layer.provide(updateCheckRecordsLayer));
+
+/**
  * Once per process: check the package source for a newer release (at most
  * once per day, throttled through a stamp persisted in global state) and, in
  * an interactive terminal, offer to run the matching global install. npm-like
@@ -307,7 +339,7 @@ export function notifyCliUpdate(
           normalized === '' || normalized === 'y' || normalized === 'yes';
       }),
     }).pipe(
-      Effect.provide(updateCheckRecordsLayer),
+      Effect.provide(cliUpdateCheckRecords),
       Effect.catchCause((cause) =>
         Cause.hasDies(cause)
           ? Effect.logWarning('The update check failed unexpectedly').pipe(

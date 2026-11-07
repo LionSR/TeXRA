@@ -147,7 +147,7 @@ interface StatusBarChrome {
   /** Session approval policy; a non-default policy earns a segment. */
   readonly approvalPolicy?: ApprovalPolicy;
   /** Terminal width in columns. */
-  readonly width?: number;
+  readonly width: number;
   readonly ctrlCAction?: CtrlCAction;
   /** Nested-session location (the focused child's label). Omitted on the
    *  root session, where the header already names the conversation. */
@@ -351,12 +351,9 @@ function statusBarSegmentsWidth(segments: readonly StatusBarSegment[]): number {
 }
 
 // Shared by every width-aware layout below: the row width minus the status
-// bar's fixed horizontal padding, or undefined when the width itself is
-// unknown (tests/headless runs).
-function statusBarInnerWidth(width: number | undefined): number | undefined {
-  return width === undefined
-    ? undefined
-    : Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
+// bar's fixed horizontal padding.
+function statusBarInnerWidth(width: number): number {
+  return Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
 }
 
 /**
@@ -368,15 +365,10 @@ function statusBarInnerWidth(width: number | undefined): number | undefined {
  */
 function fitStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
-  width: number | undefined,
+  width: number,
 ): readonly StatusBarSegment[] {
   const innerWidth = statusBarInnerWidth(width);
-  if (
-    innerWidth === undefined ||
-    statusBarSegmentsWidth(segments) <= innerWidth
-  ) {
-    return segments;
-  }
+  if (statusBarSegmentsWidth(segments) <= innerWidth) return segments;
 
   // Lowest priority first, the later of two equals first.
   const yieldOrder = [...segments.keys()].sort(
@@ -439,7 +431,7 @@ function statusBarBindingsText(
     scriptAvailable = false,
   }: StatusBarShortcutsInput,
   ctrlCAction: CtrlCAction,
-  maxColumns: number | undefined,
+  maxColumns: number,
 ): string {
   const parentBack = parentNavigationAvailable
     ? keyHintText({ key: 'Esc', action: AGENT_LIST.parentAction })
@@ -501,7 +493,7 @@ function childListBindingsText(
     selectionResumable = false,
   }: StatusBarChildListInput,
   ctrlCAction: CtrlCAction,
-  maxColumns: number | undefined,
+  maxColumns: number,
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const enterBinding = keyHintText({

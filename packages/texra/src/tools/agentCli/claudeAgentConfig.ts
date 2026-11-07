@@ -19,6 +19,7 @@ import {
   homeDirectory,
   inheritedEnv,
 } from '@texra-ai/harness/node';
+import { absentReason } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -36,8 +37,10 @@ const CHANNEL = 'claudeAgent';
  * Best-effort and side-effect-free: the login session lives in
  * `${CLAUDE_CONFIG_DIR | ~/.claude}/.credentials.json` on Linux/Windows and in
  * the login keychain on macOS. The macOS probes read metadata only (no
- * `-w`/`-g`) so they never trigger a keychain access prompt; any failure is
- * swallowed and treated as "no credential."
+ * `-w`/`-g`) so they never trigger a keychain access prompt. Every failure
+ * reads as "no credential": an absent file or keychain entry silently, a
+ * credential file that cannot be checked or a `security` tool that cannot
+ * start with a warning.
  *
  * `env` is the environment the subprocess will get, so the answer matches
  * what Claude Code sees.
@@ -56,15 +59,26 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
     // exactly this question, and the service's `exists` would need this same
     // failure branch anyway — so taking it from context buys nothing for one
     // boolean, and this check runs before any root is resolved.
+    const credentialFile = path.join(configDir, '.credentials.json');
     const credentialFileExists = yield* Effect.tryPromise({
-      try: () => access(path.join(configDir, '.credentials.json')),
+      try: () => access(credentialFile),
       catch: ensureError,
     }).pipe(
       Effect.as(true),
       // access(F_OK) succeeds when the file exists regardless of its read
       // permissions, so an error means the file is absent or the path is not
-      // traversable. Neither case is a usable credential.
-      Effect.catch(() => Effect.succeed(false)),
+      // traversable. Neither is a usable credential, but only absence is
+      // ordinary: a path that cannot be traversed says why a signed-in
+      // person's session is not used.
+      Effect.catchIf(absentReason, () => Effect.succeed(false)),
+      Effect.catch((error) =>
+        Effect.as(
+          Effect.logWarning(
+            `Claude Code's credential file ${credentialFile} could not be checked, so its login session is not used: ${error.message}`,
+          ).pipe(withLogChannel(CHANNEL)),
+          false,
+        ),
+      ),
     );
     if (credentialFileExists) return true;
 
