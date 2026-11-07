@@ -42,17 +42,17 @@ report.
 
 ## Where things stand on 2026-11-07
 
-| Work                                     | State                                                                                                                                  |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| R1–R5, R7, R8's first half               | landed, PR 14769; compromises in [PR 1's record](./2026-11-06-root-designs-pr1-compromises.md)                                         |
-| The CLI service (R10's service side)     | landed, PRs 14771 and 14772 ([its note](./2026-11-06-cli-service-root-causes.md))                                                      |
-| R10's "the client holds one `Session`"   | landed, PR 14772 (`CliRunReads`, `serviceRunReads`, `serviceRecords` gone)                                                             |
-| `oneShot` as a read; six llm error kinds | landed, PRs 14774 and 14776                                                                                                            |
-| R9, the model path                       | in progress: PR 14778 (two loops, `simplify/model-loops`), then `simplify/model-gate` (gate, `ScopedRef`, credential, `SharedAttempt`) |
-| R6, the view's three facts               | not started; `RUN_PHASE` 64 references, `durableOutcome` 30, `statusKey` 31                                                            |
-| R10's hosts' verbs, exit code, drainer   | not started; `setExitCode` 22 references, `registerCliStateResetHook` 10                                                               |
-| R8's second half                         | not started (rooted filesystems as one `SessionRoots`, `SessionViewService`, `Interactions`)                                           |
-| PR 1 record §3 and §4, harness small     | not started, except `oneShot`                                                                                                          |
+| Work                                     | State                                                                                                                              |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| R1–R5, R7, R8's first half               | landed, PR 14769; compromises in [PR 1's record](./2026-11-06-root-designs-pr1-compromises.md)                                     |
+| The CLI service (R10's service side)     | landed, PRs 14771 and 14772 ([its note](./2026-11-06-cli-service-root-causes.md))                                                  |
+| R10's "the client holds one `Session`"   | landed, PR 14772 (`CliRunReads`, `serviceRunReads`, `serviceRecords` gone)                                                         |
+| `oneShot` as a read; six llm error kinds | landed, PRs 14774 and 14776; one platform-error unwrap, PR 14777                                                                   |
+| R9, the model path                       | two loops landed, PR 14778; the gate and `ScopedRef` (PR 14781) and the coordinator lock (PR 14782) in review; the credential next |
+| R6, the view's three facts               | not started; `RUN_PHASE` 64 references, `durableOutcome` 30, `statusKey` 31                                                        |
+| R10's hosts' verbs, exit code, drainer   | not started; `setExitCode` 22 references, `registerCliStateResetHook` 10                                                           |
+| R8's second half                         | not started (rooted filesystems as one `SessionRoots`, `SessionViewService`, `Interactions`)                                       |
+| PR 1 record §3 and §4, harness small     | not started, except `oneShot`                                                                                                      |
 
 Open pull requests the order waits on:
 
@@ -62,8 +62,8 @@ Open pull requests the order waits on:
 - **14773** (programs, not agents, for the catalog and codemode) is set
   aside by the owner (2026-11-07). M4, M9 and H9, which its outcome could
   replace, are out of the order until the owner returns to it.
-- **14777** (one unwrap of a platform error) is the error classifiers'
-  owner: G10's error tags join the storage-errors inventory after it.
+- **14777** (one unwrap of a platform error) landed 2026-11-07, so G10's
+  error tags can join the storage-errors inventory now.
 - **14741** (blob link kinds) touches only the store; nothing here waits.
 
 Decided, not reopened here: every item marked "_Done 2026-11-06_" in
@@ -133,8 +133,8 @@ zero.
   (`latex/texTools.ts`) answered `ok` on the engine's exit code; five of its
   seven callers trusted it and two checked the file their own way. One
   `fs.stat` inside its `Effect.fn` makes `ok` mean "a non-empty PDF exists";
-  the callers' post-checks and the options schema decode go. In review as
-  PR 14783.
+  the callers' post-checks and the options schema decode go. Landed in
+  PR 14783 (2026-11-07).
 
 #### M3: refused on investigation
 
@@ -430,7 +430,7 @@ item a report lists without a lane. Full deletion lists are in the reports.
 | I6  | two latexdiff orchestrators; a service as three one-use classes                             | S5      | 4.4       |
 | I7  | the extraction ladder decides "which files may this reply name" twice                       | S5      | 4.3       |
 | I8  | the arXiv download hand-joins a promise; a cause wrapper around `Effect.retry`              | S6      | 4.4       |
-| I9  | `compileLatex2Pdf` reports success before the PDF exists                                    | S6      | 0         |
+| I9  | `compileLatex2Pdf` reports success before the PDF exists                                    | S6      | landed    |
 | I10 | the toolchain catalog's install advice as prose parsed back                                 | S5      | 4.4       |
 | I11 | the LaTeX preview re-implements the request's scope                                         | S1      | 3.1       |
 | I12 | batched: helpers, `applyFor`'s enum, `LatexTrace`, `taskFileSnapshots`'s `WeakMap`, …       | S3      | 8.1       |
