@@ -77,7 +77,7 @@ behaviour; comments substituting for design; a false comment.
     `" + "`, not `+`.
   - In `max_style`, `{d${variable}}` (`maxRules.ts:228`) runs before
     `\frac{d}{d${variable}}` (`:232`). So `\frac{d}{dx}` becomes
-    `\frac{d}{\dd x}`, and the third rule's `\frac{\dd}` part never applies.
+    `\frac{d}{\ddx}`, and the third rule's `\frac{\dd}` part never applies.
     The comment above it ("Handle cases like \frac{d}{dx}") describes a rule
     that never fires.
 - **Measured.** I transpiled the rule modules into a scratch directory and

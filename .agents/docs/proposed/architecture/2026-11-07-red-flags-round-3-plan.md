@@ -225,13 +225,13 @@ flags no area audit had: pass-through variables (PT), interface comments
 (IC), names (NM), nonobvious code (NC), temporal decomposition and conjoined
 code (TC), and general versus special purpose (GS). A catalogue
 (`catalogue.md`) tags all 208 distinct findings of rounds 1 to 3 with
-Ousterhout's flags and their status. On 2026-11-07 the counts were:
+Ousterhout's flags and their status. At main `ca1431e` (after #14796,
+#14797 and #14800), with this section's owners, the 225 finding ids stand at:
 
-- 83 landed;
-- 118 assigned;
-- 5 refused;
-- 19 open with no owner;
-- of those 19, 3 held by the owner with #14773.
+- 93 landed;
+- 123 assigned;
+- 6 refused;
+- 3 open, all held by the owner with #14773.
 
 The flags that cluster in one package point to one cause each:
 
