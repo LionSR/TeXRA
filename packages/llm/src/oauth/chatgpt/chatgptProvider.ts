@@ -318,21 +318,22 @@ const hostId = Effect.fn('chatgpt.hostId')(function* (
 const CHATGPT_POLICY = Object.freeze<SubscriptionOAuthPolicy<ChatgptSession>>({
   secretKey: CHATGPT_SESSION_SECRET_KEY,
   sessionSchema: ChatgptSessionSchema,
-  tokenEndpoint: {
+  tokenEndpoint: Object.freeze({
     tokenUrl: CHATGPT_TOKEN_URL,
     // Every stored session carries the client it registered; this is only
     // the registration id the first authorize request names.
     clientId: REGISTRATION_CLIENT_ID,
     tokenResponseSchema: SubscriptionTokenResponseSchema,
-    params: { resource: CHATGPT_RESOURCE },
-  },
+    params: Object.freeze({ resource: CHATGPT_RESOURCE }),
+  }),
   notSignedInMessage: 'Not signed in with ChatGPT. Run sign-in first.',
-  authorize: {
+  authorize: Object.freeze({
     url: CHATGPT_AUTHORIZE_URL,
     scope: CHATGPT_SCOPE,
-    redirectUri: (port) => `http://127.0.0.1:${port}${CHATGPT_CALLBACK_PATH}`,
-    params: { resource: CHATGPT_RESOURCE },
-  },
+    redirectUri: (port: number) =>
+      `http://127.0.0.1:${port}${CHATGPT_CALLBACK_PATH}`,
+    params: Object.freeze({ resource: CHATGPT_RESOURCE }),
+  }),
   // A returning sign-in reauthorizes the registered client and sends no name
   // hint, which only a registration takes.
   registration: Effect.fnUntraced(function* (secrets) {
