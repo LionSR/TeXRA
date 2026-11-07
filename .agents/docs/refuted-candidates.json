@@ -271,7 +271,6 @@
       ]
     },
     {
-<<<<<<< HEAD
       "id": "RT-listing-entry-actions",
       "candidate": "the run listing entry carries RunView.actions (runActions) in place of resumable/resumeBlocked, so listRuns stops calling deriveResumability",
       "why": "The two answer different questions. The listing's resumable is deriveResumability's checkpoint: a run that continues from its rows whatever its outcome, so a completed conversation is listed resumable and the CLI resume list enables it, and resumeBlocked carries why rows cannot be continued here (an earlier build, damaged rows, a plugin this process does not load). runActions offers resume only on an interrupted loop-driven run or an unfinished script, and reads the view, which holds no plugin facts, so the listing would disable every finished conversation and lose the blocked reason (packages/harness/example/10-external-plugin.ts asserts it). continuesFromRows is the shared rule both read on purpose, not a second decider.",
@@ -281,7 +280,10 @@
           "file": "packages/harness/src/agent/storage/runListing.ts",
           "symbol": "listRuns",
           "signature": "export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<AgentRunListingEntry[], Error, SessionLog | SessionViewAccess> {…})"
-=======
+        }
+      ]
+    },
+    {
       "id": "DOC-user-edit-on-task-run",
       "candidate": "the user's Accept-time edit recorded on the document task's own run: the revision record gains `userEdit: { round, diff } | null`, written by the progress view's Accept (ProgressWorkflowFileActionsController.userEdit), and document_context reads it into the next revision's prompt",
       "why": "No supported write reaches the run's documents fact from the host's Accept path. A run's `plugin.fact` rows are committed only by the run's own tool calls (`ToolResult.facts`, in the call's `tool.result` batch); the one other plugin write, `RequestDecisionHook.commit`, runs only while a pending plugin request of the run is being decided and commits facts about the plugin's own aggregate (`ownFactRow` hangs them under the run as `plugin:<aggregate>`), which `RunView.facts` and `documentRoundsOf` never read. A host-side append to an ended run would be a new session-store write path in the harness. It would also have no reader: Accept acts on outputs the task already proposed, a completed recipe does not run another revision on resume, a fork drops the documents fact (`fork: 'drop'`), and Run again is a new run with fresh documents. An Accept while the task still runs would race the recipe's whole-list commit (`withRound`), which drops the other writer's change. The launcher note #14713 sends (`followUpLauncher`) is the reader that exists; a task with no launcher has no later turn to read the edit.",
@@ -296,7 +298,6 @@
           "file": "packages/harness/src/tools/plugins.ts",
           "symbol": "ownFactRow",
           "signature": "export const ownFactRow = ( { aggregate, ...fact }: ToolFact & { readonly aggregate: string }, runId: RunId, ): OwnFactRow => ({…});"
->>>>>>> origin/main
         }
       ]
     }
