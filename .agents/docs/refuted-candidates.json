@@ -526,6 +526,34 @@
           "signature": "private get inquiry(): InquiryRequest {…}"
         }
       ]
+    },
+    {
+      "id": "RT-tui-approve-handler",
+      "candidate": "the terminal chat answers its prompts through an approve handler attached to its session (SessionHost.approve), so the modal is on screen exactly while its fiber runs and decided, reopenRequest and the useOwnApiKey host-capability slot go",
+      "why": "Every chat is a client of the background service by default, and a service-backed session refuses an approve handler: serviceSession.ts line 636, attach dies with \"approve handlers are not supported on a service-backed session; the service's windows answer prompts\". Every window, the terminal chat included, answers a prompt with request.decide from its view; that one path is the design. A second path, an approval capability in the host-call protocol plus a rule for which attached window answers, is refused, and so is an approve handler on the chat's own-session fallback alone, which would be a second implementation beside request.decide. The ten-minute APPROVAL_HANDLER_TIMEOUT that would have denied a waiting person was deleted in #14772, so no clock argues for the move either. decided, reopenRequest and the useOwnApiKey slot stay because the terminal chat answers with request.decide: decided hides a request between the key press and its request.decided row, reopenRequest shows it again when the decide is refused, and the slot runs the own-key retry, whose controller lands the decision itself once the key is in place. Found as F2 (2026-11-05 design red flags, F-hosts.md) and section 1.1 of the PR 1 compromises; refused by the coordinator of the hosts round.",
+      "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/F-hosts.md#f2-approvals-the-harnesss-answer-loop-is-reimplemented-twice-in-the-cli-with-a-client-side-decided-flag",
+      "symbols": [
+        {
+          "file": "packages/texra/src/controllers/server/serviceSession.ts",
+          "symbol": "serviceSession.attach",
+          "signature": "attach: (host) => host.approve === undefined ? attachWindowHost(link, workspace, { emit: host.emit }) : Effect.die( new Error( \"approve handlers are not supported on a service-backed session; the service's windows answer prompts\", ), ),"
+        },
+        {
+          "file": "packages/cli/src/chat/tui/state/approvalQueue.ts",
+          "symbol": "decided",
+          "signature": "const decided = signal<ReadonlySet<string>>(new Set());"
+        },
+        {
+          "file": "packages/cli/src/chat/tui/state/approvalQueue.ts",
+          "symbol": "reopenRequest",
+          "signature": "export function reopenRequest(requestId: string): void {…}"
+        },
+        {
+          "file": "packages/cli/src/chat/tui/state/approvalQueue.ts",
+          "symbol": "useHostCapability",
+          "signature": "export function useHostCapability( execute: (arm: HostCommand) => void, ): () => void {…}"
+        }
+      ]
     }
   ]
 }
