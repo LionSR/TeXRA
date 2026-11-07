@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 52
+Exports: 51
 
 - `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
@@ -26,8 +26,7 @@ Exports: 52
 - `isNotADirectoryError` — `function isNotADirectoryError: (err: unknown) => boolean`
 - `JsonConfigProvider` — `class JsonConfigProvider { constructor: new ({ workspace, global, local, catalog, }: JsonConfigProviderOptions) => JsonConfigProvider; static: ; instance: catalog: SettingsCatalog; get: <T>(key: string) => T; inspect: <T = unknown>(key: string) => Partial<Record<"globalValue" | "workspaceValue", T>>; update: <T>(key: string, value: T, target?: ConfigTarget) => Effect<void, ConfigWriteFailed, never> }`
 - `JsonConfigProviderOptions` — `interface JsonConfigProviderOptions { workspace: ConfigStore; global: ConfigStore; local: ConfigStore; catalog: SettingsCatalog; }`
-- `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, follow: boolean) => JsonStore; static: open: (filePath: string, options?: JsonStoreOptions | undefined) => Effect<JsonStore, Error, FileSystem | Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
-- `JsonStoreOptions` — `interface JsonStoreOptions { onUnreadable?: (error: Error) => void; follow?: boolean; }`
+- `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, version: string | undefined) => JsonStore; static: open: (filePath: string) => Effect<JsonStore, Error, FileSystem | Path>; unreadable: (filePath: string) => Effect<JsonStore, never, Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
 - `LOG_CHANNEL` — `const LOG_CHANNEL: "channel"`
 - `LogEntry` — `type LogEntry = ReturnType<typeof Logger.formatStructured.log>; ≡ { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }`
 - `LogSink` — `interface LogSink { write(entry: LogEntry): void; dispose?(): void; }`

@@ -253,15 +253,14 @@ export function loadCliStartupConfig(
   return Effect.provide(
     Effect.gen(function* () {
       const degradations: string[] = [];
-      // Following their files: a run that follows the project's settings
-      // (its approval policy, read at each decision) sees what another
-      // window or terminal saves while it runs.
+      // A run that follows the project's settings (its approval policy,
+      // read at each decision) sees what another window or terminal saves
+      // while it runs: the stores follow their files.
       const stores = yield* openTexraConfigStores(
         TEXRA_SETTINGS.catalog,
         storageRoot,
         cwd,
         (message) => degradations.push(message),
-        true,
       );
       // The user's MCP server config, which only a run declaring MCP tools
       // otherwise reads: a broken file warns here, not first mid-run.

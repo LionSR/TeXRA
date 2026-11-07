@@ -42,14 +42,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             mkdtempSync(path.join(tmpdir(), 'policy-')),
             'c.json',
           );
-          const follow = true;
-          const service = yield* JsonStore.open(file, { follow });
+          const service = yield* JsonStore.open(file);
           const windowB = yield* JsonStore.open(file);
           // The file holds the key as stored, under the catalog's namespace.
           const STORED_POLICY_KEY = `${TEXRA_SETTINGS.catalog.namespace}.${APPROVAL_POLICY_CONFIG_KEY}`;
           const config = new JsonConfigProvider({
-            workspace: yield* JsonStore.open(`${file}.workspace`, { follow }),
-            global: yield* JsonStore.open(`${file}.global`, { follow }),
+            workspace: yield* JsonStore.open(`${file}.workspace`),
+            global: yield* JsonStore.open(`${file}.global`),
             local: service,
             catalog: TEXRA_SETTINGS.catalog,
           });
