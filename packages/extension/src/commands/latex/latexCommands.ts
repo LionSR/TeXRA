@@ -97,7 +97,6 @@ export function handleIndentCurrentTeX(
       );
 
       if (success) {
-        yield* Effect.sleep(100);
         yield* showLoggedInfoMessage(
           CHANNEL,
           'LaTeX file indented successfully',

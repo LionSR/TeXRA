@@ -81,11 +81,11 @@ function promptForApiKey(
             ),
     ),
   );
+  // Disposing the input hides it, so an accepted value is followed by a
+  // second `accept(undefined)`; `Effect.callback` ignores every `resume`
+  // after the first, and `dispose` is idempotent.
   const answer = Effect.callback<string | undefined>((resume) => {
-    let settled = false;
     const accept = (value: string | undefined): void => {
-      if (settled) return;
-      settled = true;
       resume(Effect.succeed(value));
       ib.dispose();
     };

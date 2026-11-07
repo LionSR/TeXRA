@@ -27,7 +27,7 @@ const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
 
 /** Dismissing the browser-choice dialog cancels sign-in, matching this
- * repo's modal convention (e.g. authCommands.ts, compareCommands.ts). */
+ * repo's modal convention (e.g. authCommands.ts, compareFiles.ts). */
 class SubscriptionSignInCancelled extends Schema.TaggedError<SubscriptionSignInCancelled>()(
   'SubscriptionSignInCancelled',
   {},

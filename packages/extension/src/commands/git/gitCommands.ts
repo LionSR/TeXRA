@@ -10,7 +10,6 @@ import {
   type RootedFileSystem,
   WorkspaceFs,
 } from '@texra-ai/harness/host';
-import { executeCommand } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -29,9 +28,6 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { findCommand } from '@texra/utils/system/binaryResolver';
-import { COMMIT_HASH_PATTERN } from '@texra/utils/git/commitHashPattern';
-import { COMMIT_LABEL_FORMAT } from '@texra/utils/git/commitLogFormat';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 const CHANNEL = 'gitCommands';
@@ -48,50 +44,6 @@ const openUrl = (url: string) =>
         ),
       ),
     );
-
-export const findCommitInHistory = Effect.fn('findCommitInHistory')(function* (
-  roots: WorkspaceRoots,
-  commitHash: string,
-) {
-  if (typeof commitHash !== 'string') {
-    return null;
-  }
-
-  const sanitizedCommit = commitHash.trim();
-  if (!COMMIT_HASH_PATTERN.test(sanitizedCommit)) {
-    return null;
-  }
-
-  const workspacePath = roots.workspace;
-  if (!workspacePath) {
-    return null;
-  }
-
-  const gitOptions = {
-    cwd: workspacePath,
-    settings: roots,
-    quiet: true,
-  };
-  const verifyResult = yield* executeCommand(
-    ['git', 'rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
-    gitOptions,
-  );
-
-  if (!verifyResult.success) {
-    return null;
-  }
-
-  const labelResult = yield* executeCommand(
-    ['git', 'show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
-    gitOptions,
-  );
-
-  if (!labelResult.success) {
-    return sanitizedCommit;
-  }
-
-  return labelResult.stdout;
-});
 
 const promptInput = Effect.fn('promptInput')(function* (
   title: string,

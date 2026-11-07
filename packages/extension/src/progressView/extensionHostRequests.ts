@@ -25,13 +25,6 @@ import {
 } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
-import { handleCompare } from '@commands/latex/compareCommands';
-import { findCommitInHistory } from '@commands/git/gitCommands';
-import { openFile } from '@commands/files/openFileCommands';
-import {
-  createFileSelectionPickers,
-  getCurrentFile,
-} from '@commands/files/fileSelectionCommands';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
@@ -85,6 +78,12 @@ import {
   type HostRequestFailure,
   type RequestRefusal,
 } from '@texra/controllers/session/hostCallFailure';
+
+// Local file imports
+import { handleCompare } from './compareFiles';
+import { createFileSelectionPickers, getCurrentFile } from './fileSelection';
+import { findCommitInHistory } from './findCommit';
+import { openFile } from './openFile';
 
 const CHANNEL = 'ExtensionHostRequests';
 
