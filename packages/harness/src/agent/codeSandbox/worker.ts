@@ -163,15 +163,15 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
 
   yield* Effect.try({
     try: () => {
-      defineHostFunction(context, '__csIssue', (name, json, phase) => {
+      defineHostFunction(context, '__csIssue', (name, json, section) => {
         const seq = nextSeq++;
         ops.push({
           seq,
           name: context.getString(name),
           input: context.getString(json),
-          phase:
-            context.typeof(phase) === 'string'
-              ? context.getString(phase)
+          section:
+            context.typeof(section) === 'string'
+              ? context.getString(section)
               : null,
         });
         return context.newNumber(seq);

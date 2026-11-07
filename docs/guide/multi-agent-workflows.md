@@ -39,7 +39,7 @@ Called directly, the child runs in the background and its result reaches the lea
 A script is the body of an async JavaScript function. It calls tools with `await`, runs calls together with `Promise.all`, and recovers from failures with `try`/`catch`:
 
 ```js
-phase('Fix');
+section('Fix');
 const fixed = await Promise.allSettled(
   ['drafts/a.tex', 'drafts/b.tex'].map((file) =>
     document_task('Fix spelling errors only.', {
@@ -54,7 +54,7 @@ const correctedFiles = fixed
   .flatMap((result) =>
     result.value.changes.map((change) => change.absolutePath),
   );
-phase('Merge');
+section('Merge');
 return document_task('Merge the corrected drafts.', {
   agentName: 'merge',
   inputFiles: correctedFiles,
@@ -71,7 +71,7 @@ What a script can use:
 | `document_task(prompt, options)` | Runs one agent's document task and waits for it. Resolves to `{ changes, runId, outcome, cost }`: `changes` lists every revision's files in order, each with `path` (the workspace file) and `absolutePath` (the revised copy). Takes the same options as the `document_task` tool. With `background: true` it resolves to `{ runId }` at once.                                                                                                                                                     |
 | `self(prompt, options)`          | Runs this agent again and waits for it: forked from the conversation as it stood when the script started, or from `prompt` alone with `fork: false`. Resolves as `agent()` does; `schema` and `label` work as for `agent()`.                                                                                                                                                                                                                                                                        |
 | `tools.<name>(args)`             | Calls any other tool the lead has, with the same arguments as a direct call, and resolves to `{ output, summary }`.                                                                                                                                                                                                                                                                                                                                                                                 |
-| `phase(title)`                   | Groups the calls that follow under a title in the progress view.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `section(title)`                 | Groups the calls that follow under a title in the progress view.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `console.log(...)`               | Writes a line to the script's card; the last 80 lines return to the lead with the result.                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `searchTools`, `describeTool`    | Find a tool by keyword and read its full declaration.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
@@ -88,7 +88,7 @@ The lead reads the bundled `multi-agent-orchestration` skill for how to shape th
 ## What a run looks like
 
 1. **One approval for the script.** Before anything runs, the script is shown as a request with its title and full source. Approving it covers every `agent` and `document_task` call the script makes. **Approve** (`y`) runs it; the ▾ next to it offers **Approve all agent work in this task** (`a`), which also stops asking about later agent work, file edits, and shell commands in the task. **Reject** (`n`) declines in one click, and **Add a note…** lets you tell the lead what to change.
-2. **Calls grouped by phase.** The script's card holds one card per call, grouped by the `phase()` that was current when the call was made. Each shows the agent and model, the files it was handed, and its status: running, finished, reused (an identical call already finished, so nothing ran again), skipped, or failed. A finished call adds its elapsed time and cost. When a child is waiting on you, such as a file edit to approve, **Review** takes you to it.
+2. **Calls grouped by section.** The script's card holds one card per call, grouped by the `section()` that was current when the call was made. Each shows the agent and model, the files it was handed, and its status: running, finished, reused (an identical call already finished, so nothing ran again), skipped, or failed. A finished call adds its elapsed time and cost. When a child is waiting on you, such as a file edit to approve, **Review** takes you to it.
 3. **Open a child run.** A call's card opens the child run it launched, with its own transcript.
 4. **Skip a call.** Stopping a child run skips its call: the call rejects with `Skipped` in the script, which then carries on or stops depending on how it handles failures. A skipped call is not retried for you; ask the lead if you want it redone.
 5. **A result when it finishes.** The lead receives the script's return value and its last log lines. Document task outputs land in run storage like any other delegated run; the lead reviews them and uses `accept_run_files` to bring them into the workspace.
@@ -123,7 +123,7 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 **The global switch.** The **Multi-Agent Workflow** switch on **Settings → Plugins** gates `agent`: when it is off, `agent` is removed from every agent's tool list, whatever the agent's configuration says. `document_task` is not behind this switch. It is on by default; in the terminal client, the same switch is the **Multi-Agent Workflow** row in `/plugins`.
 
-**Hosts.** The VS Code extension, the desktop app, and the CLI show the script request, the calls grouped by phase, and the result. In a headless `texra run`, no approval prompt can be shown, so the approval policy you pass decides the script request and what its child agents may edit or execute.
+**Hosts.** The VS Code extension, the desktop app, and the CLI show the script request, the calls grouped by section, and the result. In a headless `texra run`, no approval prompt can be shown, so the approval policy you pass decides the script request and what its child agents may edit or execute.
 
 ## Troubleshooting
 

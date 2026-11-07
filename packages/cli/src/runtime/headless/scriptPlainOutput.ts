@@ -32,8 +32,8 @@ interface ScriptPlainOutputOptions {
   readonly beforeWrite?: () => void;
 }
 
-/** The lines a run's script stages say (`scriptStages`): each phase's
- *  heading and each call's line, keyed by the stage, phase and call, and a
+/** The lines a run's script stages say (`scriptStages`): each section's
+ *  heading and each call's line, keyed by the stage, section and call, and a
  *  background script run's outcome. */
 function scriptPlainLines(
   run: RunView,
@@ -42,10 +42,10 @@ function scriptPlainLines(
   const lines = new Map<string, string>();
   for (const stage of scriptStages(run, view)) {
     for (const call of stage.calls) {
-      if (call.phase !== null)
+      if (call.section !== null)
         lines.set(
-          `${stage.id}:phase:${call.phase}`,
-          `${STATUS_DIAMOND} ${call.phase}`,
+          `${stage.id}:section:${call.section}`,
+          `${STATUS_DIAMOND} ${call.section}`,
         );
       lines.set(call.id, scriptCallLine(call));
     }

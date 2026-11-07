@@ -456,7 +456,7 @@ describe('applyRunRows', () => {
             replay: 'unsafe',
             logId: 'log-s0',
             stageId: 'stage-s',
-            phase: null,
+            section: null,
           },
         },
         settlement('call-a/0', {

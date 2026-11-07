@@ -352,7 +352,7 @@ const cardRows = (
             card: dispatch.step.registry
               .get(fact.toolName)
               ?.definition.card?.(ran),
-            ...(script?.phase != null ? { phase: script.phase } : {}),
+            ...(script?.section != null ? { section: script.section } : {}),
             ...(attempt > 1 ? { attempt } : {}),
           }),
         ]),
@@ -835,7 +835,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
       replay: answer !== undefined ? 'safe' : (tool?.replay ?? 'unsafe'),
       logId: crypto.randomUUID(),
       stageId: `script-${script.logId}`,
-      phase: op.phase,
+      section: op.section,
     };
     const { title } = source;
     const call: Call = {

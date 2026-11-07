@@ -136,8 +136,8 @@ export interface ToolRow extends TranscriptRowBase {
   /** The decoded durable payload the row was built from, without live
    *  output: what a conversation export formats. */
   readonly log: ToolUseLog;
-  /** A script's call's phase, as its card's `tool.start` names it. */
-  readonly phase?: string;
+  /** A script's call's section, as its card's `tool.start` names it. */
+  readonly section?: string;
   /** The call's attempt, from the second on (its card's `tool.start`). */
   readonly attempt?: number;
   /** The run waited or ended while the call was open: the call never

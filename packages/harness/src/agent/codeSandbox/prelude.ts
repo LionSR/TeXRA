@@ -17,7 +17,7 @@ export const BRIDGE_PRELUDE = `
   const log = globalThis.__csLog;
   const done = globalThis.__csDone;
   const config = JSON.parse(globalThis.__csConfig);
-  let currentPhase = null;
+  let currentSection = null;
   for (const name of ['__csIssue', '__csLog', '__csDone', '__csConfig']) {
     delete globalThis[name];
   }
@@ -48,15 +48,15 @@ export const BRIDGE_PRELUDE = `
         new RealTypeError(label + '() takes a JSON-serializable argument.'),
       );
     }
-    const seq = issue(name, json, currentPhase);
+    const seq = issue(name, json, currentSection);
     return new RealPromise((resolve, reject) => pending.set(seq, { resolve, reject }));
   };
   const tools = Object.create(null);
   for (const name of config.tools) tools[name] = (input) => call(name, input, 'tools.' + name);
   define('tools', freeze(tools));
   for (const name of config.globals) define(name, (...args) => call(name + '()', args, name));
-  define('phase', (title) => {
-    currentPhase = String(title);
+  define('section', (title) => {
+    currentSection = String(title);
   });
   const show = (value) => {
     if (typeof value === 'string') return value;

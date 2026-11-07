@@ -51,9 +51,9 @@ export const TraceRowFieldsSchema = Schema.Union([
     logId: Schema.String,
     toolName: Schema.String,
     input: JsonValueSchema,
-    /** A script's call: the guest's latest `phase()` title when it issued
-     *  the call (`script.call.phase`). */
-    phase: Schema.optional(Schema.String),
+    /** A script's call: the guest's latest `section()` title when it issued
+     *  the call (`script.call.section`). */
+    section: Schema.optional(Schema.String),
     /** The intent attempt the card opens for, from the second on. */
     attempt: Schema.optional(
       Schema.Int.check(Schema.isGreaterThanOrEqualTo(2)),

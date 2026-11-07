@@ -34,7 +34,7 @@ type ScriptCallStatus =
 export interface ScriptCallCard {
   readonly seq: number;
   readonly toolName: string;
-  readonly phase: string | null;
+  readonly section: string | null;
   readonly attempt: number;
   readonly status: ScriptCallStatus;
   readonly reusedFrom: string | null;
@@ -76,7 +76,7 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
     [...settled.values()].find(({ callId }) => !callId.includes('/')) ?? null;
   const calls = scriptCalls.flatMap((call): ScriptCallCard[] => {
     if (call.toolName.endsWith('()')) return [];
-    const { seq, toolName, phase, callId } = call;
+    const { seq, toolName, section, callId } = call;
     const result = settled.get(callId);
     const error =
       result?.result.status === 'error' ? result.result.error : null;
@@ -84,7 +84,7 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
       {
         seq,
         toolName,
-        phase,
+        section,
         attempt: result?.attempt ?? 1,
         status: statusOf(result),
         reusedFrom:
@@ -213,7 +213,7 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
   return {
     name,
     outcome,
-    phaseCount: new Set(calls.flatMap(({ phase }) => phase ?? [])).size,
+    sectionCount: new Set(calls.flatMap(({ section }) => section ?? [])).size,
     tally,
     costUsd: view.runs.get(runId)?.treeUsage.cost ?? 0,
     durationMs: Math.max(0, Math.round(now - startedAt)),

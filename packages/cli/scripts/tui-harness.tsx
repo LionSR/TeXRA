@@ -1081,7 +1081,7 @@ function makeAgentProposalPayload(): AgentProposalRequest {
           script: {
             title: 'Review and fix chapter 2',
             source: [
-              "phase('Review')",
+              "section('Review')",
               'const reviews = await Promise.all(',
               "  ['A', 'B'].map((name) =>",
               "    agent(`Review chapter 2 as referee ${name}.`, { agentName: 'review' }),",

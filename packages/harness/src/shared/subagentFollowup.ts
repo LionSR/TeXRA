@@ -161,7 +161,7 @@ function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
   let marker = '✗';
   if (summary.outcome === 'completed') marker = clean ? '✓' : '!';
   const facts = [
-    `${formatResultCount(summary.phaseCount, 'phase')}`,
+    `${formatResultCount(summary.sectionCount, 'section')}`,
     formatScriptTally(tally),
     formatCostUsd(summary.costUsd),
     formatCompactDuration(summary.durationMs),

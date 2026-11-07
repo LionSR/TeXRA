@@ -1,7 +1,7 @@
 /**
  * `<script-stage>`: the calls one `script` call issued, painted from the
  * shared script-stage model (`scriptStages` in `@texra-ai/harness/transcript`): the card's
- * summary line, then each phase's calls as plain rows in issue order. An
+ * summary line, then each section's calls as plain rows in issue order. An
  * `agent` row opens its child run; Review opens the run that is asking;
  * "Stop this agent", in a running row's menu, stops the call's child, which
  * the call then answers as `Skipped`. "Log" opens the calls' own cards
@@ -81,7 +81,7 @@ const scriptStageStyles = css`
     color: var(--wa-color-text-normal);
   }
 
-  .phase {
+  .section {
     padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
     font-weight: var(--wa-font-weight-semibold);
   }
@@ -358,15 +358,15 @@ export class ScriptStage extends LitElement {
       }
       <div role="list">
         ${repeat(
-          this.stage.phases,
-          (phase) => phase.title ?? '',
-          (phase) =>
+          this.stage.sections,
+          (section) => section.title ?? '',
+          (section) =>
             html`${
-              phase.title === null
+              section.title === null
                 ? nothing
-                : html`<div class="phase"><bdi>${phase.title}</bdi></div>`
+                : html`<div class="section"><bdi>${section.title}</bdi></div>`
             }${repeat(
-              phase.calls,
+              section.calls,
               (call) => call.id,
               (call) => this.renderCall(call),
             )}`,

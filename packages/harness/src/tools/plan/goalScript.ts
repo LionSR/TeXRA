@@ -56,7 +56,7 @@ export const goal = async (objective, { maxCostUsd }) => {
   let report = '';
   let spent = 0;
   for (let round = 1; ; round += 1) {
-    phase('Round ' + round);
+    section('Round ' + round);
     const previous = round === 1 ? '' : '\n\n<previous_round round="' + (round - 1) + '">\n' + report + '\n</previous_round>';
     const paused = (pause) => ({ outcome: 'paused', pause, rounds: round, spent, report });
     let reply;

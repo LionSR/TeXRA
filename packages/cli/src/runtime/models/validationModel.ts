@@ -66,7 +66,7 @@ const SCRIPT_FANOUT_VALIDATION_SOURCE = `const schema = {
     check: { type: 'string' },
   },
 }
-phase('Solve')
+section('Solve')
 const results = await Promise.allSettled([
   agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', agentName: 'prover', label: 'Solve the Diophantine equation', schema }),
   agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', agentName: 'prover', label: 'Classify the matrix', schema }),
@@ -78,7 +78,7 @@ return { solutions: results.map((result) => result.status === 'fulfilled' ? resu
  *  command, then an agent it defines (`persona`). The calls run one after
  *  the other so their rows commit in one order and every generation of the
  *  store is the same; concurrent calls are the crash run's script. */
-const GOLDEN_SCRIPT_SOURCE = `phase('Gather')
+const GOLDEN_SCRIPT_SOURCE = `section('Gather')
 const [found] = await searchTools('read a file', { limit: 1 })
 const declaration = await describeTool(found.name)
 const notes = await tools[found.name]({ path: 'notes.tex' })
@@ -87,14 +87,14 @@ return { found: found.name, documented: declaration.includes('path: string'), no
 
 /** The crash suite's background script: one awaited `agent()` call, whose
  *  child the background script run owns. */
-const GOLDEN_BACKGROUND_SOURCE = `phase('Deliver')
+const GOLDEN_BACKGROUND_SOURCE = `section('Deliver')
 const child = await agent('Background child: answer.', { agentName: 'golden_child', label: 'Child' })
 return { delivered: child.response }`;
 
 /** The crash-point conformance run's script: a read and a command in one
  *  `Promise.all`, then an awaited `agent()` call, whose child the call owns
  *  (`run.start.parent.call`). */
-const GOLDEN_CRASH_SOURCE = `phase('Gather')
+const GOLDEN_CRASH_SOURCE = `section('Gather')
 const [notes, shell] = await Promise.all([
   tools.read_file({ path: 'notes.tex' }),
   tools.bash({ command: 'echo script >> effects.log', description: 'Record the script effect' }),
