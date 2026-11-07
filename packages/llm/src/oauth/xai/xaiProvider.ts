@@ -208,7 +208,6 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
     tokenResponseSchema: XaiTokenResponseSchema,
   },
   notSignedInMessage: 'Not signed in with Grok. Run sign-in first.',
-  sessionChangedMessage: 'Grok session changed while refreshing. Try again.',
   // xAI pins one redirect port, so the bind's port is ignored.
   authorize: {
     url: XAI_AUTHORIZE_URL,

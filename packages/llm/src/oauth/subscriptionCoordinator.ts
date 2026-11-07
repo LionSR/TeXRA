@@ -120,7 +120,6 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
   /** Form token endpoint the token grants go to. */
   readonly tokenEndpoint: OAuthFormEndpoint;
   readonly notSignedInMessage: string;
-  readonly sessionChangedMessage: string;
   /** The provider's authorize endpoint, for the PKCE code flow (`./pkce.ts`). */
   readonly authorize: {
     readonly url: string;

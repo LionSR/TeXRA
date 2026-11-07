@@ -120,9 +120,7 @@ const forkNow = <A>(
 /**
  * A refresh grant that parks until the test resolves `pending` with the
  * endpoint's response. `refreshStarted` completes once the grant has been
- * posted. The coordinator runs the refresh on a detached fiber, which the
- * scheduler starts on a later `setImmediate`, so no fixed wait on the test's
- * side is ordered before it.
+ * posted, so the test's next step is ordered after it.
  */
 function parkedRefresh() {
   const pending = createDeferred<Response>();
@@ -154,7 +152,7 @@ const freshToken = (coordinator: SubscriptionCoordinator<ChatgptSession>) =>
   Effect.map(coordinator.getFreshSession(), (fresh) => fresh.accessToken);
 
 describe('ChatGPT session coordinator', () => {
-  it.effect('single-flights concurrent refreshes', () =>
+  it.effect('refreshes once for concurrent callers', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
       const { pending, refreshTokens, refreshStarted } = parkedRefresh();
@@ -162,7 +160,8 @@ describe('ChatGPT session coordinator', () => {
 
       const a = yield* forkNow(freshToken(coordinator));
       const b = yield* forkNow(freshToken(coordinator));
-      // Both callers reached the shared refresh synchronously when forked.
+      // The second caller waits on the lock while the first refreshes, then
+      // finds the refreshed session.
       yield* refreshStarted;
 
       pending.resolve(jsonResponse(tokenResponse()));
@@ -201,14 +200,13 @@ describe('ChatGPT session coordinator', () => {
       const token = yield* forkNow(freshToken(coordinator));
       yield* refreshStarted;
 
-      yield* withHttp(coordinator.signOut());
+      // The sign-out waits for the exchange in flight, then deletes what it
+      // stored.
+      const signedOut = yield* forkNow(coordinator.signOut());
       pending.resolve(jsonResponse(tokenResponse()));
 
-      const error = yield* joinFailure(token);
-      expect(error).toMatchObject({
-        kind: 'expired',
-        needsReauth: true,
-      });
+      expect(yield* Fiber.join(token)).toBe('access-1');
+      yield* Fiber.join(signedOut);
       expect(storage.peek()).toBeUndefined();
     }),
   );
@@ -224,16 +222,20 @@ describe('ChatGPT session coordinator', () => {
         const token = yield* forkNow(freshToken(coordinator));
         yield* refreshStarted;
 
-        // A sign-in that finished stores its grant the same way.
-        yield* coordinator.storeTokens(
-          tokenResponse({
-            access_token: 'access-new',
-            refresh_token: 'refresh-new',
-          }),
+        // A sign-in that finished stores its grant the same way, after the
+        // exchange in flight.
+        const signedIn = yield* forkNow(
+          coordinator.storeTokens(
+            tokenResponse({
+              access_token: 'access-new',
+              refresh_token: 'refresh-new',
+            }),
+          ),
         );
         pending.resolve(revoked());
 
         const error = yield* joinFailure(token);
+        yield* Fiber.join(signedIn);
         expect(error).toMatchObject({
           kind: 'fatal',
           needsReauth: true,
