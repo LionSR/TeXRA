@@ -2,7 +2,11 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Predicate } from 'effect';
 
-import { createRunStorageLocation, Settings } from '@texra-ai/harness/host';
+import {
+  createRunStorageLocation,
+  Settings,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import {
@@ -12,8 +16,7 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@texra-ai/harness/schemas';
-import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
-import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
+import { latexdiff } from '@latex/latexdiff';
 import {
   latexdiffPairs,
   type LatexdiffPair,
@@ -76,8 +79,6 @@ const notRun = (reason: string): RoundLatexdiffs => ({
 });
 
 export class LatexDiffManager {
-  private readonly latexdiffService: LaTeXdiffService;
-
   private readonly logger: AgentTrace;
   private readonly runId: RunId;
   private readonly fileService: RunFileService;
@@ -93,7 +94,6 @@ export class LatexDiffManager {
     this.runId = runId;
     this.fileService = fileService;
     this.roots = roots;
-    this.latexdiffService = new LaTeXdiffService(runId, roots);
   }
 
   /**
@@ -114,26 +114,6 @@ export class LatexDiffManager {
       .pipe(Effect.orElseSucceed(() => location.absolutePath));
     return path.dirname(resolved);
   });
-
-  private logLatexdiffResult(result: LaTeXdiffResult, operation: string): void {
-    if (result.success) {
-      this.logger.debug('Successfully generated diff file', {
-        data: { operation, diffPath: result.diffPath },
-      });
-      return;
-    }
-
-    if (result.reason === 'missing-document-environment') {
-      this.logger.debug(`Skipping ${operation}`, {
-        data: result.message,
-      });
-      return;
-    }
-
-    this.logger.warn(`Failed to generate ${operation}`, {
-      data: result.message,
-    });
-  }
 
   /**
    * Mirror an existing workspace dependency into run storage so latexdiff's
@@ -248,17 +228,7 @@ export class LatexDiffManager {
       const entries: LatexdiffEntry[] = [];
       const artifacts: RunStorageFileLocation[] = [];
       for (const pair of pairs) {
-        const outcome = yield* this.runSingleDiff(
-          pair,
-          pair.baseRound === null
-            ? { suffix: '_diff', label: 'round-diff', pdfStemSuffix: '-diff' }
-            : {
-                suffix: buildBetweenRoundDiffSuffix(currRound, pair.baseRound),
-                label: 'between-rounds-diff',
-                pdfStemSuffix: '-round-diff',
-              },
-          roundDiffDirectory,
-        );
+        const outcome = yield* this.runSingleDiff(pair, roundDiffDirectory);
         entries.push(outcome.entry);
         if (outcome.artifact) artifacts.push(outcome.artifact);
       }
@@ -278,16 +248,16 @@ export class LatexDiffManager {
   }
 
   /**
-   * One pair's latexdiff and its compiled PDF: `suffix` names the diff file,
-   * `label` the log lines, `pdfStemSuffix` the published PDF. The diff is
+   * One pair's latexdiff and its compiled PDF, published with a `-diff` stem
+   * suffix against the starting document and `-round-diff` against the
+   * previous round. The diff is
    * written under `roundDiffDirectory` at its document's own folder, as the
    * round's output is under `r{round}/`: the diff file is named by the
    * document's file name, so `a/main.tex` and `b/main.tex` would otherwise
    * write the same `main_diff.tex`.
    */
   private runSingleDiff(
-    { revised, document, base, baseRound }: LatexdiffPair,
-    kind: { suffix: string; label: string; pdfStemSuffix: string },
+    { revised, document, base, baseRound, suffix }: LatexdiffPair,
     roundDiffDirectory: string,
   ): Effect.Effect<SingleDiffOutcome, never, DiffServices> {
     const relativePath = path.join(roundDiffDirectory, path.dirname(document));
@@ -302,10 +272,7 @@ export class LatexDiffManager {
       base,
       baseRound,
     };
-    const failed = (error: string): SingleDiffOutcome => ({
-      entry: { ...pair, status: 'failed', error },
-      artifact: null,
-    });
+    const label = baseRound === null ? 'round-diff' : 'between-rounds-diff';
     // One pair's failure is that pair's entry, never the round's: the
     // other pairs keep their diffs.
     return Effect.gen({ self: this }, function* () {
@@ -313,23 +280,23 @@ export class LatexDiffManager {
       yield* this.ensureWorkspaceDependency(revised.location);
 
       const cwd = yield* this.getWorkingDirectory(revised.location);
-      const result = yield* this.latexdiffService.runDiff(
-        base,
-        revised.location,
-        kind.suffix,
-        undefined,
-        { cwd, outputDirectory: diffDirectory.absolutePath },
-      );
-      this.logLatexdiffResult(result, kind.label);
-      if (!result.success) return failed(result.message);
+      const diffPath = yield* latexdiff(base, revised.location, {
+        roots: this.roots,
+        cwd,
+        suffix,
+        outputDirectory: diffDirectory.absolutePath,
+      }).pipe(withLogChannel(this.runId));
+      this.logger.debug('Successfully generated diff file', {
+        data: { operation: label, diffPath },
+      });
 
       const compiled = yield* this.compileDiff(
-        result.diffPath,
+        diffPath,
         base,
         diffDirectory,
         revised.round,
         revised.location,
-        kind.pdfStemSuffix,
+        baseRound === null ? '-diff' : '-round-diff',
       );
       return {
         entry: { ...pair, status: 'ok', diff: compiled.diffLocation },
@@ -337,13 +304,19 @@ export class LatexDiffManager {
       } satisfies SingleDiffOutcome;
     }).pipe(
       Effect.catch((error) =>
-        Effect.sync(() => {
+        Effect.sync((): SingleDiffOutcome => {
           const message = toErrorMessage(error);
-          this.logger.warn(
-            `${kind.label} failed for ${fileLocationDisplayPath(revised.location)}: ${message}`,
-            { data: error },
-          );
-          return failed(message);
+          const line = `${label} failed for ${fileLocationDisplayPath(revised.location)}: ${message}`;
+          // An input that is no whole document has nothing to mark up.
+          if (Predicate.isTagged(error, 'NoDocumentEnvironment')) {
+            this.logger.debug(line, { data: error });
+          } else {
+            this.logger.warn(line, { data: error });
+          }
+          return {
+            entry: { ...pair, status: 'failed', error: message },
+            artifact: null,
+          };
         }),
       ),
     );

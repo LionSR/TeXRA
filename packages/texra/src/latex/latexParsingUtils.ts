@@ -44,7 +44,7 @@ export function ensureExtension(filePath: string, extension: string): string {
  * lowercase and sentence-case (`\Citep`) spellings. Single source for the two
  * consumers that used to keep disjoint lists — citation-key extraction
  * (`extractBibliography`) and latexdiff's `--exclude-textcmd`
- * (`diffCommandExecutor`) — where a macro known to one but not the other means
+ * (`latexdiff`) — where a macro known to one but not the other means
  * either a citation key silently missed or a bibliography marked up as prose.
  *
  * Sentence-case forms are generated, not listed: the ones no package defines

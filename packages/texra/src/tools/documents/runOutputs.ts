@@ -1,31 +1,10 @@
-/**
- * The documents plugin's read of a run's output files for the hosts'
- * latexdiff orchestration, and where the toolbar's Pack puts them.
- */
+/** Where the toolbar's Pack puts a run's files. */
 import * as path from 'node:path';
 
 import { agentFileName, type RunId } from '@texra-ai/harness/schemas';
 import { HISTORY_DIR } from '@housekeeping/constants';
 import { generateTimestamp } from '@housekeeping/utils';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
-import { documentsOf } from '@texra/shared/plugins/documents';
-import {
-  type ReadonlyRoundIndexed,
-  type OutputFileInfo,
-} from '@texra/shared/plugins/documentOutputs';
-import type { SessionView } from '@texra-ai/harness/schemas';
-
-/**
- * One run's recorded output files by round, from a view of the session that
- * holds it: a document task's documents, which hosts hand to latexdiff.
- */
-export function runOutputFiles(
-  view: SessionView,
-  runId: RunId,
-): ReadonlyRoundIndexed<OutputFileInfo> {
-  const run = view.runs.get(runId);
-  return run === undefined ? {} : documentsOf(run).files;
-}
 
 /**
  * Where the toolbar's Pack snapshots a run's directory: a workspace-relative

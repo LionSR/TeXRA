@@ -25,7 +25,7 @@ vi.mock('@utils/system/execUtils', () => ({
   executeCommand: mocks.executeCommand,
 }));
 
-describe('LaTeXdiffService shadow output', () => {
+describe('latexdiff shadow output', () => {
   const tempDirs = useTempDirs();
 
   // #13191: a failed diff's message is written verbatim into the run
@@ -73,29 +73,27 @@ describe('LaTeXdiffService shadow output', () => {
         }),
       );
 
-      const { LaTeXdiffService } = yield* Effect.promise(
+      const { latexdiff } = yield* Effect.promise(
         () => import('@latex/latexdiff'),
       );
-      const result = yield* new LaTeXdiffService(
-        'test',
-        testWorkspaceRoots(),
-      ).runDiff(
-        createExternalLocation(path.join(sourceDir, 'base.tex')),
-        createExternalLocation(path.join(sourceDir, 'revised.tex')),
-        '_diff',
-        undefined,
-        {
-          cwd: testWorkspaceRoots().workspace,
-          outputDirectory: path.join(tempDir, 'executions', 'run-1', 'diff'),
-        },
+      const error = yield* Effect.flip(
+        latexdiff(
+          createExternalLocation(path.join(sourceDir, 'base.tex')),
+          createExternalLocation(path.join(sourceDir, 'revised.tex')),
+          {
+            roots: testWorkspaceRoots(),
+            cwd: testWorkspaceRoots().workspace,
+            suffix: '_diff',
+            outputDirectory: path.join(tempDir, 'executions', 'run-1', 'diff'),
+          },
+        ),
       );
 
-      expect(result.success).toBe(false);
       // The failure must come from the scrubbed subprocess path, not an
       // earlier input guard.
-      expect(result.message).toContain('Failed to run');
-      expect(result.message).not.toContain('sk-abcdefghijklmnop1234');
-      expect(result.message).not.toContain('tok.en-123');
+      expect(error.message).toContain('Failed to run');
+      expect(error.message).not.toContain('sk-abcdefghijklmnop1234');
+      expect(error.message).not.toContain('tok.en-123');
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
