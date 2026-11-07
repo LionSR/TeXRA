@@ -174,8 +174,10 @@ is present:
 
 The cost a caller sees: `sessionStore.transaction` returns only after the
 `deliver` tail has re-read and decoded its commit and the view has folded
-the `readInputBatch` re-read (`:160-163`); `settled` (16 call sites in 13
-files) additionally enqueues an ordering job and waits for the third
+the `readInputBatch` re-read (`:160-163`); `settled` (6 callers:
+`toolUse.ts:469`, `leftoverChildren.ts:139`, `Inbox.ts:169`, `bash.ts:234`,
+`runTrace.ts:341`, `runHandle.ts:127`, and the SDK's forwarder
+`sessionReads.ts:244`) additionally enqueues an ordering job and waits for the third
 reader. A request's answer is found by re-reading the tail
 (`agent/runtime/requests.ts:327`, `decisionOf`) though this process wrote
 the `request.decided`. A deletion marker returned in memory by
@@ -632,8 +634,8 @@ Checked against `node_modules/effect` 4.1.2.
 ## Verified
 
 - Every TeXRA path and line cited was read at `fcb53f7`; symbol counts were
-  taken with `grep -rn` over `packages/harness/src` (`settled`: 16 sites in
-  13 files; `log.now()`: 4; `log.tail` consumers: `requests.ts`,
+  taken with `grep -rn` over `packages/harness/src` (`SessionLog.settled`: 6
+  callers and one forwarder, other `settled` words excluded; `log.now()`: 4; `log.tail` consumers: `requests.ts`,
   `followUpMessages.ts`, `runHandle.ts`, `sessionReads.ts`; `accepts:`
   implementers: 1).
 - The B2/B3/B6/R1 status was checked against #14769's body (its R1 section
