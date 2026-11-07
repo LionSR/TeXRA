@@ -46,15 +46,19 @@ interface Route {
   /** The one recovery probe a cooling route lets through at a time; a
    *  cooling route's calls queue on it. */
   readonly probe: Semaphore.Semaphore;
+  /** How many times the route has cooled: a call admitted healthy proves
+   *  nothing about a cooling that came after its admission. */
+  cooled: number;
   /** Failures since the last success admitted while healthy. */
   failures: number;
   /** When the cooling route's next probe may go. */
   retryAt: number;
 }
 
-/** How a call went through one route: with the healthy cohort, or as the
- *  probe that holds the route's permit. */
-type Pass = 'healthy' | 'probe';
+/** How a call went through one route: with the healthy cohort, admitted
+ *  after the route's `cooled`-th cooling, or as the probe that holds the
+ *  route's permit. */
+type Pass = { readonly healthy: number } | 'probe';
 
 /** A route passed healthy cooled while a later one was waited on. */
 const COOLED = Symbol('cooled');
@@ -63,11 +67,11 @@ const COOLED = Symbol('cooled');
 type Through<A, E> = Exit.Exit<A, E> | typeof COOLED;
 
 /**
- * Record what a call's exit proved about one route it went through. A
- * failure scoped to the route cools it (a healthy route, or the probe's
- * failure: a call admitted before the route cooled says nothing new); any
- * other end of the probe opens it; a success, or a failure of the request
- * alone, of a call admitted while healthy ends the failure streak.
+ * Record what a call's exit proved about one route it went through. A call
+ * admitted healthy before the route last cooled says nothing about it. A
+ * failure scoped to the route cools it; any other end of the probe opens
+ * it; a success, or a failure of the request alone, of a call admitted
+ * healthy since the last cooling ends the failure streak.
  */
 const settle = (
   route: Route,
@@ -77,9 +81,10 @@ const settle = (
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)) return;
+    if (pass !== 'probe' && pass.healthy !== route.cooled) return;
     const error = Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
     if (error instanceof ModelError && error.scope === scope) {
-      if (pass === 'healthy' && !route.healthy) return;
+      route.cooled += 1;
       route.failures += 1;
       route.retryAt =
         (yield* Clock.currentTimeMillis) +
@@ -100,7 +105,7 @@ const settle = (
     // may fail again at once (a rate window that fits one probe rarely fits
     // the herd), and resetting there would hold the backoff at its base.
     if (pass === 'probe') route.healthy = true;
-    else if (route.healthy) route.failures = 0;
+    else route.failures = 0;
   });
 
 /**
@@ -125,13 +130,16 @@ const through = <A, E, R>(
         ? Effect.exit(attempt)
         : Effect.succeed(COOLED);
     const [route, policy] = step;
-    const healthy = Effect.flatMap(
-      through(routes, index + 1, [...passed, route], attempt),
-      (result): Effect.Effect<Through<A, E>> =>
-        result === COOLED
-          ? Effect.succeed(result)
-          : Effect.as(settle(route, policy, 'healthy', result), result),
-    );
+    const healthy = Effect.suspend(() => {
+      const pass = { healthy: route.cooled };
+      return Effect.flatMap(
+        through(routes, index + 1, [...passed, route], attempt),
+        (result): Effect.Effect<Through<A, E>> =>
+          result === COOLED
+            ? Effect.succeed(result)
+            : Effect.as(settle(route, policy, pass, result), result),
+      );
+    });
     if (route.healthy) return healthy;
     return route.probe
       .withPermit(
@@ -181,6 +189,7 @@ export const makeRetryGate = (): ModelRetryGate => {
     const created: Route = {
       healthy: true,
       probe: Semaphore.makeUnsafe(1),
+      cooled: 0,
       failures: 0,
       retryAt: 0,
     };
