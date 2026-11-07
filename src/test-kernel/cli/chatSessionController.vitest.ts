@@ -71,6 +71,7 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
+import { slashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
 import { EMPTY_DRAFT } from '@cli/chat/tui/input/draftAttachments';
@@ -464,8 +465,10 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
             yield* makeInit({
               session,
               served: true,
-              // cast: these plain messages run no slash command, so none reads it.
-              getSlashCommandContext: () => ({}) as SlashCommandContext,
+              // cast: these plain messages match no slash command, so only the
+              // empty table is read.
+              getSlashCommandContext: () =>
+                ({ commands: slashCommands([]) }) as SlashCommandContext,
             }),
           );
           const sent: string[] = [];

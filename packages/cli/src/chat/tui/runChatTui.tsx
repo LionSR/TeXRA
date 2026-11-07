@@ -78,7 +78,8 @@ import { applyCliModelAccessSelection } from './commands/handlers/modelAccessCom
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
 import { loginFromChat } from './commands/handlers/loginCommands';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
-import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
+import { builtinSlashCommands } from './commands/registerBuiltins';
+import { SlashCommandsProvider } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
@@ -107,7 +108,7 @@ import {
   appendLocalRequestRefusal,
   paintedRunIds,
 } from './state/transcript';
-import { openCliSlashCommandForm } from './commands/slashForms';
+import { openRegisteredCliSlashForm } from './commands/slashForms';
 import {
   checkModelConnection,
   connectChatModel,
@@ -380,8 +381,9 @@ export async function runChat(
   };
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (resetSessionForClear,
-  // chatController.resume) are all defined before the first use.
+  // chatController.resume, commands) are all defined before the first use.
   const slashCommandContext = (): SlashCommandContext => ({
+    commands,
     cliContext: context,
     session,
     runSession,
@@ -509,7 +511,9 @@ export async function runChat(
   // The Ink layer never directly mutates session run-state fields, every
   // state transition flows through one of the controller's narrow commands.
   const draft = runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
-  const modelConnection = makeModelConnection();
+  const modelConnection = makeModelConnection(() =>
+    openRegisteredCliSlashForm(commands.login),
+  );
   const chatController: ChatSessionController = createChatSessionController({
     session,
     runSession,
@@ -556,8 +560,8 @@ export async function runChat(
     return true;
   };
 
-  // Pre-register the slash commands the input palette uses.
-  registerBuiltinSlashCommands({
+  // The chat's slash commands, over the controller they drive.
+  const commands = builtinSlashCommands({
     runSession,
     ...(link !== undefined && { connectService: () => linkClient(link) }),
     onAccountChanged: () =>
@@ -621,20 +625,22 @@ export async function runChat(
   });
 
   const ink = render(
-    <App
-      stores={services}
-      runtime={runtime}
-      session={runSession}
-      draft={draft}
-      onSubmit={(message, holdUntil) => {
-        runtime.runFork(chatController.submit(message, holdUntil));
-      }}
-      commandName={context.commandName}
-      scrollback={scrollback}
-      onCtrlC={() => exitController.handleSigint()}
-      onSuspend={() => exitController.handleSigtstp()}
-      history={inputHistory}
-    />,
+    <SlashCommandsProvider value={commands}>
+      <App
+        stores={services}
+        runtime={runtime}
+        session={runSession}
+        draft={draft}
+        onSubmit={(message, holdUntil) => {
+          runtime.runFork(chatController.submit(message, holdUntil));
+        }}
+        commandName={context.commandName}
+        scrollback={scrollback}
+        onCtrlC={() => exitController.handleSigint()}
+        onSuspend={() => exitController.handleSigtstp()}
+        history={inputHistory}
+      />
+    </SlashCommandsProvider>,
     {
       stdout: tuiOutputStreamForColor(
         process.stdout,
@@ -669,7 +675,7 @@ export async function runChat(
   );
   inkRef.current = ink;
   // No model yet: the "Connect a model" panel is the first thing on screen.
-  if (modelConnectionNeeded.get()) openCliSlashCommandForm('login');
+  if (modelConnectionNeeded.get()) openRegisteredCliSlashForm(commands.login);
 
   const exitController = createSessionExitController({
     ink,
