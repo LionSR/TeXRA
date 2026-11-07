@@ -98,23 +98,23 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
 });
 
 /**
- * `workspacePath` is the root a relative `filePath` resolves against and the
+ * `workspaceRoot` is the root a relative `filePath` resolves against and the
  * cwd latexindent runs in, and `latexindentConfig` the configured config-file
  * path — the caller's own session root and configuration, held as data, not
  * the roots the calling fiber happens to carry.
  */
 export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   filePath: string,
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
   latexindentConfig: string,
   settings: SettingsStores,
 ) {
   // Resolve workspace-relative paths to absolute so cleanup works correctly.
   // Some callers (latexCommands, housekeeping/indent) pass relative paths.
   const absolutePath =
-    path.isAbsolute(filePath) || !workspacePath
+    path.isAbsolute(filePath) || !workspaceRoot
       ? filePath
-      : path.join(workspacePath, filePath);
+      : path.join(workspaceRoot, filePath);
 
   const args = ['-w', '-s'];
   if (latexindentConfig) {
@@ -125,7 +125,7 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   // A missing latexindent is the caller's `ToolMissing`: it never started, so
   // it left no backup or log to clean up.
   const { success } = yield* runTool('latexindent', args, {
-    cwd: workspacePath,
+    cwd: workspaceRoot,
     // The slots the caller resolved this formatter from.
     settings,
   });
@@ -137,8 +137,8 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   yield* cleanupBackupFiles(fileBaseName, fileDir);
   yield* cleanupIndentLog(path.join(fileDir, 'indent.log'));
   // latexindent may also create indent.log at the process cwd (workspace root)
-  if (workspacePath && fileDir !== workspacePath) {
-    yield* cleanupIndentLog(path.join(workspacePath, 'indent.log'));
+  if (workspaceRoot && fileDir !== workspaceRoot) {
+    yield* cleanupIndentLog(path.join(workspaceRoot, 'indent.log'));
   }
 
   if (success) {

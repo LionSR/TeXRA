@@ -169,7 +169,7 @@ export interface RunSurface {
   /** The user's expansion choice in the tree, absent until they make one;
    *  a run that needs the user (`needsUser`) outranks it. */
   readonly expanded: boolean | undefined;
-  /** Task groups inside its transcript. */
+  /** Stages inside its transcript. */
   readonly groups: ReadonlyMap<string, boolean>;
   /** For a top-level run, the `lastTimestamp` this surface last showed. */
   readonly seen: number | undefined;
@@ -230,7 +230,7 @@ export interface Surface {
     readonly runId: RunId;
     readonly cursor: CommitOrdinal;
   } | null;
-  /** Per run: its draft, its expansion, its task groups, when it was last
+  /** Per run: its draft, its expansion, its stages, when it was last
    *  shown, its last rejection. Text drafts persist; images and rejections
    *  do not. */
   readonly runs: ReadonlyMap<RunId, RunSurface>;

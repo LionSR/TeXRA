@@ -175,7 +175,7 @@ const SurfaceActionMessageSchema = Schema.Struct({
         Schema.Struct({ fileName: Schema.String, media: StoredMediaSchema }),
       ),
     }),
-    /** A workflow run of this session left running for finished or
+    /** A document task run of this session left running for finished or
      *  cancelled: the host decides the transition once and sends it to one
      *  port, which plays the completion chime. */
     Schema.Struct({ kind: Schema.Literal('chime') }),

@@ -1,6 +1,6 @@
-// Focused, read-only workflow run details.
+// Focused, read-only document task run details.
 //
-// Task-group lifecycle comes from the transcript; generated files and warnings
+// Stage lifecycle comes from the transcript; generated files and warnings
 // come from the rounds of the run's documents fact. This component only
 // joins and renders those facts—it does not infer or mutate workflow state.
 
@@ -8,8 +8,8 @@ import { Box, Text } from 'ink';
 
 import {
   fileLocationDisplayPath,
-  type TaskGroup,
-  type TaskGroupStatus,
+  type Stage,
+  type StageStatus,
   formatCompactDuration,
 } from '@texra-ai/harness/schemas';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
@@ -27,7 +27,7 @@ import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { COMPACTION_ACTIVITY_STATUS_STYLE } from './transcriptEntryLayout';
 
-interface WorkflowRunDetailLine {
+interface DocumentTaskRunDetailLine {
   readonly key: string;
   readonly text: string;
   /** Undefined paints in the terminal's default foreground. */
@@ -35,23 +35,23 @@ interface WorkflowRunDetailLine {
   readonly role: 'lifecycle' | 'outputHeading' | 'output' | 'alert';
 }
 
-type WorkflowRunFacts = {
-  readonly taskGroups: readonly TaskGroup[];
+type DocumentTaskRunFacts = {
+  readonly stages: readonly Stage[];
   /** The run's rounds, as its documents fact records them. */
   readonly rounds: readonly RoundOutput[];
 };
 
-interface WorkflowRunDetailGroup {
+interface DocumentTaskRunDetailGroup {
   readonly key: string;
-  readonly lines: readonly WorkflowRunDetailLine[];
+  readonly lines: readonly DocumentTaskRunDetailLine[];
   readonly priority: number;
 }
 
-function taskGroupLine(
-  group: TaskGroup,
+function stageLine(
+  group: Stage,
   label: string,
-  status: TaskGroupStatus,
-): WorkflowRunDetailLine {
+  status: StageStatus,
+): DocumentTaskRunDetailLine {
   const appearance = COMPACTION_ACTIVITY_STATUS_STYLE[status];
   const duration =
     group.endTime !== undefined
@@ -59,7 +59,7 @@ function taskGroupLine(
       : '';
   return {
     key: `group:${group.id}`,
-    // A task group's status is running or a run outcome, so it is worded
+    // A stage's status is running or a run outcome, so it is worded
     // with the stream vocabulary — the same one the progress view's group
     // icon announces, never the workflow-call vocabulary that happens to
     // share key names.
@@ -69,7 +69,7 @@ function taskGroupLine(
   };
 }
 
-function lifecyclePriority(status: TaskGroupStatus): number {
+function lifecyclePriority(status: StageStatus): number {
   if (status === 'failed') return 0;
   if (status === 'running') return 1;
   return 3;
@@ -78,17 +78,17 @@ function lifecyclePriority(status: TaskGroupStatus): number {
 /** A round's results rank after failed and running groups. */
 const ROUND_PRIORITY = 3;
 
-function workflowRunDetailGroups(
-  facts: WorkflowRunFacts | undefined,
-): WorkflowRunDetailGroup[] {
+function documentTaskRunDetailGroups(
+  facts: DocumentTaskRunFacts | undefined,
+): DocumentTaskRunDetailGroup[] {
   if (!facts) return [];
 
-  const groups: WorkflowRunDetailGroup[] = [];
-  for (const group of facts.taskGroups) {
+  const groups: DocumentTaskRunDetailGroup[] = [];
+  for (const group of facts.stages) {
     groups.push({
       key: `lifecycle:${group.id}`,
       lines: [
-        taskGroupLine(
+        stageLine(
           group,
           group.name || (group.kind === 'run' ? 'Workflow' : group.id),
           group.status,
@@ -99,7 +99,7 @@ function workflowRunDetailGroups(
   }
   for (const record of facts.rounds) {
     const { round, outputs, missingOutputs: missing, reply } = record;
-    const lines: WorkflowRunDetailLine[] = [
+    const lines: DocumentTaskRunDetailLine[] = [
       {
         key: `round:${round}`,
         text: `${PENDING_BOX} ${formatRoundLabel(round)} results`,
@@ -174,12 +174,12 @@ function workflowRunDetailGroups(
  * viewport. Alerts receive space before lifecycle and artifacts; an artifact
  * is never shown without its round and section headings.
  */
-export function selectWorkflowRunDetailLines(
-  facts: WorkflowRunFacts | undefined,
+export function selectDocumentTaskRunDetailLines(
+  facts: DocumentTaskRunFacts | undefined,
   capacity: number,
-): WorkflowRunDetailLine[] {
+): DocumentTaskRunDetailLine[] {
   if (capacity <= 0) return [];
-  const groups = workflowRunDetailGroups(facts);
+  const groups = documentTaskRunDetailGroups(facts);
   const allLines = groups.flatMap((group) => group.lines);
   if (allLines.length <= capacity) return allLines;
 
@@ -188,9 +188,12 @@ export function selectWorkflowRunDetailLines(
   const rankedGroups = groups.toSorted(
     (left, right) => left.priority - right.priority,
   );
-  const hasLine = (group: WorkflowRunDetailGroup, index: number): boolean =>
+  const hasLine = (group: DocumentTaskRunDetailGroup, index: number): boolean =>
     selected.get(group.key)?.has(index) ?? false;
-  const addLine = (group: WorkflowRunDetailGroup, index: number): boolean => {
+  const addLine = (
+    group: DocumentTaskRunDetailGroup,
+    index: number,
+  ): boolean => {
     if (remaining <= 0 || hasLine(group, index)) return false;
     const indices = selected.get(group.key) ?? new Set<number>();
     indices.add(index);
@@ -199,7 +202,7 @@ export function selectWorkflowRunDetailLines(
     return true;
   };
   const addWithLifecycle = (
-    group: WorkflowRunDetailGroup,
+    group: DocumentTaskRunDetailGroup,
     index: number,
   ): void => {
     const required = hasLine(group, 0) ? 1 : 2;
@@ -251,11 +254,11 @@ export function selectWorkflowRunDetailLines(
   });
 }
 
-export function WorkflowRunDetails({
+export function DocumentTaskRunDetails({
   lines,
   width,
 }: {
-  readonly lines: readonly WorkflowRunDetailLine[];
+  readonly lines: readonly DocumentTaskRunDetailLine[];
   readonly width?: number;
 }): React.JSX.Element {
   return (

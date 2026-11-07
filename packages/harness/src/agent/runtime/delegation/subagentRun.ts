@@ -9,7 +9,6 @@ import { Effect, Schema } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import {
   NO_APPROVAL_GRANTS,
@@ -19,6 +18,7 @@ import {
   AgentConfigSchema,
   type RunId,
   type SubagentProgressUpdate,
+  type AgentConfigPayload,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 

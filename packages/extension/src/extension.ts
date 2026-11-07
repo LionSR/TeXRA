@@ -36,7 +36,7 @@ import {
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   openNodeWorkspaceRoots,
-  canonicalizeWorkspacePath,
+  canonicalizeWorkspaceRoot,
   effectDiagnosticsLayer,
   FileSecrets,
   secretsDirectory,
@@ -219,7 +219,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         },
       );
       const roots = yield* openNodeWorkspaceRoots({
-        workspacePath: workspaceRoot,
+        workspaceRoot,
         storageRoot: defaultNodeStorageRoot(),
         config,
         ...(Result.isSuccess(reached) &&
@@ -371,7 +371,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   }
   const rawWorkspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!rawWorkspacePath) return;
-  const workspaceRoot = canonicalizeWorkspacePath(rawWorkspacePath);
+  const workspaceRoot = canonicalizeWorkspaceRoot(rawWorkspacePath);
 
   setLogSink(createVsCodeLogSink());
   // Deactivation releases the output channels with the sink, so a reload does

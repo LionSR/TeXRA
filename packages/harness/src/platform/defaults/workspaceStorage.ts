@@ -13,8 +13,8 @@ const STORAGE_LAYOUT = {
   workspace: 'workspace-storage',
 } as const;
 
-function sanitizeWorkspaceBasename(workspacePath: string): string {
-  const slug = basename(workspacePath)
+function sanitizeWorkspaceBasename(workspaceRoot: string): string {
+  const slug = basename(workspaceRoot)
     .replaceAll(/[^A-Za-z0-9._-]/g, '-')
     .replaceAll(/-+/g, '-')
     .replaceAll(/^-|-$/g, '');
@@ -31,26 +31,26 @@ function sanitizeWorkspaceBasename(workspacePath: string): string {
  * `canonicalizePath`) and the key is case-folded. A root that does not
  * resolve (missing, unreadable) keys by its canonical spelling.
  */
-function storageIdentity(workspacePath: string): string {
-  if (process.platform === 'win32') return workspacePath.toLowerCase();
+function storageIdentity(workspaceRoot: string): string {
+  if (process.platform === 'win32') return workspaceRoot.toLowerCase();
   try {
-    return realpathSync.native(workspacePath);
+    return realpathSync.native(workspaceRoot);
   } catch (error) {
     const code = Predicate.hasProperty(error, 'code') ? error.code : undefined;
     if (!absentReason(error) && code !== 'EACCES' && code !== 'EPERM')
       throw error;
-    return workspacePath;
+    return workspaceRoot;
   }
 }
 
 /**
- * The storage directory name of a workspace. `workspacePath` is the host's
- * canonical workspace root (`canonicalizeWorkspacePath`, decided once where
+ * The storage directory name of a workspace. `workspaceRoot` is the host's
+ * canonical workspace root (`canonicalizeWorkspaceRoot`, decided once where
  * the host reads it); its storage identity keys one folder to one
  * directory whichever case or host spelled it.
  */
-function workspaceStorageId(workspacePath: string | undefined): string {
-  const trimmed = workspacePath?.trim();
+function workspaceStorageId(workspaceRoot: string | undefined): string {
+  const trimmed = workspaceRoot?.trim();
   const source = trimmed ? storageIdentity(trimmed) : 'no-workspace';
   const stem =
     source === 'no-workspace'
@@ -73,12 +73,12 @@ export function resolveGlobalStoragePath(storageRoot: string): string {
  *  workspace's identity (`no-workspace` for none). */
 export function resolveWorkspaceStoragePath(
   storageRoot: string,
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
 ): string {
   return join(
     storageRoot,
     'v1',
     STORAGE_LAYOUT.workspace,
-    workspaceStorageId(workspacePath),
+    workspaceStorageId(workspaceRoot),
   );
 }

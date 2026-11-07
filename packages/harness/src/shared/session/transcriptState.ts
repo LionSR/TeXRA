@@ -11,7 +11,7 @@ import {
   TOOL_CALL_STATUS,
   type LogLevel,
   type MessageType,
-  type TaskGroup,
+  type Stage,
   type ToolUseLog,
 } from '@shared/schemas';
 import type { CompactionActivityProjection } from '@shared/runs/compactionActivityProjection';
@@ -42,10 +42,10 @@ import type { TranscriptView } from './sessionView';
 export interface TranscriptContext {
   /** The surface shows debug-level log rows. */
   readonly debug: boolean;
-  /** Run and session headings go to the task-group surface rather than the
+  /** Run and session headings go to the stage surface rather than the
    *  rows: a plain agent run's (`isPlainAgentIdentity`). A full-log child,
    *  a detached process or an external-CLI session keeps its verbatim log. */
-  readonly lifecycleToTaskGroups: boolean;
+  readonly lifecycleStages: boolean;
   /** The session's runs by id, for the `executions` tool header. */
   readonly runLabels?: RunLabels;
 }
@@ -93,8 +93,8 @@ export type Slot =
 export interface TranscriptIndexes {
   /** Row position by row id. */
   readonly rowIndex: Map<string, number>;
-  /** Task-group position by group id. */
-  readonly taskGroupIndex: Map<string, number>;
+  /** Stage position by group id. */
+  readonly stageIndex: Map<string, number>;
   /** The compaction projection's working state. */
   readonly compactionState: CompactionActivityProjection;
   readonly slots: Map<string, Slot>;
@@ -133,7 +133,7 @@ export interface TranscriptIndexes {
 export function emptyTranscriptIndexes(): TranscriptIndexes {
   return {
     rowIndex: new Map(),
-    taskGroupIndex: new Map(),
+    stageIndex: new Map(),
     compactionState: {
       blocks: [],
       indexByOperationId: new Map(),
@@ -156,7 +156,7 @@ export function emptyTranscriptIndexes(): TranscriptIndexes {
 
 /** A transcript with no rows. */
 export function emptyTranscript(): TranscriptView {
-  return { rows: [], taskGroups: [], settledRows: 0 };
+  return { rows: [], stages: [], settledRows: 0 };
 }
 
 /** A transcript one update call is building: a fresh envelope over the
@@ -167,7 +167,7 @@ export type TranscriptDraft = {
 /** The arrays of a draft this call owns, as it writes them. */
 type DraftArrays = {
   readonly rows: TranscriptRow[];
-  readonly taskGroups: TaskGroup[];
+  readonly stages: Stage[];
 };
 
 // ---------------------------------------------------------------------------
@@ -328,7 +328,7 @@ function rowOf(
 ): TranscriptRow | undefined {
   switch (slot.kind) {
     case 'stage':
-      return ctx.lifecycleToTaskGroups
+      return ctx.lifecycleStages
         ? undefined
         : plainLogRow(slot.base, slot.label);
     case 'text': {

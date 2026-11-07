@@ -64,7 +64,7 @@ function createRegistry(
 layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
   excludeTestServices: true,
 })('runRegistry', (it) => {
-  it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+  it.layer(FakeHost.layer({ workspaceRoot: '/workspace' }), {
     buildPerTest: true,
   })((it) => {
     it.effect(

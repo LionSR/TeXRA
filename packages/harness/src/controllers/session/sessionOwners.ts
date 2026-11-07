@@ -37,7 +37,7 @@ import { sessionPermission } from '@agent/runtime/loop/toolGuard';
 import { sessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { SessionRequests } from '@agent/runtime/requests';
 import { ProjectTools } from '@agent/runtime/loop/step';
-import { makeRunHistory } from '@agent/runtime/RunHistory';
+import { makeRunHistory } from '@agent/runtime/makeRunHistory';
 import { stopRun } from '@agent/storage/runLifecycle';
 import {
   registryOf,
@@ -48,7 +48,7 @@ import {
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import type { RunServices } from '@agent/runtime/ToolServices';
-import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionEvents';
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
 import { withLogChannel } from '@logger/effectLog';
 import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 import { SessionRoots, sessionFsLayer } from '@platform/rootedFs';
@@ -75,7 +75,10 @@ import {
   type TextChunkSource,
   type TranscriptSubscriptions,
 } from './sessionSources';
-import { makeSessionViewAccess, type SessionViewService } from './SessionView';
+import {
+  makeSessionViewAccess,
+  type SessionViewService,
+} from './sessionViewService';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
 
 const CHANNEL = 'sessionOwners';

@@ -3,11 +3,10 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
 import { displayToStoragePath } from '@agent/memory/memoryUtils';
-import type { AttachedMemoryMiss } from '@shared/schemas';
+import type { AgentConfig, AttachedMemoryMiss } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -94,7 +93,7 @@ export const TEMPLATE_INPUT_NAMES: readonly string[] = Object.freeze(
  * live in storage.
  */
 interface BuildTemplateInputsOptions {
-  workspacePath: string | undefined;
+  workspaceRoot: string | undefined;
   workingDirectory?: string;
   storageRoot: string;
 }
@@ -120,7 +119,7 @@ export interface TemplateOpening {
 /**
  * Build what a launch renders its prompts from.
  *
- * @param options.workspacePath - Workspace root of the run's session.
+ * @param options.workspaceRoot - Workspace root of the run's session.
  */
 export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   agentConfig: AgentConfig,
@@ -131,7 +130,7 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   const [attachedMemories, fileVars] = yield* Effect.all(
     [
       getAttachedMemories(agentConfig.memories, options.storageRoot),
-      getFileVars(agentConfig, logger, options.workspacePath),
+      getFileVars(agentConfig, logger, options.workspaceRoot),
     ],
     { concurrency: 'unbounded' },
   );
@@ -174,7 +173,7 @@ function getBasicVars(
   return {
     INSTRUCTION: agentConfig.instruction,
     IS_ANTHROPIC_MODEL: isAnthropicModel,
-    CWD: options.workingDirectory ?? options.workspacePath ?? '.',
+    CWD: options.workingDirectory ?? options.workspaceRoot ?? '.',
     ...getAgentDirectoryVars(),
   };
 }

@@ -16,8 +16,7 @@
  */
 import { Effect } from 'effect';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import type { SessionRoots } from '@platform/rootedFs';
 import {
@@ -26,6 +25,7 @@ import {
   type RunId,
   generateRunId,
   factName,
+  type AgentConfig,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { Rejected } from '@shared/session/runtimeRequest';
@@ -42,7 +42,7 @@ import { factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
 import { configRow, positionRow } from './loop/rows';
-import { addressedMessages } from './storedTurn';
+import { addressedMessages } from './providerMessages';
 
 /** Whether nothing is in flight: no invocation, response or undecided
  *  request its caller waits on (one it does not wait on stands across

@@ -219,7 +219,7 @@ export const executeCliConfig: (
     const presentationScope = yield* Scope.make();
     yield* Scope.addFinalizer(presentationScope, presentationHost.close());
     let failurePresented = false;
-    const renderWorkflowPlainProgress =
+    const renderPlainProgress =
       runContext.outputFormat === 'text' && runContext.renderRunProgress;
     yield* presentationHost
       .attachRunProgressRenderer(session, request.runId)
@@ -261,7 +261,7 @@ export const executeCliConfig: (
         yield* attachCliSessionProgressProjection(session),
       );
     }
-    if (renderWorkflowPlainProgress) {
+    if (renderPlainProgress) {
       yield* attachScriptPlainOutput(session, {
         runId: request.runId,
         beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),

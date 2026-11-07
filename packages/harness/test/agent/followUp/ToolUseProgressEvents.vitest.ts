@@ -6,7 +6,7 @@ import { ModelError } from '@texra-ai/llm';
 
 // Local imports
 import { qualifyAggregateId, RUN_OUTCOME } from '@texra-ai/harness/schemas';
-import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {

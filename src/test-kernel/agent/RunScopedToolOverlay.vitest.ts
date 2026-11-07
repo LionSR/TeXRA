@@ -15,7 +15,7 @@ import {
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
-import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import {
   AgentRun,
   agentRunLayer,
@@ -138,7 +138,7 @@ function runLayer(
 layer(
   Layer.provideMerge(
     SessionGraph.layer,
-    FakeHost.layer({ workspacePath: process.cwd() }),
+    FakeHost.layer({ workspaceRoot: process.cwd() }),
   ),
   { excludeTestServices: true },
 )('run-scoped tool resolution', (it) => {

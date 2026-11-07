@@ -53,9 +53,9 @@ interface DesktopPreviewHost {
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
-   * The build-and-show preview of one open paper: a LaTeX source compiles
+   * The build-and-show preview of one open project: a LaTeX source compiles
    * against `roots` (its workspace, its LaTeX settings) and its PDF opens in
-   * that paper's workbench.
+   * that project's workbench.
    */
   openBuildDisplayIn(roots: WorkspaceRoots): BuildDisplayFn;
 }

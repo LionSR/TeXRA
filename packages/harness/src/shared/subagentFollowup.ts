@@ -17,7 +17,7 @@ import { DELIVERY_TAG, DELIVERY_TAG_PATTERN } from '@shared/deliveryTags';
 import type { ScriptDeliverySummary } from '@shared/schemas';
 import { ScriptDeliverySummarySchema } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
-import { formatScriptTally } from '@shared/transcript/workflowCall';
+import { formatScriptTally } from '@shared/transcript/scriptCall';
 import {
   formatCompactDuration,
   formatCostUsd,
@@ -131,7 +131,7 @@ const SUMMARIZED_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Read the presentation-only facts attached to a workflow delivery, or
+ * Read the presentation-only facts attached to a script delivery, or
  * undefined for text that is not a script envelope carrying them. The raw
  * response remains intact for the invoking model and diagnostic inspection.
  * This string parse lives at the delivery boundary (the queued row's
@@ -152,7 +152,7 @@ export function parseScriptDeliverySummary(
   );
 }
 
-/** Collapse a parsed workflow delivery summary to its transcript lines. The
+/** Collapse a parsed script delivery summary to its transcript lines. The
  *  tick is earned only by a run whose every call succeeded; a completed run
  *  with a failed, stopped, or unreached call says so in its marker too. */
 function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {

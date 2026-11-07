@@ -17,12 +17,15 @@ import {
   AgentCatalog,
   type AgentCatalogLoadError,
 } from '@agent/index/agentCatalog';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCatalogServices } from '@agent/index/agentEntry';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
 import type { StateReadFailed } from '@shared/config/settings';
-import { agentName, type ResumeBlocked } from '@shared/schemas';
+import {
+  agentName,
+  type ResumeBlocked,
+  type AgentConfig,
+} from '@shared/schemas';
 
 /** What blocks resuming a run of `config` here, or null when nothing does. */
 export const resumeBlocker = Effect.fn('resumeBlocker')(function* (

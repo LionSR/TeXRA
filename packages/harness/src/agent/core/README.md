@@ -22,7 +22,7 @@ Not here:
 
 ## Importing
 
-Harness code imports the specific module (`@agent/core/definition/AgentConfig`);
+Harness code imports the specific module (`@agent/core/definition/RunRecord`);
 there is no `@agent/core` barrel. The `AgentConfigSchema` wire contract comes
 from `@shared/schemas` inside the harness and from `@texra-ai/harness/schemas`
 outside it. Decoding a launch's configuration (`decodeLaunchConfig`) is the

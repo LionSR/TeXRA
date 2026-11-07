@@ -24,9 +24,9 @@ describe('workspace storage defaults', () => {
   // The workspace storage identity, read off the path calculator that owns it.
   function storageIdOf(
     root: string,
-    workspacePath: string | undefined,
+    workspaceRoot: string | undefined,
   ): string {
-    return basename(resolveWorkspaceStoragePath(root, workspacePath));
+    return basename(resolveWorkspaceStoragePath(root, workspaceRoot));
   }
 
   it('computes a stable workspace storage identity', async () => {
@@ -50,21 +50,21 @@ describe('workspace storage defaults', () => {
     () =>
       Effect.gen(function* () {
         const root = yield* Effect.promise(() => makeStorageRoot());
-        const workspacePath = yield* Effect.promise(() =>
+        const workspaceRoot = yield* Effect.promise(() =>
           makeTempDir('texra-project-', tempDirs),
         );
         yield* Effect.promise(() =>
-          mkdir(join(workspacePath, '.texra'), { recursive: true }),
+          mkdir(join(workspaceRoot, '.texra'), { recursive: true }),
         );
         yield* Effect.promise(() =>
-          writeFile(join(workspacePath, '.texra', 'config.json'), '{ broken'),
+          writeFile(join(workspaceRoot, '.texra', 'config.json'), '{ broken'),
         );
         const warnings: string[] = [];
 
         const stores = yield* openTexraConfigStores(
           TEXRA_SETTINGS.catalog,
           root,
-          workspacePath,
+          workspaceRoot,
           (m: string) => warnings.push(m),
         );
         const write = yield* Effect.exit(
@@ -77,7 +77,7 @@ describe('workspace storage defaults', () => {
           yield* Effect.promise(() =>
             pathExists(
               join(
-                resolveWorkspaceStoragePath(root, workspacePath),
+                resolveWorkspaceStoragePath(root, workspaceRoot),
                 'config.json',
               ),
             ),

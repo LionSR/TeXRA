@@ -7,7 +7,7 @@
 
 import { Schema, Struct } from 'effect';
 
-/** Auxiliary resources and replies belong to the paper that opened them. */
+/** Auxiliary resources and replies belong to the project that opened them. */
 const DesktopWorkspaceMessageSchema = Schema.Struct({ session: Schema.String });
 
 export const DESKTOP_WORKSPACE_COMMANDS = {

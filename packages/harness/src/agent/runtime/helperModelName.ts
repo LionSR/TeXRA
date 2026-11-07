@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { modelConfig, modelRefOf } from '@texra-ai/llm';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas';
 import { withLogChannel } from '@logger/effectLog';
 import { getEnabledModels, readModelOptions } from '@model/computeModelOptions';
 import { Settings } from '@shared/config/settings';

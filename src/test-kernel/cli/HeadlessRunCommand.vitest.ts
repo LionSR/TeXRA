@@ -13,7 +13,7 @@ import {
   DocumentTaskOptionsSchema,
   documentsOutputFact,
 } from '@texra/shared/plugins/documents';
-import type { runHeadlessAgent } from '@cli/commands/workflow';
+import type { runHeadlessAgent } from '@cli/commands/run';
 import {
   provideCliInvocation,
   type CliContext,
@@ -90,31 +90,33 @@ vi.mock('@cli/runtime/headless/executeCli', () => ({
   executeCliConfig: (...args: unknown[]) => mocks.executeCliConfig(...args),
 }));
 
-vi.mock('@cli/runtime/headless/workflowInputs', () => ({
+vi.mock('@cli/runtime/headless/documentTaskInputs', () => ({
   // A pass-through: the real helper yields `run(inputs)` in-fiber, so the stub
   // hands the command back that same Effect instead of detaching it.
   withExpandedRunInputs: (...args: unknown[]) =>
     mocks.withExpandedRunInputs(...args),
-  hasMixedStdinWorkflowInputSpecs: vi.fn((inputFiles: readonly string[]) => {
-    const specs = new Set(
-      inputFiles.map((spec) => spec.trim()).filter(Boolean),
-    );
-    return specs.has('-') && specs.size > 1;
-  }),
-  STDIN_WORKFLOW_INPUT_BASENAME: 'stdin.tex',
-  WORKFLOW_INPUT_REQUIRED_MESSAGE:
+  hasMixedStdinDocumentTaskInputSpecs: vi.fn(
+    (inputFiles: readonly string[]) => {
+      const specs = new Set(
+        inputFiles.map((spec) => spec.trim()).filter(Boolean),
+      );
+      return specs.has('-') && specs.size > 1;
+    },
+  ),
+  STDIN_DOCUMENT_TASK_INPUT_BASENAME: 'stdin.tex',
+  DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE:
     'At least one workflow input file is required.',
 }));
 
 // Hoisted out of each test body — a dynamic import()'s result is cached, so
 // one call here serves every test below, and the first test is not charged the
 // module graph's transform time.
-const { runHeadlessAgent: nativeRun } = await import('@cli/commands/workflow');
+const { runHeadlessAgent: nativeRun } = await import('@cli/commands/run');
 
-type WorkflowRunInit = Parameters<typeof runHeadlessAgent>[1];
-type WorkflowExecuteResult = CliConfigExecuteResult;
-type WorkflowRunPayload = Extract<
-  WorkflowExecuteResult,
+type DocumentTaskRunInit = Parameters<typeof runHeadlessAgent>[1];
+type DocumentTaskExecuteResult = CliConfigExecuteResult;
+type DocumentTaskRunPayload = Extract<
+  DocumentTaskExecuteResult,
   { ok: true }
 >['result'];
 
@@ -127,8 +129,8 @@ let pendingRunStarts: { runId: RunId; rounds: readonly RoundOutput[] }[] = [];
  * test's session: its platform hands the command the host's stores, and
  * the commands under test read `secrets`/`globalState` off them.
  */
-function workflowProgram(
-  init: Partial<WorkflowRunInit> = {},
+function documentTaskProgram(
+  init: Partial<DocumentTaskRunInit> = {},
   context: CliContext = createRunCommandCliContext(),
 ) {
   // The mocked launch boundary skips the launch's own `run.start` commit, so
@@ -206,10 +208,10 @@ function roundWriting(absolutePath: string, originalPath: string): RoundOutput {
   });
 }
 
-function workflowRun(
+function documentTaskRun(
   runId: string,
-  outcome: WorkflowRunPayload['outcome'] = RUN_OUTCOME.COMPLETED,
-): WorkflowExecuteResult {
+  outcome: DocumentTaskRunPayload['outcome'] = RUN_OUTCOME.COMPLETED,
+): DocumentTaskExecuteResult {
   return {
     ok: true,
     result: {
@@ -220,8 +222,8 @@ function workflowRun(
   };
 }
 
-function mockWorkflowRun(
-  result: WorkflowExecuteResult,
+function mockDocumentTaskRun(
+  result: DocumentTaskExecuteResult,
   rounds: readonly RoundOutput[] = [],
 ): void {
   // The finalization runs the command's post-run step on the committed
@@ -330,13 +332,13 @@ layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
               generated,
               path.join(root, 'paper.tex'),
             );
-            mockWorkflowRun(workflowRun('abc00a', RUN_OUTCOME.FAILED), [
+            mockDocumentTaskRun(documentTaskRun('abc00a', RUN_OUTCOME.FAILED), [
               roundWriting(generated, path.join(root, 'paper.tex')),
             ]);
             const target = path.join(root, 'polished.tex');
             yield* Effect.promise(() => fs.writeFile(target, 'keep-me'));
 
-            const exitCode = yield* workflowProgram(
+            const exitCode = yield* documentTaskProgram(
               { output: 'polished.tex' },
               createRunCommandCliContext({ cwd: root }),
             );

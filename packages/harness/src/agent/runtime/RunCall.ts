@@ -19,7 +19,6 @@ import {
 } from 'effect';
 
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   ToolContext,
   type CallRequests,
@@ -36,6 +35,7 @@ import {
   type ToolResult,
   type ToolDefinition,
   type ToolResultPayload,
+  type AgentConfig,
 } from '@shared/schemas';
 import type { RunFacts } from '@shared/session/runFacts';
 import type { CellError } from '@shared/session/runHistory';

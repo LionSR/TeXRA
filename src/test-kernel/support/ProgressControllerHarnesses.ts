@@ -1,5 +1,5 @@
 // Local imports
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@shared/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 
 /**

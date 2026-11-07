@@ -23,7 +23,7 @@ import { cutShort } from '@agent/runtime/leftoverChildren';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
-import { getRunRecords, callChildRunId } from '@agent/storage/runRecords';
+import { getRunRecords, callChildRunId } from '@agent/storage/runOwnership';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   qualifyAggregateId,
@@ -176,7 +176,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
   }
 });
 
-/** The bytes behind a workflow call's files, hashed for its reuse key. */
+/** The bytes behind a script call's files, hashed for its reuse key. */
 export const fingerprint = Effect.fn('agent.fingerprint')(function* (
   paths: readonly (readonly string[])[],
 ) {

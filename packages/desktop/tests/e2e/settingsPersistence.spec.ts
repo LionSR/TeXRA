@@ -27,7 +27,7 @@ It verifies that the same workspace storage is read after relaunch.
 
 async function writeMemoryEntry(input: {
   userDataPath: string;
-  workspacePath: string;
+  workspaceRoot: string;
 }): Promise<void> {
   const memoryDir = join(await findWorkspaceStoragePath(input), 'memories');
   mkdirSync(memoryDir, { recursive: true });
@@ -118,27 +118,27 @@ async function verifyMemoryEntryIsListed(launched: LaunchedApp): Promise<void> {
 }
 
 test('settings memory entries survive relaunch with shared user data', async () => {
-  const { workspacePath, userDataPath } = createIsolatedProfile();
+  const { workspaceRoot, userDataPath } = createIsolatedProfile();
   let currentLaunch: LaunchedApp | undefined;
 
   try {
-    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    currentLaunch = await launchTexraApp({ workspaceRoot, userDataPath });
     await dismissOnboarding(currentLaunch.page);
 
-    await writeMemoryEntry({ userDataPath, workspacePath });
+    await writeMemoryEntry({ userDataPath, workspaceRoot });
     await verifyMemoryEntryIsListed(currentLaunch);
 
     await closeTexraApp(currentLaunch);
     currentLaunch = undefined;
 
-    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    currentLaunch = await launchTexraApp({ workspaceRoot, userDataPath });
     await dismissOnboarding(currentLaunch.page);
     await verifyMemoryEntryIsListed(currentLaunch);
   } finally {
     if (currentLaunch) {
       await closeTexraApp(currentLaunch);
     }
-    cleanupDirectory(workspacePath);
+    cleanupDirectory(workspaceRoot);
     cleanupDirectory(userDataPath);
   }
 });

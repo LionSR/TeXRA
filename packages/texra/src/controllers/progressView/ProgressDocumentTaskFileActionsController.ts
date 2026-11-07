@@ -29,7 +29,7 @@ import type { HostRunActions } from '../session/hostRunActions';
 import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
-const CHANNEL = 'ProgressWorkflowFileActions';
+const CHANNEL = 'ProgressDocumentTaskFileActions';
 
 /**
  * One file action. Its failure channel is the host's own vocabulary: every
@@ -48,8 +48,8 @@ type FileAction<A> = Effect.Effect<
 
 type FileActionRequest = Extract<HostCommand, { kind: 'fileAction' }>;
 
-/** The workflow toolbar's file verbs a host performs. */
-export interface ProgressWorkflowFileActionsHost {
+/** The document task toolbar's file verbs a host performs. */
+export interface ProgressDocumentTaskFileActionsHost {
   /** Show `editedFile` against `baseFile` in the host's diff view. */
   openDiff(
     baseFile: string,
@@ -62,10 +62,10 @@ export interface ProgressWorkflowFileActionsHost {
   showInfo(message: string): Effect.Effect<void, HostCommandFailure>;
 }
 
-interface ProgressWorkflowFileActionsControllerDeps {
+interface ProgressDocumentTaskFileActionsControllerDeps {
   /** A run's rounds, as the session view holds its documents fact. */
   rounds: (runId: RunId) => readonly RoundOutput[];
-  host: ProgressWorkflowFileActionsHost;
+  host: ProgressDocumentTaskFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
   /** The window's workspace, which an accepted file's location is in. */
@@ -74,9 +74,9 @@ interface ProgressWorkflowFileActionsControllerDeps {
   runs: Pick<HostRunActions, 'merge' | 'followUpLauncher'>;
 }
 
-export class ProgressWorkflowFileActionsController {
-  private readonly deps: ProgressWorkflowFileActionsControllerDeps;
-  constructor(deps: ProgressWorkflowFileActionsControllerDeps) {
+export class ProgressDocumentTaskFileActionsController {
+  private readonly deps: ProgressDocumentTaskFileActionsControllerDeps;
+  constructor(deps: ProgressDocumentTaskFileActionsControllerDeps) {
     this.deps = deps;
   }
 
@@ -98,7 +98,7 @@ export class ProgressWorkflowFileActionsController {
   }
 
   readonly openRunStorage: (runId: RunId) => FileAction<void> = Effect.fn(
-    'ProgressWorkflowFileActionsController.openRunStorage',
+    'ProgressDocumentTaskFileActionsController.openRunStorage',
   )(
     { self: this },
     function* (runId: RunId) {
@@ -140,7 +140,7 @@ export class ProgressWorkflowFileActionsController {
     base: string,
     activeRun?: RunId,
   ) => FileAction<void> = Effect.fn(
-    'ProgressWorkflowFileActionsController.acceptFile',
+    'ProgressDocumentTaskFileActionsController.acceptFile',
   )({ self: this }, function* (file: string, base: string, activeRun?: RunId) {
     const { host, workspace } = this.deps;
     // The content the accept wrote, read once by the write itself, so the

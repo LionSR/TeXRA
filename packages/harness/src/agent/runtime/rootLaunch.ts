@@ -1,6 +1,5 @@
 import { Context, Effect, SubscriptionRef } from 'effect';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { Inbox } from '@agent/followUp/Inbox';
 import {
   SessionRoots,
@@ -13,7 +12,12 @@ import {
   NO_APPROVAL_GRANTS,
   type ApprovalPolicyLimit,
 } from '@shared/approvalBypassKind';
-import type { CommitOrdinal, RunId, SessionCloseReport } from '@shared/schemas';
+import type {
+  AgentConfig,
+  CommitOrdinal,
+  RunId,
+  SessionCloseReport,
+} from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import type { StartOptionsSchema } from '@shared/session/runtimeRequest';
 import {

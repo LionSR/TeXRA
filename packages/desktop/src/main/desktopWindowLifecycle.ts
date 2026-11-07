@@ -53,7 +53,7 @@ export function bootstrapDesktopWindowLifecycle(
       initialRendererNavigationComplete = true;
       return;
     }
-    // A real document reload releases its resources. Switching papers
+    // A real document reload releases its resources. Switching projects
     // changes visibility and never navigates the document.
     options.workspaceIpc.disposeRendererResources();
   });

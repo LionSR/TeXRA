@@ -81,7 +81,7 @@ export async function loadDatabaseFixture(userDataPath) {
   await build({
     stdin: {
       contents: `
-        export { databaseLayer, globalDatabaseLayer } from '@controllers/session/Database';
+        export { databaseLayer, globalDatabaseLayer } from '@controllers/session/databaseLayer';
         export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
         export { Database, GlobalDatabase } from '@shared/session/database';
         export { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -113,7 +113,7 @@ export async function loadDatabaseFixture(userDataPath) {
  * on a handle over the profile's global root: under the e2e user-data
  * override that root is the profile itself, as the app resolves it.
  */
-export async function rememberOpenProject(userDataPath, workspacePath) {
+export async function rememberOpenProject(userDataPath, workspaceRoot) {
   const fixture = await loadDatabaseFixture(userDataPath);
   // The identity read and the database open spawn through the Node spawner
   // the application's runtime serves.
@@ -125,7 +125,7 @@ export async function rememberOpenProject(userDataPath, workspacePath) {
       yield* Effect.gen(function* () {
         const { values } = yield* fixture.GlobalDatabase;
         const records = fixture.openDesktopProjectRecords(values);
-        yield* records.activate(workspacePath);
+        yield* records.activate(workspaceRoot);
       }).pipe(
         Effect.provide(
           fixture

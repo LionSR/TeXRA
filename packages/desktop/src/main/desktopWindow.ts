@@ -364,7 +364,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       { postToRenderer: host.post },
       {
         readLog: () =>
-          readDesktopLogSnapshot({ workspacePath: projects.active().root }),
+          readDesktopLogSnapshot({ workspaceRoot: projects.active().root }),
         logFile: getDesktopLogFilePath,
         following: logFollowing,
         copyLog: (text) => clipboard.writeText(text),

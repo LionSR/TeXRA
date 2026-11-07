@@ -24,7 +24,7 @@ import type {
  * messages, whose media parts are blob addresses, and the assistant message
  * in the package's terms. The invocation resolves the addresses into the
  * package's input parts right before the provider call
- * (`agent/runtime/storedTurn.ts`).
+ * (`agent/runtime/providerMessages.ts`).
  */
 export type HistoryMessage =
   | Exclude<StoredMessage, { readonly role: 'assistant' }>

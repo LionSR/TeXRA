@@ -17,7 +17,7 @@ function resumeRunId(raw: string): RunId {
 }
 
 // Resume is dual-mode, so it takes the full run flag set: a tool-use task
-// reopens the interactive chat, while a workflow run resumes headless like
+// reopens the interactive chat, while a document task run resumes headless like
 // `texra run`.
 export const resumeCommand = defineCliCommand({
   meta: {

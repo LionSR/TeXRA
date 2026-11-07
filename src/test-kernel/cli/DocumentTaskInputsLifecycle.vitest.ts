@@ -5,7 +5,7 @@ import { Deferred, Effect, Exit, Fiber, ManagedRuntime, Scope } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { withExpandedRunInputs } from '@cli/runtime/headless/workflowInputs';
+import { withExpandedRunInputs } from '@cli/runtime/headless/documentTaskInputs';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -25,7 +25,7 @@ describe('CLI workflow input lifecycle', () => {
       createFakeHost({
         globalStoragePath: path.join(root, 'global-storage'),
         storagePath: path.join(root, 'workspace-storage'),
-        workspacePath: root,
+        workspaceRoot: root,
       }),
     ),
     { buildPerTest: true, excludeTestServices: true },

@@ -21,9 +21,9 @@ import {
   selectTranscriptEntriesForViewport,
 } from './transcriptViewport';
 import {
-  selectWorkflowRunDetailLines,
-  WorkflowRunDetails,
-} from './WorkflowRunDetails';
+  selectDocumentTaskRunDetailLines,
+  DocumentTaskRunDetails,
+} from './DocumentTaskRunDetails';
 import { isWorking } from '@texra-ai/harness/schemas';
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
@@ -64,18 +64,18 @@ export function ConversationPane(
       )
     : 0;
   const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
-  const workflowFacts =
+  const documentTaskFacts =
     stream && isDocumentTaskRun(stream)
       ? {
-          taskGroups: stream.transcript.taskGroups,
+          stages: stream.transcript.stages,
           rounds: documentRoundsOf(stream),
         }
       : undefined;
-  const visibleWorkflowDetails = selectWorkflowRunDetailLines(
-    workflowFacts,
+  const visibleDocumentTaskDetails = selectDocumentTaskRunDetailLines(
+    documentTaskFacts,
     detailCapacity,
   );
-  const detailRows = visibleWorkflowDetails.length;
+  const detailRows = visibleDocumentTaskDetails.length;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
     Math.max(0, maxRows - detailRows),
@@ -83,8 +83,8 @@ export function ConversationPane(
   );
   return (
     <Box flexDirection="column" maxHeight={maxRows} overflowY="hidden">
-      <WorkflowRunDetails
-        lines={visibleWorkflowDetails}
+      <DocumentTaskRunDetails
+        lines={visibleDocumentTaskDetails}
         width={metadataWidth}
       />
       {visibleEntries.entries.map((entry) => (

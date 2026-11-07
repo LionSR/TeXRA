@@ -81,7 +81,7 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
     ['run.result', 'execution'],
     // An approval request's binding to its tool call.
     ['tool.binding', 'execution'],
-    // The workflow engine's journal, plan, script, calls and attempts.
+    // The script engine's journal, plan, script, calls and attempts.
     ['workflow.attempt', 'execution'],
     ['workflow.call', 'execution'],
     ['workflow.journal', 'execution'],
@@ -221,7 +221,7 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // `phaseCount` (an earlier build's user message would be refused as a
   // damaged payload).
   log: { version: 7, listing: 'none' },
-  // v2: no `phase` kind and no `index`/`total` (an earlier build's workflow
+  // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
   'stage.start': { version: 2, listing: 'none' },

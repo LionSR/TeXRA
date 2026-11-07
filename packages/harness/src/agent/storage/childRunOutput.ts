@@ -17,7 +17,7 @@ import {
 import type { ToolRegistry } from '@tools/toolTable';
 import { normalizeFilePath } from '@utils/core';
 
-import { getRunRecords } from './runRecords';
+import { getRunRecords } from './runOwnership';
 
 /** Fail unless `reference` names a declared output of a completed direct
  *  child of `parentRunId`. */
@@ -95,7 +95,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     const reference = runStorageLocationUnder(storageRoot, absolutePath);
     if (!reference) {
       return yield* Effect.fail(
-        new Error('Workflow output is not inside run storage.'),
+        new Error('A declared output is not inside run storage.'),
       );
     }
 
@@ -120,7 +120,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
         );
       case 'invalid':
         return yield* Effect.fail(
-          new Error(`Invalid declared workflow output: ${entry.reason}`),
+          new Error(`Invalid declared output: ${entry.reason}`),
         );
       default:
         return yield* Effect.fail(

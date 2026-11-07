@@ -217,7 +217,7 @@ export interface FakePlatformOptions {
    * default. A suite pointing the workspace elsewhere passes a real
    * directory it owns (its own temp dir, or `process.cwd()`).
    */
-  workspacePath?: string | undefined;
+  workspaceRoot?: string | undefined;
   /** The storage root, as a real path. Defaults under the workspace root. */
   storagePath?: string;
   /** The global-storage root, as a real path. Worker-shared by default. */
@@ -260,8 +260,8 @@ export function createFakeWorkspaceRoots(
   root: string = makeHostRoot(),
 ): WorkspaceRoots {
   return {
-    workspace: Object.hasOwn(options, 'workspacePath')
-      ? options.workspacePath
+    workspace: Object.hasOwn(options, 'workspaceRoot')
+      ? options.workspaceRoot
       : path.join(root, 'workspace'),
     storageRoot: fakeStorageRoot(),
     storage: options.storagePath ?? path.join(root, 'workspace/.texra/storage'),

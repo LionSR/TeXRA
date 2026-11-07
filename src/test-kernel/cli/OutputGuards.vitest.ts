@@ -9,7 +9,7 @@ import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
-} from '@cli/runtime/headless/workflowOutput';
+} from '@cli/runtime/headless/documentTaskOutput';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 

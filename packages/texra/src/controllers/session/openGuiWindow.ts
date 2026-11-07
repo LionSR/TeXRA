@@ -55,9 +55,9 @@ import {
   type TranscriptExportHost,
 } from '@texra/controllers/progressView/exportTranscript';
 import {
-  ProgressWorkflowFileActionsController,
-  type ProgressWorkflowFileActionsHost,
-} from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+  ProgressDocumentTaskFileActionsController,
+  type ProgressDocumentTaskFileActionsHost,
+} from '@texra/controllers/progressView/ProgressDocumentTaskFileActionsController';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
@@ -200,7 +200,7 @@ interface GuiWindowHost {
   /** What the window does for its project's runs, here or in the service. */
   readonly window: WindowHost;
   readonly runs: Pick<HostRunActionPorts, 'openFinalOutput' | 'revealProgress'>;
-  readonly files: Omit<ProgressWorkflowFileActionsHost, 'showInfo'>;
+  readonly files: Omit<ProgressDocumentTaskFileActionsHost, 'showInfo'>;
   /** The transcript export's format picker and opener, the LaTeX export's
    *  preamble, and the host's resources directory, which holds the
    *  standalone trace viewer's template. */
@@ -349,19 +349,21 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     session,
     notify: host.notify,
   });
-  const workflowFileActions = new ProgressWorkflowFileActionsController({
-    rounds: (runId) => {
-      const run = session.view.current().runs.get(runId);
-      return run === undefined ? [] : documentRoundsOf(run);
+  const documentTaskFileActions = new ProgressDocumentTaskFileActionsController(
+    {
+      rounds: (runId) => {
+        const run = session.view.current().runs.get(runId);
+        return run === undefined ? [] : documentRoundsOf(run);
+      },
+      storageRoot: roots.storage,
+      workspace: roots.workspace,
+      host: {
+        ...host.files,
+        showInfo: (message) => host.notify('info', message),
+      },
+      runs: runActions,
     },
-    storageRoot: roots.storage,
-    workspace: roots.workspace,
-    host: {
-      ...host.files,
-      showInfo: (message) => host.notify('info', message),
-    },
-    runs: runActions,
-  });
+  );
 
   const { bindings } = host;
   const apiKeyRetry = new ProgressApiKeyRetryController({
@@ -432,13 +434,13 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       }
       switch (action) {
         case 'compare':
-          yield* workflowFileActions.compareOriginal(editedFile, baseFile);
+          yield* documentTaskFileActions.compareOriginal(editedFile, baseFile);
           return;
         case 'accept':
-          yield* workflowFileActions.acceptFile(editedFile, baseFile);
+          yield* documentTaskFileActions.acceptFile(editedFile, baseFile);
           return;
         case 'merge':
-          yield* workflowFileActions.mergeFile(editedFile, baseFile);
+          yield* documentTaskFileActions.mergeFile(editedFile, baseFile);
           return;
         case 'latexdiff':
           yield* latexdiff.file(baseFile, editedFile);
@@ -471,7 +473,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         }
         case 'openRunStorage':
-          yield* workflowFileActions.openRunStorage(request.runId);
+          yield* documentTaskFileActions.openRunStorage(request.runId);
           return done;
         case 'attachDroppedFiles': {
           const attached = yield* attachDroppedFiles(
@@ -584,7 +586,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'fileAction':
           yield* request.action === 'latexdiff'
             ? latexdiff.file(request.base, request.file)
-            : workflowFileActions.handle({
+            : documentTaskFileActions.handle({
                 ...request,
                 action: request.action,
               });
@@ -598,12 +600,12 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* exportTranscript(request.runId);
           return done;
         case 'latexdiff':
-          yield* runActions.workflowDiffRequest(request.runId);
+          yield* runActions.documentTaskDiffRequest(request.runId);
           yield* latexdiff.run(request.runId);
           return done;
         case 'pack':
         case 'clean': {
-          const files = yield* runActions.workflowFileOperation(
+          const files = yield* runActions.documentTaskFileOperation(
             request.runId,
             request.kind,
           );
