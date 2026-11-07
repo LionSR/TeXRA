@@ -7,10 +7,7 @@
 
 // Local imports
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
-import {
-  getEffectiveDiffBase,
-  type OutputFileInfo,
-} from '@texra/shared/plugins/documentOutputs';
+import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 
 // Local file imports
@@ -33,7 +30,7 @@ export interface LatexdiffPair {
 
 /**
  * The latexdiffs a round's recorded `outputs` call for: each output against
- * the document it started from (its recorded lineage's diff base), then each
+ * the document it started from (its recorded lineage's base), then each
  * against its own output in the `previous` round (empty when between-round
  * diffs are off). An output's document is its source as the round wrote it
  * (`getSafeDocumentRelativePath`), never its basename: `a/main.tex` and
@@ -49,7 +46,7 @@ export function latexdiffPairs(
   }));
   const fromBase = documents.flatMap(
     ({ revised, document }): LatexdiffPair[] => {
-      const base = getEffectiveDiffBase(revised.lineage);
+      const base = revised.lineage?.base;
       return base
         ? [{ revised, document, base, baseRound: null, suffix: '_diff' }]
         : [];

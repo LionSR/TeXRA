@@ -67,13 +67,7 @@ export const failureContextFromLogs = Effect.fn('failureContextFromLogs')(
     // one is the one named.
     const reads = yield* Effect.forEach(
       failures,
-      (failure) =>
-        // A check that errored before writing a log records the output as it.
-        Effect.result(
-          failure.log.absolutePath === failure.output.absolutePath
-            ? Effect.fail(new Error('the check errored before writing a log'))
-            : fs.readFileString(failure.log.absolutePath),
-        ),
+      (failure) => Effect.result(fs.readFileString(failure.log.absolutePath)),
       { concurrency: 8 },
     );
     const excerpts: string[] = [];

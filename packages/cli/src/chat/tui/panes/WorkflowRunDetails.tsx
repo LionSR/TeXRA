@@ -1,7 +1,7 @@
 // Focused, read-only workflow run details.
 //
 // Task-group lifecycle comes from the transcript; generated files and warnings
-// come from the canonical round-indexed artifact facts. This component only
+// come from the rounds of the run's documents fact. This component only
 // joins and renders those facts—it does not infer or mutate workflow state.
 
 import { Box, Text } from 'ink';
@@ -9,7 +9,6 @@ import { Box, Text } from 'ink';
 import { formatCompactDuration } from '@texra-ai/harness/transcript';
 import {
   fileLocationDisplayPath,
-  type FileLocation,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@texra-ai/harness/schemas';
@@ -17,15 +16,12 @@ import { safeTerminalText } from '@cli/runtime/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import {
+  compileFailuresOf,
   formatRoundLabel,
   latexdiffDisplayName,
   outputDiffCounts,
   outputDisplayName,
-  roundIndexedEntries,
-  type CompileFailure,
-  type LatexdiffEntry,
-  type ReadonlyRoundIndexed,
-  type OutputFileInfo,
+  type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
@@ -41,12 +37,8 @@ interface WorkflowRunDetailLine {
 
 type WorkflowRunFacts = {
   readonly taskGroups: readonly TaskGroup[];
-  readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
-  readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
-  readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
-  readonly latexdiffsByRound: ReadonlyRoundIndexed<LatexdiffEntry>;
-  /** Each round's kept reply: a round that wrote nothing shows where. */
-  readonly repliesByRound: { readonly [round: number]: FileLocation };
+  /** The run's rounds, as its documents fact records them. */
+  readonly rounds: readonly RoundOutput[];
 };
 
 interface WorkflowRunDetailGroup {
@@ -91,7 +83,6 @@ function workflowRunDetailGroups(
   if (!facts) return [];
 
   const groups: WorkflowRunDetailGroup[] = [];
-  const rounds = new Set<number>();
   for (const group of facts.taskGroups) {
     groups.push({
       key: `lifecycle:${group.id}`,
@@ -105,21 +96,8 @@ function workflowRunDetailGroups(
       priority: lifecyclePriority(group.status) + 1,
     });
   }
-  for (const [round] of [
-    ...roundIndexedEntries(facts.outputFilesByRound),
-    ...roundIndexedEntries(facts.missingOutputsByRound).filter(
-      ([, missing]) => missing.length > 0,
-    ),
-    ...roundIndexedEntries(facts.compileFailuresByRound),
-    ...roundIndexedEntries(facts.latexdiffsByRound),
-  ]) {
-    rounds.add(round);
-  }
-  // As the webview's file list: a round that kept a reply shows.
-  for (const round of Object.keys(facts.repliesByRound))
-    rounds.add(Number(round));
-
-  for (const round of [...rounds].toSorted((left, right) => left - right)) {
+  for (const record of facts.rounds) {
+    const { round, outputs, missingOutputs: missing, reply } = record;
     const lines: WorkflowRunDetailLine[] = [
       {
         key: `round:${round}`,
@@ -129,7 +107,6 @@ function workflowRunDetailGroups(
       },
     ];
 
-    const outputs = facts.outputFilesByRound[round] ?? [];
     if (outputs.length > 0) {
       lines.push({
         key: `outputs:${round}`,
@@ -154,8 +131,6 @@ function workflowRunDetailGroups(
         });
       }
     }
-    const missing = facts.missingOutputsByRound[round] ?? [];
-    const reply = facts.repliesByRound[round];
     if (reply && (outputs.length === 0 || missing.length > 0))
       lines.push({
         key: `reply:${round}`,
@@ -171,9 +146,7 @@ function workflowRunDetailGroups(
         role: 'alert',
       });
     }
-    for (const [index, failure] of (
-      facts.compileFailuresByRound[round] ?? []
-    ).entries()) {
+    for (const [index, failure] of compileFailuresOf(record).entries()) {
       lines.push({
         key: `compile:${round}:${failure.log.absolutePath}:${index}`,
         text: `  ${CROSS} ${formatRoundLabel(round)} · Compile check failed: ${safeTerminalText(failure.displayName)} · ${safeTerminalText(failure.logRelativePath)}`,
@@ -181,9 +154,7 @@ function workflowRunDetailGroups(
         role: 'alert',
       });
     }
-    for (const [index, entry] of (
-      facts.latexdiffsByRound[round] ?? []
-    ).entries()) {
+    for (const [index, entry] of record.latexdiffs.entries()) {
       lines.push({
         key: `latexdiff:${round}:${index}`,
         text: `  ${entry.status === 'ok' ? TICK : CROSS} ${formatRoundLabel(round)} · Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}${entry.status === 'failed' ? ` — ${safeTerminalText(entry.error)}` : ''}`,

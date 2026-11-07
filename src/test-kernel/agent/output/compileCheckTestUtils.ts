@@ -12,7 +12,6 @@ import { spiedTrace } from '@test/support/spiedTrace';
 import { TEXRA_APP } from '@test/support/texraApp';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import type { OutputState } from '@texra/agent/output/outputState';
 import type { runCompileCheck } from '@texra/agent/output/compileCheck';
 import type { FileLocation, RunId } from '@texra-ai/harness/schemas';
 
@@ -58,13 +57,11 @@ export function outputFile(
 
 export function compileContext(
   runId: RunId,
-  outputState: OutputState,
 ): Parameters<typeof runCompileCheck>[0] {
   return {
     // The installed fake host's roots: these suites seed and read one host.
     roots: testWorkspaceRoots(),
     fileService: new RunFileService(runId, testWorkspaceRoots()),
-    outputState,
     logger: spiedTrace(),
     runId,
   };

@@ -12,10 +12,8 @@ import {
 } from '../runtime/completionCommandTree';
 import { fishCompletion } from '../runtime/completionFish';
 import { zshCompletion } from '../runtime/completionZsh';
-import { CliExitCode } from '../runtime/exitCodes';
 import { writeTextStdout } from '../runtime/logSinks';
 
-import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 
 const COMPLETION_SCRIPT: Record<
@@ -43,6 +41,5 @@ export const completionCommand = defineCommand({
     } catch (error) {
       throw new CliUsageError({ message: toErrorMessage(error) });
     }
-    setExitCode(CliExitCode.Success);
   },
 });

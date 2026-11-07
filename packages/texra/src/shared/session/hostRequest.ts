@@ -244,6 +244,4 @@ export type FileOpResult =
       /** The packed copy's folder. */
       readonly outputFolder?: string;
     }
-  | { readonly status: 'noFiles' }
-  | { readonly status: 'missingParams' }
-  | { readonly status: 'error'; readonly error: string };
+  | { readonly status: 'noFiles' };
