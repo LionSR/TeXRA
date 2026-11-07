@@ -518,7 +518,7 @@ The fold maps a position to a loop phase: `turn.ready` and `waiting` to
 
 There is no halted position: a `run.end` is the halt, and a resume continues
 from the phase the last `run.position` recorded
-(`shared/session/runActions.ts#continuesFromRows`).
+(`shared/session/runState.ts#phaseAfter`).
 
 ### 5.4 The commit path
 
@@ -867,8 +867,9 @@ What survives at each commit point follows from sections 2 to 8:
 - `run.end`: The lifecycle is over. A recipe task stays finished, and a
   resume answers `finished`
   (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
-  conversation continues on a resume in a new lifecycle, from the phase its
-  last `run.position` kept (`shared/session/runActions.ts#continuesFromRows`).
+  conversation continues on a resume in a new lifecycle
+  (`shared/session/runActions.ts#continuesFromRows`), from the phase its
+  last `run.position` kept (`shared/session/runState.ts#phaseAfter`).
 
 These are guarantees about committed state. An external effect that finished
 before its result committed stays uncertain; I4 governs it, and the suite cannot
