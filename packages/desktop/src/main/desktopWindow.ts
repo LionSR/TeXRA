@@ -187,14 +187,12 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     ),
   );
 
-  // `surface`, `bindings` and `navigation` are declared below and read only
-  // inside lazy callbacks; the order cannot flip, since the surface takes the
-  // onboarding this call returns.
+  // `surface` is declared below and read only inside a lazy callback; the
+  // order cannot flip, since the bindings take the onboarding this call
+  // returns.
   const onboarding = yield* openWindowOnboarding({
     runtime,
-    projects,
     settings: () => surface.settings(),
-    activeRun: () => bindings.active(),
   });
 
   const shellActions = createDesktopShellActions(
