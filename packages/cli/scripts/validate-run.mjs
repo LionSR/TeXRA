@@ -2205,8 +2205,8 @@ prompt: |
  * A project's session in the service closes once it has no client and no
  * run held for the idle time (audit 2026-10-07 #6), while the service
  * stays up for another project's window; the next task reopens it. The
- * service is started in the foreground with a short idle time. Its log
- * lines about the close and both tasks' outcomes are the artifact.
+ * service is started in the foreground with a short idle time. Both tasks
+ * and whether the other project's session is still open are the artifact.
  */
 async function validateServiceSessionIdle() {
   const cwd = makeScratch('texra-cli-service-idle-');
@@ -2276,11 +2276,29 @@ async function validateServiceSessionIdle() {
          WHERE s.logical_id = '${runId}' AND e.type = 'run.position'
          AND json_extract(e.data, '$.payload.at') = 'waiting'`,
       ).length > 0;
+    // A project's session is the one holder of its store, which it keeps
+    // exclusively: the session is open while a reader is refused
+    // (`SQLITE_BUSY`). The service logs nothing as a session closes.
+    const storage = path.join(storageRoot, 'v1', 'workspace-storage');
+    const sessionOpen = (prefix) => {
+      const dir = readdirSync(storage).find((name) => name.startsWith(prefix));
+      assert(dir !== undefined, `the ${prefix} project should have a store`);
+      const db = new DatabaseSync(path.join(storage, dir, 'texra.db'), {
+        readOnly: true,
+      });
+      try {
+        db.prepare('SELECT 1 FROM event LIMIT 1').all();
+        return false;
+      } catch (error) {
+        if (error.errcode !== 5) throw error;
+        return true;
+      } finally {
+        db.close();
+      }
+    };
     await waitFor('the first task to wait', () => ended(first));
     texra(['tasks', 'stop', first], 'texra tasks stop (first)');
-    await waitFor('the project session to close', () =>
-      /Closed the idle session of .*work-/.test(log),
-    );
+    await waitFor('the project session to close', () => !sessionOpen('work-'));
     const second = texra(
       [
         'tasks',
@@ -2294,23 +2312,15 @@ async function validateServiceSessionIdle() {
       'texra tasks start (reopened)',
     );
     await waitFor('the second task to wait', () => ended(second));
+    const otherOpen = sessionOpen('other-');
     const artifactPath = writeArtifact('service-session-idle.json', {
-      closed: log
-        .split('\n')
-        .filter((line) => line.includes('Closed the idle session')),
       first,
       second,
+      otherOpen,
       serviceAlive: service.exitCode === null,
     });
     assert(
-      service.exitCode === null &&
-        !log
-          .split('\n')
-          .some(
-            (line) =>
-              line.includes('Closed the idle session') &&
-              line.includes('other'),
-          ),
+      service.exitCode === null && otherOpen,
       `the service should stay up and keep the attached project's session (artifact: ${artifactPath})`,
     );
     texra(['tasks', 'stop', second], 'texra tasks stop (second)');
