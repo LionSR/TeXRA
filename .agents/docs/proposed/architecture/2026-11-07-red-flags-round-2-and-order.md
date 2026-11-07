@@ -201,16 +201,29 @@ lists the findings it closes and the primitive.
 
 **Lane 3, one lifetime per request and window** (unassigned; no root).
 
-1. **The tool-edit preview: G1 + I11 + N10.** The request's `Scope` (the
-   fiber `followPendingRequests`' `FiberMap.run` already gives it) is the only
-   "finished": `Scope.addFinalizer` per temp file, `Effect.forkIn(preview,
-   scope)`, `Semaphore.make(1)` per entry for "one LaTeX operation at a time".
-   The controller takes the staging both hosts implement today
-   (`desktopToolEditApproval.ts`, 233 lines; `VscodeToolEditApprovalHost.ts`,
-   225), and each host keeps its verb. Deletes `settled`, `isSettled`,
-   `staged`, `registerCleanup`, the cleanup array, `latexOperationInProgress`,
-   five `Effect.uninterruptible` and three `Effect.never`. First in this lane:
-   three areas, the largest fiber-fighting cluster in the app.
+1. **The tool-edit preview: G1 + I11.** The request's `Scope` (the fiber
+   `followPendingRequests`' `FiberMap.run` already gives it) is the only
+   "finished": the temp files are finalizers of a child scope forked first,
+   a preview's fiber is in the request's scope, and `Semaphore.make(1)` per
+   entry is "one LaTeX operation at a time". Deletes `settled`, `isSettled`,
+   `workspaceTempCleanup`, `latexOperationInProgress`, `registerCleanup` and
+   one uninterruptible mask (PR 14784). The approval's masks and the
+   `applied` Ref wait for R7. N10, one staging for both hosts, was refused
+   on investigation (below).
+
+   **N10: refused on investigation.** The two hosts differ exactly where the
+   flow matters: the desktop stages each request in a temp directory of its
+   own and reads the user's edits from the saved file, while VS Code stages
+   into its storage directory and reads the unsaved editor buffer; an
+   unapplied edit stays on disk beside the editor in the desktop, and moves
+   to an untitled editor in VS Code before both copies go. The shared part,
+   writing the two copies, is already one function
+   (`writeApprovalTempFiles`). Moving the staging into the controller would
+   make it know which files each host removes. What stays duplicated is two
+   path getters and two spellings of the diff's title; the title could be
+   one string in `ui/copy/toolEditPreview.ts` if the two hosts should show
+   the same one. Recorded as `RT-tool-edit-staging-one-owner`.
+
 2. **The host snapshot and onboarding: G3 + G6 + N3.** One
    `SubscriptionRef<HostSnapshot>` fed by `Stream.zipLatest` of the flag
    changes and the credential probe, `Stream.changes` before the `update`;
@@ -350,7 +363,7 @@ its files are open.
 ### If one driver does it all
 
 Step 0 (I9); then R6 (2.1), since it unblocks the most; then the tool-edit
-preview (3.1); the host snapshot (3.2); R10's two PRs (2.2); a window's
+preview (3.1, PR 14784); the host snapshot (3.2); R10's two PRs (2.2); a window's
 session (3.3); the settings view (3.4); the document task's record (4.3,
 once 14713 is in); the webview transport (3.5); R8's second half (2.3);
 GitHub and Lean (4.1, 4.2); then lanes 5, 6, 7, 8 and 9 in that order. Lane
@@ -475,7 +488,7 @@ item a report lists without a lane. Full deletion lists are in the reports.
 | N7  | open projects: a persisted list read four times, a Symbol lane, a hand-diffed map           | S3      | 3.3       |
 | N8  | the editor pane's five generation counters and a promise lane                               | S2      | 3.6       |
 | N9  | the desktop window's lifecycle as three optionals beside a FiberSet and a Semaphore         | S1      | 3.6       |
-| N10 | tool-edit staging implemented twice, down to the preview class                              | S4      | 3.1       |
+| N10 | tool-edit staging implemented twice, down to the preview class                              | S4      | refused   |
 | N11 | batched: settings frontend's "not loaded" ×3, trace viewer, logs poll, …                    | S2, S3  | 3.4, 8.1  |
 | O1  | the route decided in three steps the harness sequences; the endpoint in three constants     | S5      | 7.1       |
 | O2  | reasoning controls decided in `models/` and in each `api/` row                              | S5      | 7.1       |
