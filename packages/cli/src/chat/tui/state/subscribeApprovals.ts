@@ -40,7 +40,6 @@ import {
   pruneToLive,
   reopenRequest,
   stagePresentation,
-  useHostCapability,
 } from './approvalQueue';
 import {
   appendLocalErrorTranscript,
@@ -72,12 +71,18 @@ interface TuiApprovalStores {
   readonly runtime: ProcessRuntime;
 }
 
+/** The TUI's presentation host, and the host commands it performs for the
+ *  chat's decisions while it is attached. */
+export interface TuiHostInteractions extends HostInteractions {
+  readonly performHost: (command: HostCommand) => void;
+}
+
 /** Create the TUI's presentation host. */
 export function createTuiHostInteractions(
   host: CliRuntimeHost,
   context: CliContext,
   stores: TuiApprovalStores,
-): HostInteractions {
+): TuiHostInteractions {
   const apiKeyRetry = new ProgressApiKeyRetryController({
     promptForApiKey: (provider) =>
       promptForCliProviderApiKey(stores.settings, provider).pipe(
@@ -145,7 +150,7 @@ export function createTuiHostInteractions(
     );
   };
 
-  const performHostCapability = (arm: HostCommand): void => {
+  const performHost = (arm: HostCommand): void => {
     if (arm.kind === 'useOwnApiKey') {
       useOwnApiKey(arm);
       return;
@@ -178,9 +183,8 @@ export function createTuiHostInteractions(
       attached,
     ),
   );
-  const releaseCapability = useHostCapability(performHostCapability);
-
   return {
+    performHost,
     // The CLI host renders the notice itself and says whether it rendered a
     // user-visible record; there is no program for the session to fork.
     emit: (event, payload) => {
@@ -188,7 +192,6 @@ export function createTuiHostInteractions(
     },
     dispose() {
       stores.runtime.runFork(Scope.close(attached, Exit.void));
-      releaseCapability();
     },
   };
 }

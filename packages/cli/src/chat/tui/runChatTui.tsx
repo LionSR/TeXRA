@@ -632,6 +632,7 @@ export async function runChat(
         onCtrlC={() => exitController.handleSigint()}
         onSuspend={() => exitController.handleSigtstp()}
         history={inputHistory}
+        performHost={chatController.performHost}
       />
     </SlashCommandsProvider>,
     {

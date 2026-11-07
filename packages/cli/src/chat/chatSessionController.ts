@@ -74,6 +74,7 @@ import type { TuiSession } from './tui/state/sessionRunState';
 import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf } from './tui/state/sessionView';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
   appendLocalErrorTranscript,
   appendLocalNotice,
@@ -166,6 +167,9 @@ export interface ChatSessionController {
   activateSkill(selection: SkillActivation): void;
   /** Drop every activated skill. */
   clearPendingSkills(): void;
+  /** Perform the host command a decision names instead of a
+   *  `request.decide`, on the chat's attached host. */
+  readonly performHost: (command: HostCommand) => void;
 }
 
 export interface ChatSessionControllerInit {
@@ -953,6 +957,7 @@ export function createChatSessionController(
       );
     }),
     activateSkill,
+    performHost: interactions.performHost,
     clearPendingSkills: () =>
       runtime.runSync(
         SubscriptionRef.update(draft, (current) => ({

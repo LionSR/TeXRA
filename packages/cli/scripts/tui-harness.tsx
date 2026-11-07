@@ -514,24 +514,28 @@ const harnessHostScope = Effect.runSync(Scope.make());
 HARNESS_DISPOSERS.push(() =>
   Effect.runSync(Scope.close(harnessHostScope, Exit.void)),
 );
-Effect.runSync(
-  attachInteractions(
-    session().interactions,
-    createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-      requests: {
-        request: (req) =>
-          session()
-            .requests.request(req)
-            .pipe(Effect.provide(harnessRuntimeSession)),
-        view: {
-          current: () => SubscriptionRef.getUnsafe(session().view.ref),
-          changes: session().view.changes,
-        },
+const harnessInteractions = createTuiHostInteractions(
+  harnessRuntimeHost,
+  HARNESS_CLI_CONTEXT,
+  {
+    requests: {
+      request: (req) =>
+        session()
+          .requests.request(req)
+          .pipe(Effect.provide(harnessRuntimeSession)),
+      view: {
+        current: () => SubscriptionRef.getUnsafe(session().view.ref),
+        changes: session().view.changes,
       },
-      settings: HARNESS_PLATFORM_SERVICES,
-      runtime: harnessRuntime,
-    }),
-  ).pipe(Scope.provide(harnessHostScope)),
+    },
+    settings: HARNESS_PLATFORM_SERVICES,
+    runtime: harnessRuntime,
+  },
+);
+Effect.runSync(
+  attachInteractions(session().interactions, harnessInteractions).pipe(
+    Scope.provide(harnessHostScope),
+  ),
 );
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
@@ -1888,6 +1892,7 @@ function renderHarnessApp(): React.JSX.Element {
         onSubmit={(draft) => handleHarnessSubmit(expandText(draft).trim())}
         scrollback={scrollback}
         onCtrlC={handleHarnessCtrlC}
+        performHost={harnessInteractions.performHost}
       />
     </SlashCommandsProvider>
   );

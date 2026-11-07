@@ -44,6 +44,7 @@ import type { ChatScrollback } from './panes/staticTranscriptRing';
 import { useMountScope } from './state/useMountScope';
 import { StatusBar } from './panes/StatusBar';
 import { currentApproval, promoteApprovalsForRun } from './state/approvalQueue';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
   ActiveDraftScope,
   createActiveDraftRegistry,
@@ -119,6 +120,9 @@ interface AppProps {
    *  ^Z→SIGTSTP translation, so the parsed key must be routed explicitly. */
   readonly onSuspend?: () => void;
   readonly history?: InputHistory;
+  /** Performs the host command an approval decision names instead of a
+   *  `request.decide`: the chat's attached host. */
+  readonly performHost: (command: HostCommand) => void;
 }
 
 export function App(props: AppProps): React.JSX.Element {
@@ -310,7 +314,14 @@ export function App(props: AppProps): React.JSX.Element {
             availableRows={availableRows}
             payload={pending.payload}
             onDecide={(decision) =>
-              pending.decide(requests, props.runtime, decision)
+              pending.decide(
+                {
+                  requests,
+                  runtime: props.runtime,
+                  performHost: props.performHost,
+                },
+                decision,
+              )
             }
           />
         ) : null,
