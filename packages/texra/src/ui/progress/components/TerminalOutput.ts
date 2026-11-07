@@ -113,6 +113,8 @@ export class TerminalOutput extends LitElement {
   private readonly terminalContainer = createRef<HTMLDivElement>();
 
   private terminal: Terminal | null = null;
+  /** Theme tokens this terminal already reported missing. */
+  private readonly reportedTokens = new Set<string>();
   private fitAddon: FitAddon | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private detailsElement: Element | null = null;
@@ -133,7 +135,7 @@ export class TerminalOutput extends LitElement {
   override firstUpdated(): void {
     const container = this.terminalContainer.value;
     if (!container) throw new Error('TerminalOutput rendered no container');
-    const { theme, fontFamily } = resolveXtermTheme(this);
+    const { theme, fontFamily } = resolveXtermTheme(this, this.reportedTokens);
     const editorFontSize = Number.parseFloat(
       getComputedStyle(this).getPropertyValue('--wa-editor-font-size'),
     );
