@@ -202,19 +202,30 @@ export class SubscriptionOAuthCoordinator<
   }
 
   /** End the stored (readable) session at the provider, then delete it either
-   *  way, after any refresh in flight; a failed end is reported after. */
+   *  way; a failed end is reported after. Under the lock, after any refresh in
+   *  flight, so the token ended is the one a refresh rotated to, not the one
+   *  it replaced. */
   readonly signOut = Effect.fn('SubscriptionOAuthCoordinator.signOut')(
     function* (this: SubscriptionOAuthCoordinator<S>) {
       const { endSession } = this.policy;
-      const ended = yield* Effect.exit(
-        this.loadSession().pipe(
-          Effect.catchTag('SubscriptionOAuthError', () => Effect.succeed(null)),
-          Effect.flatMap((session) =>
-            session && endSession ? endSession(session) : Effect.void,
-          ),
-        ),
+      const ended = yield* this.lock.withPermit(
+        Effect.gen({ self: this }, function* () {
+          const ended = yield* Effect.exit(
+            this.loadSession().pipe(
+              Effect.catchTag('SubscriptionOAuthError', () =>
+                Effect.succeed(null),
+              ),
+              Effect.flatMap((session) =>
+                session && endSession ? endSession(session) : Effect.void,
+              ),
+            ),
+          );
+          yield* Effect.uninterruptible(
+            this.secrets.delete(this.policy.secretKey),
+          );
+          return ended;
+        }),
       );
-      yield* this.lock.withPermit(this.secrets.delete(this.policy.secretKey));
       if (Exit.isFailure(ended)) return yield* Effect.failCause(ended.cause);
     },
   );
@@ -231,7 +242,7 @@ export class SubscriptionOAuthCoordinator<
       clientId?: string,
     ) {
       const session = yield* this.buildSession(tokens, undefined, clientId);
-      yield* this.lock.withPermit(this.store(session));
+      yield* this.lock.withPermit(Effect.uninterruptible(this.store(session)));
       return session;
     },
   );
