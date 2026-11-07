@@ -49,7 +49,8 @@ with E's and A's own accounts of what their PRs left.
 - Round 6's ids are written R6-S1 to R6-S10 and R6-T1 to R6-T7, since
   round 3's S and T rows already hold S9, T6 and T7. Round 7's are FB1 to
   FB10, as the report names them.
-- **Three rows marked landed were wrong, and one root with them.** Round 6
+- **Four rows marked landed were wrong (B2, B3, B6, E1), and one root with
+  them.** Round 6
   T re-read #14769's body: B2 and B3 (the three tails, the settle
   coordinates, the `order: true` jobs) and B6 (`mapDatabaseFailure`
   re-classifying defects) are listed as landed by R1, but every symbol
@@ -95,7 +96,7 @@ with E's and A's own accounts of what their PRs left.
 - #14836 (B, re-run of #14833 on the final main): NM4, NM7, NM8, T6, X-R5
   and Y-B's `subscribeAppSignal`. #14833 is closed as superseded.
 
-**Refused.** Four entries this wave, each a part of a row:
+**Refused.** Three entries this wave, each a part of a row:
 `G11g-usage-region-out-of-cache-key` (#14830), `RT-tui-approve-handler`
 (F2) and `CLI-tui-bell-from-attention` (K11) (#14837).
 No row was refused whole.
@@ -123,7 +124,8 @@ As before: W3's alternative, W7, W9's "age unknown" rule, a separate
 recorded compromises: root-designs PR 1 §1.4 (headless denials reach stderr
 again, `executeCli.ts`) and round 4's X-R8 (one `openLocalSession`).
 
-**Open,** with no owner:
+**Open, waiting on a later PR** (each has an owner, so it counts as
+assigned):
 
 - **F3** (the chat's launch path through `createHostRunActions`). #14837
   checked `main`: `runValidated` takes no run id and no continuation, and
@@ -132,6 +134,9 @@ again, `executeCli.ts`) and round 4's X-R8 (one `openLocalSession`).
   three hosts", not a step; it waits for that PR.
 - **K11's `/clear`.** Now three steps; the design that ends it is one
   per-chat `ChatState` for the TUI's module signals, its own PR.
+
+**Open,** with no owner:
+
 - **R5-6's rest:** the other seven `runFork` sites and the run-id counters
   in three suites, which neither round-5 PR lists.
 - **The `texra resume` shutdown window** #14837 names: a stop that lands
