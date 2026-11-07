@@ -18,19 +18,22 @@ export const SUPABASE_URL = requireEnv('SUPABASE_URL');
 export const SUPABASE_ANON_KEY = requireEnv('SUPABASE_ANON_KEY');
 const SUPABASE_SERVICE_ROLE_KEY = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
-/** Stateless server clients: no token refresh, no persisted session. */
-const STATELESS = { auth: { autoRefreshToken: false, persistSession: false } };
+/** Options for a stateless server client (no token refresh, no persisted
+ *  session), built fresh for each client so none shares another's object. */
+const stateless = () => ({
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 
 /** Service-role client: bypasses RLS, never reachable from a browser. */
 export const adminClient = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
-  STATELESS,
+  stateless(),
 );
 
 /** Anon-key client used to consume server-minted GoTrue tokens. */
 export const anonClient = createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
-  STATELESS,
+  stateless(),
 );
