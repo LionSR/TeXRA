@@ -27,11 +27,7 @@ import {
   StateReadFailed,
   withLogChannel,
 } from '@texra-ai/harness/host';
-import {
-  agentName,
-  RUN_PHASE,
-  type SessionView,
-} from '@texra-ai/harness/schemas';
+import { agentName, type SessionView } from '@texra-ai/harness/schemas';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { Session } from '@texra-ai/harness';
@@ -74,7 +70,7 @@ export function setFirstRunDone(
 function hasCompletedRun(view: SessionView): boolean {
   for (const run of view.runs.values()) {
     if (
-      run.status === RUN_PHASE.COMPLETED &&
+      run.outcome === 'completed' &&
       run.identity.kind === 'agent' &&
       agentName(run.identity.agent) !== SETUP_AGENT_NAME
     )

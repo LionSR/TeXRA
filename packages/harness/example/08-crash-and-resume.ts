@@ -161,11 +161,11 @@ const resumeProgram = Effect.gen(function* () {
         Stream.succeed(session.view.current()),
         session.view.changes,
       ),
-      (view) => childrenOf(view).some((run) => run.durableOutcome !== null),
+      (view) => childrenOf(view).some((run) => run.outcome !== null),
     ),
   ).pipe(Effect.timeout('5 seconds'));
   const committed = childrenOf(Option.getOrThrow(finished));
-  if (committed.length !== 1 || committed[0]?.durableOutcome !== 'completed')
+  if (committed.length !== 1 || committed[0]?.outcome !== 'completed')
     throw new Error(`expected one finished child, got ${committed.length}`);
   const firstChild = committed[0].id;
   console.log(`[08] child ${firstChild}'s result committed; ${signal} sent`);

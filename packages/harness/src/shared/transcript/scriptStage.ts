@@ -22,6 +22,7 @@ import {
 } from '@shared/schemas';
 import {
   acceptsFollowUp,
+  isInterrupted,
   requestAnswerability,
 } from '@shared/session/sessionView';
 import type { RunView, SessionView } from '@shared/session/readonlyViews';
@@ -173,7 +174,7 @@ function callView(
   const child = run.childIds
     .map((id) => view.runs.get(id))
     .findLast((candidate) => candidate?.parentCard === row.id);
-  const status = statusOf(row, agent, child, run.group === 'interrupted');
+  const status = statusOf(row, agent, child, isInterrupted(run));
   const asking = child === undefined ? undefined : askingRun(view, child);
   const request =
     asking === undefined
@@ -182,7 +183,7 @@ function callView(
   // What the call took and cost, once it and its child have ended: the
   // child's own live view carries the running figures.
   const ended =
-    status !== 'running' && status !== 'queued' && child?.durableOutcome != null
+    status !== 'running' && status !== 'queued' && child?.outcome != null
       ? child
       : undefined;
   const facts = [

@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   type ApprovalGrants,
   resolveBypass,
-  RUN_PHASE,
   type RunId,
   type RunView,
   type SessionView,
@@ -34,13 +33,13 @@ function rows(
     runs: new Map(
       Object.entries(runs).map(([id, run]) => [
         runId(id),
-        // The bypass reads parentId, group and status, the only fields set here.
+        // The bypass reads parentId, holder and outcome, the only fields set here.
         // cast: a partial RunView with the fields the bypass reads.
         {
           parentId: run.parent === undefined ? null : runId(run.parent),
-          group: run.interrupted ? 'interrupted' : 'active',
-          status: RUN_PHASE.RUNNING,
-          substate: null,
+          holder: run.interrupted ? 'none' : 'here',
+          position: 'running',
+          outcome: null,
         } as RunView,
       ]),
     ),

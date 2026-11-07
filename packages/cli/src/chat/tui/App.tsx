@@ -22,7 +22,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { isCtrlInput, isEscapeInput, metaChordInput } from '@cli/tui/inputKeys';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
+import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
 import {
   APPROVAL_FOREGROUND_MAX_ROWS,
@@ -163,8 +163,7 @@ export function App(props: AppProps): React.JSX.Element {
     !acceptsFollowUp(activeRun);
   const unavailableDetail =
     activeRun !== undefined && isUnreadable(activeRun)
-      ? (runNoticeText(activeRun.statusNotice) ??
-        runStatusLabel(activeRun.statusKey))
+      ? (runNoticeText(activeRun) ?? runStatus(activeRun).word)
       : undefined;
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused

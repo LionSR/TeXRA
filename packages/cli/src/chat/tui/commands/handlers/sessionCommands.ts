@@ -31,7 +31,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runStatus } from '@ui/copy/runStatus';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
@@ -104,7 +104,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
           activeRunId === undefined
             ? undefined
             : runBypasses(view, activeRunId),
-        statusLabel: run && runStatusLabel(run.statusKey),
+        statusLabel: run && runStatus(run).word,
         activeChildSessions,
         activeSkills,
         sessionId: run ? context.session.runId : undefined,
@@ -257,7 +257,7 @@ const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
     const ended = yield* context.runSession.view.changes.pipe(
       Stream.takeUntil((view) => {
         const run = view.runs.get(runId);
-        return run === undefined || !run.live;
+        return run === undefined || run.holder !== 'here';
       }),
       Stream.runDrain,
       Effect.timeout('10 seconds'),

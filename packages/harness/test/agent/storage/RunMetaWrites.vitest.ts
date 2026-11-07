@@ -56,7 +56,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               ])).runs.get(id),
             ).toMatchObject({
               description: 'A described session',
-              status: 'completed',
+              outcome: 'completed',
             });
           }),
       );

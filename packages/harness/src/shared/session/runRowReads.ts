@@ -12,9 +12,9 @@
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
 import {
-  RUN_PHASE,
   type FollowUpReceipt,
-  type RunPhase,
+  type RunOutcome,
+  type RunPosition,
   type SessionEvent,
 } from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
@@ -185,34 +185,41 @@ export const isRequestDecision = <R extends Pick<SessionEvent, 'type'>>(
 ): row is Extract<R, { type: 'request.decided' }> =>
   row.type === 'request.decided';
 
+/** Where a lifecycle row leaves its run: its loop position and outcome. */
+export interface PhaseMove {
+  readonly position: RunPosition;
+  readonly outcome: RunOutcome | null;
+}
+
 /**
- * The phase a lifecycle row puts its run in, or null for a row that changes
- * none: an activation and every loop step but `waiting` open the run
- * window, `waiting` and a child's wait rest it, `run.end` ends it on its
- * outcome. The one statement of the rule: the session view's run window,
- * the transcript boundary, the held chunk text and the publisher's open
- * streams all follow it.
+ * Where a lifecycle row leaves its run, or null for a row that changes
+ * neither: an activation and every loop step but `waiting` put it inside a
+ * turn, `waiting` between turns, and `run.end` ends it on its outcome,
+ * ready for the next activation. The one statement of the rule: the session
+ * view's position and outcome, the transcript boundary, the held chunk text
+ * and the publisher's open streams all follow it.
  */
-export function phaseMoveOf(row: SessionEvent): RunPhase | null {
+export function phaseMoveOf(row: SessionEvent): PhaseMove | null {
   switch (row.type) {
     case 'run.activate':
-      return RUN_PHASE.RUNNING;
+      return { position: 'running', outcome: null };
     case 'run.position':
-      return row.payload.at === 'waiting'
-        ? RUN_PHASE.WAITING
-        : RUN_PHASE.RUNNING;
+      return {
+        position: row.payload.at === 'waiting' ? 'waiting' : 'running',
+        outcome: null,
+      };
     case 'run.end':
-      return row.outcome;
+      return { position: 'ready', outcome: row.outcome };
     default:
       return null;
   }
 }
 
-/** Whether the row's phase rests or ends the run: the change that closes
- *  its run window, every open stream and every held chunk with it. */
+/** Whether the row rests or ends the run: the change that closes its run
+ *  window, every open stream and every held chunk with it. */
 export function closesRunWindow(row: SessionEvent): boolean {
-  const phase = phaseMoveOf(row);
-  return phase !== null && phase !== RUN_PHASE.RUNNING;
+  const move = phaseMoveOf(row);
+  return move !== null && move.position !== 'running';
 }
 
 /** The row kinds a follow-up's receipt reads ({@link followUpReceipt}). */

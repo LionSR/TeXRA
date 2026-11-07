@@ -1,13 +1,7 @@
 /** Run status constants shared across agent runtime and UI layers. */
 import { Cause } from 'effect';
 
-import {
-  type PositionAt,
-  RUN_OUTCOME,
-  RUN_PHASE,
-  type RunOutcome,
-  type RunLifecycleStatus,
-} from '@shared/schemas';
+import { type PositionAt, RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 
 // ============================================================================
 // Run-outcome algebra
@@ -27,36 +21,6 @@ export function outcomeFromCause(cause: Cause.Cause<unknown>): RunOutcome {
   return Cause.hasInterrupts(cause)
     ? RUN_OUTCOME.CANCELLED
     : RUN_OUTCOME.FAILED;
-}
-
-// ============================================================================
-// RunPhase predicates
-// ============================================================================
-
-/** Whether a `RunPhase` is one of the three terminal outcome phases
- *  (COMPLETED | CANCELLED | FAILED). This is the single enumeration of that
- *  set — hosts must consume it rather than hand-rolling their own. */
-export function isTerminalOutcomePhase(
-  phase: RunLifecycleStatus | undefined,
-): phase is RunOutcome {
-  return (
-    phase === RUN_PHASE.COMPLETED ||
-    phase === RUN_PHASE.CANCELLED ||
-    phase === RUN_PHASE.FAILED
-  );
-}
-
-/** Whether transcript content is settled for the current turn. */
-export function isTranscriptSettlementPhase(
-  phase: RunLifecycleStatus | undefined,
-): boolean {
-  return phase === RUN_PHASE.WAITING || isTerminalOutcomePhase(phase);
-}
-
-export function isInFlightPhase(
-  phase: RunLifecycleStatus | undefined,
-): boolean {
-  return phase === RUN_PHASE.RUNNING || phase === RUN_PHASE.WAITING;
 }
 
 /**

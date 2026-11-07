@@ -19,7 +19,7 @@ import {
   type RunId,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import { lastLifecycleRow } from '@shared/session/runFacts';
+import { boundsLifecycle } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { descendantRuns } from '@shared/session/sessionView';
 import type { SessionView } from '@shared/session/readonlyViews';
@@ -95,7 +95,7 @@ export function activationView(
         // showing the run removed, is the last element.
         Stream.takeUntil((level) => {
           const run = level.runs.get(runId);
-          return run === undefined || run.durableOutcome != null;
+          return run === undefined || run.outcome != null;
         }),
         Stream.tap(interest),
       );
@@ -120,7 +120,7 @@ export function runView(
   // session closing.
   const over = Effect.raceFirst(
     log.tail(activation).pipe(
-      Stream.filter((row) => lastLifecycleRow([row], runId) !== undefined),
+      Stream.filter((row) => boundsLifecycle(row, runId)),
       Stream.runHead,
     ),
     Effect.suspend(

@@ -13,7 +13,7 @@
  */
 import http from 'node:http';
 
-import { Deferred, Duration, Effect, Fiber, Result, Schema } from 'effect';
+import { Deferred, Duration, Effect, Result, Schema } from 'effect';
 import type { HttpClient } from 'effect/http';
 
 import type {
@@ -211,14 +211,10 @@ function loginWithOAuthLoopback<S extends SubscriptionSession>(
 ): Effect.Effect<S, Error, HttpClient.HttpClient> {
   const { coordinator, openBrowser, ports, callbackPath, displayName } =
     options;
-  // The setup prefix is uninterruptible: it binds the server, arms the
-  // callback wait, and starts `openBrowser` before its first cancellation
-  // check, so a launcher that never finishes is still started and an abort
-  // still finishes the login. The launcher runs on a detached fiber:
-  // interruption of the login abandons the join but never the launcher, and a
-  // late launch failure dies on that fiber — observed and inert.
-  // Interruption is observed from the launcher join onward.
-  const setup = Effect.uninterruptible(
+  // Everything the sign-in starts lives in its scope: the server, the
+  // callback handler and the browser launcher, so interrupting the sign-in
+  // closes the presenter with it, and a launch failure is the sign-in's.
+  return Effect.scoped(
     Effect.gen(function* () {
       const { server, port } = yield* Effect.acquireRelease(
         bindLoopbackServer(ports, displayName),
@@ -286,23 +282,10 @@ function loginWithOAuthLoopback<S extends SubscriptionSession>(
           }),
       );
 
-      // `startImmediately` is the launcher's ordering: it begins here, inside
-      // the uninterruptible prefix, and is joined below before the callback
-      // wait opens — a host that cannot reach a browser fails fast instead of
-      // leaving the flow waiting for a callback nobody can deliver.
-      const browserLaunch = yield* Effect.forkDetach(
-        openBrowser(authorize.url),
-        { startImmediately: true },
-      );
-      return { authorize, code, browserLaunch };
-    }),
-  );
-
-  return Effect.scoped(
-    Effect.gen(function* () {
-      const { authorize, code, browserLaunch } = yield* setup;
-
-      yield* Fiber.join(browserLaunch);
+      // The launch is awaited before the callback wait opens: a host that
+      // cannot reach a browser fails fast instead of leaving the flow
+      // waiting for a callback nobody can deliver.
+      yield* openBrowser(authorize.url);
 
       const callback = yield* Deferred.await(code).pipe(
         Effect.timeoutOrElse({

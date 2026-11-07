@@ -24,6 +24,7 @@ import {
   selectWorkflowRunDetailLines,
   WorkflowRunDetails,
 } from './WorkflowRunDetails';
+import { isWorking } from '@texra-ai/harness/schemas';
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 
@@ -48,7 +49,7 @@ export function ConversationPane(
   const displayEntries = pendingTranscriptEntries(
     merged.rows,
     merged.settledRows,
-    stream?.working === true,
+    stream != null && isWorking(stream),
   );
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   const metadataWidth =
@@ -69,7 +70,6 @@ export function ConversationPane(
     stream && documents
       ? {
           taskGroups: stream.transcript.taskGroups,
-          runDurableOutcome: stream.durableOutcome ?? undefined,
           outputFilesByRound: documents.files,
           missingOutputsByRound: documents.missingOutputs,
           compileFailuresByRound: documents.compileFailures,

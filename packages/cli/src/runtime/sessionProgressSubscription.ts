@@ -17,7 +17,7 @@ import type { LocalSession } from '@texra-ai/harness';
 
 /**
  * One live child on the `run.children` record, from the session view's own row. The
- * status is the session view's (`RunPhase`, or `ready` before the child's
+ * status is where the view says its loop stands (`ready` before the child's
  * `run.activate` is applied), not a launcher's optimistic reading of it.
  */
 function childRow(child: RunView) {
@@ -25,7 +25,7 @@ function childRow(child: RunView) {
     childRunId: child.id,
     agentName: runIdentityName(child.identity),
     identity: child.identity,
-    status: child.status,
+    status: child.position,
   };
 }
 
@@ -111,7 +111,9 @@ export const attachCliSessionProgressProjection = Effect.fn(
         const child = view.runs.get(childId);
         // A live child only: the child list reports who is still going, and a
         // child that ended carries its outcome on its own `run.end` line.
-        return child !== undefined && child.live ? [childRow(child)] : [];
+        return child !== undefined && child.holder === 'here'
+          ? [childRow(child)]
+          : [];
       });
       const wire = JSON.stringify(children);
       if (writtenChildren.get(parentRunId) === wire) continue;

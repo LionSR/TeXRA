@@ -43,7 +43,6 @@ import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   qualifyAggregateId,
-  RUN_PHASE,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import {
@@ -129,7 +128,6 @@ const PREPARED: ResolvedTurn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
   mode: 'foreground',
   messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
   tools: [],
-  transport: { kind: 'http' },
   controls: {
     temperature: null,
     maxOutputTokens: 1024,
@@ -243,7 +241,12 @@ function boundModel(
     declinedRoutes: [],
     model,
     origin: ORIGIN,
-    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
+    route: {
+      kind: 'api-key',
+      endpoint: 'https://api.openai.com/v1',
+      provider: 'openai',
+      usageRoute: 'api-key',
+    },
     forcedToolChoice: true,
     billing: 'api-key',
     maxOutputTokens: 1024,
@@ -495,8 +498,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           // The decision neither parks nor ends the run: the phase the fold
           // reports is still running.
           expect(
-            Context.get(session, SessionViewAccess).run(runId)?.status,
-          ).toBe(RUN_PHASE.RUNNING);
+            Context.get(session, SessionViewAccess).run(runId)?.position,
+          ).toBe('running');
           yield* Fiber.interrupt(pump);
         }),
       );
@@ -532,8 +535,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // A denial is not a cancel: the run stays running so the failure
             // can terminalize (#7331).
             expect(
-              Context.get(session, SessionViewAccess).run(runId)?.status,
-            ).toBe(RUN_PHASE.RUNNING);
+              Context.get(session, SessionViewAccess).run(runId)?.position,
+            ).toBe('running');
             expect(stub.attempts()).toBe(1);
           }),
       );

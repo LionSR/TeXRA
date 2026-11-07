@@ -12,6 +12,7 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@texra-ai/harness/schemas';
+import { isWorking } from '@texra-ai/harness/schemas';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -30,7 +31,7 @@ import {
 } from '@texra/shared/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runStatus } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
@@ -673,12 +674,12 @@ export function buildStatusBarDisplay(
     },
   ];
   const turn = input.turn;
-  const active = run?.working === true;
+  const active = run != null && isWorking(run);
   const queuedCount =
     run === undefined ? 0 : (view.queuedFollowUps.get(run.id)?.length ?? 0);
 
   // No run yet: the root keeps its status slot.
-  const statusLabel = run ? runStatusLabel(run.statusKey) : '-';
+  const statusLabel = run ? runStatus(run).word : '-';
   const spinPrefix =
     active && turn?.runningFrame ? `${turn.runningFrame} ` : '';
 

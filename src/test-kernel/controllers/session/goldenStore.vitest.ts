@@ -199,8 +199,8 @@ const runsOf = (view: SessionView) =>
   [...view.runs.values()].map((run) => ({
     id: run.id,
     label: run.label,
-    status: run.status,
-    outcome: run.durableOutcome,
+    position: run.position,
+    outcome: run.outcome,
     parent: run.parentId,
     children: run.childIds,
   }));
@@ -393,7 +393,7 @@ describe('the golden 1.0 store', () => {
         Stream.runDrain,
       );
       const folded = yield* SubscriptionRef.get(view.ref);
-      const done = { status: 'completed', outcome: 'completed' };
+      const done = { position: 'ready', outcome: 'completed' };
       const run = (
         id: string,
         label: string,
@@ -421,7 +421,6 @@ describe('the golden 1.0 store', () => {
         // The user stopped its held turn with Ctrl-C, which detached its
         // running Codex child; the child's turn then ended it as a root.
         run(CHAT, 'golden_chat', {
-          status: 'cancelled',
           outcome: 'cancelled',
           children: [GOAL],
         }),
@@ -433,16 +432,14 @@ describe('the golden 1.0 store', () => {
         run(FORK_SOURCE, 'golden_fork'),
         // The resumed chat over the fork, exited at its idle prompt.
         run(FORKED, 'golden_fork', {
-          status: 'cancelled',
           outcome: 'cancelled',
         }),
         // Killed while its command's result was uncommitted: it still reads
         // as running, its owner dead.
-        run(KILLED, 'golden_effect', { status: 'running', outcome: null }),
+        run(KILLED, 'golden_effect', { position: 'running', outcome: null }),
         // Stopped with `texra tasks stop` once its command reported back;
         // the command itself was swept with the deletion's open.
         run(SERVICE_TASK, 'golden_script', {
-          status: 'cancelled',
           outcome: 'cancelled',
         }),
       ]);
@@ -642,8 +639,7 @@ describe('the golden run killed after its effect', () => {
                       const run = view.runs.get(KILLED);
                       return (
                         view.cursor > result.activation &&
-                        (run?.status === 'waiting' ||
-                          run?.durableOutcome != null)
+                        (run?.position === 'waiting' || run?.outcome != null)
                       );
                     },
                   ),

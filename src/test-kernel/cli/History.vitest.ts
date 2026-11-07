@@ -113,13 +113,11 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.layer(TestSession.layer(testWorkspaceRoots(), { persistent: true }))(
         (it) => {
           it.effect(
-            'projects NDJSON status onto the frozen pre-consolidation vocabulary',
+            "carries each run's outcome and resumability, in NDJSON too",
             () =>
               Effect.gen(function* () {
-                // Byte parity for the public stream (proposal gate G):
-                // terminal outcomes emit as CliRunStatus
-                // ('interrupted'/'error'/'completed'); 'resumable' passes
-                // through. Internal entries keep RunOutcome. A document task
+                // The record states the outcome the run ended on (null for
+                // none) beside whether a resume continues it. A document task
                 // that ended is settled; one that has not, resumes.
                 const session = yield* Effect.flatMap(
                   TestSession,
@@ -140,17 +138,22 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 const entries = yield* historyEntries;
                 const byId = (id: string) =>
                   entries.find((entry) => entry.id === id);
-                expect(outcomes.map(([id]) => byId(id)?.status)).toEqual([
-                  'cancelled',
-                  'failed',
-                  'completed',
-                  'resumable',
+                expect(
+                  outcomes.map(([id]) => [
+                    byId(id)?.outcome,
+                    byId(id)?.resumable,
+                  ]),
+                ).toEqual([
+                  ['cancelled', false],
+                  ['failed', false],
+                  ['completed', false],
+                  [null, true],
                 ]);
                 const listed = outcomes.flatMap(([id]) => byId(id) ?? []);
                 expect(cliHistoryNdjsonRecords(listed)).toMatchObject(
-                  ['interrupted', 'error', 'completed', 'resumable'].map(
-                    (status) => ({ entry: { status } }),
-                  ),
+                  ['cancelled', 'failed', 'completed', null].map((outcome) => ({
+                    entry: { outcome },
+                  })),
                 );
               }),
           );

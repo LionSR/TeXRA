@@ -8,7 +8,6 @@ import { Effect, Scope, ScopedRef, Stream } from 'effect';
 
 import {
   qualifyAggregateId,
-  RUN_PHASE,
   type RunId,
   descendantRuns,
   type RunView,
@@ -16,7 +15,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { scriptStages, formatCostUsd } from '@texra-ai/harness/transcript';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runStatus } from '@ui/copy/runStatus';
 import { scriptCallLine } from '@ui/copy/scriptStage';
 
 import type { LocalSession } from '@texra-ai/harness';
@@ -50,17 +49,14 @@ function scriptPlainLines(
       lines.set(call.id, scriptCallLine(call));
     }
     // The stage's total once it has ended, its discarded attempts included.
-    if (stage.status !== RUN_PHASE.RUNNING && stage.costUsd > 0)
+    if (stage.status !== 'running' && stage.costUsd > 0)
       lines.set(
         `${stage.id}:total`,
         `Script total: ${formatCostUsd(stage.costUsd)}`,
       );
   }
-  if (run.durableOutcome !== null && run.identity.kind === 'script')
-    lines.set(
-      'outcome',
-      `${runStatusLabel(run.statusKey)}: ${run.identity.title}`,
-    );
+  if (run.outcome !== null && run.identity.kind === 'script')
+    lines.set('outcome', `${runStatus(run).word}: ${run.identity.title}`);
   return lines;
 }
 

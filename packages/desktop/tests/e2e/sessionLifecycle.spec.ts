@@ -189,16 +189,18 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
         currentLaunch!.page.locator('run-tab').evaluateAll((tabs) =>
           tabs.map((tab) => ({
             runId: (tab as HTMLElement & { run: { id: string } }).run.id,
-            status: (tab as HTMLElement & { run: { status: string } }).run
-              .status,
-            group: (tab as HTMLElement & { run: { group: string } }).run.group,
+            position: (tab as HTMLElement & { run: { position: string } }).run
+              .position,
+            holder: (tab as HTMLElement & { run: { holder: string } }).run
+              .holder,
           })),
         ),
       )
       .toEqual(
         expect.arrayContaining([
-          { runId: WAITING_RUN, status: 'waiting', group: 'interrupted' },
-          { runId: ORPHAN_RUN, status: 'running', group: 'interrupted' },
+          // Nothing holds either after the restart: both read interrupted.
+          { runId: WAITING_RUN, position: 'waiting', holder: 'none' },
+          { runId: ORPHAN_RUN, position: 'running', holder: 'none' },
         ]),
       );
     // The running app holds the store: its rows are read from a copy.

@@ -41,7 +41,6 @@ import {
   isTaskConfig,
   type RunId,
   acceptsFollowUp,
-  RUN_PHASE,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
@@ -299,7 +298,7 @@ export function createChatSessionController(
     viewChanges.pipe(
       Stream.filter((view) => {
         const run = view.runs.get(runId);
-        return run === undefined || !run.runsHere;
+        return run === undefined || run.holder !== 'here';
       }),
       Stream.runHead,
       Effect.asVoid,
@@ -317,11 +316,10 @@ export function createChatSessionController(
       Stream.filter((view) => {
         const run = view.runs.get(runId);
         if (run === undefined) return false;
-        if (run.runsHere) return true;
+        if (run.holder === 'here') return true;
         return (
           before !== undefined &&
-          (run.forkPoint !== before.forkPoint ||
-            run.durableOutcome !== before.durableOutcome)
+          (run.forkPoint !== before.forkPoint || run.outcome !== before.outcome)
         );
       }),
       Stream.runHead,
@@ -384,7 +382,7 @@ export function createChatSessionController(
   const reportRunFailure = (error: unknown, claim: RootRunSettled): void => {
     if (!session.holdsClaim(claim)) return;
     session.settleExitCode(claim, CliExitCode.AgentError);
-    if (session.leaving || session.status() === RUN_PHASE.CANCELLED) return;
+    if (session.leaving || session.status() === 'cancelled') return;
     const { classification } = normalizeProviderError(error);
     showFailure(
       error,
@@ -724,7 +722,7 @@ export function createChatSessionController(
         yield* resumed;
         yield* settledHere(runId);
         const outcome =
-          runSession.view.current().runs.get(runId)?.durableOutcome ?? null;
+          runSession.view.current().runs.get(runId)?.outcome ?? null;
         session.settleExitCode(
           claim,
           outcome === null ? CliExitCode.Success : runOutcomeExitCode(outcome),
@@ -742,7 +740,7 @@ export function createChatSessionController(
       const previous = liveHere;
       liveHere = new Set(
         [...view.runs.values()]
-          .filter((run) => run.runsHere)
+          .filter((run) => run.holder === 'here')
           .map((run) => run.id),
       );
       for (const id of liveHere) {
@@ -1002,7 +1000,7 @@ export function createChatSessionController(
       const root = runViewOf(currentView(), rootRunId.get());
       if (
         root !== undefined &&
-        (root.live || root.status === RUN_PHASE.CANCELLED) &&
+        (root.holder === 'here' || root.outcome === 'cancelled') &&
         acceptsFollowUp(root)
       )
         return yield* send(root.id, true);

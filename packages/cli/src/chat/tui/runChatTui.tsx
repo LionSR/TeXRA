@@ -25,11 +25,10 @@ import {
   qualifyAggregateId,
   type RunId,
   type AgentConfig,
-  RUN_PHASE,
   type ApprovalPolicy,
-  isTranscriptSettlementPhase,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { isWorking } from '@texra-ai/harness/schemas';
 import { FileSecrets, secretsDirectory } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@texra-ai/harness/host';
 import {
@@ -360,7 +359,7 @@ export async function runChat(
         ? [bypass(true)]
         : []),
       ...(leaving ? [bypass(false)] : []),
-      ...(policy !== 'yolo' && run.live
+      ...(policy !== 'yolo' && run.holder === 'here'
         ? [{ field: 'limit' as const, runId: run.id, limit: policy }]
         : []),
     ];
@@ -536,8 +535,8 @@ export async function runChat(
     const isRunPending = chatTuiRunPending(session);
 
     if (
-      (isRunPending && runPhaseOf(activeRun) !== RUN_PHASE.WAITING) ||
-      activeRun?.working === true
+      (isRunPending && runPhaseOf(activeRun) !== 'waiting') ||
+      (activeRun != null && isWorking(activeRun))
     ) {
       setTransientNotice(
         'Wait for the active response to finish, or press Ctrl-C first.',
@@ -728,10 +727,11 @@ export async function runChat(
       rootPhase = session.status();
       if (
         rootPhase !== previous &&
-        previous !== RUN_PHASE.WAITING &&
-        isTranscriptSettlementPhase(rootPhase) &&
+        previous !== 'waiting' &&
+        rootPhase !== undefined &&
+        rootPhase !== 'running' &&
         // A stop ends the run cancelled: no "finished" bell for it.
-        rootPhase !== RUN_PHASE.CANCELLED
+        rootPhase !== 'cancelled'
       ) {
         notify('agentFinished');
       }

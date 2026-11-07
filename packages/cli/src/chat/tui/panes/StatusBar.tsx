@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiProviderOfSecretName } from '@texra-ai/llm';
 import { appSignalStream, readModelOptions } from '@texra-ai/harness/host';
 import { isEmptyUsage, toErrorMessage } from '@texra-ai/harness/schemas';
+import { isWorking } from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
@@ -254,7 +255,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     },
     shortcuts: {
       chatInputAvailable: props.chatInputAvailable,
-      holdAvailable: props.chatInputAvailable && displayRun?.working === true,
+      holdAvailable:
+        props.chatInputAvailable && displayRun != null && isWorking(displayRun),
       childNavigationAvailable: listedRuns.length > 0,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
       transcriptAvailable:

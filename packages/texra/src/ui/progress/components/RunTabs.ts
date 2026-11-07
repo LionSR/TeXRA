@@ -15,7 +15,11 @@ import { when } from 'lit/directives/when.js';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { RUN_GROUP_LABELS, RUN_GROUP_ORDER } from '@ui/copy/runStatus';
+import {
+  RUN_SECTION_LABELS,
+  RUN_SECTION_ORDER,
+  runStatus,
+} from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 
 // Side-effect imports - register WA components
@@ -30,7 +34,12 @@ import { layoutStyles } from '../styles/logStyles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from '../utils';
 import { RunTab } from './RunTab';
-import type { SessionView, RunView, RunId } from '@texra-ai/harness/schemas';
+import {
+  needsUser,
+  type SessionView,
+  type RunView,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 
 // =============================================================================
 // RunTabs: the list
@@ -138,7 +147,7 @@ export class RunTabs extends LitElement {
   }
 
   private isExpanded(run: RunView): boolean {
-    if (run.forceExpanded) return true;
+    if (this.view !== null && needsUser(run, this.view.runs)) return true;
     return this.surface?.expanded.get(run.id) === true;
   }
 
@@ -201,18 +210,18 @@ export class RunTabs extends LitElement {
     const top = (view?.order ?? [])
       .map((id) => this.runOfEvent(id))
       .filter((run): run is RunView => run !== undefined)
-      .filter((run) => !this.activeOnly || run.group !== 'recent')
+      .filter((run) => !this.activeOnly || runStatus(run).section !== 'recent')
       .filter((run) => this.matchesSearch(run, needle));
 
     let body: TemplateResult;
     if (!this.sections) {
       body = this.renderRows(top, selected);
     } else {
-      body = html`${RUN_GROUP_ORDER.map((group) => {
-        const rows = top.filter((run) => run.group === group);
+      body = html`${RUN_SECTION_ORDER.map((group) => {
+        const rows = top.filter((run) => runStatus(run).section === group);
         if (rows.length === 0) return nothing;
         return html`<div class="group-heading group-${group}">
-            <span>${RUN_GROUP_LABELS[group]}</span>
+            <span>${RUN_SECTION_LABELS[group]}</span>
             <span class="group-count">${rows.length}</span>
           </div>
           ${this.renderRows(rows, selected)}`;

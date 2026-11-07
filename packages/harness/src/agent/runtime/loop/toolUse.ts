@@ -40,7 +40,7 @@ import {
   SessionLog,
   type RunCell,
 } from '@shared/session/runHistory';
-import type { RunState } from '@shared/session/runState';
+import { isResuming, type RunState } from '@shared/session/runState';
 import { turnText } from '@shared/session/runFacts';
 import { sentDefinitions } from '@tools/catalogEntries';
 import { sha256 } from '@utils/core/idHash';
@@ -437,7 +437,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           return finish(state, RUN_OUTCOME.FAILED);
         // An activation clears the step the view shows: a park it found
         // idle is written again, unless the queued input starts a turn.
-        if (state.resuming && !queued)
+        if (isResuming(state) && !queued)
           state = yield* cell.append([positionRow(runId, state, 'waiting')]);
         // A root's wait opens a step, recorded like a request's; a
         // child's idle is its parent's.
