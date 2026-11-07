@@ -20,7 +20,12 @@ import {
   type AgentDefinition,
 } from '@shared/schemas';
 import type { AgentSource, AgentScanIssue } from '@shared/schemas';
-import { ToolRegistry, boundFiles, type AgentBlock } from '@tools/toolTable';
+import {
+  ToolRegistry,
+  boundFile,
+  boundFiles,
+  type AgentBlock,
+} from '@tools/toolTable';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -227,12 +232,19 @@ function readYamlDefinition(
       ...owners.keys(),
     ]);
     // The digest covers the files the blocks bind, so a changed bound file
-    // reads as a changed agent. One that cannot be read counts by its name
-    // alone: the run that reads it reports the failure.
+    // reads as a changed agent. One that cannot be read fails the scan: the
+    // agent is incomplete, and a digest without it would read as changed.
     const bound = yield* Effect.forEach(boundFiles(blocks, owners), (file) =>
-      readNormalizedFile(fs, path.resolve(path.dirname(yamlPath), file)).pipe(
+      boundFile(yamlPath, file).read.pipe(
         Effect.map((text) => `\0${file}\0${text}`),
-        Effect.orElseSucceed(() => `\0${file}`),
+        Effect.mapError(
+          (cause) =>
+            new AgentScanError({
+              path: displayPath,
+              message: `Cannot read ${file}, a file this agent binds: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+        ),
       ),
     );
     return {

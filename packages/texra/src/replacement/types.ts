@@ -21,18 +21,6 @@ export type ReplacementValue = string | ReplacementFunction;
  *  declares them; the engine decides the order they run in. */
 export interface NonRegexRuleSet {
   patterns: Record<string, string>;
-  isRegex?: false;
-}
-
-/**
- * Plain string substitutions as the engine runs them, each through
- * `String.prototype.replaceAll`: longest `from` first, so a rule runs before
- * every shorter rule its `from` contains. A second pass chains one rule's
- * output into another.
- */
-export interface OrderedRuleSet {
-  readonly rules: readonly (readonly [from: string, to: string])[];
-  readonly isRegex?: false;
 }
 
 /** Regex-based substitution; patterns may be a replacement string or callback. */
@@ -42,5 +30,3 @@ export interface RegexRuleSet {
   /** Regex flags such as 'g'. */
   flags: string;
 }
-
-export type ReplacementRuleSet = OrderedRuleSet | RegexRuleSet;

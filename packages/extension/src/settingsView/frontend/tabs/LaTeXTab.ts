@@ -440,7 +440,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
 
   private renderCompileDiffSettings(): TemplateResult {
     const autoCompile = settingSignal<boolean>(
-      DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
+      DocumentsStateKey.DOCUMENTS_COMPILE_AFTER_OUTPUT,
     ).get();
     return html`
       <div class="settings-section">
@@ -450,13 +450,12 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
             'What TeXRA does with the LaTeX an agent writes in this workspace.',
           icon: 'bolt',
         })}
-        ${renderStateSettingToggleRow(DocumentsStateKey.WORKFLOW_AUTO_COMPILE)}
+        ${renderStateSettingToggleRow(DocumentsStateKey.DOCUMENTS_COMPILE_AFTER_OUTPUT)}
+        ${renderStateSettingToggleRow(DocumentsStateKey.DOCUMENTS_OPEN_PDF, {
+          disabled: !autoCompile,
+        })}
         ${renderStateSettingToggleRow(
-          DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
-          { disabled: !autoCompile },
-        )}
-        ${renderStateSettingToggleRow(
-          DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+          DocumentsStateKey.DOCUMENTS_REJECT_ON_COMPILE_FAILURE,
           { disabled: !autoCompile },
         )}
         ${renderStateSettingToggleRow(DocumentsStateKey.LATEXDIFF_CHANGES_ONLY)}

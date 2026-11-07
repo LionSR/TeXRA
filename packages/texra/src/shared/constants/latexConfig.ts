@@ -34,10 +34,10 @@ export type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];
 
 /** Documented defaults — match the values that used to live in package.json. */
 export const LATEX_CONFIG_DEFAULTS = {
-  workflowAutoCompile: true,
-  workflowAutoCompileTimeoutMs: 120000,
-  workflowAutoOpenPdf: true,
-  workflowRejectOnCompileFailure: true,
+  documentsCompileAfterOutput: true,
+  documentsCompileTimeoutMs: 120000,
+  documentsOpenPdf: true,
+  documentsRejectOnCompileFailure: true,
   latexdiffBetweenRounds: false,
   latexdiffTimeoutMs: 10000,
   latexdiffMathMarkup: 'coarse' satisfies LatexdiffMathMarkupValue,
@@ -47,6 +47,6 @@ export const LATEX_CONFIG_DEFAULTS = {
 
 /** Numeric ranges (used by the setting schemas and UI inputs). */
 export const LATEX_CONFIG_RANGES = {
-  workflowAutoCompileTimeoutMs: { min: 10000 } satisfies NumericRange,
+  documentsCompileTimeoutMs: { min: 10000 } satisfies NumericRange,
   latexdiffTimeoutMs: { min: 1000, max: 80000 } satisfies NumericRange,
 } as const;

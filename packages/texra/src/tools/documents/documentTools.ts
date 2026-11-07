@@ -90,10 +90,7 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
   );
 
 const autoOpensPdf = (docs: Documents) =>
-  Settings.get<boolean>(
-    docs.deps.roots,
-    DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
-  );
+  Settings.get<boolean>(docs.deps.roots, DocumentsStateKey.DOCUMENTS_OPEN_PDF);
 
 /**
  * What the first revision checks before the task does any work, whichever
@@ -403,7 +400,7 @@ export const DocumentCompileTool = defineTool({
     // recorded with the revision.
     const rejects = yield* Settings.get<boolean>(
       roots,
-      DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      DocumentsStateKey.DOCUMENTS_REJECT_ON_COMPILE_FAILURE,
     );
     const compile: CompileOutcome =
       check._tag === 'skipped'

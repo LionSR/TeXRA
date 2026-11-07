@@ -1,6 +1,6 @@
 /**
  * The documents plugin's setting rows and keys: the compile check after a
- * revision (`workflow.*`) and the diffs between revisions (`latexdiff.*`),
+ * revision (`documents.*`) and the diffs between revisions (`latexdiff.*`),
  * which TeXRA's catalog lists (`./texraSettings`). They live here, in a
  * browser-safe module, because the settings view's webview renders them.
  */
@@ -18,10 +18,10 @@ import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces
 
 /** The documents plugin's workspace-scoped keys. */
 export const DocumentsStateKey = Object.freeze({
-  WORKFLOW_AUTO_COMPILE: 'workflow.autoCompileAfterOutput',
-  WORKFLOW_AUTO_COMPILE_TIMEOUT_MS: 'workflow.autoCompileTimeoutMs',
-  WORKFLOW_AUTO_OPEN_PDF: 'workflow.autoOpenPdf',
-  WORKFLOW_REJECT_ON_COMPILE_FAILURE: 'workflow.rejectOnCompileFailure',
+  DOCUMENTS_COMPILE_AFTER_OUTPUT: 'documents.compileAfterOutput',
+  DOCUMENTS_COMPILE_TIMEOUT_MS: 'documents.compileTimeoutMs',
+  DOCUMENTS_OPEN_PDF: 'documents.openPdf',
+  DOCUMENTS_REJECT_ON_COMPILE_FAILURE: 'documents.rejectOnCompileFailure',
   LATEXDIFF_BETWEEN_ROUNDS: 'latexdiff.generateBetweenRoundDiffs',
   LATEXDIFF_TIMEOUT_MS: 'latexdiff.timeoutMs',
   LATEXDIFF_MATH_MARKUP: 'latexdiff.mathMarkup',
@@ -33,64 +33,64 @@ export type DocumentsStateKey =
 /** The documents plugin's rows, in catalog order. */
 export const DOCUMENTS_SETTINGS: readonly TexraSettingRow[] = [
   {
-    key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
+    key: DocumentsStateKey.DOCUMENTS_COMPILE_AFTER_OUTPUT,
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(
-        Effect.succeed(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.documentsCompileAfterOutput),
       ),
     ),
     title: 'Auto-compile outputs',
     description:
       'Compile the LaTeX project automatically after a document task writes its output.',
-    category: 'workflow',
+    category: 'documents',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex', cliConfig: true },
   } satisfies TexraSettingRow,
   {
-    key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+    key: DocumentsStateKey.DOCUMENTS_COMPILE_TIMEOUT_MS,
     schema: Schema.Int.check(
       Schema.isGreaterThanOrEqualTo(
-        LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
+        LATEX_CONFIG_RANGES.documentsCompileTimeoutMs.min,
       ),
     ).pipe(
       Schema.withDecodingDefault(
-        Effect.succeed(LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs),
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.documentsCompileTimeoutMs),
       ),
     ),
     title: 'Auto-compile timeout',
     description:
       'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
-    category: 'workflow',
+    category: 'documents',
     slot: 'workspaceState',
     surfaces: { cliConfig: true },
   } satisfies TexraSettingRow,
   {
-    key: DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
+    key: DocumentsStateKey.DOCUMENTS_OPEN_PDF,
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(
-        Effect.succeed(LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf),
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.documentsOpenPdf),
       ),
     ),
     title: 'Open the compiled PDF',
     description:
       'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
-    category: 'workflow',
+    category: 'documents',
     slot: 'workspaceState',
     // Read by the documents plugin, but the emitted `openFile` notice has no
     // CLI handler (headless), so the CLI ignores it.
     surfaces: { settingsView: 'latex' },
   } satisfies TexraSettingRow,
   {
-    key: DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+    key: DocumentsStateKey.DOCUMENTS_REJECT_ON_COMPILE_FAILURE,
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(
-        Effect.succeed(LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure),
+        Effect.succeed(LATEX_CONFIG_DEFAULTS.documentsRejectOnCompileFailure),
       ),
     ),
     title: 'Repair failed compiles',
     description:
       'When the automatic compile fails, spend the next revision repairing the output from the compile log.',
-    category: 'workflow',
+    category: 'documents',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex', cliConfig: true },
   } satisfies TexraSettingRow,
