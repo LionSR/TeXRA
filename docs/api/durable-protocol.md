@@ -46,7 +46,7 @@ const resumeInterruptedRuns = Effect.gen(function* () {
 
 ### Sending runtime commands (`session.request`)
 
-Host commands go through [`session.request(runtimeRequest)`](./harness/#session) (validated by [`RuntimeCommandSchema`](./harness/schemas#runtimerequestschema)) so each decision commits to SQLite before taking effect:
+Host commands go through [`session.request(runtimeCommand)`](./harness/#session) (validated by [`RuntimeCommandSchema`](./harness/schemas#runtimecommandschema)) so each decision commits to SQLite before taking effect:
 
 ```ts
 // Send a follow-up message to a waiting or stopped interactive run:

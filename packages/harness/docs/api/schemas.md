@@ -1895,7 +1895,7 @@ function runStorageFilePath(
 
 ## RuntimeCommand
 
-One request a surface issues to its session's runtime.
+One command a surface issues to its session's runtime.
 
 ```ts
 type RuntimeCommand = typeof RuntimeCommandSchema.Type;
@@ -1903,7 +1903,7 @@ type RuntimeCommand = typeof RuntimeCommandSchema.Type;
 
 ## RuntimeCommandSchema
 
-Every request a surface issues to its session's runtime, one arm per
+Every command a surface issues to its session's runtime, one arm per
 `group.action` tag.
 
 ```ts

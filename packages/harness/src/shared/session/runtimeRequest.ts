@@ -33,7 +33,7 @@ import {
 
 const runScoped = { runId: RunIdSchema };
 
-/** Every request a surface issues to its session's runtime, one arm per
+/** Every command a surface issues to its session's runtime, one arm per
  *  `group.action` tag. */
 export const RuntimeCommandSchema = Schema.Union([
   Schema.Struct({
@@ -162,7 +162,7 @@ export const RuntimeCommandSchema = Schema.Union([
     ]),
   }),
 ]);
-/** One request a surface issues to its session's runtime. */
+/** One command a surface issues to its session's runtime. */
 export type RuntimeCommand = typeof RuntimeCommandSchema.Type;
 
 /** What a `run.files` did: `done` (with the copy's folder), no directory

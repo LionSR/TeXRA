@@ -846,7 +846,7 @@ type RunStopReason = typeof RunStopReasonSchema.Type;
 
 ## RuntimeCommand
 
-One request a surface issues to its session's runtime.
+One command a surface issues to its session's runtime.
 
 ```ts
 type RuntimeCommand = typeof RuntimeCommandSchema.Type;
