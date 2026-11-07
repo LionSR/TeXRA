@@ -1,7 +1,7 @@
 import { emitAppSignal, Secrets, Settings } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 
-import { loadApiKeyStatusMap } from '@texra-ai/llm';
+import { apiKeyOrigins } from '@texra-ai/llm';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   ensureError,
@@ -64,7 +64,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   // The status reads are programs like the save and remove rows below them,
   // so this surface runs all of them on the runtime it was handed.
   const apiKeys = useAsyncResource({
-    load: () => Effect.flatMap(Secrets, loadApiKeyStatusMap),
+    load: () => Effect.flatMap(Secrets, apiKeyOrigins),
     runtime,
     onError: props.onError,
   });
@@ -215,7 +215,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
               Effect.gen(function* () {
                 yield* commitCliProviderApiKey(roots, provider, key);
                 apiKeys.setData(
-                  (current) => current && { ...current, [provider]: 'set' },
+                  (current) => current && { ...current, [provider]: 'secret' },
                 );
                 yield* apiKeys.refresh();
               })

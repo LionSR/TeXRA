@@ -2,7 +2,7 @@ import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Cause, Effect, Exit, Fiber, Stream, type Duration } from 'effect';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { apiProviderOfSecretName } from '@texra-ai/llm';
+import { apiKeyEntry } from '@texra-ai/llm';
 import { appSignalStream, readModelOptions } from '@texra-ai/harness/host';
 import { isEmptyUsage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
@@ -56,7 +56,7 @@ const QUOTA_REFRESH = '30 seconds';
 const modelAccessChanges: Stream.Stream<void, never, ProcessServices> =
   Stream.merge(
     appSignalStream('credentialChanged').pipe(
-      Stream.filter(({ key }) => apiProviderOfSecretName(key) !== undefined),
+      Stream.filter(({ key }) => apiKeyEntry(key) !== undefined),
     ),
     appSignalStream('modelAccessChanged'),
   ).pipe(Stream.as(undefined));

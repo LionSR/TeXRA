@@ -8,11 +8,13 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
+import type { CredentialOrigin } from '@texra-ai/llm';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { type PRSubscriptionEntry } from '@texra/shared/settingsView/settingsViewMessages';
+import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
@@ -175,8 +177,7 @@ export class GitTab extends SignalWatcher(LitElement) {
   ];
 
   @property({ attribute: false }) toggleDisabled = true;
-  @property({ attribute: false }) githubTokenStatus: 'secret' | 'env' | 'none' =
-    'none';
+  @property({ attribute: false }) githubTokenStatus: CredentialOrigin = 'none';
   @property({ attribute: false })
   prSubscriptions: readonly PRSubscriptionEntry[] = [];
 
@@ -216,10 +217,13 @@ export class GitTab extends SignalWatcher(LitElement) {
   private renderTokenStatusBadge(): TemplateResult {
     return renderSetStatusIcon({
       status: this.githubTokenStatus,
-      title: 'Token set',
+      title: credentialOriginLabel('secret', 'token'),
       fallbacks: {
-        env: { label: 'Env', variant: 'neutral' },
-        none: { label: 'Not set' },
+        env: {
+          label: credentialOriginLabel('env', 'token'),
+          variant: 'neutral',
+        },
+        none: { label: credentialOriginLabel('none', 'token') },
       },
     });
   }
@@ -241,7 +245,9 @@ export class GitTab extends SignalWatcher(LitElement) {
             <span class="token-actions">
               ${renderLabeledActionButton({
                 icon: 'key',
-                text: tokenIsSet ? 'Replace token' : 'Set token',
+                text: tokenIsSet
+                  ? TOKEN_ACTION_COPY.replace
+                  : TOKEN_ACTION_COPY.set,
                 kind: 'secondary',
                 appearance: 'outlined',
                 onClick: this.handleSetGitHubToken,
@@ -250,7 +256,7 @@ export class GitTab extends SignalWatcher(LitElement) {
                 this.githubTokenStatus === 'secret'
                   ? renderLabeledActionButton({
                       icon: 'trash',
-                      text: 'Remove token',
+                      text: TOKEN_ACTION_COPY.remove,
                       kind: 'danger',
                       onClick: this.handleRemoveGitHubToken,
                     })
@@ -258,7 +264,7 @@ export class GitTab extends SignalWatcher(LitElement) {
               }
               ${renderLabeledActionButton({
                 icon: 'arrow-up-right-from-square',
-                text: 'Create on GitHub…',
+                text: TOKEN_ACTION_COPY.create,
                 kind: 'secondary',
                 appearance: 'outlined',
                 onClick: this.handleOpenGitHubTokenUrl,

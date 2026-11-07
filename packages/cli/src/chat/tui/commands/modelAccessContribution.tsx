@@ -4,7 +4,7 @@
 
 import { Effect } from 'effect';
 
-import { loadApiKeyStatusMap } from '@texra-ai/llm';
+import { apiKeyOrigins } from '@texra-ai/llm';
 
 import {
   Secrets,
@@ -159,7 +159,7 @@ export function modelAccessContribution(deps: {
 
   function ProviderApiKeyFormAdapter(props: SlashFormProps): React.JSX.Element {
     const apiKeys = useAsyncResource({
-      load: () => Effect.flatMap(Secrets, loadApiKeyStatusMap),
+      load: () => Effect.flatMap(Secrets, apiKeyOrigins),
       runtime,
       onError: deps.onError,
     });

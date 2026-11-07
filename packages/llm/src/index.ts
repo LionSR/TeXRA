@@ -85,7 +85,11 @@ export type { ModelConfig, ModelRef, ReasoningMode } from 'llm-zoo';
 export { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 // Credentials and the provider manifest over llm-zoo.
-export { resolveCredential, SecretsFailed } from './providers/credentials.js';
+export {
+  CredentialOriginSchema,
+  resolveCredential,
+  SecretsFailed,
+} from './providers/credentials.js';
 export type {
   CredentialOrigin,
   CredentialStore,
@@ -112,14 +116,14 @@ export {
 } from './providers/providers.js';
 export {
   apiKey,
+  apiKeyOrigins,
   apiKeySecretName,
-  apiProviderOfSecretName,
+  apiKeyEntry,
   exposeApiKey,
   hasUsableApiKey,
   isApiProvider,
-  loadApiKeyStatusMap,
 } from './providers/apiProviders.js';
-export type { ApiKeyStatus, ResolvedApiKey } from './providers/apiProviders.js';
+export type { ResolvedApiKey } from './providers/apiProviders.js';
 
 // Choosing a model: selection, the route decision, reasoning and pricing.
 export {

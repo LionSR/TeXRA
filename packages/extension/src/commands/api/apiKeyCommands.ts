@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import {
   API_KEY_PROVIDER_IDS,
   type ApiKeyProviderId,
-  loadApiKeyStatusMap,
+  apiKeyOrigins,
 } from '@texra-ai/llm';
 import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -15,6 +15,7 @@ import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
+import { credentialOriginLabel } from '@ui/copy/credentials';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ApiKeyCommands';
@@ -104,10 +105,10 @@ const pickApiProvider = Effect.fn('pickApiProvider')(function* (
 ) {
   // One batched read of the key statuses: the pick shows each provider's
   // stored/environment state.
-  const statuses = yield* loadApiKeyStatusMap(yield* Secrets);
+  const origins = yield* apiKeyOrigins(yield* Secrets);
   const providerItems = API_KEY_PROVIDER_IDS.map((provider) => ({
     label: provider,
-    description: statuses[provider] === 'not-set' ? 'not set' : 'key set',
+    description: credentialOriginLabel(origins[provider], 'key'),
     provider,
   }));
   const providerPick = yield* quickPick<ApiProviderQuickPickItem>(

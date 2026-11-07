@@ -3,12 +3,13 @@ import { useState } from 'react';
 
 import {
   API_KEY_PROVIDER_IDS,
-  type ApiKeyStatus,
+  type CredentialOrigin,
   type ApiKeyProviderId,
   providerDisplayName,
 } from '@texra-ai/llm';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
+import { credentialOriginLabel } from '@ui/copy/credentials';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
@@ -18,7 +19,7 @@ import type { ProcessRuntime, Secrets } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 type ProviderApiKeyStatuses = Partial<
-  Readonly<Record<ApiKeyProviderId, ApiKeyStatus>>
+  Readonly<Record<ApiKeyProviderId, CredentialOrigin>>
 >;
 
 export interface ProviderApiKeyStatusView {
@@ -28,12 +29,10 @@ export interface ProviderApiKeyStatusView {
 }
 
 function providerApiKeyStatusLabel(
-  status: ApiKeyStatus | undefined,
+  status: CredentialOrigin | undefined,
   view: ProviderApiKeyStatusView,
 ): string {
-  if (status === 'set') return 'Key set';
-  if (status === 'env') return 'Env';
-  if (status === 'not-set') return 'Not set';
+  if (status !== undefined) return credentialOriginLabel(status, 'key');
   if (view.loading && !view.error) return 'Checking status';
   return 'Status unavailable';
 }
@@ -61,7 +60,7 @@ function configuredProviderApiKeySummary(
 ): string {
   const configured = API_KEY_PROVIDER_IDS.filter((provider) => {
     const status = statuses[provider];
-    return status === 'set' || status === 'env';
+    return status === 'secret' || status === 'env';
   }).map((provider) => providerDisplayName(provider));
   return configured.length > 0
     ? `Configured: ${configured.join(', ')}`
