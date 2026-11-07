@@ -329,15 +329,12 @@ export const executeCliConfig: (
       // Headless shutdown cascades into active children: a detached child
       // cannot outlive the exiting CLI process, so the detach-on-stop toggle
       // is not consulted here. The stop lands whether or not the session has
-      // started the run yet: a start that has not opened takes it, so the run
-      // ends cancelled as soon as it opens. The launch is interrupted too, so
-      // a resume still reading its rows stops there; the wait for a run's
-      // result is uninterruptible, so a launched run answers with its end.
+      // started the run yet: one that has not starts it stopped, so it ends
+      // cancelled as soon as it opens.
       yield* withProcessServices(
         options.services.runtime,
         Effect.gen(function* () {
           yield* stopThroughSession;
-          yield* Effect.forkDetach(Fiber.interrupt(launched));
           // The run's end, its recovery notice and the command's own
           // finalization, within the deadline below.
           yield* Deferred.await(finalized);
