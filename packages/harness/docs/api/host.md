@@ -120,35 +120,17 @@ interface AgentCatalogShape {
     AgentCatalogLoadError | StateReadFailed
   >;
   /** A source changed and its reload waits out a debounce: the next
-   *  `forLaunch` loads it first, so an agent saved a moment ago launches as
+   *  `WorkspaceAgents.forLaunch` loads it first, so an agent saved a moment ago launches as
    *  saved. */
   readonly invalidate: Effect.Effect<void>;
   /**
-   * A workspace's agents: the visible ones (its selection over the catalog),
-   * or with a delegation `scope`, the scope's pinned agents. The one list
-   * a delegating agent is told and its calls resolve against.
+   * A delegation scope's pinned agents, deduplicated by key: the list a
+   * scoped delegating agent is told and its calls resolve against, in place
+   * of its workspace's visible agents. Reads no store.
    */
-  readonly visible: (
-    stores: WorkspaceAgentsStores,
-    scope?: AgentDelegationScope,
-  ) => Effect.Effect<AgentEntry[], StateReadFailed>;
-  /**
-   * The agent a launch runs, over a settled catalog: the entry an explicit
-   * `source` pins, else a visible one, else any. A miss reloads once, then
-   * refuses the launch with what the load said.
-   */
-  readonly forLaunch: (
-    stores: WorkspaceAgentsStores,
-    identifier: string,
-    source?: AgentSource | null,
-  ) => Effect.Effect<
-    AgentEntry,
-    LaunchRefused | AgentCatalogLoadError | StateReadFailed
-  >;
-  /** The workspace's agent selection, over this catalog. */
-  readonly workspaceAgents: (
-    stores: WorkspaceAgentsStores,
-  ) => WorkspaceAgentsController<AgentEntry>;
+  readonly pinned: (scope: AgentDelegationScope) => AgentEntry[];
+  /** One workspace's agents over this catalog, its stores captured. */
+  readonly workspaceAgents: (stores: WorkspaceAgentsStores) => WorkspaceAgents;
   /** Change a custom copy of `entry` (see {@link AgentCustomization});
    *  the copy's path. */
   readonly customize: (
@@ -2826,6 +2808,28 @@ function withSessionFs<A, E, R>(
   E,
   Exclude<R, WorkspaceFs | StorageFs> | FileSystem.FileSystem | Path.Path
 >
+```
+
+## WorkspaceAgents
+
+One workspace's agents over the catalog: its selection, the agents it
+shows (`visible`), and the agent a launch from it runs.
+
+```ts
+interface WorkspaceAgents extends WorkspaceAgentsController<AgentEntry> {
+  /**
+   * The agent a launch runs, over a settled catalog: the entry an explicit
+   * `source` pins, else a visible one, else any. A miss reloads once, then
+   * refuses the launch with what the load said.
+   */
+  readonly forLaunch: (
+    identifier: string,
+    source?: AgentSource | null,
+  ) => Effect.Effect<
+    AgentEntry,
+    LaunchRefused | AgentCatalogLoadError | StateReadFailed
+  >;
+}
 ```
 
 ## WorkspaceAgentsController

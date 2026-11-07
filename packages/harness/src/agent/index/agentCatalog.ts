@@ -67,6 +67,25 @@ export type WorkspaceAgentsStores = Pick<
   'repoState' | 'globalState'
 >;
 
+/**
+ * One workspace's agents over the catalog: its selection, the agents it
+ * shows (`visible`), and the agent a launch from it runs.
+ */
+export interface WorkspaceAgents extends WorkspaceAgentsController<AgentEntry> {
+  /**
+   * The agent a launch runs, over a settled catalog: the entry an explicit
+   * `source` pins, else a visible one, else any. A miss reloads once, then
+   * refuses the launch with what the load said.
+   */
+  readonly forLaunch: (
+    identifier: string,
+    source?: AgentSource | null,
+  ) => Effect.Effect<
+    AgentEntry,
+    LaunchRefused | AgentCatalogLoadError | StateReadFailed
+  >;
+}
+
 /** What the process's agent catalog serves (see {@link AgentCatalog}). */
 export interface AgentCatalogShape {
   /** Every agent, one per name: a custom agent over a bundled one over a
@@ -93,35 +112,17 @@ export interface AgentCatalogShape {
     AgentCatalogLoadError | StateReadFailed
   >;
   /** A source changed and its reload waits out a debounce: the next
-   *  `forLaunch` loads it first, so an agent saved a moment ago launches as
+   *  `WorkspaceAgents.forLaunch` loads it first, so an agent saved a moment ago launches as
    *  saved. */
   readonly invalidate: Effect.Effect<void>;
   /**
-   * A workspace's agents: the visible ones (its selection over the catalog),
-   * or with a delegation `scope`, the scope's pinned agents. The one list
-   * a delegating agent is told and its calls resolve against.
+   * A delegation scope's pinned agents, deduplicated by key: the list a
+   * scoped delegating agent is told and its calls resolve against, in place
+   * of its workspace's visible agents. Reads no store.
    */
-  readonly visible: (
-    stores: WorkspaceAgentsStores,
-    scope?: AgentDelegationScope,
-  ) => Effect.Effect<AgentEntry[], StateReadFailed>;
-  /**
-   * The agent a launch runs, over a settled catalog: the entry an explicit
-   * `source` pins, else a visible one, else any. A miss reloads once, then
-   * refuses the launch with what the load said.
-   */
-  readonly forLaunch: (
-    stores: WorkspaceAgentsStores,
-    identifier: string,
-    source?: AgentSource | null,
-  ) => Effect.Effect<
-    AgentEntry,
-    LaunchRefused | AgentCatalogLoadError | StateReadFailed
-  >;
-  /** The workspace's agent selection, over this catalog. */
-  readonly workspaceAgents: (
-    stores: WorkspaceAgentsStores,
-  ) => WorkspaceAgentsController<AgentEntry>;
+  readonly pinned: (scope: AgentDelegationScope) => AgentEntry[];
+  /** One workspace's agents over this catalog, its stores captured. */
+  readonly workspaceAgents: (stores: WorkspaceAgentsStores) => WorkspaceAgents;
   /** Change a custom copy of `entry` (see {@link AgentCustomization});
    *  the copy's path. */
   readonly customize: (
@@ -255,49 +256,16 @@ function catalogReads(state: CatalogState) {
     const builtIn = state.entries.get(agentKey('builtIn', entry.name));
     return builtIn && builtIn.digest !== entry.basedOn ? builtIn : undefined;
   };
-  const workspaceAgents = ({ repoState, globalState }: WorkspaceAgentsStores) =>
-    new WorkspaceAgentsController<AgentEntry>({
-      repoState,
-      globalState,
-      teamMembers: state.teamMembers,
-      getAgents: list,
-      resolveAgent: get,
-    });
-  const visible = (
-    stores: WorkspaceAgentsStores,
-    scope?: AgentDelegationScope,
-  ): Effect.Effect<AgentEntry[], StateReadFailed> =>
-    scope
-      ? // Deduplicated by key: two identifiers of one entry give it once.
-        Effect.sync(() => [
-          ...new Map(
-            scope.flatMap((identifier) => {
-              const entry = get(identifier);
-              return entry ? [[agentKeyOf(entry), entry] as const] : [];
-            }),
-          ).values(),
-        ])
-      : workspaceAgents(stores).getVisibleAgents();
-  // Each tier runs only when the one before has no match, so the exact agent
-  // validation chose launches even if visibility changed since.
-  const resolve = (
-    stores: WorkspaceAgentsStores,
-    identifier: string,
-    source: AgentSource | null | undefined,
-  ): Effect.Effect<AgentEntry | undefined, StateReadFailed> => {
-    // A pinned source needs no selection read, so a failing store cannot
-    // reject an entry the catalog holds.
-    const pinned = source
-      ? state.entries.get(agentKey(source, agentName(identifier)))
-      : undefined;
-    if (pinned) return Effect.succeed(pinned);
-    return Effect.map(
-      visible(stores),
-      (visibleAgents) =>
-        findAgentByIdentifier(visibleAgents, identifier) ?? get(identifier),
-    );
-  };
-  return { list, get, newerBuiltIn, workspaceAgents, visible, resolve };
+  // Deduplicated by key: two identifiers of one entry give it once.
+  const pinned = (scope: AgentDelegationScope) => [
+    ...new Map(
+      scope.flatMap((identifier) => {
+        const entry = get(identifier);
+        return entry ? [[agentKeyOf(entry), entry] as const] : [];
+      }),
+    ).values(),
+  ];
+  return { list, get, newerBuiltIn, pinned };
 }
 
 /** The process's agent catalog (see {@link AgentCatalogShape}). */
@@ -348,29 +316,58 @@ export class AgentCatalog extends Context.Service<
         state.changePending ? refresh : onLoadLane(Effect.void),
       );
       const reads = catalogReads(state);
-      const { resolve, newerBuiltIn } = reads;
+      const { list, get, newerBuiltIn } = reads;
 
-      const forLaunch = Effect.fn('forLaunch')(function* (
-        stores: WorkspaceAgentsStores,
-        identifier: string,
-        source?: AgentSource | null,
-      ) {
-        const entry =
-          (yield* Effect.andThen(settled, () =>
-            resolve(stores, identifier, source),
-          )) ??
-          (yield* Effect.andThen(refresh, () =>
-            resolve(stores, identifier, source),
-          ));
-        if (entry) return entry;
-        return yield* new LaunchRefused({
-          message: missMessage(state, identifier),
-          notice: {
-            event: 'agentNotFound',
-            payload: { agentName: identifier },
-          },
+      const workspaceAgents = ({
+        repoState,
+        globalState,
+      }: WorkspaceAgentsStores): WorkspaceAgents => {
+        const selection = new WorkspaceAgentsController<AgentEntry>({
+          repoState,
+          globalState,
+          teamMembers: state.teamMembers,
+          getAgents: list,
+          resolveAgent: get,
         });
-      });
+        // Each tier runs only when the one before has no match, so the exact
+        // agent validation chose launches even if visibility changed since.
+        const resolve = (
+          identifier: string,
+          source: AgentSource | null | undefined,
+        ): Effect.Effect<AgentEntry | undefined, StateReadFailed> => {
+          // A pinned source needs no selection read, so a failing store
+          // cannot reject an entry the catalog holds.
+          const pinned = source
+            ? state.entries.get(agentKey(source, agentName(identifier)))
+            : undefined;
+          if (pinned) return Effect.succeed(pinned);
+          return Effect.map(
+            selection.visible(),
+            (visibleAgents) =>
+              findAgentByIdentifier(visibleAgents, identifier) ??
+              get(identifier),
+          );
+        };
+        const forLaunch = Effect.fn('forLaunch')(function* (
+          identifier: string,
+          source?: AgentSource | null,
+        ) {
+          const entry =
+            (yield* Effect.andThen(settled, () =>
+              resolve(identifier, source),
+            )) ??
+            (yield* Effect.andThen(refresh, () => resolve(identifier, source)));
+          if (entry) return entry;
+          return yield* new LaunchRefused({
+            message: missMessage(state, identifier),
+            notice: {
+              event: 'agentNotFound',
+              payload: { agentName: identifier },
+            },
+          });
+        });
+        return Object.assign(selection, { forLaunch });
+      };
 
       const customize = (entry: AgentEntry, change: AgentCustomization) =>
         customizeCopy(entry, change, newerBuiltIn(entry)).pipe(
@@ -378,17 +375,16 @@ export class AgentCatalog extends Context.Service<
         );
 
       return {
-        list: reads.list,
-        get: reads.get,
+        list,
+        get,
         scanIssues: () => state.customScanIssues,
         newerBuiltIn,
         refresh,
         invalidate: Effect.sync(() => {
           state.changePending = true;
         }),
-        visible: reads.visible,
-        forLaunch,
-        workspaceAgents: reads.workspaceAgents,
+        pinned: reads.pinned,
+        workspaceAgents,
         customize,
       };
     }),

@@ -60,6 +60,7 @@ export {
   AgentCatalog,
   AgentCatalogLoadError,
   type AgentCatalogShape,
+  type WorkspaceAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
 export type { AgentEntry } from '@agent/index/agentEntry';

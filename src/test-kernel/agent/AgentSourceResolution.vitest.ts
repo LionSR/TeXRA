@@ -36,7 +36,9 @@ import { FakeHost } from '@test/support/testKernel';
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(catalog: AgentCatalogShape, entry: AgentEntry | undefined) {
   return entry
-    ? catalog.forLaunch(installedHost().roots, entry.name, entry.source)
+    ? catalog
+        .workspaceAgents(installedHost().roots)
+        .forLaunch(entry.name, entry.source)
     : Effect.succeed(undefined);
 }
 
@@ -123,7 +125,9 @@ layer(
         expect(builtIn?.source).toBe('builtIn');
 
         // The entry validation accepts: the name within the visible agents.
-        const visible = yield* catalog.visible(installedHost().roots);
+        const visible = yield* catalog
+          .workspaceAgents(installedHost().roots)
+          .visible();
         const custom = yield* launchAs(
           catalog,
           findAgentByIdentifier(visible, 'assistant'),

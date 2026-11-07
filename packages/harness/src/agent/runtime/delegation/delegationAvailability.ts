@@ -63,7 +63,10 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
       ({ name }) => registry.get(name)?.launchesTasks,
     );
     if (!chats && !tasks) return undefined;
-    const entries = yield* (yield* AgentCatalog).visible(stores, scope);
+    const catalog = yield* AgentCatalog;
+    const entries = scope
+      ? catalog.pinned(scope)
+      : yield* catalog.workspaceAgents(stores).visible();
     const agents = entries.flatMap(
       ({ name, description, tools: agentTools, blocks }) => {
         const task = Object.keys(blocks).length > 0;

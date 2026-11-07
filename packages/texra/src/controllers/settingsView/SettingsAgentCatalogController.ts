@@ -79,7 +79,7 @@ export class SettingsAgentCatalogController {
     'SettingsAgentCatalogController.saveCurrentPreset',
   )({ self: this }, function* (name: string) {
     const trimmedName = name.trim();
-    const agents = (yield* this.deps.workspaceAgents.getVisibleAgents()).map(
+    const agents = (yield* this.deps.workspaceAgents.visible()).map(
       (entry) => entry.name,
     );
     const preset: AgentModePreset = {
@@ -138,7 +138,7 @@ export class SettingsAgentCatalogController {
   )({ self: this }, function* () {
     return (
       (yield* this.deps.workspaceAgents.getEnabledAgentKeys()) ??
-      (yield* this.deps.workspaceAgents.getVisibleAgents()).map(agentKeyOf)
+      (yield* this.deps.workspaceAgents.visible()).map(agentKeyOf)
     );
   });
 

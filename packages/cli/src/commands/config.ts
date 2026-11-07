@@ -160,7 +160,7 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
     if (keyword(defaultAgent) === 'none') {
       yield* setWorkspaceCliChatAgent(roots, undefined);
     } else if (defaultAgent !== undefined) {
-      const available = yield* workspaceAgents.getVisibleAgents();
+      const available = yield* workspaceAgents.visible();
       const selected = available.find(
         (agent) =>
           agent.name === defaultAgent || agentKeyOf(agent) === defaultAgent,

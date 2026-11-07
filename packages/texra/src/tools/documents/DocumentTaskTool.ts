@@ -56,10 +56,12 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
 ) {
   const call = yield* requireRun('document_task');
   const catalog = yield* AgentCatalog;
-  const agent = (yield* catalog.visible(
-    call.env.roots,
-    call.run.config.delegationAgentScope ?? undefined,
-  )).find((entry) => agentMatchesIdentifier(entry, input.agentName));
+  const scope = call.run.config.delegationAgentScope;
+  const agent = (
+    scope
+      ? catalog.pinned(scope)
+      : yield* catalog.workspaceAgents(call.env.roots).visible()
+  ).find((entry) => agentMatchesIdentifier(entry, input.agentName));
   if (agent !== undefined && documentTaskOf(agent) === null)
     return errorResult(
       `'${input.agentName}' has no document task: call \`agent\` to run it with a prompt.`,

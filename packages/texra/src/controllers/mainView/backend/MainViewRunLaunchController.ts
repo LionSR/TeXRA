@@ -54,10 +54,10 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
   // does not know launches as a chat, whose own resolution shows the
   // agent-config banner. A failed load refuses the launch: the catalog may
   // still serve the agent, which would then run as a chat without its task.
-  const catalog = yield* AgentCatalog;
+  const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
   const resolved = team
     ? { entry: null }
-    : yield* catalog.forLaunch(roots, agent).pipe(
+    : yield* workspaceAgents.forLaunch(agent).pipe(
         Effect.map((entry) => ({ entry })),
         Effect.catchTags({
           LaunchRefused: () => Effect.succeed({ entry: null }),
@@ -75,7 +75,7 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
   // shows no agent and no mode for it, so its launch is refused.
   if (
     entry !== null &&
-    !(yield* catalog.visible(roots)).some(
+    !(yield* workspaceAgents.visible()).some(
       (shown) => agentKeyOf(shown) === agentKeyOf(entry),
     )
   )

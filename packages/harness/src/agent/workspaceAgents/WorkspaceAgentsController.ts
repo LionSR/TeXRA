@@ -108,23 +108,26 @@ export class WorkspaceAgentsController<
     );
   }
 
-  readonly getVisibleAgents = Effect.fn(
-    'WorkspaceAgentsController.getVisibleAgents',
-  )({ self: this }, function* () {
-    const { identifiers } = yield* this.resolveStoredSelection();
-    if (identifiers === undefined) {
-      return yield* visibleAgents(this.deps.repoState, this.deps.getAgents());
-    }
-    const { entries } = this.resolveIdentifiers(identifiers);
-    return [
-      ...entries,
-      ...(yield* unlistedCustomAgents(
-        this.deps.repoState,
-        this.deps.getAgents(),
-        entries.map(agentKeyOf),
-      )),
-    ];
-  });
+  /** The agents this workspace shows: its selection over the catalog, and
+   *  the custom agents it does not list. */
+  readonly visible = Effect.fn('WorkspaceAgentsController.visible')(
+    { self: this },
+    function* () {
+      const { identifiers } = yield* this.resolveStoredSelection();
+      if (identifiers === undefined) {
+        return yield* visibleAgents(this.deps.repoState, this.deps.getAgents());
+      }
+      const { entries } = this.resolveIdentifiers(identifiers);
+      return [
+        ...entries,
+        ...(yield* unlistedCustomAgents(
+          this.deps.repoState,
+          this.deps.getAgents(),
+          entries.map(agentKeyOf),
+        )),
+      ];
+    },
+  );
 
   /** Return the effective stored identifiers, including unavailable members. */
   getEnabledAgentKeys() {

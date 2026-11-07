@@ -52,7 +52,8 @@ export function resolveCliRunAgent(
 ) {
   return Effect.flatMap(AgentCatalog, (catalog) =>
     catalog
-      .forLaunch(stores, name)
+      .workspaceAgents(stores)
+      .forLaunch(name)
       .pipe(
         Effect.catchTag('LaunchRefused', () =>
           Effect.fail(
@@ -183,7 +184,7 @@ function collectCliAgents(
   return Effect.map(
     Effect.flatMap(AgentCatalog, (catalog) =>
       source === 'visible'
-        ? catalog.visible(stores)
+        ? catalog.workspaceAgents(stores).visible()
         : Effect.succeed(catalog.list()),
     ),
     (agents) =>

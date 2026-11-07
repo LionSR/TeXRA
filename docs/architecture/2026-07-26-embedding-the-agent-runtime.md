@@ -157,7 +157,7 @@ that need no session leave the store unopened.
 Launch resolution reads the process's `AgentCatalog` service
 (`packages/harness/src/agent/index/agentCatalog.ts`, public from
 `@texra-ai/harness`). Its layer starts empty and the agent-catalog follower
-loads it; `forLaunch` finds an agent by name, and a miss reloads the catalog
+loads it; `workspaceAgents(stores).forLaunch` finds an agent by name, and a miss reloads the catalog
 once before it fails with what the load said. `refresh` rescans every source.
 
 ### Per-session — attach host interactions when presentation is required
