@@ -133,8 +133,6 @@ const phaseAfter = (
 export type RunState = RunRowState &
   RunFacts & {
     readonly commit: CommitOrdinal;
-    /** A run history row was applied, not only requests, config, activation. */
-    readonly hasHistoryRows: boolean;
     /** `null` until the opening `run.position` (then set by
      *  {@link phaseAfter}): no row that needs an opened run comes before it. */
     readonly phase: RunLoopPhase | null;
@@ -219,7 +217,6 @@ export type RunInputDraft = Exclude<
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunRowState(),
   commit,
-  hasHistoryRows: false,
   phase: null,
   modelId: null,
   backend: null,
@@ -526,6 +523,16 @@ export const isRunStateRow = <R extends Pick<SessionRow, 'type'>>(
 const handlerOf = <K extends RunStateRowType>(type: K): RowHandler<K> =>
   ROW_HANDLERS[type];
 
+/** What `row` asks of the state it applies to. */
+const requirementOf = (
+  row: Extract<RunHistoryRow, { type: RunStateRowType }>,
+): Requirement => {
+  const handler = handlerOf(row.type);
+  return typeof handler.requires === 'function'
+    ? handler.requires(row)
+    : handler.requires;
+};
+
 /** One row applied to `current`: rejected, applied, or (`null`) ignored. A
  *  row of a kind the state does not read is corrupt history, never a
  *  silent default: its reader selects the state's kinds. */
@@ -546,21 +553,15 @@ function applyRow(
     );
   if (!isRunStateRow(row)) return rejected('unknown-run-row', row.type);
   const handler = handlerOf(row.type);
-  const requires =
-    typeof handler.requires === 'function'
-      ? handler.requires(row)
-      : handler.requires;
+  const requires = requirementOf(row);
   if (requires === 'existing' && current === null) return null;
   if (requires === 'opened' && current?.phase == null)
     return rejected(
       'out-of-order',
       `${row.type} before the opening run.position`,
     );
-  // A row that only updates an existing state is not a run history row;
-  // every other row is one.
   const state = current ?? freshRunState(commit);
-  const hasHistoryRows = state.hasHistoryRows || requires !== 'existing';
-  const next = handler.apply({ ...state, commit, hasHistoryRows }, row, copies);
+  const next = handler.apply({ ...state, commit }, row, copies);
   return next === null ? null : Result.mapError(next, inconsistent);
 }
 
@@ -579,13 +580,26 @@ export function applyRunRows(
   rows: readonly RunHistoryRow[],
 ): Result.Result<RunState | null, RunHistoryInconsistent> {
   let current = state;
+  // A row that only updates an existing state (a request, the config, an
+  // activation) is not a run history row; every other row is one, and
+  // needs the opening run.position by the batch's end.
+  let history = false;
   const copies: BatchCopies = new WeakSet();
   for (const row of rows) {
     const next = applyRow(current, row, copies);
     if (next === null) continue;
     if (Result.isFailure(next)) return next;
     current = next.success;
+    history ||= isRunStateRow(row) && requirementOf(row) !== 'existing';
   }
+  if (history && current !== null && current.phase === null)
+    return Result.fail(
+      new RunHistoryInconsistent({
+        reason: 'out-of-order',
+        detail: 'run history rows without an opening run.position',
+        commit: current.commit,
+      }),
+    );
   return Result.succeed(current);
 }
 
