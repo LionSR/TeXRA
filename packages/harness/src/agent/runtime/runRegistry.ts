@@ -19,6 +19,7 @@ import {
   Context,
   Deferred,
   Effect,
+  Exit,
   Fiber,
   Schema,
   type Scope,
@@ -130,7 +131,9 @@ export class RunRegistry implements RunsShape {
     RunId,
     { stop: RunStopReason | null; readonly settled: Deferred.Deferred<void> }
   >();
-  /** The runs whose stop is committing: a start is refused meanwhile. */
+  /** The runs whose stop is committing, or whose stopped fiber has not
+   *  ended yet: a start is refused meanwhile, and a second stop records
+   *  nothing, so the first one's reason stands. */
   private readonly stopping = new Set<RunId>();
   /** The runs a file operation or a deletion holds, for its lifetime
    *  ({@link withInactiveRun}): a launch arriving meanwhile waits for it. */
@@ -373,6 +376,7 @@ export class RunRegistry implements RunsShape {
                   // Its parent's edge, read before the run leaves here.
                   const parent = this.attachedParent(runId);
                   this.live.delete(runId);
+                  this.stopping.delete(runId);
                   this.controls.delete(runId);
                   this.publishHeld();
                   this.init.wake(runId);
@@ -452,6 +456,7 @@ export class RunRegistry implements RunsShape {
         return Effect.succeed(true);
       }
       const fiber = this.live.get(runId);
+      if (this.stopping.has(runId)) return Effect.succeed(fiber !== undefined);
       this.stopping.add(runId);
       return Effect.gen({ self: this }, function* () {
         yield* this.inSession(
@@ -469,7 +474,7 @@ export class RunRegistry implements RunsShape {
             yield* this.stopHeld(id, reason);
         if (fiber !== undefined) fiber.interruptUnsafe();
         return fiber !== undefined;
-      }).pipe(Effect.ensuring(Effect.sync(() => this.stopping.delete(runId))));
+      }).pipe(Effect.onExit((exit) => this.stopped(runId, fiber, exit)));
     });
   }
 
@@ -488,12 +493,30 @@ export class RunRegistry implements RunsShape {
         return Effect.void;
       }
       const fiber = this.live.get(runId);
-      if (fiber === undefined) return Effect.void;
+      if (fiber === undefined || this.stopping.has(runId)) return Effect.void;
       this.stopping.add(runId);
       return this.inSession(this.init.programs.stop(runId, reason, false)).pipe(
         Effect.andThen(Effect.sync(() => fiber.interruptUnsafe())),
-        Effect.ensuring(Effect.sync(() => this.stopping.delete(runId))),
+        Effect.onExit((exit) => this.stopped(runId, fiber, exit)),
       );
+    });
+  }
+
+  /** A stop of `runId` answered: it stays stopping until its interrupted
+   *  `fiber` ends (the fiber's observer lets it go), unless the stop failed
+   *  before interrupting it, or no fiber drove it. */
+  private stopped(
+    runId: RunId,
+    fiber: AnyFiber | undefined,
+    exit: Exit.Exit<unknown, unknown>,
+  ): Effect.Effect<void> {
+    return Effect.sync(() => {
+      if (
+        Exit.isFailure(exit) ||
+        fiber === undefined ||
+        this.live.get(runId) !== fiber
+      )
+        this.stopping.delete(runId);
     });
   }
 
