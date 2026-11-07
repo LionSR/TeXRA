@@ -1,6 +1,9 @@
 # Lens: interface comments (ch. 12, 13)
 
 **Commit read:** main `03c2f51d5d480ca199b7192c687595d20aced5d7`.
+Main took #14796 and #14797 while this was written (`56ac9f8fe6`). None
+of the cited source files changed, and root `AGENTS.md:215` still reads as
+cited.
 **Scope:** `packages/*/src`, plus the two in-tree guidance files that
 cite code (`AGENTS.md`, `packages/harness/src/agent/runtime/README.md`).
 **Method:** two mechanical sweeps, then reading. The first sweep matched
