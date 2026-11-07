@@ -58,7 +58,7 @@ import {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-import { ToolCatalog } from '@tools/liveTools';
+import { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -176,17 +176,8 @@ export const toolAvailabilityLayer: Layer.Layer<
     const probeRound = (inputs: ToolProbeInputs) =>
       Effect.forEach(
         PROBED_PLUGINS,
-        // A plugin's probe runs with its own process services while its
-        // layer is up (a language server roster, say); a probe never
-        // brings a layer up, which could act (one may register tools).
         (plugin) =>
-          Effect.scoped(
-            Effect.flatMap(catalog.processServices(plugin.id), (own) =>
-              Option.isSome(own)
-                ? Effect.provide(probeToolGroup(plugin, inputs), own.value)
-                : probeToolGroup(plugin, inputs),
-            ),
-          ),
+          probeToolGroup(plugin, inputs, catalog.processServices(plugin.id)),
         // Every group probes at once and no group's failure cancels a
         // sibling, because each one resolves to a result of its own.
         { concurrency: 'unbounded' },
@@ -231,9 +222,9 @@ export const toolAvailabilityLayer: Layer.Layer<
                     new Map(current).set(workspace, probed),
                   ),
                 ),
-                // A round that fails (a plugin layer's start failing under
-                // it) gives its waiters that failure, and the root's next
-                // request still runs.
+                // Each group resolves to a result of its own, so a round can
+                // fail only by a defect outside them; its waiters then get
+                // that failure, and the root's next request still runs.
                 Effect.exit,
                 Effect.flatMap((probed) =>
                   PubSub.publish(answers, { round, probed }),
@@ -288,13 +279,17 @@ export const toolAvailabilityLayer: Layer.Layer<
 );
 
 /**
- * One plugin's check under the group deadline. A failure or a defect
- * (a check that throws) is logged and reported as `unknown`; only an
- * interrupt ends the probe.
+ * One plugin's check under the group deadline. The check runs with the
+ * plugin's own process services while its layer is up (`ownServices`, a
+ * language server roster, say); a probe never brings a layer up, which
+ * could act (one may register tools). A failure or a defect (a check that
+ * throws, or a layer that failed to start) is logged and reported as
+ * `unknown`, so it is this plugin's alone; only an interrupt ends the probe.
  */
 const probeToolGroup = (
   plugin: ProbedToolPlugin,
   inputs: ToolProbeInputs,
+  ownServices: ReturnType<ToolCatalogShape['processServices']>,
 ): Effect.Effect<ExternalToolCheckResult, never, ToolProbeServices> => {
   const unknown = (error: unknown) =>
     Effect.logWarning(`Availability probe failed for plugin ${plugin.id}`).pipe(
@@ -308,7 +303,7 @@ const probeToolGroup = (
         statusDetail: `Availability check failed: ${toErrorMessage(error)}`,
       }),
     );
-  return Effect.suspend(() => plugin.availability.check(inputs)).pipe(
+  const check = Effect.suspend(() => plugin.availability.check(inputs)).pipe(
     Effect.map(({ available, statusLabel, statusDetail }) => ({
       id: plugin.id,
       tools: (plugin.tools ?? []).map((tool) => tool.definition.name),
@@ -325,7 +320,10 @@ const probeToolGroup = (
           ),
         ),
     }),
-    Effect.catch(unknown),
-    Effect.catchDefect(unknown),
   );
+  return Effect.scoped(
+    Effect.flatMap(ownServices, (own) =>
+      Option.isSome(own) ? Effect.provide(check, own.value) : check,
+    ),
+  ).pipe(Effect.catch(unknown), Effect.catchDefect(unknown));
 };
