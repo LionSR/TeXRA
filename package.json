@@ -21,7 +21,6 @@
     "gate:invariants": "npm run lint && node scripts/check-row-kinds-ever.mjs && node scripts/check-api-report.mjs && npm run check:fact-spread && node scripts/verify-extension-package-invariants.mjs && node scripts/sync-package-contributes.mjs --check && node scripts/sync-notice-files.mjs --check",
     "gate:typecheck": "corepack pnpm --filter @texra-ai/cli smoke:react-compiler && npm run format:check && npm run typecheck",
     "test:vscode": "node scripts/vscode-host-e2e-runner.mjs",
-    "smoke:webviews": "corepack pnpm --filter texra vite:webviews && node scripts/verify-desktop.mjs smoke-webviews",
     "typecheck": "corepack pnpm run --parallel --include-workspace-root \"/^typecheck:/\"",
     "typecheck:root": "tsc --noEmit --checkers 8",
     "typecheck:test-kernel": "tsc --noEmit --checkers 8 -p tsconfig.test-kernel.json",

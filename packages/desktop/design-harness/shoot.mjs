@@ -5,33 +5,6 @@ import { resolve } from 'node:path';
 
 const out = resolve(process.argv[2] ?? 'shots');
 mkdirSync(out, { recursive: true });
-const scenes = process.env.SCENES
-  ? process.env.SCENES.split(',')
-  : [
-      'ext-new',
-      'ext-session',
-      'ext-drawer',
-      'ext-tree',
-      'ext-waiting-grandchild',
-      'ext-interrupted',
-      'ext-interrupted-run',
-      'ext-finished',
-      'ext-finished-workflow',
-      'ext-wide',
-      'ext-tools',
-      'ext-proposal',
-      'ext-proposal-pickers',
-      'ext-inline',
-      'ext-process',
-      'ext-cost',
-      'ext-script-running',
-      'desktop-projects',
-      'desktop-one-project',
-      'desktop-empty-project',
-      'desktop-narrow',
-      'settings-plugins',
-      'settings-approval',
-    ];
 const browser = await chromium.launch(
   process.env.PW_EXE ? { executablePath: process.env.PW_EXE } : {},
 );
@@ -42,17 +15,18 @@ const page = await browser.newPage({
 // Fixture timestamps sit near the epoch; pin the page clock beside them
 // (fanOutScenario BOARD_NOW) so elapsed labels read as minutes, not decades.
 await page.clock.setFixedTime(10_000_000);
+const origin = `http://localhost:${process.env.PORT ?? 5178}`;
+let scenes = process.env.SCENES?.split(',');
+if (!scenes) {
+  await page.goto(origin, { waitUntil: 'networkidle' });
+  scenes = (await page.locator('html').getAttribute('data-scenes')).split(',');
+}
 page.on('pageerror', (e) => console.error('[pageerror]', e.message));
 page.on('console', (m) => {
   if (m.type() === 'error') console.error('[console]', m.text());
 });
 for (const scene of scenes) {
-  await page.goto(
-    `http://localhost:${process.env.PORT ?? 5178}/?scene=${scene}`,
-    {
-      waitUntil: 'networkidle',
-    },
-  );
+  await page.goto(`${origin}/?scene=${scene}`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#frame');
   await page.waitForTimeout(800);
   await page
