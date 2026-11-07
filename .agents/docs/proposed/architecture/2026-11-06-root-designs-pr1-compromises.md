@@ -281,11 +281,13 @@ rather than per finding:
   only record. The registry's `stop` is the one writer of that row;
   routing the await's interruption through it would make the child's
   rows say why.
-- **The session's close deadline** bounds the drain of the runs, not the
-  stop rows `stopAll` writes first: a slow publisher delays a close past
-  the five seconds before the timeout starts. One deadline over both
-  would need the stop writes interruptible, which a durable append is not
-  by design.
+- **The session's close deadline, ended in lane 9.** It bounded the drain
+  of the runs, not the stop rows `stopAll` writes first: a slow publisher
+  delayed a close past the five seconds before the timeout started. The
+  deadline now starts before the stop writes (`stopSessionRuns`); the
+  writes stay uninterruptible and run whole, and the wait gets what they
+  left of the budget, so a close takes the longer of the two, not their
+  sum.
 - **An agent-CLI plugin switched off mid-turn, ended in lane 9.** It
   released its session registry (the busy set); switched on again, a second
   call on the same thread passed the claim. A claim is a scope the turn
@@ -319,7 +321,7 @@ rather than per finding:
   - the await's interruption through `RunRegistry.stop` (the registry's
     `stop` already cascades a stop row to every held descendant; what is
     left is a tool call interrupted for another reason);
-  - the close deadline over the stop writes;
+  - the close deadline over the stop writes (ended in lane 9);
   - a hold per agent-CLI turn (ended in lane 9).
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.

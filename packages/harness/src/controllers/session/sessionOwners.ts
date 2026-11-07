@@ -9,12 +9,12 @@
  */
 import {
   Cause,
+  Clock,
   Context,
   Effect,
   FiberMap,
   FiberSet,
   Layer,
-  Option,
   Scope,
   Semaphore,
   Stream,
@@ -88,22 +88,23 @@ const logFailure =
     log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
 /** Stop every run of `session`, cascading, and wait for them to end within
- *  the close budget: the runs still live past it are abandoned. */
+ *  the close budget, which starts before the stop rows: their writes are
+ *  durable appends and run whole, and the wait gets what they left of the
+ *  budget. The runs still live past it are abandoned. */
 export const stopSessionRuns = (
   session: Context.Context<SessionServices>,
 ): Effect.Effect<SessionCloseReport> =>
   Effect.gen(function* () {
     const runs = registryOf(Context.get(session, Runs));
+    const closeBy =
+      (yield* Clock.currentTimeMillis) + SESSION_CLOSE_DEADLINE_MS;
     yield* runs.stopAll();
-    const drained = yield* runs
+    const left = closeBy - (yield* Clock.currentTimeMillis);
+    yield* runs
       .awaitDrained()
-      .pipe(
-        Effect.interruptible,
-        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-      );
-    const settled = Option.isSome(drained);
-    const abandoned = settled ? [] : runs.get().map((run) => run.runId);
-    return { settled, abandoned };
+      .pipe(Effect.interruptible, Effect.timeoutOption(Math.max(left, 0)));
+    const abandoned = runs.get().map((run) => run.runId);
+    return { settled: abandoned.length === 0, abandoned };
   });
 
 /**
