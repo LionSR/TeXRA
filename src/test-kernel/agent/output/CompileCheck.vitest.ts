@@ -1,5 +1,6 @@
 // Node imports
 import { readFile } from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -10,7 +11,7 @@ import { assert, expect, vi } from 'vitest';
 // Local imports
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
-import { fakePath } from '@test/support/FakePlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { runCompileCheck } from '@texra/agent/output/compileCheck';
 
 // Local file imports
@@ -23,7 +24,7 @@ import {
 
 // The compiled PDF the fake engine reports; no test seeds it, so artifact
 // publication is a no-op — the path only has to be a plausible absolute one.
-const COMPILED_PDF = fakePath('build/main.pdf');
+const COMPILED_PDF = path.join(os.tmpdir(), 'texra-build', 'main.pdf');
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn((): Effect.Effect<CompileLatex2PdfResult> =>
@@ -43,8 +44,9 @@ layer(latexHost({}), { excludeTestServices: true })('runCompileCheck', (it) => {
     () =>
       Effect.gen(function* () {
         const runId = Schema.decodeUnknownSync(RunIdSchema)('c0e0e1');
-        const result = yield* runCompileCheck(compileContext(runId), 0, [
-          outputFile(runId, path.join('r0', 'main.tex'), 'main.tex', 0),
+        const { roots } = yield* FakeHost;
+        const result = yield* runCompileCheck(compileContext(roots, runId), 0, [
+          outputFile(roots, runId, path.join('r0', 'main.tex'), 'main.tex', 0),
         ]);
 
         assert(result._tag === 'checked');

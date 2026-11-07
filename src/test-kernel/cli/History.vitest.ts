@@ -20,7 +20,6 @@ import {
   readCliHistoryDetails,
 } from '@cli/runtime/history';
 import { SessionLog } from '@shared/session/runHistory';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   publishTestRunStart,
   publishTestRows,
@@ -110,89 +109,87 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       }),
       { buildPerTest: true },
     )((it) => {
-      it.layer(TestSession.layer(testWorkspaceRoots(), { persistent: true }))(
-        (it) => {
-          it.effect(
-            "carries each run's outcome and resumability, in NDJSON too",
-            () =>
-              Effect.gen(function* () {
-                // The record states the outcome the run ended on (null for
-                // none) beside whether a resume continues it. A document task
-                // that ended is settled; one that has not, resumes.
-                const session = yield* Effect.flatMap(
-                  TestSession,
-                  sessionHandleOf,
-                );
-                const outcomes = [
-                  ['b1b1b1', RUN_OUTCOME.CANCELLED],
-                  ['b2b2b2', RUN_OUTCOME.FAILED],
-                  ['b3b3b3', RUN_OUTCOME.COMPLETED],
-                  ['b4b4b4', undefined],
-                ] as const;
-                for (const [id, outcome] of outcomes)
-                  yield* publishRunFacts(session, decodeRunId(id), {
-                    record: config,
-                    ...(outcome && { outcome }),
-                  });
-
-                const entries = yield* historyEntries;
-                const byId = (id: string) =>
-                  entries.find((entry) => entry.id === id);
-                expect(
-                  outcomes.map(([id]) => [
-                    byId(id)?.outcome,
-                    byId(id)?.resumable,
-                  ]),
-                ).toEqual([
-                  ['cancelled', false],
-                  ['failed', false],
-                  ['completed', false],
-                  [null, true],
-                ]);
-                const listed = outcomes.flatMap(([id]) => byId(id) ?? []);
-                expect(cliHistoryNdjsonRecords(listed)).toMatchObject(
-                  ['cancelled', 'failed', 'completed', null].map((outcome) => ({
-                    entry: { outcome },
-                  })),
-                );
-              }),
-          );
-
-          it.effect(
-            'does not surface missing files or persisted paths outside the workspace',
-            () =>
-              Effect.gen(function* () {
-                const session = yield* Effect.flatMap(
-                  TestSession,
-                  sessionHandleOf,
-                );
-                const root = yield* Effect.promise(() =>
-                  makeTempDir('texra-history-root-', tempDirs),
-                );
-                const workspace = path.join(root, 'workspace');
-                const outsidePath = path.join(root, 'outside.md');
-                yield* Effect.promise(() => mkdir(workspace));
-                yield* Effect.promise(() => writeFile(outsidePath, 'outside'));
-                // A stored tool-use run whose settled calls edited these
-                // paths.
-                yield* publishRunFacts(session, decodeRunId('a1a1a1'), {
-                  record: Schema.decodeUnknownSync(AgentConfigSchema)({
-                    ...config,
-                    script: null,
-                    inputFiles: [],
-                    outputFiles: [],
-                    workingDirectory: workspace,
-                  }),
-                  edited: ['../outside.md', outsidePath, 'missing.md'],
+      it.layer(TestSession.layer(undefined, { persistent: true }))((it) => {
+        it.effect(
+          "carries each run's outcome and resumability, in NDJSON too",
+          () =>
+            Effect.gen(function* () {
+              // The record states the outcome the run ended on (null for
+              // none) beside whether a resume continues it. A document task
+              // that ended is settled; one that has not, resumes.
+              const session = yield* Effect.flatMap(
+                TestSession,
+                sessionHandleOf,
+              );
+              const outcomes = [
+                ['b1b1b1', RUN_OUTCOME.CANCELLED],
+                ['b2b2b2', RUN_OUTCOME.FAILED],
+                ['b3b3b3', RUN_OUTCOME.COMPLETED],
+                ['b4b4b4', undefined],
+              ] as const;
+              for (const [id, outcome] of outcomes)
+                yield* publishRunFacts(session, decodeRunId(id), {
+                  record: config,
+                  ...(outcome && { outcome }),
                 });
 
-                const details = yield* historyDetails(decodeRunId('a1a1a1'));
+              const entries = yield* historyEntries;
+              const byId = (id: string) =>
+                entries.find((entry) => entry.id === id);
+              expect(
+                outcomes.map(([id]) => [
+                  byId(id)?.outcome,
+                  byId(id)?.resumable,
+                ]),
+              ).toEqual([
+                ['cancelled', false],
+                ['failed', false],
+                ['completed', false],
+                [null, true],
+              ]);
+              const listed = outcomes.flatMap(([id]) => byId(id) ?? []);
+              expect(cliHistoryNdjsonRecords(listed)).toMatchObject(
+                ['cancelled', 'failed', 'completed', null].map((outcome) => ({
+                  entry: { outcome },
+                })),
+              );
+            }),
+        );
 
-                expect(details?.files).toEqual([]);
-              }),
-          );
-        },
-      );
+        it.effect(
+          'does not surface missing files or persisted paths outside the workspace',
+          () =>
+            Effect.gen(function* () {
+              const session = yield* Effect.flatMap(
+                TestSession,
+                sessionHandleOf,
+              );
+              const root = yield* Effect.promise(() =>
+                makeTempDir('texra-history-root-', tempDirs),
+              );
+              const workspace = path.join(root, 'workspace');
+              const outsidePath = path.join(root, 'outside.md');
+              yield* Effect.promise(() => mkdir(workspace));
+              yield* Effect.promise(() => writeFile(outsidePath, 'outside'));
+              // A stored tool-use run whose settled calls edited these
+              // paths.
+              yield* publishRunFacts(session, decodeRunId('a1a1a1'), {
+                record: Schema.decodeUnknownSync(AgentConfigSchema)({
+                  ...config,
+                  script: null,
+                  inputFiles: [],
+                  outputFiles: [],
+                  workingDirectory: workspace,
+                }),
+                edited: ['../outside.md', outsidePath, 'missing.md'],
+              });
+
+              const details = yield* historyDetails(decodeRunId('a1a1a1'));
+
+              expect(details?.files).toEqual([]);
+            }),
+        );
+      });
     });
   },
 );

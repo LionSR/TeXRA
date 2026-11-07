@@ -28,7 +28,6 @@ import { validationModel } from '@cli/runtime/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { noHttpClientLayer } from '@test/support/fetchTestUtils';
-import { fakeHostAppState } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -109,7 +108,11 @@ function runLayer(
         Layer.provide(
           Layer.mergeAll(
             nodePlatformLayer,
-            AppState.layer(fakeHostAppState),
+            Layer.unwrap(
+              FakeHost.useSync((host) =>
+                AppState.layer(host.roots.globalState),
+              ),
+            ),
             AppSignals.layer,
           ),
         ),

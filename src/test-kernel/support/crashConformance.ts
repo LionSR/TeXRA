@@ -117,7 +117,7 @@ import {
   validationHost,
 } from '@test/support/storeFaults';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { DETACH_SUBAGENTS_ON_STOP_SETTING } from '@texra-ai/harness/schemas';
 
 /** A file's lines, none when it is absent. */
@@ -296,7 +296,7 @@ function outcome(rows: readonly Row[], root: string) {
 }
 
 /** The suite host's workspace folder: the validation host always opens one. */
-const workspaceOf = ({ workspace }: ReturnType<typeof testWorkspaceRoots>) => {
+const workspaceOf = ({ workspace }: WorkspaceRoots) => {
   if (workspace === undefined)
     throw new Error('the crash suite runs in a workspace folder');
   return workspace;
@@ -309,10 +309,7 @@ const snapshotOf = (storage: string, n: number) =>
   join(storage, 'snapshots', String(n));
 const FILES_BESIDE = ['executions'];
 const WORKSPACE_FILES = ['effects.log', 'notes.tex'];
-const takeSnapshot = (
-  roots: ReturnType<typeof testWorkspaceRoots>,
-  n: number,
-): void => {
+const takeSnapshot = (roots: WorkspaceRoots, n: number): void => {
   const to = snapshotOf(roots.storage, n);
   mkdirSync(to, { recursive: true });
   for (const name of FILES_BESIDE) {
@@ -734,7 +731,7 @@ function violations(
  * store they index.
  */
 const cleanPass = (
-  roots: ReturnType<typeof testWorkspaceRoots>,
+  roots: WorkspaceRoots,
   launch: (
     session: Context.Context<SessionServices>,
   ) => Effect.Effect<unknown, unknown, SessionOwner>,
@@ -791,7 +788,7 @@ const cleanPass = (
  * resumed store's, and why the resume was refused or stalled, if it was.
  */
 const resumeFrom = (
-  roots: ReturnType<typeof testWorkspaceRoots>,
+  roots: WorkspaceRoots,
   clean: string,
   n: number,
   root: RunId,
@@ -914,7 +911,7 @@ export function crashConformanceSuite(
             'resumes from every commit point to the clean outcome, running nothing twice',
             () =>
               Effect.gen(function* () {
-                const roots = testWorkspaceRoots();
+                const { roots } = yield* FakeHost;
                 const root = generateRunId();
 
                 const { points, clean } = yield* cleanPass(
@@ -1039,7 +1036,7 @@ export function crashConformanceSuite(
             'reads every child result settled before the crash, exactly once',
             () =>
               Effect.gen(function* () {
-                const roots = testWorkspaceRoots();
+                const { roots } = yield* FakeHost;
                 const root = generateRunId();
                 const ids = (rows: readonly Row[], type: string) =>
                   rows
@@ -1233,7 +1230,7 @@ export function crashConformanceSuite(
             'ends a detached command a dead process left running, once',
             () =>
               Effect.gen(function* () {
-                const roots = testWorkspaceRoots();
+                const { roots } = yield* FakeHost;
                 const root = generateRunId();
                 const SEND = 'Run in the background.';
                 const of = (rows: readonly Row[], run: string, type: string) =>
@@ -1370,7 +1367,7 @@ export function crashConformanceSuite(
             'a crash between two appends of one job leaves neither',
             () =>
               Effect.gen(function* () {
-                const roots = testWorkspaceRoots();
+                const { roots } = yield* FakeHost;
                 const session = yield* persistentTestSession(roots);
                 const run = qualifyAggregateId('run', generateRunId());
                 const titled = (description: string) => [

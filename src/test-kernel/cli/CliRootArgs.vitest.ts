@@ -9,7 +9,6 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Live clock: the CLI's entry runs in real time.
 layer(SessionGraph.hosted, { excludeTestServices: true })(
@@ -70,31 +69,29 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       ),
       { buildPerTest: true },
     )((it) => {
-      it.layer(TestSession.layer(testWorkspaceRoots(), { persistent: true }))(
-        (it) => {
-          it.effect(
-            'routes usage text to stderr (not stdout) on a usage error',
-            () =>
-              Effect.gen(function* () {
-                // Regression guard for the headless-parity contract: usage
-                // shown because of an ERROR must not land on STDOUT, or it
-                // pollutes `--output-format json|ndjson` (e.g. `texra run
-                // ... | jq`). Mirrors the documented repro: a usage error
-                // under --output-format json.
-                const result = yield* Effect.promise(() =>
-                  runCli(['run', '--output-format', 'json']),
-                );
-                expect(result.exitCode).toBe(2);
-                expect(stdout).toBe('');
-                // The error leads, followed by a pointer to the usage rather
-                // than the full help screen that used to bury it.
-                expect(stderr).toMatch(
-                  /^Missing required positional argument: AGENT\nRun `texra run --help` for usage\.\n$/,
-                );
-              }),
-          );
-        },
-      );
+      it.layer(TestSession.layer(undefined, { persistent: true }))((it) => {
+        it.effect(
+          'routes usage text to stderr (not stdout) on a usage error',
+          () =>
+            Effect.gen(function* () {
+              // Regression guard for the headless-parity contract: usage
+              // shown because of an ERROR must not land on STDOUT, or it
+              // pollutes `--output-format json|ndjson` (e.g. `texra run
+              // ... | jq`). Mirrors the documented repro: a usage error
+              // under --output-format json.
+              const result = yield* Effect.promise(() =>
+                runCli(['run', '--output-format', 'json']),
+              );
+              expect(result.exitCode).toBe(2);
+              expect(stdout).toBe('');
+              // The error leads, followed by a pointer to the usage rather
+              // than the full help screen that used to bury it.
+              expect(stderr).toMatch(
+                /^Missing required positional argument: AGENT\nRun `texra run --help` for usage\.\n$/,
+              );
+            }),
+        );
+      });
     });
   },
 );

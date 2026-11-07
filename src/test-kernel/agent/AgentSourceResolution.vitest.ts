@@ -22,11 +22,7 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
-import {
-  createFakeHost,
-  fakeHostAgentDirectories,
-  installedHost,
-} from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/setupPlatform';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { noHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -36,15 +32,15 @@ import { FakeHost } from '@test/support/testKernel';
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(catalog: AgentCatalogShape, entry: AgentEntry | undefined) {
   return entry
-    ? catalog
-        .workspaceAgents(installedHost().roots)
-        .forLaunch(entry.name, entry.source)
+    ? Effect.flatMap(FakeHost, ({ roots }) =>
+        catalog.workspaceAgents(roots).forLaunch(entry.name, entry.source),
+      )
     : Effect.succeed(undefined);
 }
 
 const tempDirs: string[] = [];
 
-/** The catalog, loaded over the installed fake host. The host answers
+/** The catalog, loaded over the test's fake host. The host answers
  *  `custom()` from a temp directory of its own, so nothing in this load
  *  reaches the global storage view. */
 const loadCatalog = Effect.provide(
@@ -57,7 +53,11 @@ const loadCatalog = Effect.provide(
     Layer.provide(
       Layer.mergeAll(
         unusedGlobalStorageFs(),
-        Layer.succeed(AgentDirectories)(fakeHostAgentDirectories),
+        Layer.unwrap(
+          FakeHost.useSync((host) =>
+            Layer.succeed(AgentDirectories)(host.platform.agentDirectories),
+          ),
+        ),
         AppState.layer(new FakeStateStore()),
         nodePlatformLayer,
         noHttpClientLayer,
@@ -131,9 +131,8 @@ layer(
         expect(builtIn?.source).toBe('builtIn');
 
         // The entry validation accepts: the name within the visible agents.
-        const visible = yield* catalog
-          .workspaceAgents(installedHost().roots)
-          .visible();
+        const { roots } = yield* FakeHost;
+        const visible = yield* catalog.workspaceAgents(roots).visible();
         const custom = yield* launchAs(
           catalog,
           findAgentByIdentifier(visible, 'assistant'),

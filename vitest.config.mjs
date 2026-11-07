@@ -120,7 +120,7 @@ const NEEDS_OWN_REGISTRY = [
 const DOM_DIRS = ['desktop', 'progressView', 'settings'];
 // What the scan cannot see is a suite that changes process-wide state: an
 // environment variable a library reads once (chalk's color level), a file
-// left in the worker's home or fake root. A shared worker runs file after
+// left in the worker's home. A shared worker runs file after
 // file, so file-order shuffles find those, and the fix is in the suite: set
 // the state on the instance it lives on and restore it after, so the order a
 // worker runs files in cannot matter.

@@ -4,9 +4,8 @@ import { expect } from 'vitest';
 
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { applyHelperModelPreference } from '@agent/runtime/helperModelName';
-import { installedHost } from '@test/support/setupPlatform';
 import { withEnv } from '@test/support/testEnv';
-import { SessionGraph } from '@test/support/testKernel';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'applyHelperModelPreference',
@@ -26,7 +25,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
 
           const result = yield* applyHelperModelPreference(
             config,
-            installedHost().roots,
+            (yield* FakeHost).roots,
           ).pipe(withEnv({}));
 
           expect(result.model).toBe(selected);

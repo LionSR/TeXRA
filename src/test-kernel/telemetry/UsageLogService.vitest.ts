@@ -6,17 +6,16 @@ import { AGENT_SOURCE } from '@texra-ai/harness/schemas';
 import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
 import { AppState, UsageLog } from '@texra-ai/harness/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { usageAgentName } from '@shared/usageLog';
 import {
   usageLogLayer,
   type UsageLogOptions,
 } from '@telemetry/UsageLogService';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   jsonResponse,
   testHttpClientLayer,
 } from '@test/support/fetchTestUtils';
-import { fakeHostAppState } from '@test/support/setupPlatform';
 import { FakeHost } from '@test/support/testKernel';
 import {
   TELEMETRY_ENABLED_SETTING,
@@ -59,13 +58,15 @@ describe('UsageLogService', () => {
     if (scope) await Effect.runPromise(Scope.close(scope, Exit.void));
   };
 
-  const startUsageLog = async (
-    config: UsageLogOptions['config'],
-  ): Promise<void> => {
-    await stopUsageLog();
-    lifetime = Scope.makeUnsafe();
-    const context = await Effect.runPromise(
-      Scope.provide(
+  /** Start the service over the test host's app state, where the install
+   *  id is kept, replacing one already running. */
+  const startUsageLog = (config: UsageLogOptions['config']) =>
+    Effect.gen(function* () {
+      yield* Effect.promise(stopUsageLog);
+      const host = yield* FakeHost;
+      const scope = Scope.makeUnsafe();
+      lifetime = scope;
+      const context = yield* Scope.provide(
         Layer.build(
           usageLogLayer({
             version: undefined,
@@ -75,28 +76,28 @@ describe('UsageLogService', () => {
             Layer.provide(
               Layer.mergeAll(
                 // The process runtime's diagnostics, which the service logs
-                // through; the fetch each test stubs; and the installed
-                // host's app state, where the install id is kept.
+                // through; the fetch each test stubs; and the host's app
+                // state.
                 effectDiagnosticsLayer('Trace'),
                 testHttpClientLayer,
-                AppState.layer(fakeHostAppState),
+                AppState.layer(host.roots.globalState),
               ),
             ),
           ),
         ),
-        lifetime,
-      ),
-    );
-    usageLog = Context.get(context, UsageLog);
+        scope,
+      );
+      usageLog = Context.get(context, UsageLog);
+    });
+
+  const DEFAULT_CONFIG: UsageLogOptions['config'] = {
+    batchSize: 1,
+    flushIntervalMs: 60_000,
+    enabled: true,
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    await startUsageLog({
-      batchSize: 1,
-      flushIntervalMs: 60_000,
-      enabled: true,
-    });
   });
 
   afterEach(async () => {
@@ -118,10 +119,12 @@ describe('UsageLogService', () => {
     { buildPerTest: true, excludeTestServices: true },
   )('texra.telemetry.enabled opt-out', (it) => {
     // Optional entries must be discarded without a request.
-    async function expectNoOptionalUsageSent(): Promise<void> {
+    async function expectNoOptionalUsageSent(
+      config: WorkspaceRoots['config'],
+    ): Promise<void> {
       const fetchMock = stubBatchFetch();
 
-      logUsage(usageEntry('optional'), testWorkspaceRoots().config);
+      logUsage(usageEntry('optional'), config);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).not.toHaveBeenCalled();
@@ -129,18 +132,12 @@ describe('UsageLogService', () => {
 
     it.effect('does not let a project opt in over a user-wide opt-out', () =>
       Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_SETTING.key,
-          false,
-          'global',
-        );
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_SETTING.key,
-          true,
-          'workspace',
-        );
+        yield* startUsageLog(DEFAULT_CONFIG);
+        const { config } = (yield* FakeHost).roots;
+        yield* config.update(TELEMETRY_ENABLED_SETTING.key, false, 'global');
+        yield* config.update(TELEMETRY_ENABLED_SETTING.key, true, 'workspace');
 
-        yield* Effect.promise(() => expectNoOptionalUsageSent());
+        yield* Effect.promise(() => expectNoOptionalUsageSent(config));
       }),
     );
 
@@ -148,18 +145,13 @@ describe('UsageLogService', () => {
     // queued under the old value rather than letting the next flush ship them.
     it.effect('discards entries queued before the setting was turned off', () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 }),
-        );
+        yield* startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 });
+        const { config } = (yield* FakeHost).roots;
 
         const fetchMock = stubBatchFetch();
 
-        logUsage(usageEntry('before-opt-out'), testWorkspaceRoots().config);
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_SETTING.key,
-          false,
-          'global',
-        );
+        logUsage(usageEntry('before-opt-out'), config);
+        yield* config.update(TELEMETRY_ENABLED_SETTING.key, false, 'global');
 
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(60_000));
 
@@ -172,14 +164,12 @@ describe('UsageLogService', () => {
     // texra run`. It overrides a stored `true` and cannot re-enable logging.
     it.effect('sends nothing while TEXRA_NO_TELEMETRY=1 is set', () =>
       Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_SETTING.key,
-          true,
-          'global',
-        );
+        yield* startUsageLog(DEFAULT_CONFIG);
+        const { config } = (yield* FakeHost).roots;
+        yield* config.update(TELEMETRY_ENABLED_SETTING.key, true, 'global');
         vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
 
-        yield* Effect.promise(() => expectNoOptionalUsageSent());
+        yield* Effect.promise(() => expectNoOptionalUsageSent(config));
       }),
     );
   });

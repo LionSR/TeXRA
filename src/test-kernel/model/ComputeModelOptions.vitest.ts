@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
-import { Effect, Layer } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 
 import {
   apiKeySecretName,
@@ -12,7 +12,6 @@ import {
 import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
-import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
 import { FakeHost } from '@test/support/testKernel';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { MODEL_SELECTION_KEY } from '@model/computeModelOptions';
@@ -30,13 +29,16 @@ function onlyEnabled(models: readonly string[]) {
   };
 }
 
-/** The installed host's options for `models`, over its secret store. */
-const readHostModelOptions = (models: readonly string[]) =>
-  readModelOptions(installedHost().roots, models).pipe(
-    Effect.provideService(Secrets, fakeHostSecrets),
+/** The host's options for `models`, over its secret store. */
+const readHostModelOptions = (
+  host: Context.Service.Shape<typeof FakeHost>,
+  models: readonly string[],
+) =>
+  readModelOptions(host.roots, models).pipe(
+    Effect.provideService(Secrets, host.secrets),
   );
 
-/** Install, for the test, a host with the access state the case needs. */
+/** Build, for the test, a host with the access state the case needs. */
 function installAccessPlatform(options: {
   secrets?: Record<string, string>;
   config?: Record<string, unknown>;
@@ -47,7 +49,7 @@ function installAccessPlatform(options: {
       globalState: { [MODEL_SELECTION_KEY.key]: onlyEnabled([GPT55]) },
       secrets: options.secrets ?? OPENAI_KEY_SECRETS,
     }),
-  );
+  ).pipe(Effect.map((context) => Context.get(context, FakeHost)));
 }
 
 describe('model catalogue direct-route key ownership', () => {
@@ -67,12 +69,12 @@ describe('model catalogue direct-route key ownership', () => {
 describe('model availability', () => {
   it.effect('does not treat a Moonshot key as a Kimi Code credential', () =>
     Effect.gen(function* () {
-      yield* installAccessPlatform({
+      const host = yield* installAccessPlatform({
         secrets: { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
       });
 
       const [model] = modelOptionsFrom(
-        yield* readHostModelOptions([KIMI_CODING]),
+        yield* readHostModelOptions(host, [KIMI_CODING]),
       );
 
       expect(model).toMatchObject({
@@ -86,11 +88,13 @@ describe('model availability', () => {
     'does not disable API-key access when ChatGPT subscription is preferred but signed out',
     () =>
       Effect.gen(function* () {
-        yield* installAccessPlatform({
+        const host = yield* installAccessPlatform({
           config: { 'chatgptCodex.preferSubscription': true },
         });
 
-        const [model] = modelOptionsFrom(yield* readHostModelOptions([GPT55]));
+        const [model] = modelOptionsFrom(
+          yield* readHostModelOptions(host, [GPT55]),
+        );
 
         expect(model.availability).toBe('provider-key');
         expect(isModelOptionAvailable(model)).toBe(true);

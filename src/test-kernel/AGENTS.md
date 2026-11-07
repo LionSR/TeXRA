@@ -54,10 +54,13 @@ the home-isolation setup files, so no suite sees the developer's home:
   build with `@effect/vitest`'s `layer(...)` and `it.layer(...)`
   (`support/testKernel.ts`: `FakeHost.layer`; `SessionGraph.layer` over the
   block's host, or `SessionGraph.hosted` with a default one; and
-  `TestSession.layer`). No host is installed by default, and a block's scope
-  releases what it built, so nothing a file installs outlives it. A host runs
-  the harness alone (`HARNESS_APP`: its settings and built-in plugins) unless
-  it names TeXRA (`FakeHost.layer({ app: TEXRA_APP })`, `texraHosted`, in
+  `TestSession.layer`). No host exists by default, and a block's scope
+  releases what it built, so nothing a file builds outlives it. A suite
+  reads its host as a service (`yield* FakeHost`): its roots, its ports,
+  and `host.path(...)`, a path inside the host's own temp root, which the
+  host's layer removes on release. A host runs the harness alone
+  (`HARNESS_APP`: its settings and built-in plugins) unless it names TeXRA
+  (`FakeHost.layer({ app: TEXRA_APP })`, `texraHosted`, in
   `support/texraApp.ts`), which a suite of TeXRA's tools, settings or agents
   does.
 - **`isolated`** — what a shared registry cannot serve, each file in its own
@@ -77,13 +80,10 @@ relative paths, reach the kernel's host (`support/setupPlatform.ts`), and
 every other suite is `kernel`. There is no list of exempt suites or
 modules. A shared worker runs file after file, so process-wide state a
 source scan cannot see (the environment chalk takes its color level from, a
-stubbed global, a host left installed) is found by file-order shuffles
-(`--sequence.shuffle --sequence.seed=<n>`) and fixed in the suite: set the
-state on the instance it lives on and restore it after. The worker's fake
-root holds the files of the host installed now, and each new host empties
-it: touch it only under a host your block built. A module under test that
-reaches for an ambient host or the workspace roots itself is a production
-defect; make it take its host as a layer or a value. So for a new suite: test
+stubbed global) is found by file-order shuffles (`--sequence.shuffle
+--sequence.seed=<n>`) and fixed in the suite: set the state on the instance
+it lives on and restore it after. A module under test that reaches for an
+ambient host or the workspace roots itself is a production defect; make it take its host as a layer or a value. So for a new suite: test
 the module directly, provide dependencies as values or layers, and do not
 mock repository modules. A `vi.mock` is what moves your suite to the slow
 tier; the tier is not a target to opt into.

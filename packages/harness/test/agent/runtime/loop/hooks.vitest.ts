@@ -36,8 +36,7 @@ import {
   untilStored,
   validationHost,
 } from '@test/support/storeFaults';
-import { SessionGraph } from '@test/support/testKernel';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 
 /** A file's lines, none when it is absent. Trailing whitespace is dropped:
  *  cmd.exe's `echo text >> file` writes `text \r\n`. */
@@ -113,7 +112,7 @@ const installRewriteHook = (dir: string, runs: string, rewritten: string) =>
         },
       }),
     );
-    const roots = testWorkspaceRoots();
+    const { roots } = yield* FakeHost;
     yield* InstalledPlugins.install({ kind: 'local', path: dir }, [], roots);
     yield* InstalledPlugins.enable('rewrite-hooks', roots, () =>
       Effect.succeed(true),
@@ -127,7 +126,7 @@ describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
         'R22: a rewrite committed before a crash keeps the original call, runs only the rewritten input, and never runs the hook again',
         () =>
           Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
+            const { roots } = yield* FakeHost;
             const { workspace } = roots;
             assert(workspace !== undefined);
             const effects = join(workspace, 'effects.log');

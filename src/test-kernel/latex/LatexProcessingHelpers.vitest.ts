@@ -1,7 +1,7 @@
 import { lstat, mkdir, readlink, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Layer } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
@@ -16,7 +16,6 @@ import {
 } from '@texra-ai/harness/host';
 import { runDirUnder } from '@common/storage/storageLayout';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { FakePlatformOptions } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -73,14 +72,15 @@ describe('LatexMediaManager figure extraction', () => {
     };
   }
 
-  /** Resolve the symlink `mirrorWorkspaceFile` creates in run storage and
-   * assert it points back at the real workspace figure. */
+  /** Resolve the symlink `mirrorWorkspaceFile` creates in run storage under
+   * `storage` and assert it points back at the real workspace figure. */
   async function expectFigureMirrored(
+    storage: string,
     runId: RunId,
     figurePath: string,
   ): Promise<void> {
     const mirroredPath = path.join(
-      runDirUnder(testWorkspaceRoots().storage, runId),
+      runDirUnder(storage, runId),
       'figures/plot.png',
     );
     const stats = await lstat(mirroredPath);
@@ -96,9 +96,10 @@ describe('LatexMediaManager figure extraction', () => {
       // cast: a fixture run id; the run's file service only names a directory with it.
       const runId = 'extract-figure' as RunId;
       const { texPath, figurePath, host } = yield* Effect.promise(writeFixture);
-      yield* Layer.build(FakeHost.layer(host));
-
-      const roots = testWorkspaceRoots();
+      const { roots } = Context.get(
+        yield* Layer.build(FakeHost.layer(host)),
+        FakeHost,
+      );
       const manager = new LatexMediaManager(
         logger,
         roots,
@@ -112,7 +113,9 @@ describe('LatexMediaManager figure extraction', () => {
         .pipe(Effect.provide(sessionFsLayer(roots)));
 
       expect(media.map((f) => f.absolutePath)).toEqual([figurePath]);
-      yield* Effect.promise(() => expectFigureMirrored(runId, figurePath));
+      yield* Effect.promise(() =>
+        expectFigureMirrored(roots.storage, runId, figurePath),
+      );
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

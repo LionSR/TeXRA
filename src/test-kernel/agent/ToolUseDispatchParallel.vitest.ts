@@ -238,14 +238,15 @@ interface DispatchKit {
   readonly cell: RunCell;
   /** The tools the dispatch's step offers. */
   readonly tools: ResolvedTools['registry'];
-  /** The run's services and its calls', over the block's process services. */
+  /** The run's services and its calls', over the block's process services
+   *  and the test's host. */
   readonly layer: Layer.Layer<
     | AgentRun
     | RunHistory
     | Runs
     | Exclude<PluginToolServices, RunServices | Scope.Scope>,
     never,
-    RunServices
+    RunServices | FakeHost
   >;
 }
 

@@ -5,7 +5,6 @@ import { expect } from 'vitest';
 
 // Local imports
 import { SubscriptionPreference } from '@texra-ai/harness/host';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeHost } from '@test/support/testKernel';
 
 const CODEX_PREFER_SUBSCRIPTION_KEY = 'chatgptCodex.preferSubscription';
@@ -17,17 +16,12 @@ layer(FakeHost.layer({ config: { [CODEX_PREFER_SUBSCRIPTION_KEY]: false } }))(
       'writes workspace preference when workspace config already controls it',
       () =>
         Effect.gen(function* () {
-          yield* SubscriptionPreference.set(
-            'chatgpt',
-            testWorkspaceRoots(),
-            true,
-          );
+          const { roots } = yield* FakeHost;
+          yield* SubscriptionPreference.set('chatgpt', roots, true);
 
+          expect(SubscriptionPreference.get('chatgpt', roots)).toBe(true);
           expect(
-            SubscriptionPreference.get('chatgpt', testWorkspaceRoots()),
-          ).toBe(true);
-          expect(
-            testWorkspaceRoots().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
+            roots.config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
           ).toMatchObject({
             workspaceValue: true,
           });

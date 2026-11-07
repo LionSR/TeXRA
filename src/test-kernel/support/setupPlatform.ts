@@ -1,14 +1,12 @@
 /**
- * The fake host a suite runs over: the record (`createFakeHost`), the host
- * installed now (`installedHost`; `FakeHost.layer` in `testKernel.ts`
- * installs one for a block or a test), and the ports a test process serves
- * over it, each reading the installed host when it is called. Nothing is
- * installed by default: a suite that reads a host states it with
- * `FakeHost.layer`.
+ * The fake host a suite runs over: the record (`createFakeHost`) a block or
+ * a test builds with `FakeHost.layer` (`testKernel.ts`), which serves it and
+ * points the block's process at it while the layer lives.
  */
-import { Effect, Layer, type Scope } from 'effect';
+import { join } from 'node:path';
 
-import type { AgentDirectoriesPort } from '@platform/interfaces';
+import { Effect, Layer } from 'effect';
+
 import { GlobalValues } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -19,12 +17,12 @@ import {
   createFakeWorkspaceRoots,
   FakeSecrets,
   HARNESS_APP,
+  makeHostRoot,
   type TestApp,
   type FakeHostOverrides,
   type FakeProcessPorts,
   type FakePlatformOptions,
 } from './FakePlatform';
-import type { StateStore } from '@texra-ai/harness/host';
 
 /** The process's `GlobalValues` over a global database layer, as
  *  `processLayer` serves them, for a suite that opens a real global root. */
@@ -45,6 +43,11 @@ export const globalValuesOver = <E, R>(
  * a setup-tool call there is a test error).
  */
 export interface FakeHost {
+  /** The host's own real directory, removed with its `FakeHost.layer`. */
+  readonly root: string;
+  /** A real path inside {@link root}: `path('workspace/a.tex')` is where a
+   *  `files` seed keyed `'/workspace/a.tex'` is written. */
+  readonly path: (...segments: string[]) => string;
   readonly app: TestApp;
   readonly platform: FakeProcessPorts;
   readonly roots: WorkspaceRoots;
@@ -66,84 +69,18 @@ export function createFakeHost(
     setup,
     ...platformOverrides
   } = overrides;
+  const root = makeHostRoot();
   return {
+    root,
+    path: (...segments) => join(root, ...segments),
     app: options.app ?? HARNESS_APP,
-    platform: createFakePlatform(options, platformOverrides),
-    roots: createFakeWorkspaceRoots(options, {
-      config,
-      workspaceState,
-      globalState,
-    }),
+    platform: createFakePlatform(root, options, platformOverrides),
+    roots: createFakeWorkspaceRoots(
+      options,
+      { config, workspaceState, globalState },
+      root,
+    ),
     secrets: secrets ?? new FakeSecrets(options.secrets),
     ...(setup ? { setup } : {}),
   };
 }
-
-/**
- * The host installed now. A process is built once per block while hosts
- * change per test, so the ports below read this binding on every call.
- */
-let current: FakeHost | undefined;
-
-export function installedHost(): FakeHost {
-  if (!current)
-    throw new Error(
-      'No fake host is installed: run the block or test over `FakeHost.layer` (support/testKernel.ts).',
-    );
-  return current;
-}
-
-/**
- * Installs `host` for the calling scope. Closing the scope reinstalls the
- * host it replaced (none at the start of a file), so a host never outlives
- * the block or test that installed it.
- */
-export const installFakeHost = (
-  host: FakeHost,
-): Effect.Effect<void, never, Scope.Scope> =>
-  Effect.acquireRelease(
-    Effect.sync(() => {
-      const replaced = current;
-      current = host;
-      return replaced;
-    }),
-    (replaced) =>
-      Effect.sync(() => {
-        current = replaced;
-      }),
-  );
-
-/**
- * The `Secrets` and `AppState` services of every test process, in the shape
- * `fakeSetupPlatform` (`texraApp.ts`) uses: each member reads the installed host when
- * it is called, because the process is built once per block while hosts are
- * swapped per test. A production root passes its own store here instead: it
- * has one before it builds its process, and this harness does not.
- */
-export const fakeHostSecrets: PlatformSecrets = {
-  get: (key) => installedHost().secrets.get(key),
-  set: (key, value) => installedHost().secrets.set(key, value),
-  delete: (key) => installedHost().secrets.delete(key),
-  listStoredKeys: () => installedHost().secrets.listStoredKeys(),
-};
-
-export const fakeHostAppState: StateStore = {
-  get: (key) =>
-    Effect.suspend(() => installedHost().roots.globalState.get(key)),
-  update: (key, value) => installedHost().roots.globalState.update(key, value),
-  modify: (key, change) =>
-    Effect.suspend(() => installedHost().roots.globalState.modify(key, change)),
-};
-
-/** The `AgentDirectories` service of every test process, delegating per call
- *  for the same reason `fakeHostSecrets` does: hosts change per test, the
- *  process does not. */
-export const fakeHostAgentDirectories: AgentDirectoriesPort = {
-  custom: () => installedHost().platform.agentDirectories.custom(),
-  customConfigured: () =>
-    installedHost().platform.agentDirectories.customConfigured(),
-  builtIn: () => installedHost().platform.agentDirectories.builtIn(),
-  teamMembers: (repoState, teamId) =>
-    installedHost().app.teamMembers?.(repoState, teamId) ??
-    Effect.succeed(undefined),
-};

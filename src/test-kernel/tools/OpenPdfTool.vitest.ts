@@ -5,7 +5,6 @@ import { expect, vi } from 'vitest';
 
 // Local imports
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { fakePath } from '@test/support/FakePlatform';
 import {
   FakeHost,
   SessionGraph,
@@ -33,7 +32,6 @@ const perTest = Layer.provideMerge(
   Layer.provideMerge(
     SessionGraph.layer,
     FakeHost.layer({
-      workspacePath: fakePath('workspace'),
       // A real PDF outside the working directory, so only the path rule
       // refuses it.
       files: { '/run/paper.pdf': '%PDF-1.4\n' },
@@ -58,16 +56,17 @@ layer(perTest, { buildPerTest: true, excludeTestServices: true })(
       'rejects arbitrary absolute paths outside the allowed roots',
       () =>
         Effect.gen(function* () {
+          const host = yield* FakeHost;
           const openPdf = yield* installOpener;
           const session = yield* Effect.flatMap(TestSession, sessionHandleOf);
 
           const result = yield* OpenPdfTool.call({
-            path: fakePath('run/paper.pdf'),
+            path: host.path('run/paper.pdf'),
           }).pipe(
             Effect.provideService(EditorHost, editors),
             Effect.provide(
               nativeToolTestLayer({
-                workingDirectory: fakePath('workspace'),
+                workingDirectory: host.path('workspace'),
                 // cast: a fixture run id; no stored run is read under it.
                 run: { session, runId: generateRunId(), toolPolicy: {} },
               }),

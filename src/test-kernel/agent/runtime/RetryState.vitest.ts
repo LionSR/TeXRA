@@ -79,7 +79,6 @@ import { scriptedModel, testAgentRun } from '@test/support/scriptedRunLayers';
 import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { noHttpClientLayer } from '@test/support/fetchTestUtils';
-import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
 import {
   FakeHost,
   isolatedTestSession,
@@ -260,7 +259,8 @@ const openRun = Effect.fn('openRun')(function* (
   binding: Partial<BoundModel> = {},
 ): Effect.fn.Return<
   InvokerKit,
-  RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
+  RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed,
+  FakeHost
 > {
   const runId = retryRunId();
   yield* publishTestRunStart(session, runId);
@@ -283,6 +283,7 @@ const openRun = Effect.fn('openRun')(function* (
   ).pipe(Scope.provide(Scope.makeUnsafe()));
   // Model access as the host serves it, but a rebind keeps the stub (a
   // fresh copy of the binding).
+  const host = yield* FakeHost;
   const access = Layer.effect(
     ModelAccess,
     Effect.gen(function* () {
@@ -295,9 +296,9 @@ const openRun = Effect.fn('openRun')(function* (
     }),
   ).pipe(
     Layer.provide(
-      modelAccessLayer(installedHost().roots).pipe(
+      modelAccessLayer(host.roots).pipe(
         Layer.provide(
-          Layer.merge(noHttpClientLayer, Secrets.layer(fakeHostSecrets)),
+          Layer.merge(noHttpClientLayer, Secrets.layer(host.secrets)),
         ),
       ),
     ),
@@ -451,7 +452,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
-            setTestApprovalPolicy('yolo');
+            yield* setTestApprovalPolicy('yolo');
             const stub = scriptedModel([
               judged(
                 new ModelError({

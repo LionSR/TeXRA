@@ -5,24 +5,22 @@ import { Effect, Layer, Schema } from 'effect';
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { noopTrace } from '@test/support/noopTrace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 
-function buildVars(agentConfig: typeof AgentConfigSchema.Type) {
-  return buildTemplateInputs(agentConfig, false, noopTrace, {
-    workspacePath: fakePath('workspace'),
-    storageRoot: testWorkspaceRoots().storage,
-  });
-}
+const buildVars = (agentConfig: typeof AgentConfigSchema.Type) =>
+  Effect.flatMap(FakeHost, (host) =>
+    buildTemplateInputs(agentConfig, false, noopTrace, {
+      workspacePath: host.path('workspace'),
+      storageRoot: host.roots.storage,
+    }),
+  );
 
 // A host whose storage holds one of the two memories the run attaches; the
 // standard-library filesystem is what prompt assembly reads through.
 layer(
   Layer.merge(
     FakeHost.layer({
-      workspacePath: fakePath('workspace'),
       files: {
         '/workspace/.texra/storage/memories/present.md':
           '---\nmodifiedBy: user\nmodifiedAt: 2026-06-20T14:30:45.123Z\n---\nRemember this convention.',

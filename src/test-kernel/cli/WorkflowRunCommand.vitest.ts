@@ -32,9 +32,9 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
-import { installedHost } from '@test/support/setupPlatform';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import {
+  FakeHost,
   SessionGraph,
   sessionHandleOf,
   TestSession,
@@ -140,7 +140,7 @@ function workflowProgram(
     const handle = yield* sessionHandleOf(session);
     cliInitPlatformMock.initCliPlatform.mockReturnValue(
       Effect.succeed({
-        ...installedHost().platform,
+        ...(yield* FakeHost).platform,
         session: Effect.succeed(session),
         runtime: yield* SessionGraph.runtime,
       }),
