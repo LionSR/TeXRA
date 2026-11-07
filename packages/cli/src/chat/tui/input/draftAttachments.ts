@@ -1,15 +1,20 @@
-// Draft attachment store for the chat InputBar.
+// The chat's draft: what the input shows, the content behind its chips, and
+// the skills activated for the next message, as one immutable value the chat
+// holds in a `SubscriptionRef`. A message is this value from the input to the
+// session, and a message the session does not take comes back as the same
+// value, so nothing is re-parsed on the way back.
 //
 // Collapsing large pastes and pasted images into compact
 // `[Pasted text #N +M lines]` / `[Image #N]` chips keeps the draft readable.
-// The full content lives here, keyed by a per-draft id, and is spliced back in
-// at submit time. Text and image chips share one `#N` id space so the counter
-// never collides (mirrors Claude Code).
+// The full content lives in the draft, keyed by a per-draft id, and is spliced
+// back in where the message is sent. Text and image chips share one `#N` id
+// space so the counter never collides (mirrors Claude Code).
 //
-// This store is InputBar-local (held in a ref) — it never leaks into the
-// headless (`texra run` / `--print`) path, which has no InputBar and therefore
-// never creates a placeholder. Expansion happens only at the interactive submit
-// boundary, so the piped/non-TTY output stays byte-identical.
+// Only the interactive input makes chips; the headless (`texra run` /
+// `--print`) path has no input and never creates a placeholder, so piped
+// output stays byte-identical.
+
+import type { SkillActivation } from '../forms/SkillsListForm';
 
 /** Collapse a paste into a chip when it exceeds either bound. */
 const PASTE_CHAR_THRESHOLD = 800;
@@ -86,76 +91,160 @@ function removeChipRange(input: string, start: number, end: number): string {
   );
 }
 
-export class DraftAttachmentStore {
-  private readonly entries = new Map<number, DraftAttachment>();
-  private nextId = 1;
+export interface Draft {
+  /** What the input shows, chips included. */
+  readonly text: string;
+  /** The content behind each chip, by chip id. */
+  readonly attachments: ReadonlyMap<number, DraftAttachment>;
+  readonly nextId: number;
+  /** Skills activated for the next message, by name. */
+  readonly skills: readonly SkillActivation[];
+}
 
-  /** Store pasted text; returns the chip to insert in the draft. */
-  addPastedText(content: string): string {
-    const id = this.nextId++;
-    this.entries.set(id, { kind: 'text', content });
-    const numLines = pastedNewlineCount(content);
-    return numLines === 0
-      ? `[Pasted text #${id}]`
-      : `[Pasted text #${id} +${numLines} lines]`;
-  }
+export const EMPTY_DRAFT: Draft = Object.freeze({
+  text: '',
+  attachments: new Map(),
+  nextId: 1,
+  skills: Object.freeze([]),
+});
 
-  /** Store a pasted image; returns the chip to insert in the draft. */
-  addPastedImage(image: Omit<PastedImageEntry, 'id' | 'kind'>): string {
-    const id = this.nextId++;
-    this.entries.set(id, { id, kind: 'image', ...image });
-    return `[Image #${id}]`;
-  }
+/** The draft with `text` typed. An emptied draft holds no chip, so it drops
+ *  them; its skills stay for the next message. */
+export function withText(draft: Draft, text: string): Draft {
+  if (text === draft.text) return draft;
+  return text === ''
+    ? { ...EMPTY_DRAFT, skills: draft.skills }
+    : { ...draft, text };
+}
 
-  clear(): void {
-    this.entries.clear();
-    this.nextId = 1;
-  }
+function withAttachment(
+  draft: Draft,
+  attachment: (id: number) => DraftAttachment,
+): { readonly draft: Draft; readonly id: number } {
+  const id = draft.nextId;
+  const attachments = new Map(draft.attachments);
+  attachments.set(id, attachment(id));
+  return { draft: { ...draft, attachments, nextId: id + 1 }, id };
+}
 
-  /**
-   * Expand text chips back to their stored content (reverse-offset splice so
-   * earlier replacements don't shift later match indices, and any chip-like
-   * text *inside* pasted content is never re-matched). Image chips are left in
-   * place — the image bytes ride along as media files (see
-   * {@link resolveImages}).
-   */
-  expandText(input: string): string {
-    let out = input;
-    for (const match of matchChips(input).toReversed()) {
-      const entry = this.entries.get(match.id);
-      if (entry?.kind !== 'text') continue;
-      out = out.slice(0, match.start) + entry.content + out.slice(match.end);
-    }
-    return out;
-  }
+/** Keep pasted text; returns the draft and the chip to insert in its text. */
+export function withPastedText(
+  draft: Draft,
+  content: string,
+): { readonly draft: Draft; readonly chip: string } {
+  const next = withAttachment(draft, () => ({ kind: 'text', content }));
+  const numLines = pastedNewlineCount(content);
+  return {
+    draft: next.draft,
+    chip:
+      numLines === 0
+        ? `[Pasted text #${next.id}]`
+        : `[Pasted text #${next.id} +${numLines} lines]`,
+  };
+}
 
-  /**
-   * Text to persist in input history. Pasted text is useful on recall, but
-   * image chips are not: once submitted, their media entries are cleared and a
-   * recalled `[Image #N]` would be a bare token with no file attached.
-   */
-  expandTextForHistory(input: string): string {
-    let out = input;
-    for (const match of matchChips(input).toReversed()) {
-      const entry = this.entries.get(match.id);
-      if (entry?.kind !== 'image') continue;
-      out = removeChipRange(out, match.start, match.end);
-    }
-    return this.expandText(out);
-  }
+/** Keep a pasted image; returns the draft and the chip to insert in its text. */
+export function withPastedImage(
+  draft: Draft,
+  image: Omit<PastedImageEntry, 'id' | 'kind'>,
+): { readonly draft: Draft; readonly chip: string } {
+  const next = withAttachment(draft, (id) => ({ id, kind: 'image', ...image }));
+  return { draft: next.draft, chip: `[Image #${next.id}]` };
+}
 
-  /**
-   * Image entries whose chip survives in `input`, in chip order. Orphaned
-   * chips (deleted from the text) are dropped, matching Claude Code's orphan
-   * gate.
-   */
-  resolveImages(input: string): PastedImageEntry[] {
-    const present = new Set(matchChips(input).map((m) => m.id));
-    const images: PastedImageEntry[] = [];
-    for (const id of present) {
-      const entry = this.entries.get(id);
-      if (entry?.kind === 'image') images.push(entry);
-    }
-    return images;
+/** The skill activated for the next message, replacing one of its name. */
+export function withSkill(draft: Draft, skill: SkillActivation): Draft {
+  return {
+    ...draft,
+    skills: [...draft.skills.filter((s) => s.name !== skill.name), skill],
+  };
+}
+
+/**
+ * The draft text with text chips expanded back to their content
+ * (reverse-offset splice so earlier replacements don't shift later match
+ * indices, and any chip-like text *inside* pasted content is never
+ * re-matched). Image chips are left in place: the image bytes ride along as
+ * media files (see {@link resolveImages}).
+ */
+export function expandText(draft: Draft, input = draft.text): string {
+  let out = input;
+  for (const match of matchChips(input).toReversed()) {
+    const entry = draft.attachments.get(match.id);
+    if (entry?.kind !== 'text') continue;
+    out = out.slice(0, match.start) + entry.content + out.slice(match.end);
   }
+  return out;
+}
+
+/**
+ * Text to persist in input history. Pasted text is useful on recall, but
+ * image chips are not: once submitted, their media entries are cleared and a
+ * recalled `[Image #N]` would be a bare token with no file attached.
+ */
+export function expandTextForHistory(draft: Draft): string {
+  let out = draft.text;
+  for (const match of matchChips(draft.text).toReversed()) {
+    const entry = draft.attachments.get(match.id);
+    if (entry?.kind !== 'image') continue;
+    out = removeChipRange(out, match.start, match.end);
+  }
+  return expandText(draft, out);
+}
+
+/**
+ * Image entries whose chip survives in the text, in chip order. Orphaned
+ * chips (deleted from the text) are dropped, matching Claude Code's orphan
+ * gate.
+ */
+export function resolveImages(draft: Draft): PastedImageEntry[] {
+  const present = new Set(matchChips(draft.text).map((m) => m.id));
+  const images: PastedImageEntry[] = [];
+  for (const id of present) {
+    const entry = draft.attachments.get(id);
+    if (entry?.kind === 'image') images.push(entry);
+  }
+  return images;
+}
+
+/**
+ * A message the session did not take, back in the input: its text below
+ * whatever was typed since, its chips renumbered into the current draft's id
+ * space, and its skills activated again unless one of the same name was
+ * activated since.
+ */
+export function restoreDraft(current: Draft, returned: Draft): Draft {
+  let next: Draft = {
+    ...current,
+    skills: [
+      ...current.skills,
+      ...returned.skills.filter(
+        (skill) => !current.skills.some((s) => s.name === skill.name),
+      ),
+    ],
+  };
+  if (returned.text.length === 0) return next;
+  const renumbered = new Map<number, number>();
+  for (const match of matchChips(returned.text)) {
+    const entry = returned.attachments.get(match.id);
+    if (entry === undefined || renumbered.has(match.id)) continue;
+    const added = withAttachment(next, (id) =>
+      entry.kind === 'image' ? { ...entry, id } : entry,
+    );
+    next = added.draft;
+    renumbered.set(match.id, added.id);
+  }
+  let text = returned.text;
+  for (const match of matchChips(returned.text).toReversed()) {
+    const id = renumbered.get(match.id);
+    if (id === undefined) continue;
+    const chip = text
+      .slice(match.start, match.end)
+      .replace(`#${match.id}`, `#${id}`);
+    text = text.slice(0, match.start) + chip + text.slice(match.end);
+  }
+  return {
+    ...next,
+    text: current.text.length > 0 ? `${current.text}\n${text}` : text,
+  };
 }

@@ -165,18 +165,8 @@ const PATH_FORMS =
 
 const decodeTargetPath = Schema.decodeUnknownResult(SubscriptionTargetPath);
 
-function requirePath(input: {
-  command: string;
-  path: string;
-}): Effect.Effect<SubscriptionTarget, ToolError> {
-  const raw = input.path;
-  if (!raw) {
-    return Effect.fail(
-      new ToolError(
-        `command="${input.command}" requires a path (${PATH_FORMS}).`,
-      ),
-    );
-  }
+/** The target `raw` names; the input's union already requires a path. */
+function parsePath(raw: string): Effect.Effect<SubscriptionTarget, ToolError> {
   const target = decodeTargetPath(raw.trim());
   return Result.isSuccess(target)
     ? Effect.succeed(target.success)
@@ -199,7 +189,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
 ) {
   yield* requireToken();
   const subscriptions = yield* GitHubSubscriptions;
-  const requested = yield* requirePath(input);
+  const requested = yield* parsePath(input.path);
   const minAnnotationLevel = input.min_annotation_level;
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
@@ -296,7 +286,7 @@ const resolveIssueIsPR = (
 const execUnsubscribe = Effect.fn('GitHubSubscriptionTool.unsubscribe')(
   function* (input: UnsubscribeInput, runId: RunId) {
     const subscriptions = yield* GitHubSubscriptions;
-    const target = yield* requirePath(input);
+    const target = yield* parsePath(input.path);
     // Symmetric to subscribe: an /issues/N path may have been bound as the
     // PR it names.
     const removed =

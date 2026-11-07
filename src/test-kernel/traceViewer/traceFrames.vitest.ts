@@ -7,7 +7,6 @@ import {
   type TraceDocument,
 } from '@texra-ai/harness/schemas';
 import { DisplaySessionEventSchema } from '@texra-ai/harness/transcript';
-import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
 // Relative import: `packages/trace-viewer` is a separate workspace package
@@ -58,7 +57,7 @@ function runStart(): Record<string, unknown> {
   return {
     type: 'run.start',
     identity: { kind: 'agent', agent: 'assistant' },
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    takesFollowUps: false,
     worktree: null,
     parent: null,
     provenance: null,

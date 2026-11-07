@@ -1,12 +1,13 @@
 /**
- * The installed plugins' Claude Code hooks at the run loop's points
- * (`2026-09-28-code-plugins-hooks-v1.md`). A point is one site a set of
- * hooks answers: a run's opening, a user follow-up, a tool call, a turn's
- * end. The hooks are the ones the run's step pinned, so a plugin enabled or
- * disabled mid-run reaches the next step. Each invocation is recorded as a
- * `hook.outcome` row, which the caller commits through the run's one writer
- * in the batch that the point belongs to; a point the run already recorded
- * is never run again, and its recorded effect is used instead.
+ * The installed plugins' Claude Code hooks at the run loop's points. A point
+ * is one site a set of hooks answers: a run's opening, a user follow-up, a
+ * tool call, a turn's end. A step pins its hooks as one value
+ * ({@link StepHooks}) and the loop runs each point through the value of the
+ * step it runs under, so a plugin enabled or disabled mid-run reaches the
+ * next step. Each invocation is recorded as a `hook.outcome` row, which the
+ * caller commits through the run's one writer in the batch that the point
+ * belongs to; a point the run already recorded is never run again, and its
+ * recorded effect is used instead.
  */
 import * as path from 'node:path';
 
@@ -36,8 +37,8 @@ import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   qualifyAggregateId,
-  SUPPORTED_HOOK_EVENTS,
   type HookOutcomePayload,
+  type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
@@ -47,11 +48,10 @@ import { workAutoApproved } from '../requests';
 import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
-import type { StepTools } from './step';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** One installed plugin's command hook, as a step pinned it. */
-export interface StepHook {
+interface StepHook {
   /** The plugin's id, `plugin:<name>`. */
   readonly plugin: string;
   readonly name: string;
@@ -60,78 +60,11 @@ export interface StepHook {
   /** The plugin's trust digest: a changed script is a different hook. */
   readonly revision: string;
   readonly hook: ConfiguredHook;
-  /** A hook the offering step recorded that is gone or changed now: it is
-   *  not run, and a `PreToolUse` one denies the call it would have seen. */
-  readonly stale?: true;
 }
 
 /** A hook's identity, as `tools.offered` records the step's set. */
 const identityOf = (step: StepHook) =>
   `${step.plugin}@${step.revision}#${step.hook.id}`;
-
-/** A recorded hook that no installed plugin offers as it was. */
-const staleHook = (identity: string): StepHook => {
-  const [head = '', id = ''] = identity.split('#');
-  const [plugin = '', revision = ''] = head.split('@');
-  const named = id.split('/').at(-3);
-  const event =
-    SUPPORTED_HOOK_EVENTS.find((known) => known === named) ?? 'PreToolUse';
-  return {
-    plugin,
-    name: plugin,
-    root: '',
-    revision,
-    stale: true,
-    hook: {
-      id,
-      event,
-      matcher: undefined,
-      command: '',
-      args: undefined,
-      timeoutSeconds: 0,
-    },
-  };
-};
-
-/**
- * A step's hooks: the command hooks of the installed plugins it accepted,
- * by plugin id, and their identities, which its `tools.offered` row records.
- * A step that dispatches a resumed response is held to what the offering
- * step recorded (`held`): it runs the recorded hooks still installed as
- * they were, none added since, and in place of each recorded `PreToolUse`
- * hook that is gone or changed a stale one that denies the call; `notes`
- * name them.
- */
-export function stepHooks(
-  installed: ReadonlyMap<string, LoadablePlugin>,
-  held: readonly string[] | null,
-) {
-  const current = [...installed]
-    .toSorted(([a], [b]) => Number(a > b) - Number(a < b))
-    .flatMap(([plugin, { record, plugin: resolved, trust }]) =>
-      resolved.hooks.hooks.map((hook): StepHook => ({
-        plugin,
-        name: record.name,
-        root: record.path,
-        revision: trust.digest,
-        hook,
-      })),
-    );
-  if (held === null)
-    return { hooks: current, identities: current.map(identityOf), notes: [] };
-  const recorded = new Set(held);
-  const kept = current.filter((step) => recorded.has(identityOf(step)));
-  const present = new Set(kept.map(identityOf));
-  const gone = held.filter((identity) => !present.has(identity));
-  return {
-    hooks: [...kept, ...gone.map(staleHook)],
-    identities: [...held],
-    notes: gone.map(
-      (identity) =>
-        `Hook ${identity} was pinned when this call was offered and is gone or changed now: a PreToolUse hook denies the call instead of running.`,
-    ),
-  };
-}
 
 /** What the hooks of one point said, and the rows that record it. */
 interface HookPoint {
@@ -142,17 +75,39 @@ interface HookPoint {
   readonly context: string | null;
 }
 
+/** A prompt point's rows, and the text parts its context adds to the
+ *  prompt's message. */
+interface PromptPoint {
+  readonly rows: readonly RunHistoryDraft[];
+  readonly parts: InputPart[];
+}
+
 type Services = ChildProcessSpawner | FileSystem.FileSystem | SessionServices;
 
-/** How a stale hook ends, never run, and what a `PreToolUse` one answers. */
-const STALE_MESSAGE = 'the hook this call was offered under is gone or changed';
-const STALE = {
-  run: { kind: 'unstartable', message: STALE_MESSAGE },
-  denial: { decision: 'deny', reason: `${STALE_MESSAGE}: the call is not run` },
-} as const;
+/** Why a call is denied when a `PreToolUse` hook it was offered under is
+ *  gone or changed: the hook is not run in its place. */
+const GONE_MESSAGE = 'the hook this call was offered under is gone or changed';
 
-/** A turn's stop: its rows, and the turn a block opens next. */
-type StopPoint = Omit<PromptPoint, 'parts'> & { block: FollowUpBatch | null };
+/** The recorded outcome of a gone `PreToolUse` hook (`identity`) at
+ *  `point`: never run, it denies the call. */
+const goneDenial = (point: string, identity: string): HookOutcomePayload => {
+  const [head = '', hook = ''] = identity.split('#');
+  return {
+    point,
+    event: 'PreToolUse',
+    plugin: head.slice(0, head.lastIndexOf('@')),
+    hook,
+    durationMs: 0,
+    status: 'unstartable',
+    exitCode: null,
+    decision: 'deny',
+    reason: `${GONE_MESSAGE}: the call is not run`,
+    updatedInput: null,
+    context: null,
+    ignored: [],
+    stderr: GONE_MESSAGE,
+  };
+};
 
 const pointOf = (
   outcomes: readonly HookOutcomePayload[],
@@ -168,12 +123,17 @@ const pointOf = (
   };
 };
 
+const partsOf = (context: string | null): InputPart[] =>
+  context === null ? [] : [{ kind: 'text', text: context }];
+
 /**
  * Run the hooks of `input`'s event that `names` matches (a tool's names, a
  * session source, an agent type; every hook of an event without matcher
  * support when absent) at `point`, concurrently, or reuse the outcomes the
- * run recorded there. Warnings and hook messages reach the run's log.
- * Never fails: a hook that cannot run is a recorded outcome with no effect.
+ * run recorded there. `gone` names the `PreToolUse` hooks the call was
+ * offered under that are gone or changed: each denies it, never run.
+ * Warnings and hook messages reach the run's log. Never fails: a hook that
+ * cannot run is a recorded outcome with no effect.
  */
 const hooksAt = Effect.fn('Hooks.at')(function* (
   run: AgentRunShape,
@@ -182,34 +142,31 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
   point: string,
   input: HookInput,
   names?: readonly string[],
+  gone: readonly string[] = [],
 ): Effect.fn.Return<HookPoint, never, Services> {
   const recorded = state.hookOutcomes[point];
   if (recorded !== undefined) return pointOf(recorded);
   const event = input.hook_event_name;
+  const denied = gone.map((identity) => goneDenial(point, identity));
   const matched = hooks.filter(
     ({ hook }) =>
       hook.event === event &&
       (names === undefined || matchesHook(hook.matcher, names)),
   );
-  if (matched.length === 0) return pointOf([]);
   const { workspace, globalStorage } = yield* SessionRoots;
-  if (workspace === undefined) {
+  if (matched.length > 0 && workspace === undefined)
     run.logger.warn(
       `Not running ${matched.length} ${event} hook(s): this run has no workspace to run them in.`,
     );
-    return pointOf([]);
-  }
   const stdin = encodeHookInput(input);
-  const outcomes = yield* Effect.forEach(
-    matched,
+  const ran = yield* Effect.forEach(
+    workspace === undefined ? [] : matched,
     Effect.fnUntraced(function* (step) {
-      const { run: ended, durationMs } = step.stale
-        ? { run: STALE.run, durationMs: 0 }
-        : yield* runHook(step.hook, stdin, {
-            pluginRoot: step.root,
-            projectDir: workspace,
-            pluginData: pluginDataDir(globalStorage, step.name),
-          });
+      const { run: ended, durationMs } = yield* runHook(step.hook, stdin, {
+        pluginRoot: step.root,
+        projectDir: workspace ?? '',
+        pluginData: pluginDataDir(globalStorage, step.name),
+      });
       const { status, warning, systemMessage, ...said } = interpretHookRun(
         input,
         ended,
@@ -234,12 +191,12 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
         status,
         exitCode: ended.kind === 'exited' ? ended.exitCode : null,
         ...said,
-        ...(step.stale && event === 'PreToolUse' && STALE.denial),
         stderr: stderr === '' ? null : stderr,
       } satisfies HookOutcomePayload;
     }),
     { concurrency: 'unbounded' },
   );
+  const outcomes = [...ran, ...denied];
   return pointOf(
     outcomes,
     outcomes.map((payload): RunHistoryDraft => ({
@@ -250,217 +207,248 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
   );
 });
 
-/** The root of `run`'s parent chain: the session its hooks see. */
-const rootOf = (run: AgentRunShape) =>
-  Effect.map(SessionViewAccess, (view) => {
-    let [root, up] = [run.runId, run.entry.parent];
-    while (up !== null) [root, up] = [up, view.run(up)?.parentId ?? null];
-    return root;
-  });
-
 /** The fields every event's input carries for `run`: its root run's id as
- *  the session, its permission mode as its approvals decide, and for a child
- *  its own id and agent, as the reference gives a subagent's hooks. */
+ *  the session (the view's ancestry of its parent), its permission mode as
+ *  its approvals decide, and for a child its own id and agent, as the
+ *  reference gives a subagent's hooks. */
 const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
-  const root = yield* rootOf(run);
+  const { parent } = run.entry;
+  const root =
+    parent === null
+      ? run.runId
+      : ((yield* SessionViewAccess).run(parent)?.ancestors[0]?.id ?? parent);
   return {
     session_id: root,
     cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',
     permission_mode: (yield* workAutoApproved(run.runId))
       ? ('bypassPermissions' as const)
       : ('default' as const),
-    ...(root === run.runId
+    ...(parent === null
       ? {}
       : { agent_id: run.runId, agent_type: run.config.agent }),
   };
 });
 
-/** The hooks of the run's current step. */
-const currentHooks = (run: AgentRunShape) =>
-  Effect.map(SynchronizedRef.get(run.steps), (open) => open?.tools.hooks ?? []);
-
-/** A prompt point's rows, and the text parts its context adds to the
- *  prompt's message. */
-interface PromptPoint {
-  readonly rows: readonly RunHistoryDraft[];
-  readonly parts: InputPart[];
+/**
+ * `run`'s hooks for one step: the command hooks of the installed plugins it
+ * accepted, by plugin id. A step that dispatches a resumed response is held
+ * to the hooks the offering step recorded (`held`): it runs the recorded
+ * hooks still installed as they were, none added since, and each recorded
+ * `PreToolUse` hook that is gone or changed denies the calls instead of
+ * running; the run's log names every one gone.
+ */
+export function stepHooks(
+  run: AgentRunShape,
+  installed: ReadonlyMap<string, LoadablePlugin>,
+  held: readonly string[] | null,
+) {
+  const current = [...installed]
+    .toSorted(([a], [b]) => Number(a > b) - Number(a < b))
+    .flatMap(([plugin, { record, plugin: resolved, trust }]) =>
+      resolved.hooks.hooks.map((hook): StepHook => ({
+        plugin,
+        name: record.name,
+        root: record.path,
+        revision: trust.digest,
+        hook,
+      })),
+    );
+  const recorded = held === null ? null : new Set(held);
+  const hooks =
+    recorded === null
+      ? current
+      : current.filter((step) => recorded.has(identityOf(step)));
+  const present = new Set(hooks.map(identityOf));
+  const gone = (held ?? []).filter((identity) => !present.has(identity));
+  for (const identity of gone)
+    run.logger.warn(
+      `Hook ${identity} was pinned when this call was offered and is gone or changed now: a PreToolUse hook denies the call instead of running.`,
+    );
+  // A hook's id is `<source>/<event>/<group>/<index>`.
+  const goneBefore = gone.filter(
+    (identity) => identity.split('/').at(-3) === 'PreToolUse',
+  );
+  const at = (
+    state: RunState,
+    point: string,
+    input: HookInput,
+    names?: readonly string[],
+  ) => hooksAt(run, state, hooks, point, input, names);
+  const prompt = Effect.fn('Hooks.prompt')(function* (
+    state: RunState,
+    key: string,
+    text: string,
+  ): Effect.fn.Return<PromptPoint, never, Services> {
+    if (run.entry.parent !== null) return { rows: [], parts: [] };
+    const submit = yield* at(state, `UserPromptSubmit:${key}`, {
+      ...(yield* inputBase(run)),
+      hook_event_name: 'UserPromptSubmit',
+      prompt: text,
+    });
+    return { rows: submit.rows, parts: partsOf(submit.context) };
+  });
+  return {
+    /** What the step's `tools.offered` row records. */
+    identities: held ?? current.map(identityOf),
+    /** A root run's user prompt (`key`: `open`, or the follow-up that
+     *  carries it): `UserPromptSubmit`, whose context joins its message. */
+    prompt,
+    /**
+     * A root run's opening: `SessionStart` (`source: "startup"`), then the
+     * opening prompt's `UserPromptSubmit`. Their rows commit in the opening
+     * batch, and their context joins the first user message.
+     */
+    opening: Effect.fn('Hooks.opening')(function* (
+      state: RunState,
+      text: string,
+    ): Effect.fn.Return<PromptPoint, never, Services> {
+      if (run.entry.parent !== null) return { rows: [], parts: [] };
+      const model = (yield* ScopedRef.get(run.model)).modelId;
+      const start = yield* at(
+        state,
+        'SessionStart',
+        {
+          ...(yield* inputBase(run)),
+          hook_event_name: 'SessionStart',
+          source: 'startup',
+          model,
+        },
+        ['startup'],
+      );
+      // The prompt is what the user asked; the launch's request text wraps it.
+      const asked =
+        run.config.displayInstruction || run.config.instruction || text;
+      const submit = yield* prompt(state, 'open', asked);
+      return {
+        rows: [...start.rows, ...submit.rows],
+        parts: [...partsOf(start.context), ...submit.parts],
+      };
+    }),
+    /**
+     * A completed turn's `Stop` (a root) or `SubagentStop` (a child), if
+     * any: its rows, which commit before `waiting`, and the turn a block
+     * opens with its reason, even in a one-shot run. `stop_hook_active`
+     * (after a block's turn, or in a script's run) is not blocked, which
+     * bounds the loop.
+     */
+    stop: Effect.fn('Hooks.stop')(function* (
+      turn: { readonly state: RunState; readonly outcome: string },
+      lastMessage: string,
+    ) {
+      if (turn.outcome !== 'completed') return { rows: [], block: null };
+      const { state } = turn;
+      const base = yield* inputBase(run);
+      const blocked = state.hookOutcomes[`Stop:${state.turn - 1}`] ?? [];
+      const common = {
+        stop_hook_active:
+          run.config.script != null || blocked.some((o) => o.context !== null),
+        last_assistant_message: lastMessage,
+      } as const;
+      const { rows, context: text } = yield* at(
+        state,
+        `Stop:${state.turn}`,
+        run.entry.parent === null
+          ? { ...base, ...common, hook_event_name: 'Stop' }
+          : {
+              ...base,
+              ...common,
+              hook_event_name: 'SubagentStop',
+              agent_id: run.runId,
+              agent_type: run.config.agent,
+            },
+        run.entry.parent === null ? undefined : [run.config.agent],
+      );
+      const block: FollowUpBatch | null =
+        text === null ? null : { kind: 'synthetic', text };
+      return { rows, block };
+    }),
+    /**
+     * One tool call's `PreToolUse`, matched on the call's Claude Code name
+     * and its own (or as the run recorded them), its input decoded by
+     * `schema` (the tool's): their `outcomes`, which the chain
+     * (`toolGuard.ts`) decides on, and `fromHook`, which reads a rewrite as
+     * the harness tool's input. `after` runs the call's `PostToolUse` once
+     * it executed, timed from `bodyStarts`, and returns the rows that commit
+     * with its result (none for a result that is not `executed`).
+     */
+    preToolUse: Effect.fn('Hooks.preToolUse')(function* (
+      cell: Pick<RunCell, 'current'>,
+      call: { readonly callId: string; readonly toolName: string },
+      responseId: string,
+      toolInput: unknown,
+      schema: ToolDefinition['schema'],
+    ) {
+      // Hooks see the decoded input, so a rewrite keeps the fields they never saw.
+      const read = schema && Schema.decodeUnknownResult(schema)(toolInput);
+      const issued = read && Result.isSuccess(read) ? read.success : toolInput;
+      const input = yield* inputBase(run);
+      const claude = claudeToolCall(call.toolName, issued, (file) =>
+        typeof file === 'string' ? path.resolve(input.cwd, file.trim()) : file,
+      );
+      const names = [claude.toolName, call.toolName];
+      const base = {
+        ...input,
+        tool_name: claude.toolName,
+        tool_input: claude.toolInput,
+        tool_use_id: call.callId,
+      };
+      // Call ids are unique within one response only.
+      const point = `${responseId}/${call.callId}`;
+      const pre = yield* hooksAt(
+        run,
+        yield* cell.current,
+        hooks,
+        `PreToolUse:${point}`,
+        { ...base, hook_event_name: 'PreToolUse' },
+        names,
+        goneBefore,
+      );
+      // `duration_ms` is the body's alone: timed after approval and PreToolUse.
+      let startedAt: number | undefined;
+      const bodyStarts = Effect.map(Clock.currentTimeMillis, (now) => {
+        startedAt = now;
+      });
+      const after = Effect.fn('Hooks.postToolUse')(function* (
+        result: ToolResult,
+      ) {
+        if (result.status !== 'executed') return [];
+        const post = yield* at(
+          yield* cell.current,
+          `PostToolUse:${point}`,
+          {
+            ...base,
+            tool_input:
+              pre.outcomes.find((o) => o.updatedInput !== null)?.updatedInput ??
+              claude.toolInput,
+            hook_event_name: 'PostToolUse',
+            tool_response: result,
+            ...(startedAt === undefined
+              ? {}
+              : { duration_ms: (yield* Clock.currentTimeMillis) - startedAt }),
+          },
+          names,
+        );
+        return post.rows;
+      });
+      return { ...pre, fromHook: claude.fromHook, bodyStarts, after };
+    }),
+    /** The text part a call's recorded hooks add after its result. */
+    callText: (state: RunState, responseId: string, callId: string) =>
+      partsOf(
+        pointOf([
+          ...(state.hookOutcomes[`PreToolUse:${responseId}/${callId}`] ?? []),
+          ...(state.hookOutcomes[`PostToolUse:${responseId}/${callId}`] ?? []),
+        ]).context,
+      ),
+  };
 }
 
-const partsOf = (context: string | null): InputPart[] =>
-  context === null ? [] : [{ kind: 'text', text: context }];
+/** What a step's hooks run at each of the loop's points. */
+export type StepHooks = ReturnType<typeof stepHooks>;
 
-/**
- * A root run's opening: `SessionStart` (`source: "startup"`), then the
- * opening prompt's `UserPromptSubmit`. Their rows commit in the opening
- * batch, and their context joins the first user message.
- */
-export const openingHooks = Effect.fn('Hooks.opening')(function* (
-  run: AgentRunShape,
-  state: RunState,
-  prompt: string,
-): Effect.fn.Return<PromptPoint, never, Services> {
-  if ((yield* rootOf(run)) !== run.runId) return { rows: [], parts: [] };
-  const hooks = yield* currentHooks(run);
-  const base = yield* inputBase(run);
-  const model = (yield* ScopedRef.get(run.model)).modelId;
-  const start = yield* hooksAt(
-    run,
-    state,
-    hooks,
-    'SessionStart',
-    { ...base, hook_event_name: 'SessionStart', source: 'startup', model },
-    ['startup'],
+/** The hooks of `run`'s current step; none before its first step opens. */
+export const hooksOf = (run: AgentRunShape) =>
+  Effect.map(
+    SynchronizedRef.get(run.steps),
+    (open) => open?.tools.hooks ?? stepHooks(run, new Map(), null),
   );
-  // The prompt is what the user asked; the launch's request text wraps it.
-  const asked =
-    run.config.displayInstruction || run.config.instruction || prompt;
-  const submit = yield* promptHooks(run, state, 'open', asked);
-  return {
-    rows: [...start.rows, ...submit.rows],
-    parts: [...partsOf(start.context), ...submit.parts],
-  };
-});
-
-/** A root run's user prompt (`key`: `open`, or the follow-up that carries
- *  it): `UserPromptSubmit`, whose context joins the prompt's message. */
-export const promptHooks = Effect.fn('Hooks.prompt')(function* (
-  run: AgentRunShape,
-  state: RunState,
-  key: string,
-  prompt: string,
-): Effect.fn.Return<PromptPoint, never, Services> {
-  if ((yield* rootOf(run)) !== run.runId) return { rows: [], parts: [] };
-  const submit = yield* hooksAt(
-    run,
-    state,
-    yield* currentHooks(run),
-    `UserPromptSubmit:${key}`,
-    { ...(yield* inputBase(run)), hook_event_name: 'UserPromptSubmit', prompt },
-  );
-  return { rows: submit.rows, parts: partsOf(submit.context) };
-});
-
-/**
- * A completed turn's `Stop` (a root) or `SubagentStop` (a child), if any:
- * its rows, which commit before `waiting`, and the turn a block opens with
- * its reason, even in a one-shot run. `stop_hook_active` (after a block's
- * turn, or in a script's run) is not blocked, which bounds the loop.
- */
-export const stopHooks = Effect.fn('Hooks.stop')(function* (
-  run: AgentRunShape,
-  turn: { readonly state: RunState; readonly outcome: string },
-  lastMessage: string,
-): Effect.fn.Return<StopPoint, never, Services> {
-  if (turn.outcome !== 'completed') return { rows: [], block: null };
-  const { state } = turn;
-  const base = yield* inputBase(run);
-  const child = (yield* rootOf(run)) !== run.runId;
-  const blocked = state.hookOutcomes[`Stop:${state.turn - 1}`] ?? [];
-  const common = {
-    stop_hook_active:
-      run.config.script != null || blocked.some((o) => o.context !== null),
-    last_assistant_message: lastMessage,
-  } as const;
-  const { rows, context: text } = yield* hooksAt(
-    run,
-    state,
-    yield* currentHooks(run),
-    `Stop:${state.turn}`,
-    child
-      ? {
-          ...base,
-          ...common,
-          hook_event_name: 'SubagentStop',
-          agent_id: run.runId,
-          agent_type: run.config.agent,
-        }
-      : { ...base, ...common, hook_event_name: 'Stop' },
-    child ? [run.config.agent] : undefined,
-  );
-  return { rows, block: text === null ? null : { kind: 'synthetic', text } };
-});
-
-/**
- * One tool call's `PreToolUse`, under the hooks of the step that offered it,
- * matched on the call's Claude Code name and its own (or as the run
- * recorded them): their `outcomes`, which the chain (`toolGuard.ts`) decides
- * on, and `fromHook`, which reads a rewrite as the harness tool's input.
- * `after` runs the call's `PostToolUse` once it executed, timed from here,
- * and returns the rows that commit with its settlement (none for a result
- * that is not `executed`).
- */
-export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
-  run: AgentRunShape,
-  cell: Pick<RunCell, 'current'>,
-  step: Pick<StepTools, 'hooks' | 'registry'>,
-  call: { readonly callId: string; readonly toolName: string },
-  responseId: string,
-  toolInput: unknown,
-) {
-  // Hooks see the decoded input, so a rewrite keeps the fields they never saw.
-  const schema = step.registry.get(call.toolName)?.definition.schema;
-  const read = schema && Schema.decodeUnknownResult(schema)(toolInput);
-  const issued = read && Result.isSuccess(read) ? read.success : toolInput;
-  const input = yield* inputBase(run);
-  const claude = claudeToolCall(call.toolName, issued, (file) =>
-    typeof file === 'string' ? path.resolve(input.cwd, file.trim()) : file,
-  );
-  const names = [claude.toolName, call.toolName];
-  const base = {
-    ...input,
-    tool_name: claude.toolName,
-    tool_input: claude.toolInput,
-    tool_use_id: call.callId,
-  };
-  // Call ids are unique within one response only.
-  const at = `${responseId}/${call.callId}`;
-  const pre = yield* hooksAt(
-    run,
-    yield* cell.current,
-    step.hooks,
-    `PreToolUse:${at}`,
-    { ...base, hook_event_name: 'PreToolUse' },
-    names,
-  );
-  // `duration_ms` is the body's alone: timed after approval and PreToolUse.
-  let startedAt: number | undefined;
-  const bodyStarts = Effect.map(Clock.currentTimeMillis, (now) => {
-    startedAt = now;
-  });
-  const after = Effect.fn('Hooks.postToolUse')(function* (result: ToolResult) {
-    if (result.status !== 'executed') return [];
-    const post = yield* hooksAt(
-      run,
-      yield* cell.current,
-      step.hooks,
-      `PostToolUse:${at}`,
-      {
-        ...base,
-        tool_input:
-          pre.outcomes.find((o) => o.updatedInput !== null)?.updatedInput ??
-          claude.toolInput,
-        hook_event_name: 'PostToolUse',
-        tool_response: result,
-        ...(startedAt === undefined
-          ? {}
-          : { duration_ms: (yield* Clock.currentTimeMillis) - startedAt }),
-      },
-      names,
-    );
-    return post.rows;
-  });
-  return { ...pre, fromHook: claude.fromHook, bodyStarts, after };
-});
-
-/** The text part a call's recorded hooks add after its result, if any. */
-export const callHookText = (
-  state: RunState,
-  responseId: string,
-  callId: string,
-): InputPart[] => {
-  const { context } = pointOf([
-    ...(state.hookOutcomes[`PreToolUse:${responseId}/${callId}`] ?? []),
-    ...(state.hookOutcomes[`PostToolUse:${responseId}/${callId}`] ?? []),
-  ]);
-  return partsOf(context);
-};

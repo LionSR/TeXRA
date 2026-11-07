@@ -226,7 +226,7 @@ const seedStartedRun = (
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', runId),
       identity: { kind: 'agent', agent: 'polish' },
-      userFollowUpSupport: 'unsupported',
+      takesFollowUps: false,
       parent: null,
       provenance: null,
     },

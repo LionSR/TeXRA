@@ -7,10 +7,7 @@ import { withLogChannel, withSessionFs } from '@texra-ai/harness/host';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
 import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
-import {
-  launchSetupAssistant,
-  SETUP_ASSISTANT_CHANNEL,
-} from '@commands/setup/setupAssistantCommand';
+import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
 import { createSampleProject as sysCreateSampleProject } from '@commands/system/sampleProjectCommands';
 import {
   setApiKey as apiSetApiKey,
@@ -81,8 +78,6 @@ export function registerCommands(
     newTask: () => progressViewProvider.showLauncher(),
     cleanBuild: () => confirmCleanBuild,
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
-    // The launch returns once the setup conversation ends, which may have
-    // completed a first task, so the onboarding funnel recomputes then.
     runSetupAssistant: () =>
       launchSetupAssistant(
         roots,
@@ -90,16 +85,6 @@ export function registerCommands(
         progressViewProvider.runValidated,
         progressViewProvider.showConnectModel(),
         progressViewProvider.showProgressView(),
-      ).pipe(
-        Effect.andThen(
-          progressViewProvider.refreshOnboardingFunnel().pipe(
-            Effect.ignore({
-              log: 'Warn',
-              message: 'Refreshing the onboarding state',
-            }),
-            withLogChannel(SETUP_ASSISTANT_CHANNEL),
-          ),
-        ),
       ),
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),

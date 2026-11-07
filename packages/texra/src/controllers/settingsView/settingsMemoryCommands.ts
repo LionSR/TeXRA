@@ -10,30 +10,30 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
-import type {
-  SettingsHostBindings,
-  SettingsPresentation,
+import {
+  hostStatePage,
+  type SettingsHostBindings,
+  type SettingsPresentation,
 } from './settingsHostBindings';
 
-/** The Memory page: its arms and its opening data. */
+/** The Memory page: its arms and its page. */
 export function settingsMemoryCommands(ports: {
   readonly bindings: Pick<
     SettingsHostBindings,
     'post' | 'prompt' | 'openPath' | 'revealPath'
   >;
-  readonly present: Pick<SettingsPresentation, 'report' | 'reported'>;
+  readonly present: Pick<
+    SettingsPresentation,
+    'report' | 'reported' | 'changed'
+  >;
 }) {
   const { bindings } = ports;
-  const { report, reported } = ports.present;
-  const memoryData = Effect.map(MemoryStore.list, (items) => ({
-    command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
-    items,
-  }));
-  const postMemoryData = bindings.post(memoryData);
-  // A mutation reads the refreshed list whether or not a view is open, so a
-  // failed read after a delete or pin is reported either way.
-  const postMutatedMemoryData = Effect.flatMap(memoryData, (message) =>
-    bindings.post(Effect.succeed(message)),
+  const { report, reported, changed } = ports.present;
+  const memoryChanged = changed('memory');
+  const page = hostStatePage(
+    'memory',
+    ['memory'],
+    Effect.map(MemoryStore.list, (items) => ({ items })),
   );
   const setMemoryPinned = Effect.fn('setMemoryPinned')(function* (
     storagePath: string,
@@ -46,11 +46,11 @@ export function settingsMemoryCommands(ports: {
       );
       return;
     }
-    yield* postMutatedMemoryData;
+    yield* memoryChanged;
   });
 
   const handlers = {
-    getMemoryData: () => postMemoryData,
+    getMemoryData: () => memoryChanged,
     // Every outcome of the read-and-post is answered: a failure is reported
     // and then the preview's placeholder is posted, so the view never waits
     // on a preview that will not arrive.
@@ -102,9 +102,9 @@ export function settingsMemoryCommands(ports: {
     },
     deleteMemory: Effect.fn('deleteMemory')(
       function* ({ storagePath, displayPath }) {
-        // A declined delete posts nothing. A prompt that cannot show and a
+        // A declined delete changes nothing. A prompt that cannot show and a
         // failed remove stay typed, so the failure is reported and the list
-        // the view is waiting on is reposted.
+        // the view is waiting on is read again.
         const confirmed = yield* bindings.prompt.confirm(
           `Delete "${displayPath}"?`,
           { modal: true, confirmLabel: 'Delete' },
@@ -113,13 +113,10 @@ export function settingsMemoryCommands(ports: {
         // On the memory tree's lane, as every memory tool command is: a delete
         // from here never races an agent's edit beneath it.
         yield* MemoryStore.delete(storagePath);
-        yield* postMutatedMemoryData;
+        yield* memoryChanged;
       },
       Effect.catch((error) =>
-        Effect.andThen(
-          report('Failed to delete memory', error),
-          postMemoryData,
-        ),
+        Effect.andThen(report('Failed to delete memory', error), memoryChanged),
       ),
     ),
     pinMemory: ({ storagePath }) =>
@@ -129,5 +126,5 @@ export function settingsMemoryCommands(ports: {
   } satisfies Partial<
     SettingsViewInboundHandlerRegistry<ProcessServices | StorageFs>
   >;
-  return { handlers, postMemoryData };
+  return { handlers, page };
 }

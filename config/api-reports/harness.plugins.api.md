@@ -73,7 +73,7 @@ Exports: 126
 - `PluginToolServices` — `type PluginToolServices = RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope; ≡ PluginToolServices`
 - `ProcessChildLaunch` — `interface ProcessChildLaunch { readonly identity: Extract<RunIdentity, { kind: 'agent' | 'process'; }>; readonly config: RunRecord; readonly description: string; readonly turn: (ctx: { readonly logger: AgentTrace; readonly runId: RunId; }) => ProcessTurn; }`
 - `ProcessPluginLayer` — `interface ProcessPluginLayer<ROut = never> { readonly layer: Layer.Layer<ROut, never, PluginLayerServices>; readonly drain?: Effect.Effect<void, never, ROut>; }`
-- `ProcessReport` — `interface ProcessReport { readonly report: string; readonly failure?: string; readonly exit?: ProcessExit; }`
+- `ProcessReport` — `interface ProcessReport { readonly report: string; readonly exit?: ProcessExit; readonly failure?: string; }`
 - `ProcessTurn` — `interface ProcessTurn { readonly stageLabel: string; readonly run: Effect.Effect<ProcessReport, Error, PlatformServices>; readonly reportError: (error: Error) => string; }`
 - `PromptSection` — `type PromptSection = (ctx: { readonly offered: readonly string[]; readonly isChild: boolean; readonly isAnthropic: boolean; readonly config: ConfigProvider; }) => string; ≡ PromptSection`
 - `randomizedExponentialBackoff` — `function randomizedExponentialBackoff: (base: Input) => Schedule<Duration, unknown, never, never>`

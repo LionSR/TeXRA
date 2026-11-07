@@ -25,10 +25,7 @@ import {
   DESKTOP_PDF_COMMANDS,
   type DesktopShowPdfMessage,
 } from '../shared/desktopPdfMessages.js';
-import {
-  tryShowInRenderer,
-  type DesktopOverlayPostOptions,
-} from './desktopIpcTypes.js';
+import type { DesktopRenderer } from './desktopIpcTypes.js';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -73,7 +70,7 @@ interface DesktopPreviewHost {
   openBuildDisplayIn(roots: WorkspaceRoots): BuildDisplayFn;
 }
 
-interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
+interface DesktopPreviewHostOptions extends DesktopRenderer {
   shell: DesktopShellAdapter;
   /** The process runtime the window was handed. It only supplies the
    *  filesystem `openPath` probes through; nothing settles on it. */
@@ -178,27 +175,6 @@ export function createDesktopPreviewHost(
     );
   }
 
-  // Opens the PDF in the renderer's pdf workbench tab (an `<iframe>` on
-  // Electron's built-in Chromium viewer), or reports `false` so the caller
-  // falls back to `shell.openPath`.
-  function tryShowPdfInRenderer(
-    roots: WorkspaceRoots,
-    pdfPath: string,
-    title: string,
-    build: number,
-  ): boolean {
-    return tryShowInRenderer(
-      { ...options, source: 'desktopPreviewHost', fallback: 'external viewer' },
-      {
-        command: DESKTOP_PDF_COMMANDS.SHOW_PDF,
-        session: roots.storage,
-        title,
-        pdfUrl: pathToFileURL(pdfPath).href,
-        build,
-      } satisfies DesktopShowPdfMessage,
-    );
-  }
-
   const buildDisplayProgram = Effect.fn('buildDisplayProgram')(function* (
     roots: WorkspaceRoots,
     fileLocation: FileLocation,
@@ -249,13 +225,16 @@ export function createDesktopPreviewHost(
 
     // A successful build names a PDF on disk. Every build gets its own
     // number, so its tab reloads however close in time two builds land.
+    // It opens in the renderer's pdf workbench tab (an `<iframe>` on
+    // Electron's built-in Chromium viewer).
     const { pdfPath } = built;
-    const build = ++builds;
-
-    if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath), build))
-      return;
-
-    yield* openPathProgram(pdfPath);
+    options.postToRenderer({
+      command: DESKTOP_PDF_COMMANDS.SHOW_PDF,
+      session: roots.storage,
+      title: path.basename(pdfPath),
+      pdfUrl: pathToFileURL(pdfPath).href,
+      build: ++builds,
+    } satisfies DesktopShowPdfMessage);
   });
 
   return {

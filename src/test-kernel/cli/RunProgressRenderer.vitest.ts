@@ -10,7 +10,6 @@ import {
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
-import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
@@ -44,7 +43,7 @@ function publishRun(
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', runId),
       identity: { kind: 'agent', agent },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      takesFollowUps: true,
       worktree: null,
       parent: null,
       provenance: null,
@@ -192,7 +191,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     type: 'run.start',
                     aggregateId: qualifyAggregateId('run', childRunId),
                     identity: { kind: 'agent', agent: 'review' },
-                    userFollowUpSupport: 'unsupported',
+                    takesFollowUps: false,
                     parent: { id: parentRunId, call: null },
                     provenance: null,
                   },

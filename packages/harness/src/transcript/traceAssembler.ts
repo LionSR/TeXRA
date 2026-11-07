@@ -17,12 +17,11 @@ import { getRunRecords } from '@agent/storage/runRecords';
 
 import {
   isDisplaySessionEvent,
-  USER_FOLLOW_UP_SUPPORT,
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
-import { isRequestDecision, recordOf } from '@shared/session/runRowReads';
+import { isRequestDecision } from '@shared/session/runRowReads';
 
 import type { TraceDocument } from './traceDocumentSchema';
 
@@ -92,13 +91,12 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
     trace: {
       runId,
       events: displayEvents.map((event) => {
-        const { start } = recordOf(event);
-        if (start !== null)
+        if (event.type === 'run.start')
           return {
-            ...start,
+            ...event,
             origin: null,
             parent: null,
-            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            takesFollowUps: false,
           };
         if (isRequestDecision(event))
           return {

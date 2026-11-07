@@ -1,7 +1,7 @@
 /**
  * Whether one call proceeds, decided once, in an order that makes a
  * permission cover the operation that actually runs: what the call's
- * `PreToolUse` hooks said and how they rewrote it (recorded by `preToolUse`,
+ * `PreToolUse` hooks said and how they rewrote it (recorded by `StepHooks.preToolUse`,
  * so a resume reads them back), the final input decoded again, the paths it
  * writes checked, then the policy's one reading ({@link sessionPermission})
  * over that input, whose ask opens the call's request through the run's
@@ -61,7 +61,7 @@ import { askCommandApproval, commandRejectedResult } from './commandApproval';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionServices } from '../rootLaunch';
 import type { PluginToolServices } from '../ToolServices';
-import type { preToolUse } from './hooks';
+import type { StepHooks } from './hooks';
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -109,7 +109,7 @@ export const sessionPermission =
 
 /** A call's recorded `PreToolUse` outcomes, and how a rewrite reads. */
 type CallHooks = Pick<
-  Effect.Success<ReturnType<typeof preToolUse>>,
+  Effect.Success<ReturnType<StepHooks['preToolUse']>>,
   'outcomes' | 'fromHook'
 >;
 

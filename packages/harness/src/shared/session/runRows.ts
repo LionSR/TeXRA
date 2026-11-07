@@ -18,11 +18,11 @@
  * part of a run's rows (a listing or a tail), so there it means the row that
  * opened the request was not read.
  *
- * Every other reader holds a `RunRows`, folded from the rows its read
- * selects by `runRowReads.ts`, which applies the shared rows through here.
+ * The reads of a run's requests and input (`runRowReads.ts`) apply the
+ * shared rows they select through here too.
  */
 import type { SessionEvent } from '@shared/schemas';
-import type { RunPosition, RunRowVerdict, RunRows } from './runRowsShape';
+import type { RunPosition, RunRowVerdict, SharedRunRows } from './runRowsShape';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
  *  here and not handled by `applyRunRow` is a compile error there. */
@@ -112,33 +112,14 @@ export const freshRunPosition = (): RunPosition => ({
   requests: byId([]),
 });
 
-/** The `RunRows` before any row. */
-export const freshRunRows = (): RunRows => ({
+/** The `SharedRunRows` before any row. */
+export const freshSharedRunRows = (): SharedRunRows => ({
   ...freshRunPosition(),
   followUps: [],
   taken: new Map(),
-  start: null,
-  parent: null,
-  activation: null,
-  end: null,
-  stop: null,
-  removed: null,
-  inputClosed: false,
-  report: null,
-  exit: null,
-  config: null,
-  position: null,
-  title: null,
-  label: null,
-  grants: null,
-  facts: {},
-  lifecycles: [],
-  positions: [],
-  results: [],
-  scriptCalls: [],
 });
 
-const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
+const applied = (rows: Partial<SharedRunRows>): RunRowVerdict => ({
   kind: 'applied',
   rows,
 });
@@ -172,23 +153,23 @@ export function applyRunRow(
   copies?: BatchCopies,
 ): RunRowVerdict;
 export function applyRunRow(
-  current: RunRows | null,
+  current: SharedRunRows | null,
   row: SharedRunRow,
   copies?: BatchCopies,
 ): RunRowVerdict;
 export function applyRunRow(
-  current: RunRows | RunPosition | null,
+  current: SharedRunRows | RunPosition | null,
   row: SharedRunRow,
   copies?: BatchCopies,
 ): RunRowVerdict {
-  // A follow-up row enters only through the `RunRows` overload, so it meets
-  // a `RunRows` or nothing; `undefined` is a position-only reader's state.
+  // A follow-up row enters only through the `SharedRunRows` overload, so it meets
+  // a `SharedRunRows` or nothing; `undefined` is a position-only reader's state.
   const slice =
     current === null || 'followUps' in current ? current : undefined;
   switch (row.type) {
     case 'run.position': {
       const p = row.payload;
-      const rows = current ?? freshRunRows();
+      const rows = current ?? freshSharedRunRows();
       if (p.turn != null && p.turn < rows.turn) {
         return {
           kind: 'contradiction',
@@ -235,7 +216,7 @@ export function applyRunRow(
       // Queued input may come before everything else a run writes, so it
       // starts the reader's state; a replayed delivery id is queued once.
       if (slice === undefined) return positionOnly(row);
-      const rows = slice ?? freshRunRows();
+      const rows = slice ?? freshSharedRunRows();
       const seen = rows.followUps.some((f) => f.followUpId === row.followUpId);
       if (seen || rows.taken.has(row.followUpId)) return { kind: 'unchanged' };
       const followUps = ownCopy(copies, rows.followUps, (f) => [...f]);

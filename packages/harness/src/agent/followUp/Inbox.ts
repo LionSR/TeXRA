@@ -16,7 +16,7 @@ import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow } from '@shared/session/runFacts';
 import type { Conflict } from '@shared/session/runtimeRequest';
 import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
-import type { RunRows } from '@shared/session/runRowsShape';
+import type { RunRowsRead } from '@shared/session/runRowReads';
 import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
 import type {
   LogWriteError,
@@ -267,7 +267,7 @@ export class SessionInbox {
     item: InboxItem,
     options: SendOptions,
   ): Effect.Effect<Admission, DatabaseReadFailed | Conflict, Scope.Scope> {
-    const closed = (input: RunRows) =>
+    const closed = (input: RunRowsRead<'input'>) =>
       this.disposed || (!this.readers.has(runId) && input.inputClosed);
     const only = (sent: Sent): Admission => ({ rows: [], sent });
     // The reader hears the row: it reads committed rows, so a wake ahead
@@ -309,7 +309,9 @@ export class SessionInbox {
   }
 
   /** The run's input, lifecycle and parent as its committed rows say them. */
-  readonly read = (runId: RunId): Effect.Effect<RunRows, DatabaseReadFailed> =>
+  readonly read = (
+    runId: RunId,
+  ): Effect.Effect<RunRowsRead<'input'>, DatabaseReadFailed> =>
     Effect.suspend(() =>
       this.port.log.runRows(qualifyAggregateId('run', runId), 'input'),
     );
@@ -338,7 +340,8 @@ const warnWith =
     );
 
 /** Whether the run has a pending message, not just one of its own requests. */
-const queued = (input: RunRows): boolean => input.followUps.some(isMessage);
+const queued = (input: RunRowsRead<'input'>): boolean =>
+  input.followUps.some(isMessage);
 
 /** The session's follow-up inbox ({@link SessionInbox}): every run's input,
  *  one reader each, which every message to a run is admitted through.

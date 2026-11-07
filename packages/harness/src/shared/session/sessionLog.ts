@@ -23,7 +23,7 @@ import type {
   DatabaseWriteFailed,
   SessionStoreMovedAside,
 } from './database';
-import type { RunRowRead } from './runRowReads';
+import type { RunRowRead, RunRowsRead } from './runRowReads';
 import type { RunRows } from './runRowsShape';
 import type { RunHistoryDraft } from './runState';
 import type { Append, UnfoldedDraft } from './sessionEvents';
@@ -89,14 +89,14 @@ export interface SessionLogShape {
     fromSeq?: number,
     types?: readonly SessionEvent['type'][],
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-  /** The `RunRows` of the kinds one read names (`RUN_ROW_READS`), read
+  /** What one read (`RUN_ROW_READS`) makes of the rows of its kinds, read
    *  through the type index of a run's aggregate or a plugin's own; with
    *  `through`, of its rows up to that seq alone (a fork's cut). */
-  runRows(
+  runRows<R extends RunRowRead>(
     id: AggregateId,
-    read: RunRowRead,
+    read: R,
     through?: number,
-  ): Effect.Effect<RunRows, DatabaseReadFailed>;
+  ): Effect.Effect<RunRowsRead<R>, DatabaseReadFailed>;
   /** The strings under `digests`: what the rows name by address (media
    *  bytes, a tool edit's proposal). */
   blobs(

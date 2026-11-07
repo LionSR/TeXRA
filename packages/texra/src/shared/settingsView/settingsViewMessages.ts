@@ -34,13 +34,9 @@ import {
   WebviewReadyMessageSchema,
 } from '@texra/shared/ipc';
 import { ToolDependencyStatusSchema } from '@texra/shared/tools/toolPlugin';
-import {
-  createDispatcher,
-  type HandlerRegistry,
-} from '@texra/shared/utils/dispatcher';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { SettingsTargetSchema } from './settingsTarget';
-import { UpdateProfileMessageSchema } from './profileViewMessages';
+import { ProfilePageSchema } from './profileViewMessages';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
@@ -49,7 +45,7 @@ import {
   OpenMemoryFolderMessageSchema,
   PinMemoryMessageSchema,
   UnpinMemoryMessageSchema,
-  UpdateMemoryMessageSchema,
+  MemoryPageSchema,
   UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
 import { commandOnly } from './messageFactories';
@@ -161,8 +157,7 @@ const AgentSelectionItemSchema = Schema.Struct({
 export type AgentSelectionItem = typeof AgentSelectionItemSchema.Type;
 
 /** Outbound: backend → frontend agent selection data */
-const UpdateAgentSelectionMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION),
+const AgentSelectionPageSchema = Schema.Struct({
   agents: Schema.Array(AgentSelectionItemSchema),
   customAgentIssues: Schema.Array(AgentScanIssueSchema).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
@@ -208,21 +203,18 @@ const ModelSelectionItemSchema = Schema.Struct({
 export type ModelSelectionItem = typeof ModelSelectionItemSchema.Type;
 
 /** Outbound: backend → frontend model selection data */
-const UpdateModelSelectionMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
+const ModelSelectionPageSchema = Schema.Struct({
   models: Schema.Array(ModelSelectionItemSchema),
   helperModel: Schema.String,
 });
-export type UpdateModelSelectionMessage =
-  (typeof UpdateModelSelectionMessageSchema)['Type'];
+export type ModelSelectionPage = typeof ModelSelectionPageSchema.Type;
 
 // ============================================================
 // Custom agent directory data schema
 // ============================================================
 
 /** Outbound: backend → frontend custom agent directory info */
-const UpdateCustomAgentDirMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR),
+const CustomAgentDirPageSchema = Schema.Struct({
   path: Schema.String,
   isDefault: Schema.Boolean,
 });
@@ -239,8 +231,7 @@ const SettingsTeamPresetSchema = AgentModePresetSchema.mapFields(
 export type SettingsTeamPreset = typeof SettingsTeamPresetSchema.Type;
 
 /** Outbound: backend → frontend agent teams (built-in + custom) */
-const UpdateAgentModePresetsMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
+const TeamsPageSchema = Schema.Struct({
   /** Every launchable team in catalog order: the built-in teams, then the
    *  workspace's custom teams. */
   presets: Schema.Array(SettingsTeamPresetSchema),
@@ -346,35 +337,30 @@ export type PluginRow = typeof PluginRowSchema.Type;
 
 /** Outbound: the Plugins page's rows and what the MCP config file's
  *  invalid entries raise. */
-const UpdatePluginsMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
+const PluginsPageSchema = Schema.Struct({
   rows: Schema.Array(PluginRowSchema),
   mcpWarnings: Schema.Array(Schema.String),
 });
 
 /** Outbound: the Skills tab's skills and their issues. */
-const UpdateSkillsListMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST),
+const SkillsPageSchema = Schema.Struct({
   skills: Schema.Array(SkillDisplayItemSchema),
   issues: Schema.Array(SkillDisplayIssueSchema),
 });
 
 /** Outbound: backend → frontend GitHub token status. */
-const UpdateGitHubTokenStatusMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS),
+const GitHubTokenPageSchema = Schema.Struct({
   /** 'secret' = stored in SecretStorage; 'env' = GITHUB_TOKEN/GH_TOKEN env var; 'none' = missing. */
   status: Schema.Literals(['secret', 'env', 'none']),
 });
 
-const UpdateSubscriptionAuthStatusMessageSchema = Schema.Struct({
-  command: Schema.Literal(
-    SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS,
-  ),
-  status: SubscriptionAuthStatusSchema,
-});
+/** Each subscription's sign-in status, by provider. */
+const SubscriptionAuthPageSchema = Schema.Record(
+  Schema.Literals(SUBSCRIPTION_AUTH_PROVIDERS),
+  SubscriptionAuthStatusSchema,
+);
 
-const UpdateSubscriptionUsageMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE),
+const SubscriptionUsagePageSchema = Schema.Struct({
   snapshots: SubscriptionUsageSnapshotsSchema,
 });
 const PRSubscriptionOwnerSchema = Schema.Struct({
@@ -389,8 +375,7 @@ const PRSubscriptionEntrySchema = Schema.Struct({
 export type PRSubscriptionEntry = typeof PRSubscriptionEntrySchema.Type;
 
 /** Outbound: backend → frontend active PR subscriptions. */
-const UpdatePRSubscriptionsMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS),
+const PRSubscriptionsPageSchema = Schema.Struct({
   subscriptions: Schema.Array(PRSubscriptionEntrySchema),
 });
 
@@ -445,8 +430,7 @@ export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = {
 };
 
 /** Outbound: backend → frontend LaTeX settings status */
-const UpdateLatexSettingsStatusMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS),
+const LatexStatusPageSchema = Schema.Struct({
   settings: LatexSettingsStatusSchema,
 });
 
@@ -454,34 +438,49 @@ const UpdateLatexSettingsStatusMessageSchema = Schema.Struct({
 // Outbound messages (extension host → settings webview)
 // ============================================================
 
-const SettingsViewOutboundMessageSchema = Schema.Union([
+/**
+ * What the host knows for the view, one field per page. Each field is
+ * absent until the host first sends it, which is how a page tells "not
+ * loaded" from an empty value. The host sends each field as its inputs
+ * change (`UPDATE_HOST_STATE`), and the view keeps the latest of each.
+ */
+const SettingsHostStateSchema = Schema.Struct({
+  memory: MemoryPageSchema,
+  profile: ProfilePageSchema,
+  models: ModelSelectionPageSchema,
+  agents: AgentSelectionPageSchema,
+  customAgentDir: CustomAgentDirPageSchema,
+  teams: TeamsPageSchema,
+  skills: SkillsPageSchema,
+  plugins: PluginsPageSchema,
+  githubToken: GitHubTokenPageSchema,
+  subscriptionAuth: SubscriptionAuthPageSchema,
+  subscriptionUsage: SubscriptionUsagePageSchema,
+  prSubscriptions: PRSubscriptionsPageSchema,
+  latex: LatexStatusPageSchema,
+});
+export type SettingsHostState = typeof SettingsHostStateSchema.Type;
+/** One page of {@link SettingsHostState}. */
+export type SettingsHostPage = keyof SettingsHostState;
+
+const UpdateHostStateMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_HOST_STATE),
+  patch: SettingsHostStateSchema.mapFields(Struct.map(Schema.optionalKey)),
+});
+
+// ============================================================
+// Outbound messages (extension host → settings webview)
+// ============================================================
+
+export const SettingsViewOutboundMessageSchema = Schema.Union([
   SetTabMessageSchema,
-  UpdateMemoryMessageSchema,
+  UpdateHostStateMessageSchema,
   UpdateMemoryPreviewMessageSchema,
-  UpdateModelSelectionMessageSchema,
-  UpdateAgentSelectionMessageSchema,
-  UpdateCustomAgentDirMessageSchema,
-  UpdateAgentModePresetsMessageSchema,
   UpdateSettingsSnapshotMessageSchema,
-  UpdateSkillsListMessageSchema,
-  UpdatePluginsMessageSchema,
-  UpdateGitHubTokenStatusMessageSchema,
-  UpdateSubscriptionAuthStatusMessageSchema,
-  UpdateSubscriptionUsageMessageSchema,
-  UpdatePRSubscriptionsMessageSchema,
-  UpdateLatexSettingsStatusMessageSchema,
-  UpdateProfileMessageSchema,
 ]);
 
 export type SettingsViewOutboundMessage =
   (typeof SettingsViewOutboundMessageSchema)['Type'];
-
-export type SettingsViewOutboundHandlerRegistry =
-  HandlerRegistry<SettingsViewOutboundMessage>;
-
-export const dispatchSettingsViewOutbound = createDispatcher(
-  SettingsViewOutboundMessageSchema,
-);
 
 /** Inbound message addressed to a provider by name. */
 function providerCommand<T extends string>(command: T) {

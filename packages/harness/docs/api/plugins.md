@@ -1234,12 +1234,13 @@ What one process turn reports as it returns.
 interface ProcessReport {
   /** The delivery its parent reads (`formatDelivery`). */
   readonly report: string;
-  /** A failure the process reported without throwing (a failed exit, an
-   *  SDK's error result): the run ends failed with it, its report still
-   *  delivered. */
-  readonly failure?: string;
-  /** How a command exited, recorded as the run's `process.exit` row. */
+  /** How a command exited, recorded as the run's `process.exit` row: a
+   *  code other than 0 ends the run failed, its report still delivered. */
   readonly exit?: ProcessExit;
+  /** A failure a process with no exit of its own reported without
+   *  throwing (an SDK's error result): the run ends failed with it, its
+   *  report still delivered. */
+  readonly failure?: string;
 }
 ```
 

@@ -1,6 +1,6 @@
 /**
  * The extension's half of the settings view: the shared settings body
- * (`createSettingsViewBody`) over VS Code's editor, dialogs and webview, plus
+ * (`makeSettingsViewBody`) over VS Code's editor, dialogs and webview, plus
  * the commands only VS Code answers (installing extensions and writing VS
  * Code's LaTeX settings).
  */
@@ -25,7 +25,7 @@ import {
   SettingsViewInboundMessageSchema,
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
+import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import {
@@ -86,7 +86,7 @@ export class SettingsViewMessageHandler {
     ProcessServices | StorageFs
   >;
   /** The shared settings body: its programs, handlers and repaints. */
-  readonly body: ReturnType<typeof createSettingsViewBody>;
+  readonly body: Effect.Success<ReturnType<typeof makeSettingsViewBody>>;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -97,81 +97,78 @@ export class SettingsViewMessageHandler {
       'refreshCatalogs' | 'refreshApiKeyStatus' | 'revealRun' | 'runLabel'
     >,
   ) {
-    this.body = createSettingsViewBody({
-      host: 'vscode',
-      roots,
-      resourcesPath: path.join(context.extensionPath, 'resources'),
-      skillDisplay: Skills.display(roots),
-      accountCopy: ACCOUNT_OUTCOME,
-      bindings: {
-        post: (message) =>
-          this.withActiveWebview((webview) =>
-            Effect.flatMap(message, (built) => postToWebview(webview, built)),
-          ),
-        notify: vscodeUi,
-        prompt: vscodeUi,
-        externalOpener: new VscodeExternalOpener(),
-        // Markdown opens in preview mode, the read-only rendered view.
-        openPath: (filePath) =>
-          hasExtension(filePath, '.md')
-            ? safeExecuteCommand(
-                'markdown.showPreview',
-                [vscode.Uri.file(filePath)],
-                this.viewName,
-              ).pipe(Effect.asVoid)
-            : showDocument(() => vscode.workspace.openTextDocument(filePath)),
-        revealPath: (filePath) =>
-          executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
-        // An untitled buffer holds the text, so Ctrl+S prompts for a new
-        // location instead of writing back over the source.
-        showReadOnlyYaml: (_fileName, text) =>
-          showDocument(() =>
-            vscode.workspace.openTextDocument({
-              content: text.replaceAll('\r\n', '\n'),
-              language: 'yaml',
+    this.body = runtime.runSync(
+      makeSettingsViewBody({
+        installsExtensions: true,
+        roots,
+        resourcesPath: path.join(context.extensionPath, 'resources'),
+        skillDisplay: Skills.display(roots),
+        accountCopy: ACCOUNT_OUTCOME,
+        bindings: {
+          post: (message) =>
+            this.withActiveWebview((webview) =>
+              Effect.flatMap(message, (built) => postToWebview(webview, built)),
+            ),
+          notify: vscodeUi,
+          prompt: vscodeUi,
+          externalOpener: new VscodeExternalOpener(),
+          // Markdown opens in preview mode, the read-only rendered view.
+          openPath: (filePath) =>
+            hasExtension(filePath, '.md')
+              ? safeExecuteCommand(
+                  'markdown.showPreview',
+                  [vscode.Uri.file(filePath)],
+                  this.viewName,
+                ).pipe(Effect.asVoid)
+              : showDocument(() => vscode.workspace.openTextDocument(filePath)),
+          revealPath: (filePath) =>
+            executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
+          // An untitled buffer holds the text, so Ctrl+S prompts for a new
+          // location instead of writing back over the source.
+          showReadOnlyYaml: (_fileName, text) =>
+            showDocument(() =>
+              vscode.workspace.openTextDocument({
+                content: text.replaceAll('\r\n', '\n'),
+                language: 'yaml',
+              }),
+            ),
+          pickFolder: (title) =>
+            Effect.map(
+              selectFolder({ title, openLabel: 'Select Folder' }),
+              (selected) => selected ?? undefined,
+            ),
+          refreshCatalogs: (selectedAgent) =>
+            progressView.refreshCatalogs({
+              agentCatalogAlreadyFresh: true,
+              selectedAgent,
             }),
-          ),
-        pickFolder: (title) =>
-          Effect.map(
-            selectFolder({ title, openLabel: 'Select Folder' }),
-            (selected) => selected ?? undefined,
-          ),
-        refreshCatalogs: (selectedAgent) =>
-          progressView.refreshCatalogs({
-            agentCatalogAlreadyFresh: true,
-            selectedAgent,
-          }),
-        // The launcher's API-key banner reads the same credential probe from
-        // the host snapshot; the funnel follows the banner.
-        refreshCredentialStatus: progressView.refreshApiKeyStatus,
-        signInSubscription: (providerId) =>
-          Effect.asVoid(
-            signInWithSubscription(roots, this.channel, providerId),
-          ),
-        revealRun: (runId) => progressView.revealRun(runId),
-        runLabel: (runId) => progressView.runLabel(runId),
-        runInTerminal: (name, command) =>
-          Effect.sync(() => {
-            const terminal = vscode.window.createTerminal({ name });
-            terminal.show();
-            terminal.sendText(command);
-          }),
-        latexEditorStatus,
-        requiresOpenWorkspace: () => !roots.workspace,
-      },
-    });
+          // The launcher's API-key banner reads the same credential probe from
+          // the host snapshot; the funnel follows the banner.
+          refreshCredentialStatus: progressView.refreshApiKeyStatus,
+          signInSubscription: (providerId) =>
+            Effect.asVoid(
+              signInWithSubscription(roots, this.channel, providerId),
+            ),
+          revealRun: (runId) => progressView.revealRun(runId),
+          runLabel: (runId) => progressView.runLabel(runId),
+          runInTerminal: (name, command) =>
+            Effect.sync(() => {
+              const terminal = vscode.window.createTerminal({ name });
+              terminal.show();
+              terminal.sendText(command);
+            }),
+          latexEditorStatus,
+          requiresOpenWorkspace: () => !roots.workspace,
+        },
+      }),
+    );
     this.handlerRegistry = {
       ...this.body.handlers,
       ...vscodeLatexSettingsHandlers(this.body),
     };
 
-    // One fiber owns every repaint follower, and each repaint is its child:
-    // disposing interrupts them all.
-    const following = runtime.runFork(
-      this.body.followRepaints((repaint) =>
-        Effect.asVoid(Effect.forkChild(repaint)),
-      ),
-    );
+    // One fiber owns every page follower: disposing interrupts them all.
+    const following = runtime.runFork(this.body.follow);
     context.subscriptions.push({
       dispose: () => runtime.runFork(Fiber.interrupt(following)),
     });

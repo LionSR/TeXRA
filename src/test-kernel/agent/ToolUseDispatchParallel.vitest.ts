@@ -44,6 +44,7 @@ import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
+import { stepHooks } from '@agent/runtime/loop/hooks';
 import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type {
@@ -320,14 +321,17 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 /** Dispatch the pending response of an opened run; `definitions` are the
  *  tools a script run in it may call. */
 const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
-  dispatchPendingResponse(kit.cell, {
-    definitions,
-    registry: kit.tools,
-    offered: [],
-    services: Context.empty(),
-    stepRoots: [],
-    hooks: [],
-    modules: {},
+  Effect.gen(function* () {
+    const run = yield* AgentRun;
+    return yield* dispatchPendingResponse(kit.cell, {
+      definitions,
+      registry: kit.tools,
+      offered: [],
+      services: Context.empty(),
+      stepRoots: [],
+      hooks: stepHooks(run, new Map(), null),
+      modules: {},
+    });
   }).pipe(Effect.provide(kit.layer), Effect.provide(kit.session));
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(

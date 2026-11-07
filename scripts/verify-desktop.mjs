@@ -1590,7 +1590,7 @@ function startRun(log, { runId, agent, at, parentRunId }) {
     type: 'run.start',
     identity: { kind: 'agent', agent },
     isRemote: false,
-    userFollowUpSupport: 'nativeInteractive',
+    takesFollowUps: true,
     approvalPolicy: {
       policy: 'ask',
       bypasses: { bash: false, toolEdit: false, superYolo: false },

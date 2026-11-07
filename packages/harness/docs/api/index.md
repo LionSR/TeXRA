@@ -889,10 +889,9 @@ interface Session {
     Error
   >;
   /**
-   * Delete one run, or every stored run (`'all'`). A run another live
-   * process is running is skipped and reported as `active`. Deleting a
-   * single run may take it from a process that cannot be proved alive or
-   * dead; `'all'` never does.
+   * Delete one run, or every stored run (`'all'`), each as a `run.delete`
+   * request would. A run this session is running is skipped and reported
+   * as `active`.
    */
   readonly deleteRuns: (
     target: RunId | 'all',

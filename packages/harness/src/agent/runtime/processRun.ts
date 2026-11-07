@@ -5,12 +5,13 @@
  * under the launching call, forks the turn under the run's id on the
  * session's registry, and ends the run with what the turn reports: its
  * delivery (`run.report`, queued on the parent's input by the end's
- * transaction), the process's exit (`process.exit`), and a failure the
- * process reported. The process's output goes to the run's trace as it
+ * transaction), the process's exit (`process.exit`), and its failure: an
+ * exit other than 0, or the failure a provider's SDK reported with no exit
+ * of its own. The process's output goes to the run's trace as it
  * arrives (`AgentTrace.output`). A stop interrupts the turn, and a stopped
  * process run delivers nothing: its interruption is the fact. A process
  * run is never resumed: a later turn of the same thread is a new run, and
- * a message to one is refused (`USER_FOLLOW_UP_SUPPORT.UNSUPPORTED`).
+ * a message to one is refused (`takesFollowUps: false`).
  */
 import { Effect, Exit } from 'effect';
 
@@ -32,7 +33,6 @@ import {
   generateRunId,
   qualifyAggregateId,
   RUN_OUTCOME,
-  USER_FOLLOW_UP_SUPPORT,
   type ProcessExit,
   type RunEnd,
   type RunId,
@@ -46,12 +46,13 @@ import { ensureError } from '@utils/errors/errorMessage';
 export interface ProcessReport {
   /** The delivery its parent reads (`formatDelivery`). */
   readonly report: string;
-  /** A failure the process reported without throwing (a failed exit, an
-   *  SDK's error result): the run ends failed with it, its report still
-   *  delivered. */
-  readonly failure?: string;
-  /** How a command exited, recorded as the run's `process.exit` row. */
+  /** How a command exited, recorded as the run's `process.exit` row: a
+   *  code other than 0 ends the run failed, its report still delivered. */
   readonly exit?: ProcessExit;
+  /** A failure a process with no exit of its own reported without
+   *  throwing (an SDK's error result): the run ends failed with it, its
+   *  report still delivered. */
+  readonly failure?: string;
 }
 
 /** A process child's one turn, built around the run's trace. */
@@ -106,7 +107,7 @@ const processRun = (
       Effect.flatMap(Effect.exit(restore(turn.run)), (exit) => {
         const { outcome, error } = endVerdict(
           Exit.map(exit, (report) =>
-            report.failure === undefined
+            failureOf(report) === undefined
               ? RUN_OUTCOME.COMPLETED
               : RUN_OUTCOME.FAILED,
           ),
@@ -118,9 +119,17 @@ const processRun = (
     ).pipe(Effect.ensuring(Effect.sync(() => logger.close())));
   });
 
+/** A returned turn's failure: its exit's, or the one it reported. */
+const failureOf = ({ exit, failure }: ProcessReport): string | undefined => {
+  if (exit === undefined || exit.code === 0) return failure;
+  if (exit.code === null)
+    return `The command ended with no exit code${exit.timedOut ? ' (timed out)' : ''}.`;
+  return `The command failed with exit code ${exit.code}${exit.timedOut ? ' (timed out)' : ''}.`;
+};
+
 /** What the turn's exit puts on the run's end: a returned turn's report,
- *  its reported failure and its exit; a thrown one's error report; a
- *  stopped one's nothing. */
+ *  its failure and its exit; a thrown one's error report; a stopped one's
+ *  nothing. */
 const endingOf = (
   runId: RunId,
   turn: ProcessTurn,
@@ -132,7 +141,8 @@ const endingOf = (
   readonly leading: readonly UnfoldedDraft[];
 } => {
   if (Exit.isSuccess(exit)) {
-    const { report, failure, exit: processExit } = exit.value;
+    const { report, exit: processExit } = exit.value;
+    const failure = failureOf(exit.value);
     return {
       report,
       ...(failure !== undefined && {
@@ -176,7 +186,7 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
   const open = Effect.gen(function* () {
     yield* registerRun(runId, launch.config, {
       identity: launch.identity,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      takesFollowUps: false,
       parentRunId: parent.runId,
       parentCall: { callId, card: parent.logId, awaited: false },
       description: childRunDescription(launch.description),

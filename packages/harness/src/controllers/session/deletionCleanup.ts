@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import {
   type Context,
   Effect,
-  type Fiber,
+  Queue,
   FileSystem,
   Path,
   type PlatformError,
@@ -26,7 +26,11 @@ import {
   WorkspaceFs,
   withSessionFs,
 } from '@platform/rootedFs';
-import { qualifyAggregateId, type RunId } from '@shared/schemas';
+import {
+  qualifyAggregateId,
+  type RunId,
+  type SessionEvent,
+} from '@shared/schemas';
 import type { AggregateState, Database } from '@shared/session/database';
 import {
   Rejected,
@@ -107,41 +111,57 @@ const removeRunDirectories: (
   Effect.catchIf(absentReason, () => Effect.void),
 );
 
+/** A run's deletion marker. */
+type RemovalMarker = Extract<SessionEvent, { type: 'run.removed' }>;
+
+/** The session's deletion collector ({@link deletionCollector}). */
+export interface DeletionCollector {
+  /** One pass over the markers the store holds pending: those an earlier
+   *  session committed and did not collect (the session runs it at open). */
+  readonly pending: Effect.Effect<void>;
+  /** Collect `marker`, which just committed: the session's delivery of its
+   *  committed rows hands each one here. */
+  readonly removed: (marker: RemovalMarker) => void;
+}
+
 /**
- * The session's deletion collector, bound to the caller's scope: each run
- * of the answered effect forks one pass over the pending deletion markers there,
- * answering its fiber (the session runs one at open and one after each
- * removal). Every step of a pass may run twice, in one process or two, so
- * passes never conflict; a failed record stays closed and pending for the
- * next pass, and a failed read of the records is logged.
+ * The session's deletion collector, bound to the caller's scope: one fiber
+ * there collects each marker handed to `removed`, in commit order. Every
+ * step of a collection may run twice, in one process or two, so a marker
+ * the open pass and the fiber both take collects once; a failed record
+ * stays closed and pending for the next session's pass, and a failed read
+ * of the records is logged.
  */
 export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
   function* (
     database: Pick<Context.Service.Shape<typeof Database>, 'deletions'>,
     storage: string,
   ): Effect.fn.Return<
-    Effect.Effect<Fiber.Fiber<void>>,
+    DeletionCollector,
     never,
     FileSystem.FileSystem | Scope.Scope
   > {
     const fs = yield* FileSystem.FileSystem;
-    const scope = yield* Effect.scope;
-    const pass = Effect.gen(function* () {
-      for (const marker of yield* database.deletions.pending()) {
-        if (marker.type !== 'run.removed') continue;
-        yield* database.deletions
-          .collect(marker, (ids) => removeRunDirectories(fs, storage, ids))
-          .pipe(
-            Effect.catch((error) =>
-              Effect.logWarning(
-                `Deletion cleanup remains pending for ${marker.aggregateId}`,
-              ).pipe(
-                Effect.annotateLogs({ data: error }),
-                withLogChannel(CHANNEL),
-              ),
+    const collect = (marker: RemovalMarker) =>
+      database.deletions
+        .collect(marker, (ids) => removeRunDirectories(fs, storage, ids))
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `Deletion cleanup remains pending for ${marker.aggregateId}`,
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(CHANNEL),
             ),
-          );
-      }
+          ),
+        );
+    const markers = yield* Queue.unbounded<RemovalMarker>();
+    yield* Effect.forkScoped(
+      Effect.forever(Effect.flatMap(Queue.take(markers), collect)),
+    );
+    const pending = Effect.gen(function* () {
+      for (const marker of yield* database.deletions.pending())
+        if (marker.type === 'run.removed') yield* collect(marker);
     }).pipe(
       Effect.catch((error) =>
         Effect.logWarning('Deletion records could not be read.').pipe(
@@ -150,7 +170,12 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
         ),
       ),
     );
-    return Effect.forkIn(pass, scope);
+    return {
+      pending,
+      removed: (marker) => {
+        Queue.offerUnsafe(markers, marker);
+      },
+    };
   },
 );
 
@@ -193,17 +218,16 @@ const copyOrRemoveRunDir = Effect.fn('runStorage.copyOrRemoveRunDir')(
   },
 );
 
-/** The session's runs, asked whether a fiber here drives the run: a step
- *  on an inactive run refuses one that is. */
 /** The registry's step on a run nothing drives (`withInactiveRun`): it
  *  refuses a run live here or with live work under it, and a launch
  *  arriving meanwhile waits for the step. */
 type InactiveRunStep = Pick<RunRegistry, 'withInactiveRun'>;
 
-/** A `run.delete`, or a listing's removal: the admitted lifetime's rows
+/** A `run.delete`, the one way a run is deleted: the admitted lifetime's rows
  *  removed from the log as the registry's step on the inactive run, which
  *  refuses one anything still runs, its descendants included (the removal
- *  takes their rows and files with it). */
+ *  takes their rows and files with it). The removal's transaction refuses
+ *  a run whose start is no longer the admitted one. */
 export const deleteAdmittedRun = (
   deps: {
     readonly log: Pick<SessionEventsShape, 'removeRun'>;

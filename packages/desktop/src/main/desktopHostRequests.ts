@@ -62,7 +62,7 @@ interface DesktopHostRequestsOptions {
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
-  postToRenderer(message: unknown): boolean | void;
+  postToRenderer(message: unknown): void;
   onboarding: Pick<
     WindowOnboarding,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'

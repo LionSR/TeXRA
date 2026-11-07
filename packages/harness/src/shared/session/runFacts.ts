@@ -36,11 +36,9 @@ import {
   type SessionEventDraft,
   STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResultPayload,
-  USER_FOLLOW_UP_SUPPORT,
-  type UserFollowUpSupport,
 } from '@shared/schemas';
 
-import { byId, isSharedRunRow } from './runRows';
+import { byId } from './runRows';
 import { runRowsFrom } from './runRowReads';
 import type { TurnResult } from '@texra-ai/llm';
 import type { RunHistoryDraft, RunInputDraft } from './runState';
@@ -189,16 +187,13 @@ export const consumedRow = (
   disposition,
 });
 
-/** Run `runId`'s rows among `rows`, folded (a shared row left out, so a
- *  partial read, a listing's, folds too). */
+/** Run `runId`'s record rows among `rows`, folded (`runRowsFrom`). */
 export const recordsOf = (
   rows: readonly SessionEvent[],
   runId: RunId,
 ): RunRows => {
   const id = qualifyAggregateId('run', runId);
-  return runRowsFrom(
-    rows.filter((row) => row.aggregateId === id && !isSharedRunRow(row)),
-  );
+  return runRowsFrom(rows.filter((row) => row.aggregateId === id));
 };
 
 /** Whether `row` bounds a lifecycle of run `runId`: its `run.activate`
@@ -230,7 +225,7 @@ export interface RegisterRunOptions {
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
-  readonly userFollowUpSupport?: UserFollowUpSupport;
+  readonly takesFollowUps?: boolean;
   /** The run's `run.description`, durable at birth: a child's
    *  task label; a root's summary comes later as a second row. */
   readonly description?: string;
@@ -282,8 +277,7 @@ export function registrationDrafts(
     type: 'run.start',
     aggregateId: target,
     identity: options.identity,
-    userFollowUpSupport:
-      options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    takesFollowUps: options.takesFollowUps ?? false,
     worktree: worktree ? { workingDirectory: worktree } : undefined,
     parent:
       options.parentRunId === undefined

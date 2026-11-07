@@ -34,7 +34,7 @@ import {
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRowReads';
+import { foldRunRows } from '@shared/session/runRowReads';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 
 /** Let a forked submission reach its parked resume Promise. */
@@ -118,14 +118,12 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
         ? publisher.withPermits(1)(work({ append }))
         : publisher.withPermits(1)(runStateAppend(append)(work)),
     runRows: (id, read) =>
-      Effect.sync(() => {
-        const kinds: readonly string[] = RUN_ROW_READS[read];
-        return runRowsFrom(
-          rows.filter(
-            (row) => row.aggregateId === id && kinds.includes(row.type),
-          ),
-        );
-      }),
+      Effect.sync(() =>
+        foldRunRows(
+          read,
+          rows.filter((row) => row.aggregateId === id),
+        ),
+      ),
     history: (id, _from, types = []) =>
       Effect.sync(() =>
         rows.filter(

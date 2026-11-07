@@ -3,18 +3,18 @@
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { SignalWatcher } from '@lit-labs/signals';
+import { Result } from 'effect';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { isUnrecognizedCommand } from '@texra/shared/utils/dispatcher';
 
 // Local imports - shared styles
 
 // Local imports - shared schemas and constants
-import { dispatchSettingsViewOutbound } from '@texra/shared/settingsView/settingsViewMessages';
+import { DEFAULT_LATEX_SETTINGS_STATUS } from '@texra/shared/settingsView/settingsViewMessages';
 import type {
   SettingsSectionName,
   SettingsTabPanelName,
@@ -42,32 +42,14 @@ import './tabs/GitTab';
 import './tabs/LaTeXTab';
 
 // Local imports - module-scope settings state + composed message handlers
-import { settingsViewHandlers } from './messageDispatcher';
+import { applyOutboundMessage } from './messageDispatcher';
 import {
-  activePresetId,
-  customAgentDir,
-  customAgentDirIsDefault,
-  customAgentScanIssues,
-  githubTokenStatus,
-  gitSettingsLoaded,
-  latexSettingsLoaded,
-  latexSettingsStatus,
-  memoryItems,
-  modelSelectionItems,
-  orchestratorAgents,
-  prSubscriptions,
-  providerKeyStatuses,
+  hostState,
   resetSettingsState,
   selectedPanel,
   selectedSections,
   selectSettingsPage,
-  skillLoadIssues,
-  skillsList,
-  subscriptionAuth,
-  subscriptionUsage,
-  teamPresets,
-  pluginsPage,
-  agentSelectionItems,
+  settingsSnapshotRevisions,
 } from './settingsState';
 
 registerTeXRAWebAwesomeIcons();
@@ -86,20 +68,20 @@ export class SettingsApp extends SignalWatcher(LitElement) {
 
   private readonly messageListener = (event: MessageEvent): void => {
     const raw: unknown = event.data;
-    dispatchSettingsViewOutbound(raw, settingsViewHandlers, (error) => {
-      // On the desktop this element shares the window with the whole shell,
-      // so every desktop message reaches this listener too; one whose command
-      // is not a settings-view command is another surface's, not a defect.
-      if (this.isDesktopHost && isUnrecognizedCommand(error)) return;
-      const command =
-        raw && typeof raw === 'object' && 'command' in raw
-          ? String(raw.command)
-          : 'unknown';
+    const command =
+      raw && typeof raw === 'object' && 'command' in raw
+        ? String(raw.command)
+        : 'unknown';
+    // On the desktop this element shares the window with the whole shell,
+    // so every `desktop:*` push reaches this listener too: another
+    // surface's, not a defect.
+    if (this.isDesktopHost && command.startsWith('desktop:')) return;
+    const applied = applyOutboundMessage(raw);
+    if (Result.isFailure(applied))
       console.warn(
         `[SettingsApp] Message validation failed for command "${command}".`,
-        error,
+        applied.failure,
       );
-    });
   };
 
   /** True when the Electron desktop renderer mounted this webview. */
@@ -261,18 +243,19 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     section: SettingsSectionName | undefined,
     desktopHost: boolean,
   ): TemplateResult {
+    const host = hostState.get();
     switch (activePanel) {
       case 'models':
         return html`
           <models-tab
             .section=${section}
-            .providerKeyStatuses=${providerKeyStatuses.get()}
-            .modelSelectionItems=${modelSelectionItems.get()}
-            .usage=${subscriptionUsage.get()}
+            .providerKeyStatuses=${host.profile?.providerKeyStatuses ?? null}
+            .modelSelectionItems=${host.models?.models ?? []}
+            .usage=${host.subscriptionUsage?.snapshots ?? null}
           >
             <subscriptions-tab
               slot="subscriptions"
-              .subscriptionAuth=${subscriptionAuth.get()}
+              .subscriptionAuth=${host.subscriptionAuth ?? {}}
             ></subscriptions-tab>
           </models-tab>
         `;
@@ -280,37 +263,39 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         return html`
           <agents-tab
             .section=${section}
-            .agents=${agentSelectionItems.get()}
-            .customAgentDir=${customAgentDir.get()}
-            .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
-            .customAgentScanIssues=${customAgentScanIssues.get()}
+            .agents=${host.agents?.agents ?? []}
+            .customAgentDir=${host.customAgentDir?.path ?? ''}
+            .customAgentDirIsDefault=${host.customAgentDir?.isDefault ?? true}
+            .customAgentScanIssues=${host.agents?.customAgentIssues ?? []}
           >
             <teams-tab
               slot="teams"
-              .activePresetId=${activePresetId.get()}
-              .presets=${teamPresets.get()}
-              .orchestratorAgents=${orchestratorAgents.get()}
+              .activePresetId=${host.teams?.activePresetId ?? null}
+              .presets=${host.teams?.presets ?? []}
+              .orchestratorAgents=${host.teams?.orchestratorAgents ?? []}
             ></teams-tab>
             <skills-tab
               slot="skills"
-              .skills=${skillsList.get()}
-              .issues=${skillLoadIssues.get()}
+              .skills=${host.skills?.skills ?? []}
+              .issues=${host.skills?.issues ?? []}
             ></skills-tab>
           </agents-tab>
         `;
       case 'plugins':
-        return html`<plugins-tab .page=${pluginsPage.get()}></plugins-tab>`;
+        return html`<plugins-tab .page=${host.plugins ?? null}></plugins-tab>`;
       case 'latex':
         return html`
           <latex-tab
             .section=${section}
-            .settings=${latexSettingsStatus.get()}
-            .loaded=${latexSettingsLoaded.get()}
+            .settings=${host.latex?.settings ?? DEFAULT_LATEX_SETTINGS_STATUS}
+            .loaded=${host.latex !== undefined}
             .desktopHost=${desktopHost}
           ></latex-tab>
         `;
       case 'memory':
-        return html`<memory-tab .items=${memoryItems.get()}></memory-tab>`;
+        return html`<memory-tab
+          .items=${host.memory?.items ?? []}
+        ></memory-tab>`;
       case 'general':
         if (desktopHost && section === 'appearance')
           return html`<slot name="appearance"></slot>`;
@@ -318,9 +303,9 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         return section === 'git'
           ? html`
               <git-tab
-                .toggleDisabled=${!gitSettingsLoaded.get()}
-                .githubTokenStatus=${githubTokenStatus.get()}
-                .prSubscriptions=${prSubscriptions.get()}
+                .toggleDisabled=${settingsSnapshotRevisions.get()['git-author'] === undefined}
+                .githubTokenStatus=${host.githubToken?.status ?? 'none'}
+                .prSubscriptions=${host.prSubscriptions?.subscriptions ?? []}
               ></git-tab>
             `
           : html`<privacy-tab></privacy-tab>`;

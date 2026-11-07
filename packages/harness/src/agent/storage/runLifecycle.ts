@@ -195,12 +195,25 @@ const cancelledRequests = (
   );
 
 /**
+ * The id a child's delivery to its parent is queued under, one per
+ * lifecycle (`${runId}:${activation}`): a replay of the delivery writes
+ * nothing, and a second delivery of one lifecycle is a duplicate. A
+ * lifecycle delivers once, by its end's report or, for one a dead process
+ * cut short, by the notice that it was interrupted.
+ */
+export const deliveryId = (runId: RunId, facts: RunRows): string =>
+  `${runId}:${facts.activation?.commit ?? 0}`;
+
+/** Whether `followUpId` is one of `runId`'s deliveries ({@link deliveryId}),
+ *  of any lifecycle, as opposed to a message the run sent. */
+export const isDeliveryOf = (runId: RunId, followUpId: string): boolean =>
+  followUpId.startsWith(`${runId}:`);
+
+/**
  * A child's report queued on its parent's input, decided in the job
- * committing the child's end, under the id of this lifecycle
- * (`${runId}:${activation}`): a replay of the end writes nothing, and a
- * second delivery of one lifecycle is a duplicate. A closed, deleted or
- * unreadable parent refuses it, with a warning once the job commits; the
- * child's own rows still commit.
+ * committing the child's end, under the lifecycle's {@link deliveryId}.
+ * A closed, deleted or unreadable parent refuses it, with a warning once
+ * the job commits; the child's own rows still commit.
  */
 const parentDelivery = Effect.fn('parentDelivery')(function* (
   runId: RunId,
@@ -212,7 +225,7 @@ const parentDelivery = Effect.fn('parentDelivery')(function* (
   const item = {
     text,
     from: { kind: 'run', runId } as const,
-    deliveryId: `${runId}:${facts.activation?.commit ?? 0}`,
+    deliveryId: deliveryId(runId, facts),
   };
   const admitted = yield* Inbox.use((inbox) =>
     inbox.admission(parent.id, item, {}),

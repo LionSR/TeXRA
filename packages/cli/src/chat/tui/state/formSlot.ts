@@ -8,6 +8,8 @@
 // (#12908). They go through the owner below instead, which keeps the forms
 // that did not get the slot in arrival order and hands it on as each closes.
 
+import { randomUUID } from 'node:crypto';
+
 import { signal, type Signal } from '@lit-labs/signals';
 
 import { registerCliStateResetHook } from './cliState';
@@ -18,7 +20,7 @@ import { registerCliStateResetHook } from './cliState';
 interface ActiveSlashForm {
   /** The entry's own identity, stamped when it enters the slot: App keys the
    *  mounted form on it, so a form never inherits another form's state. */
-  readonly id: number;
+  readonly id: string;
   /** The slash command that mounted the form (for the header strip). */
   readonly commandName: string;
   /** Render the form body. Receives the close callback. */
@@ -36,7 +38,6 @@ export const activeForm: Signal.State<ActiveSlashForm | undefined> = signal<
 const QUEUED_FORMS: ActiveSlashForm[] = [];
 
 type FormRequest = Omit<ActiveSlashForm, 'id'>;
-let nextFormId = 0;
 
 /**
  * Show `form` once the slot is free. What a surface that arrives unbidden
@@ -44,7 +45,7 @@ let nextFormId = 0;
  * working in, so it waits its turn behind whatever is there.
  */
 export function openActiveForm(request: FormRequest): ActiveSlashForm {
-  const form = { ...request, id: nextFormId++ };
+  const form = { ...request, id: randomUUID() };
   if (activeForm.get() === undefined) activeForm.set(form);
   else QUEUED_FORMS.push(form);
   return form;
@@ -59,7 +60,7 @@ export function openActiveForm(request: FormRequest): ActiveSlashForm {
 export function takeActiveForm(request: FormRequest): void {
   const displaced = activeForm.get();
   if (displaced) QUEUED_FORMS.unshift(displaced);
-  activeForm.set({ ...request, id: nextFormId++ });
+  activeForm.set({ ...request, id: randomUUID() });
 }
 
 /**

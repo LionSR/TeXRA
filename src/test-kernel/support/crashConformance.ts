@@ -1386,7 +1386,7 @@ export function crashConformanceSuite(
                     type: 'run.start',
                     aggregateId: run,
                     identity: { kind: 'agent', agent: 'chat' },
-                    userFollowUpSupport: 'unsupported',
+                    takesFollowUps: false,
                     parent: null,
                     provenance: null,
                   },

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import { signal } from '@lit-labs/signals';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,6 +27,10 @@ const transport = vi.hoisted(() => ({
   open: vi.fn(),
   subscribe: vi.fn(),
   request: vi.fn<WebviewTransport['request']>(),
+  // The session's scope is the test's: a request runs to its answer.
+  run: vi.fn<WebviewTransport['run']>((_session, program) => {
+    void Effect.runPromise(program);
+  }),
   onSurfaceAction: vi.fn(),
   close: vi.fn(),
   dispose: vi.fn(),
@@ -77,7 +81,7 @@ afterEach(() => surfaces.dispose());
 
 function response(): (result: Response['result']) => void {
   const { promise, resolve } = Promise.withResolvers<Response['result']>();
-  transport.request.mockReturnValueOnce(promise);
+  transport.request.mockReturnValueOnce(Effect.promise(() => promise));
   return resolve;
 }
 
@@ -106,8 +110,9 @@ describe('session Surface ownership', () => {
     surfaces.submit(KEY);
     expect(transport.request).toHaveBeenCalledOnce();
     admit({ ok: true, outcome: { kind: 'done' } });
-    await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().sending.size).toBe(0);
+    await vi.waitFor(() =>
+      expect(surfaces.get(KEY)?.surface$.get().sending.size).toBe(0),
+    );
   });
 
   it('retains the complete draft on rejected admission and clears only an unchanged accepted draft', async () => {
@@ -134,9 +139,10 @@ describe('session Surface ownership', () => {
       patch: { text: 'New text' },
     });
     reject({ ok: false, error: { _tag: 'Rejected', reason: 'Unavailable' } });
-    await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual(
-      new Rejected({ reason: 'Unavailable' }),
+    await vi.waitFor(() =>
+      expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual(
+        new Rejected({ reason: 'Unavailable' }),
+      ),
     );
     expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
       text: 'New text',
@@ -151,19 +157,21 @@ describe('session Surface ownership', () => {
       patch: { text: 'Later text' },
     });
     acceptEdited({ ok: true, outcome: { kind: 'done' } });
-    await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
-      text: 'Later text',
-      images: [image],
-    });
+    await vi.waitFor(() =>
+      expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
+        text: 'Later text',
+        images: [image],
+      }),
+    );
 
     const accept = response();
     surfaces.runtimeRequest(KEY, { ...request, text: 'Later text' });
     accept({ ok: true, outcome: { kind: 'done' } });
-    await Promise.resolve();
-    expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
-      text: '',
-      images: [],
-    });
+    await vi.waitFor(() =>
+      expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
+        text: '',
+        images: [],
+      }),
+    );
   });
 });
