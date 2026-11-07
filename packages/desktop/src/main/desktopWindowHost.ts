@@ -7,10 +7,7 @@ import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  ExternalOpenFailed,
-  type NotificationFailed,
-} from '@texra/hosts/uiHosts';
+import { HostFailed } from '@texra/hosts/uiHosts';
 import {
   INSTRUCTION_ACTION,
   type InstructionAction,
@@ -54,7 +51,7 @@ export function createDesktopWindowHost(options: {
       showErrorMessage(
         `A desktop operation failed: ${toErrorMessage(error)}`,
       ).pipe(
-        Effect.catch((notificationError: NotificationFailed) =>
+        Effect.catch((notificationError: HostFailed) =>
           Effect.sync(() => {
             console.error(
               'Failed to display desktop asynchronous operation error:',
@@ -96,12 +93,12 @@ export function createDesktopWindowHost(options: {
   const openExternalProgram = (
     url: string,
     reportFailure: boolean,
-  ): Effect.Effect<void, ExternalOpenFailed> =>
+  ): Effect.Effect<void, HostFailed> =>
     previewHost.openExternal(url, { reportFailure }).pipe(
       Effect.catchTag('PreviewUnavailable', (cause) =>
         Effect.fail(
-          new ExternalOpenFailed({
-            target: url,
+          new HostFailed({
+            member: 'openExternal',
             message: `The desktop could not open ${url} in the default browser: ${cause.message}`,
             cause,
           }),
@@ -119,8 +116,8 @@ export function createDesktopWindowHost(options: {
       previewHost.openExternal(url).pipe(
         Effect.mapError(
           (cause) =>
-            new ExternalOpenFailed({
-              target: url,
+            new HostFailed({
+              member: 'openExternal',
               message: 'The documentation URL could not be opened.',
               cause,
             }),
@@ -128,7 +125,7 @@ export function createDesktopWindowHost(options: {
         // The handler's parameter is the whole error type this expression can
         // carry, so a second failure added here fails to compile instead of
         // reading as a documentation URL that would not open.
-        Effect.catch((error: ExternalOpenFailed) =>
+        Effect.catch((error: HostFailed) =>
           Effect.sync(() => reportBackgroundError(error)),
         ),
       ),
@@ -154,10 +151,10 @@ export function createDesktopWindowHost(options: {
    * run behind it. The caller still awaits the dialog, as it did before.
    */
   const awaitOrReport = (
-    started: Effect.Effect<void, NotificationFailed>,
+    started: Effect.Effect<void, HostFailed>,
   ): Effect.Effect<void> =>
     started.pipe(
-      Effect.catchTag('NotificationFailed', (error) =>
+      Effect.catchTag('HostFailed', (error) =>
         Effect.sync(() => reportBackgroundError(error)),
       ),
     );

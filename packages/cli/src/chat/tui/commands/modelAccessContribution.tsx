@@ -29,7 +29,6 @@ import { modelConnectionNeeded } from '../modelConnection';
 import { setTransientNotice } from '../state/cliState';
 import { appendLocalNotice } from '../state/transcript';
 import {
-  applyCliModelAccessSelection,
   applyCliProviderApiKey,
   showCliAccountStatus,
 } from './handlers/modelAccessCommands';
@@ -38,14 +37,18 @@ import {
   loginStartMessage,
   logoutFromChat,
 } from './handlers/loginCommands';
-import { openCliSlashCommandForm } from './slashForms';
+import { openRegisteredCliSlashForm } from './slashForms';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type {
   SlashCommandEffect,
   SlashCommandOutput,
 } from './handlers/slashContext';
 import type { ErrorHandler, formSelectionHandler } from './formSelection';
-import type { SlashCommandContribution, SlashFormProps } from './slashRegistry';
+import type {
+  SlashCommand,
+  SlashCommandContribution,
+  SlashFormProps,
+} from './slashRegistry';
 
 /** Selection handler that reports progress while the form shows a busy frame. */
 export type FormActionHandler<T> = (
@@ -58,7 +61,7 @@ type ApiKeySaveHandler = (
   key: string,
 ) => Effect.Effect<string | void, Error, Secrets>;
 
-/** `registerBuiltinSlashCommands`' picker binding, shared with this plugin. */
+/** `builtinSlashCommands`' picker binding, shared with this plugin. */
 type BindSelection = <T>(
   props: SlashFormProps,
   action: (value: T, output: SlashCommandOutput) => SlashCommandEffect,
@@ -76,28 +79,21 @@ export function modelAccessContribution(deps: {
   readonly stores: SettingsStores;
   readonly runtime: ProcessRuntime;
   readonly bindSelection: BindSelection;
-  readonly onModelAccessSelect?: FormActionHandler<CliModelAccessSelection>;
-  readonly onLoginSelect?: FormActionHandler<LoginFormValue>;
+  readonly onModelAccessSelect: FormActionHandler<CliModelAccessSelection>;
+  readonly onLoginSelect: FormActionHandler<LoginFormValue>;
   /** After a sign-in, sign-out, preference, or key save finishes: the chat
    *  re-checks whether a model can answer now. */
-  readonly onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
+  readonly onAccountChanged: () => Effect.Effect<void, never, ProcessServices>;
   /** Reports a failed key-status read; the rows then read "Status unavailable". */
-  readonly onError?: ErrorHandler;
-}): SlashCommandContribution {
-  const { stores, runtime, bindSelection } = deps;
-  const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
-    deps.onModelAccessSelect ??
-    ((selection, output) =>
-      applyCliModelAccessSelection(stores, selection, undefined, output));
+  readonly onError: ErrorHandler;
+}): SlashCommandContribution & { readonly login: SlashCommand } {
+  const { stores, runtime, bindSelection, onModelAccessSelect, onLoginSelect } =
+    deps;
   const onApiKeySave: ApiKeySaveHandler = (provider, key) =>
     applyCliProviderApiKey(stores, provider, key);
-  const onLoginSelect: FormActionHandler<LoginFormValue> =
-    deps.onLoginSelect ??
-    ((value, output) => loginFromChat(value, stores, undefined, output));
   const onLogoutSelect: FormActionHandler<CliLogoutTarget> = (value, output) =>
     logoutFromChat(value, stores, output);
-  const recheck = (): Effect.Effect<void, never, ProcessServices> =>
-    deps.onAccountChanged?.() ?? Effect.void;
+  const recheck = deps.onAccountChanged;
 
   function AccountAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
     const bound = bindSelection<AccountAction>(
@@ -150,7 +146,7 @@ export function modelAccessContribution(deps: {
           // The key form takes the slot this form leaves; closing first keeps
           // `takeActiveForm` from requeueing this form behind it.
           props.onDone(undefined);
-          openCliSlashCommandForm('key');
+          openRegisteredCliSlashForm(key);
         }}
         onCancel={() => props.onDone(undefined)}
       />
@@ -185,45 +181,41 @@ export function modelAccessContribution(deps: {
     );
   }
 
-  return {
-    pluginId: 'model-access',
-    commands: [
-      {
-        name: 'key',
-        description: 'Add a provider API key with masked input',
-        aliases: ['keys'],
-        category: 'account',
-        echo: 'never',
-        // A remainder never reaches the form: it could be the key itself,
-        // so it is refused and dropped rather than pre-filled.
-        handler: (remainder) =>
-          Effect.sync(() => {
-            if (remainder) {
-              setTransientNotice(
-                'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
-              );
-            }
-            openCliSlashCommandForm('key');
-          }),
-        formComponent: ProviderApiKeyFormAdapter,
-        redactInput: true,
-      },
-      {
-        name: 'login',
-        description: 'Sign in or out, and choose subscriptions or API keys',
-        category: 'account',
-        // One form owns sign-in, sign-out, and subscription preferences, so
-        // the typed command is not an accurate transcript row; outcomes are
-        // written by the form's handlers.
-        echo: 'never',
-        handler: (remainder, context) =>
-          remainder.trim().toLowerCase() === 'status'
-            ? showCliAccountStatus(stores)
-            : loginFromChat(remainder, stores, context.cliContext).pipe(
-                Effect.andThen(recheck),
-              ),
-        formComponent: AccountAccessFormAdapter,
-      },
-    ],
+  const key: SlashCommand = {
+    name: 'key',
+    description: 'Add a provider API key with masked input',
+    aliases: ['keys'],
+    category: 'account',
+    echo: 'never',
+    // A remainder never reaches the form: it could be the key itself,
+    // so it is refused and dropped rather than pre-filled.
+    handler: (remainder) =>
+      Effect.sync(() => {
+        if (remainder) {
+          setTransientNotice(
+            'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
+          );
+        }
+        openRegisteredCliSlashForm(key);
+      }),
+    formComponent: ProviderApiKeyFormAdapter,
+    redactInput: true,
   };
+  const login: SlashCommand = {
+    name: 'login',
+    description: 'Sign in or out, and choose subscriptions or API keys',
+    category: 'account',
+    // One form owns sign-in, sign-out, and subscription preferences, so
+    // the typed command is not an accurate transcript row; outcomes are
+    // written by the form's handlers.
+    echo: 'never',
+    handler: (remainder, context) =>
+      remainder.trim().toLowerCase() === 'status'
+        ? showCliAccountStatus(stores)
+        : loginFromChat(remainder, stores, context.cliContext).pipe(
+            Effect.andThen(recheck),
+          ),
+    formComponent: AccountAccessFormAdapter,
+  };
+  return { pluginId: 'model-access', commands: [key, login], login };
 }

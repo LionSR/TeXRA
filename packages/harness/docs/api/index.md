@@ -73,8 +73,6 @@ embedder supplying its own names its workspace roots beside them.
 interface AgentPlatform {
   /** The agent directories this process's `AgentDirectories` service serves. */
   readonly agentDirectories: AgentDirectoriesPort;
-  /** The app's directories on every command's PATH (`CommandDirs`). */
-  readonly commandDirs?: () => readonly string[];
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
@@ -445,7 +443,7 @@ interface LocalSession extends Session {
   };
   /** Show a notice through the attached host; a notice raised while no
    *  host is attached waits for the next one. */
-  readonly emit: SessionHostInteractions['emit'];
+  readonly emit: Notices['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been
    *  shown to the attached host (or queued for the next one). */

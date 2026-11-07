@@ -249,8 +249,7 @@ export function sessionReads(
     listRuns: () => read(listRuns()),
     held: heldRuns(Context.get(session, Runs)),
     deleteRuns: deleteRuns(session),
-    // Bound: the session's presentation owner keeps its attachments.
-    emit: interactions.emit.bind(interactions),
+    emit: interactions.emit,
     settled: log.settled,
   };
 }

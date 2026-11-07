@@ -17,9 +17,12 @@ import type {
   ScriptCallPayload,
   ToolResultPayload,
 } from '@shared/schemas';
+import { Result } from 'effect';
+
 import type { ModelOrigin, RemoteOperation } from '@texra-ai/llm';
 import type { RunPosition } from './runRowsShape';
 import type { HistoryMessage, ModelMessagePayload } from './historyTurns';
+import type { RowRejection } from './runState';
 
 /** How an attempt ended, as its `failed` row records it. */
 export type Failure = {
@@ -90,13 +93,19 @@ export function failuresBefore(
     : [...invocation.earlier, invocation.current.failed];
 }
 
+/** A row out of the order the run history writes. */
+export const outOfOrder = (
+  detail: string,
+): Result.Result<never, RowRejection> =>
+  Result.fail({ reason: 'out-of-order', detail });
+
 /** The invocation after its row `p` (null: its response closed it), or why
  *  `p` cannot follow it. An `attempt` row opens the next attempt; so does a
  *  `failed` row naming it, for an attempt that failed before it was sent. */
 export function invocationAfter(
   invocation: Invocation | null,
   p: InvocationRow,
-): Invocation | null | string {
+): Result.Result<Invocation | null, RowRejection> {
   const current = invocation?.current;
   return p.kind === 'attempt' ||
     (p.kind === 'failed' &&
@@ -109,7 +118,7 @@ export function invocationAfter(
 function openedBy(
   invocation: Invocation | null,
   p: Extract<InvocationRow, { kind: 'attempt' | 'failed' }>,
-): Invocation | string {
+): Result.Result<Invocation, RowRejection> {
   const { invocationId, attempt } = p.invocation;
   const prior = invocation?.current.ref;
   const follows =
@@ -117,8 +126,10 @@ function openedBy(
       ? invocation === null
       : prior?.invocationId === invocationId && attempt === prior.attempt + 1;
   if (!follows)
-    return `${p.kind} ${attempt} of ${invocationId} does not follow ${prior?.attempt ?? 'no attempt'}`;
-  return {
+    return outOfOrder(
+      `${p.kind} ${attempt} of ${invocationId} does not follow ${prior?.attempt ?? 'no attempt'}`,
+    );
+  return Result.succeed({
     current: {
       ref: p.invocation,
       sent:
@@ -129,14 +140,14 @@ function openedBy(
       closed: false,
     },
     earlier: failuresBefore(invocation, p.invocation),
-  };
+  });
 }
 
 /** The invocation after `p` moves or closes its open attempt. */
 function movedBy(
   invocation: Invocation | null,
   p: InvocationRow,
-): Invocation | null | string {
+): Result.Result<Invocation | null, RowRejection> {
   const current = invocation?.current;
   if (
     invocation == null ||
@@ -144,14 +155,15 @@ function movedBy(
     current.failed !== null ||
     !sameRef(current.ref, p.invocation)
   )
-    return `${p.kind} names no open attempt`;
-  const moved = (patch: Partial<Attempt>): Invocation => ({
-    ...invocation,
-    current: { ...current, ...patch },
-  });
+    return outOfOrder(`${p.kind} names no open attempt`);
+  const moved = (patch: Partial<Attempt>) =>
+    Result.succeed<Invocation>({
+      ...invocation,
+      current: { ...current, ...patch },
+    });
   switch (p.kind) {
     case 'attempt':
-      return 'an attempt row moves no attempt';
+      return outOfOrder('an attempt row moves no attempt');
     case 'identified':
       return moved({ providerResponseId: p.providerResponseId });
     case 'accepted':
@@ -160,12 +172,12 @@ function movedBy(
       });
     case 'cancelled':
       return current.accepted === null
-        ? 'cancelled names no accepted operation'
+        ? outOfOrder('cancelled names no accepted operation')
         : moved({ accepted: null });
     case 'failed':
       return moved({ failed: { error: p.error, next: p.next } });
     case 'response':
-      return null;
+      return Result.succeed(null);
   }
 }
 

@@ -33,6 +33,7 @@ import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
+import { HostFailed } from '@texra/hosts/uiHosts';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import {
   passesFileFilters,
@@ -109,20 +110,6 @@ class WorkspaceRequestRefused extends Schema.TaggedError<WorkspaceRequestRefused
   'WorkspaceRequestRefused',
   {
     message: Schema.String,
-  },
-) {}
-
-/**
- * A host promise this handler awaited rejected. `member` names which, so the
- * report says what actually failed, and `message` is the rejection's own text
- * so the sentence the renderer shows is unchanged.
- */
-class WorkspaceHostCallFailed extends Schema.TaggedError<WorkspaceHostCallFailed>()(
-  'WorkspaceHostCallFailed',
-  {
-    member: Schema.Literal('ptyHost.create'),
-    message: Schema.String,
-    cause: Schema.Defect(),
   },
 ) {}
 
@@ -403,7 +390,7 @@ export function createDesktopWorkspaceIpc(
       const session = yield* Effect.tryPromise({
         try: () => options.ptyHost.create({ id: sessionId, cols, rows }),
         catch: (cause) =>
-          new WorkspaceHostCallFailed({
+          new HostFailed({
             member: 'ptyHost.create',
             message: toErrorMessage(cause),
             cause,
@@ -420,7 +407,7 @@ export function createDesktopWorkspaceIpc(
       // Surface in the terminal itself: a silent no-op looks like a shell
       // that never printed a prompt. Then fail with the cause, so the
       // window's router reports it and the request never settles in silence.
-      Effect.catch((error: WorkspaceHostCallFailed) =>
+      Effect.catch((error: HostFailed) =>
         Effect.andThen(
           Effect.sync(() =>
             renderer.postToRenderer({

@@ -9,7 +9,7 @@ import {
 } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
-import { NotificationFailed } from '@texra/hosts/uiHosts';
+import { HostFailed } from '@texra/hosts/uiHosts';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DesktopProjectRecords,
@@ -267,7 +267,7 @@ void Effect.runPromise(
                 `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
               ),
             catch: (cause) =>
-              new NotificationFailed({
+              new HostFailed({
                 member: 'showWarningMessage',
                 message: 'The unopened-projects warning could not be shown.',
                 cause,

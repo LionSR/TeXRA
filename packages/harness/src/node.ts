@@ -76,6 +76,7 @@ export {
 } from '@utils/system/execUtils';
 export type { ExecResult } from '@shared/schemas';
 export {
+  CommandDirs,
   existsAtAbsolute,
   homeDirectory,
   whichOnExtendedPath,

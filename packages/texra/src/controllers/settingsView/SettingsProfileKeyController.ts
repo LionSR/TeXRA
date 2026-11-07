@@ -7,7 +7,7 @@ import {
   type SettingsStores,
 } from '@texra-ai/harness/host';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
-import type { PromptFailed, PromptHost } from '@texra/hosts/uiHosts';
+import type { HostFailed, PromptHost } from '@texra/hosts/uiHosts';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
 
 interface SettingsProfileKeyControllerDeps {
@@ -112,7 +112,7 @@ export class SettingsProfileKeyController {
     function* (
       provider: string,
       verb: 'set' | 'remove',
-      action: Effect.Effect<void, Error | PromptFailed, Secrets>,
+      action: Effect.Effect<void, Error | HostFailed, Secrets>,
     ): Effect.fn.Return<
       void,
       ProviderKeyActionFailed | StateReadFailed,

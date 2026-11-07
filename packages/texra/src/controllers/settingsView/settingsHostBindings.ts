@@ -10,7 +10,7 @@ import { formatError } from '@texra-ai/harness/schemas';
 import type {
   ExternalOpener,
   MessageHost,
-  NotificationFailed,
+  HostFailed,
   PromptHost,
 } from '@texra/hosts/uiHosts';
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
@@ -129,10 +129,10 @@ export function settingsPresentation(
   bindings: SettingsHostBindings,
   inputs: PubSub.PubSub<SettingsInput>,
 ): SettingsPresentation {
-  const shown = (notice: Effect.Effect<void, NotificationFailed>) =>
+  const shown = (notice: Effect.Effect<void, HostFailed>) =>
     Effect.forkDetach(
       notice.pipe(
-        Effect.catchTag('NotificationFailed', (failure) =>
+        Effect.catchTag('HostFailed', (failure) =>
           Effect.logWarning(
             `Could not show a settings notice: ${failure.message}`,
           ).pipe(withLogChannel(SETTINGS_LOG_CHANNEL)),
