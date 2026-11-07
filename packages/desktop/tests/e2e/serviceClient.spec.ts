@@ -478,6 +478,9 @@ test('a window that never reached the service says its tasks run in this window 
     const banner = launched.page.locator('progress-app #serviceLocalBanner');
     await expect(banner).toContainText('in this window only');
     await expect(banner).toContainText('the app keeps its data in');
+    await banner.screenshot({
+      path: test.info().outputPath('service-local-banner.png'),
+    });
   } finally {
     await closeTexraApp(launched);
   }
