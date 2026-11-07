@@ -1,14 +1,15 @@
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 
-import { codeSandboxWorker } from '../../../scripts/code-sandbox-worker.mjs';
+import { harnessBundleOptions } from '../../../scripts/code-sandbox-worker.mjs';
 
 const packageRoot = new URL('..', import.meta.url);
 const quickJsWasmSpecifier = '@jitl/quickjs-wasmfile-release-sync/wasm';
+const base = harnessBundleOptions();
 
 await build({
+  ...base,
   absWorkingDir: fileURLToPath(packageRoot),
-  bundle: true,
   entryPoints: {
     index: 'src/index.ts',
     schemas: 'src/schemas.ts',
@@ -34,11 +35,8 @@ await build({
         );
       },
     },
-    codeSandboxWorker,
+    ...base.plugins,
   ],
-  loader: {
-    '.wasm': 'binary',
-  },
   sourcemap: false,
   splitting: true,
   target: 'es2022',

@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
+import { buildIdentityDefine } from './build-identity.mjs';
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const CODE_SANDBOX_WORKER_ID = 'virtual:code-sandbox-worker';
 
@@ -72,3 +74,22 @@ export const codeSandboxWorker = {
     );
   },
 };
+
+/**
+ * The esbuild options every bundle of the harness's sources starts from;
+ * each config spreads them and adds its own. They embed the worker and the
+ * QuickJS WASM bytes, stamp the build identity, and keep class names: the
+ * model-error verdict (packages/llm/src/api/verdict.ts) tells a network
+ * failure by the SDK error classes' names along the prototype chain, and
+ * esbuild renames a class when it minifies or when two bundled modules
+ * declare the same name.
+ */
+export function harnessBundleOptions() {
+  return {
+    bundle: true,
+    loader: { '.wasm': 'binary' },
+    plugins: [codeSandboxWorker],
+    define: buildIdentityDefine(),
+    keepNames: true,
+  };
+}

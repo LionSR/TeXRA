@@ -2,9 +2,9 @@ import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
-// Same alias/dedupe recipe as packages/desktop/vite.config.ts — the proven
-// mechanism for running the real Progress View Lit components outside VS Code.
-import { aliases } from '../../scripts/aliases.mjs';
+// The shared aliases and dedupe list let the real Progress View Lit
+// components run outside VS Code, as in the desktop renderer.
+import { aliases, dedupe } from '../../scripts/aliases.mjs';
 
 /**
  * Builds the trace viewer straight into the extension's resources (so the
@@ -40,11 +40,6 @@ export default defineConfig({
   },
   resolve: {
     alias: aliases,
-    dedupe: [
-      '@awesome.me/webawesome',
-      '@lit-labs/signals',
-      'lit',
-      'signal-polyfill',
-    ],
+    dedupe,
   },
 });
