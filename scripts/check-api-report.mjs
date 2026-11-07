@@ -40,12 +40,8 @@ function coreEntries(rootDir) {
       ([subpath]) => subpath !== './package.json',
     );
     return entries.map(([subpath, target]) => {
-      const spelled = typeof target === 'string' ? target : target.types;
-      // `./src/foo/bar.ts`, or its built declaration
-      // `./dist/types/foo/bar.d.ts`: the path under `src/`.
-      const source = spelled
-        .replace(/^\.\/(?:src|dist\/types)\//, '')
-        .replace(/\.d\.ts$|\.ts$/, '');
+      // `./src/foo/bar.ts`: the path under `src/`.
+      const source = target.replace(/^\.\/src\//, '').replace(/\.ts$/, '');
       return {
         name: manifest.name,
         subpath,

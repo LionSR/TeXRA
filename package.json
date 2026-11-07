@@ -47,6 +47,7 @@
     "@electron/asar": "^4.3.1",
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@lit-labs/signals": "^0.3.0",
+    "@texra-ai/harness": "workspace:*",
     "@texra-ai/llm": "workspace:*",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^22.20.5",
