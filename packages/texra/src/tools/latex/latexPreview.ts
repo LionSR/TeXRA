@@ -29,7 +29,7 @@ import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { filesByPrefix } from '@latex/formatter/latexindentpt';
-import { LaTeXdiffService } from '@latex/latexdiff';
+import { latexdiff } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -343,29 +343,22 @@ export const runLatexdiff = (
         ),
       );
 
-      const result = yield* new LaTeXdiffService(
-        'ToolEditApproval',
-        entry.request.roots,
-      ).runDiff(
+      const diffPath = yield* latexdiff(
         tempPathToLocation(entry.request.roots.workspace, originalPath),
         tempPathToLocation(entry.request.roots.workspace, proposedPath),
-        DIFF_SUFFIX,
-        'coarse',
         {
+          roots: entry.request.roots,
           cwd: entry.request.roots.workspace ?? outputDirectory,
+          suffix: DIFF_SUFFIX,
+          mathMarkup: 'coarse',
           subtype: options.subtype,
           outputDirectory,
         },
-      );
-
-      if (!result.success || !result.diffPath) {
-        entry.onError(result.message);
-        return;
-      }
+      ).pipe(withLogChannel('ToolEditApproval'));
 
       const diffLocation = tempPathToLocation(
         entry.request.roots.workspace,
-        result.diffPath,
+        diffPath,
       );
       yield* options.openBuildDisplay(diffLocation, { preserveFocus: true });
     }),

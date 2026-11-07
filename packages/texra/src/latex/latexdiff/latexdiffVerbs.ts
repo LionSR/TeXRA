@@ -1,11 +1,15 @@
 /**
  * The latexdiff verbs both GUI hosts answer through their window
  * (`openGuiWindow`): a diff of two files, the commit verbs (latexdiff-vc and
- * the pack and clean of what it produced), and the round-aware diff of a
- * whole run. The guards, the refusal wording and the outcome notices live
- * here once; a host supplies only how a generated diff opens and how a long
- * diff run shows its progress ({@link LatexdiffHost}).
+ * the pack and clean of what it produced), and the diffs of a whole run: the
+ * ones its rounds recorded, and a fresh latexdiff for a round that recorded
+ * none. The guards, the refusal wording and the outcome notices live here
+ * once; a host supplies only how a generated diff opens and how a long diff
+ * run shows its progress ({@link LatexdiffHost}).
  */
+
+// Node imports
+import * as path from 'node:path';
 
 // Third-party imports
 import { Effect } from 'effect';
@@ -32,18 +36,16 @@ import {
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
 import type { MessageHost } from '@texra/hosts/uiHosts';
-import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { runOutputFiles } from '@texra/tools/documents/runOutputs';
+import { documentsOf } from '@texra/shared/plugins/documents';
+import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
+import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 
 // Local file imports
-import { LaTeXdiffService, type LaTeXdiffResult } from '../latexdiff';
+import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
-import {
-  runLatexdiffForRun,
-  type DiffProgressReporter,
-} from './diffOperations';
+import { latexdiffPairs } from './diffOperations';
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
 type LatexdiffCommitAction = Extract<
@@ -58,6 +60,12 @@ type LatexdiffVerb<A> = Effect.Effect<
   ProcessServices | StorageFs | WorkspaceFs
 >;
 
+/** The host's progress indicator, which VS Code's `vscode.Progress`
+ *  satisfies structurally. */
+interface ProgressReporter {
+  report(value: { message?: string; increment?: number }): void;
+}
+
 /** What a host does for the latexdiff verbs. */
 export interface LatexdiffHost {
   /** Open the generated diffs, in order, for viewing. */
@@ -65,7 +73,7 @@ export interface LatexdiffHost {
   /** Run `task` under the host's progress indicator, titled `title`. */
   withProgress<A, E, R>(
     title: string,
-    task: (progress: DiffProgressReporter) => Effect.Effect<A, E, R>,
+    task: (progress: ProgressReporter) => Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E, R>;
 }
 
@@ -73,7 +81,7 @@ export interface LatexdiffHost {
 export function latexdiffVerbs(parts: {
   readonly host: LatexdiffHost;
   readonly roots: WorkspaceRoots;
-  /** The window's session: its view holds the runs' recorded outputs. */
+  /** The window's session: its view holds the runs' recorded documents. */
   readonly session: Session;
   readonly messages: Pick<
     MessageHost,
@@ -81,7 +89,6 @@ export function latexdiffVerbs(parts: {
   >;
 }) {
   const { host, roots, session, messages } = parts;
-  const service = new LaTeXdiffService(CHANNEL, roots);
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
 
   /** A notice the request does not wait on: a VS Code toast answers only
@@ -96,10 +103,11 @@ export function latexdiffVerbs(parts: {
     );
 
   /** A generated diff opens; a failed one is refused with its message. */
-  const openResult = (result: LaTeXdiffResult) =>
-    result.success
-      ? host.openDiffs([result.diffPath])
-      : Effect.fail(new Rejected({ reason: result.message }));
+  const open = <E extends Error, R>(diff: Effect.Effect<string, E, R>) =>
+    diff.pipe(
+      Effect.mapError((error) => new Rejected({ reason: error.message })),
+      Effect.flatMap((diffPath) => host.openDiffs([diffPath])),
+    );
 
   /** latexdiff over two files of the workspace. */
   const file = Effect.fn('latexdiffVerbs.file')(function* (
@@ -111,16 +119,14 @@ export function latexdiffVerbs(parts: {
         reason: 'Choose a base file and an edited file first.',
       });
     }
-    // The math markup is the executor's: it reads the setting.
-    const result = yield* service.runDiff(
-      at(baseFile),
-      at(editedFile),
-      '_diff',
-      undefined,
-      { cwd: roots.workspace },
+    yield* open(
+      latexdiff(at(baseFile), at(editedFile), {
+        roots,
+        cwd: roots.workspace,
+        suffix: '_diff',
+      }),
     );
-    yield* openResult(result);
-  });
+  }, withLogChannel(CHANNEL));
 
   /** latexdiff-vc over the base file against a commit, and the pack and
    *  clean housekeeping of what it produced. */
@@ -133,7 +139,7 @@ export function latexdiffVerbs(parts: {
       return yield* new Rejected({ reason: 'Choose a base file first.' });
     }
     if (action === 'latexdiffvc') {
-      return yield* openResult(yield* service.runDiffVc(at(baseFile), commit));
+      return yield* open(latexdiffAgainstCommit(at(baseFile), commit, roots));
     }
     const message = latexdiffPackMessage(
       yield* runPackLatexdiffvc(
@@ -143,31 +149,58 @@ export function latexdiffVerbs(parts: {
       ),
     );
     if (message) yield* notify(messages.showInfoMessage(message));
-  });
+  }, withLogChannel(CHANNEL));
 
-  /** The round-aware latexdiff of a whole run, opening every diff it
-   *  produced; a run whose every diff failed is refused. */
+  /**
+   * The latexdiffs of a whole run, opened: first each round's diffs as its
+   * `document_diff` recorded them, then for each round with outputs and no
+   * recorded diff (or a failed one), a latexdiff of the pairs it calls for. A run whose every
+   * diff failed is refused.
+   */
   const run = Effect.fn('latexdiffVerbs.run')(function* (runId: RunId) {
-    // Read once, so the notices name the markup every diff ran with.
-    const mathMarkup = yield* Settings.get<LatexdiffMathMarkupValue>(
-      roots,
-      DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
+    const documents = documentsOf(
+      session.view.current().runs.get(runId) ?? { facts: {} },
     );
-    yield* Effect.logInfo(`Running latexdiff, math markup: ${mathMarkup}`);
-    const { results } = yield* host
-      .withProgress('Running LaTeX diffs', (progress) => {
-        progress.report({ increment: 0, message: 'Preparing LaTeX diffs...' });
-        return runLatexdiffForRun({
-          runId,
-          rounds: runOutputFiles(session.view.current(), runId),
-          roots,
-          mathMarkup,
-          channel: CHANNEL,
-          progress,
-        });
-      })
-      .pipe(Effect.mapError((cause) => hostFailure('runLatexdiff', cause)));
-    if (results.length === 0) {
+    // A round whose recorded diffs all succeeded opens them; a round that
+    // recorded none, or a failed one, is diffed again.
+    const reusable = (round: number) =>
+      documents.latexdiffs[round]?.every((entry) => entry.status === 'ok') ??
+      false;
+    const recorded = roundIndexedEntries(documents.latexdiffs)
+      .filter(([round]) => reusable(round))
+      .flatMap(([, entries]) => entries);
+    const unrecorded = roundIndexedEntries(documents.files).filter(
+      ([round]) => !reusable(round),
+    );
+    const betweenRounds =
+      unrecorded.length > 0 &&
+      (yield* Settings.get<boolean>(
+        roots,
+        DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+      ).pipe(Effect.mapError((cause) => hostFailure('runLatexdiff', cause))));
+    const pairs = unrecorded.flatMap(([round, outputs]) =>
+      latexdiffPairs(
+        outputs,
+        betweenRounds ? (documents.files[round - 1] ?? []) : [],
+      ),
+    );
+    // Extraction records every output's lineage; one with no base in it is a
+    // new document, not a failure. An output whose lineage was never recorded
+    // lacks a base the run could have named: it counts as a failed diff.
+    const missingLineage = unrecorded.flatMap(([round, outputs]) =>
+      outputs
+        .filter((info) => info.lineage === null)
+        .map(
+          (info) => `${getSafeDocumentRelativePath(info.source)} (r${round})`,
+        ),
+    );
+    for (const description of missingLineage) {
+      yield* Effect.logWarning(
+        `Diff skipped (${description}): its lineage was never recorded`,
+      );
+    }
+    const total = recorded.length + pairs.length + missingLineage.length;
+    if (total === 0) {
       yield* notify(
         messages.showInfoMessage(
           'No LaTeX diff operations available for this run.',
@@ -175,27 +208,57 @@ export function latexdiffVerbs(parts: {
       );
       return;
     }
-    const diffPaths: string[] = [];
-    for (const result of results) {
-      if (result.success) diffPaths.push(result.diffPath);
-      else
-        yield* Effect.logWarning(
-          `Diff failed (${result.description}): ${result.message}`,
-        );
-    }
+
+    // Sequential: each latexdiff is a whole TeX run, narrated one at a time.
+    const diffPairs = (progress: ProgressReporter) =>
+      Effect.forEach(
+        pairs,
+        ({ revised, document, base, baseRound, suffix }) => {
+          const description =
+            baseRound === null
+              ? `${document} (r${revised.round})`
+              : `${document} (r${baseRound}→r${revised.round})`;
+          progress.report({
+            increment: 100 / pairs.length,
+            message: `Running diff for ${description}`,
+          });
+          return latexdiff(base, revised.location, {
+            roots,
+            // A diff runs in its base file's folder when no folder is open.
+            cwd: roots.workspace ?? path.dirname(base.absolutePath),
+            suffix,
+          }).pipe(
+            Effect.map((diffPath): readonly string[] => [diffPath]),
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `Diff failed (${description}): ${error.message}`,
+              ).pipe(Effect.as([])),
+            ),
+          );
+        },
+      );
+    const fresh =
+      pairs.length === 0
+        ? []
+        : yield* host.withProgress('Running LaTeX diffs', diffPairs);
+    const diffPaths = [
+      ...recorded.flatMap((entry) =>
+        entry.status === 'ok' ? [entry.diff.absolutePath] : [],
+      ),
+      ...fresh.flat(),
+    ];
+
     if (diffPaths.length === 0) {
       return yield* new Rejected({
-        reason: `All LaTeX diff operations failed (math markup: "${mathMarkup}")`,
+        reason: 'All LaTeX diff operations failed',
       });
     }
     yield* notify(
-      diffPaths.length < results.length
+      diffPaths.length < total
         ? messages.showWarningMessage(
-            `${diffPaths.length} of ${results.length} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
+            `${diffPaths.length} of ${total} LaTeX diff operations completed successfully`,
           )
-        : messages.showInfoMessage(
-            `All LaTeX diffs completed successfully (math markup: "${mathMarkup}")`,
-          ),
+        : messages.showInfoMessage('All LaTeX diffs completed successfully'),
     );
     yield* host.openDiffs(diffPaths);
   }, withLogChannel(CHANNEL));

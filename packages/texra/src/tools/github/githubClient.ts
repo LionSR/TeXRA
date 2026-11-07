@@ -71,6 +71,10 @@ type GitHubRequestError =
   | GitHubPermanentError
   | GitHubTransientError;
 
+/** Every way a {@link ghGet} can fail: a classified response, a transport
+ *  failure or timeout, or the token store's read. */
+export type GitHubFailure = GitHubRequestError | SecretsFailed;
+
 /**
  * GitHub error responses are `{ message, documentation_url, ... }` JSON
  * objects; fall back to a JSON-stringified form for any other shape.
@@ -147,11 +151,7 @@ function classifyFailure(
 export const ghGet = Effect.fn('ghGet')(function* <T>(
   path: string,
   etag?: string,
-): Effect.fn.Return<
-  ConditionalResponse<T>,
-  GitHubRequestError | SecretsFailed,
-  GitHubServices
-> {
+): Effect.fn.Return<ConditionalResponse<T>, GitHubFailure, GitHubServices> {
   const secrets = yield* Secrets;
   const token = yield* getGitHubToken(secrets);
   const headers: Record<string, string> = {

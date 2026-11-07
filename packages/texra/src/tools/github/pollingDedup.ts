@@ -11,26 +11,44 @@ interface DedupedResourceOptions<T, Id> {
   sinceCursor?: string;
 }
 
+/** A copy of `cache` with the same capacity, entries and recency order. */
+export function copyLru<
+  K extends NonNullable<unknown>,
+  V extends NonNullable<unknown>,
+>(cache: LRUCache<K, V>): LRUCache<K, V> {
+  const copy = new LRUCache<K, V>({ max: cache.max });
+  copy.load(cache.dump());
+  return copy;
+}
+
+/**
+ * The ids a comment-shaped list has delivered and the cursor it is polled
+ * from. `seed` and `diff` update it in place, so a poll applies them to the
+ * `copy` that becomes its next state, never to the state it read.
+ */
 export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
   /** LRU-capped so long-running subscriptions don't grow it unboundedly. */
-  readonly seenIds: LRUCache<Id, true>;
+  private seenIds: LRUCache<Id, true>;
   sinceCursor: string | undefined;
 
-  private readonly getId: (item: T) => Id;
-  private readonly getCursor:
-    | ((items: readonly T[]) => string | undefined)
-    | undefined;
+  private readonly options: DedupedResourceOptions<T, Id>;
 
   constructor(options: DedupedResourceOptions<T, Id>) {
-    this.getId = options.getId;
-    this.getCursor = options.getCursor;
+    this.options = options;
     this.sinceCursor = options.sinceCursor;
     this.seenIds = new LRUCache({ max: options.maxSeenIds });
   }
 
+  copy(): DedupedResource<T, Id> {
+    const next = new DedupedResource(this.options);
+    next.sinceCursor = this.sinceCursor;
+    next.seenIds = copyLru(this.seenIds);
+    return next;
+  }
+
   seed(items: readonly T[]): void {
     for (const item of items) {
-      this.seenIds.set(this.getId(item), true);
+      this.seenIds.set(this.options.getId(item), true);
     }
     this.advanceCursor(items);
   }
@@ -42,7 +60,7 @@ export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
     // catches the same id appearing twice within one fetched page).
     const newIds = new Set<Id>();
     for (const item of items) {
-      const id = this.getId(item);
+      const id = this.options.getId(item);
       if (this.seenIds.has(id) || newIds.has(id)) continue;
       newIds.add(id);
       emit(item);
@@ -52,7 +70,7 @@ export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
   }
 
   private advanceCursor(items: readonly T[]): void {
-    const newest = this.getCursor?.(items);
+    const newest = this.options.getCursor?.(items);
     if (newest) this.sinceCursor = newest;
   }
 }

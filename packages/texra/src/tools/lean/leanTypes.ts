@@ -86,19 +86,6 @@ export const LEAN_PROJECT_COMMANDS = freezeCommands({
     description: "Download Mathlib cache for current file's imports only",
     hint: 'faster',
   },
-  install_elan: {
-    group: 'Setup',
-    description: 'Install Elan (Lean version manager)',
-  },
-  install_deps: { group: 'Setup', description: 'Install Lean dependencies' },
-  update_elan: {
-    group: 'Setup',
-    description: 'Update Elan to latest version',
-  },
-  select_toolchain: {
-    group: 'Setup',
-    description: 'Select default Lean toolchain version',
-  },
 } satisfies Record<string, LeanProjectCommandSpec>);
 export type LeanProjectCommand = keyof typeof LEAN_PROJECT_COMMANDS;
 
@@ -202,16 +189,14 @@ export interface FetchDiagnosticsResult {
 }
 
 /**
- * Lean cannot serve the call: no Lake project above the file (`no-project`),
- * no usable toolchain (no `lake`/`lean` to start a server, no Lean 4
- * extension: `toolchain`, the one reason the tool answers with setup
- * guidance), or the adapter or its server stopped under the call (`stopped`,
- * a crash included).
+ * Lean cannot serve the call: no Lake project above the file, no usable
+ * toolchain (no `lake` to start a server, no Lean 4 extension), or the
+ * server stopped under the call (a crash included). The message says which,
+ * and carries the setup advice where the toolchain is the cause.
  */
 export class LeanUnavailable extends Schema.TaggedError<LeanUnavailable>()(
   'LeanUnavailable',
   {
-    reason: Schema.Literals(['no-project', 'toolchain', 'stopped']),
     message: Schema.String,
     cause: Schema.optional(Schema.Defect()),
   },

@@ -1,35 +1,37 @@
 /**
- * The direct LSP lane's core: every {@link LeanLanguageServices} operation as
- * an Effect over a `LayerMap` of {@link LeanServer}s keyed by workspace root.
+ * The {@link LeanLanguageServices} port over `lake env lean --server`, for
+ * hosts without a VS Code extension bridge (Electron desktop, CLI, the agent
+ * package): every operation as an Effect over a `LayerMap` of
+ * {@link LeanServer}s keyed by workspace root.
  *
- * The map builds a root's server on first use, memoizes it, serializes
- * concurrent first-touch requests for the same root onto one build, and
- * releases a server unused for the idle time-to-live. Each request holds a
- * lease (the map's reference count) for its duration. The pool's bookkeeping
- * is one `Ref` of root to owners and leases: every agent run that uses a
- * server owns it until its run-end hook fires; a server whose final owner
- * ended is invalidated at once, or, while a lease is in flight, when that
- * lease ends. `restart_server` invalidates and rebuilds every root (each on
- * its own, so one failure does not interrupt a sibling); a spawn that hits a
- * full file table invalidates the idle roots, waits for the ones already
- * closing, and retries once. Closing the pool's scope ends map and servers.
+ * The map builds a root's server on first use, serializes concurrent
+ * first-touch requests for the same root onto one build, and counts the
+ * references to it. A call holds one for its duration, and one more in the
+ * scope the caller provides (its run's), so a server lives while a run that
+ * used it lives or a call uses it, and stops when the last of them ends.
+ * `restart_server` stops and restarts every root (each on its own, so one
+ * failure does not interrupt a sibling); a spawn that hits a full file table
+ * stops the other servers and retries once. Closing the layer's scope ends
+ * the map and its servers. Nothing is spawned until a Lean tool is invoked.
  */
 
 import * as path from 'node:path';
 
 import {
+  Cause,
   Context,
   Deferred,
-  type Duration,
   Effect,
+  Exit,
   FileSystem,
   Layer,
   LayerMap,
-  RcMap,
-  Ref,
+  Option,
   Predicate,
+  RcMap,
   Result,
   Schema,
+  Scope,
 } from 'effect';
 
 import { ChildProcessSpawner } from 'effect/process';
@@ -39,23 +41,24 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
-import { createLeanServerRoster } from '../leanServerRegistry';
+import { LeanLanguageServices } from '../leanLanguageServices';
 import {
   LeanFileCommandFailed,
   LeanFileUnreadable,
   LeanUnavailable,
+  LspHoverSchema,
+  PlainGoalSchema,
+  PlainTermGoalSchema,
   type LeanProjectCommand,
-  type FetchDiagnosticsResult,
   type LspResult,
 } from '../leanTypes';
-import type { RunId } from '@texra-ai/harness/schemas';
-import type { LeanServerInfo } from '../leanServerRegistry';
+import type { LeanServerInfo } from '../leanServerInfo';
 
 const LOG_CHANNEL = 'lean.direct';
 
 /**
  * Lake arguments for project commands that fan out across all active servers.
- * Commands absent here (restart_server, stop_server, …) have own branches.
+ * The server commands (restart_server, stop_server) have own branches.
  */
 const LAKE_PROJECT_ARGS = {
   build: ['build'],
@@ -64,20 +67,12 @@ const LAKE_PROJECT_ARGS = {
   fetch_file_cache: ['exe', 'cache', 'get'],
 } satisfies Partial<Record<LeanProjectCommand, readonly string[]>>;
 
-/** The pool was disposed before or while this call ran. */
-export const adapterStopped = (): LeanUnavailable =>
-  new LeanUnavailable({
-    reason: 'stopped',
-    message: 'Lean adapter was stopped.',
-  });
-
 /**
  * The session errors that mean the root's server ended under the call or its
  * connection closed: a stop or a crash, never a missing toolchain. A request
  * error is the server's answer, not an end, so it is not one of them.
  */
 const SERVER_ENDED = [
-  'LeanSessionDisposed',
   'LeanSessionNotRunning',
   'JsonRpcConnectionDisposed',
 ] as const;
@@ -85,7 +80,6 @@ const SERVER_ENDED = [
 /** The root's server ended under the call: it was stopped or crashed. */
 const serverStopped = (error: Error): LeanUnavailable =>
   new LeanUnavailable({
-    reason: 'stopped',
     message: `The Lean server stopped: ${error.message}`,
     cause: error,
   });
@@ -93,8 +87,7 @@ const serverStopped = (error: Error): LeanUnavailable =>
 /** No `lake env lean --server` could be started for the root. */
 const noToolchain = (error: LeanStartError): LeanUnavailable =>
   new LeanUnavailable({
-    reason: 'toolchain',
-    message: error.message,
+    message: `${error.message}\n\nInstall elan so that \`lake\` is on PATH (https://leanprover-community.github.io/install/).`,
     cause: error,
   });
 
@@ -106,221 +99,113 @@ class LeanProjectCommandError extends Schema.TaggedError<LeanProjectCommandError
   },
 ) {}
 
-export interface LeanServerPoolOptions {
-  readonly lakeCommand: string;
-  /** Release a server unused for this long; `Duration.infinity` never does. */
-  readonly idleTimeToLive: Duration.Duration;
+/** A root the map holds, with its server's start once it has finished. */
+interface HeldRoot {
+  readonly root: string;
+  /** Absent while the server starts. */
+  readonly start?: Exit.Exit<Context.Context<LeanServer>, LeanStartError>;
 }
 
-interface RootEntry {
-  /** Set once the root's server has been leased; absent while it starts. */
-  readonly server?: LeanServer['Service'];
-  /** Runs that used this shared server and have not reached run end yet. */
-  readonly owners: ReadonlySet<RunId>;
-  readonly leases: number;
-  /** Final owner ended while a request was still leased. */
-  readonly stopWhenIdle: boolean;
-}
+/** The started server of `held`, if its start succeeded. */
+const startedServer = ({ start }: HeldRoot) =>
+  start && Exit.isSuccess(start)
+    ? Context.get(start.value, LeanServer)
+    : undefined;
 
-const EMPTY_ENTRY: RootEntry = {
-  owners: new Set(),
-  leases: 0,
-  stopWhenIdle: false,
-};
+/**
+ * The port over servers spawned with `lakeCommand` (`lake`, or a test's
+ * stand-in). The process runtime builds it once, over the process's
+ * `ChildProcessSpawner` and `FileSystem`.
+ */
+export const directLeanLanguageServices = (
+  lakeCommand: string,
+): Layer.Layer<
+  LeanLanguageServices,
+  never,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
+> => Layer.effect(LeanLanguageServices)(make(lakeCommand));
 
-export class LeanServerPool extends Context.Service<
-  LeanServerPool,
-  {
-    readonly fetchDiagnosticsForFile: (
-      file: string,
-      runId: RunId | undefined,
-    ) => Effect.Effect<
-      FetchDiagnosticsResult,
-      LeanUnavailable | LeanFileUnreadable
-    >;
-    readonly executeFileCommand: (
-      filePath: string,
-      runId: RunId | undefined,
-    ) => Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable>;
-    readonly executeProjectCommand: (
-      command: LeanProjectCommand,
-      runId: RunId | undefined,
-    ) => Effect.Effect<
-      void,
-      LeanProjectCommandError | LeanStartError | LeanUnavailable
-    >;
-    /** `reply` decodes Lean's non-null answer; a mismatch is the result's error. */
-    readonly positionRequest: <T>(
-      filePath: string,
-      line: number,
-      column: number,
-      method: string,
-      reply: Schema.Codec<T, unknown>,
-      runId: RunId | undefined,
-    ) => Effect.Effect<LspResult<T>>;
-    /** See {@link LeanLanguageServices.stopSessionsForRun}. */
-    readonly stopSessionsForRun: (runId: RunId) => Effect.Effect<void>;
-    /** See {@link LeanLanguageServices.listServers}. */
-    readonly listServers: () => readonly LeanServerInfo[];
-  }
->()('@texra/lean/LeanServerPool') {
-  static readonly layer = (
-    options: LeanServerPoolOptions,
-  ): Layer.Layer<
-    LeanServerPool,
-    never,
-    ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
-  > => Layer.effect(LeanServerPool)(make(options));
-}
-
-const make = Effect.fn('LeanServerPool.make')(function* ({
-  lakeCommand,
-  idleTimeToLive,
-}: LeanServerPoolOptions) {
+const make = Effect.fn('LeanServerPool.make')(function* (lakeCommand: string) {
   const fs = yield* FileSystem.FileSystem;
-  // This pool's own roster, so the dashboard's list ends when the pool does.
-  const roster = createLeanServerRoster();
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const servers = yield* LayerMap.make(
-    (root: string) =>
-      LeanServer.layer({ workspaceRoot: root, lakeCommand, roster }),
-    { idleTimeToLive },
+  // No idle time-to-live: a server stops as soon as its last reference ends.
+  const servers = yield* LayerMap.make((root: string) =>
+    LeanServer.layer({ workspaceRoot: root, lakeCommand }),
   );
-  const entries = yield* Ref.make<ReadonlyMap<string, RootEntry>>(new Map());
-  const stopped = yield* Ref.make(false);
-  // Registered after the map, so it runs before the map closes: a call that
-  // lands during disposal fails as stopped rather than as interrupted.
-  yield* Effect.addFinalizer(() => Ref.set(stopped, true));
 
-  const updateEntry = (root: string, f: (entry: RootEntry) => RootEntry) =>
-    Ref.update(entries, (map) =>
-      new Map(map).set(root, f(map.get(root) ?? EMPTY_ENTRY)),
-    );
-
-  /**
-   * Roots whose server is live or still starting, dropping closed and
-   * never-started ones. The prune removes exactly the entries this scan saw
-   * closed, unchanged since: a root another fiber leased while the scan
-   * yielded holds a new entry, and erasing it would lose that lease and owner.
-   */
-  const liveEntries = Effect.gen(function* () {
-    const live = new Map<string, RootEntry>();
-    const closed = new Map<string, RootEntry>();
-    for (const [root, entry] of yield* Ref.get(entries)) {
-      const gone = entry.server
-        ? yield* Deferred.isDone(entry.server.closed)
-        : entry.leases === 0;
-      if (gone) closed.set(root, entry);
-      else live.set(root, entry);
-    }
-    if (closed.size > 0) {
-      yield* Ref.update(
-        entries,
-        (map) =>
-          new Map(
-            [...map].filter(([root, entry]) => closed.get(root) !== entry),
+  /** Every root the map holds now, read off the map itself. */
+  const heldRoots = Effect.suspend(() => {
+    const { state } = servers.rcMap;
+    if (state._tag === 'Closed') return Effect.succeed([]);
+    return Effect.forEach(
+      [...state.map],
+      ([root, entry]): Effect.Effect<HeldRoot> =>
+        Deferred.poll(entry.deferred).pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.succeed({ root }),
+              onSome: (start) =>
+                Effect.map(Effect.exit(start), (exit) => ({
+                  root,
+                  start: exit,
+                })),
+            }),
           ),
-      );
-    }
-    return live;
-  });
-
-  /**
-   * Stop currently-idle other roots after EMFILE/ENFILE, then return so the
-   * caller can retry the spawn, waiting first for servers already closing so
-   * their descriptors are gone. Not for busy ones: position RPCs have no
-   * timeout, so one hung hover/goal would stall the start.
-   */
-  const evictOthersForExhausted = Effect.fn(
-    'LeanServerPool.evictOthersForExhausted',
-  )(function* (exceptRoot: string) {
-    const live = yield* liveEntries;
-    yield* Effect.forEach(
-      [...live].flatMap(([root, { leases, server }]) =>
-        root !== exceptRoot && leases === 0 && server ? [{ root, server }] : [],
-      ),
-      ({ root, server }) =>
-        servers
-          .invalidate(root)
-          .pipe(Effect.andThen(Deferred.await(server.closed))),
-      { concurrency: 'unbounded', discard: true },
+        ),
     );
   });
 
-  /** The root's server, built on first use, in the caller's scope. */
+  /** Drop the root from the map and stop its server now, if it started. */
+  const stop = (held: HeldRoot) =>
+    servers
+      .invalidate(held.root)
+      .pipe(Effect.andThen(startedServer(held)?.shutdown ?? Effect.void));
+
+  /** The root's server, built on first use, held in the caller's scope. */
   const serverFor = (root: string) =>
     servers.contextEffect(root).pipe(
       Effect.map((context) => Context.get(context, LeanServer)),
-      // A failed build stays cached for the idle time otherwise.
+      // A failed build stays in the map otherwise.
       Effect.tapError(() => servers.invalidate(root)),
     );
 
+  /**
+   * The root's server. A spawn that finds the file table full stops the
+   * other started servers, whose descriptors that frees, and retries once.
+   */
   const acquire = Effect.fn('LeanServerPool.acquire')(function* (root: string) {
-    if (yield* Ref.get(stopped)) return yield* adapterStopped();
-    // A server the map dropped but whose scope is still closing keeps the
-    // root reserved: its replacement spawns once the descriptors are back.
-    const previous = (yield* Ref.get(entries)).get(root)?.server;
-    if (previous && !(yield* RcMap.has(servers.rcMap, root))) {
-      yield* Deferred.await(previous.closed);
-    }
     return yield* serverFor(root).pipe(
       Effect.catchIf(
         (error) => isFileTableExhausted(error),
         Effect.fnUntraced(function* (error) {
-          const others = [...(yield* liveEntries).keys()].some(
-            (other) => other !== root,
+          const others = (yield* heldRoots).filter(
+            (held) => held.root !== root && startedServer(held),
           );
-          if (!others) return yield* Effect.fail(error);
+          if (others.length === 0) return yield* Effect.fail(error);
           yield* Effect.logWarning(
             `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
           ).pipe(withLogChannel(LOG_CHANNEL));
-          yield* evictOthersForExhausted(root);
+          yield* Effect.forEach(others, stop, {
+            concurrency: 'unbounded',
+            discard: true,
+          });
           return yield* serverFor(root);
         }),
       ),
     );
   });
 
-  const release = Effect.fn('LeanServerPool.release')(function* (root: string) {
-    const entry = yield* Ref.modify(entries, (map) => {
-      const current = map.get(root);
-      if (!current) return [undefined, map] as const;
-      const next = { ...current, leases: Math.max(0, current.leases - 1) };
-      return [next, new Map(map).set(root, next)] as const;
-    });
-    if (entry && entry.leases === 0 && entry.stopWhenIdle) {
-      yield* servers.invalidate(root);
-    }
-  });
-
   /**
-   * Lease the root's server for the caller's scope. The owner is recorded
-   * before the readiness wait so a run end that lands meanwhile sees it; a new
-   * owner supersedes a deferred stop. Uninterruptible where the lease count
-   * and its release are paired, so neither is left unmatched.
+   * The root's server, held for the caller's scope and, once started, in
+   * `owner` too. `owner`'s reference is taken only after the start, so a
+   * failed start is released with the call.
    */
   const lease = Effect.fn('LeanServerPool.lease')(function* (
     root: string,
-    runId: RunId | undefined,
+    owner: Scope.Scope,
   ) {
-    yield* Effect.uninterruptible(
-      Effect.gen(function* () {
-        yield* updateEntry(root, (entry) => {
-          const newOwner = runId !== undefined && !entry.owners.has(runId);
-          return {
-            ...entry,
-            owners: newOwner ? new Set(entry.owners).add(runId) : entry.owners,
-            leases: entry.leases + 1,
-            stopWhenIdle: newOwner ? false : entry.stopWhenIdle,
-          };
-        });
-        yield* Effect.addFinalizer(() => release(root));
-      }),
-    );
     const server = yield* acquire(root);
-    yield* updateEntry(root, (entry) =>
-      entry.server === server ? entry : { ...entry, server },
-    );
+    yield* RcMap.getOption(servers.rcMap, root).pipe(Scope.provide(owner));
     return server;
   });
 
@@ -331,7 +216,6 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     const root = yield* resolveWorkspaceRoot(fs, absolute);
     if (!root) {
       return yield* new LeanUnavailable({
-        reason: 'no-project',
         message: `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
       });
     }
@@ -340,75 +224,17 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   const withServer = <A, E>(
     filePath: string,
-    runId: RunId | undefined,
     use: (server: LeanServer['Service']) => Effect.Effect<A, E>,
   ) =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const root = yield* requireRoot(filePath);
-        const server = yield* lease(root, runId);
-        return yield* use(server);
-      }),
-    );
-
-  const stop = (root: string, entry: RootEntry) =>
-    servers
-      .invalidate(root)
-      .pipe(Effect.andThen(entry.server?.shutdown ?? Effect.void));
-
-  /**
-   * Run-end hook: release the ended run's ownership of every server it used.
-   * A shared server survives while another run still owns it. If the final
-   * owner ends during an in-flight request, the stop waits for the final
-   * lease. Servers started outside any run use the idle time-to-live.
-   */
-  const stopSessionsForRun = Effect.fn('LeanServerPool.stopSessionsForRun')(
-    function* (runId: RunId) {
-      const live = yield* liveEntries;
-      const roots: string[] = [];
-      for (const root of live.keys()) {
-        // Decided inside the update, not from the scan's copy: a lease taken
-        // meanwhile keeps its server alive rather than be invalidated as idle.
-        const stopNow = yield* Ref.modify(entries, (map) => {
-          const current = map.get(root);
-          if (!current?.owners.has(runId)) return [false, map] as const;
-          const owners = new Set(current.owners);
-          owners.delete(runId);
-          const next: RootEntry = {
-            ...current,
-            owners,
-            stopWhenIdle:
-              owners.size === 0 && current.leases > 0
-                ? true
-                : current.stopWhenIdle,
-          };
-          return [
-            owners.size === 0 && current.leases === 0,
-            new Map(map).set(root, next),
-          ] as const;
-        });
-        if (stopNow) roots.push(root);
-      }
-      yield* Effect.forEach(roots, (root) => servers.invalidate(root), {
-        concurrency: 'unbounded',
-        discard: true,
-      });
-    },
-  );
-
-  const restart = Effect.fn('LeanServerPool.restart')(function* (
-    root: string,
-    entry: RootEntry,
-    runId: RunId | undefined,
-  ) {
-    yield* stop(root, entry);
-    if (entry.server) yield* Deferred.await(entry.server.closed);
-    yield* Effect.scoped(lease(root, runId));
-  });
+    Effect.gen(function* () {
+      const owner = yield* Scope.Scope;
+      const root = yield* requireRoot(filePath);
+      return yield* Effect.scoped(Effect.flatMap(lease(root, owner), use));
+    });
 
   const runLake = Effect.fn('LeanServerPool.runLake')(function* (
     roots: ReadonlyArray<string>,
-    runId: RunId | undefined,
+    owner: Scope.Scope,
     args: readonly string[],
   ) {
     if (roots.length === 0) {
@@ -421,7 +247,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       roots,
       (root) =>
         Effect.scoped(
-          lease(root, runId).pipe(
+          lease(root, owner).pipe(
             Effect.andThen(
               runLakeCommand({
                 workspaceRoot: root,
@@ -450,12 +276,16 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   const executeProjectCommand = Effect.fn(
     'LeanServerPool.executeProjectCommand',
-  )(function* (command: LeanProjectCommand, runId: RunId | undefined) {
-    // Project commands aren't tied to a file: they apply to every live root.
-    const live = yield* liveEntries;
+  )(function* (command: LeanProjectCommand) {
+    const owner = yield* Scope.Scope;
+    // Project commands aren't tied to a file: they apply to every root whose
+    // server is starting or started.
+    const live = (yield* heldRoots).filter(
+      (held) => !held.start || Exit.isSuccess(held.start),
+    );
     switch (command) {
       case 'restart_server': {
-        if (live.size === 0) {
+        if (live.length === 0) {
           return yield* new LeanProjectCommandError({
             message: 'No Lean server running to restart.',
           });
@@ -464,7 +294,12 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
         // interrupt a sibling's. The first failure is reported once all finish.
         const restarts = yield* Effect.forEach(
           live,
-          ([root, entry]) => Effect.result(restart(root, entry, runId)),
+          (held) =>
+            Effect.result(
+              stop(held).pipe(
+                Effect.andThen(Effect.scoped(lease(held.root, owner))),
+              ),
+            ),
           { concurrency: 'unbounded' },
         );
         const failed = restarts.find(Result.isFailure);
@@ -472,7 +307,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
         return;
       }
       case 'stop_server':
-        yield* Effect.forEach(live, ([root, entry]) => stop(root, entry), {
+        yield* Effect.forEach(live, stop, {
           concurrency: 'unbounded',
           discard: true,
         });
@@ -484,26 +319,17 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       case 'clean':
       case 'fetch_cache':
       case 'fetch_file_cache':
-        yield* runLake([...live.keys()], runId, LAKE_PROJECT_ARGS[command]);
+        yield* runLake(
+          live.map((held) => held.root),
+          owner,
+          LAKE_PROJECT_ARGS[command],
+        );
         return;
-      case 'install_elan':
-      case 'install_deps':
-      case 'update_elan':
-      case 'select_toolchain':
-        return yield* new LeanProjectCommandError({
-          message:
-            `Command "${command}" is only available inside VS Code with the leanprover.lean4 extension. ` +
-            'In CLI/desktop builds, run the matching shell command directly (see https://leanprover-community.github.io/install/linux.html).',
-        });
     }
   });
 
-  const fetchDiagnosticsForFile = Effect.fn(
-    'LeanServerPool.fetchDiagnosticsForFile',
-  )(function* (file: string, runId: RunId | undefined) {
-    return yield* withServer(file, runId, (server) =>
-      server.diagnostics(file),
-    ).pipe(
+  const fetchDiagnosticsForFile = (file: string) =>
+    withServer(file, (server) => server.diagnostics(file)).pipe(
       Effect.catchTag(SERVER_ENDED, (error) =>
         Effect.fail(serverStopped(error)),
       ),
@@ -526,71 +352,106 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
           `fetchDiagnosticsForFile: no diagnostics for ${file}: ${error.message}`,
         ).pipe(withLogChannel(LOG_CHANNEL)),
       ),
+      Effect.withSpan('LeanServerPool.fetchDiagnosticsForFile'),
     );
-  });
 
-  const executeFileCommand = Effect.fn('LeanServerPool.executeFileCommand')(
-    function* (filePath: string, runId: RunId | undefined) {
-      // Both file commands have the same effect from our point of view: drop
-      // the cached open state and re-open with fresh contents.
-      return yield* withServer(filePath, runId, (server) =>
-        server.restartFile(filePath),
-      ).pipe(
-        Effect.catchTag(SERVER_ENDED, (error) =>
-          Effect.fail(serverStopped(error)),
-        ),
-        Effect.catchTag('LeanStartError', (error) =>
-          Effect.fail(noToolchain(error)),
-        ),
-        Effect.catchTag(
-          ['LeanFileUnreadable', 'PlatformError', 'JsonRpcRequestError'],
-          (error) =>
-            Effect.fail(
-              new LeanFileCommandFailed({
-                message: error.message,
-                cause: error,
-              }),
-            ),
-        ),
-      );
-    },
+  // Both file commands have the same effect from our point of view: drop
+  // the cached open state and re-open with fresh contents.
+  const executeFileCommand = (filePath: string) =>
+    withServer(filePath, (server) => server.restartFile(filePath)).pipe(
+      Effect.catchTag(SERVER_ENDED, (error) =>
+        Effect.fail(serverStopped(error)),
+      ),
+      Effect.catchTag('LeanStartError', (error) =>
+        Effect.fail(noToolchain(error)),
+      ),
+      Effect.catchTag(
+        ['LeanFileUnreadable', 'PlatformError', 'JsonRpcRequestError'],
+        (error) =>
+          Effect.fail(
+            new LeanFileCommandFailed({
+              message: error.message,
+              cause: error,
+            }),
+          ),
+      ),
+      Effect.withSpan('LeanServerPool.executeFileCommand'),
+    );
+
+  /** `reply` decodes Lean's non-null answer; a mismatch is the result's error. */
+  const positionRequest = <T>(
+    filePath: string,
+    line: number,
+    column: number,
+    method: string,
+    reply: Schema.Codec<T, unknown>,
+  ) =>
+    withServer(filePath, (server) =>
+      server.requestSettled(filePath, line, column, method),
+    ).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(reply))),
+      Effect.map((data): LspResult<T> =>
+        data
+          ? { data }
+          : { data: null, error: 'Lean returned no data for this position.' },
+      ),
+      Effect.catch((error) =>
+        Effect.succeed<LspResult<T>>({
+          data: null,
+          error: toErrorMessage(error),
+        }),
+      ),
+      Effect.withSpan('LeanServerPool.positionRequest', {
+        attributes: { method },
+      }),
+    );
+
+  const listServers = Effect.flatMap(heldRoots, (held) =>
+    Effect.forEach(held, ({ root, start }): Effect.Effect<LeanServerInfo> => {
+      const base = { workspaceRoot: root, mode: 'direct-lsp' } as const;
+      if (!start) return Effect.succeed({ ...base, status: 'starting' });
+      return Exit.isSuccess(start)
+        ? Context.get(start.value, LeanServer).info
+        : Effect.succeed({
+            ...base,
+            status: 'error',
+            errorMessage: Option.match(Cause.findErrorOption(start.cause), {
+              onNone: () => 'The Lean server failed to start.',
+              onSome: (error) => error.message,
+            }),
+          });
+    }),
   );
 
-  const positionRequest = Effect.fn('LeanServerPool.positionRequest')(
-    function* <T>(
-      filePath: string,
-      line: number,
-      column: number,
-      method: string,
-      reply: Schema.Codec<T, unknown>,
-      runId: RunId | undefined,
-    ) {
-      return yield* withServer(filePath, runId, (server) =>
-        server.requestSettled(filePath, line, column, method),
-      ).pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(reply))),
-        Effect.map((data): LspResult<T> =>
-          data
-            ? { data }
-            : { data: null, error: 'Lean returned no data for this position.' },
-        ),
-        Effect.catch((error) =>
-          Effect.succeed<LspResult<T>>({
-            data: null,
-            error: toErrorMessage(error),
-          }),
-        ),
-      );
-    },
-  );
-
-  return LeanServerPool.of({
+  return LeanLanguageServices.of({
+    listServers,
     fetchDiagnosticsForFile,
-    executeFileCommand,
+    executeFileCommand: (_command, filePath) => executeFileCommand(filePath),
     executeProjectCommand,
-    positionRequest,
-    stopSessionsForRun,
-    listServers: () => roster.list(),
+    getGoalState: (filePath, line, column) =>
+      positionRequest(
+        filePath,
+        line,
+        column,
+        '$/lean/plainGoal',
+        PlainGoalSchema,
+      ),
+    getTermGoal: (filePath, line, column) =>
+      positionRequest(
+        filePath,
+        line,
+        column,
+        '$/lean/plainTermGoal',
+        PlainTermGoalSchema,
+      ),
+    getHoverInfo: (filePath, line, column) =>
+      positionRequest(
+        filePath,
+        line,
+        column,
+        'textDocument/hover',
+        LspHoverSchema,
+      ),
   });
 });
 
