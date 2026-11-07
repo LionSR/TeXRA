@@ -14,6 +14,7 @@ import {
   type RunToolCall,
 } from '@agent/runtime/RunCall';
 import {
+  BACKGROUND_OUTPUT_HEAD_CHARS,
   BACKGROUND_OUTPUT_TAIL_CHARS,
   formatBashDelivery,
   formatBashError,
@@ -52,33 +53,62 @@ const SHELL_BACKGROUNDING_MESSAGE =
  * A foreground stream's first and last characters, kept as it arrives so a
  * long command needs no buffer of its whole output, and the text they show:
  * the whole stream when the two windows cover it, else both ends around a
- * note of how much was left out. Whitespace is trimmed once, from that text;
- * `null` when nothing but whitespace arrived.
+ * note of how much was left out; `null` when nothing but whitespace arrived.
+ * Whitespace at either end of the stream takes no room in either window:
+ * leading whitespace is dropped, and trailing whitespace waits until
+ * something else follows it.
  */
 function boundedOutput(streamName: 'stdout' | 'stderr') {
   let head = '';
   let tail = '';
   let totalChars = 0;
+  // The whitespace after the last other character, as each window would
+  // take it, and its length.
+  let pendingHead = '';
+  let pendingTail = '';
+  let pendingChars = 0;
+  const add = (headText: string, tailText: string, chars: number): void => {
+    // The head grows only while it holds everything seen: a cut can stop
+    // it one short of its budget (before a split surrogate pair), and a
+    // later chunk appended after that cut would not follow it.
+    if (head.length === totalChars)
+      head = appendHead(head, headText, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
+    totalChars += chars;
+    tail = appendTail(tail, tailText, TOOL_RESULT_TRUNCATION_TAIL_CHARS);
+  };
   return {
     append(chunk: string): void {
-      // The head grows only while it holds everything seen: a cut can stop
-      // it one short of its budget (before a split surrogate pair), and a
-      // later chunk appended after that cut would not follow it.
-      if (head.length === totalChars)
-        head = appendHead(head, chunk, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
-      totalChars += chunk.length;
-      tail = appendTail(tail, chunk, TOOL_RESULT_TRUNCATION_TAIL_CHARS);
+      const text = totalChars === 0 ? chunk.trimStart() : chunk;
+      const content = text.trimEnd();
+      if (content) {
+        if (pendingChars > 0) add(pendingHead, pendingTail, pendingChars);
+        add(content, content, content.length);
+        pendingHead = '';
+        pendingTail = '';
+        pendingChars = 0;
+      }
+      const trailing = text.slice(content.length);
+      pendingChars += trailing.length;
+      pendingHead = appendHead(
+        pendingHead,
+        trailing,
+        TOOL_RESULT_TRUNCATION_HEAD_CHARS,
+      );
+      pendingTail = appendTail(
+        pendingTail,
+        trailing,
+        TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+      );
     },
     text(): string | null {
+      if (totalChars === 0) return null;
       const elidedChars = totalChars - head.length - tail.length;
-      let text = tail;
-      if (elidedChars > 0) {
-        text = `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]\n\n${tail}`;
-      } else if (totalChars > tail.length) {
-        // The windows overlap: the head, then the part of the tail after it.
-        text = head + appendTail('', tail, totalChars - head.length);
-      }
-      return text.trim() || null;
+      if (elidedChars > 0)
+        return `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]\n\n${tail}`;
+      // The windows overlap: the head, then the part of the tail after it.
+      if (totalChars > tail.length)
+        return head + appendTail('', tail, totalChars - head.length);
+      return tail;
     },
   };
 }
@@ -129,8 +159,10 @@ function backgroundBashTurn(params: {
   const { runId, call, logger, log } = params;
   const { command } = call;
   // Each stream's output becomes rows as it arrives, up to the cap on both
-  // streams together. Past it, what a stream sends is held as a rolling
-  // tail (its `elided` characters are the rest), and the tails become the
+  // streams together. Past it, a stream still records its first characters
+  // up to the delivery's head budget, so its head survives the other
+  // stream's volume; the rest it sends is held as a rolling tail (its
+  // `elided` characters are what the tail let go), and the tails become the
   // log's last rows when the command ends, however it ends.
   const streams = {
     stdout: { recorded: 0, elided: 0, tail: '' },
@@ -151,11 +183,27 @@ function backgroundBashTurn(params: {
     if (!capReached) {
       capReached = true;
       logger.warn(
-        `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: the last ${BACKGROUND_OUTPUT_TAIL_CHARS.toLocaleString()} characters of each stream are recorded when the command ends]`,
+        `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: each stream's first ${BACKGROUND_OUTPUT_HEAD_CHARS.toLocaleString()} characters are still recorded, and its last ${BACKGROUND_OUTPUT_TAIL_CHARS.toLocaleString()} when the command ends]`,
       );
     }
-    const tail = appendTail(held.tail, chunk, BACKGROUND_OUTPUT_TAIL_CHARS);
-    held.elided += held.tail.length + chunk.length - tail.length;
+    // A stream that has begun its tail records nothing more, so its rows
+    // stay its first characters, then its tail.
+    const head =
+      held.tail === ''
+        ? appendHead(
+            '',
+            chunk,
+            Math.max(0, BACKGROUND_OUTPUT_HEAD_CHARS - held.recorded),
+          )
+        : '';
+    if (head) {
+      held.recorded += head.length;
+      logger.output(stream, head);
+    }
+    const rest = chunk.slice(head.length);
+    if (!rest) return;
+    const tail = appendTail(held.tail, rest, BACKGROUND_OUTPUT_TAIL_CHARS);
+    held.elided += held.tail.length + rest.length - tail.length;
     held.tail = tail;
   };
   const recordTails = (): void => {

@@ -33,7 +33,7 @@ export const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
  * "[... N characters elided ...]" note) so the model doesn't mistake the
  * excerpt for the complete stream.
  */
-const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
+export const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
 
 /** The call a background command came from: what it runs, and the
  *  model's short description of it, which names it in the transcript. */
