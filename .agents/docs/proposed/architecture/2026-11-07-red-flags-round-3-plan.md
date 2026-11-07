@@ -216,3 +216,92 @@ messages); U7 to R3-E (the provider copies, the network-failure regex) and
 R3-B (the log-severity sinks, `HostFrameSchema`, `DECLINE_RANK`). An owner
 who drops one records why in its PR body. The rules of the round-2 note's "What every owner follows" apply
 unchanged.
+
+## 4. The lens audits and the catalogue
+
+The area audits searched one list of red flags. Six whole-repo lens audits
+(`.agents/docs/evidence/2026-11-07-design-red-flags-lenses/`) searched the
+flags no area audit had: pass-through variables (PT), interface comments
+(IC), names (NM), nonobvious code (NC), temporal decomposition and conjoined
+code (TC), and general versus special purpose (GS). A catalogue
+(`catalogue.md`) tags all 208 distinct findings of rounds 1 to 3 with
+Ousterhout's flags and their status. On 2026-11-07 the counts were:
+
+- 83 landed;
+- 118 assigned;
+- 5 refused;
+- 19 open with no owner;
+- of those 19, 3 held by the owner with #14773.
+
+The flags that cluster in one package point to one cause each:
+
+| Package                           | Cluster                                       | Cause                                           |
+| --------------------------------- | --------------------------------------------- | ----------------------------------------------- |
+| harness                           | pass-through variable, temporal decomposition | the lifecycle split across files by time        |
+| cli                               | reinvented primitive                          | the exit held in no Effect value                |
+| desktop                           | reinvented primitive                          | no `Scope` per window                           |
+| llm                               | repetition                                    | each provider restating the route decision      |
+| prompts, hosts, tooling and tests | information leakage                           | facts hand-copied into files no compiler checks |
+
+### 4.1 Unknown unknowns the lenses found
+
+| Id  | What is wrong                                                                                                                                                                                       | Owner    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| NC1 | Text replacement runs in object-key order: 318 of the 2,535 default rules can never produce their output. Sorted longest key first, none is shadowed.                                               | C (R3-T) |
+| NC5 | `submit_output` accepts once per activation, though it says once per run, so a run behaves differently live and after a resume.                                                                     | E        |
+| PT1 | A launch's API keys ride on the run record that every plugin tool can see. `wakeRun` resumes a run with no keys; check whether a service run started with a client's keys then fails.               | E        |
+| IC  | 32 false comments in source and 2 in guidance, among them the public tool error contract, a deadline #14772 removed, two "only writer" claims, and eight comments that cite checks that do not run. | F        |
+
+### 4.2 By owner
+
+Each owner adds these to the round-3 PR it already has (section 3); none needs
+a new PR.
+
+- **A (R3-A):**
+  - PT3: `CliContext` as a service, not a parameter 30 functions only forward.
+  - NM3: `RunPosition` names two types.
+  - NM5: the four names for a pending request, with U1.
+  - Q5: A's alone.
+  - V-R5 and V-R22: A's alone.
+  - K11: the headless result built three times; `runtime/` as one directory.
+- **B (R3-B, and R18's PR):**
+  - GS2: the dialog ports reduced to three members.
+  - GS3: the settings view asks what the editor can do, not which host it is.
+  - GS5: one `select` for the workspace agents.
+  - GS6: a per-kind pane table.
+  - TC1: one PDF display operation.
+  - TC2: the progress view built in its owner's scope.
+  - NC7: the viewer opens when the build finishes.
+  - PT4: log channels through the fiber's annotation.
+  - Q4: B's alone, with J2.
+  - J8, J10 (lands with T7), J-b, J9's rest, N11's rest, G11, U7 (d, e).
+- **C (R3-T):**
+  - NC1.
+  - NC6: GitHub bodies decoded with their schemas.
+  - PT5: the Zotero port read where it is used.
+  - I12's rest, H11's rest.
+  - I2's `diffBaseOf` and I4's recipe half.
+  - NM4: "task" and "workflow".
+- **D (R3-R):**
+  - E11's test half, if R2 reaches `callRequests` first.
+- **E (R3-E, R3-E2, R3-Q):**
+  - NC5, PT1.
+  - PT2: `Sessions` yields `AgentCatalog` once.
+  - PT6.
+  - GS1: a tool declares its card; `tool.start` changes, so it goes in R3-E2.
+  - GS4: no "outside any run" tool context.
+  - TC3, TC4, TC5, TC6: the attempt, background compaction, the launch trace, the upload cache.
+  - NC2, NC3, NC4.
+  - NM2: `SessionEvent` as `SessionRow`, in R3-Q.
+  - NM6.
+  - E11, C11, O9, M11.
+  - S7: E's alone, in R3-Q.
+  - E5 with Q2: one owner for the tool context type.
+- **F:**
+  - IC: one PR for the false comments.
+  - The three refusals with no record: M2, E10 and I8's two parts.
+  - NM7, the basename pairs, and NM8, the project folder's spellings, once the packages touching those files have landed.
+
+NM1 ("settle" for eight things) and the banned-word counts (NM9) are not a
+mass rename. Each owner renames what it touches, as root `AGENTS.md`
+"Terminology" asks.
