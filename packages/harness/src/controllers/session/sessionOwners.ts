@@ -140,7 +140,7 @@ export const sessionOwnersLayer = (
       );
       // The store: the session's one publisher, and its doors past the log.
       const store = yield* makeSessionStore(roots.storage);
-      const collectDeletions = yield* deletionCollector(
+      const deletions = yield* deletionCollector(
         yield* Database,
         roots.storage,
       );
@@ -193,15 +193,14 @@ export const sessionOwnersLayer = (
           permission: sessionPermission(approvals, interactions),
         }),
       );
-      // The requests, over the store's removal door and the deletion pass.
+      // The requests, over the store's removal door.
       const database = yield* Database;
       const requests = sessionRequests({
         sessionLog: log,
         view,
         log: {
           aggregateState: database.aggregateState,
-          removeRun: (id, start) =>
-            Effect.tap(store.removeRun(id, start), () => collectDeletions),
+          removeRun: store.removeRun,
         },
         plugins: yield* ToolRegistry,
         services: yield* Effect.context<RunServices>(),
@@ -264,9 +263,13 @@ export const sessionOwnersLayer = (
       // and the dependency probes, held for its life and probed beside the
       // open (the gate withholds nothing until they answer).
       const plugins = yield* ToolRegistry;
-      // The local half of a committed removal; its plugin rows go with it.
+      // The local half of a committed removal (its plugin rows go with it)
+      // and its collection.
       yield* store
-        .deliver((runId) => inbox.forget(runId))
+        .deliver((runId, marker) => {
+          inbox.forget(runId);
+          deletions.removed(marker);
+        })
         .pipe(Scope.provide(consumers));
       // The registry's phase notification rides the fold-gated tail: its
       // waiters read `RunView.status` once the view holds a row's state.
@@ -296,7 +299,7 @@ export const sessionOwnersLayer = (
         Effect.forkIn(consumers),
       );
       yield* sweepLeftoverRuns.pipe(Effect.provide(session), Effect.forkScoped);
-      yield* collectDeletions;
+      yield* Effect.forkScoped(deletions.pending);
       yield* (yield* ToolAvailability).hold(roots);
       return session;
     }),

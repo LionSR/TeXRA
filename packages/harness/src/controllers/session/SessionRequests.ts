@@ -33,7 +33,6 @@ import {
   qualifyAggregateId,
   blocksCaller,
   readToolEditContent,
-  type CommitOrdinal,
   type RunAction,
   type RunId,
 } from '@shared/schemas';
@@ -370,27 +369,9 @@ export function sessionRequests(
     );
   });
 
-  const removeRun = Effect.fn('SessionRequests.removeRun')(function* (
-    runId: RunId,
-    expectedStartCommit: CommitOrdinal,
-  ) {
-    // Listing-driven removal (a history delete, the leftover-shell sweep)
-    // acts through the registry's inactive-run step, which refuses a run a
-    // launch here holds; `actions` is not consulted.
-    const admitted = yield* admit(deps, { kind: 'run.delete', runId });
-    if (admitted.startCommit !== expectedStartCommit) {
-      return yield* new Unavailable({
-        runId,
-        reason: `The ${runNoun(deps.view, runId)} changed after it was listed.`,
-      });
-    }
-    const runs = registryOf(yield* Runs);
-    yield* deleteAdmittedRun(deps, runId, admitted, runs);
-  });
-
   // cast: each case of `handle` answers with its own kind's outcome.
   const perKind = request as SessionRequestsShape['request'];
-  return { request: perKind, removeRun };
+  return { request: perKind };
 }
 
 /** A decision for a request no longer pending: decided already, or never opened. */
