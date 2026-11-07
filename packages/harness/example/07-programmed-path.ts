@@ -19,8 +19,12 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { Effect, Layer, Schema } from 'effect';
-import { defineTool, HISTORY_TABLES, Sessions } from '@texra-ai/harness';
-import { definePlugin, harnessBuiltins } from '@texra-ai/harness/plugins';
+import { HISTORY_TABLES, Sessions } from '@texra-ai/harness';
+import {
+  definePlugin,
+  harnessBuiltins,
+  defineTool,
+} from '@texra-ai/harness/plugins';
 
 import { makeExampleWorkspace, scriptReturnsOf } from './_support.ts';
 

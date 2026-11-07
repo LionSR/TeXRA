@@ -12,11 +12,10 @@
  */
 
 import { Effect, Schema } from 'effect';
-import { defineTool } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import { AgentCatalog } from '@texra-ai/harness/host';
 
-import { executed, ToolError } from '@texra-ai/harness/plugins';
+import { executed, ToolError, defineTool } from '@texra-ai/harness/plugins';
 import { agentName } from '@texra-ai/harness/schemas';
 import {
   AGENT_MODE_PRESETS,

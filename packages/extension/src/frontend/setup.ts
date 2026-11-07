@@ -1,7 +1,7 @@
 import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { withExtendedPath } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptExtensionInstall } from '@frontend/ui/instruction';

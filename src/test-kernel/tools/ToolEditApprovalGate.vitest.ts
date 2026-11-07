@@ -20,8 +20,8 @@ import {
 import {
   requestToolEditApproval,
   type PluginToolServices,
+  WorkspaceFs,
 } from '@texra-ai/harness/plugins';
-import { WorkspaceFs } from '@texra-ai/harness/host';
 import { SessionRequests } from '@agent/runtime/requests';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog } from '@shared/session/runHistory';

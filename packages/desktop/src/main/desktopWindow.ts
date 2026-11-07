@@ -16,7 +16,7 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,

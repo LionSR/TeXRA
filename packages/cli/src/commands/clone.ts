@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Internal imports
-import { Secrets, type PlatformSecrets } from '@texra-ai/harness/host';
+import { Secrets, type PlatformSecrets } from '@texra-ai/harness/plugins';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   cloneOverleafProject,

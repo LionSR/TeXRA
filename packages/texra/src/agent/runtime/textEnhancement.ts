@@ -1,10 +1,7 @@
 import { Effect } from 'effect';
 
-import {
-  helperCall,
-  withLogChannel,
-  normalizeProviderError,
-} from '@texra-ai/harness/host';
+import { helperCall, normalizeProviderError } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
 
 import type { WorkspaceRoots } from '@texra-ai/harness';

@@ -21,9 +21,7 @@
 
 // Third-party imports
 import { Effect, type FileSystem, Schema, type Scope, Stream } from 'effect';
-import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
-import { Secrets } from '@texra-ai/harness/host';
 
 // Local imports
 import {
@@ -40,6 +38,9 @@ import {
   type AgentTrace,
   type PluginToolServices,
   type ProcessTurn,
+  defineTool,
+  type ToolResult,
+  Secrets,
 } from '@texra-ai/harness/plugins';
 import {
   AgentCliEffortSchema,

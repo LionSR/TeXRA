@@ -18,13 +18,13 @@ import { StatusCodes } from 'http-status-codes';
 
 // Local imports
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { Settings } from '@texra-ai/harness/host';
 import {
   isTransportReason,
   scopedClient,
   scopedOkClient,
   withRequestTimeout,
   ToolError,
+  Settings,
 } from '@texra-ai/harness/plugins';
 import { ZOTERO_PORT_SETTING } from '@texra/shared/settingsView/texraSettings';
 

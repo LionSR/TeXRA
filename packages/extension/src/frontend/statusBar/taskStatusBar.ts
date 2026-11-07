@@ -3,11 +3,8 @@ import { Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - session view
-import {
-  appSignalStream,
-  Settings,
-  type AppSignals,
-} from '@texra-ai/harness/host';
+import { appSignalStream } from '@texra-ai/harness/host';
+import { Settings, type AppSignals } from '@texra-ai/harness/plugins';
 import {
   APPROVAL_POLICY_SETTING,
   descendantRuns,

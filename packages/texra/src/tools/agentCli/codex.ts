@@ -25,13 +25,8 @@ import {
 } from 'effect';
 
 // Local imports
-import {
-  defineTool,
-  type WorkspaceRoots,
-  type ToolResult,
-} from '@texra-ai/harness';
+import { type WorkspaceRoots } from '@texra-ai/harness';
 import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
-import { withLogChannel } from '@texra-ai/harness/host';
 import {
   ensureError,
   toErrorMessage,
@@ -67,9 +62,12 @@ import {
   buildCodexTurnToolLog,
   codexCallCard,
 } from './codexShared';
-import type {
-  PluginToolServices,
-  ProcessTurn,
+import {
+  type PluginToolServices,
+  type ProcessTurn,
+  defineTool,
+  type ToolResult,
+  withLogChannel,
 } from '@texra-ai/harness/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

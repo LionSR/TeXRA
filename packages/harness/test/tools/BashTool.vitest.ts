@@ -36,7 +36,7 @@ import {
 } from '@test/support/testKernel';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
-import type { ToolResult } from '@texra-ai/harness';
+import type { ToolResult } from '@texra-ai/harness/plugins';
 import type { ExecResult } from '@texra-ai/harness/node';
 
 /**

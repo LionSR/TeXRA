@@ -2,11 +2,11 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { defineTool } from '@texra-ai/harness';
 import {
   executed,
   nullishWithDefault,
   ToolError,
+  defineTool,
 } from '@texra-ai/harness/plugins';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/common/terminalOutput';
 

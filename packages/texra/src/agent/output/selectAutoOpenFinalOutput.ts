@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { Settings } from '@texra-ai/harness/host';
+import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
 import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import { finalDocumentOutput } from '@texra/shared/plugins/documentOutputs';
 import {
@@ -8,7 +8,6 @@ import {
 } from '@texra/shared/plugins/documents';
 import type { RunEnd } from '@texra-ai/harness';
 import type { AgentConfig, RunView } from '@texra-ai/harness/schemas';
-import type { SettingsStores } from '@texra-ai/harness/host';
 import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 /**

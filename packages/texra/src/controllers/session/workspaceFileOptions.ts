@@ -8,7 +8,7 @@
  */
 import { Effect } from 'effect';
 
-import { WorkspaceFs } from '@texra-ai/harness/host';
+import { WorkspaceFs } from '@texra-ai/harness/plugins';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import {
   getEditedFileListConfig,

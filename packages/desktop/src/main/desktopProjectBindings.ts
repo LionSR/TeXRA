@@ -24,8 +24,8 @@ import {
   type ProcessServices,
   ToolAvailability,
   type Notices,
-  withLogChannel,
 } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { type HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';

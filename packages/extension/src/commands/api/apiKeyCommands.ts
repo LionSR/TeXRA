@@ -8,7 +8,11 @@ import {
   type ApiKeyProviderId,
   apiKeyOrigins,
 } from '@texra-ai/llm';
-import { Secrets, withLogChannel } from '@texra-ai/harness/host';
+import {
+  Secrets,
+  withLogChannel,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
@@ -16,7 +20,6 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { credentialOriginLabel } from '@ui/copy/credentials';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ApiKeyCommands';
 

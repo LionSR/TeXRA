@@ -13,14 +13,13 @@ import {
   getHelperModelName,
   type ProcessServices,
   type readModelOptions,
-  Secrets,
   StateReadFailed,
-  withLogChannel,
   presentFollowUpResult,
   presentRunFailure,
   type Notices,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
+import { Secrets, withLogChannel } from '@texra-ai/harness/plugins';
 import { Cause, Effect, FileSystem, Scope } from 'effect';
 
 import {

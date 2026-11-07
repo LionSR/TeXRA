@@ -7,11 +7,15 @@ import { Config, Effect, Option, Predicate, Schema } from 'effect';
 
 // Local imports
 import { API_KEY_PROVIDER_IDS, apiKeyEntry, apiKey } from '@texra-ai/llm';
-import { defineTool } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { homeDirectory, withExtendedPath } from '@texra-ai/harness/node';
-import { executed, ToolError } from '@texra-ai/harness/plugins';
+import {
+  executed,
+  ToolError,
+  defineTool,
+  Secrets,
+  withLogChannel,
+} from '@texra-ai/harness/plugins';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { EditorIntegration } from '@texra/hosts/editorIntegration';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';

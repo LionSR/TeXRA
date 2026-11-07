@@ -6,17 +6,13 @@ import {
   type AgentConfig,
   Cancelled,
 } from '@texra-ai/harness/schemas';
-import {
-  presentRunFailure,
-  type Secrets,
-  type Notices,
-} from '@texra-ai/harness/host';
+import { presentRunFailure, type Notices } from '@texra-ai/harness/host';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { Run, Session } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import type { Secrets, SettingsStores } from '@texra-ai/harness/plugins';
 
 /** Instruction handed to the setup agent when launched. */
 const SETUP_INSTRUCTION =

@@ -4,12 +4,7 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import {
-  Secrets,
-  withLogChannel,
-  type RootedFileSystem,
-  WorkspaceFs,
-} from '@texra-ai/harness/host';
+import { type RootedFileSystem } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -33,7 +28,12 @@ import {
 } from '@texra/shared/constants/latexToolchain';
 import { osPlatformOf } from '@texra/shared/osPlatform';
 import { hasPackageManager } from '@texra/utils/system/toolChecks';
-import type { PlatformSecrets } from '@texra-ai/harness/host';
+import {
+  Secrets,
+  withLogChannel,
+  WorkspaceFs,
+  type PlatformSecrets,
+} from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'gitCommands';
 

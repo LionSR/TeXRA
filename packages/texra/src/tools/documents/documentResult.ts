@@ -10,11 +10,7 @@ import path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import {
-  buildDiffHunks,
-  withLogChannel,
-  isPathWithin,
-} from '@texra-ai/harness/host';
+import { buildDiffHunks, isPathWithin } from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import {
   readNormalizedFile,
@@ -41,7 +37,11 @@ import {
   type DocumentsOutput,
 } from '@texra/shared/plugins/documents';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { AgentBlockResult, RecipeChange } from '@texra-ai/harness/plugins';
+import {
+  type AgentBlockResult,
+  type RecipeChange,
+  withLogChannel,
+} from '@texra-ai/harness/plugins';
 
 /**
  * The unified diff of `before` into `after`, `undefined` when nothing

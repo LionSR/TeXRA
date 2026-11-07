@@ -22,9 +22,9 @@ import path from 'node:path';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
 
-import { defineTool, Sessions, type ApprovalHandler } from '@texra-ai/harness';
+import { Sessions, type ApprovalHandler } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
-import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { harnessBuiltins, defineTool } from '@texra-ai/harness/plugins';
 import type { PendingRequest, RunId } from '@texra-ai/harness/schemas';
 import { validationModelLayer } from '../src/runtime/models/validationModel';
 

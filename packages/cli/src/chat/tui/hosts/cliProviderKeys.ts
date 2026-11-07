@@ -16,7 +16,7 @@ import {
 } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 
 import { tuiUi } from './tuiUiHost';
-import type { Secrets, SettingsStores } from '@texra-ai/harness/host';
+import type { Secrets, SettingsStores } from '@texra-ai/harness/plugins';
 
 /** Run one controller action on the TUI's prompt; a failure names its cause
  *  and stays in the Effect channel. */

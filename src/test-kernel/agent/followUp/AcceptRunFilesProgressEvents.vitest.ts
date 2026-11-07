@@ -7,7 +7,7 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
 // Local imports
-import { WorkspaceFs } from '@texra-ai/harness/host';
+import { WorkspaceFs } from '@texra-ai/harness/plugins';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';

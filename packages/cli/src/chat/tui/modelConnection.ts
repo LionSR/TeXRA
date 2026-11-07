@@ -6,10 +6,8 @@
 import { signal } from '@lit-labs/signals';
 import { Effect, Latch, Result } from 'effect';
 
-import {
-  withLogChannel,
-  type RunModelDecisionReason,
-} from '@texra-ai/harness/host';
+import { type RunModelDecisionReason } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { setCliHelperModel } from '@cli/runtime/platform/initPlatform';
 import {

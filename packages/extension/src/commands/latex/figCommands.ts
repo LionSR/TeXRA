@@ -14,11 +14,8 @@ import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  StorageFs,
-  WorkspaceFs,
-  ProcessServices,
-} from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
+import type { StorageFs, WorkspaceFs } from '@texra-ai/harness/plugins';
 import { pluralize } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'FigCommands';

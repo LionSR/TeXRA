@@ -13,8 +13,6 @@ import {
   hasExtension,
   createRunStorageLocation,
   pathToLocationIn,
-  Settings,
-  withLogChannel,
 } from '@texra-ai/harness/host';
 
 import { Effect, FileSystem } from 'effect';
@@ -34,9 +32,13 @@ import {
   publishCompiledPdfArtifact,
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
-import type { AgentTrace } from '@texra-ai/harness/plugins';
+import {
+  type AgentTrace,
+  Settings,
+  withLogChannel,
+  type WorkspaceFs,
+} from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,

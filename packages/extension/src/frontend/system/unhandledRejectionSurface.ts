@@ -8,7 +8,8 @@ import { Effect, Queue } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { formatFatalErrorDetail, withLogChannel } from '@texra-ai/harness/host';
+import { formatFatalErrorDetail } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 

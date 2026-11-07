@@ -7,7 +7,6 @@
 
 import { Effect } from 'effect';
 import {
-  AppSignals,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -16,6 +15,7 @@ import {
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
+import { AppSignals } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import { HostFailed } from '@texra/hosts/uiHosts';

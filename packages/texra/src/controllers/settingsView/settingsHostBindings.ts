@@ -5,7 +5,7 @@
  */
 import { Cause, Effect, PubSub } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { formatError } from '@texra-ai/harness/schemas';
 import type {
   Dialogs,

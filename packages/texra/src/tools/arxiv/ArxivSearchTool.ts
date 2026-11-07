@@ -15,12 +15,12 @@ import { Duration, Effect, Schema } from 'effect';
 import * as RateLimiter from 'effect/persistence/RateLimiter';
 
 // Local imports
-import { defineTool } from '@texra-ai/harness';
 import { toErrorMessage, pluralize } from '@texra-ai/harness/schemas';
 import {
   nullishWithDefault,
   executed,
   ToolError,
+  defineTool,
 } from '@texra-ai/harness/plugins';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 

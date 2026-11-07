@@ -12,7 +12,7 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect, absurd } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   attentionOf,
   type RequestPayload,

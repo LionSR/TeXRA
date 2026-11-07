@@ -33,13 +33,13 @@ import {
   LaunchRefused,
   RunFailure,
   ToolsRefused,
-  type ITool,
   type Run,
   type RunEnd,
   type RunRecords,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
+import type { ITool } from '@texra-ai/harness/plugins';
 import {
   activationView,
   StateReadFailed,

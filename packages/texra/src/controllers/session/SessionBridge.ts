@@ -45,7 +45,7 @@ import { type Session } from '@texra-ai/harness';
 import {
   SESSION_CLOSE_DEADLINE_MS,
   withLogChannel,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';

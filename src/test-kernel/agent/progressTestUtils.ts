@@ -8,7 +8,7 @@ import {
 } from 'effect';
 
 // Local imports
-import { defineTool } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness/plugins';
 import {
   type BashRequest,
   type DisplayRow,

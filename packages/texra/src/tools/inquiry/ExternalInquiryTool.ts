@@ -16,8 +16,6 @@
  */
 
 import { Cause, Effect, Schema } from 'effect';
-import { defineTool, type ToolResult } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness/host';
 import {
   callerRun,
   ChildRuns,
@@ -26,6 +24,9 @@ import {
   nullishWithDefault,
   executed,
   ToolError,
+  defineTool,
+  type ToolResult,
+  withLogChannel,
 } from '@texra-ai/harness/plugins';
 import {
   type RunId,

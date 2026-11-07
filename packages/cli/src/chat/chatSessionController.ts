@@ -100,7 +100,7 @@ import {
 } from './tui/input/draftAttachments';
 import type { ModelConnection } from './tui/modelConnection';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 // ---------------------------------------------------------------------------

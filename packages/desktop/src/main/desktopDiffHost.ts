@@ -4,9 +4,9 @@ import { nanoid } from 'nanoid';
 import {
   buildDiffHunks,
   type ProcessRuntime,
-  withLogChannel,
   withProcessServices,
 } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { DiffLabel, DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '../shared/monacoLanguage';
 

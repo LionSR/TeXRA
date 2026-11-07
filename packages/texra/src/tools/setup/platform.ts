@@ -13,15 +13,18 @@ import { Context, Effect, Schema } from 'effect';
 
 // Local imports
 import { SubscriptionAccounts } from '@texra-ai/llm/node';
-import { readModelOptions, Secrets } from '@texra-ai/harness/host';
-import { ToolError } from '@texra-ai/harness/plugins';
+import { readModelOptions } from '@texra-ai/harness/host';
+import {
+  ToolError,
+  Secrets,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 import type {
   TerminalRunFailed,
   TerminalRunRequest,
   TerminalRunResult,
 } from '@texra/hosts/uiHosts';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * A host command that was dispatched and rejected (the VS Code host's own

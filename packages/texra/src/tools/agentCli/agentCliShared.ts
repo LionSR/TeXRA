@@ -5,7 +5,6 @@
 import { Clock, Effect, Exit, Schema, Scope, type Context } from 'effect';
 
 // Local imports
-import { type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import {
   ChildRuns,
@@ -17,6 +16,7 @@ import {
   type ToolCardHandle,
   executed,
   ToolError,
+  type ToolResult,
 } from '@texra-ai/harness/plugins';
 import {
   AgentConfigSchema,

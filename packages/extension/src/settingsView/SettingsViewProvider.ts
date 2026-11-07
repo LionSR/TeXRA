@@ -15,7 +15,7 @@ import {
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 
 const CHANNEL = 'SettingsViewProvider';

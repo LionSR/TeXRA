@@ -1,11 +1,14 @@
-import { Secrets, Settings } from '@texra-ai/harness/host';
+import {
+  Secrets,
+  Settings,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 import { Effect } from 'effect';
 import { API_KEY_PROVIDER_IDS, apiKeyOrigins } from '@texra-ai/llm';
 import { providerEndpointSetting } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { SettingsHostState } from '@texra/shared/settingsView/settingsViewMessages';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * The profile page for either host: every

@@ -20,9 +20,8 @@ import {
 } from 'effect';
 
 // Local imports
-import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
-import { WorkspaceFs, pathToLocationIn } from '@texra-ai/harness/host';
+import { pathToLocationIn } from '@texra-ai/harness/host';
 import {
   ChildRuns,
   requireRun,
@@ -50,7 +49,12 @@ import {
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
-import type { PluginToolServices } from '@texra-ai/harness/plugins';
+import {
+  type PluginToolServices,
+  defineTool,
+  type ToolResult,
+  WorkspaceFs,
+} from '@texra-ai/harness/plugins';
 
 /**
  * Whether `target` is a file, following links: a symlink to a file is a

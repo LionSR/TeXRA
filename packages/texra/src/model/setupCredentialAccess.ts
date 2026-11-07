@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 /**
  * The setup assistant's launch model: the first provider setup model the

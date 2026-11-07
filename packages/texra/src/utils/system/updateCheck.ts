@@ -2,7 +2,7 @@ import { Clock, Context, Duration, Effect, Predicate, Schema } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
 import { gt as semverGt, valid as semverValid } from 'semver';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { ValueFamily } from '@texra-ai/harness/host';
 
 import type { Cause } from 'effect';

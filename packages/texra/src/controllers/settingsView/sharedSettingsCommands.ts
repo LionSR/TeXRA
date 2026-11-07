@@ -17,18 +17,21 @@ import { apiKeyEntry } from '@texra-ai/llm';
 import {
   type PerKeyLane,
   setModelEnabled,
-  Settings,
-  type StorageFs,
   withPerKeyLane,
   withSessionFs,
 } from '@texra-ai/harness/host';
+import {
+  Settings,
+  type StorageFs,
+  emitAppSignal,
+} from '@texra-ai/harness/plugins';
 import {
   APPROVAL_POLICY_SETTING,
   SUBSCRIPTION_AUTH_PROVIDERS,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
+import { appSignalStream } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import {

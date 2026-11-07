@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { modelConfig } from '@texra-ai/llm';
-import { Settings } from '@texra-ai/harness/host';
+import { Settings } from '@texra-ai/harness/plugins';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';

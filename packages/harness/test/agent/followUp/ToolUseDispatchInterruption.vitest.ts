@@ -19,7 +19,7 @@ import {
 } from '@test/support/scriptedRunLayers';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
-import type { ITool } from '@texra-ai/harness';
+import type { ITool } from '@texra-ai/harness/plugins';
 
 import type { TurnResult } from '@texra-ai/llm';
 

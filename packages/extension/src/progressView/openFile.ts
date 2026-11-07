@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 

@@ -29,9 +29,9 @@ import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
-  SESSION_CLOSE_DEADLINE_MS,
   AgentError,
 } from '@texra-ai/harness/host';
+import { SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness/plugins';
 import type { CliRunResult } from '@cli/schemas/cliOutput';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 

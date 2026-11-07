@@ -29,11 +29,8 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import {
-  AgentCatalog,
-  describeFollowUpFailure,
-  Secrets,
-} from '@texra-ai/harness/host';
+import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
   Interactions,

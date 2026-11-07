@@ -3,9 +3,8 @@ import * as nodePath from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
-import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { Settings, WorkspaceFs, toPosixPath } from '@texra-ai/harness/host';
+import { toPosixPath } from '@texra-ai/harness/host';
 import { relativeToRoot, pathExists } from '@texra-ai/harness/node';
 
 // Local imports - tools
@@ -15,6 +14,10 @@ import {
   type ToolPathCall,
   executed,
   formatToolOutput,
+  defineTool,
+  type ToolResult,
+  Settings,
+  WorkspaceFs,
 } from '@texra-ai/harness/plugins';
 import {
   extractBibliographyContext,

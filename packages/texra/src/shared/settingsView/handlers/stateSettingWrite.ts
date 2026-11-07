@@ -11,7 +11,7 @@
 //   - a settings view writes only rows tagged for a settings-view snapshot;
 //     the CLI writes only the rows its `/config` panel lists.
 
-import { Settings } from '@texra-ai/harness/host';
+import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
 import { Effect, Result, Schema } from 'effect';
 
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -19,7 +19,6 @@ import type {
   SettingsViewRow,
   TexraSettingRow,
 } from '@texra/shared/settingsView/settingSurfaces';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 /** The surfaces that write a setting: a settings view, or the CLI. */
 type SettingSurface = 'settingsView' | 'cli';

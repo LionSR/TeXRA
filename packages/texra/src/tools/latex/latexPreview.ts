@@ -20,11 +20,11 @@ import {
 } from 'effect';
 
 import {
-  withLogChannel,
   isStrictlyWithin,
   createExternalLocation,
   createWorkspaceLocation,
 } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';

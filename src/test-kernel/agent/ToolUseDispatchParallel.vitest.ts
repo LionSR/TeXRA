@@ -72,8 +72,7 @@ import { ScriptTool } from '@tools/codemode/ScriptTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 import { recordSessionEvents } from './progressTestUtils';
-import type { BoundModel } from '@texra-ai/harness/plugins';
-import type { ITool, ToolResult } from '@texra-ai/harness';
+import type { BoundModel, ITool, ToolResult } from '@texra-ai/harness/plugins';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
 

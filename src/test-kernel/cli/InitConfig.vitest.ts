@@ -8,7 +8,7 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { Settings } from '@texra-ai/harness/host';
+import { Settings } from '@texra-ai/harness/plugins';
 import { ensureTexraGitignored } from '@cli/runtime/platform/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/platform/cliConfig';
 import { errnoError } from '@test/support/fsTestUtils';

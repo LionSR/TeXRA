@@ -31,13 +31,14 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
-import { defineTool, Sessions, type LocalSession } from '@texra-ai/harness';
+import { Sessions, type LocalSession } from '@texra-ai/harness';
 import {
   definePlugin,
   errorResult,
   executed,
   harnessBuiltins,
   type Plugin,
+  defineTool,
 } from '@texra-ai/harness/plugins';
 import {
   qualifyAggregateId,

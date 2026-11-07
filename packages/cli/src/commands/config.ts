@@ -1,8 +1,5 @@
-import {
-  Settings,
-  AgentCatalog,
-  InvalidAgentTeamError,
-} from '@texra-ai/harness/host';
+import { AgentCatalog, InvalidAgentTeamError } from '@texra-ai/harness/host';
+import { Settings } from '@texra-ai/harness/plugins';
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 

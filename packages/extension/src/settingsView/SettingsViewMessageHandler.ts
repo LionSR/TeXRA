@@ -9,7 +9,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, Fiber, Result, Schema } from 'effect';
 
-import { Skills, hasExtension, withLogChannel } from '@texra-ai/harness/host';
+import { Skills, hasExtension } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';

@@ -9,7 +9,8 @@ import {
   DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import { Settings, Skills, type ProcessRuntime } from '@texra-ai/harness/host';
+import { Skills, type ProcessRuntime } from '@texra-ai/harness/host';
+import { Settings } from '@texra-ai/harness/plugins';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 
 import { AsyncListForm } from './_shared/ListForm';

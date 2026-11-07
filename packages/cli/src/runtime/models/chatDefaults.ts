@@ -9,7 +9,7 @@ import {
   cliCommandDefaults,
 } from '../platform/cliConfig';
 import { pickDefaultToolUseAgent } from '../defaultAgents';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 /**
  * A configured or environment agent value, trimmed and dropped if it can't be

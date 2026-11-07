@@ -6,7 +6,8 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem } from 'effect';
 import { describe } from 'vitest';
 
-import { sessionFsLayer, type StorageFs } from '@texra-ai/harness/host';
+import { sessionFsLayer } from '@texra-ai/harness/host';
+import type { StorageFs } from '@texra-ai/harness/plugins';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';

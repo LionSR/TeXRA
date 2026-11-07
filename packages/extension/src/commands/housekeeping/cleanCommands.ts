@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   announce,

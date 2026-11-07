@@ -44,12 +44,7 @@ import {
   qualifyAggregateId,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import {
-  DatabaseWriteFailed,
-  Secrets,
-  Settings,
-  UsageLog,
-} from '@texra-ai/harness/host';
+import { DatabaseWriteFailed, UsageLog } from '@texra-ai/harness/host';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
@@ -92,7 +87,7 @@ import {
 
 // Local file imports
 import { autoDecideRequests, seedActiveRun } from '../progressTestUtils';
-import type { BoundModel } from '@texra-ai/harness/plugins';
+import { type BoundModel, Secrets, Settings } from '@texra-ai/harness/plugins';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
 

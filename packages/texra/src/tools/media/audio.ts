@@ -16,11 +16,8 @@ import {
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import {
-  withLogChannel,
-  normalizeProviderError,
-  Settings,
-} from '@texra-ai/harness/host';
+import { normalizeProviderError } from '@texra-ai/harness/host';
+import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
 import {
   inheritedEnv,
   withExtendedPath,

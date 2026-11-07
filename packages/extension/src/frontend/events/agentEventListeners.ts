@@ -21,8 +21,8 @@ import {
   type RuntimePresentationEventPayloads,
   type HostInteractions,
   type PresentationEventHandlers,
-  withLogChannel,
 } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   type AgentConfig,

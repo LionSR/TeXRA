@@ -14,7 +14,7 @@ import {
   openNodeWorkspaceRoots,
   secretsDirectory,
 } from '@texra-ai/harness/node';
-import { emitAppSignal } from '@texra-ai/harness/host';
+import { emitAppSignal } from '@texra-ai/harness/plugins';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';

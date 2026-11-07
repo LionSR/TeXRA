@@ -5,12 +5,12 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
+import { pathToLocationIn } from '@texra-ai/harness/host';
 import {
+  renderPrompt,
   withLogChannel,
-  pathToLocationIn,
   Settings,
-} from '@texra-ai/harness/host';
-import { renderPrompt } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';

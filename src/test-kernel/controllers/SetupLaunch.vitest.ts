@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { apiKeySecretName, SecretsFailed } from '@texra-ai/llm';
-import { Secrets } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { withEnv } from '@test/support/testEnv';

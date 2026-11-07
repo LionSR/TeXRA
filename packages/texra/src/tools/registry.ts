@@ -10,7 +10,6 @@
 
 // Third-party imports
 import { Effect, Layer } from 'effect';
-import { Settings } from '@texra-ai/harness/host';
 import {
   HostCapabilities,
   codemode,
@@ -112,7 +111,7 @@ import {
 import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
 import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
-import type { WriteFilter } from '@texra-ai/harness/plugins';
+import { type WriteFilter, Settings } from '@texra-ai/harness/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */

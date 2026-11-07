@@ -6,7 +6,7 @@ import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - fs
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
   showLoggedErrorMessage,
