@@ -243,7 +243,12 @@ function boundModel(
     declinedRoutes: [],
     model,
     origin: ORIGIN,
-    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
+    route: {
+      kind: 'api-key',
+      endpoint: 'https://api.openai.com/v1',
+      provider: 'openai',
+      usageRoute: 'api-key',
+    },
     forcedToolChoice: true,
     billing: 'api-key',
     maxOutputTokens: 1024,

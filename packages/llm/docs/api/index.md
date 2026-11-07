@@ -18,7 +18,6 @@ catalogs, route decisions, reasoning selection, turn cost, and `ModelError`.
 - **Model & provider catalogs**: [`selectModel`](#selectmodel),
   [`MODEL_PROVIDER_PLUGINS`](#model_provider_plugins),
   [`decideModelRoute`](#decidemodelroute),
-  [`resolveRouteEndpoint`](#resolverouteendpoint),
   [`RouteFacts`](#routefacts) ([`OWN_KEY_ROUTE_FACTS`](#own_key_route_facts)),
   [`chooseReasoning`](#choosereasoning), and [`turnCost`](#turncost).
 - **Structured failures & credentials**: [`ModelError`](#modelerror),
@@ -302,7 +301,7 @@ Decide the route `config` takes under `facts`. Pure.
 ```ts
 function decideModelRoute(
   config: ModelConfig,
-  facts: RouteDecisionFacts,
+  facts: RouteFacts,
 ): ModelRoute
 ```
 
@@ -838,12 +837,14 @@ The route a model's next request takes, decided by {@link decideModelRoute}.
 type ModelRoute =
   | {
       readonly kind: 'chatgpt-subscription';
+      readonly endpoint: string;
       /** The input window: the user's override, else what the Codex backend grants. */
       readonly contextWindow: number;
     }
-  | { readonly kind: 'xai-subscription' }
+  | { readonly kind: 'xai-subscription'; readonly endpoint: string }
   | {
       readonly kind: 'api-key';
+      readonly endpoint: string;
       readonly provider: ApiKeyProviderId;
       readonly usageRoute: ApiKeyUsageRoute;
     }
@@ -871,10 +872,11 @@ const originOf: <P extends ModelOrigin["protocol"]>(config: Pick<{ readonly requ
 
 ## OWN_KEY_ROUTE_FACTS
 
-The facts under which a model takes its own key: no plan is on.
+The facts under which a model takes its own key at its default endpoint:
+no plan is on and the host names no endpoint.
 
 ```ts
-const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts
+const OWN_KEY_ROUTE_FACTS: RouteFacts
 ```
 
 ## PLAN_ROUTES
@@ -1096,40 +1098,18 @@ function resolveModelSource(
 ): string
 ```
 
-## resolveRouteEndpoint
-
-The endpoint `route` sends `config`'s requests to, or `undefined` when no
-endpoint is stated for the provider (a regional provider the host gave no
-endpoint).
-
-```ts
-function resolveRouteEndpoint(
-  config: Pick<ModelConfig, 'provider' | 'baseUrl'>,
-  route: CredentialRoute,
-  facts: Pick<RouteFacts, 'endpoints'>,
-): string | undefined
-```
-
 ## routeConfig
 
 The config `config` runs with on `route`: a subscription's zero per-token
 price and context ceiling, and for a dual-backend Kimi model on Kimi Code
 the coding wire id and tier window. The endpoint is not part of it: the
-route itself names the credential and endpoint (`./routeEndpoint.ts`).
+route itself names it.
 
 ```ts
 function routeConfig(
   config: ModelConfig,
   route: ModelRoute,
 ): ModelConfig
-```
-
-## RouteDecisionFacts
-
-The facts {@link decideModelRoute} reads.
-
-```ts
-type RouteDecisionFacts = Omit<RouteFacts, 'endpoints'>;
 ```
 
 ## RouteFacts
@@ -1154,7 +1134,7 @@ interface RouteFacts {
   /**
    * The host's endpoint per provider id: a dashboard URL, or the default of
    * the region the provider's toggle picks. A provider absent here takes its
-   * catalog default (`resolveRouteEndpoint`).
+   * plugin's default.
    */
   readonly endpoints: Readonly<Partial<Record<string, string>>>;
 }

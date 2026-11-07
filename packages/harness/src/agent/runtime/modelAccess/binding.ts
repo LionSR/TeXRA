@@ -100,7 +100,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
   Scope.Scope | HttpClient.HttpClient | Secrets
 > {
   const { request, requested, settings } = plan;
-  const { route, facts, backend } = plan.decision;
+  const { route, backend } = plan.decision;
   const protocol = PROTOCOL_BY_BACKEND[backend];
   if (protocol === 'validation') {
     const canned = yield* Effect.serviceOption(ValidationModel);
@@ -143,14 +143,13 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       message: `Model "${requested.label}" has no direct API-key provider.`,
     });
   }
-  const credential = yield* routeCredential(route, requested, facts);
+  const credential = yield* routeCredential(route);
   const chatgpt = credential.route === 'chatgpt-subscription';
   const reasoning = yield* reasoningOf(plan, requested);
   const turn = { protocol, textOnly: request.textOnly };
   const bound = yield* bindWireModel({
     model: requested,
     route,
-    endpoint: credential.endpoint,
     // A subscription token is the bearer where an API key would be; the
     // ChatGPT plan's also selects that plan's request rules.
     credential: chatgpt
@@ -181,7 +180,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       [
         bound.config.provider,
         credential.route,
-        credential.endpoint,
+        route.endpoint,
         // A key cools its own route; a session is one per signed-in
         // account, whose token rotates under it.
         typeof credential.bearer === 'string'

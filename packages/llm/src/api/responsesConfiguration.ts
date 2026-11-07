@@ -118,7 +118,7 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
     allowedReasoningEfforts: facts.acceptedEfforts,
     continuationInheritsInstructions: xai,
     supportsForcedToolChoice: true,
-    openaiEndpoint: spec.endpoint === OPENAI_DEFAULT_ENDPOINT,
+    openaiEndpoint: spec.route.endpoint === OPENAI_DEFAULT_ENDPOINT,
     requestDialect: 'openai',
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,

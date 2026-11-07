@@ -173,7 +173,7 @@ export function configurationFor(spec: BindSpec): {
     base: {
       requestedModel: config.id,
       deployment: {
-        endpoint: spec.endpoint,
+        endpoint: spec.route.endpoint,
         // A non-secret name of the credential route.
         credentialScope: `${credentialProvider}:${route.kind}`,
       },

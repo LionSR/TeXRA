@@ -63,15 +63,14 @@ const bindModel: (spec: BindSpec) => Effect<Binding, ModelError, Scope>
 
 One model on one decided route, and what the caller asks of it. The
 protocol is the model's provider's, and the route fixes the config it runs
-(`routeConfig`), the credential scope stamped on its origin and the plan
-it bills.
+(`routeConfig`), the endpoint it sends to, the credential scope stamped on
+its origin and the plan it bills.
 
 ```ts
 interface BindSpec {
   /** The llm-zoo entry, before its route's overrides. */
   readonly model: ModelConfig;
   readonly route: CredentialRoute;
-  readonly endpoint: string;
   readonly credential: ModelCredential;
   /** Each option has a default; the booleans default to `false`. */
   readonly options?: {

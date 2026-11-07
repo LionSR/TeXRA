@@ -37,7 +37,7 @@ import { openaiResponsesModel } from '../src/api/openaiResponses.js';
 import {
   decideModelRoute,
   OWN_KEY_ROUTE_FACTS,
-  type RouteDecisionFacts,
+  type RouteFacts,
 } from '../src/models/modelRoute.js';
 import { chooseReasoning } from '../src/models/reasoningChoice.js';
 import { selectModel } from '../src/models/modelSelection.js';
@@ -176,7 +176,7 @@ interface LiveProtocol {
   readonly model: string;
   readonly endpoint: string;
   /** Route preferences beyond the model's own key (a coding plan). */
-  readonly route?: Partial<RouteDecisionFacts>;
+  readonly route?: Partial<RouteFacts>;
   /**
    * Whether the codec accepts an authored `continuation`. Where it does, the
    * matrix chains a second turn on the anchor the first returned; where it
@@ -196,8 +196,7 @@ function bind(spec: LiveProtocol, apiKey: string): Model {
   assert(route.kind === 'api-key', `${spec.model} takes no API key.`);
   const { configuration } = configurationFor({
     model: selected.config,
-    route,
-    endpoint: spec.endpoint,
+    route: { ...route, endpoint: spec.endpoint },
     credential: { kind: 'api-key', apiKey },
     options: {
       maxOutputTokens: 2048,
