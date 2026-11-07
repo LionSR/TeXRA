@@ -34,7 +34,6 @@ import {
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
 import type { WindowOnboarding } from './desktopWindowOnboarding.js';
-import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
@@ -52,7 +51,7 @@ interface DesktopHostRequestsOptions {
     WindowOnboarding,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
   >;
-  openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
+  openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Effect.Effect<void, never, ProcessServices>;
   /** The process runtime this window was handed; every request arm below runs
@@ -187,7 +186,15 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       files: {
         openDiff: (baseFile: string, editedFile: string, title: string) =>
           host
-            .openDiff({ filePath: baseFile }, { filePath: editedFile }, title)
+            .openDiff(
+              { filePath: baseFile },
+              { filePath: editedFile },
+              {
+                title,
+                // Each compared pair is a review of its own.
+                displayPath: `${editedFile} <-> ${baseFile}`,
+              },
+            )
             .pipe(
               Effect.mapError(
                 (cause) =>
@@ -203,8 +210,9 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       },
       export: {
         pickFormat: host.pickTranscriptExportFormat(),
-        // The preview host has already shown its own notice; the port's
-        // tag carries that refusal and its wording out unchanged.
+        // The window has already shown the failure (the run host's
+        // `openPath` is `presented`); the port's tag carries its wording out
+        // unchanged.
         openPath: (filePath: string) =>
           host.openPath(filePath).pipe(
             Effect.mapError(

@@ -51,6 +51,17 @@ export interface DesktopWindowHooks {
   cancelPendingQuit(): void;
 }
 
+type WindowState =
+  | { readonly _tag: 'closed' }
+  | {
+      readonly _tag: 'open';
+      readonly window: CurrentWindow;
+      /** The quit waiting on this window's close; the user's choice to keep
+       *  editing calls it off. */
+      readonly continueQuit: (() => void) | undefined;
+    }
+  | { readonly _tag: 'closing'; readonly release: Effect.Effect<void> };
+
 interface CurrentWindow extends OpenedDesktopWindow {
   /** Closes the window's scope: run once, a later caller joining the close
    *  in flight, so the closed event, a reopen and the shutdown all wait on
@@ -104,28 +115,28 @@ export function createDesktopWindows(options: {
   const reopens = runtime.runSync(
     FiberSet.make<void>().pipe(Scope.provide(reopensScope)),
   );
-  let current: CurrentWindow | undefined;
-  let releasing: Effect.Effect<void> | undefined;
-  let continueQuit: (() => void) | undefined;
+  /** The one window: none, open (with the quit waiting on its close, if
+   *  one asked), or closed and still releasing what it held. */
+  let state: WindowState = { _tag: 'closed' };
 
   const hooks: DesktopWindowHooks = {
     cancelPendingQuit: () => {
-      continueQuit = undefined;
+      if (state._tag === 'open') state = { ...state, continueQuit: undefined };
     },
   };
 
   const onClosed = (closed: CurrentWindow) => {
-    const resume = continueQuit;
-    continueQuit = undefined;
-    if (current === closed) {
-      current = undefined;
-      if (process.platform === 'darwin') {
-        Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
-      }
+    const isOpen = state._tag === 'open' && state.window === closed;
+    const resume =
+      state._tag === 'open' && isOpen ? state.continueQuit : undefined;
+    if (isOpen && process.platform === 'darwin') {
+      Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
     }
-    // Published before the close starts, so a reopen asked for meanwhile
-    // waits for it even when every finalizer runs synchronously.
-    releasing = closed.release;
+    // Set before the close starts, so a reopen asked for meanwhile waits for
+    // it even when every finalizer runs synchronously. The window is the
+    // only one: an open waits for the last one's release.
+    const closing: WindowState = { _tag: 'closing', release: closed.release };
+    if (isOpen) state = closing;
     runtime.runFork(
       closed.release.pipe(
         // Resume the quit once the window's resources are released and
@@ -135,7 +146,7 @@ export function createDesktopWindows(options: {
         // `will-quit`, which on macOS leaves the process running.
         Effect.ensuring(
           Effect.sync(() => {
-            if (releasing === closed.release) releasing = undefined;
+            if (state === closing) state = { _tag: 'closed' };
             if (resume) setImmediate(resume);
           }),
         ),
@@ -160,7 +171,7 @@ export function createDesktopWindows(options: {
       Effect.onError(() => release),
     );
     const window: CurrentWindow = { ...opened, release };
-    current = window;
+    state = { _tag: 'open', window, continueQuit: undefined };
     // Closed while the open waited: release it now, as `closed` would have.
     if (opened.window.isDestroyed()) onClosed(window);
     else opened.window.once('closed', () => onClosed(window));
@@ -170,11 +181,16 @@ export function createDesktopWindows(options: {
   // for it and then finds the window open.
   const opening = Semaphore.makeUnsafe(1);
   const open = opening.withPermit(
-    Effect.suspend(() =>
-      current
-        ? Effect.void
-        : Effect.andThen(releasing ?? Effect.void, openWindow),
-    ),
+    Effect.suspend(() => {
+      switch (state._tag) {
+        case 'open':
+          return Effect.void;
+        case 'closing':
+          return Effect.andThen(state.release, openWindow);
+        case 'closed':
+          return openWindow;
+      }
+    }),
   );
 
   const reopen = (then?: () => void) => {
@@ -199,10 +215,12 @@ export function createDesktopWindows(options: {
     );
   };
 
+  const current = () => (state._tag === 'open' ? state.window : undefined);
+
   return {
-    window: () => current?.window ?? null,
+    window: () => current()?.window ?? null,
     focus: (then) => {
-      const window = current?.window;
+      const window = current()?.window;
       if (!window) {
         reopen(then);
         return;
@@ -214,15 +232,24 @@ export function createDesktopWindows(options: {
       }
       then?.();
     },
-    revealRun: (key, runId) => current?.reveal(key, runId),
+    revealRun: (key, runId) => current()?.reveal(key, runId),
     reopen,
     open,
     continueQuitAfterClose: (resume) => {
-      continueQuit = resume;
+      if (state._tag === 'open') state = { ...state, continueQuit: resume };
     },
     released: Effect.andThen(
       Scope.close(reopensScope, Exit.void),
-      Effect.suspend(() => current?.release ?? releasing ?? Effect.void),
+      Effect.suspend(() => {
+        switch (state._tag) {
+          case 'open':
+            return state.window.release;
+          case 'closing':
+            return state.release;
+          case 'closed':
+            return Effect.void;
+        }
+      }),
     ),
   };
 }

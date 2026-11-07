@@ -216,7 +216,7 @@
     {
       "id": "RT-tool-edit-staging-one-owner",
       "candidate": "the tool-edit approval's staging in the controller, with each host reduced to its diff verbs",
-      "why": "The hosts differ where the flow matters: where the two copies live (a per-request temp directory, the extension's storage directory), where the user's edits are read from (the saved file, the unsaved editor buffer) and what survives an unapplied edit (the proposed file on disk, an untitled editor). Writing the copies is already one function, writeApprovalTempFiles; a controller-owned staging would have to know which files each host removes. What remains duplicated is two path getters and two spellings of the diff title.",
+      "why": "The hosts differ where the flow matters: where the two copies live (a per-request temp directory, the extension's storage directory), where the user's edits are read from (the saved file, the unsaved editor buffer) and what survives an unapplied edit (the proposed file on disk, an untitled editor). Writing the copies is already one function, writeApprovalTempFiles; a controller-owned staging would have to know which files each host removes. What remains duplicated is two path getters; the diff's title is one label in ui/copy/toolEditPreview.ts.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
       "symbols": [
         {
@@ -260,7 +260,7 @@
     {
       "id": "RT-desktop-window-fiberhandle",
       "candidate": "the desktop window as one FiberHandle: open as FiberHandle.run with onlyIfMissing, the closed event as FiberHandle.clear, the shutdown as awaitEmpty, the quit's resume as a Deferred",
-      "why": "FiberHandle.run with onlyIfMissing returns an already-interrupted fiber while the handle still holds the closing window's fiber (FiberHandle.js runImpl), and clear holds it there until the window's scope has released. A reopen asked for during a close (the macOS dock click right after closing) would be dropped instead of waiting for the release and opening, which the current open does with `releasing`. awaitEmpty before run cannot replace it: on an open window it never returns, so open would need the closing state again. The quit's resume must also stay on setImmediate: a quit requested from inside `closed` lands before Electron removes the window and is abandoned. What remains is the three optionals as one state value (closed, open, closing), not a different primitive.",
+      "why": "FiberHandle.run with onlyIfMissing returns an already-interrupted fiber while the handle still holds the closing window's fiber (FiberHandle.js runImpl), and clear holds it there until the window's scope has released. A reopen asked for during a close (the macOS dock click right after closing) would be dropped instead of waiting for the release and opening, which the current open does with `releasing`. awaitEmpty before run cannot replace it: on an open window it never returns, so open would need the closing state again. The quit's resume must also stay on setImmediate: a quit requested from inside `closed` lands before Electron removes the window and is abandoned. The three optionals are one state value instead (closed, open, closing), not a different primitive.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
       "symbols": [
         {
@@ -389,6 +389,19 @@
           "file": "packages/texra/src/latex/arxivProcessor.ts",
           "symbol": "downloadFile",
           "signature": "function downloadFile( url: string, destBasePath: string, ): Effect.Effect<string, ArxivSourceError, DownloadServices> {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-desktop-projects-rcmap",
+      "candidate": "the desktop's open projects as an RcMap keyed by root (open as RcMap.get, close as RcMap.invalidate), the bindings as a second RcMap, deleting the per-root lanes, the uninterruptible hand-offs and the projects list",
+      "why": "RcMap.invalidate removes an entry but closes it only once no scope holds a reference (node_modules/effect/dist/RcMap.js invalidate: `if (entry.refCount > 0) return`). A desktop project is held for as long as it is open, past any window (macOS keeps the projects when the window closes), so its holder is the process scope, and close would never release it unless each project kept a scope of its own for the lookup to be held in: the per-project scope the registry already opens and closes. The reference count would be a second count beside the registry's ordered list, which the rail and the selection need anyway (an RcMap keeps no order). What was a hand-rolled primitive is gone instead: the Symbol-keyed lane is one Semaphore(1).",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
+      "symbols": [
+        {
+          "file": "packages/desktop/src/main/desktopProjects.ts",
+          "symbol": "openDesktopProjectRegistry",
+          "signature": "export const openDesktopProjectRegistry: ( options: DesktopProjectRegistryOptions, ) => Effect.Effect< DesktopProjectRegistry, Error, DesktopProjectRecords | StateStores | Sessions | HostWindows > = Effect.fn('openDesktopProjectRegistry')(…);"
         }
       ]
     }
