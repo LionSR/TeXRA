@@ -392,7 +392,6 @@ function buildClaudeAgentTurn(params: {
   const { logger, runId, prompt } = params;
   return buildAgentCliTurn({
     logger,
-    stageLabel: 'Claude Code session',
     claim: params.claim,
     runProviderTurn: runStreamedTurn({
       prompt,
@@ -410,7 +409,9 @@ function buildClaudeAgentTurn(params: {
     }),
     getUsage: (turn) => turn.usage,
     isTurnError: (turn) => turn.isError,
-    turnErrorMessage: (turn) => turn.errorMessage || undefined,
+    turnErrorMessage: (turn) =>
+      turn.errorMessage ||
+      'Claude Code reported a failed turn without throwing.',
     formatDelivery: (turn, wallTimeMs) =>
       formatDelivery({
         tag: 'claude-agent-result',

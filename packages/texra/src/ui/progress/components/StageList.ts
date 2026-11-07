@@ -84,7 +84,6 @@ const stageListStyles = css`
 
 interface GroupTree {
   group: Stage;
-  children: GroupTree[];
   rows: TranscriptRow[];
 }
 
@@ -113,19 +112,14 @@ function compareGroups(a: Stage, b: Stage): number {
 
 /**
  * The transcript as the list renders it: ungrouped rows (the user's
- * inputs, follow-ups, errors) interleaved chronologically with the group
- * trees. Rows are classified by `groupId` alone; a group with no parent is
- * a root (the transcript names only parents it holds).
+ * inputs, follow-ups, errors) interleaved chronologically with the stages
+ * and their rows. Rows are classified by `groupId` alone.
  */
 function transcriptTimeline(
   groups: readonly Stage[],
   rows: readonly TranscriptRow[],
 ): TimelineEntry[] {
   const groupIds = new Set(groups.map((group) => group.id));
-  const children = Map.groupBy(
-    groups.filter((group) => group.parentStageId !== undefined),
-    (group) => group.parentStageId,
-  );
   const sortedRows = rows.toSorted(compareRows);
   const isGroupedRow = (row: TranscriptRow) =>
     Boolean(row.groupId && groupIds.has(row.groupId));
@@ -134,15 +128,12 @@ function transcriptTimeline(
     (row) => row.groupId,
   );
   const ungrouped = sortedRows.filter((row) => !isGroupedRow(row));
-  const node = (group: Stage): GroupTree => ({
-    group,
-    children: (children.get(group.id) ?? []).sort(compareGroups).map(node),
-    rows: rowsByGroup.get(group.id) ?? [],
-  });
   const roots = groups
-    .filter((g) => g.parentStageId === undefined)
-    .sort(compareGroups)
-    .map(node);
+    .toSorted(compareGroups)
+    .map((group): GroupTree => ({
+      group,
+      rows: rowsByGroup.get(group.id) ?? [],
+    }));
   return [
     ...ungrouped.map((row) => ({ key: row.id, time: row.timestamp, row })),
     ...roots.map((tree) => ({
@@ -400,7 +391,7 @@ export class StageList extends LitElement {
     return remaining <= threshold;
   }
 
-  /** Render child group header inline (only called for non-root groups) */
+  /** A section's header: its status, title, start and duration. */
   private renderGroupHeader(node: GroupTree): TemplateResult {
     const { group } = node;
     const formattedStartTime = getTimeFormatter().format(
@@ -436,10 +427,9 @@ export class StageList extends LitElement {
     `;
   }
 
-  /** Rows of a group followed by its child groups, in transcript order. A
-   *  script stage leads with its calls as the script-stage model reads
-   *  them; the calls' own cards, with their output, open below it from the
-   *  card's Log. */
+  /** Rows of a stage, in transcript order. A script stage leads with its
+   *  calls as the script-stage model reads them; the calls' own cards, with
+   *  their output, open below it from the card's Log. */
   private renderGroupBody(node: GroupTree): TemplateResult {
     const script = this.scripts.get(node.group.id);
     const rows = this.renderRowEntries(node.rows, `group:${node.group.id}`);
@@ -456,22 +446,15 @@ export class StageList extends LitElement {
             ></script-stage>
             ${callsOpen ? rows : nothing}`
         : rows
-    }${repeat(
-      node.children,
-      (c) => c.group.id,
-      (c) => this.renderGroupNode(c),
-    )}`;
+    }`;
   }
 
-  /** Render a group node and its children recursively */
-  private renderGroupNode(
-    node: GroupTree,
-    isRoot = false,
-  ): TemplateResult | typeof nothing {
+  /** Render a stage: a script stage as a plain container, its script-stage
+   *  view heading it; any other as a collapsible section with a header. */
+  private renderGroupNode(node: GroupTree): TemplateResult {
     const { group } = node;
 
-    // Tree roots: simple container (no collapsible), always render content.
-    if (isRoot) {
+    if (this.scripts.has(group.id)) {
       return html`
         <div class="log-group log-run" data-run-id=${group.id}>
           <div class="log-group-content">${this.renderGroupBody(node)}</div>
@@ -479,8 +462,7 @@ export class StageList extends LitElement {
       `;
     }
 
-    // Child groups: collapsible details element.
-    // Collapsed child groups contribute zero DOM nodes for their content.
+    // Collapsed sections contribute zero DOM nodes for their content.
     const expanded = this.isExpanded(group.id);
     // wa-show and wa-hide both: `dispatchGroupToggle` owns the bubble guard
     // and reads the direction from the event type.
@@ -574,7 +556,7 @@ export class StageList extends LitElement {
           if ('row' in item) {
             return this.renderLogEntry(item.row);
           }
-          return this.renderGroupNode(item.tree, true);
+          return this.renderGroupNode(item.tree);
         },
       )}
     `;

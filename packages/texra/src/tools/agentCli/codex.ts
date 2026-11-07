@@ -318,7 +318,6 @@ function buildCodexTurn(params: {
   const { thread, logger, runId, prompt } = params;
   return buildAgentCliTurn({
     logger,
-    stageLabel: 'Codex session',
     claim: params.claim,
     runProviderTurn: runStreamedTurn(thread, prompt, logger),
     getUsage: codexTurnUsage,

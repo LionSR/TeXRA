@@ -66,13 +66,7 @@ import type { AgentConfig } from '@texra-ai/harness/schemas';
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
   ToolRun,
-  | 'config'
-  | 'logger'
-  | 'parentStage'
-  | 'fileService'
-  | 'runId'
-  | 'opening'
-  | 'model'
+  'config' | 'logger' | 'fileService' | 'runId' | 'opening' | 'model'
 >;
 
 /** The tool call the documents are opened for: its run, its roots, and

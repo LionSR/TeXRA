@@ -94,7 +94,6 @@ export function nativeToolTestLayer(
           () => ({ modelId: 'test-model' }) as BoundModel,
         ),
         logger: noopTrace,
-        parentStage: noopTrace.openStage('Run: test'),
         steps: noStep(),
         scope: yield* Effect.scope,
         opening: null,

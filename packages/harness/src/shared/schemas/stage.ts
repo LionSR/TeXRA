@@ -12,7 +12,6 @@ export const StageSchema = Schema.Struct({
   /** The outcome it closed with; null while it is open, when it reads as
    *  its run reads. */
   outcome: Schema.NullOr(RunOutcomeSchema),
-  parentStageId: Schema.optional(Schema.String),
   kind: Schema.optional(StageKindSchema),
 });
 

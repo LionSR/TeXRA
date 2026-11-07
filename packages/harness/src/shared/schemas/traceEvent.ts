@@ -47,7 +47,6 @@ export const TraceRowFieldsSchema = Schema.Union([
   trace('stage.start', {
     id: Schema.String,
     label: Schema.String,
-    parentId: Schema.optional(Schema.NullOr(Schema.String)),
     kind: Schema.optional(Schema.NullOr(StageKindSchema)),
   }),
   trace('stage.end', { id: Schema.String, status: RunOutcomeSchema }),

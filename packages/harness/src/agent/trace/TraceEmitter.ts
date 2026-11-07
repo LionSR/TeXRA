@@ -123,7 +123,6 @@ export class TraceEmitter implements AgentTrace {
       type: 'stage.start',
       id,
       label,
-      parentId: options.parent?.id,
       kind: options.kind,
     });
     return new StageHandleImpl(this, id);
@@ -225,10 +224,6 @@ class StageHandleImpl implements StageHandle {
       id: this.id,
       status: status ?? RUN_OUTCOME.COMPLETED,
     });
-  }
-
-  child(label: string, options: StageOptions = {}): StageHandle {
-    return this.trace.openStage(label, { ...options, parent: this });
   }
 }
 

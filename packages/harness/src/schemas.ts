@@ -359,6 +359,7 @@ export {
   type RequestDecision,
   RequestShowErrorPayloadSchema,
   type RetryRequest,
+  outcomeFromCause,
   RUN_OUTCOME,
   type RunEndOutput,
   RunEndSchema,

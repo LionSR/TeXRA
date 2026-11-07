@@ -51,8 +51,7 @@ import { standingAfter, type RunStanding } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
 /** A stage start opens its stage whole; a stage end closes the group
- *  its start opened and writes nothing for a group no start opened. A
- *  group's parent is a group this transcript opened, or it has none. */
+ *  its start opened and writes nothing for a group no start opened. */
 function applyStage(
   d: Draft,
   event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
@@ -65,9 +64,6 @@ function applyStage(
       name: event.label,
       startTime: d.at,
       outcome: null,
-      ...(event.parentId && d.ix.stageIndex.has(event.parentId)
-        ? { parentStageId: event.parentId }
-        : {}),
       ...(event.kind != null ? { kind: event.kind } : {}),
     };
   } else {
@@ -101,22 +97,9 @@ function record(d: Draft, event: TraceRowFields): void {
       return;
 
     case 'stage.start': {
-      // A new model-turn boundary starts fresh: whatever MODEL_RESPONSE
-      // stream the previous turn may have opened is no longer this turn's
-      // to reuse. Tool-use turns are session stages containing several
-      // inner model/tool rounds.
-      if (event.kind === 'session') {
-        ix.pendingModelResponseId = undefined;
-      }
       write(d, {
         kind: 'stage',
-        base: open(
-          d,
-          event.id,
-          event.parentId ?? undefined,
-          MESSAGE_TYPES.DEFAULT,
-          true,
-        ),
+        base: open(d, event.id, undefined, MESSAGE_TYPES.DEFAULT, true),
         label: event.label,
       });
       applyStage(d, event);
@@ -351,6 +334,14 @@ export function applyTranscriptEvent(
   };
   if (event.type === 'run.position' && event.payload.at === 'waiting')
     d.ix.lastWait = event.seq;
+  // A turn starts fresh, and so does an activation (a resume may pick up a
+  // turn mid-way): whatever MODEL_RESPONSE stream came before is no longer
+  // this turn's for `response.finalized` to close.
+  if (
+    event.type === 'run.activate' ||
+    (event.type === 'run.position' && event.payload.at === 'turn.begin')
+  )
+    d.ix.pendingModelResponseId = undefined;
   const standing = standingAfter(event);
   if (standing !== null) applyStandingToTranscript(d, standing);
   else if (isTranscriptEvent(event)) {

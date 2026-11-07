@@ -224,7 +224,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
-  'stage.start': { version: 2, listing: 'none' },
+  // v3: no run, turn or process-run stage and no `parentId` (an earlier
+  // build's `Run:` stage would read as a section of this build's).
+  'stage.start': { version: 3, listing: 'none' },
   'stage.end': { ...V1, listing: 'none' },
   // v2: a tool's card is stated (`card`), not derived from its name, so the
   // fold has no Codex builders (an earlier build's card would read without

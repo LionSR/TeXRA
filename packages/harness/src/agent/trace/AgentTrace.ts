@@ -21,18 +21,14 @@ export type AgentTraceSink = (event: AgentEvent) => void;
 export interface StageOptions {
   /** Semantic stage kind consumed by host progress surfaces. */
   readonly kind?: 'run' | 'session';
-  /** Parent handle for nested stages; without one the stage opens as a root. */
-  readonly parent?: StageHandle;
 }
 
-/** Handle returned by `openStage` — wraps a stage with end/child ops. */
+/** Handle returned by `openStage`. */
 export interface StageHandle {
   /** Stage id. */
   readonly id: string | undefined;
   /** Emit `stage.end` with the given outcome. Idempotent. */
   end(status?: RunOutcome): void;
-  /** Open a nested stage parented to this one. */
-  child(label: string, options?: StageOptions): StageHandle;
 }
 
 /** Options accepted by `openRun`. */
