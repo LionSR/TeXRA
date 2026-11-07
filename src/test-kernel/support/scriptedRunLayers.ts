@@ -250,20 +250,23 @@ export const scriptedInvokerLayer = modelInvokerLayer().pipe(
   ),
 );
 
-const TEST_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
-  agent: 'chat',
-  model: 'test-model',
-  instruction: 'Do the thing.',
-});
+/** The fixture task, which each launch is built from afresh. */
+const TEST_INSTRUCTION = 'Do the thing.';
+const testConfig = () =>
+  Schema.decodeUnknownSync(AgentConfigSchema)({
+    agent: 'chat',
+    model: 'test-model',
+    instruction: TEST_INSTRUCTION,
+  });
 
 /** A launch's entry with no parent, registration or opening trace. */
-const TEST_ENTRY: RunLaunch['entry'] = {
+const testEntry = (): RunLaunch['entry'] => ({
   parent: null,
   awaited: false,
   registration: null,
   enter: (commit) => Effect.uninterruptible(commit(Effect.succeed([]))),
-  initialUserMessage: 'Do the thing.',
-};
+  initialUserMessage: TEST_INSTRUCTION,
+});
 
 /**
  * The launch a fixture run stands on: a `chat` run of the test model with
@@ -275,7 +278,7 @@ export function testLaunch(
   over: Partial<RunLaunch> = {},
 ): RunLaunch {
   const logger = over.logger ?? noopTrace;
-  const config = over.config ?? TEST_CONFIG;
+  const config = over.config ?? testConfig();
   return {
     runId,
     startedAt: 0,
@@ -290,7 +293,7 @@ export function testLaunch(
       attachedMemories: null,
       attachedMemoryMisses: [],
     },
-    entry: TEST_ENTRY,
+    entry: testEntry(),
     ...over,
   };
 }
@@ -355,7 +358,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
         { runId: init.runId, session: init.session, logger, model, scope },
         {
           config: Schema.decodeUnknownSync(AgentConfigSchema)({
-            ...TEST_CONFIG,
+            ...testConfig(),
             ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
           }),
           persona: Schema.decodeUnknownSync(PersonaSchema)({
@@ -365,12 +368,12 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           ...testRunTools(tools),
           finalToolName: init.finalToolName ?? null,
           entry: {
-            ...TEST_ENTRY,
+            ...testEntry(),
             parent: init.parentRunId ?? null,
             initialUserMessage:
               'initialUserMessage' in init
                 ? init.initialUserMessage
-                : TEST_ENTRY.initialUserMessage,
+                : TEST_INSTRUCTION,
           },
         },
       );

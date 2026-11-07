@@ -1,8 +1,12 @@
 import { layer } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { Effect, Fiber, Schema } from 'effect';
 import { expect } from 'vitest';
 
-import { RunIdSchema, AgentConfigSchema } from '@texra-ai/harness/schemas';
+import {
+  AgentConfigSchema,
+  generateRunId,
+  RunIdSchema,
+} from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -36,12 +40,19 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const session = yield* isolatedTestSession();
             // The parent's `run.start` is published and left uncommitted,
             // which is what a record read sees: without the barrier ahead of
-            // it, this child is refused as if its parent did not exist.
-            const parentRunId = yield* publishTestRunStart(session);
+            // it, this child is refused as if its parent did not exist. The
+            // publication runs to its enqueue, then the child registers, and
+            // the join fails the case if the row was refused.
+            const parentRunId = generateRunId();
+            const published = yield* Effect.forkChild(
+              publishTestRunStart(session, parentRunId),
+              { startImmediately: true },
+            );
             yield* registerRun(runId, baseConfig, {
               ...options,
               parentRunId,
             }).pipe(Effect.provide(session));
+            yield* Fiber.join(published);
             expect(
               yield* getRunRecords(runId)
                 .exists()

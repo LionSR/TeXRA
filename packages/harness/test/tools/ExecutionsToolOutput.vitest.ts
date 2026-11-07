@@ -73,15 +73,20 @@ function launchBackgroundRun(
       .spyOn(toolUseFollowUp, 'wakeIfOwed')
       .mockReturnValue(Effect.succeed(true));
 
-    yield* publishTestRunStart(session, PARENT_RUN_ID);
-    // No settle before the launch. `registerRun` opens the parent check with an
+    // Queued, not committed, when the launch reads: the publication runs to
+    // its enqueue and is joined after the launch. No settle before the launch. `registerRun` opens the parent check with an
     // empty batch on the session's publisher, so the child's admission read
     // runs after the parent's queued `run.start`. Settling here instead would
     // make this suite pass whether or not that barrier exists.
+    const published = yield* Effect.forkChild(
+      publishTestRunStart(session, PARENT_RUN_ID),
+      { startImmediately: true },
+    );
     const launched = yield* BashTool.call({
       command: 'make build',
       run_in_background: true,
     }).pipe(Effect.provide(parentRunCall(session)));
+    yield* Fiber.join(published);
 
     yield* Effect.promise(() => outputEmitted);
     yield* Context.get(session, SessionLog).settled;
