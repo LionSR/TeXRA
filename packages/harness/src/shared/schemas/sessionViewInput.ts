@@ -44,12 +44,11 @@ const RunUnreadableSchema = Schema.Literals(['damaged', 'earlierBuild']);
 /**
  * Why a run's banner speaks, as a key and the data its words need; the
  * app's `@ui/copy/runStatus` words it. In priority order: its rows cannot
- * be read here, its process stopped before it finished, its end lost its
- * result.
+ * be read here, its end lost its result. An interrupted run is read from
+ * its `holder` and `outcome`, not from a notice.
  */
 export const RunNoticeSchema = Schema.Union([
   Schema.Struct({ kind: RunUnreadableSchema }),
-  Schema.Struct({ kind: Schema.Literal('interrupted') }),
   Schema.Struct({ kind: Schema.Literal('lost'), message: Schema.String }),
 ]);
 

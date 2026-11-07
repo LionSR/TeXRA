@@ -151,7 +151,6 @@ export {
   compareByNewestCreationTime,
   compareBySeqNo,
 } from '@shared/runs/runOrdering';
-export { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 export type {
   CompactionActivityBlock,
   CompactionActivityStatus,

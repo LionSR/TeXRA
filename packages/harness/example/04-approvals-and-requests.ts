@@ -90,7 +90,7 @@ const program = Effect.gen(function* () {
   yield* Stream.runHead(
     Stream.filter(
       run.view,
-      (view) => view.runs.get(run.runId)?.status === 'waiting',
+      (view) => view.runs.get(run.runId)?.position === 'waiting',
     ),
   );
   console.log('[04] cycle 1 status=waiting');
@@ -125,7 +125,7 @@ const program = Effect.gen(function* () {
     runId: run.runId,
     reason: 'user',
   });
-  const finalStatus = session.view.current().runs.get(run.runId)?.status;
+  const finalStatus = session.view.current().runs.get(run.runId)?.outcome;
   // A stopped run has ended: its result is its `cancelled` end.
   const { outcome } = yield* run.result;
   if (outcome !== 'cancelled') {

@@ -357,7 +357,7 @@ export function attemptRequests(
 export function resumedAttempt(
   state: {
     readonly requests: RunPosition['requests'];
-    readonly decidedSinceActivation: ReadonlySet<string>;
+    readonly activatedAt: number | null;
   },
   at: Omit<CallAttempt, 'attempt'>,
   status: Exclude<CallStatus, { kind: 'settled' }>,
@@ -370,9 +370,11 @@ export function resumedAttempt(
   const next = asked(attemptOf(status) + 1);
   if (status.kind === 'issued' || next.raised > 0) return next;
   const started = asked(status.attempt);
+  const decidedAt = started.own?.request.decidedAt ?? null;
   const stands =
-    started.own?.request.decision == null ||
-    state.decidedSinceActivation.has(started.own.requestId);
+    decidedAt === null ||
+    state.activatedAt === null ||
+    decidedAt > state.activatedAt;
   return started.raised > 0 && stands ? started : { ...next, mayHaveRun: true };
 }
 

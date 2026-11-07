@@ -8,8 +8,12 @@
  */
 
 // Local imports
-import { RUN_LIFECYCLE_READY, runIdentityName } from '@shared/schemas';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+import { runIdentityName } from '@shared/schemas';
+import {
+  isInterrupted,
+  type RunView,
+  type SessionView,
+} from '@shared/session/sessionView';
 
 /**
  * The tables a history query reads and their columns, in order: the public
@@ -185,9 +189,9 @@ export type HistoryWrite = readonly [
 
 /** A run's status as `runs.status` words it. */
 function runStatus(run: RunView): string {
-  if (run.durableOutcome !== null) return 'ended';
-  if (run.status === RUN_LIFECYCLE_READY) return 'created';
-  return run.group === 'interrupted' ? 'interrupted' : run.status;
+  if (run.outcome !== null) return 'ended';
+  if (run.position === 'ready') return 'created';
+  return isInterrupted(run) ? 'interrupted' : run.position;
 }
 
 /** The writes that replace the runs table with the view's `runs` and read
@@ -216,7 +220,7 @@ export const replaceRuns = (
       run.description,
       new Date(run.launchedAt).toISOString(),
       runStatus(run),
-      run.durableOutcome,
+      run.outcome,
       run.usage.cost,
       run.usage.inputTokens,
       run.usage.outputTokens,

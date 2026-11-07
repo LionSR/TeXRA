@@ -8,7 +8,7 @@ import { app, Notification, type BrowserWindow } from 'electron';
 import { Context, Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
 import { attentionOf } from '@texra-ai/harness/schemas';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runStatus } from '@ui/copy/runStatus';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
@@ -141,7 +141,7 @@ export const followDesktopAttention = Effect.gen(function* () {
         // A child's ending is its parent's news.
         for (const run of finished) {
           if (run.parentId !== null) continue;
-          const line = `${run.title}: ${runStatusLabel(run.statusKey)}.`;
+          const line = `${run.title}: ${runStatus(run).word}.`;
           notices.push({ runId: run.id, line });
         }
         const first = notices[0];

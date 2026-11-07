@@ -17,13 +17,13 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import {
-  type RunOutcome,
+  isInterrupted,
+  isWorking,
   type RunId,
   type TaskGroup,
 } from '@texra-ai/harness/schemas';
 import {
   formatCompactDuration,
-  taskGroupDisplayStatus,
   pluralize,
   compareBySeqNo,
   scriptStages,
@@ -190,9 +190,6 @@ export class TaskGroupList extends LitElement {
 
   /** The stream these rows belong to; every group toggle names it. */
   @property({ attribute: false }) runId: RunId | null = null;
-
-  /** The session view's final outcome once no producer can close another group. */
-  @property({ attribute: false }) durableOutcome: RunOutcome | null = null;
 
   /** `Surface.groups` for this stream: true is expanded, false collapsed,
    *  a missing key expanded. Toggles go out as surface actions. */
@@ -363,7 +360,7 @@ export class TaskGroupList extends LitElement {
    * a fresh copy of the same record.
    */
   private renderLogEntry(row: TranscriptRow) {
-    const interrupted = this.run?.group === 'interrupted';
+    const interrupted = this.run !== null && isInterrupted(this.run);
     return guard([row, interrupted], () =>
       formatLogEntry(row, interrupted, this.tools),
     );
@@ -438,10 +435,7 @@ export class TaskGroupList extends LitElement {
       ? formatCompactDuration(group.endTime - group.startTime)
       : '';
 
-    const status = taskGroupDisplayStatus(
-      group,
-      this.durableOutcome ?? undefined,
-    );
+    const { status } = group;
     const statusIcon = terminalStatusIcon(status);
     return html`
       <span class="group-status-icon">
@@ -538,7 +532,7 @@ export class TaskGroupList extends LitElement {
           id="${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}"
           class=${classMap({
             'log-group-header': true,
-            [`is-${taskGroupDisplayStatus(group, this.durableOutcome ?? undefined)}`]: true,
+            [`is-${group.status}`]: true,
           })}
         >
           ${this.renderGroupHeader(node)}
@@ -577,7 +571,7 @@ export class TaskGroupList extends LitElement {
     // with no output the terminal buffer is empty and would render a blank
     // pane, so show the same "Task is starting" / idle text instead.
     if (this.rows.length === 0 && this.groups.length === 0) {
-      const active = this.run?.working === true;
+      const active = this.run !== null && isWorking(this.run);
       const noun = this.run?.parentId ? 'agent' : 'task';
       return html`
         <div class="log-placeholder">

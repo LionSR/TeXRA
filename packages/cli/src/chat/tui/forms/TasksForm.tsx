@@ -31,7 +31,7 @@ import {
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 
 import { BaseTextInput } from '../input/BaseTextInput';
 import { ApprovalModal } from '../modals/ApprovalModal';
@@ -293,10 +293,10 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     3,
     (props.availableRows ?? 24) - ATTACHED_CHROME_ROWS - (presentable ? 10 : 0),
   );
-  const runStatus = level.run && runStatusLabel(level.run.statusKey);
+  const runWord = level.run && runStatus(level.run).word;
   const status = level.ended
     ? `detached: ${level.ended}`
-    : (runStatus ?? 'connecting…');
+    : (runWord ?? 'connecting…');
 
   return (
     <Box flexDirection="column">

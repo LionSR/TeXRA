@@ -343,7 +343,7 @@ export class HistoryQueryStore implements Context.Service.Shape<
         const fed = store.fed.get(run.id);
         // An ended run takes no row before its next activation, which
         // replaces its view.
-        if (fed?.view === run && run.durableOutcome !== null) continue;
+        if (fed?.view === run && run.outcome !== null) continue;
         const after = fed?.seq ?? 0;
         const rows = yield* this.session.log
           .history(qualifyAggregateId('run', run.id), after + 1)

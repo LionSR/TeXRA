@@ -55,7 +55,6 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 
 import {
   qualifyAggregateId,
-  RUN_PHASE,
   type RunId,
   RunIdSchema,
   type SessionEvent,
@@ -294,7 +293,10 @@ const runHistoryOverStore = Layer.effect(
 function drawn(view: SessionView) {
   return {
     cursor: view.cursor,
-    status: view.runs.get(RUN)?.status ?? null,
+    status: (() => {
+      const run = view.runs.get(RUN);
+      return run === undefined ? null : (run.outcome ?? run.position);
+    })(),
     requests: view.requests.map((request) => request.requestId),
   };
 }
@@ -371,8 +373,8 @@ describe('session events and view', () => {
       // no approval, is ever published. The anchor is the seeded log's
       // level, so the history is under it and the tail repeats none of it.
       expect(drawnSequence(yield* Fiber.join(states))).toEqual([
-        { cursor: 0, status: RUN_PHASE.WAITING, requests: ['req-1'] },
-        { cursor: 5, status: RUN_PHASE.RUNNING, requests: [] },
+        { cursor: 0, status: 'waiting', requests: ['req-1'] },
+        { cursor: 5, status: 'running', requests: [] },
       ]);
     }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );

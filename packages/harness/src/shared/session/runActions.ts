@@ -5,14 +5,10 @@
 import {
   isLoopDriven,
   isPlainAgentIdentity,
-  RUN_PHASE,
-  RUN_SUBSTATE,
   type RunAction,
 } from '@shared/schemas';
 
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-
-import type { RunView } from './sessionView';
+import { isInterrupted, type RunView } from './sessionView';
 import type { RunView as ReadonlyRunView } from './readonlyViews';
 
 /** Opening the run's folder, exporting its conversation, copying its
@@ -24,11 +20,11 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * The one rule for which actions a run's state licenses, applied by the fold
  * into `RunView.actions`. One whose rows this build cannot read (`stranded`:
  * damaged, or an earlier build's) never becomes readable,
- * so it offers delete beside inspection, the one way to clear it. A live
- * run (`live`: working, waiting, or spawned and not started yet) can
- * be stopped; while it is in flight (running or waiting, not interrupted)
- * an agent's run takes approval grants, and a conversation (not a task's
- * recipe) its compaction. Nothing that rewrites or
+ * so it offers delete beside inspection, the one way to clear it. A run
+ * this process holds (working, waiting, or spawned and not started yet) can
+ * be stopped; an agent's run takes approval grants, and a conversation (not
+ * a task's recipe) its compaction, unless it is still starting (no loop
+ * step and no settled point yet). Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
  * ended forked (at its latest settled point, before any turn it is in now). After, a
@@ -42,22 +38,16 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
 export function runActions(
   run: Pick<
     RunView,
-    | 'group'
-    | 'live'
-    | 'status'
-    | 'substate'
-    | 'identity'
-    | 'recipe'
-    | 'forkPoint'
+    'holder' | 'outcome' | 'turn' | 'identity' | 'recipe' | 'forkPoint'
   >,
   stranded: boolean,
 ): RunAction[] {
   if (stranded) return ['delete', ...inspectActions()];
-  if (run.live) {
-    const inFlight = run.group === 'running' || run.group === 'waiting';
-    const agent = inFlight && run.identity.kind === 'agent';
-    const compact =
-      agent && !run.recipe && run.substate !== RUN_SUBSTATE.STARTING;
+  if (run.holder === 'here') {
+    const agent = run.identity.kind === 'agent';
+    // Nothing to compact while its first activation has taken no loop step.
+    const starting = run.turn === null && run.forkPoint === null;
+    const compact = agent && !run.recipe && !starting;
     return [
       'stop',
       ...(agent ? (['grant'] as const) : []),
@@ -68,11 +58,11 @@ export function runActions(
     ];
   }
   const actions: RunAction[] = ['delete', 'rename', 'files'];
-  const ended = isTerminalOutcomePhase(run.status);
+  const ended = run.outcome !== null;
   if (
     continuesFromRows({ ...run, ended }) &&
-    (run.group === 'interrupted' ||
-      (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED))
+    (isInterrupted(run) ||
+      (run.identity.kind === 'script' && run.outcome !== 'completed'))
   )
     actions.push('resume');
   if (isPlainAgentIdentity(run.identity)) {
@@ -102,11 +92,11 @@ const forkable = (
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(
-  run: Pick<ReadonlyRunView, 'live' | 'label'>,
+  run: Pick<ReadonlyRunView, 'holder' | 'label'>,
   action: RunAction,
 ): string {
   const what = ACTION_LABEL[action];
-  if (run.live)
+  if (run.holder === 'here')
     return `${what} is not available while “${run.label}” is running; stop it first.`;
   return `${what} is not available for “${run.label}” in its current state.`;
 }

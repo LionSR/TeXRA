@@ -11,6 +11,7 @@ import {
   type AgentSource,
   type RunId,
   descendantRuns,
+  needsUser,
 } from '@texra-ai/harness/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
 import {
@@ -21,7 +22,12 @@ import {
   type Surface,
   type SurfaceAction,
 } from '@texra/shared/session/surface';
-import { RUN_GROUP_LABELS } from '@ui/copy/runStatus';
+import {
+  RUN_SECTION_LABELS,
+  RUN_SECTION_ORDER,
+  runStatus,
+  type RunSection,
+} from '@ui/copy/runStatus';
 import { sessionView } from './sessionView';
 import type {
   RunModelDecisionReason,
@@ -159,7 +165,7 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const included = sessionRunIds.get();
   const { expanded } = surface.get();
   const rows: SessionListRow[] = [];
-  const groups: Record<RunView['group'], RunView[]> = {
+  const groups: Record<RunSection, RunView[]> = {
     running: [],
     waiting: [],
     interrupted: [],
@@ -177,10 +183,10 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   );
   detached.sort(compareByNewestCreationTime);
   for (const run of [...tops, ...detached]) {
-    if (included.has(run.id)) groups[run.group].push(run);
+    if (included.has(run.id)) groups[runStatus(run).section].push(run);
   }
   const append = (run: RunView, depth: number): void => {
-    const open = run.forceExpanded || expanded.get(run.id) === true;
+    const open = needsUser(run, view.runs) || expanded.get(run.id) === true;
     rows.push({ kind: 'run', run, depth, expanded: open });
     if (open) {
       for (const id of run.childIds) {
@@ -189,10 +195,10 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
       }
     }
   };
-  for (const runs of Object.values(groups)) {
-    const first = runs.at(0);
-    if (!first) continue;
-    rows.push({ kind: 'group', label: RUN_GROUP_LABELS[first.group] });
+  for (const section of RUN_SECTION_ORDER) {
+    const runs = groups[section];
+    if (runs.length === 0) continue;
+    rows.push({ kind: 'group', label: RUN_SECTION_LABELS[section] });
     for (const run of runs) append(run, 0);
   }
   return rows;
@@ -218,7 +224,7 @@ export const rootRunIds = computed(() =>
 export const sessionRunIds = computed((): ReadonlySet<RunId> => {
   const included = new Set(rootRunIds.get());
   for (const run of sessionView().get().runs.values()) {
-    if (run.runsHere) included.add(run.id);
+    if (run.holder === 'here') included.add(run.id);
   }
   return included;
 });

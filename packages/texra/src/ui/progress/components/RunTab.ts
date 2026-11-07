@@ -16,8 +16,7 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { type IconName } from '@ui/wa/iconNames';
-import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
+import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 import {
   buttonStyles,
@@ -42,15 +41,6 @@ import { formatRelativeTime } from '@ui/copy/format';
 import { runTabStyles } from './RunTab.styles';
 import type { RunView } from '@texra-ai/harness/schemas';
 
-/** Shape cue per tone (the session view spells the tone, the host the glyph). */
-const TONE_ICONS: Record<RunView['tone'], IconName> = {
-  running: 'circle',
-  success: 'circle-check',
-  danger: 'circle-exclamation',
-  warning: 'triangle-exclamation',
-  neutral: 'circle',
-};
-
 function buildTooltip(run: RunView): string {
   const modelDisplay =
     run.identity.kind === 'agent' && run.model
@@ -62,7 +52,7 @@ function buildTooltip(run: RunView): string {
     : undefined;
   const mainLine = [
     run.label,
-    `Status: ${run.approval === 'none' ? runStatusLabel(run.statusKey) : 'Needs approval'}`,
+    `Status: ${run.approval === 'none' ? runStatus(run).word : 'Needs approval'}`,
     run.rollup.total > 0 && rollupLabel(run),
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
@@ -75,7 +65,7 @@ function buildTooltip(run: RunView): string {
   return [
     mainLine,
     run.description,
-    runNoticeText(run.statusNotice),
+    runNoticeText(run),
     lastSeen && `Last activity ${lastSeen}`,
   ]
     .filter(Boolean)
@@ -170,15 +160,16 @@ export class RunTab extends LitElement {
 
   override render(): TemplateResult {
     const run = this.run;
-    const notice = runNoticeText(run.statusNotice);
+    const notice = runNoticeText(run);
+    // A descendant's request needs the user too, though this run is not
+    // the one waiting on it.
+    const status = runStatus(run);
     const pendingApproval = run.approval !== 'none';
-    const showStatus = pendingApproval || run.tone !== 'neutral';
-    const statusGlyph = pendingApproval
-      ? 'triangle-exclamation'
-      : TONE_ICONS[run.tone];
+    const showStatus = pendingApproval || status.tone !== 'neutral';
+    const statusGlyph = pendingApproval ? 'triangle-exclamation' : status.glyph;
     const accessibleStatusLabel = pendingApproval
       ? 'Needs approval'
-      : runStatusLabel(run.statusKey);
+      : status.word;
     const runTitle = run.title;
     const tooltip = buildTooltip(run);
     const deleteLabel =
@@ -207,7 +198,7 @@ export class RunTab extends LitElement {
         class=${classMap({
           'tab-container': true,
           'is-active': this.active,
-          [`tone-${run.tone}`]: true,
+          [`tone-${status.tone}`]: true,
           'has-pending-approval': pendingApproval,
           'is-unseen': this.unseen,
         })}

@@ -4,7 +4,12 @@
  * them under their group; each has its own Resume.
  */
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
+import {
+  isInterrupted,
+  type RunView,
+  type SessionView,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 
 /** One interrupted task, as `/resume all` names it. */
 interface InterruptedTask {
@@ -25,7 +30,7 @@ export function interruptedTasks(
     .filter(
       (run) =>
         run.parentId === null &&
-        run.group === 'interrupted' &&
+        isInterrupted(run) &&
         run.actions.includes('resume'),
     )
     .sort((a, b) => b.createdAt - a.createdAt)
