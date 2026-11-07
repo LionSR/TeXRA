@@ -172,9 +172,7 @@ export function toFetchToolError(
       return new ToolError(messages.http(reason.response.status));
     }
     if (isTransportReason(reason)) {
-      return new ToolError(
-        messages.network(toErrorMessage(reason.cause ?? error)),
-      );
+      return new ToolError(messages.network(toErrorMessage(error)));
     }
   }
   return new ToolError(messages.fallback(error.message));

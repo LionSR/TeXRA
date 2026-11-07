@@ -47,7 +47,7 @@ const writeSide = (
       (cause) =>
         new ApprovalTempWriteFailed({
           side,
-          message: toErrorMessage(cause.reason.cause ?? cause),
+          message: toErrorMessage(cause),
           cause,
         }),
     ),

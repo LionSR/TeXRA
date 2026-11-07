@@ -90,7 +90,7 @@ type DownloadServices = FileSystem.FileSystem | HttpClient.HttpClient;
  */
 const permanentFsError = (error: PlatformError.PlatformError) =>
   new ArxivSourcePermanentError({
-    message: toErrorMessage(error.reason.cause ?? error),
+    message: toErrorMessage(error),
   });
 
 const permanentFs = <T, R>(
@@ -534,7 +534,7 @@ function removeUnfinishedPaperDir(
   }).pipe(
     Effect.as(null),
     Effect.catch((error) => {
-      const message = `A partial source was left at ${paperDirFull} (${toErrorMessage(error.reason.cause ?? error)}); remove it before downloading again.`;
+      const message = `A partial source was left at ${paperDirFull} (${toErrorMessage(error)}); remove it before downloading again.`;
       return Effect.logWarning(message).pipe(Effect.as(message));
     }),
     withLogChannel(ARXIV_CHANNEL),

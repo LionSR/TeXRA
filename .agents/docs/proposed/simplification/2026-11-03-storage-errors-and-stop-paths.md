@@ -185,6 +185,18 @@ entry (the harness depends on `@texra-ai/llm`, so llm cannot import the
 harness's), not both; the plan wording has one owner, the
 UI's, and the harness copies go.
 
+_Done 2026-11-06 (first part): `toErrorMessage` walks a `PlatformError`'s
+and a `SqlError`'s `reason.cause`, and the nine hand unwraps are gone;
+the three `NotFound`-only catches and the housekeeping `BadResource`
+catch read `absentReason`; the ChatGPT revoke retries by llm's
+`isRetryableStatus`. Kept with their reasons: `isTransientHttpStatus`
+beside `isRetryableStatus` (the 409 difference is documented); the plan
+wording in the harness (`ProviderError.message`, stored on the run's
+rows and read by an embedder and a child's parent) beside the app's
+copy, which words the same facts for its surfaces; llm's own
+`causeChain` and `toErrorMessage`, since the harness's browser-safe
+entries cannot take llm's._
+
 **Give up.** Nothing observable.
 
 ## 5. Stop and interruption: one answer to "did it stop or fail"
@@ -305,6 +317,13 @@ two (done). The gate owns every wait, the no-route failure's included: `pauseBef
 sleep goes and `retryAfterMs` is honoured. One thrown-to-result converter; a non-`ToolError` defect is
 logged at `warn` before it becomes a result; one skip signal; `diagnostics`
 values get a reader or go.
+
+_Done 2026-11-06: the loop waits once before a resend, as long as the
+provider asked (`retryAfterMs`) else the base backoff, and nothing for a
+failure the route gate cooled; `ToolResult.diagnostics` is gone with its
+schema, its sanitizer and twelve producers (nothing read it: not the
+model's text, not a surface, not a row reader), and a schema failure
+reaches the model as its rendered issue tree in the one error text._
 
 **Give up.** A silent success on truncation, which is the defect.
 

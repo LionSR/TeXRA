@@ -1,11 +1,6 @@
 import { Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
-import {
-  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-  formatIssuesForDiagnostics,
-  type ValidationErrorDiagnostics,
-} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -70,20 +65,13 @@ export function partitionDuplicateCalls<
   return sharedWithPrimary;
 }
 
-/** Normalize a tool call error into a user-friendly message with optional diagnostics. */
+/** A tool call's failure as the model reads it: the tool's name and the
+ *  failure's message, a schema failure's as its rendered issue tree. */
 export function normalizeToolCallError(
   toolName: string,
   error: unknown,
-): { message: string; diagnostics?: ValidationErrorDiagnostics } {
-  if (!(error instanceof Schema.SchemaError)) {
-    return { message: `${toolName}: ${toErrorMessage(error)}` };
-  }
-
-  return {
-    message: `${toolName}: Invalid parameters provided`,
-    diagnostics: {
-      type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-      formatted: formatIssuesForDiagnostics(error),
-    },
-  };
+): string {
+  return error instanceof Schema.SchemaError
+    ? `${toolName}: Invalid parameters:\n${error.message}`
+    : `${toolName}: ${toErrorMessage(error)}`;
 }

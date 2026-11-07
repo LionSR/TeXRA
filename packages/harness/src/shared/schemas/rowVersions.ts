@@ -293,7 +293,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // edit of an existing file requires; an earlier build's row would read as a
   // call that read nothing, and the run's edits would be refused (nothing
   // records what that build's calls read).
-  'tool.result': { version: 3, listing: 'none' },
+  // v4: no `diagnostics`; an earlier build's row holding them would have
+  // them silently dropped.
+  'tool.result': { version: 4, listing: 'none' },
   // v2: no `continuation`: goal mode is a script, and a waiting run never
   // continues itself (an earlier build's row names a plugin continuation this
   // build has none of).

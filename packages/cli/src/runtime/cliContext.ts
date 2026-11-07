@@ -380,7 +380,7 @@ const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
             message: `--cwd: path does not exist: ${requested}`,
           })
         : new CliUsageError({
-            message: `--cwd: cannot access ${requested}: ${toErrorMessage(error.reason.cause ?? error)}`,
+            message: `--cwd: cannot access ${requested}: ${toErrorMessage(error)}`,
           }),
     ),
   );

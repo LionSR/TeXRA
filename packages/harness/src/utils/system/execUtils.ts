@@ -306,7 +306,7 @@ function drain(
 }
 
 function describeFailure(error: PlatformError): string {
-  return toErrorMessage(error.reason.cause ?? error.reason._tag);
+  return toErrorMessage(error);
 }
 
 /** The command for a log or a message: argv quoted as this platform's

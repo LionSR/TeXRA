@@ -337,7 +337,6 @@ export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
       {
         // Not "Read …": the card would read as a read_file call.
         summary: `Not edited: ${path} was not read first`,
-        diagnostics: { reason: 'unread-file', path },
       },
     );
   },

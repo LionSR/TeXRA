@@ -491,7 +491,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
       error: unsent
         ? `tool_unavailable: "${fact.toolName}" is not a direct call in this run; call it from a script as tools.${fact.toolName}(...).`
         : `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
-      diagnostics: { code: 'tool_unavailable', tool: fact.toolName },
     };
   } else {
     // From here the call may have run: its intent commits now, with a slow
@@ -568,15 +567,11 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     } else {
       const refused = findStorageRefusal(invoked.cause);
       if (refused) return yield* runRefusal(runId, refused);
-      const { message, diagnostics } = normalizeToolCallError(
+      const message = normalizeToolCallError(
         fact.toolName,
         Cause.squash(invoked.cause),
       );
-      result = {
-        status: 'error',
-        error: message.trim() || 'Tool run failed.',
-        ...(diagnostics ? { diagnostics } : {}),
-      };
+      result = { status: 'error', error: message.trim() || 'Tool run failed.' };
     }
   }
   // A result the schema refuses becomes an error result the model can read;

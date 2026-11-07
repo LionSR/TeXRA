@@ -1,5 +1,5 @@
 // Local imports - tool result schemas
-import { Result, Schema } from 'effect';
+import { Schema } from 'effect';
 
 import {
   type FileReference,
@@ -7,29 +7,7 @@ import {
   type ToolFileAttachment,
   type ToolResult,
   ToolResultSchema,
-  type ValidationErrorDiagnostics,
-  ValidationErrorDiagnosticsSchema,
 } from '@shared/schemas';
-
-/**
- * Sanitize the shared `diagnostics` field. Sanitized results only carry the
- * validation-error diagnostics shape (see `ToolResultSharedFields.diagnostics`
- * for why the source field is `Schema.Unknown`); any other tool's diagnostics
- * payload — or a validation-error payload whose `formatted` doesn't actually
- * match the formatted-issue shape — is dropped rather than passed through
- * untyped.
- */
-function sanitizeDiagnostics(
-  diagnostics: unknown,
-): ValidationErrorDiagnostics | undefined {
-  if (diagnostics === undefined) return undefined;
-  const validationError = Schema.decodeUnknownResult(
-    ValidationErrorDiagnosticsSchema,
-  )(diagnostics);
-  return Result.isSuccess(validationError)
-    ? validationError.success
-    : undefined;
-}
 
 /**
  * Result from extracting attachments from a tool result.
@@ -66,25 +44,13 @@ export function extractToolAttachments(
   // missing before it reaches `formatToolResultAsText`.
   const parsed = Schema.decodeUnknownSync(ToolResultSchema)(result);
 
-  if (parsed.status === 'error') {
-    // No binary-bearing field exists on this branch of the schema
-    // (output/edits/files are all `Schema.Undefined` here), so the parsed value
-    // needs nothing but its sanitized diagnostics.
-    const { diagnostics: rawDiagnostics, ...rest } = parsed;
-    const diagnostics = sanitizeDiagnostics(rawDiagnostics);
-    return {
-      attachments: [],
-      facts: [],
-      sanitizedResult: {
-        ...rest,
-        ...(diagnostics !== undefined ? { diagnostics } : {}),
-      },
-    };
-  }
+  // No binary-bearing field exists on the error branch of the schema
+  // (output/edits/files are all `Schema.Undefined` there).
+  if (parsed.status === 'error')
+    return { attachments: [], facts: [], sanitizedResult: parsed };
 
-  const { files, facts = [], diagnostics: rawDiagnostics, ...rest } = parsed;
+  const { files, facts = [], ...rest } = parsed;
   checkFacts(facts);
-  const diagnostics = sanitizeDiagnostics(rawDiagnostics);
   const attachments: readonly ToolFileAttachment[] = files ?? [];
 
   return {
@@ -103,7 +69,6 @@ export function extractToolAttachments(
             })),
           }
         : {}),
-      ...(diagnostics !== undefined ? { diagnostics } : {}),
     },
   };
 }

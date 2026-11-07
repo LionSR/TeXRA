@@ -74,7 +74,6 @@ layer(SessionGraph.hosted)('MemoryTool view with an omitted path', (it) => {
       expect(result).toMatchObject({
         status: 'error',
         error: expect.stringContaining(message),
-        diagnostics: { name: 'ToolError' },
       });
     }),
   );
