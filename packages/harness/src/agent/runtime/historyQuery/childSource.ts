@@ -65,7 +65,7 @@ const handle = (message) => {
       writable(() => {
         db.exec('BEGIN');
         try {
-          for (const [name, ...values] of message.ops) writes[name].run(...values);
+          for (const { statement, params } of message.ops) writes[statement].run(params);
           db.exec('COMMIT');
         } catch (error) {
           db.exec('ROLLBACK');

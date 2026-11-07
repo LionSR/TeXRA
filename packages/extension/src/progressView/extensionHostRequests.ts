@@ -13,7 +13,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FiberHandle, Scope } from 'effect';
 
-import { Rejected, type Session, type WorkspaceRoots } from '@texra-ai/harness';
+import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   type StateStore,
   withProcessServices,
@@ -24,7 +24,11 @@ import {
   pathToLocationIn,
 } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
-import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  type AgentConfig,
+  Rejected,
+} from '@texra-ai/harness/schemas';
 import { openLatexdiffs } from '@commands/latex/latexdiffCommands';
 import { handleCompare } from '@commands/latex/compareCommands';
 import { findCommitInHistory } from '@commands/git/gitCommands';

@@ -9,7 +9,7 @@ import {
   MESSAGE_TYPES,
   decodeLogPayload,
   type MessageType,
-  type TranscriptEvent,
+  type TraceRowFields,
 } from '@shared/schemas';
 import type { StreamingTextRow } from '@shared/transcript/transcriptRow';
 
@@ -28,7 +28,7 @@ export const STREAMING_TEXT_ROW_KIND: Partial<
  *  row, its stderr at the warning level. */
 export function recordProcessOutputRow(
   d: Draft,
-  event: Extract<TranscriptEvent, { type: 'process.output' }>,
+  event: Extract<TraceRowFields, { type: 'process.output' }>,
 ): void {
   const level = event.stream === 'stderr' ? 'warn' : 'info';
   const base = open(
@@ -52,7 +52,7 @@ export function recordProcessOutputRow(
  *  diagnostic, never dropped. */
 export function recordLogRow(
   d: Draft,
-  event: Extract<TranscriptEvent, { type: 'log' }>,
+  event: Extract<TraceRowFields, { type: 'log' }>,
 ): void {
   if (event.level === 'debug' && !d.ctx.debug) return;
   const groupId = event.stageId;

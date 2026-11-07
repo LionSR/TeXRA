@@ -1,6 +1,5 @@
 // Node imports
 import * as nodePath from 'node:path';
-import { formatResultCount } from '@texra-ai/harness/transcript';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
@@ -10,7 +9,7 @@ import { Settings, WorkspaceFs, toPosixPath } from '@texra-ai/harness/host';
 import { relativeToRoot, pathExists } from '@texra-ai/harness/node';
 
 // Local imports - tools
-import { ensureError } from '@texra-ai/harness/schemas';
+import { ensureError, formatResultCount } from '@texra-ai/harness/schemas';
 import {
   resolveToolPath,
   type ToolPathCall,

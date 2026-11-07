@@ -6,11 +6,11 @@
 
 import { Box, Text } from 'ink';
 
-import { formatCompactDuration } from '@texra-ai/harness/transcript';
 import {
   fileLocationDisplayPath,
   type TaskGroup,
   type TaskGroupStatus,
+  formatCompactDuration,
 } from '@texra-ai/harness/schemas';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';

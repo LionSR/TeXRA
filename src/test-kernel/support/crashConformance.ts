@@ -98,7 +98,7 @@ import {
   AgentConfigSchema,
   qualifyAggregateId,
   aggregateTarget,
-  SessionEventSchema,
+  SessionRowSchema,
   type RunId,
 } from '@shared/schemas';
 import {
@@ -346,7 +346,7 @@ const approveAll = (session: Context.Context<SessionServices>, after = 0) =>
   ).pipe(Effect.forkScoped);
 
 /** Every row type: a run's rows are read whole. */
-const ALL_TYPES = SessionEventSchema.members.map(
+const ALL_TYPES = SessionRowSchema.members.map(
   (schema) => schema.fields.type.literal,
 );
 

@@ -11,7 +11,7 @@ import { Effect, Schema } from 'effect';
 // Local imports - core
 import { defineTool } from '@texra-ai/harness';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
-import { pluralize } from '@texra-ai/harness/transcript';
+import { pluralize } from '@texra-ai/harness/schemas';
 
 // Local imports - zotero
 import { callBetterBibTeX } from './bbtClient';

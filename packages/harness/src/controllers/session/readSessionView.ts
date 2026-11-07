@@ -32,6 +32,7 @@ import type { ToolRegistry } from '@tools/toolTable';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 import { databaseLayer } from './Database';
+import { projectStores } from './projectDatabase';
 import { cannotOpen } from './storeAside';
 import { sessionInputsLayer } from './sessionInputs';
 import { LocalRuntimeSource, TextChunkSource } from './sessionSources';
@@ -115,4 +116,45 @@ export const readSessionView = Effect.fn('readSessionView')(function* (
       ),
     ),
   );
+});
+
+/** One project under a storage root, as `Sessions.projects` lists it. */
+export interface ProjectView {
+  /** The project's folder. */
+  readonly workspace: string;
+  /** Its storage directory. */
+  readonly storage: string;
+  readonly view: SessionView;
+}
+
+/**
+ * Every project under `storageRoot` (`projectStores`): a session this
+ * process holds answers from its live view (`held`, by storage directory),
+ * any other is read cold from its store. A store that cannot be opened or
+ * replayed (a defect included) is logged and left out, so one damaged store
+ * never hides the rest.
+ */
+export const projectViews = Effect.fn('projectViews')(function* (
+  storageRoot: string,
+  held: (storage: string) => SessionView | undefined,
+) {
+  const views: ProjectView[] = [];
+  for (const { workspace, storage } of yield* projectStores(storageRoot)) {
+    const live = held(storage);
+    if (live !== undefined) {
+      views.push({ workspace, storage, view: live });
+      continue;
+    }
+    const cold = yield* readSessionView(storage).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning(
+          `Leaving ${workspace} out of the project list: its store could not be read`,
+          cause,
+        ).pipe(Effect.as(Option.none<SessionView>())),
+      ),
+    );
+    if (Option.isSome(cold))
+      views.push({ workspace, storage, view: cold.value });
+  }
+  return views;
 });

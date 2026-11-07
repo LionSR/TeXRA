@@ -25,8 +25,8 @@ import {
   StoredMessageSchema,
   type StoredTurnSchema,
   toJsonValue,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
   type StoredInputPart,
 } from '@shared/schemas';
 import type {
@@ -143,7 +143,7 @@ const live = (value: unknown) =>
  */
 export function storedDraft(
   row: RunHistoryDraft,
-): Result.Result<WithBlobs<SessionEventDraft>, RunHistoryInconsistent> {
+): Result.Result<WithBlobs<SessionRowDraft>, RunHistoryInconsistent> {
   const unstorable = (issue: Schema.SchemaError) =>
     new RunHistoryInconsistent({
       reason: 'unreadable-turn',
@@ -229,7 +229,7 @@ function livePayload(
   }
 }
 
-function liveRow(row: SessionEvent): RunHistoryRow {
+function liveRow(row: SessionRow): RunHistoryRow {
   if (row.type === 'context.edit')
     return {
       ...row,
@@ -242,9 +242,9 @@ function liveRow(row: SessionEvent): RunHistoryRow {
 /** Committed rows as the run fold reads them, or the row whose turn this
  *  build of the package cannot read. */
 export function runHistoryRows(
-  rows: readonly SessionEvent[],
+  rows: readonly SessionRow[],
 ): Result.Result<readonly RunHistoryRow[], RunHistoryInconsistent> {
-  let at: SessionEvent | undefined;
+  let at: SessionRow | undefined;
   return Result.try({
     try: () => rows.map((row) => liveRow((at = row))),
     catch: (cause) =>

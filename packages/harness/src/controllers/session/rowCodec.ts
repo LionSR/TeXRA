@@ -36,12 +36,12 @@ import {
   RETIRED_ROW_KINDS,
   ROW_KINDS,
   SessionEventDraftSchema,
-  SessionEventSchema,
+  SessionRowSchema,
   unavailableFactReason,
   type AggregateId,
   type JsonValue,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
 } from '@shared/schemas';
 import {
   DatabaseRowCorrupt,
@@ -120,7 +120,7 @@ export function aggregateOf(kind: unknown, logicalId: unknown): AggregateId {
   );
 }
 
-const hasKind = (type: string): type is SessionEventDraft['type'] =>
+const hasKind = (type: string): type is SessionRowDraft['type'] =>
   Object.hasOwn(ROW_KINDS, type);
 
 /** The stored version of `type` this build reads: its kind's, and none of
@@ -170,8 +170,8 @@ export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
 /** Validate a draft and encode it at its kind's current version, with the
  *  blobs it brings. Throws on a draft that does not parse, is not JSON, or
  *  whose blob does not hash to its digest. */
-export function prepareEventDraft(input: WithBlobs<SessionEventDraft>): {
-  readonly draft: SessionEventDraft;
+export function prepareEventDraft(input: WithBlobs<SessionRowDraft>): {
+  readonly draft: SessionRowDraft;
   readonly row: EncodedRow;
 } {
   const { blobs = [], ...rest } = input;
@@ -180,7 +180,7 @@ export function prepareEventDraft(input: WithBlobs<SessionEventDraft>): {
 }
 
 export function encodeDraft(
-  draft: SessionEventDraft,
+  draft: SessionRowDraft,
   brought: readonly DraftBlob[] = [],
 ): EncodedRow {
   const { type, aggregateId: _key, ...payload } = draft;
@@ -271,7 +271,7 @@ export function decodeRow(
   factKinds: FactKinds,
   blobs: Blobs,
 ): Result.Result<
-  SessionEvent | undefined,
+  SessionRow | undefined,
   DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
 > {
   const row = Schema.decodeUnknownSync(RowSchema)(input);
@@ -299,7 +299,7 @@ export function decodeRow(
   } catch (error) {
     return corrupt(error);
   }
-  const parsed = Schema.decodeUnknownResult(SessionEventSchema)({
+  const parsed = Schema.decodeUnknownResult(SessionRowSchema)({
     ...data,
     aggregateId: aggregateOf(row.kind, row.logicalId),
     seq: row.seq,

@@ -24,7 +24,7 @@ import {
   aggregateTarget,
   type CommitOrdinal,
   type RunId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import {
   Database,
@@ -67,7 +67,7 @@ export interface SessionStore {
   /** The tail as the view has folded it (each row released once the view
    *  holds its state), for the session's one reader: `settled` waits until
    *  it has run over a commit, so it never waits on `settled` itself. */
-  readonly folded: Stream.Stream<SessionEvent, DatabaseReadFailed>;
+  readonly folded: Stream.Stream<SessionRow, DatabaseReadFailed>;
   /** Deliver the raw tail from the store's opening commit for the caller's
    *  scope: each committed row drops the transient text it closes, a run's
    *  removal is handed to `removed`, and the position it reaches is what a
@@ -75,7 +75,7 @@ export interface SessionStore {
   readonly deliver: (
     removed: (
       runId: RunId,
-      marker: Extract<SessionEvent, { type: 'run.removed' }>,
+      marker: Extract<SessionRow, { type: 'run.removed' }>,
     ) => void,
   ) => Effect.Effect<void, never, Scope.Scope>;
   /** Drain the publisher inside the close deadline, then shut the doors:

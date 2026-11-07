@@ -244,7 +244,7 @@ the same POLICY implemented per host, the simplification is to hoist it:
   Schemas are SSOT — derive types (`typeof S.Type`), never hand-write
   parallel ones.
 - Run-scoped facts extend `AgentEvent`; session-authored facts extend the
-  `SessionEvent` schema and commit via the session log's `transact`.
+  `SessionRow` schema and commit via the session log's `transact`.
   No new `bus.emit` from a VS Code-free zone.
 - No new `@agent/*` deep-import specifiers from hosts; import through a
   harness entry.

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   assistantMessageFromResult,
   completedTurn,
+  type Model,
   type TurnRequest,
 } from '@texra-ai/llm';
 import { anthropicMessagesModel } from '../../src/api/anthropicMessages.js';
@@ -206,7 +207,7 @@ describe('canonical Anthropic Messages protocol', () => {
       Effect.gen(function* () {
         vi.stubEnv('ANTHROPIC_AUTH_TOKEN', 'ambient-bearer');
         vi.stubEnv('ANTHROPIC_BASE_URL', 'https://ambient.invalid');
-        const configured = model();
+        const configured = yield* model();
         const prepared = yield* configured.prepareTurn(REQUEST);
         assert(prepared.mode === 'foreground');
         const events = yield* Stream.runCollect(
@@ -432,7 +433,7 @@ describe('canonical Anthropic Messages protocol', () => {
     'replays a turn of another codec version without its reasoning',
     () =>
       Effect.gen(function* () {
-        const configured = model();
+        const configured = yield* model();
         const prepared = yield* configured.prepareTurn(REQUEST);
         assert(prepared.mode === 'foreground');
         const result = yield* completedTurn(configured.streamTurn(prepared));
@@ -471,15 +472,20 @@ describe('canonical Anthropic Messages protocol', () => {
       }),
   );
 
-  it('rejects ambient custom headers before they override the selected credentials', () => {
-    vi.stubEnv(
-      'ANTHROPIC_CUSTOM_HEADERS',
-      'X-Api-Key: another-key\nanthropic-version: another-version',
-    );
-    expect(() => model()).toThrow(
-      expect.objectContaining({ _tag: 'ModelError', kind: 'invalid-request' }),
-    );
-  });
+  it.effect(
+    'rejects ambient custom headers before they override the selected credentials',
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv(
+          'ANTHROPIC_CUSTOM_HEADERS',
+          'X-Api-Key: another-key\nanthropic-version: another-version',
+        );
+        expect(yield* Effect.flip(model())).toMatchObject({
+          _tag: 'ModelError',
+          kind: 'invalid-request',
+        });
+      }),
+  );
 });
 
 /*
@@ -525,10 +531,7 @@ describe('Anthropic message threads', () => {
     };
   };
   // Turns that each answer the previous turn's tool calls.
-  const turns = Effect.fn(function* (
-    bound: ReturnType<typeof model>,
-    count = 2,
-  ) {
+  const turns = Effect.fn(function* (bound: Model, count = 2) {
     let messages = REQUEST.messages;
     for (let turn = 0; turn < count; turn++) {
       const prepared = yield* bound.prepareTurn({ ...REQUEST, messages });
@@ -568,7 +571,7 @@ describe('Anthropic message threads', () => {
 
   it.effect('continues the stored response with only the new messages', () =>
     Effect.gen(function* () {
-      yield* turns(model());
+      yield* turns(yield* model());
       const create = sent(0);
       expect(create.beta).toBe('message-threads-2026-08-12');
       expect(create.body.thread).toStrictEqual({ type: 'create' });
@@ -590,7 +593,7 @@ describe('Anthropic message threads', () => {
       fetchModel
         .mockImplementationOnce(async () => response(signedEvents()))
         .mockImplementationOnce(async () => rejected(404, 'thread_not_found'));
-      yield* turns(model());
+      yield* turns(yield* model());
       expect(fetchModel).toHaveBeenCalledTimes(3);
       const replay = sent(2);
       expect(replay.body.thread).toStrictEqual({ type: 'create' });
@@ -607,7 +610,7 @@ describe('Anthropic message threads', () => {
         .mockImplementationOnce(lost)
         .mockImplementationOnce(async () => response(signedEvents()))
         .mockImplementationOnce(lost);
-      yield* turns(model(), 4);
+      yield* turns(yield* model(), 4);
       // Turn 3's continue is lost right after turn 2's replay: from then on
       // the conversation goes out whole, with no continue to fail first.
       expect(fetchModel).toHaveBeenCalledTimes(6);
@@ -624,7 +627,7 @@ describe('Anthropic message threads', () => {
       fetchModel.mockImplementationOnce(async () =>
         rejected(400, 'thread_unsupported_request'),
       );
-      yield* turns(model());
+      yield* turns(yield* model());
       expect(fetchModel).toHaveBeenCalledTimes(3);
       for (const call of [1, 2]) {
         expect(sent(call).beta).toBeNull();

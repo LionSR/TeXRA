@@ -19,7 +19,7 @@
  */
 // The frozen schemas live in `config/storage/frozen/`, written by
 // `npm run storage:freeze` at a release and checked by `rowVersions.vitest.ts`.
-import type { SessionEventDraft } from './sessionEvent';
+import type { SessionRowDraft } from './sessionEvent';
 
 interface RowKind {
   /** The version this build writes and reads. */
@@ -113,7 +113,7 @@ export const CURRENT_VALUE_VERSION = 1;
 
 /** Every arm of `SessionEventDraftSchema`: a new arm without an entry, its
  *  version and its listing class, does not compile. */
-export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
+export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v2: the launching call's id and card are one `parent.call`, with no
   // top-level `parentCard`.
   // v3: the parent call says whether it awaits the child (`awaited`); an
@@ -321,7 +321,7 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
  * `Database`).
  */
 export function listingTypeOf(
-  event: Pick<SessionEventDraft, 'type'>,
+  event: Pick<SessionRowDraft, 'type'>,
 ): string | null {
   const { listing } = ROW_KINDS[event.type];
   if (listing === 'none') return null;

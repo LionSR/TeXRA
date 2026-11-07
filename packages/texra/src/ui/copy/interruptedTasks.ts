@@ -3,12 +3,12 @@
  * the view's `interrupted` group that this window can resume. The view lists
  * them under their group; each has its own Resume.
  */
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import {
   isInterrupted,
   type RunView,
   type SessionView,
   type RunId,
+  formatResultCount,
 } from '@texra-ai/harness/schemas';
 
 /** One interrupted task, as `/resume all` names it. */

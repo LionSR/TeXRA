@@ -1,6 +1,5 @@
-import { pluralize } from '@texra-ai/harness/transcript';
-
 import type { DiffLabel } from '@texra/hosts/uiHosts';
+import { pluralize } from '@texra-ai/harness/schemas';
 
 /** A tool edit's diff, as every host names it: the tool, the file, and how
  *  many lines it changes. */

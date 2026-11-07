@@ -20,9 +20,9 @@ import type {
   AggregateId,
   CommitOrdinal,
   OwnerId,
-  SessionEvent,
-  DisplaySessionEvent,
-  SessionEventDraft,
+  SessionRow,
+  DisplayRow,
+  SessionRowDraft,
 } from '@shared/schemas';
 import type {
   Database,
@@ -60,7 +60,7 @@ export interface JobOptions {
  *  is, with the blobs it stores. */
 export type UnfoldedDraft = WithBlobs<
   Exclude<
-    SessionEventDraft,
+    SessionRowDraft,
     { type: Exclude<RunStateRowType, 'run.end' | 'run.stop'> }
   >
 >;
@@ -80,7 +80,7 @@ export type Alongside<E = never> = Effect.Effect<
 export type Append = (
   events: readonly UnfoldedDraft[],
 ) => Effect.Effect<
-  readonly SessionEvent[],
+  readonly SessionRow[],
   DatabaseAggregateClosed | DatabaseWriteFailed
 >;
 
@@ -149,7 +149,7 @@ export class SessionEvents extends Context.Service<
       id: AggregateId,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
-      readonly SessionEvent[],
+      readonly SessionRow[],
       DatabaseAggregateClosed | DatabaseWriteFailed
     >;
     /** Close the plane: end the inbox and run what it holds, inside the
@@ -169,10 +169,7 @@ export class SessionEvents extends Context.Service<
     /** The listing read from storage: the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */
-    readonly listing: () => Stream.Stream<
-      DisplaySessionEvent,
-      DatabaseReadFailed
-    >;
+    readonly listing: () => Stream.Stream<DisplayRow, DatabaseReadFailed>;
     /** Every event with commit above `fromCommit`, in commit order across
      *  aggregates, then the tail, which ends when the session closes; every
      *  tail shares one read of each commit. Transcript rows of unsubscribed
@@ -185,7 +182,7 @@ export class SessionEvents extends Context.Service<
     readonly all: (
       fromCommit: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+    ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
   }
 >()('@texra-ai/harness/session/SessionEvents') {}
 
@@ -208,7 +205,7 @@ interface DrainLevel<E> {
 }
 
 /** One read of the rows above `fromCommit` through `upTo`, never past it. */
-const readThrough = <A extends SessionEvent, E>(
+const readThrough = <A extends SessionRow, E>(
   read: Read<A, E>,
   fromCommit: CommitOrdinal,
   upTo: CommitOrdinal,
@@ -227,7 +224,7 @@ const readThrough = <A extends SessionEvent, E>(
  *  stopped to the upper bound captured for it. A level says "there is
  *  more", not "there is one more", so the wakes during a read collapse into
  *  one further read, and a row a read could not deliver is not read again. */
-const forwardReads = <A extends SessionEvent, E>(
+const forwardReads = <A extends SessionRow, E>(
   read: Read<A, E>,
   level: DrainLevel<E>,
   fromCommit: CommitOrdinal,
@@ -255,7 +252,7 @@ const forwardReads = <A extends SessionEvent, E>(
  * pulls past them). A row the store no longer holds emits nothing, so a
  * reader that must know the tail passed an ordinal (the NDJSON detach
  * drain) waits on this coordinate, never on the events alone. */
-const released = <A extends SessionEvent, E>(
+const released = <A extends SessionRow, E>(
   deliveries: Stream.Stream<Delivery<A>, E>,
   fromCommit: CommitOrdinal,
   drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
@@ -273,7 +270,7 @@ const released = <A extends SessionEvent, E>(
 
 /** A drain of its own for one reader: {@link forwardReads} on `level`,
  *  {@link released} from `fromCommit`. */
-export const tailFrom = <A extends SessionEvent, E>(
+export const tailFrom = <A extends SessionRow, E>(
   read: Read<A, E>,
   level: DrainLevel<E>,
   fromCommit: CommitOrdinal,
@@ -299,7 +296,7 @@ export const logTails = Effect.fnUntraced(function* (
 > {
   const fanout =
     yield* PubSub.unbounded<
-      Take.Take<Delivery<DisplaySessionEvent>, DatabaseReadFailed>
+      Take.Take<Delivery<DisplayRow>, DatabaseReadFailed>
     >();
   let published = yield* log.currentCommit;
   const level = {

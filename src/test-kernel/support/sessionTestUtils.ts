@@ -21,8 +21,8 @@ import {
   type AggregateId,
   type RunId,
   type RunOutcome,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
 } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
 import { applyTranscriptEvent } from '@shared/session/transcriptUpdate';
@@ -44,7 +44,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
  */
 export function publishTestRows(
   session: Context.Context<SessionServices>,
-  rows: readonly SessionEventDraft[],
+  rows: readonly SessionRowDraft[],
 ): void {
   Effect.runFork(seedRows(Context.get(session, SessionLog))(rows));
 }
@@ -53,7 +53,7 @@ export function publishTestRows(
  *  admitted: a seeded history stands in for what a run's cell wrote. */
 export const seedRows =
   (log: Pick<SessionLog['Service'], 'transact'>) =>
-  (rows: readonly SessionEventDraft[]) =>
+  (rows: readonly SessionRowDraft[]) =>
     log.transact((tx) => runStateAppend(tx.append)(rows));
 
 /**
@@ -139,7 +139,7 @@ export function createTestRunTrace(runId: RunId) {
       transcript,
       { ix, owned: new WeakSet() },
       // cast: the trace's transcript events are session event payloads.
-      { ...fact, aggregateId: aggregate, seq, at: seq } as SessionEvent,
+      { ...fact, aggregateId: aggregate, seq, at: seq } as SessionRow,
       ctx,
     );
   };

@@ -1,7 +1,7 @@
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { String as Str } from 'effect';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   git: 'Git and worktrees',

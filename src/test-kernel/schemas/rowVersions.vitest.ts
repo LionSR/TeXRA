@@ -12,7 +12,7 @@ import { Schema } from 'effect';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-import { WORKSPACE_STORES } from '@texra-ai/harness/node';
+import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
 import {
   CURRENT_VALUE_VERSION,

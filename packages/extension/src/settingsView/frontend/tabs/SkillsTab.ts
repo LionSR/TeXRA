@@ -11,8 +11,8 @@ import {
   type ActiveSkillSourceScope,
   type SkillDisplayIssue,
   type SkillDisplayItem,
+  pluralize,
 } from '@texra-ai/harness/schemas';
-import { pluralize } from '@texra-ai/harness/transcript';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postMessage } from '@texra/shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';

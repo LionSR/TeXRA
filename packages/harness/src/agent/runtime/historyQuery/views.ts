@@ -147,45 +147,110 @@ export const cutJson = (value: unknown): string | null => {
 /** The row a call's intent and result update: its latest issue under that
  *  id in its run, as a provider may reuse a call id in a later turn. */
 const LATEST_CALL =
-  'SELECT max(position) FROM tool_calls WHERE run_id = ? AND call_id = ?';
+  'SELECT max(position) FROM tool_calls WHERE run_id = :run_id AND call_id = :call_id';
 /** What an open call is: running while its run is live, otherwise its
  *  result is unknown (its body may have run with nothing recorded). */
 const OPEN_STATUS = `CASE WHEN run_id IN
   (SELECT id FROM runs WHERE status IN ('running', 'waiting'))
   THEN 'running' ELSE 'unknown' END`;
 
-/** The store's writes, by the name an append op starts with: calls are
- *  added as their facts arrive, the runs table is replaced whole, and open
- *  calls are read against it again. */
-export const HISTORY_WRITE_SQL = Object.freeze({
-  toolCall: `INSERT INTO tool_calls
-    (position, run_id, call_id, script_call_id, tool, input, status, issued_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
-  toolStart: `UPDATE tool_calls SET attempt = ?, status = 'running',
-    started_at = ? WHERE position = (${LATEST_CALL})`,
-  toolEnd: `UPDATE tool_calls SET attempt = ?, status = ?, output = ?,
-    value = ?, error = ?, ended_at = ? WHERE position = (${LATEST_CALL})`,
-  modelAttempt: `INSERT INTO model_calls
-    (run_id, invocation_id, attempt, model, status, started_at)
-    VALUES (?, ?, ?, ?, 'running', ?)`,
-  modelEnd: `UPDATE model_calls SET status = ?, output = ?, error = ?,
-    input_tokens = ?, output_tokens = ?, cost = ?, ended_at = ?
-    WHERE run_id = ? AND invocation_id = ? AND attempt = ?`,
-  removeTools: 'DELETE FROM tool_calls WHERE run_id = ?',
-  removeModels: 'DELETE FROM model_calls WHERE run_id = ?',
-  clearRuns: 'DELETE FROM runs',
-  run: `INSERT INTO runs VALUES (${HISTORY_TABLES.runs.map(() => '?').join(', ')})`,
-  openTools: `UPDATE tool_calls SET status = ${OPEN_STATUS}
-    WHERE status IN ('running', 'unknown')`,
-  openModels: `UPDATE model_calls SET status = ${OPEN_STATUS}
-    WHERE status IN ('running', 'unknown')`,
-});
+/** A value a history column holds. */
+type Value = string | number | null;
 
-/** One write: its `HISTORY_WRITE_SQL` statement's name, then its values. */
-export type HistoryWrite = readonly [
-  keyof typeof HISTORY_WRITE_SQL,
-  ...(string | number | null)[],
-];
+/** What each of the store's writes binds, by parameter name. */
+interface HistoryParams {
+  readonly toolCall: {
+    readonly position: number;
+    readonly run_id: string;
+    readonly call_id: string;
+    readonly script_call_id: string | null;
+    readonly tool: string;
+    readonly input: Value;
+    readonly issued_at: string;
+  };
+  readonly toolStart: {
+    readonly attempt: number;
+    readonly started_at: string;
+    readonly run_id: string;
+    readonly call_id: string;
+  };
+  readonly toolEnd: {
+    readonly attempt: number;
+    readonly status: string;
+    readonly output: Value;
+    readonly value: Value;
+    readonly error: Value;
+    readonly ended_at: string;
+    readonly run_id: string;
+    readonly call_id: string;
+  };
+  readonly modelAttempt: {
+    readonly run_id: string;
+    readonly invocation_id: string;
+    readonly attempt: number;
+    readonly model: string;
+    readonly started_at: string;
+  };
+  readonly modelEnd: {
+    readonly status: 'completed' | 'failed' | 'cancelled';
+    readonly output: Value;
+    readonly error: Value;
+    readonly input_tokens: number | null;
+    readonly output_tokens: number | null;
+    readonly cost: number | null;
+    readonly ended_at: string;
+    readonly run_id: string;
+    readonly invocation_id: string;
+    readonly attempt: number;
+  };
+  readonly removeTools: { readonly run_id: string };
+  readonly removeModels: { readonly run_id: string };
+  readonly clearRuns: Readonly<Record<never, never>>;
+  readonly run: Readonly<Record<(typeof HISTORY_TABLES.runs)[number], Value>>;
+  readonly openTools: Readonly<Record<never, never>>;
+  readonly openModels: Readonly<Record<never, never>>;
+}
+
+/** The store's writes, by the name an append op carries: calls are added as
+ *  their facts arrive, the runs table is replaced whole, and open calls are
+ *  read against it again. Each binds its `HistoryParams` by name. */
+export const HISTORY_WRITE_SQL: Readonly<Record<keyof HistoryParams, string>> =
+  Object.freeze({
+    toolCall: `INSERT INTO tool_calls
+    (position, run_id, call_id, script_call_id, tool, input, status, issued_at)
+    VALUES (:position, :run_id, :call_id, :script_call_id, :tool, :input,
+    'pending', :issued_at)`,
+    toolStart: `UPDATE tool_calls SET attempt = :attempt, status = 'running',
+    started_at = :started_at WHERE position = (${LATEST_CALL})`,
+    toolEnd: `UPDATE tool_calls SET attempt = :attempt, status = :status,
+    output = :output, value = :value, error = :error, ended_at = :ended_at
+    WHERE position = (${LATEST_CALL})`,
+    modelAttempt: `INSERT INTO model_calls
+    (run_id, invocation_id, attempt, model, status, started_at)
+    VALUES (:run_id, :invocation_id, :attempt, :model, 'running', :started_at)`,
+    modelEnd: `UPDATE model_calls SET status = :status, output = :output,
+    error = :error, input_tokens = :input_tokens,
+    output_tokens = :output_tokens, cost = :cost, ended_at = :ended_at
+    WHERE run_id = :run_id AND invocation_id = :invocation_id
+    AND attempt = :attempt`,
+    removeTools: 'DELETE FROM tool_calls WHERE run_id = :run_id',
+    removeModels: 'DELETE FROM model_calls WHERE run_id = :run_id',
+    clearRuns: 'DELETE FROM runs',
+    run: `INSERT INTO runs (${HISTORY_TABLES.runs.join(', ')})
+    VALUES (${HISTORY_TABLES.runs.map((column) => `:${column}`).join(', ')})`,
+    openTools: `UPDATE tool_calls SET status = ${OPEN_STATUS}
+    WHERE status IN ('running', 'unknown')`,
+    openModels: `UPDATE model_calls SET status = ${OPEN_STATUS}
+    WHERE status IN ('running', 'unknown')`,
+  });
+
+/** One write: its `HISTORY_WRITE_SQL` statement and the values it binds. */
+export type HistoryWrite = {
+  [K in keyof HistoryParams]: {
+    readonly statement: K;
+    readonly params: HistoryParams[K];
+  };
+}[keyof HistoryParams];
 
 /** A run's status as `runs.status` words it. */
 function runStatus(run: RunView): string {
@@ -204,32 +269,34 @@ export const replaceRuns = (
     readonly unreadable: ReadonlyMap<string, string>;
   },
 ): HistoryWrite[] => [
-  ['clearRuns'],
+  { statement: 'clearRuns', params: {} },
   ...Array.from(runs.values(), (run): HistoryWrite => {
-    const row = [
-      run.id,
-      run.parentId,
+    // Every cell is cut as the store holds it: a run's texts may be long.
+    const params: HistoryParams['run'] = {
+      id: cutText(run.id),
+      parent_id: cutText(run.parentId),
       // Only a run still under its parent names the launching call: a
       // detached child's parent, and its rows, may be gone.
-      run.parentId === null || run.parentCard === null
-        ? null
-        : (fed.calls.byCard.get(run.parentCard) ?? null),
-      run.identity.kind,
-      runIdentityName(run.identity),
-      run.model,
-      run.description,
-      new Date(run.launchedAt).toISOString(),
-      runStatus(run),
-      run.outcome,
-      run.usage.cost,
-      run.usage.inputTokens,
-      run.usage.outputTokens,
-      fed.unreadable.get(run.id) ?? null,
-    ];
-    return ['run', ...row.map(cutText)];
+      parent_call_position:
+        run.parentId === null || run.parentCard === null
+          ? null
+          : (fed.calls.byCard.get(run.parentCard) ?? null),
+      kind: cutText(run.identity.kind),
+      name: cutText(runIdentityName(run.identity)),
+      model: cutText(run.model),
+      description: cutText(run.description),
+      started_at: new Date(run.launchedAt).toISOString(),
+      status: cutText(runStatus(run)),
+      outcome: cutText(run.outcome),
+      cost: run.usage.cost,
+      input_tokens: run.usage.inputTokens,
+      output_tokens: run.usage.outputTokens,
+      calls_unreadable: cutText(fed.unreadable.get(run.id) ?? null),
+    };
+    return { statement: 'run', params };
   }),
-  ['openTools'],
-  ['openModels'],
+  { statement: 'openTools', params: {} },
+  { statement: 'openModels', params: {} },
 ];
 
 /** What the tool description tells the model it can query. */

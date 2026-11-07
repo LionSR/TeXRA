@@ -48,7 +48,7 @@ Discriminated union of every event the SDK surface emits.
 
 ```ts
 type AgentEvent =
-  | TraceArm<(typeof TRACE_ROW_TYPES)[number]>
+  | TraceRow<(typeof TRACE_ROW_TYPES)[number]>
   | StreamChunkEvent;
 ```
 
@@ -68,14 +68,6 @@ interface AgentPlatform {
 }
 ```
 
-## AgentRunListingEntry
-
-A run a person started, as a history list shows it.
-
-```ts
-type AgentRunListingEntry = typeof AgentRunListingEntrySchema.Type;
-```
-
 ## ApprovalHandler
 
 A host's answer to each request a run of the session waits on: an
@@ -91,25 +83,6 @@ type ApprovalHandler = (
 ) => Effect.Effect<RequestDecision, Error>;
 ```
 
-## Cancelled
-
-Nothing is left to tell the user: they cancelled the operation, or the
-host has already told them why it did not go through. No refusal notice
-is needed.
-
-```ts
-class Cancelled extends Schema.TaggedError<Cancelled>()(
-  'Cancelled',
-  {},
-)
-```
-
-## CommitOrdinal
-
-```ts
-type CommitOrdinal = typeof CommitOrdinalSchema.Type;
-```
-
 ## Composition
 
 What an embedder composes the process from: its platform, its plugins
@@ -123,17 +96,6 @@ interface Composition {
   readonly plugins: readonly Plugin[];
   readonly skills?: HostSkillOptions;
 }
-```
-
-## Conflict
-
-A `followUp.send` under an `id` the run holds another message under.
-
-```ts
-class Conflict extends Schema.TaggedError<Conflict>()('Conflict', {
-  runId: RunIdSchema,
-  id: Schema.String,
-})
 ```
 
 ## DatabaseOpenFailed
@@ -193,18 +155,6 @@ a `value` without `scriptReturns` is declared to scripts as resolving to
 function defineTool<T, R = never, const Name extends string = string>(
   def: DefineToolOptions<T, R> & { readonly name: Name },
 ): DefinedTool<T, R, Name>
-```
-
-## DisplaySessionEvent
-
-```ts
-type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
-```
-
-## ExportNode
-
-```ts
-type ExportNode = typeof ExportNodeSchema.Type;
 ```
 
 ## HeldRun
@@ -400,7 +350,7 @@ interface LocalSession extends Session {
     readonly events: (
       from: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+    ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
   };
   /** The {@link Run} of `runId`'s activation at `activation`, as `start`
    *  or `resume` handed it out: a host that carries a handle across a
@@ -491,70 +441,6 @@ type OutcomeOf<K extends RuntimeCommand['kind']> = Extract<
 >;
 ```
 
-## PendingRequest
-
-A request a run waits on a person for, as `SessionView` lists it:
-which run asks, the request's id, and its payload (`payload.kind` is
-what is asked: a command, an edit, a plan, a retry, a question).
-
-```ts
-type PendingRequest = SessionView['requests'][number];
-```
-
-## Plugin
-
-One plugin: what it contributes to a run. How an app shows it (a
-dashboard card's copy, its setup guide, its settings rows) is the app's
-own record, keyed by `id`.
-
-```ts
-interface Plugin {
-  /** Stable, persisted identifier (the switch key, the plugin a run's
-   *  offered tool records, and the name of its `resources/plugins/<id>/`
-   *  directory): lowercase letters, digits and dashes, starting with a
-   *  letter or digit. A list with any other id is refused. */
-  readonly id: string;
-  /** Its tools, registered by each tool's `definition.name`, in order. */
-  readonly tools?: readonly ITool<Error, PluginToolServices>[];
-  /**
-   * Present when the plugin has an external dependency: it is probed, and
-   * its tools are withheld while the dependency is missing. Without it the
-   * plugin is built in and always available.
-   */
-  readonly availability?: ToolAvailabilityChecks;
-  /** The plugin has a user switch, which a fresh install sets to this
-   *  position; while off, its tools are withheld from every agent. It must
-   *  be probed (`availability`, `ALWAYS_AVAILABLE` when it needs nothing
-   *  installed). Without one the plugin is always on. */
-  readonly toggle?: 'on' | 'off';
-  /** Tools of this plugin offered to every agent with tools, declared or not,
-   *  while the plugin is on and a boolean catalog setting is on: tool name to
-   *  setting key, or `true` for no setting but the plugin's own switch. An
-   *  injected tool still passes the host and approval gates; a script's
-   *  run (a task's recipe) and a text-only persona get none. */
-  readonly injectedWhen?: Readonly<Record<string, string | true>>;
-  /** Its section of each request's system text, pinned while it is on. */
-  readonly prompt?: PromptSection;
-  /** Process-lifetime services, up while the plugin is switched on or a step
-   *  pins it. A host-supplied one (VS Code's Lean services) is passed with
-   *  the host's plugin value. */
-  readonly processLayer?: ProcessPluginLayer;
-  /** Session-lifetime services, one per open session, up while the plugin
-   *  is switched on or a step of that session pins it. */
-  readonly sessionLayer?: SessionPluginLayer;
-  /** Its side of a decision on a pending request it opened, on or off. */
-  readonly decision?: RequestDecisionHook;
-  /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
-  readonly factKinds?: readonly FactKind[];
-  /** The agent-file block it owns (`AgentBlock`), on or off. */
-  readonly agentBlock?: AgentBlock;
-  /** Script module sources by name, imported as `builtIn:<name>`. */
-  readonly scriptModules?: Readonly<Record<string, string>>;
-  /** The plugins it runs on, by id; a list lacking one is rejected. */
-  readonly requires?: readonly string[];
-}
-```
-
 ## PluginsRefused
 
 The plugin list cannot be composed, for a defect `toolTable` refuses: an
@@ -572,30 +458,18 @@ class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
 )
 ```
 
-## Rejected
+## ProjectView
 
-The runtime refused the request for a worded reason, which is also its
-`message`, so a caller that only formats errors still shows why.
-
-```ts
-class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
-  reason: Schema.String,
-  docsPage: Schema.optional(Schema.String),
-})
-```
-
-## RequestDecision
+One project under a storage root, as `Sessions.projects` lists it.
 
 ```ts
-type RequestDecision = typeof RequestDecisionSchema.Type;
-```
-
-## RequestError
-
-How a runtime request fails: one of the tagged errors above.
-
-```ts
-type RequestError = typeof RequestErrorSchema.Type;
+interface ProjectView {
+  /** The project's folder. */
+  readonly workspace: string;
+  /** Its storage directory. */
+  readonly storage: string;
+  readonly view: SessionView;
+}
 ```
 
 ## responseText
@@ -681,19 +555,7 @@ interface Run {
    * before the read reached it arrives whole, as one chunk.
    */
   readonly events: Stream.Stream<AgentEvent, RunFailure>;
-  /** Stop the run, as the user's `run.stop` does. */
-  readonly interrupt: Effect.Effect<void>;
 }
-```
-
-## RunActive
-
-A launch here holds the run this request would act on.
-
-```ts
-class RunActive extends Schema.TaggedError<RunActive>()('RunActive', {
-  runId: RunIdSchema,
-})
 ```
 
 ## RunDeletion
@@ -730,12 +592,6 @@ class RunFailure extends Schema.TaggedError<RunFailure>()('RunFailure', {
   cause: Schema.Defect(),
   message: Schema.String,
 })
-```
-
-## RunId
-
-```ts
-type RunId = typeof RunIdSchema.Type;
 ```
 
 ## RunRecords
@@ -783,28 +639,12 @@ interface RunRecords {
 }
 ```
 
-## RunResult
-
-One run's result as `readResult` answers it.
-
-```ts
-type RunResult = typeof RunResultSchema.Type;
-```
-
 ## RunStopReason
 
 Why a run stops: a `user` stop or this process's `shutdown`.
 
 ```ts
 type RunStopReason = typeof RunStopReasonSchema.Type;
-```
-
-## RuntimeCommand
-
-One command a surface issues to its session's runtime.
-
-```ts
-type RuntimeCommand = typeof RuntimeCommandSchema.Type;
 ```
 
 ## Session
@@ -964,6 +804,16 @@ class Sessions extends Context.Service<
      *  deadline. */
     readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
     readonly list: Effect.Effect<readonly LocalSession[]>;
+    /**
+     * Every project under the process's storage root, from the record a
+     * host writes as it opens one: a session this process holds answers
+     * from its live view, any other is read cold from its store. A store
+     * that cannot be read is logged and left out.
+     */
+    readonly projects: Effect.Effect<
+      readonly ProjectView[],
+      DatabaseReadFailed
+    >;
   }
 >()('@texra-ai/harness/Sessions')
 ```
@@ -1015,18 +865,6 @@ class ToolsRefused extends Schema.TaggedError<ToolsRefused>()(
     tools: Schema.Array(Schema.String),
     message: Schema.String,
   },
-)
-```
-
-## Unavailable
-
-The stream, request, or run the request names is gone or not in a state
-that can take it.
-
-```ts
-class Unavailable extends Schema.TaggedError<Unavailable>()(
-  'Unavailable',
-  { runId: RunIdSchema, reason: Schema.String },
 )
 ```
 

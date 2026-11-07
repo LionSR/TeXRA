@@ -9,7 +9,7 @@
 import type {
   ContextEditPayloadSchema,
   ModelMessagePayloadSchema,
-  SessionEvent,
+  SessionRow,
   StoredMessage,
 } from '@shared/schemas';
 import type {
@@ -80,4 +80,4 @@ type LiveRow<Row> = Row extends { readonly type: 'model.message' }
     : Row;
 
 /** A committed row as the run fold reads it. */
-export type RunHistoryRow = Live<SessionEvent>;
+export type RunHistoryRow = Live<SessionRow>;

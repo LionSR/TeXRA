@@ -7,7 +7,6 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/host';
-import { pluralize } from '@texra-ai/harness/transcript';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { quickPick } from '@frontend/ui/dialogs';
@@ -20,6 +19,7 @@ import type {
   WorkspaceFs,
   ProcessServices,
 } from '@texra-ai/harness/host';
+import { pluralize } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'FigCommands';
 

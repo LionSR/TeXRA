@@ -14,8 +14,11 @@ import {
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
-import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
-import { Rejected } from '@texra-ai/harness';
+import {
+  toErrorMessage,
+  type RunId,
+  Rejected,
+} from '@texra-ai/harness/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import type { AppSignals, ProcessServices } from '@texra-ai/harness/host';

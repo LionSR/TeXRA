@@ -63,7 +63,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,
   type RunId,
-  type SessionEventDraft,
+  type SessionRowDraft,
 } from '@shared/schemas';
 import {
   DatabaseReadFailed,
@@ -101,7 +101,7 @@ interface StoreHold {
 
 interface Armed {
   readonly operation: StoreOperation;
-  readonly rowType: SessionEventDraft['type'] | undefined;
+  readonly rowType: SessionRowDraft['type'] | undefined;
   readonly fault:
     | { readonly kind: 'fail' }
     | {
@@ -119,13 +119,13 @@ interface StoreFaults {
    *  is named in the error (`injected appendAll fault (run.end)`). */
   readonly failNext: (
     operation: StoreOperation,
-    rowType?: SessionEventDraft['type'],
+    rowType?: SessionRowDraft['type'],
   ) => Effect.Effect<void>;
   /** The next matching call waits, before it starts, until the hold is
    *  released or failed; the faults' scope releases any hold left. */
   readonly holdNext: (
     operation: StoreOperation,
-    rowType?: SessionEventDraft['type'],
+    rowType?: SessionRowDraft['type'],
   ) => Effect.Effect<StoreHold>;
 }
 
@@ -151,7 +151,7 @@ export const sessionStoreFaults = (
       (entry.rowType === undefined ||
         operation !== 'appendAll' ||
         // cast: appendAll's first argument is the batch of drafts it commits.
-        (args[0] as readonly SessionEventDraft[]).some(
+        (args[0] as readonly SessionRowDraft[]).some(
           (draft) => draft.type === entry.rowType,
         ));
     /** The first fault matching this call, disarmed as it is taken. */

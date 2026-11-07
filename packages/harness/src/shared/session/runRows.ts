@@ -21,7 +21,7 @@
  * The reads of a run's requests and input (`runRowReads.ts`) apply the
  * shared rows they select through here too.
  */
-import type { SessionEvent } from '@shared/schemas';
+import type { SessionRow } from '@shared/schemas';
 import type { RunRowState, RunRowVerdict, SharedRunRows } from './runRowsShape';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
@@ -32,22 +32,22 @@ const SHARED_RUN_ROW_TYPES = {
   'request.decided': true,
   'followup.queued': true,
   'followup.consumed': true,
-} as const satisfies Partial<Record<SessionEvent['type'], true>>;
+} as const satisfies Partial<Record<SessionRow['type'], true>>;
 
 export type SharedRunRow = Extract<
-  SessionEvent,
+  SessionRow,
   { type: keyof typeof SHARED_RUN_ROW_TYPES }
 >;
 
 /** Whether `applyRunRow` handles this row: the one test both readers use. */
-export const isSharedRunRow = <E extends Pick<SessionEvent, 'type'>>(
+export const isSharedRunRow = <E extends Pick<SessionRow, 'type'>>(
   row: E,
 ): row is Extract<E, SharedRunRow> =>
   Object.hasOwn(SHARED_RUN_ROW_TYPES, row.type);
 
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
 export type QueuedFollowUp = Pick<
-  Extract<SessionEvent, { type: 'followup.queued' }>,
+  Extract<SessionRow, { type: 'followup.queued' }>,
   'followUpId' | 'content' | 'holdUntil' | 'control' | 'commit'
 >;
 

@@ -27,7 +27,7 @@ const ResponseCutSchema = Schema.Literals(['length', 'content-filter']);
 export type ResponseCut = typeof ResponseCutSchema.Type;
 
 /** Durable transcript vocabulary; session events extend each arm. */
-export const TranscriptEventSchema = Schema.Union([
+export const TraceRowFieldsSchema = Schema.Union([
   trace('log', {
     level: LogLevelSchema,
     message: Schema.String,
@@ -108,15 +108,15 @@ export const TranscriptEventSchema = Schema.Union([
   }),
 ]);
 
-export type TranscriptEvent = typeof TranscriptEventSchema.Type;
+export type TraceRowFields = typeof TraceRowFieldsSchema.Type;
 
 const TRANSCRIPT_EVENT_TYPES = new Set<string>(
-  TranscriptEventSchema.members.map((schema) => schema.fields.type.literal),
+  TraceRowFieldsSchema.members.map((schema) => schema.fields.type.literal),
 );
 
 /** Trace rows consumed by the transcript projection, including listing arms. */
 export function isTranscriptEvent<T extends { type: string }>(
   event: T,
-): event is Extract<T, { type: TranscriptEvent['type'] }> {
+): event is Extract<T, { type: TraceRowFields['type'] }> {
   return TRANSCRIPT_EVENT_TYPES.has(event.type);
 }

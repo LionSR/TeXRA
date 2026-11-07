@@ -14,7 +14,7 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   DEBUG_MODE_KEY,
   referencedAggregates,
-  isDisplaySessionEvent,
+  isDisplayRow,
   type AggregateId,
   type ExistenceReconciliation,
   type SessionViewInput,
@@ -83,7 +83,7 @@ export const sessionInputsLayer = Layer.effect(
                 ? yield* requiredRead(log.currentCommit)
                 : effectiveCommit;
             const listing = (yield* requiredRead(log.readListing())).filter(
-              isDisplaySessionEvent,
+              isDisplayRow,
             );
             const checked = new Set<AggregateId>(
               effectiveAggregates.map(({ id }) => id),
@@ -230,7 +230,7 @@ export const sessionInputsLayer = Layer.effect(
                   const batch: SessionViewInput[] = [
                     ...changed,
                     ...rows
-                      .filter(isDisplaySessionEvent)
+                      .filter(isDisplayRow)
                       .map((event): SessionViewInput => ({
                         _tag: 'event',
                         read: 'all',

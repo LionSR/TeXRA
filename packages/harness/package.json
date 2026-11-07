@@ -23,42 +23,52 @@
   "engines": {
     "node": "^22.22.2 || >=24.15.0"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "files": [
     "dist",
     "docs",
     "LICENSE.txt",
     "NOTICE.txt"
   ],
-  "types": "./dist/types/index.d.ts",
+  "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./schemas": {
-      "types": "./dist/types/schemas.d.ts",
-      "import": "./dist/schemas.js"
-    },
-    "./transcript": {
-      "types": "./dist/types/transcriptEntry.d.ts",
-      "import": "./dist/transcript.js"
-    },
-    "./plugins": {
-      "types": "./dist/types/plugins.d.ts",
-      "import": "./dist/plugins.js"
-    },
-    "./host": {
-      "types": "./dist/types/host.d.ts",
-      "import": "./dist/host.js"
-    },
-    "./node": {
-      "types": "./dist/types/node.d.ts",
-      "import": "./dist/node.js"
-    },
+    ".": "./src/index.ts",
+    "./schemas": "./src/schemas.ts",
+    "./transcript": "./src/transcriptEntry.ts",
+    "./plugins": "./src/plugins.ts",
+    "./host": "./src/host.ts",
+    "./node": "./src/node.ts",
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "types": "./dist/types/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/types/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./schemas": {
+        "types": "./dist/types/schemas.d.ts",
+        "import": "./dist/schemas.js"
+      },
+      "./transcript": {
+        "types": "./dist/types/transcriptEntry.d.ts",
+        "import": "./dist/transcript.js"
+      },
+      "./plugins": {
+        "types": "./dist/types/plugins.d.ts",
+        "import": "./dist/plugins.js"
+      },
+      "./host": {
+        "types": "./dist/types/host.d.ts",
+        "import": "./dist/host.js"
+      },
+      "./node": {
+        "types": "./dist/types/node.d.ts",
+        "import": "./dist/node.js"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs",

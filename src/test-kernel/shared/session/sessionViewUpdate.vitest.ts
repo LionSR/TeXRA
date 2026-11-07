@@ -19,7 +19,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
-import { SessionEventSchema } from '@shared/schemas';
+import { SessionRowSchema } from '@shared/schemas';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 
 import type { RunHistoryRow } from '@shared/session/historyTurns';
@@ -124,7 +124,7 @@ describe('session view update', () => {
 
 // ---------------------------------------------------------------------------
 // The run-state fold: the sibling of `fold` that produces what the loop
-// continues from. Rows are built through `SessionEventSchema`, the boundary
+// continues from. Rows are built through `SessionRowSchema`, the boundary
 // that runs in production; nothing here reaches an arm schema directly.
 // ---------------------------------------------------------------------------
 
@@ -266,7 +266,7 @@ const runHistoryRow = (
 ): RunHistoryRow =>
   Result.getOrThrow(
     runHistoryRows([
-      Schema.decodeUnknownSync(SessionEventSchema)({
+      Schema.decodeUnknownSync(SessionRowSchema)({
         // cast: each case writes a run-history draft; the decode around it checks it.
         ...Result.getOrThrow(
           storedDraft({
@@ -285,7 +285,7 @@ const runHistoryRow = (
 /** The same boundary, asked whether it accepts the draft at all. */
 const rowAccepted = (draft: Record<string, unknown>): boolean =>
   Result.isSuccess(
-    Schema.decodeUnknownResult(SessionEventSchema)({
+    Schema.decodeUnknownResult(SessionRowSchema)({
       aggregateId: RUN_HISTORY_AGGREGATE,
       ...draft,
       seq: 1,

@@ -158,6 +158,9 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
+      '@texra-ai/harness':
+        specifier: workspace:*
+        version: link:packages/harness
       '@texra-ai/llm':
         specifier: workspace:*
         version: link:packages/llm
@@ -708,6 +711,9 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
+      '@texra-ai/harness':
+        specifier: workspace:*
+        version: link:../harness
       '@typescript/native':
         specifier: npm:typescript@^7.0.2
         version: typescript@7.0.2

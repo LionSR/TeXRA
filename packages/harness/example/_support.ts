@@ -18,12 +18,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Layer } from 'effect';
-import {
-  ModelFetch,
-  type AgentPlatform,
-  type ExportNode,
-} from '@texra-ai/harness';
+import { ModelFetch, type AgentPlatform } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
+import type { ExportNode } from '@texra-ai/harness/host';
 
 export interface ScriptedToolCall {
   readonly id?: string;

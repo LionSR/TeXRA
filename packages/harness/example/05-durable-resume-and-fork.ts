@@ -105,7 +105,11 @@ const program = Effect.gen(function* () {
   if (firstText !== 'Drafted section 1 with an informal proof sketch.')
     throw new Error(`run1's first activation replayed: ${firstText}`);
   console.log(`[05] first activation reread: ${firstText}`);
-  yield* resumed.interrupt;
+  yield* session.request({
+    kind: 'run.stop',
+    runId: resumed.runId,
+    reason: 'user',
+  });
   yield* session.settled;
 
   const listed = yield* session.listRuns();

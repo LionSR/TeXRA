@@ -3,8 +3,7 @@
  * how a stream is presented. Surface decisions over session view facts; nothing
  * here derives topology.
  */
-import { formatCompactDuration } from '@texra-ai/harness/transcript';
-import { type RunId } from '@texra-ai/harness/schemas';
+import { type RunId, formatCompactDuration } from '@texra-ai/harness/schemas';
 import { runViewOf } from './sessionView';
 import type { SessionView } from '@texra-ai/harness/schemas';
 

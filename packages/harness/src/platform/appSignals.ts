@@ -3,7 +3,7 @@ import { Context, Effect, Layer, PubSub, type Scope, Stream } from 'effect';
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
  * credentials, workspace-file writes). Not for run/session progress
- * events — those extend `AgentEvent` (`agent/trace/`) or the `SessionEvent`
+ * events — those extend `AgentEvent` (`agent/trace/`) or the `SessionRow`
  * schema (`shared/schemas/sessionEvent.ts`), per the event-channel rule in
  * the harness AGENTS.md.
  *

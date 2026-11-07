@@ -13,7 +13,7 @@ import {
   MESSAGE_TYPES,
   ToolError,
   type RunId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
@@ -52,7 +52,7 @@ interface ProcessOutputProjection {
  * every other row is run bookkeeping, not command output.
  */
 function projectProcessOutput(
-  events: readonly SessionEvent[],
+  events: readonly SessionRow[],
 ): ProcessOutputProjection {
   const lines: string[] = [];
   let chars = 0;

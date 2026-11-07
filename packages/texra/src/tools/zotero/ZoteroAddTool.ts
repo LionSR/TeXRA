@@ -22,7 +22,7 @@ import { Effect, Result, Schema } from 'effect';
 // Local imports
 import { defineTool } from '@texra-ai/harness';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
-import { pluralize } from '@texra-ai/harness/transcript';
+import { pluralize } from '@texra-ai/harness/schemas';
 
 // Local file imports
 import { callZoteroConnector, checkZoteroRunning } from './bbtClient';

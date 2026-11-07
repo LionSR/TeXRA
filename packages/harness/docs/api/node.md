@@ -314,6 +314,14 @@ const inheritedEnv: (keep?: "openai" | "anthropic" | "google" | "xai" | "deepsee
 const INPUT_HISTORY_LIMIT: 1000
 ```
 
+## isNotADirectoryError
+
+Check if an error represents "a parent path component is a file, not a directory".
+
+```ts
+function isNotADirectoryError(err: unknown): boolean
+```
+
 ## JsonConfigProvider
 
 Store-backed {@link ConfigProvider}. Keys are relative to the catalog's
@@ -749,16 +757,6 @@ function withExtendedPath<T extends NodeJS.ProcessEnv>(
   env: T,
   appDirs: readonly string[],
 ): T
-```
-
-## WORKSPACE_STORES
-
-The global root's record of a workspace store, keyed by its storage
-directory id: the root it serves, so a storage prune can tell a store
-whose root is gone.
-
-```ts
-const WORKSPACE_STORES: ValueFamily<{ readonly root: string }>
 ```
 
 ## workspaceRelativePath
