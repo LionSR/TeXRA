@@ -283,12 +283,17 @@ export function factKindsOf(plugins: Iterable<Plugin>): FactKinds {
  * written by a newer build, never commits.
  */
 export function checkOwnFacts(
+  toolName: string,
   plugin: Plugin | undefined,
   facts: readonly ToolFact[],
 ): void {
   for (const { kind, version, value, aggregate, ...fact } of facts) {
-    const factKind = plugin?.factKinds?.find((own) => own.kind === kind);
-    if (factKind === undefined || fact.plugin !== plugin?.id)
+    if (plugin === undefined)
+      throw new Error(
+        `the tool ${toolName} states the fact ${fact.plugin}/${kind}, but no loaded plugin offers it`,
+      );
+    const factKind = plugin.factKinds?.find((own) => own.kind === kind);
+    if (factKind === undefined || fact.plugin !== plugin.id)
       throw new Error(`the fact ${fact.plugin}/${kind} is not its plugin's`);
     if (aggregate !== undefined && !aggregate.startsWith(`${factKind.plugin}:`))
       throw new Error(

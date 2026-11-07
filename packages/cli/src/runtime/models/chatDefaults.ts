@@ -58,7 +58,7 @@ export function resolveChatDefaults(
   const modelDecision = decideRunModel([
     { model: overrideModel, reason: 'explicit-override' },
     { model: envModel, reason: 'environment' },
-    { model: configured.model, reason: configured.modelScope ?? 'user-config' },
+    { model: configured.model, reason: 'command-config' },
     { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
   ]);
 

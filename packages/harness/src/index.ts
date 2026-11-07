@@ -96,7 +96,7 @@ export {
   DatabaseReadFailed,
   SessionOptionsConflict,
 } from '@shared/session/database';
-export type { SessionOpenError } from '@shared/session/database';
+export type { SessionOpenError, StoredBlobs } from '@shared/session/database';
 
 // What `session.request` answers, and why it refuses.
 export {

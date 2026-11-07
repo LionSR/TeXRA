@@ -118,6 +118,8 @@ export interface OpenStep {
     readonly plugins: readonly LoadablePlugin[];
     readonly contributors: ReadonlySet<string>;
   };
+  /** The recorded skills it left out: named at the step that first does. */
+  readonly notOffered: readonly string[];
   readonly holding: boolean;
 }
 
@@ -289,13 +291,24 @@ const openStep = Effect.fn('Step.open')(function* (
     const byName = new Map(
       catalog.named.filter(contributes).map((entry) => [entry.name, entry]),
     );
+    // A skill the run recorded (listed, or activated by its user) that this
+    // step does not offer, its plugin withdrawn or the skill gone, is left
+    // out and named, as a recorded tool is (`heldToRecord`).
+    const notOffered = new Set<string>();
+    const offered = (recordedNames: readonly string[]) =>
+      recordedNames.flatMap((name) => {
+        const entry = byName.get(name);
+        if (entry === undefined) notOffered.add(name);
+        return entry ?? [];
+      });
     // Those of core sources and of the plugins it draws on, bounded after
     // the filter, so a withdrawn plugin's skills never push a listed one out.
     const listed = !listing
       ? []
-      : (recordedSkills?.flatMap((name) => byName.get(name) ?? []) ??
-        catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS));
-    const activated = names.flatMap((name) => byName.get(name) ?? []);
+      : recordedSkills === null
+        ? catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS)
+        : offered(recordedSkills);
+    const activated = offered(names);
     const hooks = stepHooks(run, pinned.installed, recordedHooks);
     const modules = tools.registry.has(SCRIPT_TOOL_NAME) ? imported : {};
     return {
@@ -323,6 +336,7 @@ const openStep = Effect.fn('Step.open')(function* (
       withheld: resolved.withheldForApproval,
       skills,
       listed,
+      notOffered: [...notOffered],
       contributing: contributing.toSorted(
         (a, b) => Number(a.id > b.id) - Number(a.id < b.id),
       ),
@@ -335,6 +349,7 @@ const openStep = Effect.fn('Step.open')(function* (
     scope,
     withheld: step.withheld,
     skills: step.skills,
+    notOffered: step.notOffered,
     holding,
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
@@ -351,6 +366,13 @@ const openStep = Effect.fn('Step.open')(function* (
   if (withheldChanged) {
     warnings.push(
       `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
+    );
+  }
+  // A skill is named once, at the first step that no longer offers it.
+  for (const name of step.notOffered) {
+    if (previous?.notOffered.includes(name) === true) continue;
+    warnings.push(
+      `Skill "${name}" was offered to this run but is no longer available; the run continues without it.`,
     );
   }
   // Reported where the change is recorded, not at every step.

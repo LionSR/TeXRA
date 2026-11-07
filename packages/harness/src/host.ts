@@ -159,7 +159,6 @@ export {
   type RunModelCandidate,
   type RunModelDecision,
   type RunModelDecisionReason,
-  type RunModelFallbackMode,
 } from '@model/runModelDecision';
 export { SubscriptionPreference } from '@model/subscriptionAccess';
 export {

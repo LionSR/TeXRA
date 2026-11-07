@@ -288,7 +288,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
         },
       );
     }
-    modelOverride = modelExit.value;
+    modelOverride = modelExit.value.model;
   }
 
   const agentOverride =

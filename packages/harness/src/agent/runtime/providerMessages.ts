@@ -8,7 +8,7 @@
  * the package's own schemas parse them back here, so a turn another build of
  * the package can no longer read is a refusal of that run, never a default.
  */
-import { Effect, Predicate, Result, Schema } from 'effect';
+import { Effect, Predicate, Result, Schema, absurd } from 'effect';
 
 import {
   AssistantMessageSchema,
@@ -40,6 +40,7 @@ import {
   RunHistoryInconsistent,
   type RunHistoryDraft,
 } from '@shared/session/runState';
+import type { StoredBlobs } from '@shared/session/database';
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -328,8 +329,12 @@ export function addressedMessages(messages: readonly AppendedMessage[]): {
             content: entry.content.map(addressed),
           })),
         };
-      default:
+      // These hold no media part.
+      case 'assistant':
+      case 'system':
         return message;
+      default:
+        return absurd(message);
     }
   });
   return { messages: result, blobs: [...blobs.values()] };
@@ -342,23 +347,16 @@ export function addressedMessages(messages: readonly AppendedMessage[]): {
  */
 export const providerMessages = <E>(
   messages: readonly HistoryMessage[],
-  read: (
-    digests: readonly string[],
-  ) => Effect.Effect<ReadonlyMap<string, string>, E>,
+  read: (digests: readonly string[]) => Effect.Effect<StoredBlobs, E>,
 ): Effect.Effect<readonly ProviderMessage[], E> => {
   const digests = new Set<string>();
   for (const message of messages)
     for (const part of inputParts(message))
       if (part.kind !== 'text') digests.add(part.digest);
-  const resolved = (
-    part: StoredInputPart,
-    texts: ReadonlyMap<string, string>,
-  ): InputPart => {
+  const resolved = (part: StoredInputPart, texts: StoredBlobs): InputPart => {
     if (part.kind === 'text') return part;
     const { digest, ...rest } = part;
-    const base64 = texts.get(digest);
-    // `read` fails on a digest the store lacks, so none is missing here.
-    if (base64 === undefined) throw new Error(`Media blob ${digest} not read`);
+    const base64 = texts(digest);
     if (rest.kind !== 'image')
       return { kind: rest.kind, mimeType: rest.mimeType, base64 };
     const { detail, ...image } = rest;
@@ -382,8 +380,12 @@ export const providerMessages = <E>(
               content: entry.content.map((part) => resolved(part, texts)),
             })),
           };
-        default:
+        // These hold no media part.
+        case 'assistant':
+        case 'system':
           return message;
+        default:
+          return absurd(message);
       }
     }),
   );
