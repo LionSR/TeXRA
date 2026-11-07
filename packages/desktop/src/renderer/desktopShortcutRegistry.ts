@@ -1,8 +1,6 @@
 import { commandCatalogById } from '@texra/shared/commands/catalog';
-import {
-  toElectronAccelerator,
-  type DesktopPlatform,
-} from '../shared/accelerators';
+import { toElectronAccelerator } from '../shared/accelerators';
+import type { OsPlatform } from '@texra/shared/osPlatform';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
@@ -17,7 +15,7 @@ export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
  * read: the shell's accelerator hints call it too, before this registry
  * exists (a bootstrap failure leaves no registry at all).
  */
-export function desktopCommandPaletteShortcut(platform: DesktopPlatform): {
+export function desktopCommandPaletteShortcut(platform: OsPlatform): {
   readonly id: typeof DESKTOP_COMMAND_PALETTE_ID;
   readonly label: string;
   readonly accelerator: string;
@@ -39,7 +37,7 @@ interface DesktopShortcutRegistryOptions {
   readonly document: Document;
   readonly actions: DesktopCommandActions;
   readonly openCommands: () => void;
-  readonly platform: DesktopPlatform;
+  readonly platform: OsPlatform;
 }
 
 /** Installs the one desktop shortcut dispatcher over the catalog's fixed
@@ -149,7 +147,7 @@ const FUNCTION_KEY_PATTERN = /^F\d{1,2}$/i;
 /** Converts a DOM keyboard chord into the canonical Electron-style form. */
 function keyboardEventToAccelerator(
   event: KeyboardEvent,
-  platform: DesktopPlatform,
+  platform: OsPlatform,
 ): string | undefined {
   if (MODIFIER_KEYS.has(event.key)) return undefined;
   const key = normalizeKeyboardKey(event.key);

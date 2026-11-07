@@ -20,7 +20,7 @@ import {
   type AgentDefinition,
 } from '@shared/schemas';
 import type { AgentSource, AgentScanIssue } from '@shared/schemas';
-import { ToolRegistry } from '@tools/toolTable';
+import { ToolRegistry, boundFiles, type AgentBlock } from '@tools/toolTable';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -136,9 +136,7 @@ export function scanDirectory(
       // Code-unit order, which the default sort gave one directory's paths.
       [...rootOf].toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
       ([yamlPath, root]) =>
-        Effect.result(
-          readYamlDefinition(yamlPath, root, fileSchema, [...blocks.keys()]),
-        ),
+        Effect.result(readYamlDefinition(yamlPath, root, fileSchema, blocks)),
       { concurrency: 8 },
     )) {
       if (Result.isSuccess(result)) parsed.push(result.success);
@@ -202,7 +200,7 @@ function readYamlDefinition(
   yamlPath: string,
   dir: string,
   fileSchema: Schema.Codec<Record<string, unknown>, unknown>,
-  blockKeys: readonly string[],
+  owners: ReadonlyMap<string, AgentBlock>,
 ): Effect.Effect<ParsedAgentYaml, AgentScanError, FileSystem.FileSystem> {
   const displayPath = path.relative(dir, yamlPath);
   const scanError = (cause: unknown) =>
@@ -211,30 +209,41 @@ function readYamlDefinition(
       message: formatScanFailure(cause),
       cause,
     });
-  return FileSystem.FileSystem.pipe(
-    Effect.flatMap((fs) => readNormalizedFile(fs, yamlPath)),
-    Effect.mapError(scanError),
-    Effect.flatMap((content) => {
-      // A key no persona field and no listed plugin's block owns is refused.
-      const parsed = Result.flatMap(safeParseYaml(content), (value) =>
-        Schema.decodeUnknownResult(fileSchema)(value, {
-          onExcessProperty: 'error',
-          errors: 'all',
-        }),
-      );
-      if (Result.isFailure(parsed)) {
-        return Effect.fail(scanError(parsed.failure));
-      }
-      const { definition, blocks } = splitBlocks(parsed.success, blockKeys);
-      return Effect.succeed({
-        name: definition.name,
-        path: yamlPath,
-        root: dir,
-        definition,
-        blocks,
-        digest: truncatedHexId(content, 12),
-      });
-    }),
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const content = yield* readNormalizedFile(fs, yamlPath).pipe(
+      Effect.mapError(scanError),
+    );
+    // A key no persona field and no listed plugin's block owns is refused.
+    const parsed = Result.flatMap(safeParseYaml(content), (value) =>
+      Schema.decodeUnknownResult(fileSchema)(value, {
+        onExcessProperty: 'error',
+        errors: 'all',
+      }),
+    );
+    if (Result.isFailure(parsed))
+      return yield* Effect.fail(scanError(parsed.failure));
+    const { definition, blocks } = splitBlocks(parsed.success, [
+      ...owners.keys(),
+    ]);
+    // The digest covers the files the blocks bind, so a changed bound file
+    // reads as a changed agent. One that cannot be read counts by its name
+    // alone: the run that reads it reports the failure.
+    const bound = yield* Effect.forEach(boundFiles(blocks, owners), (file) =>
+      readNormalizedFile(fs, path.resolve(path.dirname(yamlPath), file)).pipe(
+        Effect.map((text) => `\0${file}\0${text}`),
+        Effect.orElseSucceed(() => `\0${file}`),
+      ),
+    );
+    return {
+      name: definition.name,
+      path: yamlPath,
+      root: dir,
+      definition,
+      blocks,
+      digest: truncatedHexId(content + bound.join(''), 12),
+    };
+  }).pipe(
     Effect.tapError((error) =>
       Effect.logWarning(`Failed to scan ${yamlPath}: ${error.message}`).pipe(
         withLogChannel(CHANNEL),

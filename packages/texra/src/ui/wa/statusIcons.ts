@@ -6,6 +6,7 @@ import { css, html, type CSSResult, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports
+import { credentialOriginLabel } from '@ui/copy/credentials';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
 import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -116,10 +117,10 @@ export function renderKeyStatusIcon(
 ): TemplateResult {
   return renderSetStatusIcon({
     status,
-    title: 'Key set',
+    title: credentialOriginLabel('secret', 'key'),
     fallbacks: {
-      env: { label: 'Env' },
-      'not-set': { label: 'Not set' },
+      env: { label: credentialOriginLabel('env', 'key') },
+      none: { label: credentialOriginLabel('none', 'key') },
     },
   });
 }

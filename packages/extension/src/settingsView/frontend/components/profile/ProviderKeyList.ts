@@ -72,7 +72,7 @@ export class ProviderKeyList extends LitElement {
   private renderActions(entry: ProviderKeyStatus): TemplateResult {
     const { displayName, provider } = entry;
     const removeButton =
-      entry.status === 'set'
+      entry.status === 'secret'
         ? renderIconActionButton({
             id: `provider-key-remove-${provider}`,
             icon: 'trash',
@@ -227,7 +227,7 @@ export class ProviderKeyList extends LitElement {
           </div>
         </div>
         ${
-          planCredits && (isExpanded || entry.status !== 'set')
+          planCredits && (isExpanded || entry.status !== 'secret')
             ? renderPlanCreditsHint(planCredits)
             : nothing
         }

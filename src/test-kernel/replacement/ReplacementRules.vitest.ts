@@ -67,3 +67,21 @@ describe('personal style contextual replacements', () => {
     assert.strictEqual(result, expected);
   });
 });
+
+// ---------------------------------------------------------------------------
+// rule order
+// ---------------------------------------------------------------------------
+
+describe('rule order', () => {
+  // A rule whose key contains a shorter rule's key must run first, or the
+  // shorter rule rewrites its input away: `\;` alone becomes a space, which
+  // left `\;+\;` as ` + ` instead of `+`.
+  it('applies a rule before the shorter rules its key contains', () => {
+    const result = replacementEngine.applyAll(
+      String.raw`$a\;+\;b$`,
+      fakeConfig({}, TEXRA_APP.settings),
+    ).text;
+
+    assert.strictEqual(result, '$a+b$');
+  });
+});

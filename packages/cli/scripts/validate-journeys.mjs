@@ -343,11 +343,11 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
         calls[r.payload.toolName] = (calls[r.payload.toolName] ?? 0) + 1;
     const scripts = calls.script ?? 0;
     return {
-      tokens: usage.totalInputTokens + usage.totalOutputTokens,
-      inputTokens: usage.totalInputTokens,
-      outputTokens: usage.totalOutputTokens,
-      cachedInputTokens: usage.totalCachedInputTokens,
-      cost: usage.totalCost,
+      tokens: usage.inputTokens + usage.outputTokens,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cachedInputTokens: usage.cachedInputTokens ?? 0,
+      cost: usage.cost,
       wallMs,
       scripts,
       calls,

@@ -4,6 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 
 // Local imports - tools
+import { RunCall, type RunCallShape } from '@agent/runtime/RunCall';
 import {
   buildTerminalTool,
   normalizeStructuredOutputSchema,
@@ -67,9 +68,15 @@ describe('buildTerminalTool', () => {
         status: 'executed',
         value: { title: 'First', count: 1 },
       });
-      expect(yield* tool.call({ title: 'Second', count: 2 })).toMatchObject({
-        status: 'error',
-      });
+      // Once the run's rows hold a submission, live or after a resume, a
+      // second one is refused.
+      const submitted = Effect.provideService(RunCall, {
+        facts: Effect.succeed({ structured: { value: { title: 'First' } } }),
+        // cast: the tool reads only the call's facts, and of them only `structured`.
+      } as unknown as RunCallShape);
+      expect(
+        yield* submitted(tool.call({ title: 'Second', count: 2 })),
+      ).toMatchObject({ status: 'error' });
     }),
   );
 });

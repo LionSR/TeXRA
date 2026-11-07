@@ -92,8 +92,6 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
 
   // 1. Math Operators (defined with \DeclareMathOperator*)
   // These require _{\op} and ^{\op} format
-  // Keep longer commands before any command prefixes because replacements run
-  // sequentially and match unanchored substrings.
   // prettier-ignore
   const mathOperators = [
       'argmin','argmax','tr','TransformerEncoder','Tr','sign','sort','argsort','Cov','Cat','Bern','Unif','ReLU','Concat','Skip','Upsample','Softmax','Conv','BatchNorm','LayerNorm','MaxPool','Dropout','Attention','MultiHead','AdaLN',
@@ -192,9 +190,7 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       [`_\\${op}`, `_{\\${op}}`],
       [`^\\${op}`, `^{\\${op}}`],
     ]),
-    // Combined eq/st shortcuts: keep these before the textCommands block so
-    // the AUTO \text{eq} -> \eq / \text{st} -> \st rules cannot consume
-    // the fragment first (same shadowing class as \mathcal{H}^{\text{eff}}).
+    // Combined eq/st shortcuts
     'p^{\\text{eq}}': '\\peq',
     'q^{\\text{eq}}': '\\qeq',
     'p^{\\text{st}}': '\\pst',
@@ -237,19 +233,12 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     ...generateCommandShortcuts(calculusCommandMap),
     // Vector variables: \vec{x} -> \vx
     ...generateDecoratorShortcuts('vec', vectorLetters, 'v'),
-    // Bold Greek: \boldsymbol{\alpha} -> \bal. Keep this before the bare
-    // Greek shortcuts below: applyReplacements walks the merged pattern object
-    // in insertion order, so the bare-Greek rules would otherwise fire inside
-    // \boldsymbol{...} first and shadow these destinations.
+    // Bold Greek: \boldsymbol{\alpha} -> \bal
     ...generateGreekShortcuts('boldsymbol', greekBoldLetters, 'b', {
       shortcuts: BOLD_GREEK_SHORTCUTS,
     }),
     ...generateCommandShortcuts(GREEK_LETTER_SHORTCUTS),
-    // Combined shortcuts: keep these before the \mathcal, \hat, and effH
-    // component rules so the decorated-H combinations are not consumed
-    // piecemeal first (AUTO \hat{H} -> \hH would otherwise turn
-    // \hat{H}^{\text{eff}} into \hH^{\text{eff}} and the effH rule would
-    // then fire inside it, corrupting to \h\effH).
+    // Combined shortcuts for the decorated H
     '\\mathcal{H}^{\\text{eff}}': '\\ceffH',
     '\\cH^{\\text{eff}}': '\\ceffH',
     '\\hat{H}^{\\text{eff}}': '\\hat{\\effH}',

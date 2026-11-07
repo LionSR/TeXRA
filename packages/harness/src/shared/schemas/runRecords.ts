@@ -9,7 +9,7 @@ import { JsonValueSchema } from './jsonValue';
 import { RetryErrorInfoSchema } from './errors';
 import { RunOutcomeSchema } from './run';
 import { RunIdentitySchema } from './runIdentity';
-import { RunUsageTotalsSchema } from './usage';
+import { TokenUsageStatsSchema } from './usage';
 
 export const NonAgentRunRecordSchema = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1)),
@@ -88,14 +88,14 @@ export function emptyRunEndOutput(): RunEndOutput {
 /**
  * A run's terminal result as every reader sees it. `error` is present only
  * on a failed outcome; `usage` once a round recorded usage, including on
- * failures. Cost is `usage.totalCost` and nothing else. Derived on read
+ * failures. Cost is `usage.cost` and nothing else. Derived on read
  * (`readRunEnd`): the usage is the run history's fold of its priced response
  * rows, the output as {@link RunEndOutputSchema} says.
  */
 export const RunEndSchema = Schema.Struct({
   outcome: RunOutcomeSchema,
   error: Schema.optional(RunEndErrorSchema),
-  usage: Schema.optional(RunUsageTotalsSchema),
+  usage: Schema.optional(TokenUsageStatsSchema),
   output: RunEndOutputSchema,
 });
 export type RunEnd = typeof RunEndSchema.Type;

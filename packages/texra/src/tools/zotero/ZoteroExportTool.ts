@@ -14,7 +14,7 @@ import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { pluralize } from '@texra-ai/harness/transcript';
 
 // Local imports - zotero
-import { callBetterBibTeX, withZoteroPort } from './bbtClient';
+import { callBetterBibTeX } from './bbtClient';
 
 const ZOTERO_EXPORT_TIMEOUT_MS = 30_000; // 30 s
 
@@ -44,10 +44,11 @@ const ZoteroExportInputSchema = Schema.Struct({
 
 type ZoteroExportInput = typeof ZoteroExportInputSchema.Type;
 
-const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* (
-  { citekeys, format, library }: ZoteroExportInput,
-  port: number,
-) {
+const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* ({
+  citekeys,
+  format,
+  library,
+}: ZoteroExportInput) {
   const translator = format || 'biblatex';
 
   const params: unknown[] = library
@@ -57,7 +58,6 @@ const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* (
   const result = yield* callBetterBibTeX(
     'item.export',
     params,
-    port,
     Schema.String,
     ZOTERO_EXPORT_TIMEOUT_MS,
   );
@@ -84,5 +84,5 @@ export const ZoteroExportTool = defineTool({
     'Export BibTeX/BibLaTeX entries from Zotero by citation keys. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroExportInputSchema,
-  execute: withZoteroPort(exportEntries),
+  execute: exportEntries,
 });

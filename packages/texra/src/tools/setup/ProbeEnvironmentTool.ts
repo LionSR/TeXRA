@@ -6,11 +6,7 @@ import * as os from 'node:os';
 import { Config, Effect, Option, Predicate, Schema } from 'effect';
 
 // Local imports
-import {
-  API_KEY_PROVIDER_IDS,
-  apiProviderOfSecretName,
-  apiKey,
-} from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS, apiKeyEntry, apiKey } from '@texra-ai/llm';
 import { defineTool } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import { Secrets, withLogChannel } from '@texra-ai/harness/host';
@@ -257,9 +253,9 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
                 if (key === GITHUB_TOKEN_STORAGE_KEY) {
                   return githubToken === 'env' || githubToken === 'none';
                 }
-                if (!key.startsWith('apiKey.')) return false;
-                const provider = apiProviderOfSecretName(key);
-                if (provider === undefined) return true;
+                const provider = apiKeyEntry(key);
+                if (provider === undefined) return false;
+                if (provider === 'unknown') return true;
                 const origin = apiKeys.find(
                   (entry) => entry.provider === provider,
                 )?.origin;
@@ -267,7 +263,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
               }),
               otherRedactedCount: storedKeys.filter(
                 (key) =>
-                  !key.startsWith('apiKey.') &&
+                  apiKeyEntry(key) === undefined &&
                   key !== GITHUB_TOKEN_STORAGE_KEY,
               ).length,
             },

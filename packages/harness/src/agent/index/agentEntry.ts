@@ -31,7 +31,8 @@ export interface AgentEntry {
   path: string; // absolute path to the definition file
   description?: string;
   tools?: string[]; // tool names, for display
-  /** Digest of the definition file; absent on a plugin agent. */
+  /** Digest of the definition file and the files its blocks bind; absent
+   *  on a plugin agent. */
   digest?: string;
   /** A customized copy's `basedOn`: the bundled file's digest it began from. */
   basedOn?: string;

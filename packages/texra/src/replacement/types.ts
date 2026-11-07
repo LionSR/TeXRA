@@ -17,10 +17,22 @@ export type ReplacementValue = string | ReplacementFunction;
  * beside the rules.
  */
 
-/** Plain string substitution, applied via `String.prototype.replaceAll`. */
+/** Plain string substitutions, from each key to its value, as a category
+ *  declares them; the engine decides the order they run in. */
 export interface NonRegexRuleSet {
   patterns: Record<string, string>;
   isRegex?: false;
+}
+
+/**
+ * Plain string substitutions as the engine runs them, each through
+ * `String.prototype.replaceAll`: longest `from` first, so a rule runs before
+ * every shorter rule its `from` contains. A second pass chains one rule's
+ * output into another.
+ */
+export interface OrderedRuleSet {
+  readonly rules: readonly (readonly [from: string, to: string])[];
+  readonly isRegex?: false;
 }
 
 /** Regex-based substitution; patterns may be a replacement string or callback. */
@@ -31,4 +43,4 @@ export interface RegexRuleSet {
   flags: string;
 }
 
-export type ReplacementRuleSet = NonRegexRuleSet | RegexRuleSet;
+export type ReplacementRuleSet = OrderedRuleSet | RegexRuleSet;

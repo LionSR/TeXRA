@@ -9,6 +9,7 @@ import {
 
 // Internal imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
+import { RunCall } from '@agent/runtime/RunCall';
 import {
   convertToolSchema,
   type JSONSchemaObject,
@@ -196,8 +197,6 @@ export function buildTerminalTool(
 ): ITool<Error, never> {
   const { schema } = normalizeStructuredOutputSchema(input);
 
-  // Built per run, so `captured` belongs to this run's loop alone.
-  let captured = false;
   return defineTool<unknown, never>({
     name: STRUCTURED_OUTPUT_TOOL_NAME,
     description:
@@ -205,14 +204,17 @@ export function buildTerminalTool(
     schema,
     // A repeated call and a malformed payload are the call's own failures,
     // the latter keeping its schema issues for the model's diagnostics.
+    // Whether the run has submitted is its rows' answer, so a resumed run
+    // refuses a second submission as the live one does.
     execute: Effect.fn('structuredOutput.execute')(function* (input) {
-      if (captured) {
+      const call = yield* RunCall;
+      const facts = call === null ? null : yield* call.facts;
+      if (facts?.structured != null) {
         return yield* Effect.fail(
           new ToolError('submit_output can only be accepted once per run.'),
         );
       }
       const value = yield* Schema.decodeUnknownEffect(JsonValueSchema)(input);
-      captured = true;
       return {
         status: 'executed',
         endTurn: true,

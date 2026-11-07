@@ -167,7 +167,7 @@ interface AgentCatalogShape {
 ## AgentCustomization
 
 A change to a custom copy of a bundled agent: `copy` writes a new one
-into the custom directory, stamped with the bundled file's digest
+into the custom directory, with the files its blocks bind beside it, stamped with the bundled file's digest
 (`basedOn`), and is refused when one is there; `overwrite` replaces it;
 `keep` re-stamps the user's copy with the changed bundled version, which
 dismisses its newer-version notice and touches nothing else.
@@ -179,8 +179,8 @@ type AgentCustomization = 'copy' | 'overwrite' | 'keep';
 ## AgentCustomizeRefused
 
 `customize` refused the change: the entry has no file of its own to copy
-(`noFile`), its copy would land outside the custom directory (`escapes`),
-a copy is already there (`exists`, at `path`), or a copy has no newer
+(`noFile`), its copy would land outside the custom directory or a file it
+binds lies outside its own directory (`escapes`), a copy is already there (`exists`, at `path`), or a copy has no newer
 bundled version to keep (`current`).
 
 ```ts
@@ -332,7 +332,8 @@ interface AgentEntry {
   path: string; // absolute path to the definition file
   description?: string;
   tools?: string[]; // tool names, for display
-  /** Digest of the definition file; absent on a plugin agent. */
+  /** Digest of the definition file and the files its blocks bind; absent
+   *  on a plugin agent. */
   digest?: string;
   /** A customized copy's `basedOn`: the bundled file's digest it began from. */
   basedOn?: string;
@@ -1362,24 +1363,6 @@ The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
 function mcpServerOfToolName(name: string): string | undefined
 ```
 
-## ModelHostFactUnreadable
-
-A host fact (a preference, a config switch, a stored state entry) could not
-be read because the host's store threw. Environmental, so it is a typed
-failure a caller recovers from like an unreadable secret store. The module's
-own invariant ({@link resolveModelAvailability}) stays a defect.
-
-```ts
-class ModelHostFactUnreadable extends Schema.TaggedError<ModelHostFactUnreadable>()(
-  'ModelHostFactUnreadable',
-  {
-    fact: Schema.String,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-)
-```
-
 ## ModelOption
 
 One visible model's option: whether it can run now, the route that decided
@@ -1943,15 +1926,16 @@ behind every model picker, run-model check and prospective route. The
 facts every model shares are read once, each model is routed once, then
 one key status is read per provider the routes consult; each option is
 finished purely over them, so the ~157-model settings pass costs no
-per-model awaits. Every host read fails in its typed channel
-({@link ModelHostFactUnreadable}). `models`, when given, is honored
+per-model awaits. Each read fails with its own error: a settings or key
+read as itself, a subscription session as its route (`RouteUnavailable`,
+with whether it needs a sign-in). `models`, when given, is honored
 verbatim, one option each, in order. Nothing is cached here: the sign-in
 state is read live by design. `stores` are the caller's setting slots (a
 session's `roots`); provider keys and sign-ins come from the process
 {@link Secrets} service.
 
 ```ts
-const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelOption[], ModelHostFactUnreadable, Secrets>
+const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelOption[], StateReadFailed | SecretsFailed | RouteUnavailable, Secrets>
 ```
 
 ## readSessionView

@@ -87,25 +87,20 @@ task:
     - appendix.tex
   requests:
     - |
-      [Request that emits one <document> per name in OUTPUT_FILES]
+      [What to write; TeXRA appends the reply format, one <document> per name]
 ```
 
-### Prompt template for multiple outputs
+### The reply format
 
-Iterate over `INPUT_FILES` (or `OUTPUT_FILES` when `task.outputs` is set) so the model emits one `<document name="...">` block per expected filename. Use `{{ INPUT_FILES | join(", ") }}` when the prompt needs a comma-separated list:
+TeXRA ends every request with the format it reads the reply in: a
+`<documents>` container with one `<document name="...">` block per expected
+filename (the `task.outputs` names, or else the input files), in order. A
+request says only what to write. Use `{{ INPUT_FILES | join(", ") }}` when
+the prompt needs the names as a list:
 
 ```
 # Inside a task.requests entry:
-Output one updated document for each input file, using the matching input
-filename as the document name.
-
-<documents>
-{% for output in INPUT_FILES %}
-<document name="{{ output }}">
-% UPDATED_CONTENT_FOR_{{ output }}
-</document>
-{% endfor %}
-</documents>
+Output one updated document for each input file.
 ```
 
 ## Next steps

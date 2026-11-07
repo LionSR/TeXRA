@@ -18,11 +18,14 @@ import {
   SkillDisplayItemSchema,
   WorkspaceStateKey,
 } from '@texra-ai/harness/schemas';
-import { API_KEY_PROVIDER_IDS, ReasoningEffortSchema } from '@texra-ai/llm';
+import {
+  API_KEY_PROVIDER_IDS,
+  CredentialOriginSchema,
+  ReasoningEffortSchema,
+} from '@texra-ai/llm';
 import { AgentModePresetSchema } from '@texra/shared/agentTeams';
 import {
   LATEX_DEPENDENCIES,
-  OS_PLATFORMS,
   SYSTEM_PACKAGE_MANAGERS,
 } from '@texra/shared/constants/latexToolchain';
 import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
@@ -53,6 +56,7 @@ import {
   PluginActionMessageSchema,
   PluginListItemSchema,
 } from './pluginMessages';
+import { OsPlatformSchema } from '@texra/shared/osPlatform';
 
 /** An absolute URL the host may open. */
 const UrlSchema = Schema.String.check(
@@ -350,8 +354,9 @@ const SkillsPageSchema = Schema.Struct({
 
 /** Outbound: backend → frontend GitHub token status. */
 const GitHubTokenPageSchema = Schema.Struct({
-  /** 'secret' = stored in SecretStorage; 'env' = GITHUB_TOKEN/GH_TOKEN env var; 'none' = missing. */
-  status: Schema.Literals(['secret', 'env', 'none']),
+  /** Where the token comes from: the host's secret store, `GH_TOKEN` /
+   *  `GITHUB_TOKEN`, or nowhere. */
+  status: CredentialOriginSchema,
 });
 
 /** Each subscription's sign-in status, by provider. */
@@ -393,7 +398,7 @@ const LatexSettingsStatusSchema = Schema.Struct({
     Schema.Boolean,
   ),
   latexWorkshopInstalled: Schema.Boolean,
-  platform: Schema.Literals(OS_PLATFORMS),
+  platform: OsPlatformSchema,
   pdflatexPath: Schema.NullOr(Schema.String),
   latexmkPath: Schema.NullOr(Schema.String),
   latexdiffPath: Schema.NullOr(Schema.String),

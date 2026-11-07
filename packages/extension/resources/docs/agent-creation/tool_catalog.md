@@ -1,6 +1,9 @@
 # Tool Catalog for Agents
 
 Grant only the tools the agent needs; start from the recommended groups below.
+Each entry says what a tool is for. How to call it (its parameters, return
+values and limits) is in the tool's own description, which the agent reads
+whenever it is offered the tool, so an agent's prompt does not restate it.
 
 ## File operations
 
@@ -48,40 +51,18 @@ Grant only the tools the agent needs; start from the recommended groups below.
 
 ## Agent delegation
 
-- `agent` — run a named agent as a child of this run, with a prompt. Pass
-  `prompt` and `agentName`; the agent works with its own tools and may take
-  `schema` (a JSON Schema object; its value returns as `structured`),
-  `mediaFiles` and `working_directory`. Gated by the "Multi-Agent Workflow"
-  switch in Settings → Plugins, which removes it from every agent when off.
+- `agent` — run a named agent as a child of this run, with a prompt.
+  Gated by the "Multi-Agent Workflow" switch in Settings → Plugins, which
+  removes it from every agent when off.
 - `document_task` — run a named agent's document task over files, as a
-  child of this run. Pass `agentName`, `inputFiles` (rewritten, one revised
-  document each) plus optional `prompt`, `contextFiles`, `mediaFiles`,
-  `outputFiles`, and the task's switches under the names a run stores
-  them by (`attachTeXCount`, `reflect`, `autoExtractFigure`,
-  `autoExtractTikzFigure`, `autoCompileInputPdf`). Only an agent with a
-  `task` block has a document task. Unlike `agent`, it is not gated by the
-  "Multi-Agent Workflow" switch.
-- Both take `model` (with an `@effort` suffix), `memories`, `label`, and
-  `timeoutMs`. Called directly, the child runs in the background and its
-  result arrives as a follow-up message (a one-shot run waits).
-- `script` — run a JavaScript program that calls the agent's other tools.
-  `code` is the body of an async function: `await tools.<name>(args)` or
-  `await agent(prompt, opts)`, `await document_task(prompt, opts)`,
-  `Promise.all` / `Promise.allSettled`, `try`/`catch`, `phase(title)`, and
-  `console.log`. In a script, `agent()` waits for the child and resolves to
-  `{ response, files, structured?, runId, outcome, cost }` (`document_task()`
-  to `{ documents: { outputs }, runId, outcome, cost }`), or rejects
-  with an Error named `AgentFailed`, `TimedOut`, `Skipped`,
-  `ModelUnavailable`, `CallLimit`, or `DuplicateCall`; give otherwise
-  identical calls distinct `id`s. One approval request covers every `agent`
-  and `document_task` call in the script and shows its source. There are no timers, no
-  `Date.now()`, no `Math.random()`, and no imports, so an interrupted script
-  replays exactly and finished calls are not run again. `run_in_background:
-  true` runs it as its own background run that delivers one result and a
-  summary as a follow-up; `timeoutMs` is the wall clock (1 s to 24 h,
-  default 60 min). Use it when the whole fan-out and join is known up front;
-  call `agent` directly when the next step depends on reading the last
-  result.
+  child of this run. Only an agent with a `task` block has a document
+  task. Not gated by the "Multi-Agent Workflow" switch.
+- `script` — run a JavaScript program that calls the agent's other tools,
+  `agent` and `document_task` included, and joins their results in code.
+  Offering it also offers `self`, which a script calls to run the agent
+  itself again on one part of the work. Use it when the whole fan-out and
+  join is known up front; call `agent` directly when the next step depends
+  on reading the last result.
 - `executions` — view execution history and manage running executions;
   `action: "send"` on `/executions/<id>` messages another run, such as a
   follow-up to a WAITING subagent.
@@ -129,6 +110,8 @@ Grant only the tools the agent needs; start from the recommended groups below.
 - `ask_user_question` — ask the user one to three short clarification
   questions and wait for their answers, when continuing without their
   preference would be guesswork.
+- `apply_team` — apply an agent team to the workspace and record it as the
+  user's default (the setup agent's).
 - `inquiry` — dispatch a question to an external AI model via the user as a
   human-in-the-loop bridge; the run continues (even after a restart, even
   hours later) once the user pastes the answer back.

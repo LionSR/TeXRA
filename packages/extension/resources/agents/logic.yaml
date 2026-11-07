@@ -26,9 +26,8 @@ prompt: |
                       \item Ensure every concept is either: (1) explained before use, (2) clearly referenced forward with pointer, or (3) standard knowledge stated explicitly
                   \end{itemize}
           \end{itemize}
-      \item Use the command \criticize{comment text}{severity}{confidence} where severity and confidence are 1-5:
+      \item Use the command \criticize{comment text}{severity}{confidence} on the scale given with its definition:
           \begin{itemize}
-              \item Severity: Level 5 (Critical), 4 (Major), 3 (Moderate), 2 (Minor), 1 (Cosmetic)
               \item Confidence: Level 5 (Certain), 4 (High), 3 (Moderate), 2 (Low), 1 (Speculative)
           \end{itemize}
       \item The text inside \criticize{...}{...}{...} must use proper LaTeX syntax:
@@ -77,6 +76,8 @@ prompt: |
   \end{itemize}
 
 task:
+  files:
+    CRITICIZE: criticize.tex
   prefix: |
     The following \LaTeX documents need logical-structure analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read every document to identify its narrative and argument structure.
 
@@ -88,6 +89,9 @@ task:
     </documents>
 
     Read the entire collection before proceeding.
+
+    The \criticize annotation, its scale and its definition; add the definition to the preamble if it is not already there:
+    {{ CRITICIZE_CONTENT }}
   requests:
     - |
       Analyze the paper's logical structure and flow according to:
@@ -214,17 +218,7 @@ task:
       - \criticize{This assumes readers understand result from \cref{eq:main_result} in \cref{sec:main}, but that section doesn't derive it. Add brief summary.}{4}{4}
       - \criticize{Out of place: This lengthy derivation in main text belongs in \cref{app:proofs}. Consider moving to appendix and referencing here.}{4}{4}
 
-      Add the comment command definition in the preamble if not already present:
-      \usepackage{xcolor}
-      \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\textit{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
+      Add the \criticize definition given above to the preamble if it is not already there.
     - |
       Review the identified structural issues and plan improvements. Separate direct fixes from major decisions.
 
@@ -287,12 +281,4 @@ task:
 
       If appendix derivations are questionable, add comments in the main text where those results are used, warning about the weak foundation. Be proactive with improvements that don't cross section boundaries, delete substantial content, or require cross-document coordination; leave major reorganization and cross-document changes as issue comments for the human to decide.
 
-      Did later documents receive less attention than earlier ones? Re-read the last document now. Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
+      Did later documents receive less attention than earlier ones? Re-read the last document now.

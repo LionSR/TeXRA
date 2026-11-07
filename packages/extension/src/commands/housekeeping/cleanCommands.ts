@@ -22,11 +22,9 @@ const LISTED_BUILD_DIRECTORIES = 10;
 export const confirmCleanBuild = Effect.gen(function* () {
   const directories = yield* findBuildDirectories;
   if (directories.length === 0) {
-    yield* Effect.forkDetach(
-      showLoggedInfoMessage(
-        CHANNEL,
-        'No build/ folders found in this workspace.',
-      ),
+    yield* showLoggedInfoMessage(
+      CHANNEL,
+      'No build/ folders found in this workspace.',
     );
     return;
   }
@@ -49,18 +47,14 @@ export const confirmCleanBuild = Effect.gen(function* () {
   if (!confirmed) return;
   const failed = yield* removeBuildDirectories(directories);
   if (failed.length > 0) {
-    yield* Effect.forkDetach(
-      showLoggedMessage(
-        CHANNEL,
-        `Could not delete ${failed.length} of ${directories.length} build/ ${noun}: ${failed.join(', ')}. See the TeXRA log for the cause.`,
-      ),
+    yield* showLoggedMessage(
+      CHANNEL,
+      `Could not delete ${failed.length} of ${directories.length} build/ ${noun}: ${failed.join(', ')}. See the TeXRA log for the cause.`,
     );
     return;
   }
-  yield* Effect.forkDetach(
-    showLoggedInfoMessage(
-      CHANNEL,
-      `Deleted ${directories.length} build/ ${noun}.`,
-    ),
+  yield* showLoggedInfoMessage(
+    CHANNEL,
+    `Deleted ${directories.length} build/ ${noun}.`,
   );
 });

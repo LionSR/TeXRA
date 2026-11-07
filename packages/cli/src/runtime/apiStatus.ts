@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import {
   API_KEY_PROVIDER_IDS,
-  loadApiKeyStatusMap,
+  apiKeyOrigins,
   providerDisplayName,
 } from '@texra-ai/llm';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
@@ -91,7 +91,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
   const [access, keyStatuses] = yield* Effect.all(
     [
       readCliModelAccessStatus(stores),
-      Effect.flatMap(Secrets, loadApiKeyStatusMap),
+      Effect.flatMap(Secrets, apiKeyOrigins),
     ] as const,
     { concurrency: 'unbounded' },
   );
@@ -158,7 +158,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
   const otherPersonalKeys = formatPersonalApiKeysLine(
     API_KEY_PROVIDER_IDS.filter(
       (provider) =>
-        keyStatuses[provider] !== 'not-set' &&
+        keyStatuses[provider] !== 'none' &&
         !CODING_PLAN_SUBSCRIPTIONS.some(
           (plan) => plan.exclusiveCredential && plan.apiProvider === provider,
         ),

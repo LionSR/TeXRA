@@ -43,18 +43,8 @@ task:
       </instruction>
       {% endif %}
 
-      Use the provided template as the skeleton for the presentation. Use the following format:
+      Use this template as the skeleton for the presentation:
 
-      <documents>
-      <document name="{{ OUTPUT_FILES[0] }}">
       {{ TEMPLATE_SLIDE_CONTENT }}
-      </document>
-      </documents>
     - |
-      Review the draft deck for accuracy of the paper's claims, slide organization, equation formatting, and plain, concrete phrasing. Fix any issues you find and output the complete revised deck; if nothing needs fixing, reproduce it unchanged. Use the following format:
-
-      <documents>
-      <document name="{{ OUTPUT_FILES[0] }}">
-      % Complete revised LaTeX Beamer presentation here
-      </document>
-      </documents>
+      Review the draft deck for accuracy of the paper's claims, slide organization, equation formatting, and plain, concrete phrasing. Fix any issues you find and output the complete revised deck; if nothing needs fixing, reproduce it unchanged.
