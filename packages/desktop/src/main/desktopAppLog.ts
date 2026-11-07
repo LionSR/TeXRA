@@ -57,7 +57,8 @@ export function getDesktopLogDirectory(): string {
   }
 }
 
-function getDesktopLogFilePath(): string {
+/** Where the desktop log is on disk (the snapshot carries it redacted). */
+export function getDesktopLogFilePath(): string {
   return logFilePath ?? join(getDesktopLogDirectory(), LOG_FILE_NAME);
 }
 

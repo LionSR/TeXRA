@@ -28,6 +28,7 @@ import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMe
 import {
   attachRendererConsoleLog,
   getDesktopLogDirectory,
+  getDesktopLogFilePath,
   readDesktopLogSnapshot,
 } from './desktopAppLog.js';
 import {
@@ -366,6 +367,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       {
         readLog: () =>
           readDesktopLogSnapshot({ workspacePath: projects.active().root }),
+        logFile: getDesktopLogFilePath,
         following: logFollowing,
         copyLog: (text) => clipboard.writeText(text),
         showSaveDialog: (dialogOptions) =>

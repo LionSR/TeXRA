@@ -32,6 +32,8 @@ class DesktopLogActionFailed extends Schema.TaggedError<DesktopLogActionFailed>(
 
 interface DesktopLogIpcOptions {
   readLog(): DesktopLogSnapshot;
+  /** The log file's real path; the snapshot's is redacted for display. */
+  logFile(): string;
   /** The window's one follow of the log file, run while its Logs tab is
    *  shown; closing the window interrupts it. */
   following: FiberHandle.FiberHandle<void>;
@@ -55,7 +57,8 @@ export function createDesktopLogIpc(
   /** Push the log now, then each time its file changes. A watch the OS
    *  refuses ends the follow with a warning; Refresh still reads the log. */
   const follow = Effect.suspend(() => {
-    const { path } = postSnapshot();
+    postSnapshot();
+    const path = options.logFile();
     return FileSystem.FileSystem.use((fs) =>
       Stream.runForEach(
         fs.watch(dirname(path)).pipe(
