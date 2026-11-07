@@ -38,7 +38,7 @@ import {
   type InvocationRef,
   type RunId,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
+import type { DatabaseReadFailed, StoredBlobs } from '@shared/session/database';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { sha256 } from '@utils/core/idHash';
@@ -245,7 +245,7 @@ function recordedTurn(state: RunState) {
 /** The session log's blob read: how a request's media addresses resolve. */
 type ReadBlobs = (
   digests: readonly string[],
-) => Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
+) => Effect.Effect<StoredBlobs, DatabaseReadFailed>;
 
 /** What an invocation sends besides the history. */
 export interface InvokeRequest {
