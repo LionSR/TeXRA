@@ -116,8 +116,8 @@ function compareGroups(a: TaskGroup, b: TaskGroup): number {
 /**
  * The transcript as the list renders it: ungrouped rows (the user's
  * inputs, follow-ups, errors) interleaved chronologically with the group
- * trees. Rows are classified by `groupId` alone; a group whose parent is
- * absent is a root.
+ * trees. Rows are classified by `groupId` alone; a group with no parent is
+ * a root (the transcript names only parents it holds).
  */
 function transcriptTimeline(
   groups: readonly TaskGroup[],
@@ -125,9 +125,7 @@ function transcriptTimeline(
 ): TimelineEntry[] {
   const groupIds = new Set(groups.map((group) => group.id));
   const children = Map.groupBy(
-    groups.filter(
-      (group) => group.parentGroupId && groupIds.has(group.parentGroupId),
-    ),
+    groups.filter((group) => group.parentGroupId !== undefined),
     (group) => group.parentGroupId,
   );
   const sortedRows = rows.toSorted(compareRows);
@@ -144,7 +142,7 @@ function transcriptTimeline(
     rows: rowsByGroup.get(group.id) ?? [],
   });
   const roots = groups
-    .filter((g) => !g.parentGroupId || !groupIds.has(g.parentGroupId))
+    .filter((g) => g.parentGroupId === undefined)
     .sort(compareGroups)
     .map(node);
   return [
@@ -501,10 +499,6 @@ export class TaskGroupList extends LitElement {
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
     // Tree roots: simple container (no collapsible), always render content.
-    // Keyed on tree position (isRoot), NOT group.parentGroupId, so a re-rooted
-    // orphan (a group whose parent is absent, promoted to a root by
-    // `transcriptTimeline`) gets the root layout instead of the nested
-    // collapsible one even though it retains its dangling parentGroupId.
     if (isRoot) {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>

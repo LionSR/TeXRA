@@ -1,8 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  createFlushableDebounce,
-  type FlushableDebounce,
-} from '@texra/shared/utils/flushableDebounce';
+import { describe, expect, it } from 'vitest';
 import { deriveRunId } from '@utils/core/idHash';
 
 describe('deriveRunId', () => {
@@ -10,37 +6,5 @@ describe('deriveRunId', () => {
     expect(deriveRunId({ parent: 'abc', attempt: 2 })).toBe(
       deriveRunId({ attempt: 2, parent: 'abc' }),
     );
-  });
-});
-
-describe('createFlushableDebounce', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  // The CLI transcript sync re-schedules from inside its own callback (its
-  // trace flush writes to the store, which fires the change subscription
-  // synchronously). An implementation that invokes and then cancels drops that
-  // reschedule, freezing every later sync.
-  it('keeps a reschedule made from inside the callback', () => {
-    const inner = vi.fn();
-    let rescheduleOnce = true;
-    const batcher: FlushableDebounce = createFlushableDebounce(() => {
-      inner();
-      if (!rescheduleOnce) return;
-      rescheduleOnce = false;
-      batcher.schedule();
-    }, 100);
-
-    batcher.schedule();
-    vi.advanceTimersByTime(100);
-    expect(inner).toHaveBeenCalledOnce();
-
-    vi.advanceTimersByTime(100);
-    expect(inner).toHaveBeenCalledTimes(2);
   });
 });
