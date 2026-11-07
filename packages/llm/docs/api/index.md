@@ -1290,11 +1290,13 @@ interface UnreleasedUpload {
 
 ## wireEffort
 
-The effort a route sends: the chosen level, or `none` when thinking is off and `none` is how the route says so.
+The effort `route` sends for `config`: the chosen level, or `none` when
+thinking is off and `none` is how the route says so.
 
 ```ts
 function wireEffort(
-  config: ModelConfig,
+  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
+  route: Pick<ModelRoute, 'kind'> | undefined,
   reasoning: ReasoningChoice,
 ): ReasoningEffort | null
 ```

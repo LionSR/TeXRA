@@ -5,15 +5,20 @@
  * this table and the Responses vendors' (`responsesConfiguration.ts`), so a
  * caller never spells a wire field.
  */
+import { Schema } from 'effect';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ModelError, PLAN_ROUTES } from '../errors.js';
 import { routeConfig } from '../models/modelRoute.js';
-import { acceptedEfforts, chooseReasoning } from '../models/reasoningChoice.js';
+import {
+  acceptedEfforts,
+  chooseReasoning,
+  wireEffort,
+} from '../models/reasoningChoice.js';
 import { BACKEND_PROTOCOLS } from '../providers/providerPlugins.js';
 import { responsesConfiguration } from './responsesConfiguration.js';
 import { backgroundCapable } from '../protocol.js';
-import type { ModelConfiguration } from '../turn.js';
+import { type ModelConfiguration, ThinkingLevelSchema } from '../turn.js';
 import type { BindSpec } from '../node.js';
 
 type HttpProtocol = ModelConfiguration['protocol'];
@@ -51,6 +56,8 @@ export interface Facts {
   };
   /** The effort values the route accepts on the wire (see {@link acceptedEfforts}). */
   readonly acceptedEfforts: readonly ReasoningEffort[];
+  /** The effort the route sends for the bind's reasoning (see {@link wireEffort}). */
+  readonly effort: ReasoningEffort | null;
 }
 
 /** Anthropic's thinking: off, adaptive, or a budget of half the output where the model takes one. */
@@ -112,13 +119,7 @@ const CONFIGURE: {
         store: spec.options.serverState,
         // A Gemini model without levels (2.5, budget-controlled) keeps the
         // level this route has always sent.
-        thinkingLevel:
-          effort === 'minimal' ||
-          effort === 'low' ||
-          effort === 'medium' ||
-          effort === 'high'
-            ? effort
-            : 'high',
+        thinkingLevel: Schema.is(ThinkingLevelSchema)(effort) ? effort : 'high',
       },
     };
   },
@@ -183,6 +184,7 @@ export function configurationFor(spec: BindSpec): {
       temperature: sampled ? (options.temperature ?? null) : null,
     },
     acceptedEfforts: acceptedEfforts(config, route),
+    effort: wireEffort(config, route, options.reasoning),
   });
   return { config, options, configuration };
 }

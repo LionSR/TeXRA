@@ -7,7 +7,6 @@ import { Number as Num } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 
 import { codexBackendModelId } from '../models/modelRoute.js';
-import { wireEffort } from '../models/reasoningChoice.js';
 import {
   type BACKEND_PROTOCOLS,
   type BackendProviderId,
@@ -20,7 +19,7 @@ type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
 /** The request fields a vendor route sets for itself. */
 interface VendorFields extends Pick<
   ResponsesConfiguration,
-  'supportsForcedToolChoice' | 'allowedReasoningEfforts'
+  'supportsForcedToolChoice'
 > {
   readonly stores: boolean;
   readonly temperature: number | null;
@@ -33,7 +32,7 @@ interface VendorFields extends Pick<
  * socket, files or token count, and only the request fields it documents.
  */
 function vendorRoute(
-  { base, controls }: Facts,
+  { base, controls, acceptedEfforts }: Facts,
   fields: VendorFields,
 ): ResponsesConfiguration {
   return {
@@ -41,7 +40,7 @@ function vendorRoute(
     protocol: 'openai-responses',
     background: 'unsupported',
     supportsDocumentInput: false,
-    allowedReasoningEfforts: fields.allowedReasoningEfforts,
+    allowedReasoningEfforts: acceptedEfforts,
     continuationInheritsInstructions: false,
     supportsForcedToolChoice: fields.supportsForcedToolChoice,
     openaiEndpoint: false,
@@ -66,14 +65,12 @@ const effortOnly = (
  * the ChatGPT subscription's Codex backend.
  */
 function firstPartyResponses(facts: Facts): ResponsesConfiguration {
-  const { base, config, controls, spec } = facts;
+  const { base, config, controls, spec, effort } = facts;
   const { credential, options } = spec;
-  const choice = options.reasoning;
-  const effort = wireEffort(config, choice);
   const reasoning =
     config.reasoning === undefined
       ? null
-      : { effort, mode: choice.mode, summary: 'auto' as const };
+      : { effort, mode: options.reasoning.mode, summary: 'auto' as const };
   if (credential.kind === 'chatgpt') {
     // OpenAI's token sharing: the public Responses API under a ChatGPT plan's
     // rules. A request is stateless and streamed (`store: false`, no
@@ -157,58 +154,50 @@ const RESPONSES_ROUTES: {
   deepseek: (facts) =>
     vendorRoute(facts, {
       supportsForcedToolChoice: true,
-      allowedReasoningEfforts: facts.acceptedEfforts,
       stores: false,
       temperature: facts.controls.temperature,
-      reasoning: effortOnly(
-        wireEffort(facts.config, facts.spec.options.reasoning),
-      ),
+      reasoning: effortOnly(facts.effort),
     }),
   // Kimi fixes its sampling. Its `thinking` switch is not part of this
   // request shape, so `@none` is refused by the reasoning choice.
   moonshot: (facts) =>
     vendorRoute(facts, {
       supportsForcedToolChoice: false,
-      allowedReasoningEfforts: facts.acceptedEfforts,
       stores: false,
       temperature: null,
-      reasoning: effortOnly(facts.spec.options.reasoning.effort),
+      reasoning: effortOnly(facts.effort),
     }),
   // Zhipu stores for seven days; `none` turns thinking off.
   glm: (facts) =>
     vendorRoute(facts, {
       supportsForcedToolChoice: false,
-      allowedReasoningEfforts: facts.acceptedEfforts,
       stores: true,
       temperature:
         facts.controls.temperature === null
           ? null
           : Math.min(1, facts.controls.temperature),
-      reasoning: effortOnly(
-        wireEffort(facts.config, facts.spec.options.reasoning),
-      ),
+      reasoning: effortOnly(facts.effort),
     }),
   // DashScope stores by default; Qwen keeps its own thinking default.
   dashscope: (facts) =>
     vendorRoute(facts, {
       supportsForcedToolChoice: false,
-      allowedReasoningEfforts: facts.acceptedEfforts,
       stores: true,
       temperature: facts.controls.temperature,
       reasoning: null,
     }),
-  // MiniMax reasons only when asked; its temperature range is (0, 1].
+  // MiniMax reasons only when asked, and omits the field otherwise; its
+  // temperature range is (0, 1].
   minimax: (facts) => {
     const { options } = facts.spec;
     return vendorRoute(facts, {
       supportsForcedToolChoice: false,
-      allowedReasoningEfforts: ['high'],
       stores: false,
       temperature:
         options.temperature === undefined
           ? null
           : Num.clamp(options.temperature, { minimum: 0.01, maximum: 1 }),
-      reasoning: options.reasoning.thinking ? effortOnly('high') : null,
+      reasoning: options.reasoning.thinking ? effortOnly(facts.effort) : null,
     });
   },
 };

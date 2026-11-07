@@ -90,7 +90,8 @@ const EffortSchema = Schema.NullOr(
   ReasoningEffortLevelSchema.pick(['low', 'medium', 'high', 'xhigh', 'max']),
 );
 const CacheSchema = Schema.Literals(['disabled', '5m']);
-const ThinkingLevelSchema = Schema.Literals([
+/** The thinking levels Google's Interactions request takes. */
+export const ThinkingLevelSchema = Schema.Literals([
   'minimal',
   'low',
   'medium',
