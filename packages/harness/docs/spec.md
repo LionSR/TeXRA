@@ -358,7 +358,9 @@ also read by `applyRunRows`.
 
 The transcript tier is display rows too
 (`shared/schemas/traceEvent.ts#TraceRowFieldsSchema`):
-`log`, `stage.start`, `stage.end`, `tool.start` (a call's card opens),
+`log`, `stage.start` and `stage.end` (a labelled span no other row bounds,
+such as a script's calls; a stage still open when its run ends closes with
+that `run.end`), `tool.start` (a call's card opens),
 `tool.end` (it closes), `usage` (one priced turn; a run with a run history
 stores none), `context.state`, `stream.start`, `stream.end`, and
 `response.finalized` (the final text of one provider response; a loop turn that

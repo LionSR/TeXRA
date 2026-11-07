@@ -148,11 +148,11 @@ resumed, enabled and trusted (`name`, `source`, and for a fetched plugin its
 tools a run offered can change between its model requests when a plugin is
 switched on or off; the run records each change in its history.
 
-### NDJSON contract, version 2
+### NDJSON contract, version 3
 
 Every `--output-format ndjson` line is one JSON object whose first key is
 `kind`, followed by the record's own fields, a `ts` timestamp, and
-`contract: 2`, the version of this contract. Version 2 is the 1.0 contract:
+`contract: 3`, the version of this contract. Version 3 is the 1.0 contract:
 
 - `kind: "progress"` records carry a session event verbatim. `event` is the
   event's `type` (`run.start`, `status`, `run.end`, `usage`, `stage.start`,
@@ -162,7 +162,10 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   run's events name it through `payload.aggregateId`, the JSON array
   `["run", "<run id>"]`; a
   parent edge is `payload.parent` on `run.start`; the terminal fact is
-  `run.end` with its `outcome`. One record with no session event behind it,
+  `run.end` with its `outcome`. A run's turns are its `run.position`
+  events (`turn.begin`, `turn.end`); a `stage.start`/`stage.end` pair is a
+  labelled span inside one, such as a script's calls, and a stage still
+  open when its run ends closes with that `run.end`. One record with no session event behind it,
   `event: "run.children"`, reports a parent run's live children as
   `{ runId, children }`, each child carrying its `childRunId`, `identity`,
   `agentName`, and `status` — where its loop stands: `running`,
