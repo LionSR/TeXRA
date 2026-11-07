@@ -7,7 +7,7 @@
  *
  * The caller supplies each event's clock and id, and the reducer owns no
  * clock, timer, IO, or durable write. Each event type writes the value the
- * event means: a stage its stage and heading, a tool card its row from
+ * event means: a stage its entry in `stages`, a tool card its row from
  * one decode, a stream its text row, a `log` row its decoded payload
  * (`transcriptLogRows.ts`). The working state lives in `transcriptState.ts`.
  */
@@ -15,7 +15,6 @@ import { Predicate } from 'effect';
 import {
   MESSAGE_TYPES,
   TOOL_CALL_STATUS,
-  isPlainAgentIdentity,
   isTranscriptEvent,
   type SessionRow,
   type Stage,
@@ -95,22 +94,10 @@ function record(d: Draft, event: TraceRowFields): void {
       recordProcessOutputRow(d, event);
       return;
 
-    case 'stage.start': {
-      write(d, {
-        kind: 'stage',
-        base: open(d, event.id, undefined, MESSAGE_TYPES.DEFAULT, true),
-        label: event.label,
-      });
+    case 'stage.start':
+    case 'stage.end':
       applyStage(d, event);
       return;
-    }
-
-    case 'stage.end': {
-      const slot = ix.slots.get(event.id);
-      if (slot?.kind === 'stage') write(d, slot);
-      applyStage(d, event);
-      return;
-    }
 
     case 'tool.start': {
       if (ix.closed) return;
@@ -387,10 +374,7 @@ export function buildRunTranscript(
   if (start.type !== 'run.start' || start.seq !== 1) {
     throw new Error('A transcript read must begin with its creation row.');
   }
-  const ctx: TranscriptContext = {
-    debug,
-    lifecycleStages: isPlainAgentIdentity(start.identity),
-  };
+  const ctx: TranscriptContext = { debug };
   for (const event of events) {
     transcript = applyTranscriptEvent(transcript, work, event, ctx);
   }
