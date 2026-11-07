@@ -78,7 +78,7 @@ import {
 import { hostCapabilitiesOf, liveToolGates } from '../requests';
 import { blobRows, contextAt, stored } from '../run/requestContext';
 import { appendRow, SCRIPT_TOOL_NAME } from './rows';
-import { stepHooks, type StepHook } from './hooks';
+import { stepHooks, type StepHooks } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 
 /** The project's side of the tool catalog ({@link SessionTools}): its
@@ -96,7 +96,7 @@ export interface StepTools extends ResolvedTools {
   readonly stepRoots: readonly StepRoot[];
   /** The command hooks of the installed plugins it accepted, by plugin id:
    *  its calls, and the prompts and stops under it, run these. */
-  readonly hooks: readonly StepHook[];
+  readonly hooks: StepHooks;
   /** The modules its scripts may import, source by specifier. */
   readonly modules: { readonly [specifier: string]: string };
 }
@@ -295,8 +295,7 @@ const openStep = Effect.fn('Step.open')(function* (
       : (recordedSkills?.flatMap((name) => byName.get(name) ?? []) ??
         catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS));
     const activated = names.flatMap((name) => byName.get(name) ?? []);
-    const hooks = stepHooks(pinned.installed, recordedHooks);
-    for (const note of hooks.notes) run.logger.warn(note);
+    const hooks = stepHooks(run, pinned.installed, recordedHooks);
     const modules = tools.registry.has(SCRIPT_TOOL_NAME) ? imported : {};
     return {
       tools: {
@@ -308,10 +307,9 @@ const openStep = Effect.fn('Step.open')(function* (
             ? []
             : [{ absolutePath: directory, label: `Skill ${name}` }],
         ),
-        hooks: hooks.hooks,
+        hooks,
         modules,
       },
-      hooks: hooks.identities,
       warnings: [
         ...pinned.warnings,
         ...resolved.warnings,
@@ -369,7 +367,8 @@ const openStep = Effect.fn('Step.open')(function* (
     skillsChanged ||
     stableStringify(modules) !== stableStringify(state.offeredWith.modules) ||
     state.offeredContext !== sha256(context) ||
-    step.hooks.join('\0') !== state.offeredWith.hooks.join('\0');
+    step.tools.hooks.identities.join('\0') !==
+      state.offeredWith.hooks.join('\0');
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
   const withheldChanged =
@@ -408,7 +407,7 @@ const openStep = Effect.fn('Step.open')(function* (
               skills,
               system: system === undefined ? null : sha256(system),
               context: sha256(context),
-              hooks: step.hooks,
+              hooks: step.tools.hooks.identities,
               modules,
             },
           } satisfies RunHistoryDraft,

@@ -49,7 +49,7 @@ import {
 } from './run/mediaInput';
 import { blobRows } from './run/requestContext';
 import { appendRow, positionRow } from './loop/rows';
-import { promptHooks } from './loop/hooks';
+import { hooksOf } from './loop/hooks';
 import { resolveActivations } from './loop/step';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { AgentRunShape } from './run/AgentRun';
@@ -203,8 +203,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const hooked =
       typed.length === 0
         ? { rows: [], parts: [] }
-        : yield* promptHooks(
-            run,
+        : yield* (yield* hooksOf(run)).prompt(
             state,
             typed[0].followUpId,
             typed.map(({ content }) => content.text).join('\n\n'),

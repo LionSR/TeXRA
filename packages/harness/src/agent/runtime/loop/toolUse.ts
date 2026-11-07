@@ -67,7 +67,7 @@ import {
   type RunExit,
 } from './runProgram';
 import { dispatchPendingResponse } from './toolUseDispatch';
-import { openingHooks, stopHooks } from './hooks';
+import { hooksOf } from './hooks';
 import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { registryOf, Runs, type AgentRunServices } from '../runRegistry';
@@ -234,7 +234,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       }
       if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
       content.push(...media.value.parts, { kind: 'text', text: userRequest });
-      const hooked = yield* openingHooks(run, opening, userRequest);
+      const hooked = yield* step.tools.hooks.opening(opening, userRequest);
       content.push(...hooked.parts);
       return { content, offered: [...step.rows, ...hooked.rows], handed: [] };
     }),
@@ -478,7 +478,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // closes open streams and is the rest a resume's receipt reads), and
       // a Stop hook's block or input already queued.
       const reply = turnResponse(turn.state);
-      const { rows: hooks, block } = yield* stopHooks(run, turn, reply);
+      const { rows: hooks, block } = yield* (yield* hooksOf(run)).stop(
+        turn,
+        reply,
+      );
       const goesOn =
         !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
       const ending = [

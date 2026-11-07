@@ -111,7 +111,6 @@ import {
   formatToolResultAsText,
 } from '../run/toolResultText';
 import { callRequests, guardedToolCall } from './toolGuard';
-import { callHookText, preToolUse } from './hooks';
 import { appendRow, displayRow, positionRow } from './rows';
 import type { AgentRunServices } from '../runRegistry';
 import type { StepTools } from './step';
@@ -480,7 +479,14 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   );
   // Its step's PreToolUse hooks, recorded before the chain decides.
   const pre =
-    tool && (yield* preToolUse(run, cell, step, fact, responseId, input));
+    tool &&
+    (yield* step.hooks.preToolUse(
+      cell,
+      fact,
+      responseId,
+      input,
+      tool.definition.schema,
+    ));
   if (pre && pre.rows.length > 0) yield* commit(call, pre.rows);
   let result: ToolResult;
   // What the body ran on, which the cards show; the issued input is recorded.
@@ -951,7 +957,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
         content.text,
         ...content.media.map(({ part }) => part),
         // What the call's hooks add, after its result.
-        ...callHookText(settledState, responseId, fact.callId),
+        ...dispatch.step.hooks.callText(settledState, responseId, fact.callId),
       ],
     };
   });
