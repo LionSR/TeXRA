@@ -9,6 +9,7 @@ import {
 import * as vscode from 'vscode';
 import {
   Effect,
+  Exit,
   FileSystem,
   type Path,
   type PlatformError,
@@ -108,81 +109,74 @@ export const invokeLatexWorkshopBuild = (
   );
 
 /**
- * Open a file, compile if it is TeX, and display the resulting PDF.
- * The PDF viewer is refreshed if already loaded.
+ * Show each file in order, building the TeX ones, then open the PDF viewer
+ * once, for the last file whose build left a PDF to show.
  *
- * Answers `true` when a surface was actually presented, and `false` when
- * the path is missing, the internal LaTeX compilation failed, or the PDF
- * viewer command rejected, so presentation callers can report non-delivery
- * truthfully.
+ * `latex-workshop.view` takes no argument and shows LaTeX Workshop's current
+ * document, so when a later file took that place (it had no PDF to show, or
+ * showing it failed) the viewer's file is opened in the editor again first.
+ * The viewer opens in the caller's scope after this returns, on the failing
+ * path too, and a failure to open it is logged at warn.
  *
  * Workspace TeX files are built through LaTeX Workshop rather than the
- * internal compiler. A `latex-workshop.build` failure is warn-logged but does
- * not by itself make this resolve `false`: LaTeX Workshop surfaces its own
- * build-failure UI in the editor, so the returned boolean reports the
- * viewer-open outcome that follows the build attempt.
+ * internal compiler. A `latex-workshop.build` failure is only warn-logged:
+ * LaTeX Workshop shows its own build-failure UI in the editor.
  */
-export const openBuildDisplayIfTex = Effect.fn(
-  'openBuild.openBuildDisplayIfTex',
-)(function* (
+export const openBuilt = Effect.fn('openBuild.openBuilt')(function* (
   roots: WorkspaceRoots,
-  fileLocation: FileLocation,
+  locations: readonly [FileLocation, ...FileLocation[]],
   options: { preserveFocus?: boolean } = {},
-): Effect.fn.Return<
-  boolean,
-  DisplayFailure,
-  PreparedFileServices | Scope.Scope
-> {
-  const prepared = yield* prepareFileForDisplay(
-    roots,
-    fileLocation,
-    options.preserveFocus ?? false,
+): Effect.fn.Return<void, DisplayFailure, PreparedFileServices | Scope.Scope> {
+  const preserveFocus = options.preserveFocus ?? false;
+  let viewerFile: FileLocation | undefined;
+  yield* Effect.gen(function* () {
+    for (const location of locations) {
+      if (yield* prepareFileForDisplay(roots, location, preserveFocus))
+        viewerFile = location;
+    }
+  }).pipe(
+    Effect.onExit((exit) => {
+      if (viewerFile === undefined) return Effect.void;
+      const stillCurrent =
+        Exit.isSuccess(exit) &&
+        viewerFile.absolutePath === locations.at(-1)?.absolutePath;
+      return (
+        stillCurrent
+          ? Effect.succeed(true)
+          : reopenViewerFile(viewerFile, preserveFocus)
+      ).pipe(
+        Effect.flatMap((ready) =>
+          ready
+            ? // In the caller's scope: the viewer opens after this returns,
+              // and closing that scope cancels an open still waiting.
+              Effect.forkScoped(openViewer, { startImmediately: true })
+            : Effect.void,
+        ),
+      );
+    }),
   );
-  if (prepared.kind !== 'latex-ready') return prepared.delivered;
-  return yield* scheduleViewerDisplay;
 });
 
 /**
- * Prepare a file for display (open, show, and build when TeX), optionally
- * scheduling the delayed PDF viewer.
- *
- * With `scheduleViewer` left `true` (the default) this settles after the
- * file-open/build phase completes and schedules the viewer without awaiting
- * its 5s confirmation. Set `scheduleViewer: false` to prepare several files
- * sequentially without scheduling viewer handoffs, then run
- * `scheduleViewerDisplay` once after the final file so LaTeX Workshop's
- * current document/root is the intended viewer target (#10553).
+ * Make the viewer's file LaTeX Workshop's current document again, answering
+ * whether it is. A failed open is a reason to skip the viewer rather than
+ * show an unrelated PDF; it is logged at warn.
  */
-export const prepareBuildDisplay = Effect.fn('openBuild.prepareBuildDisplay')(
-  function* (
-    roots: WorkspaceRoots,
-    fileLocation: FileLocation,
-    options: { preserveFocus?: boolean; scheduleViewer?: boolean } = {},
-  ): Effect.fn.Return<
-    boolean,
-    DisplayFailure,
-    PreparedFileServices | Scope.Scope
-  > {
-    const prepared = yield* prepareFileForDisplay(
-      roots,
-      fileLocation,
-      options.preserveFocus ?? false,
-    );
-    if (prepared.kind !== 'latex-ready') return prepared.delivered;
-
-    if (options.scheduleViewer !== false) {
-      // `scheduleViewerDisplay` never fails, so this is a fiber of the
-      // caller's scope rather than work this caller waits for: closing that
-      // scope cancels an open still waiting. It starts immediately, so its
-      // delay runs from here rather than from whenever a fiber next gets the
-      // scheduler.
-      yield* Effect.forkScoped(scheduleViewerDisplay, {
-        startImmediately: true,
-      });
-    }
-    return true;
-  },
-);
+const reopenViewerFile = (
+  location: FileLocation,
+  preserveFocus: boolean,
+): Effect.Effect<boolean> =>
+  openFileInEditor(location.absolutePath, {
+    preview: true,
+    preserveFocus,
+  }).pipe(
+    Effect.as(true),
+    Effect.catch((err) =>
+      Effect.logWarning(
+        `Could not reopen ${location.absolutePath} before opening the PDF viewer: ${toErrorMessage(err)}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
+    ),
+  );
 
 /** What the file-open/build phase takes from the runtime it is run on. */
 type PreparedFileServices =
@@ -193,26 +187,20 @@ type PreparedFileServices =
 /** How it fails: the editor's own rejections, and the existence probe's. */
 type DisplayFailure = Error | PlatformError.PlatformError;
 
-type PrepareFileForDisplayResult =
-  | { kind: 'done'; delivered: boolean }
-  | { kind: 'latex-ready' };
-
+/** Show one file, building it when it is TeX, answering whether its build
+ *  left a PDF for the viewer. */
 const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(
   function* (
     roots: WorkspaceRoots,
     fileLocation: FileLocation,
     preserveFocus: boolean,
-  ): Effect.fn.Return<
-    PrepareFileForDisplayResult,
-    DisplayFailure,
-    PreparedFileServices
-  > {
+  ): Effect.fn.Return<boolean, DisplayFailure, PreparedFileServices> {
     const absolutePath = fileLocation.absolutePath;
 
     const fs = yield* FileSystem.FileSystem;
     if (!(yield* fs.exists(absolutePath))) {
       yield* showLoggedMessage(CHANNEL, `File not found: ${absolutePath}`);
-      return { kind: 'done', delivered: false };
+      return false;
     }
 
     const uri = vscode.Uri.file(absolutePath);
@@ -221,18 +209,10 @@ const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(
       yield* executeVscodeCommand('vscode.open', uri, {
         preserveFocus,
       } satisfies vscode.TextDocumentShowOptions);
-      return { kind: 'done', delivered: true };
+      return false;
     }
 
-    const prepared = yield* prepareLatexBuild(
-      roots,
-      uri,
-      fileLocation,
-      preserveFocus,
-    );
-    return prepared
-      ? { kind: 'latex-ready' }
-      : { kind: 'done', delivered: false };
+    return yield* prepareLatexBuild(roots, uri, fileLocation, preserveFocus);
   },
 );
 
@@ -308,32 +288,23 @@ const scheduleViewerRefresh: Effect.Effect<void> = Effect.gen(function* () {
 });
 
 /**
- * Schedule the PDF viewer open for the current LaTeX Workshop document/root.
- *
- * `latex-workshop.view` is argument-free and acts on LaTeX Workshop's current
- * context, so callers that prepare a batch of files should schedule this only
- * once, after the intended final file has been shown and built.
- *
- * Settles to `true` when `latex-workshop.view` accepts the open request, and
- * `false` when it rejects, so the caller can report viewer non-delivery.
+ * Open the PDF viewer on LaTeX Workshop's current document, then refresh it.
+ * A rejected open is logged at warn, and leaves nothing to refresh.
  */
-export const scheduleViewerDisplay: Effect.Effect<boolean, never, Scope.Scope> =
-  Effect.gen(function* () {
+const openViewer: Effect.Effect<void, never, Scope.Scope> = Effect.gen(
+  function* () {
     yield* Effect.sleep(LATEX_VIEWER_OPEN_DELAY_MS);
-    return yield* executeVscodeCommand('latex-workshop.view').pipe(
-      // The refresh is scheduled only once the open has settled: a viewer that
-      // never opened has nothing to refresh (#10556). It starts immediately so
-      // its delay runs from the settlement rather than from whenever a fiber
-      // next gets the scheduler.
-      Effect.tap(() =>
+    yield* executeVscodeCommand('latex-workshop.view').pipe(
+      // It starts immediately so its delay runs from the open rather than
+      // from whenever a fiber next gets the scheduler.
+      Effect.andThen(
         Effect.forkScoped(scheduleViewerRefresh, { startImmediately: true }),
       ),
-      Effect.as(true),
       Effect.catch((err) =>
         Effect.logWarning(`Viewer display failed: ${toErrorMessage(err)}`).pipe(
           withLogChannel(CHANNEL),
-          Effect.as(false),
         ),
       ),
     );
-  });
+  },
+);

@@ -25,7 +25,6 @@ import {
 } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
-import { openLatexdiffs } from '@commands/latex/latexdiffCommands';
 import { handleCompare } from '@commands/latex/compareCommands';
 import { findCommitInHistory } from '@commands/git/gitCommands';
 import { openFile } from '@commands/files/openFileCommands';
@@ -41,6 +40,7 @@ import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { openBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
@@ -331,13 +331,19 @@ export const createExtensionHostRequests = Effect.fn(
     // `null`, as it does for a cancel.
     pickFiles: (fileType) => multipleFilePickers[fileType](),
     latexdiff: {
-      // The viewer a diff schedules opens in the view's scope, so a close
-      // of the view cancels a delayed open.
-      openDiffs: (diffPaths) =>
-        runHandler(
-          'openLatexdiffs',
-          inViewScope(openLatexdiffs(roots, diffPaths)),
-        ),
+      // The diffs' PDF viewer opens in the view's scope, so a close of the
+      // view cancels an open still waiting.
+      openDiffs: ([first, ...rest]) =>
+        first === undefined
+          ? Effect.void
+          : runHandler(
+              'openLatexdiffs',
+              inViewScope(
+                openBuilt(roots, [at(first), ...rest.map(at)], {
+                  preserveFocus: true,
+                }),
+              ),
+            ),
       withProgress: (title, task) =>
         withVSCodeProgress(
           {

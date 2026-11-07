@@ -32,7 +32,7 @@ import {
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { openBuilt } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
@@ -239,10 +239,10 @@ export function createAgentPresentationHost(
     openFile: (payload) =>
       withProcessServices(
         runtime,
-        openBuildDisplayIfTex(roots, payload.location, {
+        openBuilt(roots, [payload.location], {
           preserveFocus: payload.preserveFocus,
         }).pipe(Effect.provideService(Scope.Scope, scope)),
-      ).pipe(Effect.asVoid),
+      ),
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, roots, runtime, payload),
     agentNotFound: (payload) =>

@@ -18,7 +18,7 @@ import {
   type DiffSession,
 } from '@frontend/approval/VscodeDiffViewHost';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { openBuilt } from '@frontend/latex/openBuild';
 import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   fromHost,
@@ -41,8 +41,7 @@ const CHANNEL = 'ToolEditApproval';
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost = new VscodeDiffViewHost();
   readonly openBuildDisplay: BuildDisplayFn = (location, options) =>
-    openBuildDisplayIfTex(this.roots, location, options).pipe(
-      Effect.asVoid,
+    openBuilt(this.roots, [location], options).pipe(
       Effect.provideService(Scope.Scope, this.scope),
     );
 
