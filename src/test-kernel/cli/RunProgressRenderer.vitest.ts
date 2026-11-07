@@ -8,8 +8,8 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
+import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
+import { attachCliSessionProgressProjection } from '@cli/runtime/headless/sessionProgressSubscription';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {

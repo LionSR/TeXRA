@@ -5,7 +5,7 @@ import { Deferred, Effect, Exit, Fiber, ManagedRuntime, Scope } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { withExpandedRunInputs } from '@cli/runtime/workflowInputs';
+import { withExpandedRunInputs } from '@cli/runtime/headless/workflowInputs';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

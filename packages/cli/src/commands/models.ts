@@ -9,10 +9,10 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   listCliEnabledModelCatalog,
   setCliModelEnabled,
-} from '../runtime/enabledModels';
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+} from '../runtime/models/enabledModels';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
+import { writeTextStderr } from '../runtime/platform/logSinks';
 import {
   cliModelRecord,
   formatCliModelDetails,
@@ -22,12 +22,12 @@ import {
   loadCliModelAccessEntry,
   type CliModelAccess,
   type CliModelListOptions,
-} from '../runtime/modelAccess';
+} from '../runtime/models/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
-import type { CliContext } from '../runtime/cliContext';
+import type { CliContext } from '../runtime/platform/cliContext';
 
 /**
  * The report every model command gives when its platform cannot come up: one

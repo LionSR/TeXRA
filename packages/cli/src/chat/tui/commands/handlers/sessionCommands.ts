@@ -4,7 +4,7 @@ import { Effect, Result, Stream } from 'effect';
 import { planOf, runBypasses } from '@texra-ai/harness/schemas';
 import { type Session } from '@texra-ai/harness';
 import { readModelOptions } from '@texra-ai/harness/host';
-import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
+import { defaultShortcutModifierLabel } from '@cli/runtime/terminal/shortcutLabels';
 import {
   formatCliSessionStatus,
   taskCostStatus,

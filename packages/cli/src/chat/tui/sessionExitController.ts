@@ -14,11 +14,17 @@ import {
   type ProcessRuntime,
 } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { readCliCwd } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { leaveAtOnce, runCliExit } from '@cli/runtime/initPlatform';
-import { writeTextStderrAndWait, writeTextStdout } from '@cli/runtime/logSinks';
-import { holdSignals, type SignalPolicy } from '@cli/runtime/processSignals';
+import { readCliCwd } from '@cli/runtime/platform/cliContext';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import { leaveAtOnce, runCliExit } from '@cli/runtime/platform/initPlatform';
+import {
+  writeTextStderrAndWait,
+  writeTextStdout,
+} from '@cli/runtime/platform/logSinks';
+import {
+  holdSignals,
+  type SignalPolicy,
+} from '@cli/runtime/platform/processSignals';
 import {
   supportsTerminalJobControl,
   type TuiTerminal,

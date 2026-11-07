@@ -4,8 +4,8 @@ import { Effect } from 'effect';
 import { withSessionFs } from '@texra-ai/harness/host';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatform } from '../runtime/initPlatform';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,

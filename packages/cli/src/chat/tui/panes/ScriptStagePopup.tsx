@@ -33,7 +33,7 @@ import {
   COLOR_SUCCESS,
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
-import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
+import { fillRows, safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import {
   SCRIPT_CALL_STATUS_LABEL,
   scriptCallSummary,

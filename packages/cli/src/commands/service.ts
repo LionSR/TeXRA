@@ -3,7 +3,7 @@ import { Deferred, Effect, Exit } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
-import { holdSignals } from '@cli/runtime/processSignals';
+import { holdSignals } from '@cli/runtime/platform/processSignals';
 import { stopService } from '@texra/controllers/server/client';
 import { servicePaths } from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/handlers';
@@ -15,16 +15,16 @@ import {
   CliInvocation,
   CliUsageError,
   type CliContext,
-} from '../runtime/cliContext';
+} from '../runtime/platform/cliContext';
 import {
   cliServiceProjects,
   isLinked,
   linkCliService,
   probeCliService,
-} from '../runtime/cliService';
-import { cliProcessLayer } from '../runtime/cliProcessRuntime';
-import { CliExitCode } from '../runtime/exitCodes';
-import { writeTextStderr } from '../runtime/logSinks';
+} from '../runtime/platform/cliService';
+import { cliProcessLayer } from '../runtime/platform/cliProcessRuntime';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';

@@ -43,8 +43,8 @@ import {
 import { attachScriptPlainOutput } from './scriptPlainOutput';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost } from './cliPresentationHost';
-import { CliExitCode } from './exitCodes';
-import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
+import { CliExitCode } from '../platform/exitCodes';
+import { writeTextStderr, writeTextStderrAndWait } from '../platform/logSinks';
 import { readCliPluginPins, runOutcomeExitCode } from './terminalStatus';
 import {
   CliUsageError,
@@ -53,7 +53,7 @@ import {
   projectApprovalPolicy,
   type CliContext,
   type CliInvocation,
-} from './cliContext';
+} from '../platform/cliContext';
 import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
 
 /** What a headless run starts: a host's whole configuration (the

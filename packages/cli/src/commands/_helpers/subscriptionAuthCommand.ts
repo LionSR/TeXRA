@@ -1,16 +1,16 @@
 import { defineCommand, type CommandDef } from 'citty';
 import { Cause, Effect } from 'effect';
 
-import { CliInvocation } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { cliPlatform } from '@cli/runtime/initPlatform';
-import { writeErrorStderr } from '@cli/runtime/logSinks';
+import { CliInvocation } from '@cli/runtime/platform/cliContext';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import { cliPlatform } from '@cli/runtime/platform/initPlatform';
+import { writeErrorStderr } from '@cli/runtime/platform/logSinks';
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
   signOutCliSubscription,
   subscriptionSignOutOutcomeMessage,
-} from '@cli/runtime/subscriptionLogin';
+} from '@cli/runtime/models/subscriptionLogin';
 import {
   subscriptionProvider,
   type SubscriptionAccount,

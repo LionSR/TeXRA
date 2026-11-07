@@ -1,4 +1,4 @@
-import { CliUsageError } from '../runtime/cliContext';
+import { CliUsageError } from '../runtime/platform/cliContext';
 import { parseCliHistoryId } from '../runtime/history';
 import { runResumeCommand } from './resumeRun';
 

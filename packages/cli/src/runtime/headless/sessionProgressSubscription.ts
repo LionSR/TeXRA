@@ -6,7 +6,7 @@ import {
   type RunId,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { writeNdjsonStdout } from './logSinks';
+import { writeNdjsonStdout } from '../platform/logSinks';
 import type { LocalSession } from '@texra-ai/harness';
 
 /**

@@ -161,17 +161,17 @@ import {
   appendLocalUserTranscript,
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
-import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
-import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
-import { makeCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
-import { cliPlatform } from '../src/runtime/initPlatform';
-import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
+import { defaultShortcutModifierLabel } from '../src/runtime/terminal/shortcutLabels';
+import { updateCliModelAccess } from '../src/runtime/models/modelAccessSelection';
+import { makeCliProcessRuntime } from '../src/runtime/platform/cliProcessRuntime';
+import { cliPlatform } from '../src/runtime/platform/initPlatform';
+import { resolveCliResourcesPath } from '../src/runtime/platform/resourcesPath';
 import {
   createCliRuntimeHost,
   type CliRuntimeHost,
-} from '../src/runtime/cliPresentationHost';
+} from '../src/runtime/headless/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
-import type { CliContext } from '../src/runtime/cliContext';
+import type { CliContext } from '../src/runtime/platform/cliContext';
 
 const harnessRunId = Schema.decodeUnknownSync(RunIdSchema);
 const HARNESS_RUN_ID = harnessRunId('aaaa0001f10e');

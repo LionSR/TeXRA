@@ -22,8 +22,8 @@ import {
 } from '@texra-ai/harness/host';
 import { toErrorMessage, type PendingRequest } from '@texra-ai/harness/schemas';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
-import type { CliContext } from '@cli/runtime/cliContext';
-import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import type { CliContext } from '@cli/runtime/platform/cliContext';
+import type { CliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { readToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
 import {

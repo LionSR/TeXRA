@@ -18,14 +18,14 @@ import {
   missingAgentMessage,
   type CliAgentListOptions,
 } from '../runtime/agents';
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
+import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
-import type { CliContext } from '../runtime/cliContext';
+import type { CliContext } from '../runtime/platform/cliContext';
 
 const listAgents = Effect.fn('listAgents')(function* (
   context: CliContext,

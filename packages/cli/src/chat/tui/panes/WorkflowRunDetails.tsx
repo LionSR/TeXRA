@@ -12,7 +12,7 @@ import {
   type TaskGroup,
   type TaskGroupStatus,
 } from '@texra-ai/harness/schemas';
-import { safeTerminalText } from '@cli/runtime/terminalText';
+import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import {

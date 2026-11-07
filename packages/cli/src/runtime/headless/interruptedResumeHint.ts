@@ -1,7 +1,7 @@
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
-import { formatResumeCommand } from '../chat/tui/state/resumeHint';
-import { readCliCwd, type CliContext } from './cliContext';
+import { formatResumeCommand } from '../../chat/tui/state/resumeHint';
+import { readCliCwd, type CliContext } from '../platform/cliContext';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** Read the launch directory without making recovery depend on its lifetime. */

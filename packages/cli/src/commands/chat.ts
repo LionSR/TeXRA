@@ -1,16 +1,16 @@
 import { Effect } from 'effect';
 
-import { CliUsageError } from '../runtime/cliContext';
-import { assertExplicitModelKnown } from '../runtime/runModel';
+import { CliUsageError } from '../runtime/platform/cliContext';
+import { assertExplicitModelKnown } from '../runtime/models/runModel';
 import {
   defaultShortcutModifierLabel,
   focusChordLabel,
-} from '../runtime/shortcutLabels';
+} from '../runtime/terminal/shortcutLabels';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
-} from '../runtime/terminalRequirements';
-import { notifyCliUpdate } from '../runtime/updateChecker';
+} from '../runtime/terminal/terminalRequirements';
+import { notifyCliUpdate } from '../runtime/platform/updateChecker';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';

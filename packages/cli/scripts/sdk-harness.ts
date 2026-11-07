@@ -31,7 +31,7 @@ import {
 } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
-import { validationModelLayer } from '../src/runtime/validationModel';
+import { validationModelLayer } from '../src/runtime/models/validationModel';
 
 const [workspace, storageDir, mode, argument] = process.argv.slice(2);
 if (

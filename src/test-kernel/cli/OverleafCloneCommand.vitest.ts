@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, vi } from 'vitest';
 // Local imports
 import { makeMachineGitEnv } from '@texra-ai/harness/node';
 import { Secrets } from '@texra-ai/harness/host';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -24,13 +24,17 @@ const mocks = vi.hoisted(() => ({
 
 // `clone` runs without a platform, over the layer its command names. Here
 // that layer serves the block's services, so nothing is spawned or stored.
-vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>()),
+vi.mock('@cli/runtime/platform/cliProcessRuntime', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@cli/runtime/platform/cliProcessRuntime')
+  >()),
   cliSecretsLayer: mocks.cliSecretsLayer,
 }));
 
-vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/cliContext')>()),
+vi.mock('@cli/runtime/platform/cliContext', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@cli/runtime/platform/cliContext')
+  >()),
   readCliAmbientState: mocks.readCliAmbientState,
 }));
 

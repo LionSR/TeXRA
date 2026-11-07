@@ -27,7 +27,7 @@ import {
 } from '@texra-ai/harness/host';
 import { getModelLabel, GlobalStateKey } from '@texra-ai/harness/schemas';
 
-import { resolveKnownCliModelId } from './cliConfig';
+import { resolveKnownCliModelId } from '../platform/cliConfig';
 
 export interface CliEnabledModelRow {
   readonly id: string;

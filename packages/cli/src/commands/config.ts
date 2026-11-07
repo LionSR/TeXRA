@@ -15,16 +15,19 @@ import {
   CliUsageError,
   failUsage,
   readCliAmbientState,
-} from '../runtime/cliContext';
+} from '../runtime/platform/cliContext';
 import {
   formatCliWorkspaceAgents,
   readCliWorkspaceAgents,
 } from '../runtime/workspaceAgents';
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatform, type CliPlatformServices } from '../runtime/initPlatform';
-import { writeErrorStderr } from '../runtime/logSinks';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import {
+  cliPlatform,
+  type CliPlatformServices,
+} from '../runtime/platform/initPlatform';
+import { writeErrorStderr } from '../runtime/platform/logSinks';
 
-import { setWorkspaceCliChatAgent } from '../runtime/cliConfig';
+import { setWorkspaceCliChatAgent } from '../runtime/platform/cliConfig';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';

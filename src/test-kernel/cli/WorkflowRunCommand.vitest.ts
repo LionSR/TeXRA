@@ -14,16 +14,19 @@ import {
   documentsOutputFact,
 } from '@texra/shared/plugins/documents';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
-import { provideCliInvocation, type CliContext } from '@cli/runtime/cliContext';
+import {
+  provideCliInvocation,
+  type CliContext,
+} from '@cli/runtime/platform/cliContext';
 import {
   CliPlatform,
   type CliPlatformServices,
-} from '@cli/runtime/initPlatform';
+} from '@cli/runtime/platform/initPlatform';
 import type {
   CliExecuteOptions,
   CliConfigExecuteResult,
-} from '@cli/runtime/executeCli';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+} from '@cli/runtime/headless/executeCli';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -58,7 +61,7 @@ vi.mock('@common/storage/storageLayout', async (importActual) => ({
   ),
 }));
 
-vi.mock('@cli/runtime/runModel', () => ({
+vi.mock('@cli/runtime/models/runModel', () => ({
   buildHeadlessRunContext: vi.fn((context: CliContext) => ({
     ...context,
     quietLogs: true,
@@ -81,13 +84,13 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   resolveCliRunAgent: mocks.resolveCliRunAgent,
 }));
 
-vi.mock('@cli/runtime/executeCli', () => ({
+vi.mock('@cli/runtime/headless/executeCli', () => ({
   // A pass-through, so the mocked seam has the real module's Effect-returning
   // shape and every stub below returns the program the command yields.
   executeCliConfig: (...args: unknown[]) => mocks.executeCliConfig(...args),
 }));
 
-vi.mock('@cli/runtime/workflowInputs', () => ({
+vi.mock('@cli/runtime/headless/workflowInputs', () => ({
   // A pass-through: the real helper yields `run(inputs)` in-fiber, so the stub
   // hands the command back that same Effect instead of detaching it.
   withExpandedRunInputs: (...args: unknown[]) =>

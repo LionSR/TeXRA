@@ -9,14 +9,14 @@ import { ensureError } from '@texra-ai/harness/schemas';
 
 import { runCommandForExitCode } from '../commands/_helpers/exitCode';
 import { serveCommand } from '../commands/service';
-import { readCliArgv } from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
+import { readCliArgv } from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   cliErrorMessage,
   installCliPipeErrorHandlers,
   prePlatformDiagnosticSink,
   writeTextStderr,
-} from '../runtime/logSinks';
+} from '../runtime/platform/logSinks';
 
 setLogSink(prePlatformDiagnosticSink, { trusted: true });
 

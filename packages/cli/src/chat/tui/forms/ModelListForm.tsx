@@ -13,7 +13,7 @@ import {
   type CliModelPickerItem,
   type CliModelStores,
   type GetModelSwitchDisabledReason,
-} from '@cli/runtime/modelAccess';
+} from '@cli/runtime/models/modelAccess';
 import { ListForm, useAsyncPickerForm } from './_shared/ListForm';
 import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext';
 

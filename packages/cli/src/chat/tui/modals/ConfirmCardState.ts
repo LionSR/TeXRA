@@ -8,7 +8,7 @@ import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import {
   firstFittingCandidate,
   textDisplayWidth,
-} from '@cli/runtime/terminalText';
+} from '@cli/runtime/terminal/terminalText';
 import { HOLLOW_DOT, STATUS_DOT } from '@cli/tui/ui/glyphs';
 import {
   APPROVE_SESSION_ACTION,

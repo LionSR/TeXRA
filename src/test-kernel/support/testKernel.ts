@@ -56,7 +56,7 @@ import {
 } from '@agent/runtime/HostInteractions';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import { RouteRetries } from '@agent/runtime/ModelRetryGate';
-import { validationModelLayer } from '@cli/runtime/validationModel';
+import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SessionRoots } from '@platform/rootedFs';

@@ -13,9 +13,13 @@ import {
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { formatBytes } from '@ui/copy/format';
 
-import { CliExitCode } from './exitCodes';
-import { askCliQuestion, writeTextStderr, writeTextStdout } from './logSinks';
-import type { CliContext } from './cliContext';
+import { CliExitCode } from './platform/exitCodes';
+import {
+  askCliQuestion,
+  writeTextStderr,
+  writeTextStdout,
+} from './platform/logSinks';
+import type { CliContext } from './platform/cliContext';
 
 export const pruneStorage = Effect.fn('pruneStorage')(function* (
   context: CliContext,

@@ -11,19 +11,19 @@ import {
   writeDoctorReport,
   type DoctorReport,
 } from '../runtime/doctor';
-import { makeCliProcessRuntime } from '../runtime/cliProcessRuntime';
-import { silentLogSink } from '../runtime/logSinks';
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatform } from '../runtime/initPlatform';
+import { makeCliProcessRuntime } from '../runtime/platform/cliProcessRuntime';
+import { silentLogSink } from '../runtime/platform/logSinks';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
 import { pruneStorage } from '../runtime/pruneStorage';
 
-import { getCliModelAccessList } from '../runtime/modelAccess';
+import { getCliModelAccessList } from '../runtime/models/modelAccess';
 
 import { contextFromArgs } from './_helpers/context';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import type { CliContext } from '../runtime/cliContext';
+import type { CliContext } from '../runtime/platform/cliContext';
 
 /** The healthy report, on the command's runtime once its platform is up. */
 const readyReport = (context: CliContext) =>

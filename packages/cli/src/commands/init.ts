@@ -6,10 +6,10 @@ import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 
 import { implicitDefaultToolUseAgents } from '@texra/shared/constants/agents';
-import { CLI_CHEAP_START_MODEL } from '../runtime/cliConfig';
-import { type CliContext } from '../runtime/cliContext';
+import { CLI_CHEAP_START_MODEL } from '../runtime/platform/cliConfig';
+import { type CliContext } from '../runtime/platform/cliContext';
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
-import { CliExitCode } from '../runtime/exitCodes';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   buildInitConfig,
   ensureTexraGitignored,
@@ -17,14 +17,14 @@ import {
   type GitignoreOutcome,
   type InitAnswers,
   type InitConfigShape,
-} from '../runtime/initConfig';
-import { cliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+} from '../runtime/platform/initConfig';
+import { cliPlatform } from '../runtime/platform/initPlatform';
+import { writeTextStderr } from '../runtime/platform/logSinks';
 import {
   formatCliNoAvailableModelsRecovery,
   getCliModelAccessList,
   type CliModelAccess,
-} from '../runtime/modelAccess';
+} from '../runtime/models/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';

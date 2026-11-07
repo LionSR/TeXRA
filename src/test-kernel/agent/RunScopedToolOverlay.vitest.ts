@@ -23,7 +23,7 @@ import {
   type RunLaunch,
 } from '@agent/runtime/run/AgentRun';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { validationModelLayer } from '@cli/runtime/validationModel';
+import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';

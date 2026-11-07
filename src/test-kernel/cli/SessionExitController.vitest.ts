@@ -14,16 +14,16 @@ const mocks = vi.hoisted(() => ({
   writeTextStdout: vi.fn(),
 }));
 
-vi.mock('@cli/runtime/cliContext', () => ({
+vi.mock('@cli/runtime/platform/cliContext', () => ({
   readCliCwd: () => '/tmp/project',
 }));
 
-vi.mock('@cli/runtime/initPlatform', () => ({
+vi.mock('@cli/runtime/platform/initPlatform', () => ({
   leaveAtOnce: {},
   runCliExit: (exit: Effect.Effect<void, unknown>) => Effect.runPromise(exit),
 }));
 
-vi.mock('@cli/runtime/logSinks', () => ({
+vi.mock('@cli/runtime/platform/logSinks', () => ({
   writeTextStderrAndWait: mocks.writeTextStderrAndWait,
   writeTextStdout: mocks.writeTextStdout,
 }));

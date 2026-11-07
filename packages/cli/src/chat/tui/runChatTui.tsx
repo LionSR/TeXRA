@@ -37,20 +37,23 @@ import {
   launchApprovalNotice,
   projectApprovalPolicy,
   type CliContext,
-} from '@cli/runtime/cliContext';
-import { isLinked, linkClient } from '@cli/runtime/cliService';
+} from '@cli/runtime/platform/cliContext';
+import { isLinked, linkClient } from '@cli/runtime/platform/cliService';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
-import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import type { CliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { cliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
+import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
+import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import {
+  cliPlatform,
+  setCliHelperModel,
+} from '@cli/runtime/platform/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
-} from '@cli/runtime/modelAccess';
-import { writeTextStderr } from '@cli/runtime/logSinks';
+} from '@cli/runtime/models/modelAccess';
+import { writeTextStderr } from '@cli/runtime/platform/logSinks';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {

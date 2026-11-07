@@ -29,15 +29,18 @@ import {
   launchApproval,
   launchApprovalNotice,
   projectApprovalPolicy,
-} from '../runtime/cliContext';
-import { isLinked, linkClient } from '../runtime/cliService';
+} from '../runtime/platform/cliContext';
+import { isLinked, linkClient } from '../runtime/platform/cliService';
 import { environmentApiKeys } from '@texra/controllers/server/serviceSession';
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatform } from '../runtime/initPlatform';
-import { getStdoutColumns, writeTextStderr } from '../runtime/logSinks';
-import { selectCliRunModel } from '../runtime/runModel';
-import { attachTask } from '../runtime/taskAttach';
-import { runOutcomeExitCode } from '../runtime/terminalStatus';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
+import {
+  getStdoutColumns,
+  writeTextStderr,
+} from '../runtime/platform/logSinks';
+import { selectCliRunModel } from '../runtime/models/runModel';
+import { attachTask } from '../runtime/headless/taskAttach';
+import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';

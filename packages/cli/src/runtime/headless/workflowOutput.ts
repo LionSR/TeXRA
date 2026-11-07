@@ -23,7 +23,7 @@ import {
   type OutputFileSummary,
 } from '@texra/shared/plugins/documentOutputs';
 
-import { CliUsageError, type CliContext } from './cliContext';
+import { CliUsageError, type CliContext } from '../platform/cliContext';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 

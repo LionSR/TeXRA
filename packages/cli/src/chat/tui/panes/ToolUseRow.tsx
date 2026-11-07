@@ -7,7 +7,7 @@ import { Box, Text } from 'ink';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
-import { clipToWidth } from '@cli/runtime/terminalText';
+import { clipToWidth } from '@cli/runtime/terminal/terminalText';
 
 import { DiffView } from '../render/DiffView';
 import {

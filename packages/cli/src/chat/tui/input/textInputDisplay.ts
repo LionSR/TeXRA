@@ -1,4 +1,4 @@
-import { textDisplayWidth } from '@cli/runtime/terminalText';
+import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
 import { clampCursor } from './textInputEditing';
 
 interface TextInputDisplayWindow {

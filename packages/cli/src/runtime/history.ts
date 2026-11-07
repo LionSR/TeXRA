@@ -30,8 +30,8 @@ import {
   type RunStatusKey,
 } from '@ui/copy/runStatus';
 
-import { CliUsageError } from './cliContext';
-import { cliErrorMessage } from './logSinks';
+import { CliUsageError } from './platform/cliContext';
+import { cliErrorMessage } from './platform/logSinks';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,

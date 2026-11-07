@@ -12,18 +12,18 @@ import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 
 // Local file imports
-import { CliExitCode } from './exitCodes';
+import { CliExitCode } from './platform/exitCodes';
 import {
   writeNdjsonStdout,
   writeTextStderr,
   writeTextStdout,
-} from './logSinks';
-import { createCliStyle } from './style';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminalRequirements';
+} from './platform/logSinks';
+import { createCliStyle } from './terminal/style';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { CliContext } from './cliContext';
-import type { CliStyle } from './style';
-import type { CliModelAccess } from './modelAccess';
+import type { CliContext } from './platform/cliContext';
+import type { CliStyle } from './terminal/style';
+import type { CliModelAccess } from './models/modelAccess';
 
 type DoctorCheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
 

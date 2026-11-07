@@ -6,7 +6,7 @@ import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpe
 import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
 import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
 
-import { CliExitCode } from '../runtime/exitCodes';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
@@ -22,17 +22,17 @@ import {
   readCliHistoryStandaloneTemplate,
   type CliHistoryDeleteResult,
 } from '../runtime/history';
-import { cliPlatform } from '../runtime/initPlatform';
+import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
   writeErrorStderr,
   writeRawStdout,
   writeTextStderr,
-} from '../runtime/logSinks';
+} from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
 function parseHistoryListLimit(value: string | undefined): number | undefined {
   if (!value || !/^\d+$/.test(value)) return undefined;

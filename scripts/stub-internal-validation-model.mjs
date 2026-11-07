@@ -1,5 +1,5 @@
 // esbuild plugin that keeps the package-validation model
-// (`packages/cli/src/runtime/validationModel.ts`) out of a shipped CLI
+// (`packages/cli/src/runtime/models/validationModel.ts`) out of a shipped CLI
 // bundle. Every import that resolves to that file loads a stand-in instead,
 // which serves no validation model, so the bundle carries neither the canned
 // output nor a gate the environment can open.
@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const realModule = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../packages/cli/src/runtime/validationModel.ts',
+  '../packages/cli/src/runtime/models/validationModel.ts',
 );
 
 const STUB = `import { Layer } from 'effect';

@@ -43,7 +43,7 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
-import { interactiveTerminalFailure } from './terminalRequirements';
+import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type CliMode = 'headless' | 'interactive';

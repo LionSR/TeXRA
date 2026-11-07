@@ -9,8 +9,8 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { Settings } from '@texra-ai/harness/host';
-import { ensureTexraGitignored } from '@cli/runtime/initConfig';
-import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
+import { ensureTexraGitignored } from '@cli/runtime/platform/initConfig';
+import { setWorkspaceCliChatAgent } from '@cli/runtime/platform/cliConfig';
 import { errnoError } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

@@ -10,14 +10,14 @@ import {
   type PluginUpdate,
 } from '@texra-ai/harness/host';
 
-import { CliInvocation, CliUsageError } from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatform } from '../runtime/initPlatform';
+import { CliInvocation, CliUsageError } from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
   askCliQuestion,
   writeErrorStderr,
   writeTextStderr,
-} from '../runtime/logSinks';
+} from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';

@@ -12,14 +12,14 @@ import {
   failUsage,
   type CliContext,
   type CliInvocation,
-} from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
+} from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   cliPlatform,
   type CliPlatform,
   type CliPlatformServices,
-} from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+} from '../runtime/platform/initPlatform';
+import { writeTextStderr } from '../runtime/platform/logSinks';
 import {
   cliTeamListRecord,
   cliTeamNdjsonRecords,
@@ -32,7 +32,7 @@ import {
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
-} from '../runtime/runModel';
+} from '../runtime/models/runModel';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
@@ -45,9 +45,9 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliToolUseConfig } from '../runtime/executeCli';
-import { toolUseResultText } from '../runtime/terminalStatus';
-import { withExpandedRunInputs } from '../runtime/workflowInputs';
+import { executeCliToolUseConfig } from '../runtime/headless/executeCli';
+import { toolUseResultText } from '../runtime/headless/terminalStatus';
+import { withExpandedRunInputs } from '../runtime/headless/workflowInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 interface TeamRunInit {

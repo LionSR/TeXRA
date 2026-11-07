@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { absentReason } from '@texra-ai/harness/node';
-import { CliUsageError } from '@cli/runtime/cliContext';
+import { CliUsageError } from '@cli/runtime/platform/cliContext';
 
 /**
  * The instruction a run starts from: the `--instruction-file` contents ahead of

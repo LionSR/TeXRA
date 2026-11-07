@@ -1,5 +1,5 @@
 import { runCommand, type ArgsDef, type CommandDef } from 'citty';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 
 // citty's `runCommand` drops a subcommand's return value and passes no
 // `data` down to it, so a command's exit code reaches the process entry

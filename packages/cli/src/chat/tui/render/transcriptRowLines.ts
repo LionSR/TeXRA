@@ -10,7 +10,7 @@ import {
   transcriptText,
   type TranscriptText,
 } from '@texra-ai/harness/transcript';
-import { safeTerminalText } from '@cli/runtime/terminalText';
+import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';

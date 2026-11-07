@@ -14,23 +14,23 @@ import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   makeCliProcessRuntime,
   type CliServices,
-} from '@cli/runtime/cliProcessRuntime';
+} from '@cli/runtime/platform/cliProcessRuntime';
 import type {
   CliPlatform,
   CliPlatformOptions,
-} from '@cli/runtime/initPlatform';
+} from '@cli/runtime/platform/initPlatform';
 import {
   prePlatformDiagnosticSink,
   silentLogSink,
   writeErrorStderr,
-} from '@cli/runtime/logSinks';
+} from '@cli/runtime/platform/logSinks';
 import type { RunChatInit } from '@cli/chat/tui/runChatTui';
 import {
   provideCliInvocation,
   type CliContext,
   type CliInvocation,
-} from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+} from '@cli/runtime/platform/cliContext';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 
 import { contextFromArgs } from './context';
 import { setExitCode } from './exitCode';

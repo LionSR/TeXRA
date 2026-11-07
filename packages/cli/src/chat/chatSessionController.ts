@@ -42,16 +42,19 @@ import {
   acceptsFollowUp,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
-import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import { runOutcomeExitCode } from '@cli/runtime/headless/terminalStatus';
+import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
-} from '@cli/runtime/modelAccess';
-import { setCliHelperModel } from '@cli/runtime/initPlatform';
+} from '@cli/runtime/models/modelAccess';
+import { setCliHelperModel } from '@cli/runtime/platform/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import {
+  launchApproval,
+  type CliContext,
+} from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { modelFailureText } from '@ui/copy/modelAccess';
 import { requestErrorText } from '@ui/copy/requestErrors';

@@ -10,7 +10,7 @@ import { Box, Text } from 'ink';
 import { clampModalWidth, MIN_MODAL_CONTENT_WIDTH } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { KeyHints, scrollKeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
-import { fillRows } from '@cli/runtime/terminalText';
+import { fillRows } from '@cli/runtime/terminal/terminalText';
 import { ConfirmCardFeedback } from './ConfirmCard';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {

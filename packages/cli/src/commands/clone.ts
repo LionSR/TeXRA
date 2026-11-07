@@ -19,11 +19,11 @@ import {
 } from '@latex/overleafProject';
 
 // Local imports - runtime
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliSecretsLayer } from '../runtime/cliProcessRuntime';
-import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliSecretsLayer } from '../runtime/platform/cliProcessRuntime';
+import { askCliQuestion, writeTextStderr } from '../runtime/platform/logSinks';
 
 // Local imports - command helpers
 import { defineCliCommand } from './_helpers/defineCliCommand';

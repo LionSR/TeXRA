@@ -23,7 +23,7 @@ import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 
 import { readCliVersion, type CliContext } from './cliContext';
 import { CliPlatform, type CliPlatformOptions } from './initPlatform';
-import { validationModelLayer } from './validationModel';
+import { validationModelLayer } from '../models/validationModel';
 
 /** What a CLI command's program runs over: the process services, its
  *  sessions, and the windows attached to it (`texra serve`'s). */

@@ -9,8 +9,8 @@ import { Box, Text, useInput, useWindowSize, type Key } from 'ink';
 import { Cause, Effect, SubscriptionRef } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { attachClipboardImage } from '@cli/runtime/clipboardImage';
-import { writeTextStderr } from '@cli/runtime/logSinks';
+import { attachClipboardImage } from '@cli/runtime/terminal/clipboardImage';
+import { writeTextStderr } from '@cli/runtime/platform/logSinks';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';

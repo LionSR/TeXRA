@@ -21,21 +21,21 @@ import {
   failUsage,
   type CliContext,
   type CliInvocation,
-} from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
+} from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   formatInterruptedResumeHint,
   tryReadCliCwd,
-} from '../runtime/interruptedResumeHint';
+} from '../runtime/headless/interruptedResumeHint';
 import {
   writeErrorStderr,
   writeTextStderr,
   writeTextStderrAndWait,
-} from '../runtime/logSinks';
+} from '../runtime/platform/logSinks';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
-} from '../runtime/runModel';
+} from '../runtime/models/runModel';
 import {
   LAUNCHABLE_AGENT_NAME_DESCRIPTION,
   resolveCliRunAgent,
@@ -44,7 +44,7 @@ import {
   cliPlatform,
   type CliPlatform,
   type CliPlatformServices,
-} from '../runtime/initPlatform';
+} from '../runtime/platform/initPlatform';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
@@ -59,17 +59,17 @@ import {
   executeCliConfig,
   executeCliToolUseConfig,
   type CliExecuteOptions,
-} from '../runtime/executeCli';
+} from '../runtime/headless/executeCli';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import {
   runOutcomeExitCode,
   toolUseResultText,
-} from '../runtime/terminalStatus';
+} from '../runtime/headless/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
   withExpandedRunInputs,
   WORKFLOW_INPUT_REQUIRED_MESSAGE,
-} from '../runtime/workflowInputs';
+} from '../runtime/headless/workflowInputs';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
@@ -78,7 +78,7 @@ import {
   resolveWorkflowOutput,
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
-} from '../runtime/workflowOutput';
+} from '../runtime/headless/workflowOutput';
 import type { Sessions } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';

@@ -9,7 +9,7 @@ import {
 import { agentKeyOf } from '@texra-ai/harness/schemas';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 
-import { CliUsageError } from './cliContext';
+import { CliUsageError } from './platform/cliContext';
 
 export interface CliAgentListOptions {
   readonly includeHidden?: boolean;

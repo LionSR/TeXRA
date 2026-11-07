@@ -3,14 +3,14 @@ import { setLogSink } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 
 import { runCli } from '../commands/root';
-import { formatCrashReportLine } from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
+import { formatCrashReportLine } from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   cliErrorMessage,
   installCliPipeErrorHandlers,
   prePlatformDiagnosticSink,
   writeTextStderr,
-} from '../runtime/logSinks';
+} from '../runtime/platform/logSinks';
 
 // This process owns its diagnostic sink from here, not from the platform
 // that eventually installs its own: the harness's console fallback sends

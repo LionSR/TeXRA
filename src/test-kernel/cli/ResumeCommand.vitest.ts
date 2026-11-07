@@ -10,11 +10,14 @@ import {
   RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { provideCliInvocation, type CliContext } from '@cli/runtime/cliContext';
+import {
+  provideCliInvocation,
+  type CliContext,
+} from '@cli/runtime/platform/cliContext';
 import {
   CliPlatform,
   type CliPlatformServices,
-} from '@cli/runtime/initPlatform';
+} from '@cli/runtime/platform/initPlatform';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
@@ -29,12 +32,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // The platform links the service a conversation continues in; none here.
-vi.mock('@cli/runtime/cliService', () => ({
+vi.mock('@cli/runtime/platform/cliService', () => ({
   isLinked: (link: { readonly none?: string }) => !('none' in link),
 }));
 
-vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/logSinks')>()),
+vi.mock('@cli/runtime/platform/logSinks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/platform/logSinks')>()),
   writeTextStderr: mocks.writeTextStderr,
 }));
 

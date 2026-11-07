@@ -16,23 +16,23 @@ import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
-import { isLinked } from '../runtime/cliService';
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatform } from '../runtime/initPlatform';
-import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
-import { buildHeadlessRunContext } from '../runtime/runModel';
+import { isLinked } from '../runtime/platform/cliService';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
+import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
+import { buildHeadlessRunContext } from '../runtime/models/runModel';
 import { resolveCliRunAgent } from '../runtime/agents';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
-} from '../runtime/workflowOutput';
+} from '../runtime/headless/workflowOutput';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
-} from '../runtime/terminalRequirements';
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+} from '../runtime/terminal/terminalRequirements';
+import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
 function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${cliErrorMessage(error)}`;

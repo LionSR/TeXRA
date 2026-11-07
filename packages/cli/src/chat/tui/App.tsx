@@ -21,7 +21,7 @@ import {
   isUnreadable,
 } from '@texra-ai/harness/schemas';
 import { isCtrlInput, isEscapeInput, metaChordInput } from '@cli/tui/inputKeys';
-import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
+import { defaultShortcutModifierLabel } from '@cli/runtime/terminal/shortcutLabels';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
 import {

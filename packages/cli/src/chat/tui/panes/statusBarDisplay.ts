@@ -20,7 +20,7 @@ import {
   firstFittingCandidate,
   textDisplayWidth,
   truncateSummaryToWidth,
-} from '@cli/runtime/terminalText';
+} from '@cli/runtime/terminal/terminalText';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
