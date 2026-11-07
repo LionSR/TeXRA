@@ -351,8 +351,9 @@ inside one plugin).
    `Layer.effect` for a resource.
 2. G9: `UsageLogService` as `Queue.sliding` into `Stream.groupedWithin` into
    `Effect.retry`.
-3. G10 and H3's error tags nothing branches on, after PR 14777: added to the
-   storage-errors inventory §3 and cut there.
+3. G10's error tags nothing branches on (H3 is step 4.1's): the unread
+   fields landed in #14786; one `HostFailed` for the host ports waits on
+   packages A and B.
 
 **Lane 9, harness small** (package E, after lane 7).
 
@@ -382,7 +383,7 @@ waits on what, and when the package is done.
 | C. Plugins                        | 4.1, 4.2, 4.3, 4.4 (I6, I10)          | large      | a new session                         | now; 4.3 after PR 14713 |
 | D. The terminal UI                | 6.1 to 6.4                            | medium     | a new session                         | now                     |
 | E. The model path, then providers | lane 1, lane 7, lane 9                | large      | the R9 driver ("TeXRA pull requests") | already running         |
-| F. Small items                    | lane 5; 8.2, 8.3; 4.4 (I8 + H10); 8.1 | small each | this session                          | now                     |
+| F. Small items                    | lane 5; 8.2, 8.3; 4.4 (I8 + H10); 8.1 | small each | this session                          | #14786; 8.1 later       |
 
 ### What every owner follows
 
@@ -524,21 +525,28 @@ before touching them.
 
 ### F. Small items (this session)
 
-One PR for items 1 to 6, one commit each, any of them refused with a record
-when it does not hold up on `main`; item 7 waits on the other packages:
+Done as one PR, #14786 (2026-11-07), after each finding was re-checked on
+`main`:
 
-1. M2: the MCP pool's failed start as a failing `RcMap` lookup.
-2. G10 + H3: error tags and fields nothing branches on, added to the
-   storage-errors inventory §3 and cut.
-3. G9: `UsageLogService` as `Queue.sliding` into `Stream.groupedWithin`.
-4. I8 + H10: the arXiv download as a stream under `Effect.timeout`, its rate
-   limit in the plugin's layer.
-5. M1: `toolAvailability` as one `SubscriptionRef` per root.
-6. M5, M6: the `/executions` routes as one column; the background shell's
-   capture as a projection of its rows.
-7. 8.1, the module-level facts, one package at a time, each after that
-   package's owner above has landed its PRs there; M10 (`utils/` moves) last,
-   once no other package's PRs are open in the harness.
+- **Landed in #14786:** M5 (the route table's `kinds` column; the summary
+  had listed `/executions/<id>/children`, which no route serves), H10 (the
+  plugin's `RateLimiter`, a token bucket of one token per 3 seconds), G10's
+  unread fields (`ExternalOpenFailed.kind`, `PromptFailed.member`,
+  `TranscriptExportFailed.step`), and a false comment on `RcMap` failures.
+- **Refused:** M2. `RcMap` has no read that does not acquire, so a root run
+  sweeping its keys would wait on starts in flight and renew every idle
+  server; the failed-key set stays. I8's parts: the `catchCause`/`failCause`
+  pair keeps a cleanup defect a typed retry would drop, and `autoIndent`
+  and a null `formatter` are two facts (a null formatter with indenting
+  asked says formatting is off).
+- **Not small, out of package F:** G9 (the usage log's close must try each
+  queued batch once, warn at 5 s and not hold the process; the stream design
+  gives no close), M1 (scheduling, publication and `refresh`'s wait together),
+  G10's one `HostFailed` (it spans the hosts packages A and B edit), and
+  I8's tar extraction as a stream (needs proof the writable's end covers the
+  file writes). M6 was not reached.
+- **Still package F's, later:** 8.1, the module-level facts, one package at a
+  time after that package's owner has landed there; M10 last.
 
 ## Acceptance
 
@@ -604,7 +612,7 @@ item a report lists without a lane. Full deletion lists are in the reports.
 | H7  | the server roster as a second record of the pool, with a generation counter                 | S5      | 4.2       |
 | H8  | the Lean port's optional host hooks; command rows one host answers with an error            | S4      | 4.2       |
 | H9  | a plugin reaches its host six ways; a capability as a bare flag                             | S4      | held      |
-| H10 | the arXiv rate limit as a module `SynchronizedRef`                                          | S3      | 4.4       |
+| H10 | the arXiv rate limit as a module `SynchronizedRef`                                          | S3      | landed    |
 | H11 | batched: two Zotero classifiers, a field-scan decision, two `AppSignals` paths, …           | —       | —         |
 | I1  | a revision's record as a mutable map six modules write into                                 | S5      | 4.3       |
 | I2  | an output's lineage as two fields flattened to one path, origin re-derived                  | S5      | 4.3       |
@@ -640,10 +648,10 @@ item a report lists without a lane. Full deletion lists are in the reports.
 | K10 | "which read is current" hand-rolled per site: counters, `interruptUnsafe`, once-flags       | S1      | 6.3       |
 | K11 | batched                                                                                     | —       | —         |
 | M1  | `toolAvailability`'s latest-wins scheduler, refcount and signal relay                       | S2      | 5.2       |
-| M2  | the MCP pool caches a failed start as a success and remembers it in a Set                   | S3, S6  | 5.1       |
+| M2  | the MCP pool caches a failed start as a success and remembers it in a Set                   | S3, S6  | refused   |
 | M3  | a child process's environment decided in four modules, two vocabularies                     | S5      | refused   |
 | M4  | the plan tool decodes its own past results to find its goal                                 | S5      | held      |
-| M5  | `/executions` paths per run kind spelled three times                                        | S5      | 5.3       |
+| M5  | `/executions` paths per run kind spelled three times                                        | S5      | landed    |
 | M6  | the background shell's in-memory capture beside its `process.output` rows                   | S5      | 5.3       |
 | M7  | eleven process facts in module `let`s; two proxy policies                                   | S3      | 8.1       |
 | M8  | platform ports carry app facts as optionals; `WorkspaceRoots` restates services             | S4      | 2.3       |
