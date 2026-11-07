@@ -16,7 +16,15 @@ import type { RunView, SessionView } from '@shared/session/sessionView';
  * or a task (`task`, a run opened on a plugin's recipe); every other run
  * shows what it IS (`process` / `script`).
  */
-type RunDisplayCategory = 'task' | RunIdentity['kind'];
+export type RunDisplayCategory = 'task' | RunIdentity['kind'];
+
+/** Every display category, for a path every run serves. */
+export const ALL_KINDS: readonly RunDisplayCategory[] = [
+  'agent',
+  'task',
+  'process',
+  'script',
+];
 
 export function runDisplayCategory(run: RunView): RunDisplayCategory {
   return run.identity.kind === 'agent' && run.recipe
@@ -34,32 +42,6 @@ export function childRunViews(view: SessionView, runId: RunId): RunView[] {
     const child = view.runs.get(id);
     return child === undefined ? [] : [child];
   });
-}
-
-/** Return paths available for a given display category. */
-function getAvailablePaths(
-  category: RunDisplayCategory,
-  hasChildren: boolean,
-): string[] {
-  const common = [
-    'config',
-    'report',
-    'result',
-    ...(hasChildren ? ['children'] : []),
-  ];
-  switch (category) {
-    case 'agent':
-      return [...common, 'conversation', 'workspace-files'];
-    case 'task':
-      return [...common, 'files', 'conversation'];
-    case 'process':
-      return [...common, 'output'];
-    case 'script':
-      return [...common, 'conversation'];
-    default:
-      category satisfies never;
-      return common;
-  }
 }
 
 /**
@@ -144,22 +126,17 @@ export function buildSummaryLines(run: RunView): string[] {
   return lines;
 }
 
-/**
- * Build the report/available-paths lines that close the summary.
- * Appended after the children lines, so this only needs whether there were
- * any children, not the rows themselves.
- */
+/** Build the report and available-paths lines that close the summary; the
+ *  paths are the ones the tool's route table serves for the run's kind. */
 export function buildSummaryTailLines(
   runId: RunId,
-  category: RunDisplayCategory,
-  hasChildren: boolean,
+  paths: readonly string[],
   report: string | null,
 ): string[] {
   const lines: string[] = [];
 
   if (report) lines.push('', 'Result:', report);
 
-  const paths = getAvailablePaths(category, hasChildren);
   lines.push(
     '',
     `Available paths: ${paths.map((p) => `/executions/${runId}/${p}`).join(', ')}`,
