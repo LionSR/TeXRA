@@ -107,14 +107,8 @@ import {
 } from './run/requestContext';
 import { providerMessages } from './storedTurn';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
-import { positionRow } from './loop/rows';
+import { configRow, positionRow } from './loop/rows';
 import type { SessionServices } from './rootLaunch';
-
-/** The answer the invoker gives itself for an automatic quota fallback. */
-const PERSONAL_RETRY = {
-  type: 'request.decided',
-  decision: { action: 'retry', credentials: 'personal' },
-} as const;
 
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
@@ -512,39 +506,43 @@ export const modelInvokerLayer = (): Layer.Layer<
         },
       );
 
-      /** Rebind on a person's retry answer, `selection`, retiring the
-       *  failed binding, on the routes the run declines as its rows now
-       *  stand; a failure keeps it, loudly. The turn's loop is the binding's
-       *  one writer while it runs, the switch at its model boundary the
-       *  other, so a binding that already replaced `failed` is one the loop
-       *  bound itself, and stands. */
+      /** Rebind for a retry on `credentials`, retiring the failed binding,
+       *  on the routes the run declines as its rows now stand plus the one
+       *  the retry `declines`; the new binding, or null when another stands.
+       *  A failure keeps the old one, loudly. The turn's loop is the
+       *  binding's one writer while it runs, the switch at its model
+       *  boundary the other, so a binding that already replaced `failed` is
+       *  one the loop bound itself, and stands. */
       const rebind = (
         cell: RunCell,
-        selection: RetryCredentials,
+        { credentials, declines }: RetryCredentials,
         failed: BoundModel,
-      ): Effect.Effect<void, CallFailure> =>
-        Effect.flatMap(cell.current, ({ declinedRoutes }) =>
-          ScopedRef.getUnsafe(run.model) !== failed
-            ? Effect.void
-            : ScopedRef.set(
-                run.model,
-                access
-                  .bind({
-                    modelId: failed.modelId,
-                    // A personal-key retry drops the route's overlay (window,
-                    // prices, PDF admission, Kimi endpoint) for the catalog's.
-                    config:
-                      selection === 'personal' ? undefined : failed.config,
-                    backend: failed.backend,
-                    declinedRoutes,
-                    textOnly: failed.textOnly,
-                    temperature: run.persona.temperature,
-                  })
-                  // The ref masks its acquisition; a stop must still cut a
-                  // bind in progress.
-                  .pipe(Effect.interruptible),
-              ),
-        ).pipe(
+      ): Effect.Effect<BoundModel | null, CallFailure> =>
+        Effect.flatMap(cell.current, (state) => {
+          if (ScopedRef.getUnsafe(run.model) !== failed)
+            return Effect.succeed(null);
+          const declinedRoutes =
+            declines === null || state.declinedRoutes.includes(declines)
+              ? state.declinedRoutes
+              : [...state.declinedRoutes, declines];
+          return ScopedRef.set(
+            run.model,
+            access
+              .bind({
+                modelId: failed.modelId,
+                // A personal-key retry drops the route's overlay (window,
+                // prices, PDF admission, Kimi endpoint) for the catalog's.
+                config: credentials === 'personal' ? undefined : failed.config,
+                backend: failed.backend,
+                declinedRoutes,
+                textOnly: failed.textOnly,
+                temperature: run.persona.temperature,
+              })
+              // The ref masks its acquisition; a stop must still cut a
+              // bind in progress.
+              .pipe(Effect.interruptible),
+          ).pipe(Effect.andThen(ScopedRef.get(run.model)));
+        }).pipe(
           Effect.tapError((error) =>
             Effect.sync(() =>
               logger.warn('Failed to refresh the model binding', {
@@ -557,8 +555,10 @@ export const modelInvokerLayer = (): Layer.Layer<
       /**
        * The batch that ends attempt `ref` as `failed` with `error`. One that
        * asks opens its retry request first, with the credential move a
-       * used-up `quota` offers and, where the policy or an automatic quota
-       * fallback answers at once, that answer, so no surface lists it pending.
+       * used-up `quota` offers and, where the policy answers at once, that
+       * answer, so no surface lists it pending. A used-up plan the route
+       * falls back from without asking asks nothing: its `failed` row
+       * declines the route (`next: decline`).
        */
       const failedRows = Effect.fn('ModelInvoker.failedRows')(function* (
         cell: RunCell,
@@ -569,7 +569,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         usage: NormalizedUsage | null,
         quota: ModelError['quota'],
       ): Effect.fn.Return<readonly RunHistoryDraft[], never, SessionServices> {
-        const failed: RunHistoryDraft = {
+        const failedRow = (next: FailedNext): RunHistoryDraft => ({
           type: 'model.message',
           aggregateId,
           payload: {
@@ -579,25 +579,27 @@ export const modelInvokerLayer = (): Layer.Layer<
             next,
             ...(usage === null ? {} : { usage }),
           },
-        };
-        if (next.kind !== 'ask') return [failed];
+        });
+        if (next.kind !== 'ask') return [failedRow(next)];
         const { requestId } = next;
         const credentialSwitch = yield* access.credentialSwitch(
           bound,
           quota,
           (yield* cell.current).declinedRoutes,
         );
-        const automatic =
+        if (
           credentialSwitch?.kind === 'decline-route' &&
           credentialSwitch.automatic
-            ? credentialSwitch
-            : null;
-        if (automatic !== null) {
-          // The notice records the route it moved off; an app words it.
-          logger.info(quotaFallbackMessage(automatic), {
+        ) {
+          // Nobody is asked: the run declines the route and resends on the
+          // user's own key. The notice records the route; an app words it.
+          logger.info(quotaFallbackMessage(credentialSwitch), {
             messageType: MESSAGE_TYPES.QUOTA_FALLBACK,
-            data: { route: automatic.route },
+            data: { route: credentialSwitch.route },
           });
+          return [
+            failedRow({ kind: 'decline', route: credentialSwitch.route }),
+          ];
         }
         const payload = {
           kind: 'retry',
@@ -617,10 +619,8 @@ export const modelInvokerLayer = (): Layer.Layer<
             requestId,
             payload,
           },
-          failed,
-          ...(automatic
-            ? [{ ...PERSONAL_RETRY, aggregateId, requestId }]
-            : yield* policyDecidedRows(runId, payload)),
+          failedRow(next),
+          ...(yield* policyDecidedRows(runId, payload)),
         ];
       });
 
@@ -856,6 +856,16 @@ export const modelInvokerLayer = (): Layer.Layer<
               yield* recordFailure(cell, ref, failure, next, bound);
               continue;
             }
+            // The binding the retry is sent on, with the routes it declines,
+            // recorded before the send.
+            const { success: renewed } = rebound;
+            if (renewed !== null)
+              yield* cell.append([
+                configRow(runId, run.config, renewed.modelId, {
+                  backend: renewed.backend,
+                  declinedRoutes: renewed.declinedRoutes,
+                }),
+              ]);
           }
           const bound = yield* ScopedRef.get(run.model);
           const tried = yield* tryAttempt(cell, request, move, ref, bound);

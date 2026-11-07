@@ -277,8 +277,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // dropped).
   // v14: no `purpose`; a compaction's summary records no attempt.
   // v15: an attempt records when it was sent (`sentAtMs`), which a failure
-  // the provider billed is priced from (an earlier build's would fail to
-  // read).
+  // the provider billed is priced from, and a failed attempt whose plan ran
+  // out records the route it declines (`next: decline`) instead of a retry
+  // request answered at once (an earlier build's would fail to read).
   'model.message': { version: 15, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
