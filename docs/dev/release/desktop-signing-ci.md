@@ -46,9 +46,9 @@ certificate profile.
 
 ## Verification
 
-Run the installer jobs manually from GitHub Actions with
-`run_desktop_installers`, `run_windows_desktop`, and `require_desktop_signing`
-enabled before relying on signed beta artifacts. With
+Run the installer job manually from GitHub Actions with
+`run_desktop_installers` and `require_desktop_signing` enabled before relying
+on signed beta artifacts. With
 `require_desktop_signing` enabled, CI fails fast if any required secret is
 missing or only partially configured.
 
@@ -58,7 +58,7 @@ continue producing unsigned installer artifacts for development validation.
 
 ## Failure Modes
 
-- Missing or partial macOS or Windows secrets fail in the `Verify macOS signing secrets` or `Verify Windows signing secrets` step when signing is required, or whenever a partial secret set is present.
+- Missing or partial macOS or Windows secrets fail in the `Verify signing secrets` step of that platform's installer job when signing is required, or whenever a partial secret set is present.
 - Apple notarization failures surface during the Electron Builder package step.
   Check Apple API key, issuer, team, bundle identifier, and Developer ID
   certificate validity.

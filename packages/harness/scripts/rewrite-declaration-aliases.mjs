@@ -2,7 +2,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { isFile, walkFiles } from './fsWalk.mjs';
+import { walkFiles } from '../../../scripts/walkFiles.mjs';
+import { isFile } from './fsWalk.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '../..');
@@ -87,9 +88,9 @@ async function resolveDeclarationSpecifier(specifier, declaration) {
   return relative.startsWith('.') ? relative : `./${relative}`;
 }
 
-for (const declaration of await walkFiles(outputRoot, (name) =>
-  /\.d\.m?ts$/u.test(name),
-)) {
+for (const { absolutePath: declaration } of walkFiles(outputRoot, {
+  include: (file) => /\.d\.m?ts$/u.test(file),
+})) {
   const original = await readFile(declaration, 'utf8');
   let rewritten = '';
   let cursor = 0;

@@ -10,7 +10,7 @@ import {
 import type {
   BashRequest,
   RunId,
-  RuntimeRequest,
+  RuntimeCommand,
 } from '@texra-ai/harness/schemas';
 
 // Every card shares one action row (BaseRequestPanel); the bash card is where
@@ -33,10 +33,10 @@ describe('bash-request-panel', () => {
       { permission: { kind: 'bash', data: permission } },
     );
     // The panel answers through the shell's `runtime-request` event.
-    const actions: RuntimeRequest[] = [];
+    const actions: RuntimeCommand[] = [];
     element.addEventListener('runtime-request', (event) => {
       // cast: the panel dispatches `runtime-request` as a CustomEvent of a request.
-      actions.push((event as CustomEvent<RuntimeRequest>).detail);
+      actions.push((event as CustomEvent<RuntimeCommand>).detail);
     });
 
     expect(element.handleKeyboardShortcut('escape')).toBe(false);

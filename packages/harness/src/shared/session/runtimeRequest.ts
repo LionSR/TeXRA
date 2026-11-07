@@ -33,9 +33,9 @@ import {
 
 const runScoped = { runId: RunIdSchema };
 
-/** Every request a surface issues to its session's runtime, one arm per
+/** Every command a surface issues to its session's runtime, one arm per
  *  `group.action` tag. */
-export const RuntimeRequestSchema = Schema.Union([
+export const RuntimeCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('run.stop'),
     ...runScoped,
@@ -162,8 +162,8 @@ export const RuntimeRequestSchema = Schema.Union([
     ]),
   }),
 ]);
-/** One request a surface issues to its session's runtime. */
-export type RuntimeRequest = typeof RuntimeRequestSchema.Type;
+/** One command a surface issues to its session's runtime. */
+export type RuntimeCommand = typeof RuntimeCommandSchema.Type;
 
 /** What a `run.files` did: `done` (with the copy's folder), no directory
  *  to act on, or the failure that stopped it. */
@@ -212,11 +212,11 @@ const OUTCOME_KIND = {
   'followUp.send': 'followUp',
   'followUp.receipt': 'receipt',
   'request.preview': 'preview',
-} as const satisfies Partial<Record<RuntimeRequest['kind'], Outcome['kind']>>;
+} as const satisfies Partial<Record<RuntimeCommand['kind'], Outcome['kind']>>;
 
 /** What a request of kind `K` is answered with: `done` unless it is one of
  *  the kinds above. */
-export type OutcomeOf<K extends RuntimeRequest['kind']> = Extract<
+export type OutcomeOf<K extends RuntimeCommand['kind']> = Extract<
   Outcome,
   {
     kind: K extends keyof typeof OUTCOME_KIND
@@ -227,11 +227,11 @@ export type OutcomeOf<K extends RuntimeRequest['kind']> = Extract<
 
 /** Whether `outcome` answers a request of `kind`: how a client reads an
  *  answer that crossed a process boundary. */
-export const isOutcomeOf = <K extends RuntimeRequest['kind']>(
+export const isOutcomeOf = <K extends RuntimeCommand['kind']>(
   kind: K,
   outcome: Outcome,
 ): outcome is OutcomeOf<K> => {
-  const kinds: Partial<Record<RuntimeRequest['kind'], Outcome['kind']>> =
+  const kinds: Partial<Record<RuntimeCommand['kind'], Outcome['kind']>> =
     OUTCOME_KIND;
   return outcome.kind === (kinds[kind] ?? 'done');
 };

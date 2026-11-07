@@ -7,8 +7,7 @@ import { rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { buildIdentityDefine } from '../../scripts/build-identity.mjs';
-import { codeSandboxWorker } from '../../scripts/code-sandbox-worker.mjs';
+import { harnessBundleOptions } from '../../scripts/code-sandbox-worker.mjs';
 import { esmCjsGlobalsBanner } from '../../scripts/esm-cjs-globals-banner.mjs';
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
@@ -45,10 +44,11 @@ const reportRebuild = {
   },
 };
 
+const base = harnessBundleOptions();
 const options = {
+  ...base,
   absWorkingDir: packageDir,
   entryPoints: { index: 'src/main/bootstrap.ts' },
-  bundle: true,
   platform: 'node',
   format: 'esm',
   splitting: true,
@@ -60,12 +60,13 @@ const options = {
   // a bundle chunk. Keep it external so the require resolves to the real
   // installed package (electron-builder ships it via node_modules).
   external: ['electron', 'fsevents', 'node-pty'],
-  loader: { '.tex': 'text', '.wasm': 'binary' },
+  loader: { ...base.loader, '.tex': 'text' },
   tsconfig: 'tsconfig.main.json',
-  target: 'node22',
+  // The Node of the Electron that runs this bundle: 24.22 at the `electron`
+  // floor, 45.2.3. The installed package records its ABI, not its Node
+  // version, so an `electron` bump updates this by hand.
+  target: 'node24.22',
   banner: { js: esmCjsGlobalsBanner },
-  define: buildIdentityDefine(),
-  plugins: [codeSandboxWorker],
 };
 
 if (watch) {

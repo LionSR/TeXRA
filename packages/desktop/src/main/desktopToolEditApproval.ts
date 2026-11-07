@@ -31,7 +31,7 @@ import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
-import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
+import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
@@ -81,7 +81,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
 
   stagePreview(
     request: ToolEditPreviewRequest,
-  ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
+  ): Effect.Effect<ToolEditPreview, HostCommandFailure, FileSystem.FileSystem> {
     const { ui } = this.options;
     return FileSystem.FileSystem.use((fs) =>
       fs.makeTempDirectory({ prefix: 'texra-tool-edit-' }),
@@ -175,7 +175,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  showDiff(): Effect.Effect<void, HostRequestFailure> {
+  showDiff(): Effect.Effect<void, HostCommandFailure> {
     return this.ui
       .openDiff(
         { filePath: this.staged.originalPath },
@@ -188,13 +188,13 @@ class DesktopToolEditPreview implements ToolEditPreview {
       );
   }
 
-  openProposed(): Effect.Effect<void, HostRequestFailure> {
+  openProposed(): Effect.Effect<void, HostCommandFailure> {
     return this.ui.openPath(this.staged.proposedPath);
   }
 
   readProposedContent(): Effect.Effect<
     string,
-    HostRequestFailure,
+    HostCommandFailure,
     FileSystem.FileSystem
   > {
     return FileSystem.FileSystem.use((fs) =>
@@ -213,7 +213,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
    */
   dispose(
     unapplied?: string,
-  ): Effect.Effect<void, HostRequestFailure, FileSystem.FileSystem> {
+  ): Effect.Effect<void, HostCommandFailure, FileSystem.FileSystem> {
     const { tempDir, originalPath, proposedPath } = this.staged;
     return Effect.suspend(() => {
       if (unapplied !== undefined)

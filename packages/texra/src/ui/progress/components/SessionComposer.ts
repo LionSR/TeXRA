@@ -10,8 +10,8 @@
  *
  * It reads `Surface` (the draft or the launch selections) and the `host`
  * snapshot (the catalogs) and dispatches the arm for every change: a
- * `SurfaceAction` for text and selections, a `HostRequest` for launch,
- * polish, dictation, pickers, and pasted images, a `RuntimeRequest` for a
+ * `SurfaceAction` for text and selections, a `HostCommand` for launch,
+ * polish, dictation, pickers, and pasted images, a `RuntimeCommand` for a
  * follow-up. It holds no draft of its own.
  */
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';

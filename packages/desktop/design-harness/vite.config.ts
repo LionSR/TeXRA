@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
-import { aliases } from '../../../scripts/aliases.mjs';
+import { aliases, dedupe } from '../../../scripts/aliases.mjs';
 
 export default defineConfig({
   root: import.meta.dirname,
@@ -11,11 +11,6 @@ export default defineConfig({
   },
   resolve: {
     alias: aliases,
-    dedupe: [
-      '@awesome.me/webawesome',
-      '@lit-labs/signals',
-      'lit',
-      'signal-polyfill',
-    ],
+    dedupe: [...dedupe],
   },
 });

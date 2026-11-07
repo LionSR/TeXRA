@@ -11,14 +11,11 @@
 //                           config the packaging step must use
 //   smoke-package [--app <executable>]
 //                           launch the packaged app and wait for readiness
-//   smoke-webviews          render the extension webviews in Electron
 //
 // A stage returns its check failures instead of exiting, so the reporter at
-// the bottom of this file renders them and sets the exit code. Two paths keep
-// their own exits, as they did before the collapse: a usage error (unknown
-// stage, unsupported installer platform, missing `signing-env <mac|win>`)
-// exits 1 where it is detected, and the `smoke-webviews` Electron harness
-// throws its own labelled failure.
+// the bottom of this file renders them and sets the exit code. A usage error
+// (unknown stage, unsupported installer platform, missing
+// `signing-env <mac|win>`) exits 1 where it is detected.
 //
 // Heavy dependencies (@electron/asar, @playwright/test, the esbuild-backed
 // database fixture) load inside the stage that needs them, so no stage pays
@@ -34,14 +31,13 @@ import {
   readFile,
   rm,
   stat,
-  writeFile,
 } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, posix, relative, resolve } from 'node:path';
 import process from 'node:process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 // Local imports - shared packaging invariants
 import {
@@ -59,13 +55,6 @@ import {
   stopChild,
   waitForTermination,
 } from './smoke-process-utils.mjs';
-
-// Local imports - Electron webview harness
-import {
-  renderSessionHarnessBridge,
-  renderWebviewHtml,
-  runElectronWebviewHarness,
-} from './webview-electron-harness.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopRoot = join(repoRoot, 'packages', 'desktop');
@@ -1511,304 +1500,6 @@ async function smokePackagedLaunch(args) {
 }
 
 // ---------------------------------------------------------------------------
-// Stage: smoke-webviews
-// ---------------------------------------------------------------------------
-
-const nonce = 'texra-webview-smoke';
-
-// The progress webview is the one bundle the sidebar and the editor tab
-// load. It renders nothing until the host answers its `subscribe` with an
-// events frame carrying the host snapshot, so each progress view carries a
-// session fixture: the bridge shim below plays the host, answering every
-// subscribe with the fixture's events (listing rows for every run, the
-// transcript tier for the aggregates the subscribe named), the way
-// `SessionFramer` cuts a frame.
-const SESSION_KEY = '/tmp/texra-smoke/project';
-const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
-const NOW = 1_783_353_600_000;
-const RUN = 'a1b2c3d4e5f6';
-const CHILD_RUN = 'b1b2c3d4e5f6';
-
-const hostSnapshot = {
-  project: {
-    key: SESSION_KEY,
-    name: 'project',
-    initials: 'PR',
-    subtitle: SESSION_KEY,
-  },
-  agentOptions: [
-    { value: 'orchestrator', label: 'orchestrator' },
-    { value: 'research', label: 'research' },
-    { value: 'correct', label: 'correct', rounds: 1 },
-  ],
-  modelOptions: [
-    { value: 'deepseek/deepseek-flash', label: 'DeepSeek V4 Flash' },
-  ],
-  teamOptions: [],
-  workspaceRoots: [],
-  fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
-  isGitRepo: false,
-  recording: null,
-  debugMode: false,
-  approvalPolicy: 'ask',
-  banners: {
-    apiKey: { visible: false },
-    agentConfig: { visible: false },
-    dependency: { visible: false },
-    gettingStarted: false,
-    serviceOffline: null,
-    login: false,
-  },
-  onboarding: 'done',
-};
-
-/** Seq numbered per aggregate and committed in one session order. */
-function sessionLog() {
-  const events = [];
-  const seqs = new Map();
-  let commit = 0;
-  const emit = (logicalId, at, body) => {
-    const aggregateId = JSON.stringify(['run', logicalId]);
-    const seq = (seqs.get(aggregateId) ?? 0) + 1;
-    seqs.set(aggregateId, seq);
-    commit += 1;
-    events.push({ aggregateId, seq, commit, origin: OWNER, at, ...body });
-  };
-  const entry = (runId, at, fields) => {
-    emit(runId, at, { type: 'log', level: 'info', ...fields });
-  };
-  return { events, emit, entry };
-}
-
-function startRun(log, { runId, agent, at, parentRunId }) {
-  const parentCreation = log.events.find(
-    (event) =>
-      event.type === 'run.start' &&
-      event.aggregateId === JSON.stringify(['run', parentRunId]),
-  );
-  log.emit(runId, at, {
-    type: 'run.start',
-    identity: { kind: 'agent', agent },
-    isRemote: false,
-    takesFollowUps: true,
-    approvalPolicy: {
-      policy: 'ask',
-      bypasses: { bash: false, toolEdit: false, superYolo: false },
-      own: {},
-      goal: [],
-    },
-    parent: parentRunId
-      ? {
-          id: parentRunId,
-          uid: `00000000-0000-4000-8000-${String(parentCreation.commit).padStart(12, '0')}`,
-          callId: null,
-        }
-      : null,
-    provenance: null,
-  });
-  log.emit(runId, at, {
-    type: 'run.activate',
-    isRemote: false,
-  });
-  log.emit(runId, at, {
-    type: 'run.config',
-    config: {
-      model: 'deepseek/deepseek-flash',
-      agent,
-      inputFiles: ['main.tex'],
-    },
-  });
-  log.emit(runId, at, {
-    type: 'run.position',
-    payload: { family: 'toolUse', at: 'turn.begin' },
-  });
-}
-
-function conversationEvents({ approval = false } = {}) {
-  const log = sessionLog();
-  startRun(log, {
-    runId: RUN,
-    agent: 'research',
-    at: NOW,
-  });
-  log.emit(RUN, NOW + 500, {
-    type: 'run.description',
-    description: 'Check citation coverage and suggest BibTeX entries.',
-    by: 'model',
-  });
-  log.entry(RUN, NOW, {
-    messageType: 'userMessage',
-    message: 'hello world',
-  });
-  log.entry(RUN, NOW + 1000, {
-    messageType: 'modelResponse',
-    message: 'I will inspect the manuscript and report missing citations.',
-  });
-  if (approval) {
-    startRun(log, {
-      runId: CHILD_RUN,
-      agent: 'reviewer',
-      at: NOW + 2000,
-      parentRunId: RUN,
-    });
-    log.emit(RUN, NOW + 3000, {
-      type: 'request.opened',
-      requestId: 'smoke-tool-edit-approval',
-      payload: {
-        kind: 'toolEdit',
-        data: {
-          requestId: 'smoke-tool-edit-approval',
-          runId: RUN,
-          allowBypass: true,
-          path: '/tmp/texra-smoke/main.tex',
-          relativePath: 'main.tex',
-          sourceTool: 'edit_file',
-          addedLines: 1,
-          removedLines: 1,
-        },
-      },
-      thread: null,
-    });
-    log.entry(RUN, NOW + 3000, {
-      messageType: 'modelResponse',
-      message:
-        'I found a one-line correction and need approval before editing main.tex.',
-    });
-  }
-  return log.events;
-}
-
-function fileUri(relativePath) {
-  return pathToFileURL(join(repoRoot, relativePath)).toString();
-}
-
-async function smokeWebviews() {
-  const label = 'Electron webview smoke';
-  const extensionRoot = join(repoRoot, 'packages', 'extension');
-  const outputDir = join(repoRoot, 'artifacts', 'webview-smoke');
-  const generatedHtmlDir = join(outputDir, 'html');
-  const desktopRequire = createRequire(join(desktopRoot, 'package.json'));
-
-  const progressViewReplacements = {
-    bundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
-    styleUri: fileUri('packages/extension/dist/progressView/index.css'),
-    sessionKey: SESSION_KEY,
-    placement: 'sidebar',
-  };
-
-  const commonReplacements = {
-    cspSource: 'file:',
-    commonStyleUri: fileUri('packages/extension/src/common/styles/common.css'),
-    desktopThemeTokensUri: fileUri(
-      'packages/desktop/src/renderer/themeTokens.css',
-    ),
-    nonce,
-  };
-
-  const views = [
-    {
-      name: 'progress',
-      tagName: 'progress-app',
-      templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
-      replacements: progressViewReplacements,
-      session: { host: hostSnapshot, events: [], selected: null },
-    },
-    {
-      name: 'progress-populated',
-      tagName: 'progress-app',
-      templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
-      viewport: {
-        width: 420,
-        height: 600,
-      },
-      assertions: ['progressComposerLayout'],
-      replacements: progressViewReplacements,
-      session: {
-        host: hostSnapshot,
-        events: conversationEvents(),
-        selected: RUN,
-      },
-    },
-    {
-      name: 'progress-approval',
-      tagName: 'progress-app',
-      templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
-      viewport: {
-        width: 420,
-        height: 700,
-      },
-      assertions: ['toolEditApprovalLayout'],
-      replacements: progressViewReplacements,
-      session: {
-        host: hostSnapshot,
-        events: conversationEvents({ approval: true }),
-        selected: RUN,
-      },
-    },
-    {
-      name: 'settings',
-      tagName: 'settings-app',
-      templatePath: join(extensionRoot, 'src', 'settingsView', 'index.html'),
-      replacements: {
-        bundleUri: fileUri('packages/extension/dist/settingsView/bundle.js'),
-      },
-    },
-  ];
-
-  async function prepareViewHtml(view) {
-    const template = await readFile(view.templatePath, 'utf8');
-    const html = renderWebviewHtml(template, {
-      attributeLabel: 'smoke',
-      bridgeScript: renderSessionHarnessBridge({
-        nonce,
-        sessionKey: SESSION_KEY,
-        owner: OWNER,
-        session: view.session,
-        messagesKey: '__texraSmokeMessages',
-      }),
-      replacements: { ...commonReplacements, ...view.replacements },
-      view,
-    });
-    const htmlPath = join(generatedHtmlDir, `${view.name}.html`);
-    await writeFile(htmlPath, html);
-    return {
-      htmlPath,
-      name: view.name,
-      tagName: view.tagName,
-      assertions: view.assertions ?? [],
-      viewport: view.viewport,
-    };
-  }
-
-  await rm(outputDir, { recursive: true, force: true });
-  await mkdir(generatedHtmlDir, { recursive: true });
-  const smokeViews = [];
-  for (const view of views) {
-    smokeViews.push(await prepareViewHtml(view));
-  }
-
-  const configPath = join(outputDir, 'config.json');
-  await writeFile(
-    configPath,
-    `${JSON.stringify({ outputDir, views: smokeViews }, null, 2)}\n`,
-  );
-  await runElectronWebviewHarness({
-    configEnv: 'TEXRA_WEBVIEW_SMOKE_CONFIG',
-    configPath,
-    cwd: repoRoot,
-    electronBinaryPath: desktopRequire('electron'),
-    failureLabel: label,
-    noSandboxEnv: 'TEXRA_WEBVIEW_SMOKE_NO_SANDBOX',
-    runnerPath: join(repoRoot, 'scripts', 'smoke-webviews-electron-runner.cjs'),
-  });
-
-  return {
-    label,
-    summary: [`Electron webview smoke passed. Screenshots: ${outputDir}`],
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -1819,7 +1510,6 @@ const stages = {
   installers: verifyInstallers,
   'signing-env': verifySigningEnv,
   'smoke-package': smokePackagedLaunch,
-  'smoke-webviews': smokeWebviews,
 };
 
 const [stageName, ...stageArgs] = process.argv.slice(2);

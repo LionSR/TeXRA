@@ -20,8 +20,11 @@ All notable changes to this project will be documented in this file.
   `PermissionPayload` is `RequestPayload`, each `*Permission` case is a
   `*Request` (`BashRequest`, `ToolEditRequest`, `RetryRequest`,
   `AgentProposalRequest`, `PlanApprovalRequest`, `UserQuestionRequest`),
-  their schemas follow, and `ProgressPermissionKind` is `RequestKind`. The
-  stored `request.*` rows and their `kind` values are unchanged.
+  their schemas follow, and `ProgressPermissionKind` is `RequestKind`. A
+  host's command into the runtime is a command, not a request:
+  `RuntimeRequest` is `RuntimeCommand` and `HostRequestFailure` is
+  `HostCommandFailure`; `session.request` keeps its name. The stored
+  `request.*` rows and their `kind` values are unchanged.
 - **The CLI and the SDK packages need Node.js 22.22.2 or 24.15.** The
   terminal client, `@texra-ai/harness` and `@texra-ai/llm` support Node.js
   22.22.2 or later in 22.x, or 24.15 or later; `texra doctor` reports an
