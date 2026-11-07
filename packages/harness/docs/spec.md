@@ -71,9 +71,6 @@ its kind is its `type` column.
   closed by one `request.decided` row; an approval policy that answers at once
   commits both in one batch (`shared/schemas/sessionEvent.ts#'request.opened'`,
   `agent/runtime/requests.ts#policyDecidedRows`).
-- **Claim**: The write authority over one aggregate: the `owner_id` column of
-  its sequence row
-  (`controllers/session/storeSchema.ts#CREATE TABLE IF NOT EXISTS event_sequence`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
   `RunState` the loop continues from
   (`shared/session/runState.ts#applyRunRows`).
@@ -92,11 +89,11 @@ The store is one SQLite file named `texra.db` under the storage root
 application id (`TeXR`) carry the product's name. An ephemeral session runs the
 same schema in memory (`controllers/session/Database.ts#':memory:'`).
 
-The store MUST carry application id `0x54655852` and schema version 101 in
+The store MUST carry application id `0x54655852` and schema version 102 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts#APPLICATION_ID`,
 `#SCHEMA_VERSION`). A process MUST refuse, unchanged, a file with another
-application id or a schema stamp at or above 101 other than its own
-(`controllers/session/storeSchema.ts#checkStamps`). A store stamped below 101
+application id or a schema stamp at or above 102 other than its own
+(`controllers/session/storeSchema.ts#checkStamps`). A store stamped below 102
 that holds tables of the pre-1.0 format SHALL be copied whole to the first free
 `<file>.pre1` name and started fresh; nothing in it is read again
 (`controllers/session/storeSchema.ts#asideName.pre1`). A file SQLite reports

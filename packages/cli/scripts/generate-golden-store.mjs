@@ -1317,7 +1317,7 @@ async function normalize(file, root) {
     'UPDATE event SET origin = ?, at = ?, data = ? WHERE "commit" = ?',
   );
   const insertBlob = db.prepare('INSERT OR IGNORE INTO blob VALUES (?, ?)');
-  const insertRef = db.prepare('INSERT INTO event_blob VALUES (?, ?)');
+  const insertRef = db.prepare('INSERT INTO event_blob VALUES (?, ?, ?)');
   for (const row of rows) {
     // As the database encodes a row it has stamped (a child's parent
     // incarnation), which its draft schema does not carry.
@@ -1334,9 +1334,9 @@ async function normalize(file, root) {
       encoded.data,
       row.commit,
     );
-    for (const { digest, value } of encoded.blobs) {
+    for (const { digest, value, inline } of encoded.blobs) {
       insertBlob.run(digest, value);
-      insertRef.run(row.commit, digest);
+      insertRef.run(row.commit, digest, inline ? 1 : 0);
     }
   }
   // Each rename below is its aggregate's last change, which the store's
@@ -1344,15 +1344,10 @@ async function normalize(file, root) {
   // the random ids it replaces go first.
   db.exec('DELETE FROM aggregate_change');
   const updateSequence = db.prepare(
-    'UPDATE event_sequence SET logical_id = ?, uid = ?, owner_id = ? WHERE id = ?',
+    'UPDATE event_sequence SET logical_id = ?, uid = ? WHERE id = ?',
   );
   for (const row of sequences)
-    updateSequence.run(
-      ids.get(row.logical_id),
-      uuids.get(row.uid),
-      row.owner_id === null ? null : origins.get(row.owner_id),
-      row.id,
-    );
+    updateSequence.run(ids.get(row.logical_id), uuids.get(row.uid), row.id);
   for (const [table, column, keys] of [
     ['projected_row', 'data', ['"commit"', 'type']],
     ['run_usage', 'usage', ['aggregate']],

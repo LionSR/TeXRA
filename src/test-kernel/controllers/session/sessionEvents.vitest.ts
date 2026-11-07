@@ -599,7 +599,7 @@ describe('the session event table and its one publisher', () => {
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: 101,
+          user_version: 102,
         });
         expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
           auto_vacuum: 2,
@@ -618,7 +618,7 @@ describe('the session event table and its one publisher', () => {
   // its own id even at the 1.0 schema's number.
   for (const stamp of [
     '',
-    'PRAGMA application_id = 1234; PRAGMA user_version = 101;',
+    'PRAGMA application_id = 1234; PRAGMA user_version = 102;',
   ])
     it.effect(
       `refuses another application's SQLite file untouched (${stamp || 'unstamped'})`,
@@ -765,7 +765,7 @@ describe('the session event table and its one publisher', () => {
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
-    const format = 102;
+    const format = 103;
     return Effect.gen(function* () {
       yield* storeOfFormat(storage, format);
       const failure = yield* Effect.flip(
