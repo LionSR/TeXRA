@@ -430,6 +430,19 @@
           "signature": "export interface SubscriptionProvider { readonly id: SubscriptionProviderId; readonly displayName: string; readonly sessionName: string; readonly copyTarget: string; readonly modelFamily: string; signIn( options: SubscriptionSignInOptions, ): Effect.Effect<SubscriptionAccount, Error, HttpClient.HttpClient | Secrets>; … }"
         }
       ]
+    },
+    {
+      "id": "UI-pasted-image-name-host-minted",
+      "candidate": "the pasted-image file name minted by the host's store (a content address or a sequence) and returned in the save outcome, the composer sending only { ext, base64 }",
+      "why": "The composer needs the name at paste time: it inserts the image's `[name]` chip into the textarea at the caret in the same event, and the follow-up draft keys the image by that name until the host answers with the stored file. A host-minted name means inserting the chip after the round trip, into a draft the user may have kept typing in, with the caret position carried across it (a write in the session surface module). The name the renderer mints is not an identity anything else rebuilds: the host validates its prefix and shape at the boundary (`pastedImageFileName`) and stores under it, and the CLI saves through the same `savePastedImageBuffer` with the same generator. Found as J9 (round 2, J-ui-kit.md); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#finding-9-renderers-that-rebuild-what-the-data-model-split",
+      "symbols": [
+        {
+          "file": "packages/texra/src/shared/utils/pastedImageName.ts",
+          "symbol": "generatePastedImageName",
+          "signature": "export function generatePastedImageName(ext: string): string {…}"
+        }
+      ]
     }
   ]
 }
