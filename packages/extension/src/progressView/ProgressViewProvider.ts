@@ -578,6 +578,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           Effect.sync(() => listener.dispose()),
         );
     },
+    withLogChannel(CHANNEL),
   );
 
   private closeSurface(

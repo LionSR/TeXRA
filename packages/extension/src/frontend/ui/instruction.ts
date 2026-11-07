@@ -92,7 +92,7 @@ export const showInstructionWithSuppress = Effect.fn(
 /**
  * Prompt the user to install a VS Code extension, with a suppressible
  * "Never remind again" option. Fires the install command on confirm and
- * reports a refused install once.
+ * reports a refused install once, on the caller's log channel.
  */
 export function promptExtensionInstall(
   store: StateStore,
@@ -100,7 +100,6 @@ export function promptExtensionInstall(
     suppressKey: string;
     message: string;
     extensionId: string;
-    channel: string;
   },
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
@@ -112,7 +111,6 @@ export function promptExtensionInstall(
           .pipe(
             Effect.catch((err) =>
               showLoggedErrorMessage(
-                opts.channel,
                 `Error installing extension ${opts.extensionId}`,
                 err,
               ).pipe(Effect.asVoid),

@@ -156,7 +156,10 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // `~/.texra`: one history across CLI, desktop and extension.
         storageRoot: defaultNodeStorageRoot(),
         resourcesPath: path.join(context.extensionPath, 'resources'),
-        agentIssues: showLoggedMessageWithDocs,
+        agentIssues: (channel, message, docsId) =>
+          showLoggedMessageWithDocs(message, docsId).pipe(
+            withLogChannel(channel),
+          ),
         usageLog: {
           version: extensionVersion,
           editorType: vscode.env.appName || undefined,
@@ -251,7 +254,9 @@ const NO_FOLDER_COMMANDS = {
   'texra.openGettingStarted': (context) =>
     openGettingStarted(context.extension.id),
   'texra.auth.chatgpt.signIn': (_context, roots) =>
-    signInWithSubscription(roots, 'welcomeView', 'chatgpt'),
+    signInWithSubscription(roots, 'chatgpt').pipe(
+      withLogChannel('welcomeView'),
+    ),
   'texra.setApiKey': (_context, roots) => apiSetApiKey(roots),
 } satisfies Partial<
   Record<
@@ -291,6 +296,7 @@ const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
       yield* createSampleProjectWithoutWorkspace(extensionPath);
     }
   },
+  withLogChannel(EXTENSION_CHANNEL),
 );
 
 function registerWalkthroughWorkspaceAction(
@@ -526,7 +532,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     appSignalStream('githubTokenInvalid').pipe(
       Stream.runForEach(({ message }) =>
         announce(
-          EXTENSION_CHANNEL,
           vscodeUi.ask('error', gitHubTokenRejectedMessage(message), {
             items: [openSettings],
           }),
@@ -543,10 +548,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
                       log: 'Warn',
                       message: 'Opening the Git settings',
                     }),
-                    withLogChannel(EXTENSION_CHANNEL),
                   )
               : Effect.void,
           ),
+          withLogChannel(EXTENSION_CHANNEL),
           Effect.forkChild,
         ),
       ),

@@ -92,10 +92,7 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
         ),
       );
       if (!saved) {
-        yield* showLoggedMessage(
-          CHANNEL,
-          GUARD_FAILURE_MESSAGES.saveFailed.user,
-        );
+        yield* showLoggedMessage(GUARD_FAILURE_MESSAGES.saveFailed.user);
         return { status: 'saveFailed' } satisfies ActiveFileGuardResult;
       }
     }
@@ -114,7 +111,7 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
 );
 
 interface GuardedLatexCommandOptions {
-  /** The logging channel to use */
+  /** The command's log channel, named here for its whole program. */
   channel: string;
   /** Description of the action being performed (e.g. "indent LaTeX document"). */
   action: string;
@@ -145,11 +142,9 @@ export function runGuardedLatexCommand<R = never>(
     if (guardResult.status !== 'ok') {
       const failure = GUARD_FAILURE_MESSAGES[guardResult.status];
       const logLine = `Cannot ${action}: ${failure.logTail}`;
-      yield* (
-        failure.level === 'error'
-          ? Effect.logError(logLine)
-          : Effect.logWarning(logLine)
-      ).pipe(withLogChannel(channel));
+      yield* failure.level === 'error'
+        ? Effect.logError(logLine)
+        : Effect.logWarning(logLine);
       return;
     }
 
@@ -164,11 +159,10 @@ export function runGuardedLatexCommand<R = never>(
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
-        : showLoggedErrorMessage(
-            channel,
-            errorMessage,
-            Cause.squash(cause),
-          ).pipe(Effect.asVoid),
+        : showLoggedErrorMessage(errorMessage, Cause.squash(cause)).pipe(
+            Effect.asVoid,
+          ),
     ),
+    withLogChannel(channel),
   );
 }

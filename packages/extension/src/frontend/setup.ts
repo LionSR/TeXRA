@@ -56,21 +56,21 @@ export function initializeLatexSupport(
       // discover it via the LaTeX settings tab or compile errors later.
       yield* Effect.logInfo(
         'LaTeX Workshop extension not found, prompting installation',
-      ).pipe(withLogChannel(CHANNEL));
+      );
       yield* promptExtensionInstall(globalState, {
         suppressKey: 'latex-workshop-install',
         message:
           'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
         extensionId: LATEX_WORKSHOP_EXT_ID,
-        channel: 'extension',
       });
     }
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.logError(
         `Error initializing LaTeX support: ${toErrorMessage(Cause.squash(cause))}`,
-      ).pipe(withLogChannel(CHANNEL)),
+      ),
     ),
+    withLogChannel(CHANNEL),
   );
 
   return Effect.andThen(extendPath, recommendLatexWorkshop);

@@ -91,7 +91,6 @@ const promptGitMissing = Effect.fnUntraced(function* () {
 
   yield* Effect.logError(message).pipe(withLogChannel(CHANNEL));
   const selected = yield* announce(
-    CHANNEL,
     vscodeUi.ask('error', message, { items: actions }),
     undefined,
   );
@@ -140,7 +139,6 @@ function buildOverleafClonePorts(
         withLogChannel(CHANNEL),
         Effect.andThen(
           announce(
-            CHANNEL,
             vscodeUi.ask('error', message, {
               items: spec.tokenHint ? ['How to get a token'] : [],
             }),
@@ -169,9 +167,7 @@ function buildOverleafClonePorts(
         ),
       ),
     showWorkspaceNotEmpty: () =>
-      showLoggedMessage(CHANNEL, 'Workspace folder must be empty.').pipe(
-        Effect.asVoid,
-      ),
+      showLoggedMessage('Workspace folder must be empty.').pipe(Effect.asVoid),
 
     runClone: (clone, workspacePath) =>
       withVSCodeProgress(
@@ -190,7 +186,6 @@ function buildOverleafClonePorts(
         ? 'Your git token may be invalid or expired.'
         : 'Check your credentials.';
       const selected = yield* announce(
-        CHANNEL,
         vscodeUi.ask('error', `Clone failed: authentication error. ${detail}`, {
           items: r.isOverleaf
             ? ['Get New Token', 'How to get a token']
@@ -221,7 +216,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
 
     const remote = parseLatexGitUrl(input);
     if (!remote) {
-      yield* showLoggedMessage(CHANNEL, 'Invalid project URL or ID.');
+      yield* showLoggedMessage('Invalid project URL or ID.');
       return;
     }
 
@@ -231,7 +226,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
     const workspaceFs = yield* WorkspaceFs;
     const workspacePath = workspaceFs.root;
     if (!workspacePath) {
-      yield* showLoggedMessage(CHANNEL, 'Open a workspace folder first.');
+      yield* showLoggedMessage('Open a workspace folder first.');
       return;
     }
     yield* runOverleafClone(
@@ -245,4 +240,5 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
       ),
     );
   },
+  withLogChannel(CHANNEL),
 );

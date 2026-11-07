@@ -136,13 +136,12 @@ function runHandler<A, E, R>(
   handler: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, HostFailed | RequestRefusal, R> {
   const log = (failure: unknown) =>
-    Effect.logError(
-      `Command ${command} failed: ${toErrorMessage(failure)}`,
-    ).pipe(withLogChannel(CHANNEL));
+    Effect.logError(`Command ${command} failed: ${toErrorMessage(failure)}`);
   return handler.pipe(
     Effect.mapError((cause) => hostFailure(command, cause)),
     Effect.tapError(log),
     Effect.tapDefect(log),
+    withLogChannel(CHANNEL),
   );
 }
 
@@ -371,9 +370,9 @@ export const createExtensionHostRequests = Effect.fn(
     openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
       signInChatGpt: Effect.gen(function* () {
-        yield* signInWithSubscription(roots, CHANNEL, 'chatgpt');
+        yield* signInWithSubscription(roots, 'chatgpt');
         yield* refreshAfterCredentialChange;
-      }),
+      }).pipe(withLogChannel(CHANNEL)),
       // The snapshot follows the flags it reads.
       skip: setOnboardingDeclined(globalState, true),
       runSetup: Effect.flatMap(options.launcher, (launcher) =>

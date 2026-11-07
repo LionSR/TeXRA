@@ -47,6 +47,9 @@ import type {
   WorkspaceFs,
 } from '@texra-ai/harness/host';
 
+/** The log channel of the command registration's own failures. */
+const REGISTRY_CHANNEL = 'ExtensionCommandRegistry';
+
 /**
  * A command's program. The registration boundary below runs it once, over
  * the window's rooted filesystems, and finishes `executeCommand` with its
@@ -188,16 +191,15 @@ export function registerCommands(
             if (failure.kind === 'invalidArguments') {
               runtime.runFork(
                 showLoggedMessage(
-                  'ExtensionCommandRegistry',
                   `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
-                ),
+                ).pipe(withLogChannel(REGISTRY_CHANNEL)),
               );
               return;
             }
             runtime.runFork(
               Effect.logError(
                 `No handler is registered for command ${failure.id}`,
-              ).pipe(withLogChannel('ExtensionCommandRegistry')),
+              ).pipe(withLogChannel(REGISTRY_CHANNEL)),
             );
           },
           ...rawArgs,

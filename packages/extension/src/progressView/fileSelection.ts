@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   showLoggedErrorMessage,
@@ -28,16 +29,16 @@ function announceSelection<E>(
     // The toast resolves only when dismissed, so the picker does not wait on it.
     Effect.tap((result) =>
       result
-        ? showLoggedInfoMessage(CHANNEL, `Selected files: ${result.join(', ')}`)
+        ? showLoggedInfoMessage(`Selected files: ${result.join(', ')}`)
         : Effect.void,
     ),
     Effect.catch((err) =>
       showLoggedErrorMessage(
-        CHANNEL,
         'File selection failed. See the TeXRA log for details.',
         err,
       ).pipe(Effect.as(null)),
     ),
+    withLogChannel(CHANNEL),
   );
 }
 

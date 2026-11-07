@@ -39,7 +39,6 @@ export const launchSetupAssistant = Effect.fn('launchSetupAssistant')(
       Effect.catchTags({
         SetupAlreadyRunning: () =>
           showLoggedInfoMessage(
-            CHANNEL,
             'The setup assistant is already running. Follow it in the TeXRA panel.',
           ).pipe(
             Effect.andThen(
@@ -76,4 +75,5 @@ export const launchSetupAssistant = Effect.fn('launchSetupAssistant')(
       Effect.asVoid,
     );
   }),
+  withLogChannel(CHANNEL),
 );

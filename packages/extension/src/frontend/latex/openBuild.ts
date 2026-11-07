@@ -100,19 +100,17 @@ const builtPdfPath = (texPath: string, workspace: string | undefined): string =>
   );
 
 /**
- * Invoke the LaTeX Workshop build command for a file, warn-logging on failure.
- * `warnLabel` prefixes the failure message so callers keep their diagnostic context.
+ * Invoke the LaTeX Workshop build command for a file, warn-logging on the
+ * caller's channel on failure. `warnLabel` prefixes the failure message so
+ * callers keep their diagnostic context.
  */
 export const invokeLatexWorkshopBuild = (
   uri: vscode.Uri,
-  channel: string,
   warnLabel: string,
 ): Effect.Effect<void> =>
   executeVscodeCommand('latex-workshop.build', uri).pipe(
     Effect.catch((err) =>
-      Effect.logWarning(`${warnLabel}: ${toErrorMessage(err)}`).pipe(
-        withLogChannel(channel),
-      ),
+      Effect.logWarning(`${warnLabel}: ${toErrorMessage(err)}`),
     ),
   );
 
@@ -169,7 +167,7 @@ export const openBuilt = Effect.fn('openBuild.openBuilt')(function* (
       );
     }),
   );
-});
+}, withLogChannel(CHANNEL));
 
 /**
  * Make the viewer's file LaTeX Workshop's current document again, answering
@@ -213,7 +211,7 @@ const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(
 
     const fs = yield* FileSystem.FileSystem;
     if (!(yield* fs.exists(absolutePath))) {
-      yield* showLoggedMessage(CHANNEL, `File not found: ${absolutePath}`);
+      yield* showLoggedMessage(`File not found: ${absolutePath}`);
       return false;
     }
 
@@ -250,11 +248,7 @@ const prepareLatexBuild = Effect.fn('openBuild.prepareLatexBuild')(function* (
   yield* openFileInEditor(uri.fsPath, { preview: true, preserveFocus });
 
   if (fileLocation.kind === 'workspace') {
-    yield* invokeLatexWorkshopBuild(
-      uri,
-      CHANNEL,
-      'LaTeX Workshop build failed',
-    );
+    yield* invokeLatexWorkshopBuild(uri, 'LaTeX Workshop build failed');
     return true;
   }
 

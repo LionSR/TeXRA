@@ -143,10 +143,10 @@ export const setApiKey = Effect.fn('setApiKey')(function* (
     .commitProviderKey(target, apiKey)
     .pipe(
       Effect.catchTag('ProviderKeyActionFailed', (error) =>
-        showLoggedErrorMessage(CHANNEL, error.message, error.cause),
+        showLoggedErrorMessage(error.message, error.cause),
       ),
     );
-});
+}, withLogChannel(CHANNEL));
 
 /** Remove an API key after a confirmation prompt. */
 export const removeApiKey = Effect.fn('removeApiKey')(function* (
@@ -165,7 +165,7 @@ export const removeApiKey = Effect.fn('removeApiKey')(function* (
     .removeProviderKey(provider)
     .pipe(
       Effect.catchTag('ProviderKeyActionFailed', (error) =>
-        showLoggedErrorMessage(CHANNEL, error.message, error.cause),
+        showLoggedErrorMessage(error.message, error.cause),
       ),
     );
-});
+}, withLogChannel(CHANNEL));

@@ -2,6 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness/host';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   announce,
@@ -22,10 +23,7 @@ const LISTED_BUILD_DIRECTORIES = 10;
 export const confirmCleanBuild = Effect.gen(function* () {
   const directories = yield* findBuildDirectories;
   if (directories.length === 0) {
-    yield* showLoggedInfoMessage(
-      CHANNEL,
-      'No build/ folders found in this workspace.',
-    );
+    yield* showLoggedInfoMessage('No build/ folders found in this workspace.');
     return;
   }
   const listed = directories.slice(0, LISTED_BUILD_DIRECTORIES);
@@ -37,7 +35,6 @@ export const confirmCleanBuild = Effect.gen(function* () {
   const noun = directories.length === 1 ? 'folder' : 'folders';
   const confirm = `Delete ${directories.length} ${noun}`;
   const confirmed = yield* announce(
-    CHANNEL,
     vscodeUi.confirm({
       message: `Delete ${directories.length} build/ ${noun} and everything in them?`,
       action: confirm,
@@ -49,13 +46,9 @@ export const confirmCleanBuild = Effect.gen(function* () {
   const failed = yield* removeBuildDirectories(directories);
   if (failed.length > 0) {
     yield* showLoggedMessage(
-      CHANNEL,
       `Could not delete ${failed.length} of ${directories.length} build/ ${noun}: ${failed.join(', ')}. See the TeXRA log for the cause.`,
     );
     return;
   }
-  yield* showLoggedInfoMessage(
-    CHANNEL,
-    `Deleted ${directories.length} build/ ${noun}.`,
-  );
-});
+  yield* showLoggedInfoMessage(`Deleted ${directories.length} build/ ${noun}.`);
+}).pipe(withLogChannel(CHANNEL));

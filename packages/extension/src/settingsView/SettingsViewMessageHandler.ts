@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, Fiber, Result, Schema } from 'effect';
 
-import { Skills, hasExtension } from '@texra-ai/harness/host';
+import { Skills, hasExtension, withLogChannel } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -67,10 +67,10 @@ const showDocument = (
     catch: ensureError,
   });
 
-export class SettingsViewMessageHandler {
-  private readonly viewName = 'SettingsView';
-  private readonly channel = `${this.viewName}MessageHandler`;
+/** The settings view's log channel, named where its programs start. */
+const CHANNEL = 'SettingsViewMessageHandler';
 
+export class SettingsViewMessageHandler {
   /** Active webview reference, tracked on every dispatch. */
   private activeView: SettingsWebview | undefined;
 
@@ -102,11 +102,9 @@ export class SettingsViewMessageHandler {
           // Markdown opens in preview mode, the read-only rendered view.
           openPath: (filePath) =>
             hasExtension(filePath, '.md')
-              ? safeExecuteCommand(
-                  'markdown.showPreview',
-                  [vscode.Uri.file(filePath)],
-                  this.viewName,
-                ).pipe(Effect.asVoid)
+              ? safeExecuteCommand('markdown.showPreview', [
+                  vscode.Uri.file(filePath),
+                ]).pipe(Effect.asVoid)
               : showDocument(() => vscode.workspace.openTextDocument(filePath)),
           revealPath: (filePath) =>
             executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
@@ -133,9 +131,7 @@ export class SettingsViewMessageHandler {
           // the host snapshot; the funnel follows the banner.
           refreshCredentialStatus: progressView.refreshApiKeyStatus,
           signInSubscription: (providerId) =>
-            Effect.asVoid(
-              signInWithSubscription(roots, this.channel, providerId),
-            ),
+            Effect.asVoid(signInWithSubscription(roots, providerId)),
           revealRun: (runId) => progressView.revealRun(runId),
           runLabel: (runId) => progressView.runLabel(runId),
           runInTerminal: (name, command) =>
@@ -151,7 +147,9 @@ export class SettingsViewMessageHandler {
     );
 
     // One fiber owns every page follower: disposing interrupts them all.
-    const following = runtime.runFork(this.body.follow);
+    const following = runtime.runFork(
+      this.body.follow.pipe(withLogChannel(CHANNEL)),
+    );
     context.subscriptions.push({
       dispose: () => runtime.runFork(Fiber.interrupt(following)),
     });
@@ -203,10 +201,9 @@ export class SettingsViewMessageHandler {
           ? message.command
           : 'unknown';
       return showLoggedErrorMessage(
-        this.channel,
         `Settings could not handle the '${command}' request`,
         parsed.failure.message,
       ).pipe(Effect.asVoid);
-    });
+    }).pipe(withLogChannel(CHANNEL));
   }
 }
