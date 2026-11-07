@@ -1,5 +1,6 @@
 /**
- * Shared path aliases derived from tsconfig.json for Vite build configs.
+ * Shared path aliases derived from tsconfig.json for the Vite, Vitest and
+ * oxlint configs.
  * Extension esbuild reads its package tsconfig, which extends the root.
  */
 

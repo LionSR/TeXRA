@@ -115,21 +115,22 @@ aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
 harness only through `@texra-ai/harness` and its subpaths (`/node`, `/plugins`,
 `/schemas`, `/transcript`); a host holds the `LocalSession` that
 `Sessions.open` returns. The harness imports nothing from the app,
-and harness, app and llm import no host layer. oxlint (`.oxlintrc.json`,
+and harness, app and llm import no host layer. oxlint (`oxlint.config.mts`,
 `npm run lint`) also fails:
 
 - an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and
-  the runtime entries named in its overrides; the SDK's entry files run
-  nothing;
+  the runtime entries it names; the SDK's entry files run nothing;
 - `new AbortController()` outside its one permanent resident;
 - in the core, `new Promise`, `.then(`, `!` and an asserted object literal.
-  The core is the file list of the `.oxlintrc.json` override that bans
-  `.then(`: `packages/llm/src`, the harness's `agent/`, `effect/`,
-  `platform/`, `tools/`, session and schema directories, and its entry
-  files.
+  The core is `CORE` in `oxlint.config.mts`: `packages/llm/src`, the
+  harness's `agent/`, `effect/`, `platform/`, `tools/`, session and schema
+  directories, and its entry files.
 
-A later override in `.oxlintrc.json` replaces an earlier one's options for a
-rule, so each import block restates every pattern that holds for its files.
+Each import or property ban in `oxlint.config.mts` is a named set, listed once
+in a zone table with the directories and files where it holds (`except` for
+an exemption). The config writes the overrides from those tables, so a new
+zone, ban or exemption is one entry. The host-layer, app and llm alias bans
+are read from the `tsconfig.json` `paths`, so a new alias needs no lint edit.
 
 `npm run docgen` keeps the core's public-surface reports current
 (`packages/harness/AGENTS.md` "Core quality"). oxlint holds the VS Code-free zones, the host-layer, harness-no-app,
@@ -176,11 +177,10 @@ storage, and workspace files") and shown in the native TeXRA settings view.
 
 Core logic must not import `vscode`. Check this first on any diff.
 
-**VS Code-free zones:** `packages/harness/src/`, `packages/texra/src/`,
-`packages/llm/src/`, `packages/desktop/src/`, and the settings webview
-frontend `packages/extension/src/settingsView/frontend/` (the progress view's
-frontend is app code, `packages/texra/src/ui/progress/`). Enforced by the
-import overrides in `.oxlintrc.json`; keep them in sync with this list.
+**VS Code-free zones:** the harness, app, llm and desktop sources and the
+settings webview frontend; `VSCODE_FREE` in `oxlint.config.mts` lists the
+directories, and lint enforces it. The progress view's frontend is app code
+(`packages/texra/src/ui/progress/`).
 
 **VS Code-allowed:** `packages/extension/src/extension.ts` (builds its runtime
 over `processLayer()` once), `packages/extension/src/commands/`,
@@ -427,7 +427,7 @@ in review beyond this bar. Full rules: `src/test-kernel/AGENTS.md`.
 
 ## Code style
 
-oxlint (`.oxlintrc.json`) and oxfmt (`.oxfmtrc.json`) check what they can. Beyond them:
+oxlint (`oxlint.config.mts`) and oxfmt (`.oxfmtrc.json`) check what they can. Beyond them:
 
 - Erasable TypeScript only: `erasableSyntaxOnly` (root and llm `tsconfig.json`)
   refuses syntax type stripping cannot run. No `enum` (an `as const` table with
