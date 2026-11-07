@@ -10,7 +10,7 @@
  * arrives (`AgentTrace.output`). A stop interrupts the turn, and a stopped
  * process run delivers nothing: its interruption is the fact. A process
  * run is never resumed: a later turn of the same thread is a new run, and
- * a message to one is refused (`USER_FOLLOW_UP_SUPPORT.UNSUPPORTED`).
+ * a message to one is refused (`takesFollowUps: false`).
  */
 import { Effect, Exit } from 'effect';
 
@@ -32,7 +32,6 @@ import {
   generateRunId,
   qualifyAggregateId,
   RUN_OUTCOME,
-  USER_FOLLOW_UP_SUPPORT,
   type ProcessExit,
   type RunEnd,
   type RunId,
@@ -176,7 +175,7 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
   const open = Effect.gen(function* () {
     yield* registerRun(runId, launch.config, {
       identity: launch.identity,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      takesFollowUps: false,
       parentRunId: parent.runId,
       parentCall: { callId, card: parent.logId, awaited: false },
       description: childRunDescription(launch.description),

@@ -51,7 +51,7 @@ import {
 } from './runHistoryEvent';
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { HookOutcomePayloadSchema } from './hookOutcome';
-import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
+import { WorktreeInfoSchema } from './run';
 import { TranscriptEventSchema } from './traceEvent';
 
 /** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
@@ -179,7 +179,7 @@ export type RunProvenance = typeof RunProvenanceSchema.Type;
  * aggregate's logical id is the run id, so the row carries no second copy of
  * it. `worktree` is absent for a run that executes in the workspace itself
  * rather than in a dedicated worktree. `category`
- * and `userFollowUpSupport` are explicit on every run: the
+ * and `takesFollowUps` are explicit on every run: the
  * launcher knows them for an agent, a process, and a script alike,
  * and the fold reads them verbatim and derives nothing. The
  * initial approval-policy snapshot rides here rather than as its own event:
@@ -189,7 +189,9 @@ export type RunProvenance = typeof RunProvenanceSchema.Type;
  */
 const RunStartEventSchema = durable('run.start', {
   identity: RunIdentitySchema,
-  userFollowUpSupport: UserFollowUpSupportSchema,
+  /** Whether the run takes a message (a person's or a parent's) as its
+   *  next cycle: a process run and a headless one-shot root take none. */
+  takesFollowUps: Schema.Boolean,
   worktree: Schema.optional(Schema.NullOr(WorktreeInfoSchema)),
   /** The launching run with its creation coordinate; null for a root. */
   parent: Schema.NullOr(RunParentSchema),

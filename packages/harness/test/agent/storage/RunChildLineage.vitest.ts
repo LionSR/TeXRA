@@ -35,7 +35,7 @@ layer(
               Schema.decodeUnknownSync(RunIdSchema)('aaa010'),
             ),
             identity: { kind: 'agent', agent: 'assistant' },
-            userFollowUpSupport: 'unsupported',
+            takesFollowUps: false,
             parent: {
               id: Schema.decodeUnknownSync(RunIdSchema)('aaa0ff'),
               call: null,

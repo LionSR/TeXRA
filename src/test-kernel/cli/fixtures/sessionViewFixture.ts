@@ -18,7 +18,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
-import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { emptySessionView } from '@shared/session/sessionView';
 import { runActions } from '@shared/session/runActions';
 import { runStatus } from '@shared/runs/runStatusDisplay';
@@ -91,7 +90,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     working: false,
     lastTimestamp: 1,
     turn: null,
-    followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    takesFollowUps: true,
     context: null,
     parentId: null,
     ancestors: [],

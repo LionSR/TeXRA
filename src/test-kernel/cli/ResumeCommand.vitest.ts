@@ -69,7 +69,7 @@ const seedRunRecord = (config: AgentConfig | null) =>
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', RUN_ID),
         identity: { kind: 'agent', agent: 'planner' },
-        userFollowUpSupport: 'unsupported',
+        takesFollowUps: false,
         parent: null,
         provenance: null,
       },

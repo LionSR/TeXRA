@@ -138,7 +138,7 @@ import { ProcessIdentity } from '@shared/session/sessionEvents';
 const [storage, owner, run] = process.argv.slice(2);
 const append = Effect.flatMap(Database, (db) =>
   db.appendAll([{ type: 'run.start', aggregateId: qualifyAggregateId('run', run),
-    identity: { kind: 'agent', agent: 'chat' }, userFollowUpSupport: 'unsupported',
+    identity: { kind: 'agent', agent: 'chat' }, takesFollowUps: false,
     parent: null, provenance: null }]));
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
   Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
@@ -209,7 +209,7 @@ const runStart: SessionEventDraft = {
   type: 'run.start',
   aggregateId: qualifyAggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
-  userFollowUpSupport: 'unsupported',
+  takesFollowUps: false,
   parent: null,
   provenance: null,
 };

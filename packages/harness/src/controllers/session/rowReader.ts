@@ -341,7 +341,7 @@ function bareStart(input: SqlRow): SessionEvent | null {
     origin: row.origin,
     at: row.at,
     identity: { kind: 'agent', agent: 'unknown' },
-    userFollowUpSupport: 'unsupported',
+    takesFollowUps: false,
     parent: null,
     provenance: null,
   };

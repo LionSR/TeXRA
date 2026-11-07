@@ -101,7 +101,7 @@ async function writeCanonicalRunFixtures(
             type: 'run.start',
             aggregateId: id,
             identity: { kind: 'agent', agent: runFixture.agent },
-            userFollowUpSupport: 'nativeInteractive',
+            takesFollowUps: true,
             parent: null,
             provenance: null,
           },

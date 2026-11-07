@@ -255,11 +255,11 @@ rather than per finding:
   (`CodexThreads`, `ClaudeAgentSessions`) so the session layer owns its
   lifetime. A `Context.Reference` on the plugin's session layer would be the
   same with less.
-- **`USER_FOLLOW_UP_SUPPORT`** is now two values (`unsupported`,
-  `nativeInteractive`) for one boolean fact, carried on `run.start`; the
-  harness enforces it once, in `submitFollowUp` (`acceptsFollowUp` is a view
-  affordance that reads the same field). One fact, one representation would
-  make it a boolean.
+- **`USER_FOLLOW_UP_SUPPORT`, ended in lane 9.** It was two values
+  (`unsupported`, `nativeInteractive`) for one boolean fact, carried on
+  `run.start`. It is `run.start.takesFollowUps` now (the row at v4, the
+  view's field of the same name); `submitFollowUp` enforces it and
+  `acceptsFollowUp` reads it.
 - **The ten-minute `APPROVAL_HANDLER_TIMEOUT`, ended in the hosts' PR.**
   The answerer waits as long as the handler does; a host's prompt carries
   its own deadline, or none.
@@ -311,7 +311,7 @@ rather than per finding:
 - Harness, small, taken by lane 9 (each item's §3 entry says how it
   ended):
   - one delivery-id shape (ended in lane 9);
-  - `USER_FOLLOW_UP_SUPPORT` as a boolean;
+  - `USER_FOLLOW_UP_SUPPORT` as a boolean (ended in lane 9);
   - the await's interruption through `RunRegistry.stop` (the registry's
     `stop` already cascades a stop row to every held descendant; what is
     left is a tool call interrupted for another reason);

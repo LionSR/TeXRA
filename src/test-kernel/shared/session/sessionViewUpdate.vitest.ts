@@ -91,7 +91,7 @@ describe('session view update', () => {
       identity: { kind: 'agent', agent: 'custom:search' },
       parent: null,
       provenance: null,
-      userFollowUpSupport: 'nativeInteractive',
+      takesFollowUps: true,
     });
     log.emit(ROOT, T.root, { type: 'run.activate' });
     log.emit(ROOT, T.root + 1, {

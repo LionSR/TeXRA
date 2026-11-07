@@ -32,7 +32,7 @@ const withStartedSession = <A, E>(
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', runId),
         identity: { kind: 'agent', agent: 'worker' },
-        userFollowUpSupport: 'unsupported',
+        takesFollowUps: false,
         parent: null,
         provenance: null,
       },

@@ -59,7 +59,6 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   TOOL_CALL_STATUS,
-  USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
   toJsonValue,
   type JsonValue,
@@ -560,10 +559,10 @@ function seedRun(
     readonly parentRunId?: RunId;
     /** The agent name for a default (agent) identity; a run id names nothing. */
     readonly agent?: string;
-    readonly userFollowUpSupport?: Extract<
+    readonly takesFollowUps?: Extract<
       SessionEventDraft,
       { type: 'run.start' }
-    >['userFollowUpSupport'];
+    >['takesFollowUps'];
   } = {},
 ): void {
   if (harnessRuns.has(runId)) return;
@@ -577,8 +576,7 @@ function seedRun(
     type: 'run.start',
     aggregateId: qualifyAggregateId('run', runId),
     identity,
-    userFollowUpSupport:
-      options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    takesFollowUps: options.takesFollowUps ?? true,
     parent:
       options.parentRunId === undefined
         ? null
@@ -1343,7 +1341,7 @@ function seedRunningScript(): void {
   seedRun(scriptRunId, {
     identity: { kind: 'script', title: 'live-script-validation' },
     parentRunId: HARNESS_RUN_ID,
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    takesFollowUps: false,
   });
   seedPhase(scriptRunId, RUN_PHASE.RUNNING);
   for (const agentRunId of [
@@ -1353,7 +1351,7 @@ function seedRunningScript(): void {
     seedRun(agentRunId, {
       identity: { kind: 'agent', agent: 'correct' },
       parentRunId: scriptRunId,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      takesFollowUps: false,
     });
     seedPhase(agentRunId, RUN_PHASE.RUNNING);
   }
@@ -1364,7 +1362,7 @@ function seedRunningProcessChild(): void {
   seedRun(childRunId, {
     identity: { kind: 'process', tool: 'bash' },
     parentRunId: HARNESS_RUN_ID,
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    takesFollowUps: false,
   });
   seedDescription(childRunId, 'sleep 30');
   seedPhase(childRunId, RUN_PHASE.RUNNING);
@@ -1907,7 +1905,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     log.emit(id, 10_000_000, {
       type: 'run.start',
       identity: { kind: 'agent', agent },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      takesFollowUps: true,
       // The creation commit the database stamps, not a guess: `Log.parent`
       // refuses a parent that never started.
       parent: parentId === null ? null : log.parent(parentId),

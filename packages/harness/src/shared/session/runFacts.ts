@@ -36,8 +36,6 @@ import {
   type SessionEventDraft,
   STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResultPayload,
-  USER_FOLLOW_UP_SUPPORT,
-  type UserFollowUpSupport,
 } from '@shared/schemas';
 
 import { byId } from './runRows';
@@ -236,7 +234,7 @@ export interface RegisterRunOptions {
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
-  readonly userFollowUpSupport?: UserFollowUpSupport;
+  readonly takesFollowUps?: boolean;
   /** The run's `run.description`, durable at birth: a child's
    *  task label; a root's summary comes later as a second row. */
   readonly description?: string;
@@ -288,8 +286,7 @@ export function registrationDrafts(
     type: 'run.start',
     aggregateId: target,
     identity: options.identity,
-    userFollowUpSupport:
-      options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    takesFollowUps: options.takesFollowUps ?? false,
     worktree: worktree ? { workingDirectory: worktree } : undefined,
     parent:
       options.parentRunId === undefined

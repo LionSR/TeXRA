@@ -336,7 +336,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     runsHere: false,
     lastTimestamp: event.at,
     turn: null,
-    followUpSupport: event.userFollowUpSupport,
+    takesFollowUps: event.takesFollowUps,
     context: null,
     parentId: event.parent?.id ?? null,
     launchParentId: event.parent?.id ?? null,

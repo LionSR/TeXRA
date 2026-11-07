@@ -18,15 +18,6 @@ export const RUN_OUTCOME = {
 export const RunOutcomeSchema = Schema.Enum(RUN_OUTCOME);
 export type RunOutcome = typeof RunOutcomeSchema.Type;
 
-/** Runtime support declared by the launch source, independent of UI policy. */
-export const USER_FOLLOW_UP_SUPPORT = {
-  UNSUPPORTED: 'unsupported',
-  NATIVE_INTERACTIVE: 'nativeInteractive',
-} as const;
-
-export const UserFollowUpSupportSchema = Schema.Enum(USER_FOLLOW_UP_SUPPORT);
-export type UserFollowUpSupport = typeof UserFollowUpSupportSchema.Type;
-
 /**
  * The live phase vocabulary. Membership questions are answered by the
  * predicates `isInFlightPhase` and `isTerminalOutcomePhase`; whether a run

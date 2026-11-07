@@ -182,7 +182,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       return { status: 'sent' } as const;
     // A run that takes no input (a process run, a one-shot root) reads
     // none, live or not: nothing would read the row.
-    if (view.run(runId)?.followUpSupport === 'unsupported')
+    if (view.run(runId)?.takesFollowUps === false)
       return { status: 'failed', reason: 'notResumable' } as const;
     const live = runs.get(runId);
     if (live === undefined) {

@@ -17,7 +17,6 @@ import { getRunRecords } from '@agent/storage/runRecords';
 
 import {
   isDisplaySessionEvent,
-  USER_FOLLOW_UP_SUPPORT,
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
@@ -97,7 +96,7 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
             ...event,
             origin: null,
             parent: null,
-            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            takesFollowUps: false,
           };
         if (isRequestDecision(event))
           return {
