@@ -43,15 +43,6 @@ import {
 } from '@texra/shared/settingsView/settingSurfaces';
 import type { SettingsViewSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
 
-/** TeXRA's state keys that are not setting rows: telemetry's. */
-export const TexraStateKey = Object.freeze({
-  /** Random anonymous telemetry install ID (UUIDv4); deleting the key resets it. */
-  TELEMETRY_INSTALL_ID: 'telemetry.installId',
-  /** Set once the first-run telemetry notice has been shown on this host. */
-  TELEMETRY_NOTICE_SHOWN: 'telemetry.noticeShown',
-} as const);
-export type TexraStateKey = (typeof TexraStateKey)[keyof typeof TexraStateKey];
-
 /** Standalone preamble used when extracting a TikZ figure for compilation. */
 const DEFAULT_TIKZ_TEMPLATE =
   '\\documentclass[tikz,border=10pt]{standalone}\n' +

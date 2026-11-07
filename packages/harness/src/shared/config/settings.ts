@@ -4,7 +4,11 @@ import { Effect, Result, Schema } from 'effect';
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
-import type { SettingRow, SettingsCatalog } from '@shared/state/stateSettings';
+import type {
+  SettingRow,
+  SettingsCatalog,
+  StateKey,
+} from '@shared/state/stateSettings';
 
 const CHANNEL = 'settings';
 
@@ -354,21 +358,20 @@ function reset(
 
 /**
  * Read a state key that is not a catalog row (onboarding flags, the custom
- * agent directory, the reasoning overrides) as `schema` decodes it: the
+ * agent directory, the reasoning overrides) as its schema decodes it: the
  * schema's default when the key is absent, and, as for a catalog row, the
  * default after a warning when a present value fails it. The one decode of
  * these keys, so no reader casts the store's `unknown` to the type it hopes
  * for.
  */
-function state<S extends Schema.Codec<unknown, unknown>>(
+function state<A>(
   store: Pick<StateStore, 'get'>,
-  key: string,
-  schema: S,
-): Effect.Effect<S['Type'], StateReadFailed> {
-  // cast: `valueOrDefault` returns the value `schema` parsed.
-  return Effect.flatMap(store.get(key), (raw) =>
-    valueOrDefault(key, schema, classifyStored(schema, raw)),
-  ) as Effect.Effect<S['Type'], StateReadFailed>;
+  key: StateKey<A>,
+): Effect.Effect<A, StateReadFailed> {
+  // cast: `valueOrDefault` returns the value the key's schema parsed.
+  return Effect.flatMap(store.get(key.key), (raw) =>
+    valueOrDefault(key.key, key.schema, classifyStored(key.schema, raw)),
+  ) as Effect.Effect<A, StateReadFailed>;
 }
 
 /** Every read and write of a setting; see the module comment. */

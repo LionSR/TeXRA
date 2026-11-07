@@ -2,10 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import {
-  agentMatchesIdentifier,
-  WorkspaceStateKey,
-} from '@texra-ai/harness/schemas';
+import { agentMatchesIdentifier } from '@texra-ai/harness/schemas';
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { teamMembers } from '@texra/shared/agentTeams';
@@ -14,6 +11,7 @@ import type {
   WorkspaceAgentsControllerDeps,
   WorkspaceAgentsEntry,
 } from '@texra-ai/harness/host';
+import { HIDDEN_CUSTOM_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
 
 const agents: WorkspaceAgentsEntry[] = [
   { source: 'builtIn', name: 'write' },
@@ -47,7 +45,7 @@ describe('WorkspaceAgentsController', () => {
         // default would erase every other stored choice.
         const stored = ['custom:review', ''];
         const workspaceState = new FakeStateStore({
-          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: stored,
+          [HIDDEN_CUSTOM_AGENTS_KEY.key]: stored,
         });
         const workspaceAgents = controller(workspaceState, {
           getAgents: () => [],
@@ -57,9 +55,9 @@ describe('WorkspaceAgentsController', () => {
           workspaceAgents.select({ kind: 'custom', agentKeys: [] }),
         );
         expect(failure._tag).toBe('StateReadFailed');
-        expect(
-          yield* workspaceState.get(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS),
-        ).toEqual(stored);
+        expect(yield* workspaceState.get(HIDDEN_CUSTOM_AGENTS_KEY.key)).toEqual(
+          stored,
+        );
       }),
   );
 

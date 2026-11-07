@@ -19,9 +19,8 @@
  *   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
  *   [`RunIdSchema`](#runidschema), [`StartRequestSchema`](#startrequestschema).
  * - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
- *   the harness's setting rows ([`SettingRow`](#settingrow)),
- *   [`GlobalStateKey`](#globalstatekey), [`WorkspaceStateKey`](#workspacestatekey),
- *   [`TraceDocumentSchema`](#tracedocumentschema).
+ *   the harness's setting rows ([`SettingRow`](#settingrow), each a
+ *   [`StateKey`](#statekey)), [`TraceDocumentSchema`](#tracedocumentschema).
  */
 export type {
   AgentConfig,
@@ -244,10 +243,10 @@ export {
   type SettingRow,
   type SettingsCatalog,
   type SettingStore,
+  type StateKey,
 } from '@shared/state/stateSettings';
 // What a `ConfigProvider` (root) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@shared/config/settings';
-export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 // The providers' custom-endpoint rows and China-region toggles, and a
 // provider's own, if it has them.
 export {

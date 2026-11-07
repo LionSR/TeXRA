@@ -88,7 +88,8 @@ import {
   type ToolEditContent,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
+import { MODEL_SELECTION_KEY } from '@model/computeModelOptions';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import {
   ALL_RUNS,
@@ -410,7 +411,7 @@ const harnessRuntimeSession = await harnessRuntime.runPromise(
 );
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
-    harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
+    harnessRoots.repoState.update(WORKSPACE_AGENTS_KEY.key, {
       kind: 'custom',
       agentKeys: HARNESS_VISIBLE_AGENTS,
     }),
@@ -418,7 +419,7 @@ if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
   await harnessRuntime.runPromise(
-    harnessRoots.globalState.update(GlobalStateKey.MODEL_SELECTION, {
+    harnessRoots.globalState.update(MODEL_SELECTION_KEY.key, {
       enabledExtras: HARNESS_VISIBLE_MODELS,
       disabledDefaults: DEFAULT_MODELS.filter(
         (model) => !HARNESS_VISIBLE_MODELS.includes(model),

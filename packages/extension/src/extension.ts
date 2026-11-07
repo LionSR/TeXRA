@@ -39,7 +39,7 @@ import {
   secretsDirectory,
   setLogSink,
 } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
 import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
@@ -92,6 +92,15 @@ import { registerCommands } from './commands';
 import type { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 
 const EXTENSION_CHANNEL = 'extension';
+
+/** Set once the first-run welcome card has been shown. */
+const WELCOME_SHOWN_KEY = {
+  key: 'welcomeShown',
+  slot: 'globalState',
+  schema: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+} as const satisfies StateKey<boolean>;
 
 // VS Code invokes activation and deactivation separately. Only this entry
 // reads back the scope the activation program ran in: its finalizer is the
@@ -555,18 +564,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // entries can fire before their handlers exist and produce "command not
   // found" errors.
   yield* executeVscodeCommand('setContext', 'texra.activated', true);
-  const welcomeKey = 'welcomeShown';
-  if (
-    !(yield* Settings.state(
-      globalState,
-      welcomeKey,
-      Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-    ))
-  ) {
+  if (!(yield* Settings.state(globalState, WELCOME_SHOWN_KEY))) {
     // First-run welcome card; a failure leaves the flag unset, so it repeats.
     yield* Effect.forkScoped(
       progressViewProvider.showLauncher().pipe(
-        Effect.andThen(globalState.update(welcomeKey, true)),
+        Effect.andThen(globalState.update(WELCOME_SHOWN_KEY.key, true)),
         // Scope close interrupts this fiber; that is not a failed welcome.
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)

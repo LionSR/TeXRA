@@ -74,6 +74,7 @@ export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,
   AgentDirectoryService,
+  CUSTOM_AGENT_DIR_KEY,
   readCustomAgentDir,
   type AgentCustomization,
   type AgentDirectoryServiceOptions,
@@ -156,6 +157,7 @@ export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // its writer, run-model precedence, the reasoning policy, the helper model.
 export {
   getEnabledModels,
+  MODEL_SELECTION_KEY,
   readModelOptions,
   setModelEnabled,
   type ModelOption,
@@ -168,7 +170,11 @@ export {
   type RunModelFallbackMode,
 } from '@model/runModelDecision';
 export { SubscriptionPreference } from '@model/subscriptionAccess';
-export type { RouteReasoning, SentReasoning } from '@model/reasoningLevel';
+export {
+  REASONING_LEVELS_KEY,
+  type RouteReasoning,
+  type SentReasoning,
+} from '@model/reasoningLevel';
 export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
 // The process's retry gate every model call (a helper call's too) waits on.
 export type { RouteRetries } from '@agent/runtime/ModelRetryGate';

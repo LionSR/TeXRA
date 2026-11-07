@@ -14,10 +14,12 @@ import {
   agentName,
   WorkspaceAgentsSelectionSchema,
 } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import type { StateKey } from '@shared/state/stateSettings';
 
 import {
   forgetHiddenAgent,
+  HIDDEN_CUSTOM_AGENTS_KEY,
+  WORKSPACE_AGENTS_KEY,
   readWorkspaceAgentsSelection,
   recordCustomChoices,
   serializeWorkspaceWrite,
@@ -25,8 +27,13 @@ import {
   visibleAgents,
 } from './workspaceAgentsState';
 
-const DEFAULT_TEAM = GlobalStateKey.ACTIVE_TEAM_ID;
-const TeamIdSchema = Schema.optional(Schema.NonEmptyString);
+/** The team a workspace runs (`apply_team`, the settings view). The stored
+ *  key keeps the spelling it was first written under. */
+export const ACTIVE_TEAM_ID_KEY = {
+  key: 'onboarding.defaultTeamId',
+  slot: 'globalState',
+  schema: Schema.optional(Schema.NonEmptyString),
+} as const satisfies StateKey<string | undefined>;
 
 export interface WorkspaceAgentsEntry {
   readonly name: string;
@@ -81,7 +88,7 @@ export class WorkspaceAgentsController<
   }
 
   getDefaultTeamId() {
-    return Settings.state(this.deps.globalState, DEFAULT_TEAM, TeamIdSchema);
+    return Settings.state(this.deps.globalState, ACTIVE_TEAM_ID_KEY);
   }
 
   /** The members of team `teamId`, or `undefined` for a team the workspace
@@ -240,7 +247,7 @@ export class WorkspaceAgentsController<
     selection: WorkspaceAgentsSelection,
   ): Effect.Effect<void, StateWriteFailed> {
     return this.deps.repoState.update(
-      WorkspaceStateKey.WORKSPACE_AGENTS,
+      WORKSPACE_AGENTS_KEY.key,
       Schema.decodeSync(WorkspaceAgentsSelectionSchema)(selection),
     );
   }
@@ -268,7 +275,7 @@ export class WorkspaceAgentsController<
             );
           }
           if (selection.kind === 'all') {
-            yield* repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, []);
+            yield* repoState.update(HIDDEN_CUSTOM_AGENTS_KEY.key, []);
           }
           yield* this.writeSelection(
             selection.kind === 'custom'
@@ -362,7 +369,7 @@ export class WorkspaceAgentsController<
    *  the workspace has none of is rejected. The app decides which teams may
    *  be a default. */
   setDefaultTeam(teamId: string | undefined) {
-    const write = this.deps.globalState.update(DEFAULT_TEAM, teamId);
+    const write = this.deps.globalState.update(ACTIVE_TEAM_ID_KEY.key, teamId);
     return teamId === undefined
       ? write
       : Effect.andThen(this.requireTeam(teamId), write);

@@ -22,9 +22,8 @@ Browser-safe Effect Schemas, derived types, and pure read helpers for
   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
   [`RunIdSchema`](#runidschema), [`StartRequestSchema`](#startrequestschema).
 - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
-  the harness's setting rows ([`SettingRow`](#settingrow)),
-  [`GlobalStateKey`](#globalstatekey), [`WorkspaceStateKey`](#workspacestatekey),
-  [`TraceDocumentSchema`](#tracedocumentschema).
+  the harness's setting rows ([`SettingRow`](#settingrow), each a
+  [`StateKey`](#statekey)), [`TraceDocumentSchema`](#tracedocumentschema).
 
 ## acceptsFollowUp
 
@@ -828,12 +827,6 @@ const GLM_CODING_PLAN_SETTING: { readonly key: "glm.codingPlan"; readonly slot: 
 
 ```ts
 const GLM_REGION_SETTING: { readonly provider: "glm"; readonly key: "glm.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM China region"; readonly description: "Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint."; readonly category: "model"; readonly slot: "globalState"; }
-```
-
-## GlobalStateKey
-
-```ts
-const GlobalStateKey: Readonly<{ readonly MODEL_SELECTION: "modelSelection"; readonly REASONING_LEVELS: "reasoningLevels"; readonly CUSTOM_AGENT_DIR: "customAgentDir"; readonly DISABLED_TOOLS: "tools.disabled"; readonly MCP_REVISION_KEY: "mcp.revisionKey"; readonly INSTALLED_PLUGINS: "plugins.installed"; readonly ACTIVE_TEAM_ID: "onboarding.defaultTeamId"; }>
 ```
 
 ## GOAL_MAX_COST_SETTING
@@ -2138,24 +2131,13 @@ const SessionViewSchema: Struct<{ readonly key: String; readonly runs: $Readonly
 One setting, whose schema decodes its stored value to an `A`.
 
 ```ts
-interface SettingRow<A = unknown> {
-  /** The row's key, relative to its catalog's namespace (`memory.enabled`),
-   *  which the stores add (`<namespace>.memory.enabled`). */
-  readonly key: string;
-  /**
-   * The row's schema, carrying validation, any bounds, and the decoding
-   * default applied when the key is absent: decoding `undefined` yields that
-   * default.
-   */
-  readonly schema: Schema.Codec<A, unknown>;
+interface SettingRow<A = unknown> extends StateKey<A> {
   /** Short label for compact settings UIs; falls back to the stripped key. */
   readonly title?: string;
   /** Human-readable description, shared across every host that renders it. */
   readonly description?: string;
   /** Grouping label for settings UIs. Required once a UI renders the row. */
   readonly category?: string;
-  /** Where the value is stored, the same on every host. */
-  readonly slot: SettingStore;
   /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
   readonly configTarget?: 'global' | 'workspace' | 'local';
   /**
@@ -2297,6 +2279,28 @@ already resolved. A host sends it to a service as it is.
 
 ```ts
 const StartRequestSchema: Union<readonly [Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Union<readonly [Literal<"autoApprove">, Literals<readonly ["never", "ask"]>]>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly agent: Union<readonly [String, toEncoded<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>]>; readonly instruction: String; readonly model: optional<String>; }>, Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Union<readonly [Literal<"autoApprove">, Literals<readonly ["never", "ask"]>]>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly config: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>; }>]>
+```
+
+## StateKey
+
+One stored key: where it lives and what its stored value decodes to. A
+key that is not a setting (a stored record, a flag) is one of these beside
+its owner, read with `Settings.state`; a setting row is one with copy.
+
+```ts
+interface StateKey<A = unknown> {
+  /** The key, relative to its catalog's namespace (`memory.enabled`), which
+   *  the stores add (`<namespace>.memory.enabled`). */
+  readonly key: string;
+  /** Where the value is stored, the same on every host. */
+  readonly slot: SettingStore;
+  /**
+   * The schema, carrying validation, any bounds, and the decoding default
+   * applied when the key is absent: decoding `undefined` yields that
+   * default.
+   */
+  readonly schema: Schema.Codec<A, unknown>;
+}
 ```
 
 ## StoredMedia
@@ -2608,14 +2612,6 @@ type WorkspaceAgentsSelection =
 
 ```ts
 type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
-```
-
-## WorkspaceStateKey
-
-The harness's repository-scoped state keys (`roots.repoState`).
-
-```ts
-const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "workspaceAgents"; readonly HIDDEN_CUSTOM_AGENTS: "hiddenCustomAgents"; }>
 ```
 
 ## WorktreeInfo

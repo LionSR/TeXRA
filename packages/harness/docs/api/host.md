@@ -871,6 +871,15 @@ interface CurrentValues {
 }
 ```
 
+## CUSTOM_AGENT_DIR_KEY
+
+The custom agent directory the user configured, trimmed; empty when none is
+(the host then uses its default directory).
+
+```ts
+const CUSTOM_AGENT_DIR_KEY: { readonly key: "customAgentDir"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Trim, never>; }
+```
+
 ## DatabaseWriteFailed
 
 A batch was rejected whole: no member, sequence or wake level moved.
@@ -1039,7 +1048,7 @@ function formatFatalErrorDetail(error: unknown): string
 ## getEnabledModels
 
 The models the pickers show — the single reader of
-`GlobalStateKey.MODEL_SELECTION` for every host.
+{@link MODEL_SELECTION_KEY} for every host.
 
 ```ts
 const getEnabledModels: (state: Pick<StateStore, "get">) => Effect<readonly string[], StateReadFailed, never>
@@ -1330,6 +1339,15 @@ The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
 
 ```ts
 function mcpServerOfToolName(name: string): string | undefined
+```
+
+## MODEL_SELECTION_KEY
+
+The model selection's key. Its absence is the empty delta, read here
+rather than by a decoding default, so a corrupt record is reported.
+
+```ts
+const MODEL_SELECTION_KEY: { readonly key: "modelSelection"; readonly slot: "globalState"; readonly schema: Struct<{ readonly enabledExtras: $Array<String>; readonly disabledDefaults: $Array<String>; }>; }
 ```
 
 ## ModelOption
@@ -1867,8 +1885,7 @@ interface ProcessServicesOptions {
 
 ## readCustomAgentDir
 
-The custom agent directory the user configured, trimmed; empty when none is
-(the host then uses its default directory).
+{@link CUSTOM_AGENT_DIR_KEY}, read.
 
 ```ts
 const readCustomAgentDir: (state: Pick<StateStore, "get">) => Effect<string, StateReadFailed, never>
@@ -1925,6 +1942,15 @@ The orphaned stores and aside copies under `storageRoot`.
 
 ```ts
 const readStorageInventory: (storageRoot: string) => Effect<{ orphans: { readonly directory: string; readonly bytes: number; readonly why: string; }[]; asides: { readonly path: string; readonly bytes: number; }[]; skipped: { readonly path: string; readonly message: string; }[]; }, DatabaseReadFailed | PlatformError, FileSystem | GlobalValues>
+```
+
+## REASONING_LEVELS_KEY
+
+The user's saved reasoning effort per model reference. Its entries stay
+unparsed in the record so a write keeps every entry, readable or not.
+
+```ts
+const REASONING_LEVELS_KEY: { readonly key: "reasoningLevels"; readonly slot: "globalState"; readonly schema: withDecodingDefault<$Record<String, Unknown>, never>; }
 ```
 
 ## redactSecrets
@@ -2289,7 +2315,7 @@ function sessionFsLayer(
 ## setModelEnabled
 
 Enable or disable one model — the only writer of
-`GlobalStateKey.MODEL_SELECTION`.
+{@link MODEL_SELECTION_KEY}.
 
 Two invariants: at least one model stays enabled, and an unserved model is
 never enabled. Either violation fails with `StateWriteFailed`.
@@ -2307,7 +2333,7 @@ function setModelEnabled(input: {
 Every read and write of a setting; see the module comment.
 
 ```ts
-const Settings: Readonly<{ readonly get: <A>(stores: SettingsStores, row: SettingRow<A>) => Effect<A, StateReadFailed, never>; readonly inspect: <A>(stores: SettingsStores, row: SettingRow<A>) => Effect<StoredSetting<A>, StateReadFailed, never>; readonly getConfig: <A>(config: ConfigProvider, row: SettingRow<A>) => A; readonly defaultOf: <A>(catalog: SettingsCatalog, row: SettingRow<A>) => A; readonly set: <A>(stores: SettingsStores, row: SettingRow<A>, value: A, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly reset: (stores: SettingsStores, row: SettingRow<unknown>, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly state: <S extends Schema.Codec<unknown, unknown>>(store: Pick<StateStore, "get">, key: string, schema: S) => Effect<S["Type"], StateReadFailed, never>; }>
+const Settings: Readonly<{ readonly get: <A>(stores: SettingsStores, row: SettingRow<A>) => Effect<A, StateReadFailed, never>; readonly inspect: <A>(stores: SettingsStores, row: SettingRow<A>) => Effect<StoredSetting<A>, StateReadFailed, never>; readonly getConfig: <A>(config: ConfigProvider, row: SettingRow<A>) => A; readonly defaultOf: <A>(catalog: SettingsCatalog, row: SettingRow<A>) => A; readonly set: <A>(stores: SettingsStores, row: SettingRow<A>, value: A, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly reset: (stores: SettingsStores, row: SettingRow<unknown>, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly state: <A>(store: Pick<StateStore, "get">, key: StateKey<A>) => Effect<A, StateReadFailed, never>; }>
 ```
 
 ## SettingsStores

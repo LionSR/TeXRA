@@ -25,8 +25,9 @@ import {
   type AgentSource,
   HiddenCustomAgentKeysSchema,
   INHERITED_WORKSPACE_AGENTS,
+  type WorkspaceAgentsSelection,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import type { StateKey } from '@shared/state/stateSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
 /**
@@ -54,19 +55,28 @@ export function serializeWorkspaceWrite<A, E>(
  * every durable write.
  */
 export function readWorkspaceAgentsSelection(repoState: StateStore) {
-  return Settings.state(
-    repoState,
-    WorkspaceStateKey.WORKSPACE_AGENTS,
-    WorkspaceAgentsSelectionSchema.pipe(
-      Schema.withDecodingDefault(Effect.succeed(INHERITED_WORKSPACE_AGENTS)),
-    ),
-  );
+  return Settings.state(repoState, WORKSPACE_AGENTS_KEY);
 }
 
-/** The stored hidden agent keys; an absent value reads as none. */
-const HiddenKeysSchema = HiddenCustomAgentKeysSchema.pipe(
-  Schema.withDecodingDefault(Effect.succeed([])),
-);
+/** How the workspace obtains its visible agents, per repository; absent is
+ *  inherited. */
+export const WORKSPACE_AGENTS_KEY = {
+  key: 'workspaceAgents',
+  slot: 'repoState',
+  schema: WorkspaceAgentsSelectionSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed(INHERITED_WORKSPACE_AGENTS)),
+  ),
+} as const satisfies StateKey<WorkspaceAgentsSelection>;
+
+/** The custom agents the user turned off, per repository; every other
+ *  custom agent is shown, and an absent value reads as none. */
+export const HIDDEN_CUSTOM_AGENTS_KEY = {
+  key: 'hiddenCustomAgents',
+  slot: 'repoState',
+  schema: HiddenCustomAgentKeysSchema.pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+} as const satisfies StateKey<readonly string[]>;
 
 interface WorkspaceAgentEntry {
   readonly name: string;
@@ -92,11 +102,7 @@ export function unlistedCustomAgents<Entry extends WorkspaceAgentEntry>(
   // A malformed hidden list is reported and read as none, as the workspace
   // agents selection is.
   return Effect.map(
-    Settings.state(
-      repoState,
-      WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
-      HiddenKeysSchema,
-    ),
+    Settings.state(repoState, HIDDEN_CUSTOM_AGENTS_KEY),
     (stored) => {
       const hidden = new Set(stored);
       return entries.filter(
@@ -123,32 +129,35 @@ export function recordCustomChoices(
   agents: readonly WorkspaceAgentEntry[],
   selection: readonly string[],
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
-  const key = WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS;
+  const { key } = HIDDEN_CUSTOM_AGENTS_KEY;
   // One step at the store, which other processes share. A malformed stored
   // value fails and nothing is written, since a write from none would erase
   // every stored choice.
   return Effect.asVoid(
     repoState.modify(key, (stored) =>
-      Result.match(Schema.decodeUnknownResult(HiddenKeysSchema)(stored), {
-        onFailure: (cause) =>
-          Result.fail(
-            new StateReadFailed({
-              key,
-              message: `The hidden agents list is invalid and was not changed: ${cause.message}`,
-              cause,
-            }),
-          ),
-        onSuccess: (keys) => {
-          const hidden = new Set(keys);
-          for (const entry of agents) {
-            if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
-            const agentKey = agentKeyOf(entry);
-            if (listNames(selection, entry)) hidden.delete(agentKey);
-            else hidden.add(agentKey);
-          }
-          return Result.succeed([...hidden]);
+      Result.match(
+        Schema.decodeUnknownResult(HIDDEN_CUSTOM_AGENTS_KEY.schema)(stored),
+        {
+          onFailure: (cause) =>
+            Result.fail(
+              new StateReadFailed({
+                key,
+                message: `The hidden agents list is invalid and was not changed: ${cause.message}`,
+                cause,
+              }),
+            ),
+          onSuccess: (keys) => {
+            const hidden = new Set(keys);
+            for (const entry of agents) {
+              if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
+              const agentKey = agentKeyOf(entry);
+              if (listNames(selection, entry)) hidden.delete(agentKey);
+              else hidden.add(agentKey);
+            }
+            return Result.succeed([...hidden]);
+          },
         },
-      }),
+      ),
     ),
   );
 }
@@ -168,7 +177,7 @@ export function forgetHiddenAgent(
   return serializeWorkspaceWrite(
     repoState,
     Effect.asVoid(
-      repoState.modify(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, (stored) => {
+      repoState.modify(HIDDEN_CUSTOM_AGENTS_KEY.key, (stored) => {
         const hidden = Schema.decodeUnknownResult(HiddenCustomAgentKeysSchema)(
           stored,
         );

@@ -19,7 +19,7 @@ import {
   type StateReadFailed,
   type StateStore,
 } from '@shared/config/settings';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { StateKey } from '@shared/state/stateSettings';
 import type { AgentSource } from '@shared/schemas';
 import { ToolRegistry, boundFiles } from '@tools/toolTable';
 import { isStrictlyWithin } from '@utils/core/pathCore';
@@ -35,14 +35,17 @@ import type { AgentEntry } from './agentEntry';
  * The custom agent directory the user configured, trimmed; empty when none is
  * (the host then uses its default directory).
  */
+export const CUSTOM_AGENT_DIR_KEY = {
+  key: 'customAgentDir',
+  slot: 'globalState',
+  schema: Schema.Trim.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+} as const satisfies StateKey<string>;
+
+/** {@link CUSTOM_AGENT_DIR_KEY}, read. */
 export const readCustomAgentDir = (
   state: Pick<StateStore, 'get'>,
 ): Effect.Effect<string, StateReadFailed> =>
-  Settings.state(
-    state,
-    GlobalStateKey.CUSTOM_AGENT_DIR,
-    Schema.Trim.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
-  );
+  Settings.state(state, CUSTOM_AGENT_DIR_KEY);
 
 /** What a host's agent directories are built from. */
 export interface AgentDirectoryServiceOptions {

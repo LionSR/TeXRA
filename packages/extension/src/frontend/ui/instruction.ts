@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel, Settings } from '@texra-ai/harness/host';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { ensureError, type StateKey } from '@texra-ai/harness/schemas';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type {
@@ -35,12 +35,13 @@ export const showInstructionWithSuppress = Effect.fn(
   showSuppress = true,
   options: { deferDismissal?: boolean } = {},
 ): Effect.fn.Return<void, StateReadFailed | StateWriteFailed> {
-  const stateKey = `${INSTRUCTION_PREFIX}${key}`;
+  const suppressed = {
+    key: `${INSTRUCTION_PREFIX}${key}`,
+    slot: 'globalState',
+    schema: SuppressedSchema,
+  } as const satisfies StateKey<boolean>;
 
-  if (
-    showSuppress &&
-    (yield* Settings.state(store, stateKey, SuppressedSchema))
-  ) {
+  if (showSuppress && (yield* Settings.state(store, suppressed))) {
     return;
   }
 
@@ -68,7 +69,7 @@ export const showInstructionWithSuppress = Effect.fn(
       // on whichever runtime settles the Effect, so there is no runtime to
       // look up and no unpersistable choice to report.
       if (showSuppress && choice === NEVER_REMIND) {
-        return store.update(stateKey, true);
+        return store.update(suppressed.key, true);
       }
       const action = actions.find((a) => a.title === choice);
       return action === undefined ? Effect.void : action.callback();

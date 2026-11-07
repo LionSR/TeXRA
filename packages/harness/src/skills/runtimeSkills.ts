@@ -14,7 +14,10 @@ import {
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
+import {
+  decodeDisabledTools,
+  DISABLED_TOOLS_KEY,
+} from '@shared/state/disabledTools';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
@@ -154,7 +157,7 @@ function readSkillSwitches(stores: SettingsStores) {
 const readDisabledSkills = Effect.fn('readDisabledSkills')(function* (
   stores: SettingsStores,
 ) {
-  const stored = yield* stores.globalState.get(GlobalStateKey.DISABLED_TOOLS);
+  const stored = yield* stores.globalState.get(DISABLED_TOOLS_KEY.key);
   const plugins = yield* Effect.fromResult(
     Result.mapBoth(decodeDisabledTools(stored), {
       onSuccess: (ids) => [...(ids ?? [])],

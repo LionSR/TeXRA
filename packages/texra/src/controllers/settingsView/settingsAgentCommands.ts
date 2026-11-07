@@ -15,10 +15,10 @@ import {
   isStrictlyWithin,
   readCustomAgentDir,
   registerCustomAgentRoot,
+  CUSTOM_AGENT_DIR_KEY,
 } from '@texra-ai/harness/host';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
 import {
-  GlobalStateKey,
   agentKey,
   isPackagedAgentSource,
   toErrorMessage,
@@ -414,7 +414,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           yield* FileSystem.FileSystem.use((fs) =>
             fs.makeDirectory(selected, { recursive: true }),
           );
-          yield* globalState.update(GlobalStateKey.CUSTOM_AGENT_DIR, selected);
+          yield* globalState.update(CUSTOM_AGENT_DIR_KEY.key, selected);
           yield* afterCustomDirChange;
         }),
       ),
@@ -422,7 +422,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to reset custom agent directory',
         globalState
-          .update(GlobalStateKey.CUSTOM_AGENT_DIR, undefined)
+          .update(CUSTOM_AGENT_DIR_KEY.key, undefined)
           .pipe(Effect.andThen(afterCustomDirChange)),
       ),
     applyAgentModePreset: (message) =>

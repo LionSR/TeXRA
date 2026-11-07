@@ -8,16 +8,12 @@ import {
 } from '@shared/approvalPolicy';
 import {
   ActiveSkillSourceScopeSchema,
-  WorkspaceAgentsSelectionSchema,
-  HiddenCustomAgentKeysSchema,
-  INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
 } from '@shared/schemas';
 import {
   PROVIDER_ENDPOINT_SETTINGS,
   PROVIDER_REGION_SETTINGS,
 } from '@shared/state/providerSettings';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /**
  * The settings catalog, by owner. This module declares the row shape and the
@@ -46,25 +42,33 @@ export type SettingStore =
   | 'repoState'
   | 'globalState';
 
-/** One setting, whose schema decodes its stored value to an `A`. */
-export interface SettingRow<A = unknown> {
-  /** The row's key, relative to its catalog's namespace (`memory.enabled`),
-   *  which the stores add (`<namespace>.memory.enabled`). */
+/**
+ * One stored key: where it lives and what its stored value decodes to. A
+ * key that is not a setting (a stored record, a flag) is one of these beside
+ * its owner, read with `Settings.state`; a setting row is one with copy.
+ */
+export interface StateKey<A = unknown> {
+  /** The key, relative to its catalog's namespace (`memory.enabled`), which
+   *  the stores add (`<namespace>.memory.enabled`). */
   readonly key: string;
+  /** Where the value is stored, the same on every host. */
+  readonly slot: SettingStore;
   /**
-   * The row's schema, carrying validation, any bounds, and the decoding
-   * default applied when the key is absent: decoding `undefined` yields that
+   * The schema, carrying validation, any bounds, and the decoding default
+   * applied when the key is absent: decoding `undefined` yields that
    * default.
    */
   readonly schema: Schema.Codec<A, unknown>;
+}
+
+/** One setting, whose schema decodes its stored value to an `A`. */
+export interface SettingRow<A = unknown> extends StateKey<A> {
   /** Short label for compact settings UIs; falls back to the stripped key. */
   readonly title?: string;
   /** Human-readable description, shared across every host that renders it. */
   readonly description?: string;
   /** Grouping label for settings UIs. Required once a UI renders the row. */
   readonly category?: string;
-  /** Where the value is stored, the same on every host. */
-  readonly slot: SettingStore;
   /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
   readonly configTarget?: 'global' | 'workspace' | 'local';
   /**
@@ -444,25 +448,6 @@ export const GIT_WORKTREE_SUPPORT_SETTING = {
   category: 'git',
 } as const satisfies SettingRow<boolean>;
 
-// --- Workspace agents ----------------------------------------------------------
-// Written and read by the agent list and the settings view's agent catalog,
-// which no catalog-driven UI renders.
-const WORKSPACE_AGENTS_SETTING = {
-  key: WorkspaceStateKey.WORKSPACE_AGENTS,
-  slot: 'repoState',
-  schema: WorkspaceAgentsSelectionSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(INHERITED_WORKSPACE_AGENTS)),
-  ),
-} as const satisfies SettingRow<typeof WorkspaceAgentsSelectionSchema.Type>;
-
-const HIDDEN_CUSTOM_AGENTS_SETTING = {
-  key: WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
-  slot: 'repoState',
-  schema: HiddenCustomAgentKeysSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-} as const satisfies SettingRow<readonly string[]>;
-
 // --- Agent coordination ---------------------------------------------
 // Both child-work policy toggles live in `globalState`: they describe how
 // *this user* wants child runs handled, not anything about a particular
@@ -615,8 +600,6 @@ const HARNESS_SETTINGS = [
   GIT_AUTHOR_NAME_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
-  WORKSPACE_AGENTS_SETTING,
-  HIDDEN_CUSTOM_AGENTS_SETTING,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   DETACH_SUBAGENTS_ON_STOP_SETTING,
   MEMORY_ENABLED_SETTING,
