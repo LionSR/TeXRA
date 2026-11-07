@@ -78,7 +78,7 @@ export const codeBlockStyles = css`
     color: var(--wa-color-text-normal);
   }
 
-  .code-block-copy.copied::part(base) {
+  .code-block-copy.copy-success::part(base) {
     color: var(--wa-color-git-added, #3fb950);
   }
 

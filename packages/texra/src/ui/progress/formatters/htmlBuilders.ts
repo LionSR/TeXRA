@@ -11,7 +11,6 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
 
-import { copyWithFeedback } from '@texra/shared/utils/clipboard';
 import { highlightSpans } from '@ui/highlighting/highlightCode';
 import type { IconName } from '@ui/wa/iconNames';
 
@@ -20,6 +19,9 @@ import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatBytes } from '@ui/copy/format';
+
+// Side-effect import - register the <copy-button> element drawn below
+import '@ui/progress/components/CopyButton';
 
 // Local imports - formatter helpers
 import {
@@ -84,52 +86,13 @@ export function wrapInPre(text: string, className = ''): TemplateResult {
   return html`<pre class=${ifDefined(className || undefined)}>${content}</pre>`;
 }
 
-/**
- * Keep an Enter/Space keydown on a control in a `<wa-details>` summary from
- * reaching the summary, whose keydown handler toggles the panel and calls
- * `preventDefault()`, which would also cancel the control's own activation.
- * The click the browser synthesizes from the key still happens.
- */
-function stopSummaryToggleKeydown(event: Event): void {
-  if (!(event instanceof KeyboardEvent)) return;
-  if (event.key !== 'Enter' && event.key !== ' ') return;
-  event.stopPropagation();
-}
-
-/**
- * Copy a copy-button's payload from a direct `@click` binding.
- *
- * `stopPropagation()` keeps the click from reaching the enclosing
- * `<wa-details>` summary — and any delegated transcript handler above it — so
- * copying never toggles the disclosure panel.
- */
-async function copyFromClick(
-  event: Event,
-  content: string,
-  successClass?: string,
-): Promise<void> {
-  // A click inside a slotted custom button can still activate the native
-  // summary's default action even when its event no longer bubbles.
-  event.preventDefault();
-  event.stopPropagation();
-  const button = event.currentTarget;
-  if (!(button instanceof HTMLElement)) return;
-  await copyWithFeedback(button, content, { successClass });
-}
-
 /** The labeled Copy button of a message header. */
 export function buildCopyButton(
   title: string,
   content: string,
 ): TemplateResult {
   // prettier-ignore
-  return html`<wa-button class="action-button message-copy banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} @click=${(event: Event) => copyFromClick(event, content)} @keydown=${stopSummaryToggleKeydown}><span class="copy-label">Copy</span><span class="copied-label">Copied</span></wa-button>`;
-}
-
-/** The icon-only Copy button of a details summary. */
-function buildIconCopyButton(title: string, content: string): TemplateResult {
-  // prettier-ignore
-  return html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} @click=${(event: Event) => copyFromClick(event, content)} @keydown=${stopSummaryToggleKeydown}>${waIcon('copy')}</wa-button>`;
+  return html`<copy-button .text=${content} .label=${title} .look=${'labeled'}></copy-button>`;
 }
 
 /** A `<wa-icon>`, or a `<wa-spinner>` in its place while `running`. */
@@ -198,7 +161,10 @@ export function buildDetailsSummary(
     ? html` <span class="timestamp" title=${timestamp.tooltip}><bdi dir="ltr">${timestamp.display}</bdi></span>`
     : nothing;
   const copyTemplate = copyButton
-    ? buildIconCopyButton(copyButton.title, copyButton.content)
+    ? html`<copy-button
+        .text=${copyButton.content}
+        .label=${copyButton.title}
+      ></copy-button>`
     : nothing;
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
@@ -274,7 +240,7 @@ export function buildCodeBlock(
   // prettier-ignore
   const languageBadge = html`<span class="code-block-language">${LANGUAGE_LABELS[language] ?? language}</span>`;
   // prettier-ignore
-  const copyButton = html`<wa-button class="code-block-copy" appearance="plain" variant="neutral" size="s" type="button" title="Copy code" aria-label="Copy code" @click=${(event: Event) => copyFromClick(event, text, 'copied')}>${waIcon('copy')}</wa-button>`;
+  const copyButton = html`<copy-button .text=${text} .label=${'Copy code'} .look=${'code'}></copy-button>`;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)} dir="ltr"><code>${highlighted === null ? text : unsafeHTML(highlighted)}</code></pre>`;
   // prettier-ignore

@@ -280,7 +280,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
   }
 
   private renderQuestion(question: string): TemplateResult {
-    const { copied } = this.copyController.state;
+    const { copied } = this.copyController;
 
     return html`
       <div class="external-inquiry-request__question">
