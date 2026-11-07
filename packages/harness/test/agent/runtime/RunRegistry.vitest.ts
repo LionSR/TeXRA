@@ -120,7 +120,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         Effect.gen(function* () {
           const session = yield* defaultSession;
           const runs = Context.get(session, Runs);
-          const rootRunId = publishTestRunStart(session);
+          const rootRunId = yield* publishTestRunStart(session);
           const root = yield* Effect.forkChild(
             startAwaited(runs, rootRunId, Effect.never),
             { startImmediately: true },

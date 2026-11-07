@@ -26,11 +26,7 @@ import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { texraPlugins } from '@texra/tools/registry';
 import { factKindsOf } from '@tools/plugins';
-import {
-  productionFilesUnder,
-  productionRoots,
-  REPO_ROOT,
-} from '../support/repoScan';
+import { REPO_ROOT } from '../support/repoScan';
 
 /**
  * The release watermark of the session store:
@@ -108,10 +104,22 @@ describe('row versions', () => {
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('model.message');
     expect(names).toContain('current-value.app-state');
-    const declared = productionRoots()
-      .flatMap(productionFilesUnder)
+    // Every workspace package's `src`, read from the tree, so a new package
+    // is covered the day it lands.
+    const packages = resolve(REPO_ROOT, 'packages');
+    const declared = readdirSync(packages)
+      .map((name) => resolve(packages, name, 'src'))
+      .filter((root) => existsSync(root))
+      .flatMap((root) =>
+        readdirSync(root, { recursive: true, encoding: 'utf8' })
+          .filter(
+            (entry) =>
+              /\.(?:ts|tsx|mts|cts)$/.test(entry) && !entry.endsWith('.d.ts'),
+          )
+          .map((entry) => resolve(root, entry)),
+      )
       .flatMap((file) => [
-        ...readFileSync(resolve(REPO_ROOT, file), 'utf8').matchAll(
+        ...readFileSync(file, 'utf8').matchAll(
           /:\s*ValueFamily<[^=]*=\s*\{\s*name:\s*'([^']+)'/g,
         ),
       ])

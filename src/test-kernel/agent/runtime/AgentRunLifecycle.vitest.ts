@@ -7,6 +7,7 @@ import {
   RunIdSchema,
   qualifyAggregateId,
   RUN_OUTCOME,
+  AgentConfigSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { setLogSink } from '@texra-ai/harness/node';
@@ -24,7 +25,7 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 
-import { createTestLaunchContext } from './launchContextTestUtils';
+import { testLaunch } from '@test/support/scriptedRunLayers';
 
 /** The run's committed `run.end` rows, once the session's writes settled:
  *  what the run's one terminal writer (`endRun`) said. */
@@ -49,15 +50,23 @@ let lifecycleFixtureCounter = 0;
 
 /** A run of the file's session, with its launch context. */
 const lifecycleFixture = (agent = 'test-agent') =>
-  Effect.map(Effect.flatMap(TestSession, sessionHandleOf), (session) => {
+  Effect.flatMap(Effect.flatMap(TestSession, sessionHandleOf), (session) => {
     const runId = Schema.decodeUnknownSync(RunIdSchema)(
       `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}`,
     );
-    const ctx = createTestLaunchContext({ runId, agent });
+    const ctx = testLaunch(runId, {
+      config: Schema.decodeUnknownSync(AgentConfigSchema)({
+        agent,
+        model: 'test-model',
+      }),
+    });
     // A run is registered before its lifecycle runs: an activation commits
     // onto the run's rows.
-    publishTestRunStart(session, runId);
-    return { runId, ctx, session };
+    return Effect.as(publishTestRunStart(session, runId), {
+      runId,
+      ctx,
+      session,
+    });
   });
 
 /** The launching run a subagent fixture names as its parent edge. */

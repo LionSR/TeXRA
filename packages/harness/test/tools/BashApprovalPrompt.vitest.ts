@@ -12,7 +12,6 @@ import { SessionLog, Approvals } from '@shared/session/runHistory';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
-  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
@@ -23,7 +22,6 @@ function watchBashRequests(session: Context.Context<SessionServices>) {
   return Effect.gen(function* () {
     const opened: BashRequest[] = [];
     const firstOpened = yield* Deferred.make<void>();
-    const decisions: Array<() => void> = [];
 
     yield* Effect.forkScoped(
       Stream.runForEach(
@@ -35,16 +33,6 @@ function watchBashRequests(session: Context.Context<SessionServices>) {
             if (event.type !== 'request.opened') return;
             if (event.payload.kind !== 'bash') return;
             opened.push(event.payload.data);
-            decisions.push(() =>
-              publishTestRows(session, [
-                {
-                  type: 'request.decided',
-                  aggregateId: event.aggregateId,
-                  requestId: event.requestId,
-                  decision: { action: 'approve' },
-                },
-              ]),
-            );
             yield* Deferred.succeed(firstOpened, undefined);
           }),
       ),
@@ -53,7 +41,6 @@ function watchBashRequests(session: Context.Context<SessionServices>) {
     return {
       opened,
       firstOpened: Deferred.await(firstOpened),
-      approve: (index: number) => decisions[index]?.(),
     };
   });
 }
@@ -73,7 +60,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const session = yield* isolatedTestSession();
             const runId = generateRunId();
             setTestApprovalPolicy('never');
-            publishTestRunStart(session, runId);
+            yield* publishTestRunStart(session, runId);
             yield* Context.get(session, Approvals).change(
               runId,
               humanGrant(['bash'], true),
@@ -102,7 +89,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
             const runId = generateRunId();
-            publishTestRunStart(session, runId);
+            yield* publishTestRunStart(session, runId);
             yield* Context.get(session, SessionLog).settled;
             const requests = yield* watchBashRequests(session);
 

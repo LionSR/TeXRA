@@ -7,7 +7,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect, Fiber, FileSystem, Layer, Context } from 'effect';
+import { Deferred, Effect, Fiber, FileSystem, Layer, Context } from 'effect';
 import { afterEach, vi } from 'vitest';
 
 // Local imports
@@ -31,7 +31,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { waitForCondition } from '@test/support/asyncTestUtils';
 import { fakePath } from '@test/support/FakePlatform';
 import {
   FakeHost,
@@ -156,7 +155,7 @@ const setUp = () =>
     setTestApprovalPolicy('ask', Context.get(session, SessionRoots));
     workspaceWrites.mockReset();
     relativeFiles.clear();
-    runId = publishTestRunStart(session, generateRunId());
+    runId = yield* publishTestRunStart(session, generateRunId());
     yield* Context.get(session, SessionLog).settled;
     decisions = yield* autoDecideRequests(session, () => nextDecision());
   });
@@ -222,7 +221,11 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           yield* setUp();
           // Left pending: the proposal must be readable while nothing but the
           // rows holds it, as it is after the process that opened it is gone.
-          nextDecision = () => null;
+          const editOpened = yield* Deferred.make<void>();
+          nextDecision = () => {
+            Deferred.doneUnsafe(editOpened, Effect.void);
+            return null;
+          };
           const request = yield* Effect.forkChild(
             inRun(
               requestToolEditApproval({
@@ -233,11 +236,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               }),
             ),
           );
-          yield* Effect.tryPromise(() =>
-            waitForCondition(() => openedEdits().length === 1, {
-              timeoutMessage: 'Timed out waiting for the edit to be opened',
-            }),
-          );
+          yield* Deferred.await(editOpened);
           const opened = openedEdits()[0];
           const address =
             opened.payload.kind === 'toolEdit'
@@ -267,7 +266,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             })
             .pipe(Effect.provide(session));
           assert.deepStrictEqual(preview, content);
-          decideRequest(
+          yield* decideRequest(
             session,
             { runId, requestId: opened.requestId },
             { action: 'reject' },

@@ -11,7 +11,7 @@ import { Secrets } from '@texra-ai/harness/host';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
 import { fetchAnnotations } from '@texra/tools/github/checkRunsClient';
@@ -39,7 +39,7 @@ vi.mock('@texra/tools/github/githubClient', async (importOriginal) => ({
  */
 const secretsLayer = Layer.merge(
   Secrets.layer(new FakeSecrets()),
-  testHttpClientLayer,
+  noHttpClientLayer,
 );
 
 function annotation(

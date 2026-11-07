@@ -29,7 +29,7 @@ type Session = Context.Context<SessionServices>;
 const processSession = Effect.flatMap(TestSession.open(), sessionHandleOf);
 
 const start = (session: Session, runId: RunId) =>
-  Effect.sync(() => publishTestRunStart(session, runId)).pipe(
+  publishTestRunStart(session, runId).pipe(
     Effect.andThen(Context.get(session, SessionLog).settled),
   );
 

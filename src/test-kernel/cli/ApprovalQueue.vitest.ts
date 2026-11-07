@@ -20,7 +20,6 @@ import {
 import { SessionGraph } from '@test/support/testKernel';
 import {
   boundTestSessionView,
-  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
@@ -49,10 +48,10 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     const foreign = bashPayload(RUN_B);
     const view = viewWith(
       [
-        makeRunView({ id: ROOT }),
-        makeRunView({ id: RUN_A, parentId: ROOT }),
+        { id: ROOT },
+        { id: RUN_A, parentId: ROOT },
         // Another chat's run, which nothing in this terminal holds.
-        makeRunView({ id: RUN_B, holder: 'none' }),
+        { id: RUN_B, held: false },
       ],
       {
         requests: [foreign, local].map((payload) => ({
@@ -73,13 +72,9 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     // A detached child still owned by this terminal keeps its approval
     // path even after the root conversation has been cleared.
     rootRunId.set(undefined);
-    const detachedView = viewWith(
-      [
-        makeRunView({ id: RUN_A, holder: 'here' }),
-        makeRunView({ id: RUN_B, holder: 'none' }),
-      ],
-      { requests: view.requests },
-    );
+    const detachedView = viewWith([{ id: RUN_A }, { id: RUN_B, held: false }], {
+      requests: view.requests,
+    });
     seedView(detachedView);
     expect(currentApproval.get()?.payload).toEqual(local);
     expect(attentionRequests.get().map((request) => request.runId)).toEqual([

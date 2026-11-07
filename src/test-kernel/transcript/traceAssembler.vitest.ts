@@ -52,7 +52,7 @@ layer(
         value: { objective: 'Check the argument' },
       };
 
-      publishTestRunStart(session, runId);
+      yield* publishTestRunStart(session, runId);
       yield* Context.get(session, SessionLog).settled;
       yield* seedRunRecord(
         session,

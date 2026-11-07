@@ -21,6 +21,12 @@ import { stripVTControlCharacters } from 'node:util';
 import { parseArgs as parseCittyArgs } from 'citty';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
+import {
+  VALIDATION_FLAG,
+  VALIDATION_FLAG_CONTENT,
+  VALIDATION_SCENARIOS,
+  VALIDATION_SWITCH,
+} from '../src/runtime/validationSwitch.ts';
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 
 // Every `texra` this script starts resolves `~/.texra` in a temporary home.
@@ -50,11 +56,11 @@ const nextBuildPath = path.join(path.dirname(binaryPath), 'texra-next.js');
 // An SDK embedder on the validation model (scripts/sdk-harness.ts).
 const sdkHarnessPath = path.join(path.dirname(binaryPath), 'sdk-harness.js');
 const validationResourcesPath = path.join(validationRoot, 'resources');
-const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL';
-const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
-const validationFlagContent = 'texra-cli-run-validation\n';
+const validationEnv = VALIDATION_SWITCH;
+const validationFlagEnv = VALIDATION_FLAG;
+const validationFlagContent = `${VALIDATION_FLAG_CONTENT}\n`;
 const validationFlagName = '.texra-internal-validation-model';
-const validationBundleMarker = validationFlagContent.trim();
+const validationBundleMarker = VALIDATION_FLAG_CONTENT;
 const VALIDATION_FAKE_API_KEY = 'texra-validation-fake-key';
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
@@ -872,7 +878,7 @@ prompt: |
         validationModel: true,
         validationFlagPath,
         env: isolatedCliHomeEnv(home, {
-          TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY: '1',
+          [VALIDATION_SCENARIOS.historyQuery]: '1',
         }),
       },
     );
@@ -965,7 +971,7 @@ prompt: |
       `${JSON.stringify(config)}\n`,
     );
   const env = isolatedCliHomeEnv(home, {
-    TEXRA_INTERNAL_VALIDATE_ECHO: '1',
+    [VALIDATION_SCENARIOS.echo]: '1',
     TEXRA_NO_TELEMETRY: '1',
   });
   const ptyEnv = {
@@ -1324,7 +1330,7 @@ function validateSdkInlinePersona() {
         cwd: work,
         validationModel: true,
         validationFlagPath,
-        env: isolatedCliHomeEnv(home, { TEXRA_INTERNAL_VALIDATE_ECHO: '1' }),
+        env: isolatedCliHomeEnv(home, { [VALIDATION_SCENARIOS.echo]: '1' }),
       },
     );
     assertSuccess(result, 'the SDK harness');
@@ -1368,7 +1374,7 @@ async function validateSdkResumeApproval() {
     mkdirSync(work, { recursive: true });
     const validationFlagPath = path.join(work, validationFlagName);
     writeFileSync(validationFlagPath, validationFlagContent);
-    const golden = { TEXRA_INTERNAL_VALIDATE_GOLDEN: '1' };
+    const golden = { [VALIDATION_SCENARIOS.golden]: '1' };
     const asking = spawn(
       process.execPath,
       [sdkHarnessPath, work, storage, 'ask', 'Run the command'],
@@ -1664,7 +1670,7 @@ prompt: |
           ...project.ptyEnv,
           TEXRA_NO_SERVICE: '1',
           TEXRA_NO_TELEMETRY: '1',
-          TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+          [VALIDATION_SCENARIOS.golden]: '1',
         },
         onData: (_data, pty) => {
           const plain = stripVTControlCharacters(pty.output).slice(from);
@@ -1962,7 +1968,7 @@ prompt: |
   const env = {
     ...project.ptyEnv,
     TEXRA_NO_TELEMETRY: '1',
-    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texraWith = (binary, args, label) => {
     const result = run(
@@ -2116,7 +2122,7 @@ prompt: |
   const env = {
     ...project.ptyEnv,
     TEXRA_NO_TELEMETRY: '1',
-    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texra = (args, label) => {
     const result = run(
@@ -2370,7 +2376,7 @@ prompt: |
   const env = {
     ...project.ptyEnv,
     TEXRA_NO_TELEMETRY: '1',
-    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    [VALIDATION_SCENARIOS.golden]: '1',
     OPENAI_API_KEY: 'sk-terminal-only',
   };
   const output = path.join(project.work, 'env.txt');
@@ -2553,7 +2559,7 @@ prompt: |
   const env = {
     ...alpha.ptyEnv,
     TEXRA_NO_TELEMETRY: '1',
-    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    [VALIDATION_SCENARIOS.golden]: '1',
   };
   const start = (dir, agent, instruction) =>
     assertSuccess(
@@ -2680,7 +2686,7 @@ prompt: |
   const env = {
     ...project.ptyEnv,
     TEXRA_NO_TELEMETRY: '1',
-    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texra = (args, label) => {
     const result = run(
@@ -2880,7 +2886,7 @@ prompt: |
   const env = {
     ...project.ptyEnv,
     TEXRA_NO_TELEMETRY: '1',
-    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texra = (args, label) => {
     const result = run(
@@ -3293,7 +3299,7 @@ prompt: |
         validationModel: true,
         validationFlagPath,
         env: isolatedCliHomeEnv(home, {
-          TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT: '1',
+          [VALIDATION_SCENARIOS.scriptFanout]: '1',
         }),
       },
     );

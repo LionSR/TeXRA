@@ -163,7 +163,7 @@ function ensureRun(runId: RunId) {
     if (started.has(runId)) return;
     started.add(runId);
     const session = yield* sessionHandle;
-    publishTestRunStart(session, runId, { parent: root ?? null });
+    yield* publishTestRunStart(session, runId, { parent: root ?? null });
     yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
     yield* holdTestRun(session, runId);
   });

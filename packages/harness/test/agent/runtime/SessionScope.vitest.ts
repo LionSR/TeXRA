@@ -22,7 +22,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
     () =>
       Effect.gen(function* () {
         const processSession = yield* isolatedTestSession();
-        const parentRun = publishTestRunStart(processSession);
+        const parentRun = yield* publishTestRunStart(processSession);
         yield* Context.get(processSession, SessionLog).settled;
         yield* Effect.addFinalizer(() =>
           Context.get(processSession, Inbox).closeInput(parentRun),

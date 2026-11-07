@@ -9,6 +9,7 @@ import { Effect, Layer, Context } from 'effect';
 
 // Local imports
 
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -51,14 +52,14 @@ const setupTool = Effect.gen(function* () {
     TestSession.open(undefined, { host: {} }),
     sessionHandleOf,
   );
-  const runId = publishTestRunStart(session);
+  const runId = yield* publishTestRunStart(session);
   yield* Context.get(session, SessionLog).settled;
   return { runs, session, runId };
 });
 
 const callTool = (
   session: Context.Context<SessionServices>,
-  runId: ReturnType<typeof publishTestRunStart>,
+  runId: RunId,
   input: unknown,
 ) =>
   SendToTerminalTool.call(input).pipe(

@@ -74,12 +74,12 @@ const publishRunFacts = (
   },
 ) =>
   Effect.gen(function* () {
-    publishTestRunStart(session, runId);
+    yield* publishTestRunStart(session, runId);
     yield* Context.get(session, SessionLog).settled;
     yield* seedRunRecord(session, runId, facts.record);
     if (facts.edited) yield* seedEditedFiles(session, runId, facts.edited);
     if (facts.outcome) {
-      publishTestRows(session, [
+      yield* publishTestRows(session, [
         {
           type: 'run.end',
           aggregateId: qualifyAggregateId('run', runId),
