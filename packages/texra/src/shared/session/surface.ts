@@ -175,19 +175,20 @@ export interface RunSurface {
   readonly seen: number | undefined;
 }
 
-const EMPTY_RUN_SURFACE: RunSurface = Object.freeze({
-  draft: EMPTY_DRAFT,
-  expanded: undefined,
-  groups: new Map<string, boolean>(),
-  seen: undefined,
-});
-
-/** What the surface keeps for `runId`, empty when it keeps nothing. */
+/** What the surface keeps for `runId`, a fresh empty record when it keeps
+ *  nothing (a shared one would share its `groups` map). */
 export function runSurface(
   surface: Pick<Surface, 'runs'>,
   runId: RunId,
 ): RunSurface {
-  return surface.runs.get(runId) ?? EMPTY_RUN_SURFACE;
+  return (
+    surface.runs.get(runId) ?? {
+      draft: EMPTY_DRAFT,
+      expanded: undefined,
+      groups: new Map(),
+      seen: undefined,
+    }
+  );
 }
 
 /**
