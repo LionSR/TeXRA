@@ -274,13 +274,13 @@ const getClientProvider = Effect.fn('getClientProvider')(function* (
       suppressKey: 'lean4-install-tool',
       message: 'Lean 4 extension is required for this operation. Install now?',
       extensionId: LEAN4_EXTENSION_ID,
-      channel: 'lean',
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning(
           `Could not offer the Lean 4 install prompt: ${toErrorMessage(Cause.squash(cause))}`,
-        ).pipe(withLogChannel(CHANNEL)),
+        ),
       ),
+      withLogChannel(CHANNEL),
     );
     return yield* new LeanExtensionUnavailable({
       reason: 'not-installed',

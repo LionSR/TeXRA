@@ -12,16 +12,7 @@
  */
 
 // Third-party imports
-import {
-  Clock,
-  Duration,
-  Effect,
-  Random,
-  Ref,
-  Result,
-  Schedule,
-  Schema,
-} from 'effect';
+import { Clock, Duration, Effect, Random, Ref, Schedule, Schema } from 'effect';
 
 // Local imports
 import { jitteredExponentialBackoffMs } from '@texra-ai/harness/plugins';
@@ -34,7 +25,12 @@ import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import { shouldDropBotEvent } from './botFilter';
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';
 import { formatSubscriptionHalted } from './formatUtils';
-import type { ConditionalResponse, GitHubFailure } from './githubClient';
+import {
+  ghGet,
+  type ConditionalResponse,
+  type GitHubFailure,
+  type GitHubServices,
+} from './githubClient';
 import type { DedupedResource } from './pollingDedup';
 import { GITHUB_POLL_INTERVAL_MS } from './prSubscriptionConstants';
 import type { GhUser } from './prTypes';
@@ -225,21 +221,24 @@ export function logWarning(
 }
 
 /**
- * Decode a 200 payload, warning and answering `undefined` when it is
- * malformed: GitHub answered, so a bad body skips what it feeds instead of
- * counting as a failed poll that would eventually drop a reachable target.
+ * A poll's GET: {@link ghGet}, reading a malformed 200 body as unchanged with
+ * a warning. GitHub answered, so a bad body skips the resource it feeds for
+ * this poll instead of counting as a failed poll that would eventually drop a
+ * reachable target; like a 304 it leaves the resource's ETag and cursor
+ * where they were, so the next poll reads it again.
  */
-export function validateOrSkip<T>(
-  res: ConditionalResponse<unknown>,
+export function pollGet<T>(
+  path: string,
   schema: Schema.Codec<T, unknown>,
-  label: string,
-): Effect.Effect<ConditionalResponse<T> | undefined> {
-  if (res.status === 304) return Effect.succeed(res);
-  const parsed = Schema.decodeUnknownResult(schema)(res.data);
-  if (!Result.isSuccess(parsed)) {
-    return logWarning(label, parsed.failure).pipe(Effect.as(undefined));
-  }
-  return Effect.succeed({ ...res, data: parsed.success });
+  etag?: string,
+): Effect.Effect<ConditionalResponse<T>, GitHubFailure, GitHubServices> {
+  return ghGet(path, schema, etag).pipe(
+    Effect.catchTag('GitHubMalformedBodyError', (error) =>
+      logWarning(`Skipping ${path} this poll: malformed body`, error).pipe(
+        Effect.as({ status: 304 } as const),
+      ),
+    ),
+  );
 }
 
 /**

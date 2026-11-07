@@ -35,13 +35,6 @@ export function createFakeSetupPlatform(
       invoke: () => Effect.void,
       ...overrides.commands,
     },
-    extensions: {
-      isInstalled() {
-        return false;
-      },
-      install: () => Effect.void,
-      ...overrides.extensions,
-    },
     terminal:
       overrides.terminal ??
       ((): Effect.Effect<TerminalRunResult> =>

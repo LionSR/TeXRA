@@ -3,15 +3,6 @@ import { Schema } from 'effect';
 import { Sha256Schema } from './identifiers';
 import { SkillNameSchema } from './skillName';
 
-export const AGENT_SKILLS_CONFIG_KEY = 'skills.enabled';
-export const AGENT_SKILLS_ENABLED_DEFAULT = false;
-
-/** Whether agents receive the skills discovered from every source. */
-export const AgentSkillsEnabledSchema = Schema.Boolean.annotate({
-  description:
-    'Discover the skills of every source and expose them to agent prompts',
-});
-
 /**
  * The trust decision the user accepted for an installed plugin: the version
  * it was at and a digest of every file it ships and what its MCP servers run

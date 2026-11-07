@@ -102,7 +102,8 @@ export const GhCheckAnnotationArraySchema = Schema.Array(
 
 /**
  * Permissive PR/issue `state`: a novel GitHub value must coerce to a known
- * value, never throw — see validateOrSkip. Anything that isn't exactly
+ * value, never fail the decode (which skips the resource; see `pollGet`).
+ * Anything that isn't exactly
  * 'closed' is treated as open.
  */
 const OpenClosedStateSchema = Schema.String.pipe(

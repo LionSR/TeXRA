@@ -1,9 +1,11 @@
 /** Where the toolbar's Pack puts a run's files. */
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import { agentFileName, type RunId } from '@texra-ai/harness/schemas';
 import { HISTORY_DIR } from '@housekeeping/constants';
-import { generateTimestamp } from '@housekeeping/utils';
+import { fileNameTimestamp } from '@housekeeping/utils';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 
 /**
@@ -23,11 +25,13 @@ export function packDestination({
   readonly agent: string;
   readonly model: string;
   readonly inputFile: string;
-}): string {
+}): Effect.Effect<string> {
   const baseName = inputFile ? path.parse(inputFile).name : 'run';
   const idFragment = runId.replaceAll('-', '').slice(0, 8);
-  return path.posix.join(
-    HISTORY_DIR,
-    `${generateTimestamp()}_${baseName}_${agentFileName(agent)}_${modelFileName(model)}_${idFragment}`,
+  return Effect.map(fileNameTimestamp, (stamp) =>
+    path.posix.join(
+      HISTORY_DIR,
+      `${stamp}_${baseName}_${agentFileName(agent)}_${modelFileName(model)}_${idFragment}`,
+    ),
   );
 }

@@ -99,6 +99,10 @@ two halves:
     the main surface.
 - **Keep files small.** New UI lands as its own component, not as growth in
   an already large file.
+- **Inline templates stay on one line.** Lit keeps a template's whitespace,
+  so a template whose text is inline (a label, a badge, a path) is written
+  on one line under `// prettier-ignore`; indenting it across lines puts
+  spaces into the rendered text.
 
 ## Desktop composition
 

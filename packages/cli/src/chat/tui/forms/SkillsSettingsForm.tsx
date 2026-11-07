@@ -2,10 +2,11 @@ import { Text } from 'ink';
 import { Effect } from 'effect';
 
 import {
-  WorkspaceStateKey,
   ActiveSkillSourceScopeSchema,
   type ActiveSkillSourceScope,
   type SkillDisplayItem,
+  DISABLED_SKILLS_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import { Settings, Skills, type ProcessRuntime } from '@texra-ai/harness/host';
@@ -19,8 +20,8 @@ type SkillToggle =
 
 interface SkillsSettingsData {
   readonly skills: SkillDisplayItem[];
-  readonly disabledNames: string[];
-  readonly disabledScopes: ActiveSkillSourceScope[];
+  readonly disabledNames: readonly string[];
+  readonly disabledScopes: readonly ActiveSkillSourceScope[];
   readonly issueCount: number;
 }
 
@@ -60,13 +61,10 @@ export function SkillsSettingsForm(
           const result = yield* Skills.display(roots);
           return {
             skills: result.skills,
-            disabledNames: yield* Settings.get<string[]>(
+            disabledNames: yield* Settings.get(roots, DISABLED_SKILLS_SETTING),
+            disabledScopes: yield* Settings.get(
               roots,
-              WorkspaceStateKey.DISABLED_SKILLS,
-            ),
-            disabledScopes: yield* Settings.get<ActiveSkillSourceScope[]>(
-              roots,
-              WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+              DISABLED_SKILL_SOURCES_SETTING,
             ),
             issueCount: result.issues.length,
           };
@@ -100,8 +98,8 @@ export function SkillsSettingsForm(
       onSelect={(toggle, { data, update }) => {
         const key =
           toggle.kind === 'source'
-            ? WorkspaceStateKey.DISABLED_SKILL_SOURCES
-            : WorkspaceStateKey.DISABLED_SKILLS;
+            ? DISABLED_SKILL_SOURCES_SETTING.key
+            : DISABLED_SKILLS_SETTING.key;
         const current =
           toggle.kind === 'source' ? data.disabledScopes : data.disabledNames;
         const value = toggle.kind === 'source' ? toggle.scope : toggle.name;

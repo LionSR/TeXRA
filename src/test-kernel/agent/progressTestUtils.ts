@@ -208,13 +208,13 @@ export const commandTool = defineTool({
 export function bashApprovalRequest(request: {
   readonly command: string;
   readonly cwd?: string;
-  readonly runId?: RunId;
+  readonly runId: RunId;
 }): BashRequest {
   return {
     requestId: `bash-${crypto.randomUUID()}`,
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
     allowBypass: true,
-    runId: request.runId ?? '',
+    runId: request.runId,
   };
 }

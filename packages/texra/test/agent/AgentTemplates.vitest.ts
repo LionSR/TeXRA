@@ -7,7 +7,7 @@ import { parse } from 'yaml';
 import {
   AGENT_TEMPLATE_FILES,
   agentFileFromTemplate,
-} from '@texra/agent/templates/agentTemplateRenderer';
+} from '@texra/agent/templates/agentTemplates';
 
 describe('agentFileFromTemplate', () => {
   // A task's templates render when it runs, over the run's files. Rendered

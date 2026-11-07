@@ -5,8 +5,13 @@
 import { type BrowserWindow, dialog } from 'electron';
 import { Effect, Predicate } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import { withLogChannel } from '@texra-ai/harness/host';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  HostFailed,
+  type ConfirmQuestion,
+  type NoticeLevel,
+} from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import {
   INSTRUCTION_ACTION,
@@ -42,54 +47,52 @@ export function createDesktopDialogs(
     dispatchInstructionAction(action: InstructionAction): void;
   },
 ) {
-  const showMessageBoxOfType =
-    (member: HostFailed['member'], type: 'error' | 'info' | 'warning') =>
-    (message: string, project?: string): Effect.Effect<void, HostFailed> =>
-      Effect.tryPromise({
-        try: async () => {
-          await dialog.showMessageBox(window, {
-            type,
-            message,
-            ...inProject(project),
-          });
-        },
-        catch: (cause) =>
-          new HostFailed({
-            member,
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      });
-  const showErrorMessage = showMessageBoxOfType('showErrorMessage', 'error');
+  /** A message box nobody answers; one that cannot be shown (its window
+   *  gone) is logged at warn. */
+  const notify = (
+    level: NoticeLevel,
+    message: string,
+    project?: string,
+  ): Effect.Effect<void> =>
+    Effect.tryPromise({
+      try: () =>
+        dialog.showMessageBox(window, {
+          type: level,
+          message,
+          ...inProject(project),
+        }),
+      catch: ensureError,
+    }).pipe(
+      Effect.asVoid,
+      Effect.catch((cause) =>
+        Effect.logWarning(
+          `A desktop ${level} dialog could not be shown: ${cause.message}`,
+        ).pipe(withLogChannel('desktop')),
+      ),
+    );
   return {
-    showErrorMessage,
-    showInfoMessage: showMessageBoxOfType('showInfoMessage', 'info'),
-    showWarningMessage: showMessageBoxOfType('showWarningMessage', 'warning'),
+    notify,
     /**
-     * Shared shape for the "confirm this action" dialog: a warning with a
-     * confirm button (defaulted, id 0) and a 'Cancel' button (id 1),
-     * collapsed to a boolean. Used by confirmAcceptFile and the settings
-     * prompt port's `confirm`.
+     * A warning with the action's button (defaulted, id 0) and 'Cancel'
+     * (id 1), collapsed to a boolean.
      */
-    confirmDialog: (options: {
-      message: string;
-      detail?: string;
-      confirmLabel?: string;
-      project?: string;
-    }): Effect.Effect<boolean, HostFailed> =>
+    confirm: (
+      question: ConfirmQuestion,
+      project?: string,
+    ): Effect.Effect<boolean, HostFailed> =>
       Effect.tryPromise({
         try: () =>
           dialog.showMessageBox(window, {
             type: 'warning',
-            ...inProject(options.project, options.detail),
-            message: options.message,
-            buttons: [options.confirmLabel ?? 'OK', 'Cancel'],
+            ...inProject(project, question.detail),
+            message: question.message,
+            buttons: [question.action, 'Cancel'],
             defaultId: 0,
             cancelId: 1,
           }),
         catch: (cause) =>
           new HostFailed({
-            member: 'confirmDialog',
+            member: 'dialog.showMessageBox',
             message: `The confirmation dialog could not be shown: ${toErrorMessage(cause)}`,
             cause,
           }),
@@ -106,7 +109,7 @@ export function createDesktopDialogs(
       docsPage: string | undefined,
       project: string,
     ): Effect.Effect<void, HostFailed> => {
-      if (!docsPage) return showErrorMessage(message, project);
+      if (!docsPage) return notify('error', message, project);
       return Effect.tryPromise({
         try: () =>
           dialog.showMessageBox(window, {
@@ -119,7 +122,7 @@ export function createDesktopDialogs(
           }),
         catch: (cause) =>
           new HostFailed({
-            member: 'showErrorMessage',
+            member: 'dialog.showMessageBox',
             message: `A desktop error dialog could not be shown: ${toErrorMessage(cause)}`,
             cause,
           }),
@@ -158,7 +161,7 @@ export function createDesktopDialogs(
           }),
         catch: (cause) =>
           new HostFailed({
-            member: 'showInfoMessage',
+            member: 'dialog.showMessageBox',
             message: `The instruction dialog could not be shown: ${toErrorMessage(cause)}`,
             cause,
           }),

@@ -19,8 +19,8 @@
  *   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
  *   [`RunIdSchema`](#runidschema), [`StartRequestSchema`](#startrequestschema).
  * - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
- *   [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
- *   [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
+ *   the harness's setting rows ([`SettingRow`](#settingrow), each a
+ *   [`StateKey`](#statekey)), [`TraceDocumentSchema`](#tracedocumentschema).
  */
 export type {
   AgentConfig,
@@ -150,7 +150,6 @@ export { ResumeRefusalSchema } from '@shared/schemas';
 // parse, and the denial a run that may not ask reports.
 export {
   APPROVAL_POLICIES,
-  APPROVAL_POLICY_CONFIG_KEY,
   APPROVAL_POLICY_DEFAULT,
   APPROVAL_POLICY_NO_INPUT_DEFAULT,
   ApprovalPolicySchema,
@@ -211,24 +210,64 @@ export {
 // Path basics that hold in a browser: forward slashes, a path's base name,
 // and its base name without the extension.
 export { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
-// The setting rows a `ConfigProvider` resolves against (its `catalog`) and
-// the harness's own state keys, as a settings UI (a webview included) builds
-// its catalog from them and names the rows it renders.
+// The setting rows a `ConfigProvider` resolves against (its `catalog`): the
+// harness's own, which an app reads and writes through `Settings` and places
+// in its settings UIs (a webview included), and the catalog an app builds
+// from them and its own rows.
 export {
-  configTreeRows,
+  AGENT_SKILLS_ENABLED_SETTING,
+  ALLOW_ORCHESTRATOR_KILL_SETTING,
+  APPROVAL_POLICY_SETTING,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  DETACH_SUBAGENTS_ON_STOP_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
+  DISABLED_SKILLS_SETTING,
+  GIT_AUTHOR_EMAIL_SETTING,
+  GIT_AUTHOR_NAME_SETTING,
+  GIT_COMMITS_TO_SHOW_SETTING,
+  GIT_MARK_COMMITS_SETTING,
+  GIT_WORKTREE_SUPPORT_SETTING,
+  GLM_CODING_PLAN_SETTING,
+  GOAL_MAX_COST_SETTING,
+  GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
+  HELPER_MODEL_SETTING,
+  KIMI_CODE_PREFER_SETTING,
+  MEMORY_ENABLED_SETTING,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  OPENAI_FAST_TIER_SETTING,
+  SCRIPT_ONLY_SETTING,
+  CHATGPT_PREFER_SUBSCRIPTION_SETTING,
+  DEBUG_MODE_SETTING,
+  GOAL_STRATEGY_SETTING,
+  GOOGLE_BACKGROUND_RESPONSES_SETTING,
+  MAX_IMAGE_DIMENSION_SETTING,
+  SAVE_MODEL_IO_SETTING,
+  XAI_PREFER_SUBSCRIPTION_SETTING,
   settingsCatalog,
+  SOX_PATH_SETTING,
+  TOOL_PATH_PROTECTION_SETTING,
+  WEBSOCKET_OPENAI_SETTING,
+  type HarnessRowKey,
+  type SettingChoiceCopy,
+  type SettingRow,
   type SettingsCatalog,
   type SettingStore,
-  type StateSettingEntry,
+  type StateKey,
 } from '@shared/state/stateSettings';
 // What a `ConfigProvider` (root) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@shared/config/settings';
-export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-// The providers with a custom-endpoint setting, and a provider's
-// custom-endpoint key and China-region toggle, if it has them.
+// The providers' custom-endpoint rows and China-region toggles, and a
+// provider's own, if it has them.
 export {
-  PROVIDER_ENDPOINT_STATE_ENTRIES,
-  providerEndpointKey,
+  DASHSCOPE_REGION_SETTING,
+  GLM_ENDPOINT_SETTING,
+  GLM_REGION_SETTING,
+  MINIMAX_REGION_SETTING,
+  MOONSHOT_REGION_SETTING,
+  PROVIDER_ENDPOINT_SETTINGS,
+  providerEndpointSetting,
   providerRegionSetting,
 } from '@shared/state/providerSettings';
 
@@ -256,7 +295,6 @@ export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 export {
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
-  AGENT_SKILLS_CONFIG_KEY,
   AGENT_SOURCE,
   AgentConfigSchema,
   agentFileName,
@@ -270,9 +308,6 @@ export {
   AgentSourceSchema,
   type BashRequest,
   blocksCaller,
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   type ContextStateData,
   CredentialSwitchSchema,
   DEFAULT_WORKFLOW_AGENT,
@@ -287,8 +322,6 @@ export {
   generateRunId,
   formatHunkLines,
   getProposalFileGroups,
-  GOAL_MAX_COST_SETTING,
-  GOAL_STRATEGY_SETTING,
   GoalResultSchema,
   InlinePersonaSchema,
   InstalledPluginSchema,
@@ -307,8 +340,6 @@ export {
   type McpToolOutput,
   MESSAGE_TYPES,
   MODEL_AVAILABILITY_STATUS,
-  MODEL_COMPACTION_THRESHOLD_SETTING,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelAvailabilityKindSchema,
   type NormalizedUsage,
   NullableFileFieldsSchema,
@@ -324,6 +355,7 @@ export {
   type FactName,
   recipeBlockOf,
   referencedAggregates,
+  replayInputs,
   type RequestDecision,
   RequestShowErrorPayloadSchema,
   type RetryRequest,

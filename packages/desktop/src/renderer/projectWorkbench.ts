@@ -2,6 +2,7 @@
 // only tab closure, project closure, or document disposal releases its resources.
 
 import { Effect, Result, Schema, Struct } from 'effect';
+import { html, render } from 'lit';
 
 import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -11,6 +12,7 @@ import type { Theme } from '@texra/shared/ipc';
 import type { SessionSurfaces } from '@ui/progress/sessionSurfaces';
 import type { ProgressApp } from '@ui/progress/ProgressApp';
 import { requestErrorText } from '@ui/copy/requestErrors';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import {
   DesktopShellStateSchema,
@@ -18,6 +20,7 @@ import {
   openWorkbenchTab,
   setWorkbenchTabDirty,
   type DesktopShellState,
+  type WorkbenchKind,
 } from '../shared/desktopShellState';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -27,7 +30,10 @@ import { createEditorPane } from './editorPane';
 import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
 import { createTerminalPane } from './terminalPane';
-import { createWorkbenchController } from './workbenchController';
+import {
+  createWorkbenchController,
+  type PaneKind,
+} from './workbenchController';
 import { agentDocumentIdentity } from '../shared/desktopAgentDocument';
 
 const FILE_REQUEST_TIMEOUT_MS = 60_000;
@@ -200,22 +206,117 @@ export function createProjectWorkbench(options: {
   });
   const reviewPane = createReviewPane();
   const pdfPane = createPdfPane();
+  // A browser tab loads its page the first time its panel is laid out.
+  const loadedBrowserTabs = new Set<string>();
+  const panes = {
+    agent: {
+      zone: 'edge',
+      size: { width: 380 },
+      mount: (_tab, host) => {
+        host.classList.add('shell-conversation');
+        host.append(options.conversationView);
+      },
+    },
+    files: {
+      zone: 'navigator',
+      size: { width: 220 },
+      mount: (_tab, host) => {
+        host.classList.add('shell-files');
+        host.append(fileTree.treeElement);
+        void fileTree.refresh();
+      },
+    },
+    editor: {
+      zone: 'document',
+      mount: (tab, host) => {
+        if (tab.target) mountEditor(tab.id, tab.target, host);
+      },
+      layout: (tab) => {
+        if (tab.target) editorFor(tab.id).layout();
+      },
+      activate: (tab) => {
+        if (tab.target) void editorFor(tab.id).open(tab.target);
+      },
+      release: (tab) => {
+        editors.get(tab.id)?.dispose();
+        editors.delete(tab.id);
+      },
+    },
+    terminal: {
+      zone: 'bottom',
+      size: { height: 220 },
+      mount: (tab, host) => host.append(terminalPane.elementFor(tab.id)),
+      layout: (tab) => terminalPane.activate(tab.id, { focus: false }),
+      release: (tab) => terminalPane.dispose(tab.id),
+    },
+    review: {
+      zone: 'document',
+      mount: (_tab, host) => host.append(reviewPane.element),
+    },
+    pdf: {
+      zone: 'document',
+      mount: (tab, host) => host.append(pdfPane.frameFor(tab)),
+      update: (tab) => void pdfPane.frameFor(tab),
+      release: (tab) => pdfPane.dispose(tab.id),
+    },
+    browser: {
+      zone: 'document',
+      mount: (tab, host) => {
+        host.dataset.browserSlot = tab.id;
+      },
+      layout: (tab) => {
+        if (!tab.target || loadedBrowserTabs.has(tab.id)) return;
+        loadedBrowserTabs.add(tab.id);
+        send({
+          command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN,
+          tabId: tab.id,
+          url: tab.target,
+        });
+      },
+      release: (tab) => {
+        loadedBrowserTabs.delete(tab.id);
+        send({
+          command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE,
+          tabId: tab.id,
+        });
+      },
+    },
+    // One logs element serves every project: the visible project holds it.
+    logs: {
+      zone: 'bottom',
+      size: { height: 220 },
+      mount: (_tab, host) => {
+        if (options.isActive()) host.append(options.logsPane);
+      },
+      layout: (_tab, host) => host.append(options.logsPane),
+    },
+  } satisfies Record<WorkbenchKind, PaneKind>;
+  function mountEditor(id: string, target: string, host: HTMLElement) {
+    const editor = editorFor(id);
+    host.append(editor.element);
+    const footer = document.createElement('footer');
+    footer.className = 'shell-editor-toolbar';
+    render(
+      html`<span class="shell-editor-path" title=${target}>${target}</span>
+        ${renderLabeledActionButton({
+          text: 'Save',
+          icon: 'floppy-disk',
+          kind: 'ghost',
+          className: 'is-compact',
+          onClick: () => void editor.save(),
+        })}`,
+      footer,
+    );
+    host.append(footer);
+    void editor.open(target);
+  }
   const workbench = createWorkbenchController({
     session,
     isActive: options.isActive,
     isBrowserCovered: options.isBrowserCovered,
     confirmDiscard: options.confirmDiscard,
-    conversationView: options.conversationView,
-    fileTree,
-    editorFor,
-    closeEditor: (id) => {
-      editors.get(id)?.dispose();
-      editors.delete(id);
-    },
+    panes,
     terminalPane,
-    reviewPane,
-    pdfPane,
-    logsPane: options.logsPane,
     getState,
     updateShell: updateState,
     postMessage: send,

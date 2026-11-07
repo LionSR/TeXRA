@@ -35,6 +35,7 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
+import { TOOL_STATUS_WORD } from '@ui/copy/runStatus';
 import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
 
 // Local imports - CLI TUI rendering
@@ -199,7 +200,7 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
         ),
       ];
     case 'status':
-      return [labeled(section.label, section.status)];
+      return [labeled(section.label, TOOL_STATUS_WORD[section.status])];
     case 'badges':
       return [labeled(section.label, section.badges.join(', '))];
     case 'file': {

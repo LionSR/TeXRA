@@ -20,11 +20,7 @@ import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import type { StateReadFailed } from '@shared/config/settings';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
-import {
-  MODEL_COMPACTION_THRESHOLD_SETTING,
-  qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import type { CellError, RunCell } from '@shared/session/runHistory';
 import { turnText } from '@shared/session/runFacts';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
@@ -32,6 +28,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { contextTokens, estimateMessageTokens } from './contextTokens';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { CallResult } from './modelCall';
+import { MODEL_COMPACTION_THRESHOLD_SETTING } from '@shared/state/stateSettings';
 
 /** Prepended to a summary folded back into the conversation as a user
  *  message: the same marker for every provider. */
@@ -95,9 +92,9 @@ const overThreshold = Effect.fn('compaction.overThreshold')(function* (
   state: RunState,
   input: Pick<CompactionInput, 'stores' | 'bound'>,
 ) {
-  const percent = yield* Settings.get<number>(
+  const percent = yield* Settings.get(
     input.stores,
-    MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+    MODEL_COMPACTION_THRESHOLD_SETTING,
   );
   const contextWindow = input.bound.config.contextWindow;
   return (

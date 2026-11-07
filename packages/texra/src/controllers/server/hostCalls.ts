@@ -115,7 +115,7 @@ export const CallResultSchemas = {
 } as const;
 
 /** A frame of `host.attach`: the attachment's id first, then the calls. */
-export const HostFrameSchema = Schema.Union([
+export const HostAttachFrameSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('attached'),
     attachment: Schema.String,
@@ -129,7 +129,7 @@ export const HostFrameSchema = Schema.Union([
     awaited: Schema.Boolean,
   }),
 ]);
-export type HostFrame = typeof HostFrameSchema.Type;
+export type HostAttachFrame = typeof HostAttachFrameSchema.Type;
 
 /** A window's answer to one call. A failure says why in the window's
  *  words; the service reports it as the capability's own failure. */

@@ -3,9 +3,9 @@ import { modelConfig, modelRefOf } from '@texra-ai/llm';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { withLogChannel } from '@logger/effectLog';
 import { getEnabledModels, readModelOptions } from '@model/computeModelOptions';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
+import { HELPER_MODEL_SETTING } from '@shared/state/stateSettings';
 
 const CHANNEL = 'helperModel';
 
@@ -25,13 +25,13 @@ const CHANNEL = 'helperModel';
 export const getHelperModelName = Effect.fn('getHelperModelName')(function* (
   stores: SettingsStores,
 ) {
-  const configured = (yield* Settings.get<string | undefined>(
+  const configured = (yield* Settings.get(
     stores,
-    GlobalStateKey.HELPER_MODEL,
+    HELPER_MODEL_SETTING,
   ))?.trim();
-  const fallback = Settings.defaultOf<string | undefined>(
+  const fallback = Settings.defaultOf(
     stores.config.catalog,
-    GlobalStateKey.HELPER_MODEL,
+    HELPER_MODEL_SETTING,
   );
   if (configured === undefined || configured === fallback) return fallback;
   const enabled = yield* getEnabledModels(stores.globalState);

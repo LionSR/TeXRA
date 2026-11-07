@@ -4,8 +4,9 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel, Settings } from '@texra-ai/harness/host';
-import { ensureError } from '@texra-ai/harness/schemas';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { ensureError, type StateKey } from '@texra-ai/harness/schemas';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type {
   StateStore,
   StateReadFailed,
@@ -34,12 +35,13 @@ export const showInstructionWithSuppress = Effect.fn(
   showSuppress = true,
   options: { deferDismissal?: boolean } = {},
 ): Effect.fn.Return<void, StateReadFailed | StateWriteFailed> {
-  const stateKey = `${INSTRUCTION_PREFIX}${key}`;
+  const suppressed = {
+    key: `${INSTRUCTION_PREFIX}${key}`,
+    slot: 'globalState',
+    schema: SuppressedSchema,
+  } as const satisfies StateKey<boolean>;
 
-  if (
-    showSuppress &&
-    (yield* Settings.state(store, stateKey, SuppressedSchema))
-  ) {
+  if (showSuppress && (yield* Settings.state(store, suppressed))) {
     return;
   }
 
@@ -67,7 +69,7 @@ export const showInstructionWithSuppress = Effect.fn(
       // on whichever runtime settles the Effect, so there is no runtime to
       // look up and no unpersistable choice to report.
       if (showSuppress && choice === NEVER_REMIND) {
-        return store.update(stateKey, true);
+        return store.update(suppressed.key, true);
       }
       const action = actions.find((a) => a.title === choice);
       return action === undefined ? Effect.void : action.callback();
@@ -90,7 +92,7 @@ export const showInstructionWithSuppress = Effect.fn(
 /**
  * Prompt the user to install a VS Code extension, with a suppressible
  * "Never remind again" option. Fires the install command on confirm and
- * warns on failure via {@link safeExecuteCommand}.
+ * reports a refused install once, on the caller's log channel.
  */
 export function promptExtensionInstall(
   store: StateStore,
@@ -98,18 +100,22 @@ export function promptExtensionInstall(
     suppressKey: string;
     message: string;
     extensionId: string;
-    channel: string;
   },
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
     {
       title: 'Install',
       callback: () =>
-        safeExecuteCommand(
-          'workbench.extensions.installExtension',
-          [opts.extensionId],
-          opts.channel,
-        ).pipe(Effect.asVoid),
+        vscodeEditorIntegration
+          .install(opts.extensionId)
+          .pipe(
+            Effect.catch((err) =>
+              showLoggedErrorMessage(
+                `Error installing extension ${opts.extensionId}`,
+                err,
+              ).pipe(Effect.asVoid),
+            ),
+          ),
     },
   ]);
 }

@@ -14,11 +14,10 @@ export * from './contextManagement';
 export * from './toolDefinition';
 
 // Layer 1b: Standalone schemas and shared settings
-export * from './agentSkills';
+export * from './installedPlugin';
 export * from './activeSkills';
 export * from './skillName';
 export * from './skillDisplay';
-export * from './coreSettings';
 export * from './opResults';
 
 // Layer 2b: Depends on layer 1

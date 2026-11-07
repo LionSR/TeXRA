@@ -114,10 +114,11 @@ export interface ToolBadgesSection extends ToolSectionBase {
   readonly badges: readonly string[];
 }
 
-/** A section stating the call's status in words. */
+/** A section stating a status: running, finished or failed. A plugin
+ *  reporting another agent's work states it in this one vocabulary. */
 export interface ToolStatusSection extends ToolSectionBase {
   readonly kind: 'status';
-  readonly status: string;
+  readonly status: ToolCallStatus;
 }
 
 export type ToolSection =

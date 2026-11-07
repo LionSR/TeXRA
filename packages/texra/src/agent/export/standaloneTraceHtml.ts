@@ -7,15 +7,31 @@
  * comment). `main.ts`'s `loadTrace()` reads this global if present, before
  * falling back to fetching `trace.json`.
  */
+// Node imports
 import * as path from 'node:path';
 
-import type { TraceDocument } from '@texra-ai/harness/schemas';
+// Third-party imports
+import { Effect, FileSystem, Schema, type PlatformError } from 'effect';
 
-/** The trace viewer's single-file bundle under a host's resources
- *  directory: the template every host's HTML export embeds into. */
-export function traceViewerTemplatePath(resourcesPath: string): string {
-  return path.join(resourcesPath, 'traceViewer', 'index.html');
-}
+// Local imports
+import { absentReason } from '@texra-ai/harness/node';
+import type { Session } from '@texra-ai/harness';
+import type { AssembleTraceResult } from '@texra-ai/harness/host';
+import type { RunId, TraceDocument } from '@texra-ai/harness/schemas';
+
+/** The run has no trace to show: no saved configuration, or no replayable
+ *  run-root transcript. Each host words the status its own way. */
+export class TraceUnavailable extends Schema.TaggedError<TraceUnavailable>()(
+  'TraceUnavailable',
+  { status: Schema.Literals(['config_missing', 'streamLogs_missing']) },
+) {}
+
+/** The host's install has no trace-viewer bundle at `path` (a checkout where
+ *  `packages/trace-viewer` was not built); each host names its rebuild. */
+export class TraceViewerMissing extends Schema.TaggedError<TraceViewerMissing>()(
+  'TraceViewerMissing',
+  { path: Schema.String },
+) {}
 
 const MODULE_SCRIPT_MARKER = '<script type="module"';
 
@@ -46,3 +62,40 @@ export function injectStandaloneTrace(
   const inlineScript = `<script>window.__TEXRA_TRACE__ = ${jsonForInlineScript(trace)};</script>\n    `;
   return template.slice(0, index) + inlineScript + template.slice(index);
 }
+
+/**
+ * A run as one self-contained page: its trace embedded into the trace
+ * viewer's single-file bundle under the host's `resourcesPath`. The trace and
+ * its run record come back beside the page for a host that names the file
+ * after them.
+ */
+export const traceHtml = Effect.fn('traceHtml')(function* (
+  session: Session,
+  runId: RunId,
+  resourcesPath: string,
+): Effect.fn.Return<
+  Omit<Extract<AssembleTraceResult, { status: 'ok' }>, 'status'> & {
+    readonly html: string;
+  },
+  // Listed apart: inferred, the tagged errors would merge into `Error`.
+  TraceUnavailable | TraceViewerMissing | PlatformError.PlatformError | Error,
+  FileSystem.FileSystem
+> {
+  const result = yield* session.records(runId).readTrace();
+  if (result.status !== 'ok')
+    return yield* new TraceUnavailable({ status: result.status });
+  const templatePath = path.join(resourcesPath, 'traceViewer', 'index.html');
+  const fs = yield* FileSystem.FileSystem;
+  const template = yield* fs
+    .readFileString(templatePath)
+    .pipe(
+      Effect.catchIf(absentReason, () =>
+        Effect.fail(new TraceViewerMissing({ path: templatePath })),
+      ),
+    );
+  return {
+    html: injectStandaloneTrace(template, result.trace),
+    trace: result.trace,
+    record: result.record,
+  };
+});

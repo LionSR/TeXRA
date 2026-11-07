@@ -4,7 +4,6 @@ import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
 import { expect } from 'vitest';
 
-import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import {
   resolveToolPath,
   type StepRoot,
@@ -19,6 +18,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeHost } from '@test/support/testKernel';
 import { testSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { DISABLED_SKILLS_SETTING } from '@texra-ai/harness/schemas';
 
 const tempRoots = useTempDirs();
 /** The run catalog of `workspacePath`, with no installed plugin loading. */
@@ -53,10 +53,9 @@ layer(FakeHost.layer({ workspacePath: WORKSPACE_ROOT }), {
           description: 'User skill.',
         }),
       );
-      yield* testWorkspaceRoots().config.update(
-        WorkspaceStateKey.DISABLED_SKILLS,
-        ['project-skill'],
-      );
+      yield* testWorkspaceRoots().config.update(DISABLED_SKILLS_SETTING.key, [
+        'project-skill',
+      ]);
 
       const result = yield* loadRuntimeSkillCatalogEffect(
         runCatalog(WORKSPACE_ROOT),

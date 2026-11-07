@@ -90,8 +90,8 @@ export function applyStateSettingUpdate<H extends SettingSurface>(
   }
   const persist =
     parsed === null
-      ? Settings.reset(ports.stores, entry.key)
-      : Settings.set(ports.stores, entry.key, parsed.success);
+      ? Settings.reset(ports.stores, entry)
+      : Settings.set(ports.stores, entry, parsed.success);
   return persist.pipe(
     Effect.match({
       onSuccess: () => ({ kind: 'applied', entry }) as const,

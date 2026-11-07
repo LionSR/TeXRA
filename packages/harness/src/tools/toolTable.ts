@@ -5,15 +5,21 @@
  * the catalog built over it. This module imports no tool or plugin layer, so
  * a reader of the tag loads none of them.
  */
+// Node imports
+import * as path from 'node:path';
+
+// Third-party imports
 import {
   Context,
   Effect,
-  type FileSystem,
+  FileSystem,
   type Layer,
   type Path,
+  type PlatformError,
   Schema,
 } from 'effect';
 
+// Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
@@ -32,6 +38,7 @@ import {
 } from '@shared/schemas';
 import type { LogWriteError } from '@shared/session/sessionLog';
 import type { ToolCatalog } from '@tools/liveTools';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import type { Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -191,6 +198,33 @@ export function boundFiles(
   return Object.entries(blocks).flatMap(
     ([key, value]) => owners.get(key)?.files?.(value) ?? [],
   );
+}
+
+/**
+ * The file an agent file at `agentPath` binds as `file`: where it is
+ * (beside the agent file, or an absolute path as written) and how to read
+ * it. A file that cannot be read fails the read; every reader of a bound
+ * file goes through this, so none mistakes a missing file for an empty or
+ * a changed one.
+ */
+export function boundFile(
+  agentPath: string,
+  file: string,
+): {
+  readonly path: string;
+  readonly read: Effect.Effect<
+    string,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  >;
+} {
+  const boundPath = path.resolve(path.dirname(agentPath), file);
+  return {
+    path: boundPath,
+    read: Effect.flatMap(FileSystem.FileSystem, (fs) =>
+      readNormalizedFile(fs, boundPath),
+    ),
+  };
 }
 
 /** The value of `block` on `entry`, as the catalog scan parsed it with the

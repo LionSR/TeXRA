@@ -10,6 +10,7 @@ export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
   return buildToolUseDetails({
     row,
     iconName: 'globe',
+    running: false,
     label: rowHeadline(row),
     isError: false,
     content: html``,

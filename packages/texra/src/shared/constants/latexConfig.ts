@@ -1,18 +1,8 @@
 /**
- * LaTeX/compile/diff configuration — single source of truth.
- *
- * These constants are imported by:
- *   - readers in packages/harness/src/agent/, packages/texra/src/latex/, packages/texra/src/housekeeping/, src/commands/
- *   - the inbound/outbound message schemas in packages/harness/src/shared/schemas/
- *   - the settings catalog rows the LaTeX settings page renders
- * so changing a default or range here propagates everywhere with no rot.
+ * The allowed values of the LaTeX settings with a fixed choice, read by the
+ * setting rows (`documentsSettings.ts`, `texraSettings.ts`) and the code that
+ * branches on them. Each row holds its own default and bounds.
  */
-
-/** Numeric range for a setting (used by the setting schemas and UI inputs). */
-interface NumericRange {
-  readonly min: number;
-  readonly max?: number;
-}
 
 /** Allowed values for the `latexdiff` math-markup mode. */
 export const LATEXDIFF_MATH_MARKUP_VALUES = [
@@ -31,22 +21,3 @@ export const LATEX_FORMATTER_VALUES = [
   'none',
 ] as const;
 export type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];
-
-/** Documented defaults — match the values that used to live in package.json. */
-export const LATEX_CONFIG_DEFAULTS = {
-  workflowAutoCompile: true,
-  workflowAutoCompileTimeoutMs: 120000,
-  workflowAutoOpenPdf: true,
-  workflowRejectOnCompileFailure: true,
-  latexdiffBetweenRounds: false,
-  latexdiffTimeoutMs: 10000,
-  latexdiffMathMarkup: 'coarse' satisfies LatexdiffMathMarkupValue,
-  latexdiffChangesOnly: true,
-  latexFormatter: 'latexindent' satisfies LatexFormatterValue,
-} as const;
-
-/** Numeric ranges (used by the setting schemas and UI inputs). */
-export const LATEX_CONFIG_RANGES = {
-  workflowAutoCompileTimeoutMs: { min: 10000 } satisfies NumericRange,
-  latexdiffTimeoutMs: { min: 1000, max: 80000 } satisfies NumericRange,
-} as const;

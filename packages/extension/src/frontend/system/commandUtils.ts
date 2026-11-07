@@ -6,8 +6,6 @@ import * as vscode from 'vscode';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 
-const DEFAULT_CHANNEL = 'commandUtils';
-
 /**
  * A VS Code command the extension dispatched and VS Code refused.
  *
@@ -49,20 +47,17 @@ export function executeVscodeCommand<T = void>(
   });
 }
 
-/** Execute a VS Code command, reporting a rejection once and answering
- *  `undefined` in its place. */
+/** Execute a VS Code command, reporting a rejection once (on the
+ *  caller's log channel) and answering `undefined` in its place. */
 export function safeExecuteCommand<T>(
   command: string,
   args: unknown[] = [],
-  channel: string = DEFAULT_CHANNEL,
 ): Effect.Effect<T | undefined> {
   return executeVscodeCommand<T>(command, ...args).pipe(
     Effect.catch((err) =>
-      showLoggedErrorMessage(
-        channel,
-        `Error executing command ${command}`,
-        err,
-      ).pipe(Effect.as(undefined)),
+      showLoggedErrorMessage(`Error executing command ${command}`, err).pipe(
+        Effect.as(undefined),
+      ),
     ),
   );
 }

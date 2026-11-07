@@ -12,13 +12,7 @@ import type {
   RegexReplacementCategory,
 } from '@texra/shared/constants/replacementCategories';
 
-import {
-  ReplacementRuleSet,
-  NonRegexRuleSet,
-  OrderedRuleSet,
-  RegexRuleSet,
-  ReplacementValue,
-} from './types';
+import { NonRegexRuleSet, RegexRuleSet } from './types';
 import {
   applyLatexQuotesFormatting,
   type ReplacementDiagnostic,
@@ -56,8 +50,27 @@ import {
   FENCED_LATEX_BLOCK_REPLACEMENTS,
 } from './rulesRegex';
 import type { ConfigProvider } from '@texra-ai/harness/host';
+import {
+  CUSTOM_REGEX_REPLACEMENTS_SETTING,
+  CUSTOM_REPLACEMENTS_SETTING,
+  ENABLED_REGEX_REPLACEMENTS_SETTING,
+  ENABLED_REPLACEMENTS_SETTING,
+} from '@texra/shared/settingsView/texraSettings';
 
 const CHANNEL = 'ReplacementEngine';
+
+/**
+ * Plain string substitutions as the engine runs them, each through
+ * `String.prototype.replaceAll`: longest `from` first, so a rule runs before
+ * every shorter rule its `from` contains. A second pass chains one rule's
+ * output into another.
+ */
+interface OrderedRuleSet {
+  readonly rules: readonly (readonly [from: string, to: string])[];
+  readonly isRegex?: false;
+}
+
+type ReplacementRuleSet = OrderedRuleSet | RegexRuleSet;
 
 /**
  * Replaced text plus what the passes had to say about it. The engine is pure,
@@ -212,12 +225,12 @@ const REGEX_RULES: Record<RegexReplacementCategory, RegexRuleSet> = {
  * with its key; the order is the rule set's own (longest `from` first).
  */
 function getAllReplacements(config: ConfigProvider): OrderedRuleSet {
-  const enabled = new Set(
-    Settings.getConfig<string[]>(config, 'latex.enabledReplacements'),
+  const enabled = new Set<string>(
+    Settings.getConfig(config, ENABLED_REPLACEMENTS_SETTING),
   );
-  const customReplacements = Settings.getConfig<Record<string, string>>(
+  const customReplacements = Settings.getConfig(
     config,
-    'latex.customReplacements',
+    CUSTOM_REPLACEMENTS_SETTING,
   );
 
   const patterns: Record<string, string> = Object.assign(
@@ -239,12 +252,13 @@ function getAllReplacements(config: ConfigProvider): OrderedRuleSet {
  * category built from user settings whenever custom regex replacements exist.
  */
 function getAllReplacementsRegex(config: ConfigProvider): RegexRuleSet[] {
-  const enabled = new Set(
-    Settings.getConfig<string[]>(config, 'latex.enabledReplacementsRegex'),
+  const enabled = new Set<string>(
+    Settings.getConfig(config, ENABLED_REGEX_REPLACEMENTS_SETTING),
   );
-  const customReplacements = Settings.getConfig<
-    Record<string, ReplacementValue>
-  >(config, 'latex.customReplacementsRegex');
+  const customReplacements = Settings.getConfig(
+    config,
+    CUSTOM_REGEX_REPLACEMENTS_SETTING,
+  );
 
   const enabledRules = Object.entries(REGEX_RULES)
     .filter(([name]) => enabled.has(name))

@@ -45,15 +45,15 @@ export class SessionBanners extends LitElement {
         role: 'status',
         body: html`<span>${serviceOffline}</span>`,
       });
-    } else if (apiKey.visible) {
+    } else if (apiKey) {
       warning = html`<api-key-banner></api-key-banner>`;
-    } else if (agentConfig.visible) {
+    } else if (agentConfig !== null) {
       warning = html`<agent-config-banner
         .state=${agentConfig}
       ></agent-config-banner>`;
-    } else if (dependency.visible) {
+    } else if (dependency !== null) {
       warning = html`<dependency-banner
-        .state=${dependency}
+        .missingTools=${dependency}
       ></dependency-banner>`;
     } else {
       return nothing;

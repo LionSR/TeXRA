@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 import { withLogChannel } from '@texra-ai/harness/host';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
-import { DIFF_REGISTRATION_DELAY_MS } from '@texra/shared/constants/latexTiming';
 
 const CHANNEL = 'DiffView';
 
@@ -12,10 +11,11 @@ const REFRESH_SETTLE_MS = 200;
 
 /**
  * Keep a comparison in place while editors move: re-show the diff after
- * each burst of view-column changes. It starts listening after
- * `DIFF_REGISTRATION_DELAY_MS`, so the moves the diff's own opening caused
- * are not answered, and runs until interrupted: the caller runs it in a
- * `FiberHandle`, so a newer comparison replaces the older one's refresh.
+ * each burst of view-column changes. The caller starts it once the
+ * `vscode.diff` that opened the comparison has returned, and the debounce
+ * takes in any trailing moves of that opening. It runs until interrupted:
+ * the caller runs it in a `FiberHandle`, so a newer comparison replaces the
+ * older one's refresh.
  */
 export function refreshDiffOnLayoutChange(
   left: vscode.Uri,
@@ -32,23 +32,19 @@ export function refreshDiffOnLayoutChange(
       (listener) => Effect.sync(() => listener.dispose()),
     ),
   );
-  return Effect.sleep(DIFF_REGISTRATION_DELAY_MS).pipe(
-    Effect.andThen(
-      viewColumnChanges.pipe(
-        // Trailing-edge: a column move fires several events within a few
-        // milliseconds, and a leading throttle that dropped the later ones
-        // left the diff where the first event found it. The last event
-        // always refreshes.
-        Stream.debounce(REFRESH_SETTLE_MS),
-        Stream.runForEach(() =>
-          executeVscodeCommand('vscode.diff', left, right, title, {
-            preserveFocus: true,
-          } satisfies vscode.TextDocumentShowOptions).pipe(
-            Effect.catch((error) =>
-              Effect.logWarning(
-                `Could not refresh the comparison "${title}": ${error.message}`,
-              ),
-            ),
+  return viewColumnChanges.pipe(
+    // Trailing-edge: a column move fires several events within a few
+    // milliseconds, and a leading throttle that dropped the later ones
+    // left the diff where the first event found it. The last event
+    // always refreshes.
+    Stream.debounce(REFRESH_SETTLE_MS),
+    Stream.runForEach(() =>
+      executeVscodeCommand('vscode.diff', left, right, title, {
+        preserveFocus: true,
+      } satisfies vscode.TextDocumentShowOptions).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Could not refresh the comparison "${title}": ${error.message}`,
           ),
         ),
       ),

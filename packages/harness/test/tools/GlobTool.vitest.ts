@@ -5,7 +5,6 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { Glob } from 'glob';
 
 import { expect, vi } from 'vitest';
-import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -13,6 +12,7 @@ import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { GlobTool } from '@tools/glob';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
+import { TOOL_PATH_PROTECTION_SETTING } from '@texra-ai/harness/schemas';
 
 /**
  * A glob run in which one match's `stat` fails: the tool's own failure policy
@@ -127,7 +127,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     ),
                   );
                   yield* testWorkspaceRoots().workspaceState.update(
-                    WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+                    TOOL_PATH_PROTECTION_SETTING.key,
                     false,
                   );
 

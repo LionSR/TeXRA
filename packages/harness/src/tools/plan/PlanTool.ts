@@ -27,9 +27,7 @@ import {
   SessionViewAccess,
 } from '@shared/session/runHistory';
 import {
-  GOAL_MAX_COST_SETTING,
   GOAL_PLAN_KIND,
-  GOAL_STRATEGY_SETTING,
   qualifyAggregateId,
   RunIdSchema,
   type Plan,
@@ -43,6 +41,10 @@ import { errorResult, executed } from '@tools/core/result';
 
 // Local file imports
 import { goalScript } from './goalScript';
+import {
+  GOAL_MAX_COST_SETTING,
+  GOAL_STRATEGY_SETTING,
+} from '@shared/state/stateSettings';
 
 const CHANNEL = 'PlanTool';
 
@@ -156,14 +158,8 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       `The plan is approved, but a goal is already running (run ${running}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,
       'Plan approved: a goal is already running',
     );
-  const maxCostUsd = yield* Settings.get<number>(
-    call.env.roots,
-    GOAL_MAX_COST_SETTING.configKey,
-  );
-  const strategy = yield* Settings.get<string>(
-    call.env.roots,
-    GOAL_STRATEGY_SETTING.configKey,
-  );
+  const maxCostUsd = yield* Settings.get(call.env.roots, GOAL_MAX_COST_SETTING);
+  const strategy = yield* Settings.get(call.env.roots, GOAL_STRATEGY_SETTING);
   const launched = yield* launchBackgroundScript(
     call,
     {

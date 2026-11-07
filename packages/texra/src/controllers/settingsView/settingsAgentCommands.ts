@@ -15,10 +15,10 @@ import {
   isStrictlyWithin,
   readCustomAgentDir,
   registerCustomAgentRoot,
+  CUSTOM_AGENT_DIR_KEY,
 } from '@texra-ai/harness/host';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
 import {
-  GlobalStateKey,
   agentKey,
   isPackagedAgentSource,
   toErrorMessage,
@@ -30,7 +30,7 @@ import { applyTeam } from '@texra/shared/teamPlan';
 import {
   AGENT_TEMPLATE_FILES,
   agentFileFromTemplate,
-} from '@texra/agent/templates/agentTemplateRenderer';
+} from '@texra/agent/templates/agentTemplates';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -103,6 +103,15 @@ interface SettingsAgentCommandsPorts {
   readonly resourcesPath: string;
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
+}
+
+/** What the person is told when customizing kept their own copies of files
+ *  the agent binds: the copy now reads as current, so nothing else says the
+ *  bundled ones differ. */
+function keptDifferingNotice(files: readonly string[]): string {
+  return files.length === 1
+    ? `Kept your existing ${files[0]}; it differs from the built-in one.`
+    : `Kept your existing ${files.join(', ')}; they differ from the built-in ones.`;
 }
 
 /** The Agents page: its arms, its pages, and what an agent change runs. */
@@ -262,31 +271,31 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           }
 
           // A copy already there is replaced only on the user's say-so.
-          const targetPath = yield* catalog
-            .customize(entry, 'copy')
-            .pipe(
-              Effect.catchTag('AgentCustomizeRefused', (refused) =>
-                refused.reason === 'exists' && refused.path !== undefined
-                  ? Effect.flatMap(
-                      bindings.prompt.confirm(
-                        `A custom copy already exists: ${path.basename(refused.path)}`,
-                        { modal: true, confirmLabel: 'Overwrite' },
-                      ),
-                      (overwrite) =>
-                        overwrite
-                          ? catalog.customize(entry, 'overwrite')
-                          : Effect.succeed(undefined),
-                    )
-                  : Effect.as(present.alert(refused.message), undefined),
-              ),
-            );
-          if (targetPath === undefined) return;
+          const copy = yield* catalog.customize(entry, 'copy').pipe(
+            Effect.catchTag('AgentCustomizeRefused', (refused) =>
+              refused.reason === 'exists' && refused.path !== undefined
+                ? Effect.flatMap(
+                    bindings.dialogs.confirm({
+                      message: `A custom copy already exists: ${path.basename(refused.path)}`,
+                      action: 'Overwrite',
+                    }),
+                    (overwrite) =>
+                      overwrite
+                        ? catalog.customize(entry, 'overwrite')
+                        : Effect.succeed(undefined),
+                  )
+                : Effect.as(present.alert(refused.message), undefined),
+            ),
+          );
+          if (copy === undefined) return;
 
           yield* agentFilesChanged;
-          yield* bindings.openPath(targetPath);
+          yield* bindings.openPath(copy.path);
           yield* present.notice(
-            `Created custom copy: ${path.basename(targetPath)}`,
+            `Created custom copy: ${path.basename(copy.path)}`,
           );
+          if (copy.keptDiffering.length > 0)
+            yield* present.notice(keptDifferingNotice(copy.keptDiffering));
         }),
       ),
     deleteCustomAgent: (message) =>
@@ -312,10 +321,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
               );
             }
 
-            const confirmed = yield* bindings.prompt.confirm(
-              `Delete "${message.agentName}"? This cannot be undone.`,
-              { modal: true, confirmLabel: 'Delete' },
-            );
+            const confirmed = yield* bindings.dialogs.confirm({
+              message: `Delete "${message.agentName}"? This cannot be undone.`,
+              action: 'Delete',
+            });
             if (!confirmed) return;
 
             const fs = yield* FileSystem.FileSystem;
@@ -381,9 +390,9 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to create agent',
         Effect.gen(function* () {
-          const name = yield* bindings.prompt.input({
+          const name = yield* bindings.dialogs.input({
             prompt: `Enter a name for the new ${message.task ? 'document task' : 'chat'} agent (without .yaml extension)`,
-            placeHolder: 'my_agent',
+            placeholder: 'my_agent',
           });
           if (!name) return;
           const invalid = validateTemplateAgentName(name);
@@ -416,7 +425,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           yield* FileSystem.FileSystem.use((fs) =>
             fs.makeDirectory(selected, { recursive: true }),
           );
-          yield* globalState.update(GlobalStateKey.CUSTOM_AGENT_DIR, selected);
+          yield* globalState.update(CUSTOM_AGENT_DIR_KEY.key, selected);
           yield* afterCustomDirChange;
         }),
       ),
@@ -424,7 +433,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to reset custom agent directory',
         globalState
-          .update(GlobalStateKey.CUSTOM_AGENT_DIR, undefined)
+          .update(CUSTOM_AGENT_DIR_KEY.key, undefined)
           .pipe(Effect.andThen(afterCustomDirChange)),
       ),
     applyAgentModePreset: (message) =>
@@ -471,9 +480,9 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to save agent team',
         Effect.gen(function* () {
-          const name = yield* bindings.prompt.input({
+          const name = yield* bindings.dialogs.input({
             prompt: 'Name for the new team',
-            placeHolder: 'e.g. My Research Team',
+            placeholder: 'e.g. My Research Team',
           });
           if (!name?.trim()) return;
           const { catalog } = yield* page;
@@ -493,10 +502,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
               `Unknown custom team: ${message.presetId}`,
             );
           }
-          const confirmed = yield* bindings.prompt.confirm(
-            `Delete team "${target.name}"?`,
-            { modal: true, confirmLabel: 'Delete' },
-          );
+          const confirmed = yield* bindings.dialogs.confirm({
+            message: `Delete team "${target.name}"?`,
+            action: 'Delete',
+          });
           if (!confirmed) return;
           yield* catalog.deleteCustomPreset(message.presetId);
           yield* agentsChanged();

@@ -30,8 +30,6 @@ export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'ask';
  * Changing that requires changing headless discipline, not just this constant.
  */
 export const APPROVAL_POLICY_NO_INPUT_DEFAULT: ApprovalPolicy = 'never';
-/** The approval policy's config key, the same on every host. */
-export const APPROVAL_POLICY_CONFIG_KEY = 'approvalPolicy';
 const APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by the approval policy.';
 const APPROVAL_UNPRESENTABLE_MESSAGE =
   'Interactive approval requires a prompt; this run cannot present one.';

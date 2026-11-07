@@ -118,11 +118,9 @@ export interface DesktopCommandMenuEntry {
 }
 
 /**
- * Capabilities the desktop registry handlers need from the host. Mirrors
- * `ExtensionCommandActions` in shape — both register parallel handler maps
- * over the same `CommandId` union with their host-specific actions, and both
- * require every action a registered handler can reach, so a miswired host
- * fails to compile instead of producing a menu item that silently does
+ * Capabilities the desktop registry handlers need from the host. The handler
+ * map requires every action a registered handler can reach, so a miswired
+ * host fails to compile instead of producing a menu item that silently does
  * nothing.
  */
 export interface DesktopCommandActions {

@@ -24,6 +24,14 @@ import {
 } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 
+/** The roots a plugins page reads: the install record and switches in its
+ *  global state, the managed plugins under its global storage, and its
+ *  folder and configuration for the availability probes. */
+export type PluginPageRoots = Pick<
+  WorkspaceRoots,
+  'workspace' | 'config' | 'globalState' | 'globalStorage' | 'storageRoot'
+>;
+
 /**
  * Build the rows and what the MCP config file's invalid entries raise.
  * `cachedResults` skips the availability probes, as the dashboard's own

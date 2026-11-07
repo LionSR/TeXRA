@@ -24,7 +24,7 @@ import {
   type Path,
   type Scope,
 } from 'effect';
-import { writeLogEntry } from '@logger/logSink';
+import { logEntryOf, writeLogEntry } from '@logger/logSink';
 import type { AppSignals } from '@platform/appSignals';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
@@ -175,7 +175,8 @@ export function withForkFailureReporting<R, ER>(
  */
 export const viewDiagnosticsLayer: Layer.Layer<never> = Logger.layer([
   Logger.make((options) => {
-    if (options.logLevel === 'None') return;
-    writeLogEntry(Logger.formatStructured.log(options));
+    const entry = logEntryOf(options);
+    if (!entry) return;
+    writeLogEntry(entry);
   }),
 ]);

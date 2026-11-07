@@ -160,9 +160,7 @@ export class UserMessage extends LitElement {
   @property({ attribute: false })
   media: readonly (typeof StoredMediaSchema.Type)[] = [];
 
-  private copyController = new CopyButtonController(this, {
-    defaultTitle: 'Copy message',
-  });
+  private copyController = new CopyButtonController(this);
 
   /** A delivery's rendered Markdown, by its text: message text is immutable
    *  after creation, so the parse must not rerun on every render. */
@@ -199,7 +197,8 @@ export class UserMessage extends LitElement {
       messageDate,
       'minute',
     );
-    const copyState = this.copyController.state;
+    const { copied } = this.copyController;
+    const copyTitle = copied ? 'Copied!' : 'Copy message';
     const isStructuredDelivery = this.scriptSummary !== null;
 
     return html`
@@ -238,10 +237,10 @@ export class UserMessage extends LitElement {
             >
               ${renderLabeledActionButton({
                 id: 'user-message-copy-button',
-                text: copyState.copied ? 'Copied' : 'Copy',
-                label: copyState.ariaLabel,
-                tooltip: copyState.title,
-                className: `user-message-copy message-copy ${copyState.copied ? copyState.successClass : ''}`,
+                text: copied ? 'Copied' : 'Copy',
+                label: copyTitle,
+                tooltip: copyTitle,
+                className: `user-message-copy message-copy ${copied ? 'copy-success' : ''}`,
                 onClick: () => this.copyController.copy(this.text),
               })}
               ${

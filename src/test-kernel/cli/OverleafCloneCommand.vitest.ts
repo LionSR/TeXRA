@@ -204,6 +204,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             defaultNodeStorageRoot(),
             {
               ...NO_PLATFORM_INSTALL,
+              resourcesPath: expect.any(String),
               minimumLogLevel: 'Info',
             },
           );

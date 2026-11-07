@@ -7,7 +7,7 @@
  */
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import type { RateLimiterError } from 'effect/persistence/RateLimiter';
 
 // Local imports
@@ -32,7 +32,6 @@ import {
   formatReviewComment,
 } from './formatPREvent';
 import { withSince } from './githubPaths';
-import { ghGet } from './githubClient';
 import {
   checkKey,
   ciTerminalStatus,
@@ -42,8 +41,8 @@ import {
 } from './prCheckRunDomain';
 import {
   logWarning,
+  pollGet,
   readNewItems,
-  validateOrSkip,
   type PollEvent,
   type PollResult,
 } from './poller';
@@ -60,7 +59,7 @@ import {
   type GhReview,
   type GhReviewComment,
 } from './prTypes';
-import { targetPath, type PullTarget } from './subscriptionTarget';
+import type { PullTarget } from './subscriptionTarget';
 
 // Coalesce this many same-kind events in a single tick into a summary.
 const COALESCE_THRESHOLD = 3;
@@ -131,7 +130,6 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
   claimAnnotation: Effect.Effect<void, RateLimiterError>,
   prior: PullState | undefined,
 ) {
-  const skipped: PollResult<PullState> = { next: prior, events: [] };
   const prPath = `/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`;
   const issuePath = `/repos/${pr.owner}/${pr.repo}/issues/${pr.number}`;
   const events: PollEvent[] = [];
@@ -139,17 +137,9 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
   let head = prior?.head;
   let mergeableState = prior?.mergeableState;
   let prEtag = prior?.etags.pr;
-  const prRes = yield* ghGet(prPath, Schema.Unknown, prEtag);
+  const prRes = yield* pollGet(prPath, GhPullRequestSchema, prEtag);
   if (prRes.status === 200) {
-    // A malformed body skips the whole poll and keeps the ETag, so the next
-    // poll fetches and validates the same resource again.
-    const parsed = yield* validateOrSkip(
-      prRes,
-      GhPullRequestSchema,
-      `Skipping PR poll for ${targetPath(pr)}: malformed pull-request payload`,
-    );
-    if (parsed?.status !== 200) return skipped;
-    const prData = parsed.data;
+    const prData = prRes.data;
     // A closed PR cannot produce any later activity worth polling.
     if (prData.state === 'closed') {
       return {
@@ -190,7 +180,7 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
   const [commentsRes, reviewCommentsRes, reviewsRes, checks] =
     yield* Effect.all(
       [
-        ghGet(
+        pollGet(
           withSince(
             `${issuePath}/comments?per_page=100`,
             prior?.issueComments?.sinceCursor,
@@ -198,7 +188,7 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
           GhIssueCommentArraySchema,
           prior?.etags.issueComments,
         ),
-        ghGet(
+        pollGet(
           withSince(
             `${prPath}/comments?per_page=100`,
             prior?.reviewComments?.sinceCursor,
@@ -206,13 +196,34 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
           GhReviewCommentArraySchema,
           prior?.etags.reviewComments,
         ),
-        ghGet(
+        pollGet(
           `${prPath}/reviews?per_page=100`,
           GhReviewArraySchema,
           prior?.etags.reviews,
         ),
         head
-          ? fetchAllCheckRuns(pr.owner, pr.repo, head.sha, head.checkRunsCache)
+          ? fetchAllCheckRuns(
+              pr.owner,
+              pr.repo,
+              head.sha,
+              head.checkRunsCache,
+            ).pipe(
+              // A malformed page skips the whole walk for this poll: no cache
+              // comes back, so the CI state and page cache stay as they were.
+              // A cached page read in its place could mix runs from two
+              // moments and make CI look terminal when it is not.
+              Effect.catchTag('GitHubMalformedBodyError', (error) =>
+                logWarning(
+                  `Skipping check runs of ${prPath} this poll: malformed page`,
+                  error,
+                ).pipe(
+                  Effect.as({
+                    response: { status: 304 as const },
+                    cache: undefined,
+                  }),
+                ),
+              ),
+            )
           : Effect.succeed({
               response: { status: 304 as const },
               cache: undefined,
@@ -220,6 +231,15 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
       ],
       { concurrency: 4 },
     );
+  // The first poll records what CI already reported, which needs the pull
+  // request and its check runs. It sends no ETag, so anything but a 200 is a
+  // skipped malformed body: record nothing, and the next poll is the first.
+  if (
+    prior === undefined &&
+    (prRes.status !== 200 || checks.response.status !== 200)
+  ) {
+    return { next: undefined, events: [] } satisfies PollResult<PullState>;
+  }
 
   const issueComments = readNewItems(
     prior?.issueComments,

@@ -25,12 +25,12 @@ import {
 } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { readDisabledTools, type Plugin } from '@tools/plugins';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 
 /** A switch apply's backoff: 200 ms doubling, over six retries. */
 const SWITCH_READ = Schedule.exponential('200 millis');
@@ -105,7 +105,7 @@ export const pluginCatalogLayer = (
       // what is off stays off (every switched plugin, before the first);
       // it is tried again with a bounded backoff, and a change it still
       // misses is logged.
-      const switches = appState.changes([GlobalStateKey.DISABLED_TOOLS]).pipe(
+      const switches = appState.changes([DISABLED_TOOLS_KEY.key]).pipe(
         Stream.mapEffect(() =>
           readDisabledTools(appState).pipe(
             Effect.retry({ schedule: SWITCH_READ, times: 6 }),

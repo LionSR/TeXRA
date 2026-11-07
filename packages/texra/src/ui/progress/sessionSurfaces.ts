@@ -30,6 +30,7 @@ import {
   reconcileLaunch,
   runSurface,
   shownRun,
+  updateRun,
   type Draft,
   type Surface,
   type SurfaceAction,
@@ -427,11 +428,17 @@ export function createSessionSurfaces(options: {
     )
       return;
     // A new request on the run retires the answer to the last one.
-    if (runId !== null && entry.surface$.get().rejected.has(runId)) {
-      const current = entry.surface$.get();
-      const rejected = new Map(current.rejected);
-      rejected.delete(runId);
-      setSurface(entry, { ...current, rejected });
+    if (
+      runId !== null &&
+      entry.surface$.get().runs.get(runId)?.rejected !== undefined
+    ) {
+      setSurface(
+        entry,
+        updateRun(entry.surface$.get(), runId, (run) => ({
+          ...run,
+          rejected: undefined,
+        })),
+      );
     }
     // Keep text and images until admission succeeds. A rejection needs
     // no restoration, and a later edit remains independent of this send.
@@ -488,11 +495,13 @@ export function createSessionSurfaces(options: {
     // swallows it.
     const error = refusal(result);
     if (error !== null && runId !== null) {
-      const current = entry.surface$.get();
-      setSurface(entry, {
-        ...current,
-        rejected: new Map(current.rejected).set(runId, error),
-      });
+      setSurface(
+        entry,
+        updateRun(entry.surface$.get(), runId, (run) => ({
+          ...run,
+          rejected: error,
+        })),
+      );
     }
     // The form's approval went through: back to the run that asked, where
     // its child starts.

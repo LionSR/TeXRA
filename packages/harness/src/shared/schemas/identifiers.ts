@@ -22,12 +22,6 @@ export function generateRunId(): RunId {
   return crypto.randomUUID().replaceAll('-', '').slice(0, 12) as RunId;
 }
 
-/** A run id, or the empty-string sentinel meaning "no active run". */
-export const RunSelectionSchema = Schema.Union([
-  RunIdSchema,
-  Schema.Literal(''),
-]);
-
 // The aggregate key every durable session event rides on: the kind and
 // logical id of the lifecycle it belongs to (`run` by run id, `plugin` by a
 // plugin's own key), encoded canonically as JSON so one string names it in

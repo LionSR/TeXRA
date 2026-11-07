@@ -26,6 +26,7 @@ import {
   resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
+import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 const ExtractBibliographyInputSchema = Schema.Struct({
   texPath: texPathField('Path to the LaTeX file to scan for citations.'),
@@ -85,7 +86,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
       bibPath ||
-      (yield* Settings.get<string>(call.env.roots, 'bib.defaultPath'));
+      (yield* Settings.get(call.env.roots, BIB_DEFAULT_PATH_SETTING));
 
     if (effectiveBibPath) {
       const resolved = yield* resolveToolPath(call.env, effectiveBibPath);

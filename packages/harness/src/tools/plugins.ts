@@ -39,8 +39,12 @@ import {
 import { DatabaseWriteFailed } from '@shared/session/database';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
-import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
+import {
+  decodeDisabledTools,
+  DISABLED_TOOLS_KEY,
+} from '@shared/state/disabledTools';
 import type { SessionLogShape } from '@shared/session/sessionLog';
+import type { SettingRow } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   AgentBlock,
@@ -123,10 +127,10 @@ export interface Plugin {
   readonly toggle?: 'on' | 'off';
   /** Tools of this plugin offered to every agent with tools, declared or not,
    *  while the plugin is on and a boolean catalog setting is on: tool name to
-   *  setting key, or `true` for no setting but the plugin's own switch. An
+   *  setting row, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
    *  run (a task's recipe) and a text-only persona get none. */
-  readonly injectedWhen?: Readonly<Record<string, string | true>>;
+  readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>;
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
   /** Process-lifetime services, up while the plugin is switched on or a step
@@ -190,7 +194,7 @@ export function storedDisabledTools(
 /** The plugin ids the user switched off in `store`'s record; none while it
  *  is absent. */
 export function readDisabledTools(store: StateStore) {
-  return store.get(GlobalStateKey.DISABLED_TOOLS).pipe(
+  return store.get(DISABLED_TOOLS_KEY.key).pipe(
     Effect.flatMap((stored) => Effect.fromResult(storedDisabledTools(stored))),
     Effect.map((ids): ReadonlySet<string> => ids ?? new Set()),
   );

@@ -104,7 +104,10 @@ export class RunTabs extends LitElement {
   protected override willUpdate(changed: PropertyValues): void {
     if (!changed.has('view') && !changed.has('surface')) return;
     for (const runId of this.deleting) {
-      if (!this.view?.runs.has(runId) || this.surface?.rejected.has(runId)) {
+      if (
+        !this.view?.runs.has(runId) ||
+        this.surface?.runs.get(runId)?.rejected !== undefined
+      ) {
         this.deleting.delete(runId);
       }
     }

@@ -175,10 +175,7 @@ function firstRun(
     onboarding,
     banners: {
       ...base.banners,
-      dependency: {
-        visible: true,
-        missingTools,
-      },
+      dependency: missingTools,
       gettingStarted: true,
     },
   });
@@ -366,7 +363,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const base = host();
     return sidebar(view, surface(view, { kind: 'selectNew' }), {
       ...base,
-      banners: { ...base.banners, apiKey: { visible: true } },
+      banners: { ...base.banners, apiKey: true },
     });
   },
   // The desktop placement of the same shell, inside a run.

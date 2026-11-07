@@ -3,7 +3,6 @@ import { Cause, Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -27,7 +26,7 @@ const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
 
 /** Dismissing the browser-choice dialog cancels sign-in, matching this
- * repo's modal convention (e.g. authCommands.ts, compareCommands.ts). */
+ * repo's modal convention (e.g. authCommands.ts, compareFiles.ts). */
 class SubscriptionSignInCancelled extends Schema.TaggedError<SubscriptionSignInCancelled>()(
   'SubscriptionSignInCancelled',
   {},
@@ -58,7 +57,6 @@ const externalOpener = new VscodeExternalOpener();
 /** How VS Code shows a subscription sign-in prompt. */
 function vscodePresenter(
   provider: SubscriptionProvider,
-  channel: string,
 ): SubscriptionSignInPresenter {
   const { displayName, sessionName, copyTarget } = provider;
   return {
@@ -72,11 +70,12 @@ function vscodePresenter(
           Effect.catch((error) =>
             Effect.logWarning(
               `Could not copy the ${displayName} sign-in code: ${error.message}`,
-            ).pipe(withLogChannel(channel), Effect.as(false)),
+            ).pipe(Effect.as(false)),
           ),
         );
         const openLabel = `Open ${displayName}`;
-        const choice = yield* vscodeUi.info(
+        const choice = yield* vscodeUi.ask(
+          'info',
           `Enter ${displayName} code ${prompt.userCode} at ${prompt.verificationUrl}.${copied ? ' The code was copied to the clipboard.' : ''}`,
           { items: [openLabel] },
         );
@@ -88,7 +87,6 @@ function vscodePresenter(
       },
       Effect.catch((error) =>
         showLoggedErrorMessage(
-          channel,
           `${displayName} sign-in code could not be shown`,
           error,
         ),
@@ -103,7 +101,8 @@ function vscodePresenter(
         // toast — users whose subscription lives in a different browser (e.g.
         // default is Safari but the provider is signed in on Chrome) get a
         // link they can paste there instead.
-        const choice = yield* vscodeUi.info(
+        const choice = yield* vscodeUi.ask(
+          'info',
           `Sign in with ${displayName}. If your ${sessionName} session is in a different browser than your OS default, copy the link and open it there instead.`,
           { modal: true, items: [OPEN_DEFAULT_BROWSER, COPY_SIGN_IN_LINK] },
         );
@@ -113,7 +112,6 @@ function vscodePresenter(
             catch: ensureError,
           });
           yield* showLoggedInfoMessage(
-            channel,
             `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
           );
           return;
@@ -131,11 +129,11 @@ function vscodePresenter(
  * Run subscription sign-in and enable subscription routing for the provider's
  * models. The whole flow is one program the caller settles at its own
  * boundary: the OAuth leg is a step of it, under a progress notification that
- * lives for exactly as long as that step.
+ * lives for exactly as long as that step. Its lines take the caller's log
+ * channel.
  */
 export function signInWithSubscription(
   stores: SettingsStores,
-  channel: string,
   providerId: SubscriptionProviderId,
 ): Effect.Effect<boolean, never, HttpClient.HttpClient | Secrets> {
   const provider = subscriptionProvider(providerId);
@@ -155,7 +153,7 @@ export function signInWithSubscription(
           // code when the callback ports are taken (another sign-in holding
           // them) instead of failing with a bind error.
           transport: vscode.env.remoteName ? 'device' : 'auto',
-          present: vscodePresenter(provider, channel),
+          present: vscodePresenter(provider),
         }),
     ).pipe(
       // A transport defect is reported the same as its typed failure. An
@@ -179,7 +177,6 @@ export function signInWithSubscription(
       );
 
     yield* showLoggedInfoMessage(
-      channel,
       `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
     );
     return true;
@@ -189,13 +186,11 @@ export function signInWithSubscription(
         failure.cause instanceof SubscriptionSignInCancelled
           ? Effect.succeed(false)
           : showLoggedErrorMessage(
-              channel,
               `${displayName} sign-in failed`,
               failure.cause,
             ).pipe(Effect.as(false)),
       SubscriptionPreferenceUpdateFailed: (failure) =>
         showLoggedErrorMessage(
-          channel,
           `${displayName} sign-in succeeded but subscription preference update failed`,
           failure.cause,
         ).pipe(Effect.as(false)),

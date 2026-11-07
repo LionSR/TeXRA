@@ -38,7 +38,6 @@ import type { RunCell } from '@shared/session/runHistory';
 import {
   AgentConfigSchema,
   PersonaSchema,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   qualifyAggregateId,
   type RetryErrorInfo,
   type RunId,
@@ -49,6 +48,7 @@ import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
 
 const TEST_ORIGIN = {
   protocol: 'openai-responses',
@@ -97,7 +97,9 @@ function testBoundModel({
     background: false,
     serviceTier: null,
     routes: routePolicies(['test-route'], 'test-model'),
-    automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+    automaticRetries: Schema.decodeUnknownSync(
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema,
+    )(undefined),
     textOnly: false,
     ...overrides,
   };

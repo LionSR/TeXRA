@@ -15,9 +15,8 @@ import {
 } from '@shared/schemas';
 import {
   decodeDisabledTools,
-  GlobalStateKey,
-  WorkspaceStateKey,
-} from '@shared/state/stateKeys';
+  DISABLED_TOOLS_KEY,
+} from '@shared/state/disabledTools';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
@@ -40,6 +39,10 @@ import {
   type SkillSourceContribution,
   type SkillSourceOptions,
 } from './skillSources';
+import {
+  DISABLED_SKILLS_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
+} from '@shared/state/stateSettings';
 
 /** One skill in a step's catalog, as the prompt lists it, with the plugin
  *  that ships it (null for a core source) and the directory tools may read
@@ -152,11 +155,8 @@ function isSkillDisabled(
  */
 function readSkillSwitches(stores: SettingsStores) {
   return Effect.all({
-    names: Settings.get<string[]>(stores, WorkspaceStateKey.DISABLED_SKILLS),
-    scopes: Settings.get<ActiveSkillSourceScope[]>(
-      stores,
-      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-    ),
+    names: Settings.get(stores, DISABLED_SKILLS_SETTING),
+    scopes: Settings.get(stores, DISABLED_SKILL_SOURCES_SETTING),
   });
 }
 
@@ -168,7 +168,7 @@ function readSkillSwitches(stores: SettingsStores) {
 const readDisabledSkills = Effect.fn('readDisabledSkills')(function* (
   stores: SettingsStores,
 ) {
-  const stored = yield* stores.globalState.get(GlobalStateKey.DISABLED_TOOLS);
+  const stored = yield* stores.globalState.get(DISABLED_TOOLS_KEY.key);
   const plugins = yield* Effect.fromResult(
     Result.mapBoth(decodeDisabledTools(stored), {
       onSuccess: (ids) => [...(ids ?? [])],

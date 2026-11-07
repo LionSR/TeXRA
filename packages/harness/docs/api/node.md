@@ -170,7 +170,7 @@ type ExecResult = typeof ExecResultSchema.Type;
 ## executeCommand
 
 Execute an external command in `cwd` with the workspace env, over the
-process's `ChildProcessSpawner`.
+process's `ChildProcessSpawner`. Its lines take the caller's log channel.
 
 Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
 timeout (`timedOut`) and a max-buffer trip (2,
@@ -194,7 +194,6 @@ const executeCommand: (command: string | string[], options: ExecuteCommandBaseOp
 
 ```ts
 interface ExecuteCommandBaseOptions {
-  readonly channel?: string;
   readonly env?: Record<string, string>;
   /** Milliseconds; undefined or `<= 0` sets no deadline. */
   readonly timeout?: number;
@@ -394,11 +393,15 @@ const LOG_CHANNEL: "channel"
 
 One diagnostic record, shaped by Effect's own structured formatter rather
 than by a type of ours: `Logger.formatStructured` already carries level,
-fiber, timestamp, message, cause, annotations, and spans, so the logger
-layer maps straight onto this with no adaptation.
+fiber, timestamp, message, cause, annotations, and spans. Its `level` is
+typed `string`; here it is the call's severity, upper-cased, as the
+formatter writes it, so a sink's switch over it is exhaustive.
 
 ```ts
-type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
+type LogEntry = Omit<
+  ReturnType<typeof Logger.formatStructured.log>,
+  'level'
+> & { readonly level: Uppercase<LogLevel.Severity> };
 ```
 
 ## LogSink
@@ -591,7 +594,7 @@ anything but `true`.
 
 ```ts
 function projectValueIgnored(
-  row: StateSettingEntry | undefined,
+  row: SettingRow | undefined,
   value: unknown,
 ): boolean
 ```

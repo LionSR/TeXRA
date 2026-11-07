@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The compile-after-output settings are document-task settings.** The
+  project settings that compile a document task's output, open the PDF and
+  repair a failed compile are stored as `texra.documents.compileAfterOutput`,
+  `texra.documents.compileTimeoutMs`, `texra.documents.openPdf` and
+  `texra.documents.rejectOnCompileFailure` (each was `texra.workflow.*`), and
+  `texra chat`'s `/config` lists them under **Document tasks** (was
+  **Workflow run**). A value saved under an old name is not read: set it
+  again in Settings › LaTeX or `/config`.
 - **`texra history` reports a run's outcome, not a status word.** The
   `history-entry` and `history-detail` NDJSON records carry `outcome`
   (`completed`, `cancelled`, `failed`, or `null`) beside `resumable`, in
@@ -1634,6 +1642,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **An agent whose template file cannot be read is reported, not run
+  without it.** A task that names a file in `task.files` that is missing or
+  unreadable is listed as an issue on the Agents page and in `texra agents`,
+  naming the file, instead of running with that template left out.
 - **The VS Code extension no longer reports another extension's error as
   its own.** VS Code runs every extension in one process, and TeXRA showed
   "The extension host encountered an unrecoverable error" for a failure in

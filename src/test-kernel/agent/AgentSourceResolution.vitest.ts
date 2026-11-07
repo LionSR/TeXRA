@@ -1,5 +1,5 @@
 // Node imports
-import { readFile, writeFile } from 'node:fs/promises';
+import { cp, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 // Third-party imports
@@ -36,7 +36,9 @@ import { FakeHost } from '@test/support/testKernel';
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(catalog: AgentCatalogShape, entry: AgentEntry | undefined) {
   return entry
-    ? catalog.forLaunch(installedHost().roots, entry.name, entry.source)
+    ? catalog
+        .workspaceAgents(installedHost().roots)
+        .forLaunch(entry.name, entry.source)
     : Effect.succeed(undefined);
 }
 
@@ -87,6 +89,15 @@ layer(
       ],
     };
     const customDir = await makeTempDir('texra-custom-agent-', tempDirs);
+    // The bundled agents, copied so a test can change a bundled file.
+    const builtInDir = await makeTempDir('texra-builtin-agents-', tempDirs);
+    await cp(
+      resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+      builtInDir,
+      {
+        recursive: true,
+      },
+    );
     for (const [fileName, lines] of Object.entries(customAgents)) {
       await writeFile(resolve(customDir, fileName), `${lines.join('\n')}\n`);
     }
@@ -97,10 +108,7 @@ layer(
         agentDirectories: {
           custom: () => Effect.sync(() => customDir),
           customConfigured: () => Effect.succeed(false),
-          builtIn: () =>
-            Effect.sync(() =>
-              resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-            ),
+          builtIn: () => Effect.sync(() => builtInDir),
         },
       },
     );
@@ -123,7 +131,9 @@ layer(
         expect(builtIn?.source).toBe('builtIn');
 
         // The entry validation accepts: the name within the visible agents.
-        const visible = yield* catalog.visible(installedHost().roots);
+        const visible = yield* catalog
+          .workspaceAgents(installedHost().roots)
+          .visible();
         const custom = yield* launchAs(
           catalog,
           findAgentByIdentifier(visible, 'assistant'),
@@ -140,7 +150,7 @@ layer(
       const bundled = catalog.get('builtIn:paper2poster');
       assert(bundled, 'the bundled paper2poster task is listed');
 
-      const copy = yield* catalog.customize(bundled, 'copy');
+      const { path: copy } = yield* catalog.customize(bundled, 'copy');
 
       const template = (file: string) =>
         Effect.promise(() => readFile(file, 'utf8'));
@@ -161,7 +171,7 @@ layer(
       const enhance = catalog.get('builtIn:enhance');
       assert(criticize && enhance, 'the bundled criticize and enhance tasks');
 
-      const first = yield* catalog.customize(criticize, 'copy');
+      const { path: first } = yield* catalog.customize(criticize, 'copy');
       const shared = resolve(dirname(first), 'criticize.tex');
       yield* Effect.promise(() => writeFile(shared, '% edited\n'));
 
@@ -170,6 +180,29 @@ layer(
       expect(yield* Effect.promise(() => readFile(shared, 'utf8'))).toBe(
         '% edited\n',
       );
+    }),
+  );
+  // Failure mode: an update changes only a file the task binds. Overwriting
+  // the copy stamps it as current and keeps the old file beside it, so the
+  // newer-version notice goes away; the person must be told the kept file
+  // differs, or the copy is silently stale.
+  it.effect('reports a kept bound file the bundled update changed', () =>
+    Effect.gen(function* () {
+      const before = (yield* loadCatalog).get('builtIn:paper2poster');
+      assert(before, 'the bundled paper2poster task is listed');
+      yield* (yield* loadCatalog).customize(before, 'overwrite');
+      yield* Effect.promise(() =>
+        writeFile(
+          resolve(dirname(before.path), 'template_poster.tex'),
+          '% updated\n',
+        ),
+      );
+
+      const updated = (yield* loadCatalog).get('builtIn:paper2poster');
+      assert(updated, 'the updated paper2poster task is listed');
+      const copy = yield* (yield* loadCatalog).customize(updated, 'overwrite');
+
+      expect(copy.keptDiffering).toStrictEqual(['template_poster.tex']);
     }),
   );
 });

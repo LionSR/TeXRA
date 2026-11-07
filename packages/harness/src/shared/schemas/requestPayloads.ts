@@ -1,7 +1,7 @@
 import { Effect, Schema, Struct } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
-import { RunSelectionSchema, RunIdSchema, Sha256Schema } from './identifiers';
+import { RunIdSchema, Sha256Schema } from './identifiers';
 import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
 import { MODEL_PROVIDERS } from './runInput';
@@ -15,7 +15,7 @@ import { DeclinableUsageRouteSchema } from './usage';
 const RequestBaseSchema = Schema.Struct({
   requestId: Schema.String,
   allowBypass: Schema.Boolean,
-  runId: RunSelectionSchema,
+  runId: RunIdSchema,
 });
 
 export const ToolEditRequestSchema = RequestBaseSchema.mapFields(

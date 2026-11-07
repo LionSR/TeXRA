@@ -39,12 +39,12 @@ import {
   type RunStopReason,
 } from '@shared/schemas';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import type { LiveRun, RunControls, RunsShape } from './runs';
 import type { executeAgent } from './executeAgent';
 import type { RunServices } from './ToolServices';
 import type { SessionServices } from './rootLaunch';
+import { DETACH_SUBAGENTS_ON_STOP_SETTING } from '@shared/state/stateSettings';
 
 /** A launch already has the run here: the one refusal for that fact. Hosts
  *  word it from `message`; a resume reads the tag to report the run
@@ -459,9 +459,9 @@ export class RunRegistry implements RunsShape {
         );
         const detach =
           reason === 'user' &&
-          (yield* Settings.get<boolean>(
+          (yield* Settings.get(
             this.init.roots,
-            GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+            DETACH_SUBAGENTS_ON_STOP_SETTING,
           ));
         if (detach) yield* this.detachActiveChildren(runId);
         else
