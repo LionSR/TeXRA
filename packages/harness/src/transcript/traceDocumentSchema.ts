@@ -7,6 +7,7 @@ import {
   RunIdSchema,
   unavailableFactReason,
   factName,
+  type FactName,
 } from '@shared/schemas';
 
 /**
@@ -49,10 +50,7 @@ export function readTraceFacts(
 ): TraceDocument {
   const factKinds = new Map(
     [GOAL_PLAN_KIND, ...appFactKinds].map(
-      (factKind): [string, TraceFactKind] => [
-        `${factKind.plugin}/${factKind.kind}`,
-        factKind,
-      ],
+      (factKind): [FactName, TraceFactKind] => [factName(factKind), factKind],
     ),
   );
   const events = document.events.map((event) => {
