@@ -1,9 +1,9 @@
-// Shared async lifecycle for `/` forms: the one write runner, the sequenced
+// Shared async lifecycle for `/` forms: the one write runner, the latest-wins
 // read every status view and list form holds, and the list-form layer that
 // lets `Esc` close the panel while it has nothing actionable to show.
 
 import { useInput } from 'ink';
-import { Cause, Effect, type Fiber } from 'effect';
+import { Cause, Effect, Fiber, FiberHandle, Scope } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -13,6 +13,7 @@ import {
   type ReturnKeyInput,
 } from '@cli/tui/inputKeys';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
+import { useMountScope } from '@cli/chat/tui/state/useMountScope';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 
 interface AsyncResource<T, R = ProcessServices> {
@@ -136,8 +137,9 @@ export function runFormWrite<A>(
 
 /**
  * Read `load` once on mount and hold its latest result, loading flag, and
- * error. Reads are sequenced: a stale read, or one that resolves after
- * unmount, never lands.
+ * error. Every read runs in one `FiberHandle` in a scope the mount owns: a
+ * newer read interrupts the one in flight, and unmount interrupts the last,
+ * so only the latest read lands and none lands after unmount.
  */
 export function useAsyncResource<T, R extends ProcessServices>(options: {
   readonly load: () => Effect.Effect<T, Error, R>;
@@ -151,59 +153,51 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
   const [error, setError] = useState<string | undefined>(undefined);
   const latest = useRef(options);
   latest.current = options;
-  const sequence = useRef(0);
-  const mounted = useRef(false);
+  const { runtime } = options;
+  const scope = useMountScope(runtime);
+  const [reads] = useState(() =>
+    runtime.runSync(
+      FiberHandle.make<void>().pipe(Effect.provideService(Scope.Scope, scope)),
+    ),
+  );
 
   const reportError = useCallback((err: unknown) => {
     setError(toErrorMessage(err));
     latest.current.onError?.(err);
   }, []);
 
-  // `suspend` claims the sequence number when the read starts, not when its
-  // program is built: a write that composes this after itself must not
-  // reserve the slot before that write lands.
+  // A caller that sequences a read after its own write waits for that read,
+  // whether it lands or a newer one supersedes it.
   const refresh = useCallback(
     (): Effect.Effect<void, never, R> =>
-      Effect.suspend(() => {
-        if (!mounted.current) return Effect.void;
-        const request = ++sequence.current;
-        const current = (): boolean =>
-          mounted.current && request === sequence.current;
-        setLoading(true);
-        setError(undefined);
-        return latest.current.load().pipe(
-          Effect.matchCause({
-            onSuccess: (result) => {
-              if (!current()) return;
-              setData(result);
-              setLoading(false);
-            },
-            onFailure: (cause) => {
-              if (!current()) return;
-              reportError(Cause.squash(cause));
-              setLoading(false);
-            },
-          }),
-        );
-      }),
-    [reportError],
+      FiberHandle.run(
+        reads,
+        Effect.suspend(() => {
+          setLoading(true);
+          setError(undefined);
+          return latest.current.load().pipe(
+            Effect.matchCause({
+              onSuccess: (result) => {
+                setData(result);
+                setLoading(false);
+              },
+              onFailure: (cause) => {
+                reportError(Cause.squash(cause));
+                setLoading(false);
+              },
+            }),
+          );
+        }),
+      ).pipe(Effect.flatMap(Fiber.await), Effect.asVoid),
+    [reads, reportError],
   );
 
-  const { runtime } = options;
-  // The read `reload` forked last: a newer reload and the unmount interrupt it.
-  const reloading = useRef<Fiber.Fiber<void> | undefined>(undefined);
   const reload = useCallback(() => {
-    reloading.current?.interruptUnsafe();
-    reloading.current = runtime.runFork(refresh());
+    runtime.runFork(refresh());
   }, [runtime, refresh]);
 
   useEffect(() => {
-    mounted.current = true;
     reload();
-    return () => {
-      mounted.current = false;
-      reloading.current?.interruptUnsafe();
-    };
   }, []);
 
   return { data, setData, loading, error, refresh, reload, reportError };

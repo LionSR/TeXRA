@@ -25,6 +25,7 @@ import {
   queuedFollowUpPanelRowCount,
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
+import type { ChatScrollback } from './staticTranscriptRing';
 import { SubagentList } from './SubagentList';
 import { PlanPanel } from './PlanPanel';
 import {
@@ -34,34 +35,31 @@ import {
   selectedRunId as selectedRunIdSignal,
   sessionListRows,
   slashPaletteOpen as slashPaletteOpenSignal,
+  childListFocused as childListFocusedSignal,
+  focusChildList,
 } from '../state/cliState';
 import { sessionView, runViewOf } from '../state/sessionView';
-import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 
 // Cap the bottom subagent/plan panels so they never crowd out the
 // conversation, even though they now render below the input bar.
 const BOTTOM_PANEL_MAX_ROWS = 10;
-/** The App-owned facts: its layout decisions and the child list's reducer
- *  state. Everything else the region reads from its signals. */
+/** The App-owned facts: its layout decisions. Everything else the region
+ *  reads from its signals. */
 interface ConversationRegionSnapshot {
   readonly foregroundMaxRows: number | undefined;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
-  readonly selectedChildValue: RunId | undefined;
-  readonly childListFocused: boolean;
 }
 
 interface ConversationRegionProps {
   readonly columns: number;
   readonly inputBarVisible: boolean;
-  readonly onStaticTranscriptChange?: () => void;
   readonly renderForegroundSurface: (availableRows: number) => ReactNode;
   readonly renderFooterChrome: () => ReactNode;
   readonly rows: number;
+  readonly scrollback: ChatScrollback;
   readonly snapshot: ConversationRegionSnapshot;
-  readonly onCancelChildList: () => void;
-  readonly onChildSelectionChange: (value: RunId) => void;
   readonly onFocusSession: (runId: RunId) => void;
   readonly onKillRun: (runId: RunId) => void;
 }
@@ -69,14 +67,12 @@ interface ConversationRegionProps {
 export function ConversationRegion({
   columns,
   inputBarVisible,
-  onCancelChildList,
-  onChildSelectionChange,
   onFocusSession,
   onKillRun,
-  onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
   rows,
+  scrollback,
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
   const foregroundOpen = snapshot.foregroundKind !== undefined;
@@ -86,6 +82,7 @@ export function ConversationRegion({
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const sessionRows = useSignal(sessionListRows);
   const view = useSignal(sessionView());
+  const childListFocused = useSignal(childListFocusedSignal);
   const activeRun = runViewOf(view, activeRunId);
   // Which scrollback the transcript paints: the root's history, or a focused
   // child's own history while that child owns the scrollback.
@@ -96,8 +93,6 @@ export function ConversationRegion({
     rootRunId,
     scopedTranscript,
   });
-  const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
-  const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
   const activePlan = activeRun ? planOf(activeRun) : null;
   const queuedFollowUpMessages = (
@@ -146,9 +141,7 @@ export function ConversationRegion({
   // One bottom panel at a time in the same vertical column: the child list
   // while it has focus, otherwise the plan panel's one summary row.
   const planContentRows =
-    activePlan !== null && !foregroundOpen && !snapshot.childListFocused
-      ? 1
-      : 0;
+    activePlan !== null && !foregroundOpen && !childListFocused ? 1 : 0;
   const {
     bottomPanelRows: bottomPanelBudget,
     conversationRows,
@@ -157,21 +150,18 @@ export function ConversationRegion({
   } = allocateConversationPanelRows({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
     sessionCount: foregroundOpen ? 0 : sessionRows.length,
-    childListFocused: snapshot.childListFocused,
+    childListFocused,
     planContentRows,
     transcriptRows,
   });
   const childListVisible = subagentRows > 0;
+  // The list's rows are a layout fact: a focused list the layout leaves no
+  // row for hands the keys back to the input.
   useLayoutEffect(() => {
-    if (snapshot.childListFocused && !foregroundOpen && !childListVisible) {
-      onCancelChildList();
+    if (childListFocused && !foregroundOpen && !childListVisible) {
+      focusChildList(false);
     }
-  }, [
-    childListVisible,
-    foregroundOpen,
-    onCancelChildList,
-    snapshot.childListFocused,
-  ]);
+  }, [childListVisible, foregroundOpen, childListFocused]);
   const foregroundSurface = renderForegroundSurface(foregroundRows);
 
   return (
@@ -179,8 +169,7 @@ export function ConversationRegion({
       <StaticConversationTranscript
         maxRows={staticTranscriptRows}
         ownerKey={scrollbackTarget.ownerKey}
-        onRenderKeyChange={onStaticTranscriptChange}
-        renderKey={staticTranscriptKey}
+        scrollback={scrollback}
         scrollbackRunId={scrollbackTarget.runId}
         width={transcriptWidth}
       />
@@ -218,13 +207,11 @@ export function ConversationRegion({
         {bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
-              keyboardActive={snapshot.childListFocused && childListVisible}
+              keyboardActive={childListFocused && childListVisible}
               maxRows={subagentRows}
-              onCancel={onCancelChildList}
+              onCancel={() => focusChildList(false)}
               onFocusRun={onFocusSession}
               onKillRun={onKillRun}
-              onSelectionChange={onChildSelectionChange}
-              selectedValue={snapshot.selectedChildValue}
               rows={sessionRows}
               activeRunId={activeRunId}
             />

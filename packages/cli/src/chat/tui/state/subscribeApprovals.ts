@@ -11,7 +11,7 @@
 // The attached host answers nothing on its own: it stages each listed tool
 // edit's preview for the modal, and presents events.
 
-import { Cause, Effect, type Fiber } from 'effect';
+import { Cause, Effect, Exit, FiberSet, Scope } from 'effect';
 
 import {
   followPendingRequests,
@@ -101,10 +101,14 @@ export function createTuiHostInteractions(
       ),
     session: stores.requests,
   });
-  /** Own-key switches in flight. An attachment that is gone answers for
-   *  nobody, so `dispose` interrupts them before they decide a request the
-   *  next owner will. */
-  const switches = new Set<Fiber.Fiber<void>>();
+  /** The attachment's lifetime: the pending-request follower and the
+   *  own-key switches in flight. An attachment that is gone answers for
+   *  nobody, so `dispose` closes it, interrupting the switches before they
+   *  decide a request the next owner will. */
+  const attached = stores.runtime.runSync(Scope.make());
+  const switches = stores.runtime.runSync(
+    FiberSet.make<void>().pipe(Effect.provideService(Scope.Scope, attached)),
+  );
 
   /**
    * A retry on the user's own key, through the shared controller. A switch
@@ -116,37 +120,38 @@ export function createTuiHostInteractions(
     request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
   ): void => {
     const { runId, requestId } = request;
-    const fiber = stores.runtime.runFork(
-      apiKeyRetry.useOwnApiKey(request).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `Retry ${requestId} stays pending: ${toErrorMessage(error)}`,
-          ).pipe(
-            withLogChannel('cli.tui'),
-            Effect.andThen(
-              Effect.sync(() => {
-                reopenRequest(requestId);
-                appendLocalNotice(
-                  isRequestRefusal(error)
-                    ? requestErrorText(error)
-                    : toErrorMessage(error),
-                  runId,
-                );
-              }),
+    stores.runtime.runFork(
+      FiberSet.run(
+        switches,
+        apiKeyRetry.useOwnApiKey(request).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `Retry ${requestId} stays pending: ${toErrorMessage(error)}`,
+            ).pipe(
+              withLogChannel('cli.tui'),
+              Effect.andThen(
+                Effect.sync(() => {
+                  reopenRequest(requestId);
+                  appendLocalNotice(
+                    isRequestRefusal(error)
+                      ? requestErrorText(error)
+                      : toErrorMessage(error),
+                    runId,
+                  );
+                }),
+              ),
             ),
           ),
-        ),
-        // An interruption is this attachment leaving, not a failure.
-        Effect.catchDefect((defect) =>
-          Effect.map(reportRequestDefect(Cause.die(defect)), (message) => {
-            reopenRequest(requestId);
-            appendLocalErrorTranscript(message, runId);
-          }),
+          // An interruption is this attachment leaving, not a failure.
+          Effect.catchDefect((defect) =>
+            Effect.map(reportRequestDefect(Cause.die(defect)), (message) => {
+              reopenRequest(requestId);
+              appendLocalErrorTranscript(message, runId);
+            }),
+          ),
         ),
       ),
     );
-    switches.add(fiber);
-    fiber.addObserver(() => switches.delete(fiber));
   };
 
   const performHostCapability = (arm: HostRequest): void => {
@@ -177,17 +182,20 @@ export function createTuiHostInteractions(
       Effect.andThen(Effect.never),
       Effect.ensuring(dropPresentation(requestId)),
     );
-  const follower = stores.runtime.runFork(
-    Effect.scoped(
-      followPendingRequests(
-        stores.requests.view,
-        (view) =>
-          view.requests.filter(
-            (request): request is StagedRequest =>
-              request.payload.kind === 'toolEdit',
-          ),
-        stage,
+  stores.runtime.runFork(
+    Effect.forkIn(
+      Effect.scoped(
+        followPendingRequests(
+          stores.requests.view,
+          (view) =>
+            view.requests.filter(
+              (request): request is StagedRequest =>
+                request.payload.kind === 'toolEdit',
+            ),
+          stage,
+        ),
       ),
+      attached,
     ),
   );
   const releaseCapability = useHostCapability(performHostCapability);
@@ -199,8 +207,7 @@ export function createTuiHostInteractions(
       host.emit(event, payload);
     },
     dispose() {
-      follower.interruptUnsafe();
-      for (const fiber of switches) fiber.interruptUnsafe();
+      stores.runtime.runFork(Scope.close(attached, Exit.void));
       releaseCapability();
     },
   };

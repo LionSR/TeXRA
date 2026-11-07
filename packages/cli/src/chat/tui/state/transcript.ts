@@ -6,6 +6,8 @@
  * of two inputs ordered by the same transcript seq, so a row the session view's
  * residency cap drops never shifts a notice.
  */
+import { randomUUID } from 'node:crypto';
+
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
@@ -52,8 +54,6 @@ function rowSeq(row: TranscriptRow | undefined): number {
 }
 
 export const notices = signal<readonly LocalNotice[]>([]);
-
-let localEntrySeq = 0;
 
 /** A result the TUI itself reports (a slash command, a model fallback): a
  *  dim, marked row, so it never reads as the model speaking. */
@@ -116,11 +116,7 @@ function appendLocalTranscriptEntry(
     {
       runId,
       afterSeq,
-      row: localTranscriptRow(
-        kind,
-        `local:${localEntrySeq++}:${runId}`,
-        normalized,
-      ),
+      row: localTranscriptRow(kind, `local:${randomUUID()}`, normalized),
     },
   ]);
 }
@@ -159,13 +155,12 @@ export function noticesFor(
 }
 
 /**
- * The run's rows with its notices inserted after the last row
- * whose seq is at or below their `afterSeq`, in notice order. A notice's
- * settlement key is its `afterSeq`: the pane re-sorts by that key with a
- * local-after-source tiebreak, so the key alone keeps the notice after the
- * row it follows. A notice written before the run's first row keys at 0 and
- * sorts ahead of it. The merged `settledRows` is the finished prefix plus every
- * notice anchored inside it (a notice is immutable the moment it is written).
+ * The run's rows with its notices inserted after the last row whose seq is at
+ * or below their `afterSeq`, in notice order: the merged index is the print
+ * order. A notice written before the run's first row goes ahead of it. The
+ * merged `settledRows` is the finished prefix plus every notice anchored
+ * inside it (a notice is immutable the moment it is written, and keeps its
+ * identity across merges).
  */
 export function mergeLocalNotices(
   run: RunView | undefined,
@@ -185,11 +180,7 @@ export function mergeLocalNotices(
   };
   for (const notice of runNotices.toSorted((a, b) => a.afterSeq - b.afterSeq)) {
     flushThrough(notice.afterSeq);
-    out.push({
-      ...notice.row,
-      seqNo: notice.afterSeq,
-      settlementSeqNo: notice.afterSeq,
-    });
+    out.push(notice.row);
   }
   for (; next < rows.length; next += 1) out.push(rows[next]);
   return {
@@ -228,7 +219,4 @@ export function reportRequestDefect(
   );
 }
 
-registerCliStateResetHook(() => {
-  localEntrySeq = 0;
-  notices.set([]);
-});
+registerCliStateResetHook(() => notices.set([]));

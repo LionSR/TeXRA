@@ -31,9 +31,9 @@ import {
   matchTextInputBinding,
   type TextInputChunkEdit,
 } from './textInputBindings';
-import { ImagePasteQueue } from './imagePasteQueue';
+import { NO_IMAGE_PASTES, type ImagePastes } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
@@ -63,19 +63,16 @@ interface BaseTextInputProps {
    *  large paste into a `[Pasted text #N +M lines]` chip and stash the content
    *  elsewhere. Defaults to inserting the paste verbatim. */
   readonly transformPaste?: (text: string) => string;
-  /** Ctrl-V image paste: the OS-clipboard probe, the runtime its Effect
-   *  timeout runs on, and where a failure is reported. They arrive as one
-   *  prop because the probe cannot run without the runtime, so a bar that
-   *  offers paste always supplies both. */
+  /** Ctrl-V image paste: the OS-clipboard probe, the pastes it runs among
+   *  (which a submit waits for), and where a failure is reported. */
   readonly onImagePaste?: {
     /** The probe as a program: it yields the chip text to insert (e.g.
      *  `[Image #1]`), or null when there is no image on the clipboard. This
      *  input owns the one run, under the timeout below. */
     readonly probe: () => Effect.Effect<string | null, Error, ProcessServices>;
-    readonly runtime: ProcessRuntime;
+    readonly pastes: ImagePastes;
     readonly onError?: (error: unknown) => void;
   };
-  readonly imagePasteQueue?: ImagePasteQueue;
   /** Optional parent-owned value ref for same-tick programmatic draft changes. */
   readonly readLatestValue?: () => string;
   /** Optional parent-owned edit applied before a raw terminal chunk is handled. */
@@ -123,10 +120,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   // the current caret, not a stale keypress-time snapshot.
   const latestStateRef = useRef({ value, cursor });
   latestStateRef.current = { value, cursor };
-  const ownedImagePasteQueueRef = useRef<ImagePasteQueue | null>(null);
-  ownedImagePasteQueueRef.current ??= new ImagePasteQueue();
-  const imagePasteQueue =
-    props.imagePasteQueue ?? ownedImagePasteQueueRef.current;
+  const imagePasteQueue = props.onImagePaste?.pastes ?? NO_IMAGE_PASTES;
 
   // Track the last value we ourselves emitted via onChange. If the prop's
   // `value` diverges from this, the parent swapped the text out from under
@@ -224,8 +218,8 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     const latest = syncLatestExternalValue();
     if (
       latest.value.length === 0 &&
-      !imagePasteQueue.hasPending &&
-      !imagePasteQueue.hasDeferredAction
+      !imagePasteQueue.hasPending() &&
+      !imagePasteQueue.hasDeferredAction()
     ) {
       return false;
     }
@@ -272,7 +266,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         props.onEscape?.();
         return;
       }
-      if (imagePasteQueue.hasDeferredAction) {
+      if (imagePasteQueue.hasDeferredAction()) {
         // A visible Enter already committed this draft. Ignore later keystrokes
         // until clipboard probes finish so the deferred submit is neither
         // overwritten nor allowed to clear a newer draft.
@@ -334,26 +328,23 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         // discard or runtime disposal interrupts the fiber, which is not a
         // paste failure to report.
         imagePasteQueue.add(
-          imagePaste.runtime.runFork(
-            Effect.suspend(imagePaste.probe).pipe(
-              Effect.timeout(IMAGE_PASTE_TIMEOUT_MS),
-              Effect.matchCause({
-                onFailure: (cause) => {
-                  if (Cause.hasInterrupts(cause)) return;
-                  const error = Cause.squash(cause);
-                  imagePaste.onError?.(
-                    Cause.isTimeoutError(error)
-                      ? new Error('Image paste timed out.')
-                      : error,
-                  );
-                },
-                onSuccess: (chip) => {
-                  if (chip) insertIntoLatestDraft(chip);
-                },
-              }),
-            ),
+          Effect.suspend(imagePaste.probe).pipe(
+            Effect.timeout(IMAGE_PASTE_TIMEOUT_MS),
+            Effect.matchCause({
+              onFailure: (cause) => {
+                if (Cause.hasInterrupts(cause)) return;
+                const error = Cause.squash(cause);
+                imagePaste.onError?.(
+                  Cause.isTimeoutError(error)
+                    ? new Error('Image paste timed out.')
+                    : error,
+                );
+              },
+              onSuccess: (chip) => {
+                if (chip) insertIntoLatestDraft(chip);
+              },
+            }),
           ),
-          imagePaste.runtime,
         );
         return;
       }
@@ -399,7 +390,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   // otherwise the paste is inserted verbatim.
   usePaste(
     (text) => {
-      if (imagePasteQueue.hasDeferredAction) return;
+      if (imagePasteQueue.hasDeferredAction()) return;
       const toInsert = props.transformPaste?.(text) ?? text;
       insertIntoLatestDraft(toInsert);
     },
