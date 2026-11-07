@@ -83,8 +83,8 @@ const CliRunResultSchema = RunEndSchema.mapFields(
 export type CliRunResult = typeof CliRunResultSchema.Type;
 
 /**
- * A document task's result: its output carries its documents (the run's
- * `structured` value, under the CLI's name), with the run's storage folder
+ * A document task's result: its output carries its documents (what its
+ * documents row reports, in place of a `structured` value), with the run's storage folder
  * and where `--output` or `--output-dir` copied the outputs.
  */
 const CliWorkflowRunResultSchema = CliRunResultSchema.mapFields(

@@ -1,10 +1,10 @@
 /**
  * How a document task's run reads to whoever launched it
- * (`DOCUMENT_TASK_RESULT`, the documents plugin's `AgentBlock.result`): its
- * delivery to the launching model (every revision's outputs, the proposed
- * revision's diffs, and the compile failures), the files it wrote for a
- * script's summary, and the diffs `document_propose` writes, which the
- * documents fact records and the run's result is derived from.
+ * (`DOCUMENT_TASK_RESULT`, the documents plugin's `AgentBlock.result`), read
+ * from its documents row: its delivery to the launching model (every
+ * revision's outputs, the proposed revision's diffs, and the compile
+ * failures), the files it wrote for a script's summary, and the diffs
+ * `document_propose` writes, which that row records.
  */
 import path from 'node:path';
 
@@ -30,12 +30,16 @@ import {
 } from '@texra-ai/harness/schemas';
 import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
 import {
-  DocumentsResultSchema,
   type DocumentDiffs,
   type DocumentsResult,
   type OutputFileSummary,
   type ResultDiffSummary,
 } from '@texra/shared/plugins/documentOutputs';
+import {
+  DOCUMENTS_OUTPUT_KIND,
+  documentsSummary,
+  type DocumentsOutput,
+} from '@texra/shared/plugins/documents';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { AgentBlockResult, RecipeChange } from '@texra-ai/harness/plugins';
 
@@ -177,12 +181,17 @@ function documentChanges(
     }));
 }
 
-/** How a document task's run reads to whoever launched it. */
-export const DOCUMENT_TASK_RESULT: AgentBlockResult<DocumentsResult> =
+/** How a document task's run reads to whoever launched it: from its
+ *  documents row. */
+export const DOCUMENT_TASK_RESULT: AgentBlockResult<DocumentsOutput> =
   Object.freeze({
-    schema: DocumentsResultSchema,
-    delivery: documentsDelivery,
-    changes: documentChanges,
+    fact: DOCUMENTS_OUTPUT_KIND,
+    delivery: (value: DocumentsOutput, runId: RunId) =>
+      documentsDelivery(documentsSummary(value), runId),
+    changes: (
+      value: DocumentsOutput,
+      roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
+    ) => documentChanges(documentsSummary(value), roots),
   });
 
 /** Maximum lines of diff to include per file in deliveries. */

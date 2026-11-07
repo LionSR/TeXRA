@@ -1,13 +1,13 @@
 /**
  * The documents plugin's output vocabulary: what a document task's revisions
  * wrote (`RoundOutput`, with their compile failures), the flattened
- * summaries its run's result reports (`DocumentsResult`, the recipe's return
- * value and its run's `output.structured`, with the proposed revision's diffs),
+ * summaries a reader of its documents row reports (`DocumentsResult`, with
+ * the proposed revision's diffs),
  * the output protocol's tags, and how hosts name and label an output. The
  * harness holds none of it. Browser-safe: it imports only schemas and
  * browser-safe path helpers.
  */
-import { Result, Schema, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
 import {
   getBasename,
   DiffStatsSchema,
@@ -292,8 +292,9 @@ export type DocumentDiffs = typeof DocumentDiffsSchema.Type;
 
 /**
  * What a document task's run reports: every revision's outputs and compile
- * failures, and its proposed revision's diffs. Its recipe returns it, so it is
- * the run's `output.structured`.
+ * failures, and its proposed revision's diffs. Projected from the run's
+ * documents row (`documentsSummary`), never stored: the launching model's
+ * delivery and the CLI's `documents` are built from it.
  */
 export const DocumentsResultSchema = Schema.Struct({
   outputs: Schema.Array(OutputFileSummarySchema),
@@ -302,11 +303,3 @@ export const DocumentsResultSchema = Schema.Struct({
   diffsUnavailable: Schema.optional(Schema.String),
 });
 export type DocumentsResult = typeof DocumentsResultSchema.Type;
-
-/** The documents a run reports, when its value is a document task's. */
-export function documentsResultOf(
-  structured: unknown,
-): DocumentsResult | undefined {
-  const parsed = Schema.decodeUnknownResult(DocumentsResultSchema)(structured);
-  return Result.isSuccess(parsed) ? parsed.success : undefined;
-}

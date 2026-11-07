@@ -10,7 +10,7 @@ import { DOCUMENT_TASK_OPTIONS } from '@texra/shared/plugins/documents';
 
 export const DOCUMENTS_MODULE = `
 /** Run agentName's document task; resolves to its result, whose
- *  documents.outputs are the files it revised. args takes document_task's
+ *  changes are the files it revised. args takes document_task's
  *  fields: prompt, inputFiles, contextFiles, mediaFiles, outputFiles, model,
  *  ${Rec.keys(DOCUMENT_TASK_OPTIONS).join(', ')}. */
 export const revise = (agentName, args = {}) => {
@@ -21,15 +21,14 @@ export const revise = (agentName, args = {}) => {
 
 /** args for a task over what a finished task produced: each document's
  *  latest revision as an input file. A task lists a document once per
- *  round (r0/, r1/, ... in its run storage), so the last round's copy is
- *  the one taken, by its absolute path. */
+ *  revision, in revision order, so the last copy of each path is the one
+ *  taken, by its absolute path. */
 export const from = (result, args = {}) => {
-  const outputs = result?.documents?.outputs;
-  if (!Array.isArray(outputs))
+  const changes = result?.changes;
+  if (!Array.isArray(changes))
     throw new TypeError('from() takes the result of a task that ran to its end.');
   const latest = new Map();
-  for (const output of [...outputs].sort((a, b) => a.round - b.round))
-    latest.set(output.relativePath.replace(/^r\\d+[\\/\\\\]/, ''), output.absolutePath);
+  for (const change of changes) latest.set(change.path, change.absolutePath);
   return { ...args, inputFiles: [...latest.values()] };
 };
 `;

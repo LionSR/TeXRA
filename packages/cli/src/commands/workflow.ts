@@ -11,6 +11,7 @@ import type { CliWorkflowRunResult } from '@cli/schemas/cliOutput';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import {
   DOCUMENT_TASK_OPTIONS,
+  documentsOf,
   type DocumentTaskOptions,
 } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
@@ -388,14 +389,30 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         const expectedOutputFiles = declaredOutputFiles.length
           ? declaredOutputFiles
           : (config.cli?.expectedOutputFiles ?? undefined);
+        // The task's documents are its documents row, read from the
+        // store, which holds every row the run committed once its end is.
         const outputResult = yield* Effect.result(
-          resolveWorkflowOutput(
-            copied ? output : undefined,
-            copied ? outputDir : undefined,
-            ended,
-            runContext,
-            { expectedOutputFiles, storageRoot: session.roots.storage },
-          ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
+          session.view.read([]).pipe(
+            Effect.mapError(
+              (cause) =>
+                new Error(
+                  `The documents of task ${ended.runId} could not be read: ${toErrorMessage(cause)}`,
+                  { cause },
+                ),
+            ),
+            Effect.flatMap((stored) => {
+              const run = stored.runs.get(ended.runId);
+              return resolveWorkflowOutput(
+                copied ? output : undefined,
+                copied ? outputDir : undefined,
+                ended,
+                run && documentsOf(run),
+                runContext,
+                { expectedOutputFiles, storageRoot: session.roots.storage },
+              );
+            }),
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+          ),
         );
         if (Result.isFailure(outputResult)) {
           workflowOutputError ??= outputResult.failure;

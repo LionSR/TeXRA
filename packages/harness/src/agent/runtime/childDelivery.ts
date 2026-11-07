@@ -78,7 +78,6 @@ export const childEndReport = Effect.fn('childEndReport')(function* (
       // (`AgentBlock.result`).
       const recipe = yield* readRecipeResult(
         config,
-        report.output,
         runId,
         yield* SessionRoots,
       );
