@@ -142,9 +142,7 @@ const construct = Effect.fn('llm.construct')(function* (
       const { anthropicMessagesModel } = yield* Effect.promise(
         () => import('./api/anthropicMessages.js'),
       );
-      return yield* constructed(() =>
-        anthropicMessagesModel(configuration, { apiKey, fetch }),
-      );
+      return yield* anthropicMessagesModel(configuration, { apiKey, fetch });
     }
     case 'google-interactions': {
       const apiKey = yield* bearer(credential, configuration.protocol);
@@ -169,9 +167,10 @@ const construct = Effect.fn('llm.construct')(function* (
       const { openaiResponsesModel } = yield* Effect.promise(
         () => import('./api/openaiResponses.js'),
       );
-      return yield* constructed(() =>
-        openaiResponsesModel(configuration, { authentication, fetch }),
-      );
+      return yield* openaiResponsesModel(configuration, {
+        authentication,
+        fetch,
+      });
     }
   }
 });
@@ -202,20 +201,6 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
     webSocket,
     options.fetch,
   );
-  const { releaseUploads } = model;
-  if (releaseUploads !== undefined) {
-    yield* Effect.addFinalizer(() =>
-      releaseUploads().pipe(
-        Effect.flatMap((unreleased) =>
-          unreleased.length === 0
-            ? Effect.void
-            : Effect.logWarning(
-                `Could not delete ${unreleased.length} uploaded file(s) when the ${config.label} binding closed; the provider expires them on its own.`,
-              ).pipe(Effect.annotateLogs({ unreleased })),
-        ),
-      ),
-    );
-  }
   const { route } = spec;
   const billing = route.kind === 'api-key' ? route.usageRoute : route.kind;
   return {
