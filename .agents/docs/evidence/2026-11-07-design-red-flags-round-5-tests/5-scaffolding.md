@@ -81,8 +81,8 @@ top-churn file).
   (`:389`), `describe('the session event table and its one publisher'`
   (`:467`, 768 lines, the `Database` store), `describe('RunHistory'`
   (`:1235`, 325 lines, 2 tests). 14 tests in 1,560 lines, 111 lines a test.
-- The file's `vi.mock`s (`:50-54` SqliteClient, `:112-115` `node:os`,
-  `:116-127` the Lean pool) make every case `isolated` (own registry, own
+- The file's `vi.mock`s (`:50-54` SqliteClient, `:110-113` `node:os`,
+  `:114-126` the Lean pool) make every case `isolated` (own registry, own
   worker). C7 found the mocks themselves; what is new is that the
   `RunHistory` block (`@shared/session/runHistory`, which has no suite of its
   own) and the framing block need none of them and pay for them.
@@ -404,9 +404,9 @@ fields; casts (`!`) reaching past a type.
 - `pageerror` collection is written 5 times in 3 specs
   (`agentCatalog.spec.ts:37,113,207`, `devStartup.spec.ts:47`,
   `workspaceTabs.spec.ts:148`), while `launchTexraApp` already subscribes
-  to it to log (`electronApp.ts:138`).
-- `LaunchedApp.ownsWorkspace` / `ownsUserData` (`electronApp.ts:186-187`,
-  read in `closeTexraApp`, `:192-200`) carry ownership as two booleans
+  to it to log (`electronApp.ts:141`).
+- `LaunchedApp.ownsWorkspace` / `ownsUserData` (`electronApp.ts:48-50`,
+  set at `:111-114`, read in `closeTexraApp`, `:200-201`) carry ownership as two booleans
   because the launch does not own its own teardown.
 - 55 non-null `!` in the specs (`workspaceTabs` 22, including 16
   `(await x.boundingBox())!`). `oxlint.config.mts:348` applies
@@ -526,7 +526,7 @@ None depends on a root.
   continuation), one suite per route as `src/test-kernel/AGENTS.md`
   requires, all behaviour in one helper.
 - `packages/harness/test/agent/followUp/ToolUseWait.vitest.ts`'s `forkLoop`
-  (`:68-90`): it waits for the run's `n`-th `waiting` row on the log's tail,
+  (`:76-100`): it waits for the run's `n`-th `waiting` row on the log's tail,
   a published signal, and runs the production loop over the shared scripted
   model.
 - `supabase/functions/auth-bridge/index_test.ts` and
@@ -534,7 +534,7 @@ None depends on a root.
   and patch nothing (the shape F8 asks of the other two).
 - `src/test-kernel/agent/output/ReplyDocuments.vitest.ts`: a high helper share
   (45%) that is a case table (`RECOVERY_CASES`, `:101`) driven by one
-  `it.effect.each`; data, not scaffolding.
+  loop of cases (`:198`); data, not scaffolding.
 - `src/test-kernel/tools/lean/LeanServerPool.vitest.ts`: its 51% helper share
   is a fake `lake` process at the real edge (`:36-124`) under the production
   spawner.

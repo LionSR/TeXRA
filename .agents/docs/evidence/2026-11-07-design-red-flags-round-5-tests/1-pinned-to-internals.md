@@ -128,7 +128,7 @@ there.
   `scriptedInvokerLayer`. Then replace the two `RunState.invocation` reads
   with the rows a resume reads:
   - the `model.message` `failed` row's `next`;
-  - the `request.opened` row, which is already asserted (`:430-437`);
+  - the `request.opened` row, which is already asserted (`:418-425`);
   - the run's position in the view, which is already asserted.
 - **Deleted:** two `boundModel` literals (about 60 lines), `openRun`'s layer
   composition (about 40 lines), `openDispatch`'s hand-written attempt and
@@ -354,9 +354,9 @@ draft beside a support builder).
   lines in tests (`git show 18cecd8 --stat`).
 - **12 suites write the literal.** They write `type: 'run.start'` with
   `identity`, `takesFollowUps`, `parent` and `provenance` by hand. Examples:
-  - `ChildRunOutput.vitest.ts:96-104`;
-  - `ResumeCommand.vitest.ts:62-70`;
-  - `ExecuteCli.vitest.ts:196-203`.
+  - `ChildRunOutput.vitest.ts:101-108`;
+  - `ResumeCommand.vitest.ts:64-71`;
+  - `ExecuteCli.vitest.ts:210-217`.
 - **A builder already exists.** `publishTestRunStart`
   (`sessionTestUtils.ts:56-72`) writes the same draft. It takes only
   `parent`, so a suite that needs another agent name, or
@@ -461,7 +461,7 @@ beside the shared one).
 - **The sites.** These are `vi.spyOn(execUtils, 'executeCommand')` at
   `BashTool.vitest.ts:49`, `:154`, `:209`, at
   `ExecutionsToolOutput.vitest.ts:63`, and at `grep.vitest.ts:22`.
-  - The stubs call `options?.onStdout?.(…)` (`BashTool:211-212`) and return
+  - The stubs call `options?.onStdout?.(…)` (`BashTool:212-213`) and return
     hand-built `ExecResult`s.
   - `BashTool:172` also spies `resumeRunModule.resumeRun`, and
     `ExecutionsToolOutput:73` spies `toolUseFollowUp.wakeIfOwed`.
@@ -470,11 +470,11 @@ beside the shared one).
   `scriptedSpawnerLayer` (`childProcessTestLayer.ts:69`), is the one R3
   named a good module (6 suites).
 - **The assertions are good.** They are on the tool's result
-  (`BashTool.call(...)`, `:224`) and on `readRunEnd()` (`:259`).
+  (`BashTool.call(...)`, `:224`) and on `readRunEnd()` (`:262`).
 
 **The design decision behind it.** Where a tool suite fakes a process. A
 suite that stubs `executeCommand` cannot catch a bug in it. Examples are
-`executeCommand`'s chunk decoding (the surrogate-pair case at `:202` is
+`executeCommand`'s chunk decoding (the surrogate-pair case at `:203` is
 exactly that kind), its timeout, and its exit-code mapping.
 
 **The better design.** Provide `scriptedSpawnerLayer(...).layer` innermost,
@@ -560,7 +560,7 @@ Before: the schema, the fold, and the UI and `sessionLifecycle.spec.ts`
   - `RetryState.vitest.ts:87`, `:91` (llm `verdict.js`, `turn.js`);
   - `resumeRun.vitest.ts:53` and `effect/sessionPrograms.vitest.ts:34`
     (`makeSessions` from `packages/harness/src/effect/sessionPrograms`, with
-    an `as never` owner at `resumeRun:117`);
+    an `as never` owner at `resumeRun:119`);
   - `traceFrames.vitest.ts:11` and `traceAssembler.vitest.ts:28`
     (trace-viewer);
   - `llm/GoogleInteractions.vitest.ts:14`.
@@ -568,12 +568,12 @@ Before: the schema, the fold, and the UI and `sessionLifecycle.spec.ts`
   The two trace-viewer ones test `trace.json`, a format. The rest fall
   under the 10-27 note's §4 A1 codemod: cited, not re-reported.
 - **`resumeRun.vitest.ts` calls `resumeRun` directly** (`:64`). It already
-  builds the public session (`packageSession`, `:113-121`), whose
+  builds the public session (`packageSession`, `:115-123`), whose
   `session.resume(runId)` is the host verb. Fix: resume through it in the
   cases that do not need the internal options. Unverified which cases need
   them.
 - **`SessionHandle.vitest.ts` reads the internal `Approvals.policy()`**
-  (`:61`, `:68`, `:76`) to show that a reconnecting window cannot replace
+  (`:64`, `:70`, `:78`) to show that a reconnecting window cannot replace
   the persisted policy. Fix: assert what a run started after the change
   records, which is its policy in the view's `policy` map
   (`sessionView.ts:320`). Unverified that the map carries the session

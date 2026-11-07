@@ -94,7 +94,7 @@ which module calls which); a cost the tier table names and the suites pay.
 - Measured above: `isolated` alone runs in 26.0 s for 34 files and 74 tests,
   with tests 17 % of that. `kernel` runs in 16.6 s for 106 files. Each
   isolated file costs about 0.6 s of import and setup before its first test.
-- Why each suite is isolated (from the scan in `vitest.config.mjs:116-121`
+- Why each suite is isolated (from the scan in `vitest.config.mjs:110-115, 144`
   and the suites' own lines):
   - **`vi.mock` of a repository module (18):** `cli/ExecuteCli.vitest.ts:125-151`
     (5 mocks), `cli/InstallGithubAction.vitest.ts:25,32`,
@@ -177,7 +177,7 @@ scan); a comment that is no longer true.
 
 **Evidence.**
 
-- `vitest.config.mjs:122-126`: `const DOM_DIRS = ['desktop', 'progressView',
+- `vitest.config.mjs:116-120`: `const DOM_DIRS = ['desktop', 'progressView',
   'settings'];`. The reason given is that "their suites bring a window or
   load modules afresh through helpers a scan of the suite does not see
   (`settings/litComponentTestUtils.ts`, `desktop/loadSourceModule.ts`)".
@@ -202,7 +202,7 @@ scan); a comment that is no longer true.
   full run they would also join a registry that is already warm (no
   per-suite measurement).
 - The R3-R round's R7 replaced the name list for "reaches a host" with the
-  closure walk now at `vitest.config.mjs:67-90` (`reachesAHost`). `DOM_DIRS`
+  closure walk now at `vitest.config.mjs:80-106` (`reachesAHost`). `DOM_DIRS`
   is the declared list that walk left in place. `src/test-kernel/AGENTS.md`:
   "There is no list of exempt suites or modules."
 
@@ -240,7 +240,7 @@ protection.
 
 **Evidence.**
 
-- `packages/desktop/playwright.config.*:24-30`: the `desktop` project
+- `packages/desktop/playwright.config.ts:24-30`: the `desktop` project
   ignores `screenshots.spec.ts` and `devStartup.spec.ts`. `appearance` and
   `development` run only those two files.
 - CI runs only `test:e2e` (`.github/workflows/ci.yml:411`). A grep of
@@ -404,7 +404,7 @@ under an open rename makes a merge conflict and protects nothing.
 
 - Root `AGENTS.md` "Commands": `npm run test:pure   # before a push (~30s)`.
   Measured: 4.47 s wall for 99 files. 30 s was the figure for the old
-  isolated pure run (`vitest.config.mjs:30-31`, "Measured on 136 suites: 28s
+  isolated pure run (`vitest.config.mjs:33`, "Measured on 136 suites: 28s
   against 1m55s isolated", which is history and fine where it is).
 - `.agents/docs/proposed/architecture/2026-10-27-tech-debt-target-designs.md:345`
   estimates "isolated suites 172 → ~55". At this commit `isolated` has 34
