@@ -204,7 +204,7 @@ const HARNESS_CONFIG_ROWS: Record<
     configTarget: 'global',
     title: 'Server-side conversation state',
     description:
-      "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
+      "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
     category: 'model',
   },
   'model.useGoogleBackgroundResponses': {

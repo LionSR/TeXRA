@@ -328,16 +328,11 @@ function set(
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
   const entry = entryOf(stores.config.catalog, key);
-  // A schema rejection is thrown rather than constructed as a typed failure:
-  // a value the catalog's schema refuses is a defect of the caller, not a
-  // `ConfigWriteFailed` the store reported.
+  // The store holds the row's encoded form. A value the schema refuses is
+  // thrown rather than constructed as a typed failure: it is a defect of
+  // the caller, not a `ConfigWriteFailed` the store reported.
   return Effect.suspend(() =>
-    writeSlot(
-      entry,
-      Schema.decodeUnknownSync(entry.schema)(value),
-      stores,
-      target,
-    ),
+    writeSlot(entry, Schema.encodeSync(entry.schema)(value), stores, target),
   );
 }
 

@@ -126,14 +126,7 @@ export const HARNESS_ROW_SURFACES: Readonly<Record<string, Placement>> = {
   'model.useGoogleInteractionsServerState': {
     surfaces: {
       settingsView: 'profile',
-      models: [
-        {
-          provider: 'google',
-          label: 'Server-side conversation state',
-          description:
-            "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
-        },
-      ],
+      models: [{ provider: 'google' }],
     },
   },
   'model.openaiFastTier': providerToggle({ provider: 'openai' }),
