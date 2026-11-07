@@ -328,6 +328,14 @@ export const linkCliService = Effect.fn('linkCliService')(function* (
       start || (info !== null && isOlder(info))
         ? spawnOwnService(storageRoot)
         : Effect.fail(new Error(NONE_RUNNING)),
+      // The wait lasts as long as the older build's tasks, so the command
+      // says what it waits for and how to stop waiting.
+      (waitingFor) =>
+        Effect.sync(() =>
+          writeTextStderr(
+            `${waitingFor} To stop waiting, run \`texra service stop\`: its running tasks stop and can be resumed.`,
+          ),
+        ),
     ),
   );
   return Result.isFailure(linked)
