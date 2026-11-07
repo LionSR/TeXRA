@@ -63,8 +63,8 @@ export interface CliContext {
   readonly outputFormat: CliOutputFormat;
   /** The policy this invocation's launches decide privileged actions
    *  under (`launchPolicy` over the configured one and
-   *  {@link requestedApprovalPolicy}); what the CLI's headless guards and
-   *  resume hints read. */
+   *  `launchApproval({@link requestedApprovalPolicy})`); what the CLI's
+   *  headless guards and resume hints read. */
   readonly approvalPolicy: ApprovalPolicy;
   /** The policy this invocation asked for itself (`--approval-policy`,
    *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
@@ -545,9 +545,9 @@ export function effectiveApprovalPolicy(
   return launchPolicy(configured, launchApproval(requested));
 }
 
-/** Why a request is not what a launch runs under: one more permissive than
- *  the project's policy cannot widen it, and Auto-approve, which widens its
- *  own task, cannot override Block. */
+/** Why a request is not what a launch decides privileged actions under: one
+ *  more permissive than the project's policy cannot widen it, and
+ *  Auto-approve, which widens its own task, cannot override Block. */
 export function launchApprovalNotice(
   requested: ApprovalPolicy | undefined,
   configured: ApprovalPolicy,
