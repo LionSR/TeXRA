@@ -40,7 +40,6 @@ import {
   getWorkflowAutoCompileTimeoutMs,
   resolveWorkspaceSourceDir,
 } from './compileCheck';
-import { recoverOutputFailure } from './outputOperations';
 import type { OutputDependencies } from './outputFileExtraction';
 import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -204,17 +203,13 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
     return { artifacts, entries, notRun: null };
   },
   (effect, { logger }) =>
-    effect.pipe(
-      recoverOutputFailure({
-        logger,
-        level: 'error',
-        label: 'Error during latexdiff processing',
-        recover: (error) =>
-          Effect.succeed(
-            notRun(`the latexdiff pass failed: ${toErrorMessage(error)}`),
-          ),
-      }),
-    ),
+    // A failed pass is an error on the transcript, and the round records
+    // that its diffs did not run.
+    Effect.catch(effect, (error) => {
+      const message = toErrorMessage(error);
+      logger.error(`Error during latexdiff processing: ${message}`);
+      return Effect.succeed(notRun(`the latexdiff pass failed: ${message}`));
+    }),
 );
 
 /**

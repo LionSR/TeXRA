@@ -19,10 +19,12 @@ The files have distinct roles:
   independently.
 - `advanced.ts` contains whole-document transformations that do not fit the
   table representation.
-- `helpers.ts` and `constants.ts` support construction of the rule tables;
-  `types.ts` defines their common representation.
+- `patterns.ts` (`createPatterns`, and the backslash fixes both rule files
+  use) and `constants.ts` support construction of the rule tables; a
+  generator one table uses is written at that table. `types.ts` defines
+  their common representation.
 
 Keep rules in their existing category when extending a preset. A rule shared
-by two categories should have one generated source in `helpers.ts`, while each
+by two categories should have one generated source in `patterns.ts`, while each
 category remains an explicit configuration choice. New callers should enter
 through `replacementEngine` in `engine.ts`.

@@ -284,7 +284,6 @@ export const DocumentExtractTool = defineTool({
     yield* ensureCorrectXmlStructure(location, roots.config, logger).pipe(
       recoverOutputFailure({
         logger,
-        level: 'warn',
         label: 'XML structure',
         recover: () => Effect.void,
       }),
@@ -319,7 +318,6 @@ export const DocumentExtractTool = defineTool({
     ).pipe(
       recoverOutputFailure({
         logger,
-        level: 'warn',
         label: "Keeping the model's outputs",
         recover: () => Effect.void,
       }),
@@ -393,7 +391,6 @@ export const DocumentCompileTool = defineTool({
       // A check that could not run (an unreadable setting) checked nothing.
       recoverOutputFailure({
         logger,
-        level: 'warn',
         label: 'Compile check',
         recover: () =>
           Effect.succeed({

@@ -181,7 +181,14 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
     });
   }
 
-  const stale = staleDiffFileLocation(baseLocation, editedPath, targetLocation);
+  // A copy or sibling write (an extension mismatch resolving to a new file
+  // via getAcceptedFileTarget, or an explicit "save as copy") leaves the base
+  // untouched, so the diff comparing it against `editedPath` is still
+  // accurate.
+  const stale =
+    targetLocation.absolutePath === baseLocation.absolutePath
+      ? staleDiffFileLocation(baseLocation, editedPath)
+      : undefined;
   if (stale) {
     // Diff-file cleanup is a best-effort side effect of accepting a file: a
     // file already gone is the post-condition, and any other failure (a
@@ -273,35 +280,24 @@ export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
 /**
  * The stale `_diff` companion file a prior latexdiff run would have generated
  * for the `baseLocation` / `editedPath` pair (see {@link generateDiffFileName}),
- * sitting beside `baseLocation` — or `undefined` when accepting leaves no
- * stale diff behind:
- *
- * - `targetLocation` isn't `baseLocation` itself: a copy/sibling write (an
- *   extension mismatch resolving to a new file via {@link getAcceptedFileTarget},
- *   or an explicit "save as copy" choice) leaves the base untouched, so the
- *   diff comparing it against `editedPath` is still accurate.
- * - The derived diff location equals `targetLocation`: possible whenever
- *   `baseLocation`'s own name already matches the generated diff-name
- *   pattern for `editedPath` (e.g. accepting into a base literally named
- *   `<edited-stem>_diff.tex`, or accepting directly into a latexdiff
- *   artifact) — deleting it would delete the file just accepted.
+ * sitting beside `baseLocation`, once an accept has written over the base.
+ * `undefined` when that companion is the base itself: possible whenever
+ * `baseLocation`'s own name already matches the generated diff-name pattern
+ * for `editedPath` (e.g. accepting into a base literally named
+ * `<edited-stem>_diff.tex`, or accepting directly into a latexdiff
+ * artifact) — deleting it would delete the file just accepted.
  */
 function staleDiffFileLocation(
   baseLocation: FileLocation,
   editedPath: string,
-  targetLocation: FileLocation,
 ): FileLocation | undefined {
-  if (targetLocation.absolutePath !== baseLocation.absolutePath) {
-    return undefined;
-  }
   const diffLocation = siblingLocation(
     baseLocation,
     generateDiffFileName(editedPath, '_diff'),
   );
-  if (diffLocation.absolutePath === targetLocation.absolutePath) {
-    return undefined;
-  }
-  return diffLocation;
+  return diffLocation.absolutePath === baseLocation.absolutePath
+    ? undefined
+    : diffLocation;
 }
 
 /**
@@ -318,7 +314,7 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   const stale = entries.flatMap(({ outputPath, originalPath }) => {
     const original = pathToLocationIn(workspaceRoot, originalPath);
     if (original.kind === 'external') return [];
-    const diffLocation = staleDiffFileLocation(original, outputPath, original);
+    const diffLocation = staleDiffFileLocation(original, outputPath);
     if (!diffLocation || diffLocation.kind === 'external') return [];
     return [diffLocation.relativePath];
   });

@@ -391,6 +391,37 @@
           "signature": "function downloadFile( url: string, destBasePath: string, ): Effect.Effect<string, ArxivSourceError, DownloadServices> {…}"
         }
       ]
+    },
+    {
+      "id": "DOCS-task-file-snapshots-weakmap-stays",
+      "candidate": "the documents plugin's taskFileSnapshots WeakMap replaced by Effect.cached on the run opening, or by a Cache.make({ lookup: taskFileVars, capacity }) served from the plugin's layer",
+      "why": "The opening is built in the harness run runtime (agent/runtime), which knows nothing of a document task's template files; carrying an Effect.cached of an app read on it puts the app's vocabulary in the harness. A Cache in the plugin's layer is keyed the same way (by the opening's identity) but holds every key strongly until its capacity evicts it, and an eviction mid-run re-reads the template files, so an edit made mid-run would reach the run's later revisions, which the snapshot exists to prevent. A WeakMap keyed by the opening is exactly a memo whose lifetime is the opening's: file-local, never returned, nothing to reset between tests (each test builds its own opening). Found as I12 (round 2); refused in package C's follow-up.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/I-latex-documents.md#finding-12-batched-smaller-flags-each-one-pr",
+      "symbols": [
+        {
+          "file": "packages/texra/src/tools/documents/documentState.ts",
+          "symbol": "taskFileSnapshots",
+          "signature": "const taskFileSnapshots = new WeakMap< NonNullable<ToolRun['opening']>, Effect.Success<ReturnType<typeof taskFileVars>> >();"
+        }
+      ]
+    },
+    {
+      "id": "DOCS-prepare-run-workspace-per-call-stays",
+      "candidate": "the documents plugin's per-tool-call prepareRunWorkspace moved into document_context's first-revision step, so later calls of a revision skip it",
+      "why": "A later call cannot skip it: RunFileService is built per activation, so after a resume the first call to reach the documents may be any revision's, and every call reads the snapshot list (computeOutputDiffStats's diff base). The repeat call is already one field read (preparedBaseFiles); what it re-does is supportFiles, pure path math over the config's file lists with no I/O, and the catalog lookup, a map read the call needs anyway for the task block. Moving the snapshot to the first revision would make a resumed run's diff base depend on which tool it called first. Found as I12 (round 2); refused in package C's follow-up.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/I-latex-documents.md#finding-12-batched-smaller-flags-each-one-pr",
+      "symbols": [
+        {
+          "file": "packages/texra/src/tools/documents/documentState.ts",
+          "symbol": "openDocuments",
+          "signature": "export const openDocuments = Effect.fn('documents.open')(function* ({ run, env: { roots }, requests, }: DocumentCall) {…});"
+        },
+        {
+          "file": "packages/harness/src/common/storage/runStorage.ts",
+          "symbol": "RunFileService.prepareRunWorkspace",
+          "signature": "public readonly prepareRunWorkspace = Effect.fn( 'RunFileService.prepareRunWorkspace', )( { self: this }, function* ( baseFiles: FileLocation[], options: { linkFiles?: FileLocation[]; } = {}, ): Effect.fn.Return<FileLocation[], Error, FileSystem.FileSystem> {…}, );"
+        }
+      ]
     }
   ]
 }
