@@ -86,7 +86,7 @@ export const lean4 = (host: {
       }),
     },
     processLayer: {
-      layer: host.services ?? directLeanLanguageServices('lake'),
+      layer: host.services ?? directLeanLanguageServices,
     },
   }),
   icons: {

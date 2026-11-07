@@ -13,8 +13,8 @@ anonymous data goes to its own table.
 
 - Shared: `supabase/functions/_shared/logUsage.ts` (CORS, method, owner
   resolution, JSON parse, batch validation against the function's schema,
-  response shapes). Per function: `index.ts` (one
-  `serveLogUsage(schema, resolver, store)` call), `usageOwner.ts` (the
+  response shapes). Per function: `index.ts` (the
+  `logUsageHandler(schema, resolver, store)` it serves), `usageOwner.ts` (the
   resolver), the batch schema (`log-usage-v2/usageBatch.ts`,
   `log-usage/usageValidation.ts`), the store (`log-usage-v2/installStore.ts`,
   `log-usage/legacyStore.ts`), `deno.json` and `deno.lock`.

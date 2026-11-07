@@ -1,6 +1,7 @@
 import { Effect, Schema } from 'effect';
 import type { SettingChoiceCopy } from '@texra-ai/harness/schemas';
 import {
+  DEFAULT_EFFORT,
   MODEL_CONFIGS,
   type ModelConfig,
   ModelProvider,
@@ -54,7 +55,8 @@ const CLAUDE_AGENT_DEFAULT_MODEL: ModelRef = 'anthropic/claude-sonnet-5-5';
 const CodexModelSchema = codexModels.schema;
 /**
  * The newest Codex model. llm-zoo records no release date, so "newest" is
- * not derivable from the registry; a test holds this to the picker.
+ * not derivable from the registry; `PinnedModels.vitest.ts` decodes it
+ * through the picker's schema.
  */
 const CODEX_DEFAULT_MODEL: ModelRef = 'openai/gpt-6.1-sol';
 
@@ -74,9 +76,6 @@ export const AgentCliEffortSchema = Schema.Literals([
 ]);
 export type AgentCliEffort = typeof AgentCliEffortSchema.Type;
 
-/** The reasoning policy's `DEFAULT_EFFORT` (a test holds them equal). */
-const AGENT_CLI_EFFORT_DEFAULT: AgentCliEffort = ReasoningEffort.MEDIUM;
-
 /** Value facts of the settings rows: the schema with its default, and the picker labels. */
 export const CLAUDE_AGENT_MODEL_VALUES = {
   schema: ClaudeAgentModelSchema.pipe(
@@ -92,7 +91,7 @@ export const CODEX_MODEL_VALUES = {
 };
 export const AGENT_CLI_EFFORT_VALUES = {
   schema: AgentCliEffortSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(AGENT_CLI_EFFORT_DEFAULT)),
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_EFFORT)),
   ),
   choices: {
     [ReasoningEffort.LOW]: { label: 'Low' },

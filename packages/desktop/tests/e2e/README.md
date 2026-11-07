@@ -50,11 +50,22 @@ deliberate UI change:
 
 `tests/e2e/test-results/` (Playwright's per-run artifact dump) is gitignored.
 
-## Workspace folder
+## Profiles and the app's lifetime
 
-Each launch records a temporary project in the isolated profile through the
-production SQLite owner, so the app opens that project. Pass `workspaceRoot`
-to `launchTexraApp()` for a specific layout.
+`electronApp.ts` exports a Playwright `test` whose fixtures own each app:
+`profile` is a temporary home (its `~/.texra` is the data root, and Electron's
+own profile is kept there with `--user-data-dir`), `launch` starts the app over
+it, and `launched` is the first launch. After the test every open app is
+closed, the renderers must have thrown nothing, and the profile's background
+services stop. A launch is the service's client as a user's is, and waits
+until the service listens. A suite that shares one launch across its tests
+(`trajectories`, `workspaceTabs`, `screenshots`) calls `createProfile`,
+`launchTexraApp`, `closeTexraApp` and `removeProfile` itself. A test that
+writes a project store between launches stops the service that holds it first
+(`stopServices`).
+
+Each launch records the profile's project through the production SQLite
+owner, so the app opens that project.
 
 ## Cross-package imports
 
@@ -68,6 +79,5 @@ application smoke use that loader, without duplicating SQL or persisted schemas.
 ## Saved keys
 
 The app keeps saved keys in the shared owner-only `secrets/` folder under its
-data root, which the harness points at a throwaway user-data directory
-(`TEXRA_DESKTOP_E2E_USER_DATA_PATH`), so no run touches the keychain or the
-developer's own keys.
+data root, which is the temporary home's `~/.texra`, so no run touches the
+keychain or the developer's own keys.
