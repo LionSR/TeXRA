@@ -7,9 +7,15 @@
  * response contract: `_shared/logUsage.ts`).
  */
 
-import { serveLogUsage } from '../_shared/logUsage.ts';
+import { logUsageHandler } from '../_shared/logUsage.ts';
 import { storeForUser } from './legacyStore.ts';
 import { resolveJwtOwner } from './usageOwner.ts';
 import { UsageBatchSchema } from './usageValidation.ts';
 
-serveLogUsage(UsageBatchSchema, resolveJwtOwner, storeForUser);
+export const handleRequest = logUsageHandler(
+  UsageBatchSchema,
+  resolveJwtOwner,
+  storeForUser,
+);
+
+if (import.meta.main) Deno.serve(handleRequest);

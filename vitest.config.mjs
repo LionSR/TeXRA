@@ -44,9 +44,9 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 //   (`--project '!crash'`).
 //
 // Membership is computed from the suite's source, not declared. A suite is
-// `isolated` when it needs its own registry (`NEEDS_OWN_REGISTRY`,
-// `DOM_DIRS`): add a `vi.mock` and it moves there on its own, remove it and
-// the suite moves back. Otherwise a suite under one of these directories is
+// `isolated` when it or a helper it imports needs its own registry
+// (`NEEDS_OWN_REGISTRY`): add a `vi.mock` and it moves there on its own,
+// remove it and the suite moves back. Otherwise a suite under one of these directories is
 // `pure` unless it reaches a host (its imports, followed through `@test/*`
 // and relative paths, reach the kernel's host, `support/setupPlatform.ts`),
 // and every other suite is `kernel`. A directory earns a place in this list
@@ -77,15 +77,16 @@ const PURE_DIRS = [
 const HOST = resolve(rootDir, 'src/test-kernel/support/setupPlatform.ts');
 const TEST_ROOT = resolve(rootDir, 'src/test-kernel');
 const SPECIFIER = /(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g;
-/** Whether `file`'s imports through `@test/*` and relative paths reach the
- *  host module; other imports are packages, which install no host. */
-const reached = new Map();
-function reachesAHost(file) {
-  if (file === HOST) return true;
-  if (reached.has(file)) return reached.get(file);
-  reached.set(file, false);
-  const found = [...readFileSync(file, 'utf8').matchAll(SPECIFIER)].some(
-    ([, specifier]) => {
+/** Whether `file` or a module its imports reach through `@test/*` and
+ *  relative paths satisfies `test`; other imports are packages, which the
+ *  scan does not follow. `memo` holds the answers for one `test`. */
+function reaches(file, test, memo) {
+  if (memo.has(file)) return memo.get(file);
+  memo.set(file, false);
+  const source = readFileSync(file, 'utf8');
+  const found =
+    test(file, source) ||
+    [...source.matchAll(SPECIFIER)].some(([, specifier]) => {
       const base = specifier.startsWith('@test/')
         ? resolve(TEST_ROOT, specifier.slice('@test/'.length))
         : specifier.startsWith('.')
@@ -95,35 +96,34 @@ function reachesAHost(file) {
       const target = [base, `${base}.ts`, `${base}/index.ts`].find(
         (path) => path.endsWith('.ts') && existsSync(path),
       );
-      return target !== undefined && reachesAHost(target);
-    },
-  );
-  reached.set(file, found);
+      return target !== undefined && reaches(target, test, memo);
+    });
+  memo.set(file, found);
   return found;
 }
-// What a shared registry cannot serve: a `vi.mock` / `vi.doMock` factory (the
-// module it built stays in the registry, and a partial factory is what the
-// next suite imports); `vi.resetModules` (it empties the registry the next
-// suite would reuse); and a DOM (lit-html captures `document` when its module
-// first evaluates, so the second suite to bring its own jsdom window renders
-// into the first suite's dead document: `d.createComment is not a function`).
+// What a shared registry cannot serve, in a suite or a helper it imports: a
+// `vi.mock` / `vi.doMock` factory (the module it built stays in the registry,
+// and a partial factory is what the next suite imports); `vi.resetModules` (it
+// empties the registry the next suite would reuse); and a DOM (lit-html
+// captures `document` when its module first evaluates, so the second suite to
+// bring its own jsdom window renders into the first suite's dead document:
+// `d.createComment is not a function`).
 const NEEDS_OWN_REGISTRY = [
   /\bvi\.(?:do)?[mM]ock\s*\(/,
   /\bvi\.resetModules\s*\(/,
   /from\s+['"](?:lit|lit-html|lit\/|@lit\/|jsdom)/,
   /@vitest-environment\s+jsdom|new JSDOM\s*\(/,
 ];
-// The DOM directories: their suites bring a window or load modules afresh
-// through helpers a scan of the suite does not see
-// (`settings/litComponentTestUtils.ts`, `desktop/loadSourceModule.ts`), so
-// the directory decides for every suite in it.
-const DOM_DIRS = ['desktop', 'progressView', 'settings'];
+const needsOwnRegistry = new Map();
+const reachedHost = new Map();
 // What the scan cannot see is a suite that changes process-wide state: an
 // environment variable a library reads once (chalk's color level), a file
-// left in the worker's home. A shared worker runs file after
-// file, so file-order shuffles find those, and the fix is in the suite: set
-// the state on the instance it lives on and restore it after, so the order a
-// worker runs files in cannot matter.
+// left in the worker's home. A shared worker runs file after file, so CI runs
+// `pure` and `kernel` in a new file order each time
+// (`--sequence.shuffle.files`, which prints its seed; `--sequence.seed=<n>`
+// replays it) and an order-dependent suite fails where it lands. The fix is in
+// the suite: set the state on the instance it lives on and restore it after,
+// so the order a worker runs files in cannot matter.
 //
 // Resolved to file lists rather than left as globs: Vitest applies a
 // project's `exclude` after its `include`, so `isolated` must exclude exactly
@@ -140,12 +140,15 @@ for (const file of globSync(SUITES, { cwd: rootDir, posix: true }).sort()) {
   const parts = file.split('/');
   const dir = parts[0] === 'packages' ? parts[3] : parts[2];
   const path = resolve(rootDir, file);
-  const source = readFileSync(path, 'utf8');
-  if (DOM_DIRS.includes(dir) || NEEDS_OWN_REGISTRY.some((p) => p.test(source)))
-    continue;
+  const ownRegistry = (_, source) =>
+    NEEDS_OWN_REGISTRY.some((p) => p.test(source));
+  if (reaches(path, ownRegistry, needsOwnRegistry)) continue;
   if (/\/crashConformance[^/]*\.vitest\.ts$/.test(file))
     sharedSuites.crash.push(file);
-  else if (!PURE_DIRS.includes(dir) || reachesAHost(path))
+  else if (
+    !PURE_DIRS.includes(dir) ||
+    reaches(path, (target) => target === HOST, reachedHost)
+  )
     sharedSuites.kernel.push(file);
   else sharedSuites.pure.push(file);
 }

@@ -116,11 +116,10 @@ vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
   const { LeanLanguageServices } =
     await import('@texra/tools/lean/leanLanguageServices');
   return {
-    directLeanLanguageServices: () =>
-      Layer.succeed(LeanLanguageServices)(
-        // cast: no case in this suite reaches the Lean language services.
-        {} as LeanLanguageServices['Service'],
-      ),
+    directLeanLanguageServices: Layer.succeed(LeanLanguageServices)(
+      // cast: no case in this suite reaches the Lean language services.
+      {} as LeanLanguageServices['Service'],
+    ),
   };
 });
 

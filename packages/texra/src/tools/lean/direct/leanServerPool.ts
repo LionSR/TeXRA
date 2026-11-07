@@ -112,25 +112,12 @@ const startedServer = ({ start }: HeldRoot) =>
     ? Context.get(start.value, LeanServer)
     : undefined;
 
-/**
- * The port over servers spawned with `lakeCommand` (`lake`, or a test's
- * stand-in). The process runtime builds it once, over the process's
- * `ChildProcessSpawner` and `FileSystem`.
- */
-export const directLeanLanguageServices = (
-  lakeCommand: string,
-): Layer.Layer<
-  LeanLanguageServices,
-  never,
-  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
-> => Layer.effect(LeanLanguageServices)(make(lakeCommand));
-
-const make = Effect.fn('LeanServerPool.make')(function* (lakeCommand: string) {
+const make = Effect.fn('LeanServerPool.make')(function* () {
   const fs = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   // No idle time-to-live: a server stops as soon as its last reference ends.
   const servers = yield* LayerMap.make((root: string) =>
-    LeanServer.layer({ workspaceRoot: root, lakeCommand }),
+    LeanServer.layer({ workspaceRoot: root }),
   );
 
   /** Every root the map holds now, read off the map itself. */
@@ -251,7 +238,6 @@ const make = Effect.fn('LeanServerPool.make')(function* (lakeCommand: string) {
             Effect.andThen(
               runLakeCommand({
                 workspaceRoot: root,
-                lakeCommand,
                 args,
               }).pipe(
                 Effect.provideService(
@@ -492,3 +478,13 @@ const resolveWorkspaceRoot = Effect.fn('LeanServerPool.resolveWorkspaceRoot')(
     }
   },
 );
+
+/**
+ * The port over servers spawned with `lake` from `PATH`. The process runtime
+ * builds it once, over the process's `ChildProcessSpawner` and `FileSystem`.
+ */
+export const directLeanLanguageServices: Layer.Layer<
+  LeanLanguageServices,
+  never,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
+> = Layer.effect(LeanLanguageServices)(make());

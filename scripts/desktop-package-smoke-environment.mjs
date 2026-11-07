@@ -1,5 +1,8 @@
 // Node imports
-import { join } from 'node:path';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { Effect, Layer } from 'effect';
@@ -66,7 +69,6 @@ export function buildDesktopSmokeEnvironment(sourceEnvironment, paths) {
     HOME: paths.profile,
     LOCALAPPDATA: join(paths.profile, 'AppData', 'Local'),
     NODE_ENV: 'production',
-    TEXRA_DESKTOP_E2E_USER_DATA_PATH: paths.userData,
     TEXRA_NO_UPDATE_CHECK: '1',
     USERPROFILE: paths.profile,
     XDG_CACHE_HOME: join(paths.profile, '.cache'),
@@ -74,10 +76,27 @@ export function buildDesktopSmokeEnvironment(sourceEnvironment, paths) {
   };
 }
 
-/** Playwright's ESM loader cannot directly import the root's CommonJS-shaped TS modules. */
-export async function loadDatabaseFixture(userDataPath) {
+let fixture;
+
+/**
+ * The production modules the fixtures drive, bundled once per process:
+ * Playwright's ESM loader cannot directly import the root's CommonJS-shaped
+ * TS modules. Every caller shares the one bundle, which is about 10 MB.
+ */
+export function loadDatabaseFixture() {
+  fixture ??= bundleDatabaseFixture();
+  return fixture;
+}
+
+async function bundleDatabaseFixture() {
   const root = fileURLToPath(new URL('..', import.meta.url));
-  const bundle = join(userDataPath, 'session-database-fixture.mjs');
+  const bundle = join(
+    mkdtempSync(join(tmpdir(), 'texra-fixture-')),
+    'session-database-fixture.mjs',
+  );
+  process.once('exit', () =>
+    rmSync(dirname(bundle), { recursive: true, force: true }),
+  );
   await build({
     stdin: {
       contents: `
@@ -91,6 +110,7 @@ export async function loadDatabaseFixture(userDataPath) {
         export { nodeProcesses, processOwnerId } from '@platform/defaults/nodeProcesses';
         export { nodePlatformServices } from '@platform/defaults/nodePlatform';
         export { ToolRegistry, toolTable } from '@tools/toolTable';
+        export { servicePaths } from '@texra/controllers/server/discovery';
       `,
       loader: 'ts',
       resolveDir: root,
@@ -101,6 +121,9 @@ export async function loadDatabaseFixture(userDataPath) {
     format: 'esm',
     target: 'node22.16',
     tsconfig: join(root, 'tsconfig.json'),
+    // macOS's native file watcher, an optional dependency of a watcher the
+    // bundle reaches; a `.node` binary cannot be bundled.
+    external: ['fsevents'],
     banner: {
       js: "import { createRequire as __texraCreateRequire } from 'node:module'; const require = __texraCreateRequire(import.meta.url);",
     },
@@ -109,12 +132,11 @@ export async function loadDatabaseFixture(userDataPath) {
 }
 
 /**
- * Seed the profile through the same project-record owner as the application,
- * on a handle over the profile's global root: under the e2e user-data
- * override that root is the profile itself, as the app resolves it.
+ * Seed the data root (`<home>/.texra`) through the same project-record owner
+ * as the application, on a handle over its global root.
  */
-export async function rememberOpenProject(userDataPath, workspaceRoot) {
-  const fixture = await loadDatabaseFixture(userDataPath);
+export async function rememberOpenProject(dataRoot, workspaceRoot) {
+  const fixture = await loadDatabaseFixture();
   // The identity read and the database open spawn through the Node spawner
   // the application's runtime serves.
   await Effect.runPromise(
@@ -129,10 +151,55 @@ export async function rememberOpenProject(userDataPath, workspaceRoot) {
       }).pipe(
         Effect.provide(
           fixture
-            .globalDatabaseLayer(fixture.resolveGlobalStoragePath(userDataPath))
+            .globalDatabaseLayer(fixture.resolveGlobalStoragePath(dataRoot))
             .pipe(Layer.provide(fixture.ProcessIdentity.layer(owner))),
         ),
       );
     }).pipe(Effect.provide(fixture.nodePlatformServices)),
   );
+}
+
+/** Whether process `pid` still runs. */
+export function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The background services of `dataRoot` that still run: each listens on a
+ *  socket named by its process id. */
+export async function servicePids(dataRoot) {
+  const { servicePaths } = await loadDatabaseFixture();
+  const { socketDirectory } = servicePaths(dataRoot);
+  return (existsSync(socketDirectory) ? readdirSync(socketDirectory) : [])
+    .map((name) => /^serve-(\d+)\.sock$/.exec(name)?.[1])
+    .filter((pid) => pid !== undefined)
+    .map((pid) => Number.parseInt(pid, 10))
+    .filter(alive);
+}
+
+/**
+ * Stop the background services of `dataRoot` and wait for them to exit. A
+ * service is detached, so it outlives the app that started it and holds the
+ * profile's stores (and, under Playwright, the app's pipes) until it stops.
+ */
+export async function stopServices(dataRoot) {
+  const pids = await servicePids(dataRoot);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Already gone.
+    }
+  }
+  for (let waited = 0; pids.some(alive); waited += 100) {
+    if (waited >= 30_000)
+      throw new Error(
+        `TeXRA services ${pids.filter(alive).join(', ')} did not stop`,
+      );
+    await sleep(100);
+  }
 }

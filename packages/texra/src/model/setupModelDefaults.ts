@@ -4,7 +4,7 @@ import type { ApiKeyProviderId, ModelRef } from '@texra-ai/llm';
  * Provider-specific models the setup assistant can use when that provider is
  * the only known usable credential: one well-known probe model per provider,
  * so hosts do not each define their own setup routing truth. The pins are
- * literal data: `SetupModelDefaults.vitest.ts` fails an llm-zoo bump that
+ * literal data: `PinnedModels.vitest.ts` fails an llm-zoo bump that
  * retires or deprecates one. The openai pin must stay Codex-eligible: it
  * proves ChatGPT-subscription access. Keyed by every API-key provider, so a
  * new one does not compile until it names its probe model.

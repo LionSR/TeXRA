@@ -10,7 +10,6 @@ import * as path from 'node:path';
 
 import { Effect, type Scope } from 'effect';
 
-import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   linkService,
   spawnService,
@@ -29,20 +28,13 @@ function serviceBundle(mainDir: string): string | undefined {
 
 /**
  * Hold the service of `dataRoot`, starting it when none answers, for the
- * caller's scope; the link reaches it again when it goes away. Only the user's own `~/.texra` has one: a profile kept
- * elsewhere (a test's) runs its tasks in the app.
+ * caller's scope; the link reaches it again when it goes away.
  */
 export function reachDesktopService(
   dataRoot: string,
   mainDir: string,
 ): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> {
   return Effect.suspend(() => {
-    if (dataRoot !== defaultNodeStorageRoot())
-      return Effect.fail(
-        new Error(
-          `the app keeps its data in ${dataRoot}, outside ${defaultNodeStorageRoot()}`,
-        ),
-      );
     const bundle = serviceBundle(mainDir);
     if (bundle === undefined)
       return Effect.fail(new Error('this build ships no service bundle'));
