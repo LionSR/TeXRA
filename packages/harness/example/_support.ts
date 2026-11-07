@@ -210,7 +210,7 @@ export async function makeExampleWorkspace(
 
 /** What each `script` call of a stored conversation returned, in order:
  *  the structured `value` its result node carries
- *  (`records(runId).readConversation()`); a call node is followed by its
+ *  (`records(runId).readConversation`); a call node is followed by its
  *  result node. */
 export function scriptReturnsOf(
   conversation: readonly ExportNode[],

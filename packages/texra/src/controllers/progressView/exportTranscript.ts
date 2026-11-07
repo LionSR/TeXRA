@@ -11,7 +11,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports - export presentation
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from './transcriptExportFailure';

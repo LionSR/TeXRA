@@ -11,10 +11,10 @@ import {
 
 import {
   type ProcessRuntime,
-  withLogChannel,
   withProcessServices,
   withSessionFs,
 } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';

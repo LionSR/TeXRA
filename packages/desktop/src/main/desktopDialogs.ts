@@ -5,7 +5,7 @@
 import { type BrowserWindow, dialog } from 'electron';
 import { Effect, Predicate } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   HostFailed,

@@ -19,9 +19,7 @@
 
 import { Effect, Result, Schema } from 'effect';
 
-import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { Secrets } from '@texra-ai/harness/host';
 import {
   ChildRuns,
   requireRun,
@@ -30,6 +28,10 @@ import {
   nullishWithDefault,
   executed,
   ToolError,
+  defineTool,
+  type ToolResult,
+  Secrets,
+  type SettingsStores,
 } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -59,7 +61,6 @@ import {
 } from '@texra/utils/git/gitReads';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { GhIssueSchema } from './prTypes';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * What each level brings in, keyed by level. Declared above the schema because

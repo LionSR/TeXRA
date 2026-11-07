@@ -24,10 +24,12 @@ import {
   sessionFsLayer,
   workspaceEnvironmentLayer,
   type ProcessServices,
+} from '@texra-ai/harness/host';
+import {
+  ToolRegistry,
   type StorageFs,
   type WorkspaceFs,
-} from '@texra-ai/harness/host';
-import { ToolRegistry } from '@texra-ai/harness/plugins';
+} from '@texra-ai/harness/plugins';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type {
   FileOpResult,

@@ -7,7 +7,6 @@
  */
 import { Effect, Record as Rec, Schema } from 'effect';
 
-import { defineTool } from '@texra-ai/harness';
 import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   requireRun,
@@ -15,6 +14,7 @@ import {
   ChildRuns,
   CALL_FIELDS,
   fileList,
+  defineTool,
 } from '@texra-ai/harness/plugins';
 import { agentMatchesIdentifier } from '@texra-ai/harness/schemas';
 import { DOCUMENT_TASK_OPTIONS } from '@texra/shared/plugins/documents';

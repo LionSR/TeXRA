@@ -10,7 +10,8 @@
 import { Layer, ManagedRuntime } from 'effect';
 
 import type { Sessions } from '@texra-ai/harness';
-import { Secrets, type ProcessServices } from '@texra-ai/harness/host';
+import { type ProcessServices } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   effectDiagnosticsLayer,

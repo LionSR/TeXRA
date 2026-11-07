@@ -62,7 +62,7 @@ export interface ScriptCallView {
   /** An `agent` call's label or agent; any other call's tool and preview. */
   readonly label: string;
   readonly status: ScriptCallStatus;
-  readonly phase: string | null;
+  readonly section: string | null;
   /** `drafter · gpt-5 · retried · a.md · 1m 12s · $0.31` */
   readonly facts: readonly string[];
   /** What the row says first: its error, a note, or a run's request. */
@@ -88,10 +88,10 @@ export interface ScriptCallView {
   readonly summary?: string;
 }
 
-export interface ScriptPhaseView {
-  /** The guest's `phase()` title; null before its first. */
+export interface ScriptSectionView {
+  /** The guest's `section()` title; null before its first. */
   readonly title: string | null;
-  /** The phase's calls, in issue order. */
+  /** The section's calls, in issue order. */
   readonly calls: readonly ScriptCallView[];
 }
 
@@ -101,7 +101,7 @@ export interface ScriptStageView {
   readonly status: TaskGroup['status'];
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
-  readonly phases: readonly ScriptPhaseView[];
+  readonly sections: readonly ScriptSectionView[];
   /** How many of `calls` run a child, and how many wait on this window. */
   readonly agents: number;
   readonly needsYou: number;
@@ -227,7 +227,7 @@ function callView(
     toolName: row.toolUse.toolName,
     label,
     status,
-    phase: row.phase ?? null,
+    section: row.section ?? null,
     facts,
     ...(detail !== undefined ? { detail } : {}),
     ...(child !== undefined ? { childRunId: child.id } : {}),
@@ -247,8 +247,8 @@ function callView(
   };
 }
 
-function phasesOf(calls: readonly ScriptCallView[]): ScriptPhaseView[] {
-  return [...Map.groupBy(calls, (call) => call.phase)].map(
+function sectionsOf(calls: readonly ScriptCallView[]): ScriptSectionView[] {
+  return [...Map.groupBy(calls, (call) => call.section)].map(
     ([title, members]) => ({ title, calls: members }),
   );
 }
@@ -300,7 +300,7 @@ export function dispatchedChildren<Run extends RunView>(
 /**
  * The script stages of a run's transcript, oldest first: one per `script`
  * call that issued a call, its calls in issue order (first appearance) and
- * grouped by phase.
+ * grouped by section.
  */
 export function scriptStages(
   run: RunView,
@@ -333,7 +333,7 @@ export function scriptStages(
       id: stage.id,
       status: stage.status,
       calls,
-      phases: phasesOf(calls),
+      sections: sectionsOf(calls),
       agents: calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length,
       needsYou: calls.filter((call) => call.needsYou).length,
       costUsd,

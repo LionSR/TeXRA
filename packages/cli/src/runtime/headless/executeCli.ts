@@ -29,9 +29,9 @@ import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
-  SESSION_CLOSE_DEADLINE_MS,
   AgentError,
 } from '@texra-ai/harness/host';
+import { SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness/plugins';
 import type { CliRunResult } from '@cli/schemas/cliOutput';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 
@@ -456,7 +456,7 @@ export const executeCliConfig: (
         if (
           stopped &&
           onFinalized !== undefined &&
-          (yield* session.records(launchRunId).readResumable())
+          (yield* session.records(launchRunId).readResumable)
         )
           yield* onFinalized(launchRunId);
         // A failed run's end reaches the host through the session's

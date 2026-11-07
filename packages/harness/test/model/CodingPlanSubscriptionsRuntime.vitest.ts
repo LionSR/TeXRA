@@ -15,7 +15,8 @@ import {
   GLM_CODING_PLAN_SETTING,
   KIMI_CODE_PREFER_SETTING,
 } from '@texra-ai/harness/schemas';
-import { readModelOptions, Secrets } from '@texra-ai/harness/host';
+import { readModelOptions } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import { FakeHost } from '@test/support/testKernel';
 

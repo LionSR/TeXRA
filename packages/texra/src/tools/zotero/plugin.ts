@@ -7,8 +7,7 @@
 import { Duration, Effect, type Cause } from 'effect';
 
 // Local imports
-import { Settings } from '@texra-ai/harness/host';
-import { scopedClient } from '@texra-ai/harness/plugins';
+import { scopedClient, Settings } from '@texra-ai/harness/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
 import { zoteroUrl } from './bbtClient';
 import { ZoteroAddTool } from './ZoteroAddTool';

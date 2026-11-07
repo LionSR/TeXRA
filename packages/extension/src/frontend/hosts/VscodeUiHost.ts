@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   HostFailed,

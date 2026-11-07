@@ -12,7 +12,8 @@ import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import { Effect, FileSystem, Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel, type ProcessRuntime } from '@texra-ai/harness/host';
+import { type ProcessRuntime } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   VscodeDiffViewHost,
   type DiffSession,

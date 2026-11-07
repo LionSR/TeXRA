@@ -341,7 +341,7 @@ const SURFACE = [
     "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field.",
     '- A tool declared below as a function is also a global: its first argument is one field of its arguments, its second an object of the rest. A tool that resolves to more than `{ output, summary }` declares what, and its description names the errors it rejects with other than `ToolFailed`.',
     '- `self(prompt, { fork, schema, label })` runs you again on `prompt` and resolves to its `{ response, structured?, cost, spent, … }`: forked (the default) from this conversation as it stood when the script started, or with `fork: false` with no earlier conversation; either way it is told `prompt` is its one part of the work. A loop of `self()` calls that checks each reply is how a goal runs until it is met.',
-    '- `phase(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
+    '- `section(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
   ].join('\n'),
   '`const { name } = await import(specifier)` loads a module by its specifier (`builtIn:<module>`, listed below when you may import any); a static `import` line does not parse in a function body.',
   'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again.',

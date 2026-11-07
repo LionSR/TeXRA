@@ -4,7 +4,7 @@
  */
 import { Effect } from 'effect';
 
-import { Secrets } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import {
   listGitHubSubscriptionEntries,

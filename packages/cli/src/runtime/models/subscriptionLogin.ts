@@ -18,7 +18,7 @@ import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
 import { cliEnvValue, type CliContext } from '../platform/cliContext';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 export interface CliSubscriptionLoginTransportInit {
   readonly device: boolean;

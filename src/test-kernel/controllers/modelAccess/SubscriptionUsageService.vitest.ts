@@ -3,7 +3,7 @@ import { Effect, Fiber } from 'effect';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, expect, vi } from 'vitest';
 
-import { Secrets } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { SessionGraph } from '@test/support/testKernel';

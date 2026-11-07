@@ -10,7 +10,7 @@ import {
 } from '@texra-ai/llm';
 
 import { withEnv } from '@test/support/testEnv';
-import type { PlatformSecrets } from '@texra-ai/harness/host';
+import type { PlatformSecrets } from '@texra-ai/harness/plugins';
 
 function createSecrets(initial: Record<string, string> = {}): PlatformSecrets {
   const store = new Map(Object.entries(initial));

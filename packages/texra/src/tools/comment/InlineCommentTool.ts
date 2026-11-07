@@ -1,8 +1,6 @@
 // Third-party imports
 import { Context, Effect, Option, Schema } from 'effect';
-import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { withLogChannel } from '@texra-ai/harness/host';
 
 // Internal imports
 import {
@@ -14,6 +12,9 @@ import {
   resolveToolPath,
   executed,
   ToolError,
+  defineTool,
+  type ToolResult,
+  withLogChannel,
 } from '@texra-ai/harness/plugins';
 
 // Local file imports

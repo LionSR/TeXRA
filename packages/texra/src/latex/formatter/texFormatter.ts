@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 // Third-party imports
 
 // Local imports - formatter implementations
-import { Settings } from '@texra-ai/harness/host';
+import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
 import type { LatexFormatterValue } from '@texra/shared/constants/latexConfig';
 
 // Local file imports
@@ -11,7 +11,6 @@ import { runLatexIndent } from './latexindentpt';
 import { runTexFmt } from './texfmt';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { FileSystem } from 'effect';
-import type { SettingsStores } from '@texra-ai/harness/host';
 import type { SettingRow } from '@texra-ai/harness/schemas';
 import {
   LATEX_FORMATTER_SETTING,

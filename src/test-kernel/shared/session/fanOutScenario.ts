@@ -222,7 +222,7 @@ export function buildScenario({ proposal = false } = {}) {
     stageId: SCRIPT_STAGE,
     toolName: 'agent',
     input: { agentName: 'custom:search', prompt: 'search', label: 'inspect' },
-    phase: 'Map',
+    section: 'Map',
   });
 
   // The child agent run: its run.start carries the whole parent edge.
@@ -380,7 +380,7 @@ export function buildScenario({ proposal = false } = {}) {
           script: {
             title: 'review',
             source: [
-              "phase('Review')",
+              "section('Review')",
               'const reviews = await Promise.all(',
               "  ['agent', 'model'].map((part) =>",
               "    agent(`Review the ${part} section.`, { agentName: 'review', inputFiles: ['draft.tex'] }),",

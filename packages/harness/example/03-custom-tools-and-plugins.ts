@@ -7,12 +7,13 @@
  * tool on turn 1 and summarizes the tool output on turn 2.
  */
 import { Effect, Layer, Schema } from 'effect';
-import { defineTool, Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/harness';
 import {
   definePlugin,
   executed,
   harnessBuiltins,
   nullishWithDefault,
+  defineTool,
 } from '@texra-ai/harness/plugins';
 
 import { makeExampleWorkspace } from './_support.ts';

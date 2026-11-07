@@ -7,7 +7,7 @@ import { Effect, Fiber, FiberHandle, FiberSet, Scope } from 'effect';
 import { useState } from 'react';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { useMountScope } from '../state/useMountScope';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 

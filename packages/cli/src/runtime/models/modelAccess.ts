@@ -8,8 +8,8 @@ import {
   type ModelOption,
   type ProcessRuntime,
   type RunModelCandidate,
-  type SettingsStores,
 } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import {
   type UsageRoute,
   isModelOptionAvailable,

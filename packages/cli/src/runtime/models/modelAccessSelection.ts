@@ -1,7 +1,7 @@
 import { Effect, Schema } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
-import { Secrets } from '@texra-ai/harness/host';
+import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -27,7 +27,6 @@ import {
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import type { CliContext } from '../platform/cliContext';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 interface CliModelAccessSelectionResult {
   readonly message: string;

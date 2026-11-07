@@ -2,8 +2,7 @@
 import { Effect, Option, Schedule, Schema } from 'effect';
 
 // Local imports
-import { defineTool } from '@texra-ai/harness';
-import { executed, ToolError } from '@texra-ai/harness/plugins';
+import { executed, ToolError, defineTool } from '@texra-ai/harness/plugins';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import { LEAN4_EXTENSION_ID } from '@texra/tools/lean/leanTypes';
 

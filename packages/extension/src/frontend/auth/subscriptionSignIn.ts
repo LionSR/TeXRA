@@ -19,7 +19,7 @@ import {
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 

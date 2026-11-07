@@ -14,12 +14,7 @@ import {
 import { MODEL_CONFIGS } from '@texra-ai/llm';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import {
-  AppState,
-  ownKeyCredential,
-  Secrets,
-  withLogChannel,
-} from '@texra-ai/harness/host';
+import { AppState, ownKeyCredential } from '@texra-ai/harness/host';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -35,7 +30,11 @@ import {
   sweepStaleFiles,
   type PastedImageSaveFailed,
 } from '@texra/utils/files/pastedImageUtils';
-import type { StorageFs } from '@texra-ai/harness/host';
+import {
+  Secrets,
+  withLogChannel,
+  type StorageFs,
+} from '@texra-ai/harness/plugins';
 import { Cancelled, Rejected } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

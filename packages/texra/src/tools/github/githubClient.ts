@@ -9,9 +9,8 @@
 
 import { Clock, Duration, Effect, Predicate, Schema } from 'effect';
 import { StatusCodes } from 'http-status-codes';
-import { Secrets } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { scopedClient } from '@texra-ai/harness/plugins';
+import { scopedClient, Secrets } from '@texra-ai/harness/plugins';
 
 import { getGitHubToken } from './githubAuth';
 import type { SecretsFailed } from '@texra-ai/llm';

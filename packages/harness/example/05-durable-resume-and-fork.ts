@@ -4,7 +4,7 @@
  * 1. Opens a persistent SQLite session (`{ persistent: true }`).
  * 2. Starts an interactive run (`run1`) that completes its first cycle and
  *    stops it so its checkpoint sits in SQLite.
- * 3. Inspects `session.listRuns()` and `session.records(run1.runId)`.
+ * 3. Inspects `session.listRuns` and `session.records(run1.runId)`.
  * 4. Forks the conversation (`session.request({ kind: 'run.fork' })`) into a
  *    new run id, resumes the fork (`session.resume`), sends a follow-up on the
  *    fork, and verifies that both branches are persisted independently.
@@ -112,13 +112,11 @@ const program = Effect.gen(function* () {
   });
   yield* session.settled;
 
-  const listed = yield* session.listRuns();
-  const originalConversation = yield* session
-    .records(run1.runId)
-    .readConversation();
-  const forkedConversation = yield* session
-    .records(forkedRunId)
-    .readConversation();
+  const listed = yield* session.listRuns;
+  const originalConversation = yield* session.records(run1.runId)
+    .readConversation;
+  const forkedConversation =
+    yield* session.records(forkedRunId).readConversation;
   console.log(
     `[05] persisted runs=${listed.length} originalNodes=${originalConversation.length} forkedNodes=${forkedConversation.length}`,
   );

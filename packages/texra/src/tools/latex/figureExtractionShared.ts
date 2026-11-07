@@ -1,5 +1,4 @@
 import { Effect, FileSystem, Schema } from 'effect';
-import { type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -11,6 +10,7 @@ import {
   type ToolFileAttachment,
   buildFileAttachment,
   formatToolOutput,
+  type ToolResult,
 } from '@texra-ai/harness/plugins';
 
 /** Shared `texPath` field for LaTeX extraction tools, with a per-tool description. */

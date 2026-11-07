@@ -8,10 +8,8 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import {
-  AppSignals,
   AppState,
   mcpConfigPathOf,
-  Secrets,
   ValidationModel,
 } from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
@@ -45,7 +43,7 @@ import { texraPlugins } from '@texra/tools/registry';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 
 import { testLaunch } from '@test/support/scriptedRunLayers';
-import type { ITool } from '@texra-ai/harness';
+import { AppSignals, Secrets, type ITool } from '@texra-ai/harness/plugins';
 
 function tool(name: string): ITool {
   return {

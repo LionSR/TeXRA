@@ -217,7 +217,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // build would refuse a subscription's failure as a damaged payload).
   // v6: an error row carries no `userRetryable` (an earlier build's error row
   // would be refused as a damaged payload).
-  log: { version: 6, listing: 'none' },
+  // v7: a script delivery's summary counts its `sectionCount`, not
+  // `phaseCount` (an earlier build's user message would be refused as a
+  // damaged payload).
+  log: { version: 7, listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (an earlier build's workflow
   // phase stage would fail its run as damaged rather than read as that
   // build's).
@@ -226,7 +229,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v2: a tool's card is stated (`card`), not derived from its name, so the
   // fold has no Codex builders (an earlier build's card would read without
   // its sections).
-  'tool.start': { version: 3, listing: 'none' },
+  // v4: a script's call names its `section` (the guest's `section()`
+  // title), not its `phase` (an earlier build's title would be silently
+  // dropped).
+  'tool.start': { version: 4, listing: 'none' },
   'tool.end': { ...V1, listing: 'none' },
   // v2: the counts carry `TurnUsage`'s names (`cachedInputTokens`,
   // `cacheWriteTokens`, `toolUsePromptTokens`), and `elapsedTime` is gone (an
@@ -239,7 +245,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // would show a cut answer as complete).
   'response.finalized': { version: 2, listing: 'none' },
   'run.report': { ...V1, listing: 'own' },
-  'process.output': { ...V1, listing: 'none' },
+  // v2: a capped log's tail row says how many characters it follows a gap
+  // of (`elided`), in place of a notice row (an earlier build's capped log
+  // would read as one unbroken stream).
+  'process.output': { version: 2, listing: 'none' },
   'process.exit': { ...V1, listing: 'own' },
   'followup.closed': { ...V1, listing: 'own' },
   // v2: dispatch facts record `lane`, not `parallelSafe` (an earlier build's
@@ -296,7 +305,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // as damaged).
   'context.edit': { version: 7, listing: 'none' },
   'tool.intent': { ...V1, listing: 'none' },
-  'script.call': { ...V1, listing: 'none' },
+  // v2: the guest's latest title is `section`, not `phase` (an earlier
+  // build's row would fail as damaged).
+  'script.call': { version: 2, listing: 'none' },
   // v2: a captured attachment holds its bytes by blob address, never inline.
   // v3: an executed result names the files its call read (`reads`), which an
   // edit of an existing file requires; an earlier build's row would read as a

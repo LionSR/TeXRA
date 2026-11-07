@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   type RequestDecision,
   ensureError,

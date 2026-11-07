@@ -16,7 +16,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
   `Sessions.layer({ platform, plugins })`.
-- **Plugin & tool authoring**: [`definePlugin`](#defineplugin) and the
+- **Plugin & tool authoring**: [`defineTool`](#definetool),
+  [`definePlugin`](#defineplugin) and the
   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
   [`executed`](#executed), [`errorResult`](#errorresult),
   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
@@ -172,6 +173,41 @@ function approvedWriteConflict(
   original: string | null,
   finalContent: string,
 )
+```
+
+## AppSignals
+
+The process's signal hub: one unbounded `PubSub`, built once by the
+process layer and served to every program of the process from context.
+Unbounded and never shut down, so publishing never blocks or drops; a
+subscription only receives what is published after it exists.
+
+```ts
+class AppSignals extends Context.Service<
+  AppSignals,
+  {
+    /**
+     * Publish `signal` to every current subscriber and return. Synchronous
+     * by construction: the publish is the enqueue, and the hub is unbounded,
+     * so it always accepts without suspending. The delivery itself runs on
+     * each subscriber's own fiber — see the delivery and error order above.
+     * For an owner whose callbacks run outside any fiber (a secret store's
+     * commit, a registry's close listener), which captures the service
+     * where its layer is built; a program publishes with
+     * {@link emitAppSignal}.
+     */
+    readonly emit: <K extends AppSignal>(
+      signal: K,
+      payload: AppSignalPayloads[K],
+    ) => void;
+    /** A subscription to every signal, held for the caller's scope. */
+    readonly subscribe: Effect.Effect<
+      PubSub.Subscription<AppSignalEvent>,
+      never,
+      Scope.Scope
+    >;
+  }
+>()('@texra-ai/harness/AppSignals')
 ```
 
 ## assertNoParentTraversal
@@ -515,6 +551,24 @@ type DecisionOf<K extends RequestPayload['kind']> =
   | RefusalDecision;
 ```
 
+## DefinedTool
+
+A defined tool: plain data plus a `call` that validates and normalizes
+failures. An anonymous object type so the SDK's `.d.ts` inlines it.
+
+```ts
+type DefinedTool<T, R = never, Name extends string = string> = Omit<
+  ITool<Error, R>,
+  'call' | 'guard' | 'definition'
+> & {
+  readonly definition: ToolDefinition & { readonly name: Name };
+  call(
+    rawInput: unknown,
+  ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
+  readonly guard?: ToolGuard<T>;
+};
+```
+
 ## definePlugin
 
 A plugin value from its definition, its own services erased: the
@@ -522,6 +576,25 @@ harness's built-ins and an app's plugins are written the same way.
 
 ```ts
 const definePlugin: <ROut = never>(plugin: PluginDefinition<ROut>) => Plugin
+```
+
+## defineTool
+
+Define a tool: validate the model's input against `schema`, run `execute`,
+and turn ordinary failures into `{ status: 'error' }` feedback.
+Interruption, run history refusals and database write failures propagate.
+
+A tool whose `execute` succeeds with a `ToolResult` carrying a `value`
+hands a script that value in place of `{ output, summary }`. Declare its
+TypeScript type in `scriptReturns`, which is what a script is told the
+call resolves to. Nothing derives one from the other: a tool that returns
+a `value` without `scriptReturns` is declared to scripts as resolving to
+`ToolOutput`, so change the two together.
+
+```ts
+function defineTool<T, R = never, const Name extends string = string>(
+  def: DefineToolOptions<T, R> & { readonly name: Name },
+): DefinedTool<T, R, Name>
 ```
 
 ## DefineToolOptions
@@ -564,6 +637,14 @@ type DefineToolOptions<T, R = never> = Required<
 
 ```ts
 type EditRecord = typeof EditRecordSchema.Type;
+```
+
+## emitAppSignal
+
+Publish `signal` from a program: {@link AppSignals}' `emit`.
+
+```ts
+const emitAppSignal: <K extends AppSignal>(signal: K, payload: AppSignalPayloads[K]) => Effect<void, never, AppSignals>
 ```
 
 ## errorResult
@@ -819,6 +900,98 @@ function isTransportReason(
 ): boolean
 ```
 
+## ITool
+
+Contract for tool implementations.
+`defineTool` provides the canonical implementation with schema validation.
+A tool fails with an `Error` (usually a `ToolError`) and the model reads its
+message as the call's error; a throw is a defect, which `defineTool` turns
+into a failed call and logs as a crash unless it is a `ToolError`.
+
+```ts
+interface ITool<E = Error, R = never> {
+  readonly definition: ToolDefinition;
+  /** The host capability (named by the plugin that serves it,
+   *  `HostCapabilities`) the session's host must serve for this tool to be
+   *  offered, read live each step: a window that attaches mid-run brings it. */
+  readonly hostCapability?: string;
+  /** Launches agents' tasks (a plugin's block): its step lists the agents
+   *  with one. */
+  readonly launchesTasks?: true;
+  /**
+   * Where its calls run beside their siblings (omitted: `'barrier'`).
+   * Declared on the tool, not the YAML-overridable definition, so an agent
+   * config cannot move an arbitrary tool out of order.
+   *
+   * - `'parallel'`: side-effect-free AND approval-free, so calls of one
+   *   response (or one script) run concurrently within the parallel window,
+   *   and identical ones collapse onto one (`partitionDuplicateCalls`). A
+   *   read-only tool that prompts for approval is not parallel: it needs an
+   *   approval round-trip first, so it stays a barrier.
+   * - `'barrier'`: waits for every call issued before it and holds back
+   *   every call after it until it settles.
+   * - `'own'`: in a script, its calls neither wait for the calls issued
+   *   before them nor block the ones after, and take no place in the
+   *   parallel window: the tool bounds how many of its own calls run at
+   *   once (a call that waits on a child run). A later barrier still waits
+   *   for it; a response's call of it is a barrier.
+   */
+  readonly lane?: DispatchFacts['lane'];
+  /**
+   * The tool is also a global function of a script, taking its `positional`
+   * field as the first argument and the rest as the second:
+   * `agent(prompt, opts)` for `tools.agent({ prompt, ...opts })`.
+   * `withScript`: a function of scripts alone (`self()`), offered whenever
+   * the script tool is and never sent to the model as a tool of its own.
+   */
+  readonly scriptGlobal?: {
+    readonly positional: string;
+    readonly withScript?: true;
+  };
+  /**
+   * Whether a call recorded as started, with no result, may run again on
+   * resume without asking: `'safe'` only for a read-only or idempotent tool,
+   * whose second run changes nothing the first did not. Omitted is
+   * `'unsafe'`. Independent of `lane`, which is about concurrency.
+   * The response row saves the declaration with each call, and a resume
+   * re-runs a call only when that saved word and the current one both say
+   * `'safe'` (`toolUseDispatch.ts`).
+   */
+  readonly replay?: 'safe' | 'unsafe';
+  /**
+   * Whether a call needs a person's approval, and who asks. `true` (implied
+   * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
+   * body's own request (an edit's review, a plan, a delegation proposal, a
+   * question, a plugin's request), which answers what the call's hooks
+   * said. A run that cannot present a prompt is not offered such a tool
+   * (`asksApproval`).
+   */
+  readonly requiresApproval?: true | 'inBody';
+  /** Its card opens before the call runs; a fast tool's opens and closes
+   *  with its settlement. */
+  readonly slow?: boolean;
+  /** The loop-side guard this tool declares; see {@link ToolGuard}. */
+  readonly guard?: ToolGuard<never>;
+  /**
+   * A description rendered from the other tools the run declares and the
+   * modules its scripts may import, in place of `definition.description`:
+   * rendered at the step that freezes the run's system text and kept as
+   * that step recorded it until a compaction opens the freeze again
+   * (`step.ts`), so a catalog change mid-run leaves its text, and the cached
+   * prefix through it, as it was. The tool that has one is the script tool,
+   * which reaches nothing but the run's other tools and its own agent: a
+   * child is offered it, and its script-only functions, whatever its parent
+   * was.
+   */
+  readonly describe?: (
+    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
+    /** The specifiers of the modules the step's scripts may import. */
+    modules: readonly string[],
+  ) => string;
+  call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
+}
+```
+
 ## jitteredExponentialBackoffMs
 
 Compute a jittered exponential backoff delay: `baseMs * 2^(failures-1)`,
@@ -1059,6 +1232,38 @@ Trim and validate a working_directory value. Must be absolute if provided.
 function parseWorkingDirectory(
   raw: string | null | undefined,
 ): Result.Result<string | undefined, ToolError>
+```
+
+## PlatformSecrets
+
+Provider for secure secret storage (API keys, tokens).
+
+Every member is an `Effect`, so a caller inside a program gets
+the failure typed as {@link SecretsFailed} instead of `unknown`, and a
+credential read is interruptible like the program around it.
+{@link PlatformSecrets.set} and {@link PlatformSecrets.delete}
+carry one extra rule: a credential
+commit survives cancellation. The uninterruptible region is the commit
+itself and nothing before it — for the file-backed store it begins once
+the write lane has been entered, inside `FileSecrets`, so a write still
+queued behind another one can be cancelled. Everything that
+prepares a write — the lane wait, opening the store — stays interruptible, because interruption there means
+nothing was written. A post-commit step cannot run as a step after the
+write: a commit the store landed still exits as interrupted when its caller
+was cancelled during it, so the step would be skipped over a credential
+that is now on disk. The host stores therefore own the post-commit facts
+themselves, in an `Effect.ensuring` finalizer that runs on every exit: the
+file store tells the `credentialChanged` app signal its layer hands it
+(`Secrets.announcing`). A writer does not by hand.
+
+```ts
+interface PlatformSecrets extends CredentialStore {
+  /**
+   * List persisted secret names without exposing their values.
+   * Used only by credential-audit surfaces.
+   */
+  listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed>;
+}
 ```
 
 ## Plugin
@@ -1595,6 +1800,38 @@ const scopedClient: Effect<With<HttpClientError, Scope>, never, HttpClient>
 const scopedOkClient: Effect<With<HttpClientError, Scope>, never, HttpClient>
 ```
 
+## Secrets
+
+The process's secret store as an Effect service, provided once by the composition root through
+`processLayer`. The shape is the port itself: a program that reads
+or writes a credential yields the store's own Effect and matches
+{@link SecretsFailed}.
+
+Both layers also serve the store's `SubscriptionAccounts`, built with it:
+a program that reads a subscription session reads it from the store in
+force, and a layer that provides another store provides its accounts.
+
+`layer` takes a store built before the runtime (an embedder's, a test's):
+the service is that value, not a thunk resolved per member call.
+
+```ts
+class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
+  '@texra-ai/harness/platform/Secrets',
+)
+```
+
+## SESSION_CLOSE_DEADLINE_MS
+
+The budget one session close spends waiting for its runs to end before it
+reports the ones still live abandoned (`SessionOwner.close`). A hung run
+must not wedge desktop quit, eat the extension's ~5s deactivate budget, or
+stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
+together, so they finish under one deadline for the process, not one each.
+
+```ts
+const SESSION_CLOSE_DEADLINE_MS: 5000
+```
+
 ## SessionPluginLayer
 
 A plugin's session-lifetime services (its `sessionLayer`): one build
@@ -1605,6 +1842,27 @@ tools' `ChildRuns`.
 
 ```ts
 type SessionPluginLayer = Layer.Layer<never, never, PluginHold>;
+```
+
+## Settings
+
+Every read and write of a setting; see the module comment.
+
+```ts
+const Settings: Readonly<{ readonly get: <A>(stores: SettingsStores, row: SettingRow<A>) => Effect<A, StateReadFailed, never>; readonly inspect: <A>(stores: SettingsStores, row: SettingRow<A>) => Effect<StoredSetting<A>, StateReadFailed, never>; readonly getConfig: <A>(config: ConfigProvider, row: SettingRow<A>) => A; readonly defaultOf: <A>(catalog: SettingsCatalog, row: SettingRow<A>) => A; readonly set: <A>(stores: SettingsStores, row: SettingRow<A>, value: A, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly reset: (stores: SettingsStores, row: SettingRow<unknown>, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly state: <A>(store: Pick<StateStore, "get">, key: StateKey<A>) => Effect<A, StateReadFailed, never>; }>
+```
+
+## SettingsStores
+
+The setting slots a caller holds: a `WorkspaceRoots` is one.
+
+```ts
+interface SettingsStores {
+  readonly config: ConfigProvider;
+  readonly workspaceState: StateStore;
+  readonly repoState: StateStore;
+  readonly globalState: StateStore;
+}
 ```
 
 ## StageHandle
@@ -1646,6 +1904,16 @@ interface StepRoot {
   readonly absolutePath: string;
   readonly label: string;
 }
+```
+
+## StorageFs
+
+The session's own storage root (under the process's storage directory).
+
+```ts
+class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
+  '@texra-ai/harness/platform/StorageFs',
+)
 ```
 
 ## StreamHandle
@@ -2053,6 +2321,12 @@ class ToolRegistry extends Context.Service<ToolRegistry, ToolTable>()(
 )
 ```
 
+## ToolResult
+
+```ts
+type ToolResult = typeof ToolResultSchema.Type;
+```
+
 ## ToolRun
 
 What a tool reads of the run its call works for, read from the run rather
@@ -2090,6 +2364,16 @@ The web: `web_search` and `web_fetch`.
 const web: Plugin
 ```
 
+## withLogChannel
+
+Name the channel every `Effect.log*` inside `self` belongs to. Annotations
+nest, so a callee that names its own channel keeps it: this sets the channel
+for the entries that don't.
+
+```ts
+const withLogChannel: (channel: string) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, R>
+```
+
 ## withRequestTimeout
 
 One request under a deadline of `timeoutMs` that spans the whole of
@@ -2101,6 +2385,17 @@ not converted into request failures.
 
 ```ts
 const withRequestTimeout: <T, E, R>(timeoutMs: number, request: Effect<T, E, Scope | R>) => Effect<T, E | TimeoutError, Exclude<R, Scope>>
+```
+
+## WorkspaceFs
+
+The workspace folder the session works on.
+
+```ts
+class WorkspaceFs extends Context.Service<
+  WorkspaceFs,
+  RootedFileSystem
+>()('@texra-ai/harness/platform/WorkspaceFs')
 ```
 
 ## WorkspacePathResolution

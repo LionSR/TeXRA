@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { Effect, Result } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { ensureError } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'FinalOutputOpener';

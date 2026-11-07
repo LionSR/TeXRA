@@ -75,8 +75,8 @@ export interface ScriptOp {
   readonly seq: number;
   readonly name: string;
   readonly input: unknown;
-  /** The title of the guest's latest `phase()` call, if it made one. */
-  readonly phase: string | null;
+  /** The title of the guest's latest `section()` call, if it made one. */
+  readonly section: string | null;
 }
 
 /** How a call settles: a JSON value, or an error the guest's `await` throws. */

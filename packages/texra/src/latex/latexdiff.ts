@@ -14,7 +14,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
-import { redactSecrets, Settings } from '@texra-ai/harness/host';
+import { redactSecrets } from '@texra-ai/harness/host';
+import { Settings } from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { FileLocation } from '@texra-ai/harness/schemas';

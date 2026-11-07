@@ -90,8 +90,15 @@ export interface EncodedRow {
   readonly type: string;
   readonly version: number;
   readonly data: string;
-  readonly blobs: readonly { digest: string; value: Uint8Array }[];
-  /** Blobs the row names that the store already holds: linked to the row,
+  /** The blobs to store with the row: `inline` ones are strings the codec
+   *  moved out of the row, which a read inflates back; the others are
+   *  media the draft brought, addressed by the row and never inflated. */
+  readonly blobs: readonly {
+    digest: string;
+    value: Uint8Array;
+    inline: boolean;
+  }[];
+  /** Media the row names that the store already holds: linked to the row,
    *  so collection keeps them while it lives. */
   readonly references: readonly string[];
 }
@@ -147,12 +154,6 @@ function rowRefusal({ commit, type, version: stored }: typeof RowSchema.Type) {
   return null;
 }
 
-/** Whether `decodeRow` parses this row's data (a kind and version this
- *  build reads): another build's row is refused before its blobs are read. */
-export function decodable(row: SqlRow): boolean {
-  return rowRefusal(Schema.decodeUnknownSync(RowSchema)(row)) === null;
-}
-
 /** The queries, with their parameters, for the runs holding a row an
  *  earlier build wrote ({@link readableFrom}), a retired display row aside. */
 export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
@@ -197,6 +198,7 @@ export function encodeDraft(
     stored = { ...payload, payload: { digest, value: canonical } };
   }
   const blobs = new Map<string, string>();
+  const inlined = new Set<string>();
   const references = new Set<string>();
   for (const { digest, text } of brought) {
     if (text === undefined) references.add(digest);
@@ -210,6 +212,7 @@ export function encodeDraft(
       const json = JSON.stringify(value);
       const digest = sha256Hex(json);
       blobs.set(digest, json);
+      inlined.add(digest);
       return { $b: digest };
     }
     if (!Predicate.isObject(value)) return value;
@@ -222,6 +225,7 @@ export function encodeDraft(
     blobs: Array.from(blobs, ([digest, text]) => ({
       digest,
       value: zstdCompressSync(text, ZSTD_LEVEL_3),
+      inline: inlined.has(digest),
     })),
     references: [...references].filter((digest) => !blobs.has(digest)),
   };

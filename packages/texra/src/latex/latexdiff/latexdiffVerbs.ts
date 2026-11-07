@@ -16,14 +16,13 @@ import { Effect } from 'effect';
 
 // Local imports
 import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
+import { pathToLocationIn, type ProcessServices } from '@texra-ai/harness/host';
 import {
-  pathToLocationIn,
   Settings,
   withLogChannel,
-  type ProcessServices,
   type StorageFs,
   type WorkspaceFs,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness/plugins';
 import {
   Rejected,
   type RunId,

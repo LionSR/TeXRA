@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { emitAppSignal } from '@texra-ai/harness/host';
+import { emitAppSignal, type SettingsStores } from '@texra-ai/harness/plugins';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/models/apiStatus';
@@ -15,7 +15,6 @@ import {
   type SlashCommandContext,
   transcriptSlashCommandOutput,
 } from './slashContext';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * Save a provider key through the shared key controller and answer the extra

@@ -358,8 +358,8 @@ export const ScriptCallPayloadSchema = Schema.Struct({
   logId: Schema.String.check(Schema.isMinLength(1)),
   /** The script's stage, which its calls' cards open under. */
   stageId: Schema.String.check(Schema.isMinLength(1)),
-  /** The guest's latest `phase()` title when it issued the call. */
-  phase: Schema.NullOr(Schema.String),
+  /** The guest's latest `section()` title when it issued the call. */
+  section: Schema.NullOr(Schema.String),
 }).check(
   Schema.makeFilter((p) => p.callId === scriptCallId(p.scriptCallId, p.seq), {
     message: 'A script call is named by its script and its issue order.',

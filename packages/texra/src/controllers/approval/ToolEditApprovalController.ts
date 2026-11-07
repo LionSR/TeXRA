@@ -40,7 +40,8 @@ import {
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { followPendingRequests, withLogChannel } from '@texra-ai/harness/host';
+import { followPendingRequests } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   type PendingRequest,

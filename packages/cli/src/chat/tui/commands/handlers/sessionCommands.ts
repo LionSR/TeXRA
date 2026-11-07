@@ -91,7 +91,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const activeSkills =
       activeRunId === undefined
         ? []
-        : yield* context.runSession.records(activeRunId).readSkills();
+        : yield* context.runSession.records(activeRunId).readSkills;
     const [option] = yield* readModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus({

@@ -16,7 +16,8 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { withLogChannel, type HostInteractions } from '@texra-ai/harness/host';
+import { type HostInteractions } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { WINDOW_OUTDATED, type ServiceLink } from './client';

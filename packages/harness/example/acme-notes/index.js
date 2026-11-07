@@ -5,8 +5,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { Effect, Schema } from 'effect';
-import { defineTool } from '@texra-ai/harness';
-import { definePlugin } from '@texra-ai/harness/plugins';
+import { definePlugin, defineTool } from '@texra-ai/harness/plugins';
 
 export const PLUGIN_ID = 'acme-notes';
 

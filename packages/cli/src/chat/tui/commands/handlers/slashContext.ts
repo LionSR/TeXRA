@@ -6,11 +6,8 @@ import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import type { RunId, ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { Session } from '@texra-ai/harness';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  SettingsStores,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
 import type { BuiltinSlashCommands } from '../registerBuiltins';
 

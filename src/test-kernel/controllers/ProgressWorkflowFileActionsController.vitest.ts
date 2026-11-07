@@ -2,7 +2,7 @@ import { layer } from '@effect/vitest';
 import { Effect, FileSystem, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
 
-import { AppSignals } from '@texra-ai/harness/host';
+import { AppSignals } from '@texra-ai/harness/plugins';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 import { SessionGraph } from '@test/support/testKernel';

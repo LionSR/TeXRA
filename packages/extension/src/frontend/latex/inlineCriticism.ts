@@ -25,10 +25,8 @@ import * as vscode from 'vscode';
 import {
   AppState,
   type PerKeyLane,
-  withLogChannel,
   hasExtension,
   withPerKeyLane,
-  Settings,
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
@@ -37,7 +35,11 @@ import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { parseCriticismAnnotations } from './criticismParser';
 import type { Session } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  Settings,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 import { INLINE_CRITICISM_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 const CHANNEL = 'InlineCriticism';

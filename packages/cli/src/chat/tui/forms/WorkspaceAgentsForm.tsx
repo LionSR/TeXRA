@@ -26,11 +26,8 @@ import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  SettingsStores,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 type WorkspaceAgentsFormMode =
   | 'overview'

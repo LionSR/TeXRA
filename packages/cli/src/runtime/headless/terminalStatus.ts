@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
-import { InstalledPlugins, type SettingsStores } from '@texra-ai/harness/host';
+import { InstalledPlugins } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { RUN_OUTCOME, type RunOutcome } from '@texra-ai/harness/schemas';
 import {
   runOutcomeToCliRunStatus,

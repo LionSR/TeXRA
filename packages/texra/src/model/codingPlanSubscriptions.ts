@@ -1,4 +1,4 @@
-import { Settings } from '@texra-ai/harness/host';
+import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
 import {
   providerRegionSetting,
   GLM_CODING_PLAN_SETTING,
@@ -11,7 +11,6 @@ import {
 import type {
   ConfigWriteFailed,
   StateReadFailed,
-  SettingsStores,
 } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 

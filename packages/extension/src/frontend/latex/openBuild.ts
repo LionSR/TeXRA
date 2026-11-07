@@ -19,11 +19,8 @@ import {
   type Scope,
 } from 'effect';
 
-import {
-  withLogChannel,
-  withSessionFs,
-  pathToLocationIn,
-} from '@texra-ai/harness/host';
+import { withSessionFs, pathToLocationIn } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';

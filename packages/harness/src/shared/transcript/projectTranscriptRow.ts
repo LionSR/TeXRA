@@ -180,9 +180,12 @@ const MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD = 32_768;
 // ---------------------------------------------------------------------------
 
 /** What a tool row says of its call beyond its payload, as the transcript
- *  fold holds it: from the card's `tool.start`, a script's call's phase and
+ *  fold holds it: from the card's `tool.start`, a script's call's section and
  *  attempt; from the run, a cut by its end. */
-export type ToolCallFacts = Pick<ToolRow, 'phase' | 'attempt' | 'cutByRunEnd'>;
+export type ToolCallFacts = Pick<
+  ToolRow,
+  'section' | 'attempt' | 'cutByRunEnd'
+>;
 
 /** A tool card from its decoded payload; `output` is the live text a running
  *  card printed, which paints in place of the durable output, and `call` is

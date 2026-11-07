@@ -2,7 +2,7 @@
 // shared script-stage model (`scriptStages` in `@texra-ai/harness/transcript`), the one the
 // progress view paints. A foreground surface like the Ctrl-T reader:
 // row-budgeted, and Esc restores the conversation untouched. Its title is
-// the card's summary line; each phase lists its calls in issue order. Enter
+// the card's summary line; each section lists its calls in issue order. Enter
 // opens a call's child run (or the run asking under it); `s` stops a running
 // call's agent, which the script sees as `Skipped`.
 
@@ -77,7 +77,7 @@ const STATUS_COLOR = {
   'not run': COLOR_BORDER,
 } as const satisfies Record<ScriptCallView['status'], string | undefined>;
 
-/** One list entry: a phase heading, or a call. */
+/** One list entry: a section heading, or a call. */
 type Entry =
   | { readonly kind: 'heading'; readonly key: string; readonly text: string }
   | {
@@ -153,17 +153,17 @@ export function ScriptStagePopup({
   );
   const stage = stages[stageIndex];
 
-  const entries: Entry[] = (stage?.phases ?? []).flatMap((phase) => [
-    ...(phase.title === null
+  const entries: Entry[] = (stage?.sections ?? []).flatMap((section) => [
+    ...(section.title === null
       ? []
       : [
           {
             kind: 'heading' as const,
-            key: `phase:${phase.title}`,
-            text: `${STATUS_DIAMOND} ${phase.title}`,
+            key: `section:${section.title}`,
+            text: `${STATUS_DIAMOND} ${section.title}`,
           },
         ]),
-    ...phase.calls.map((call) => ({
+    ...section.calls.map((call) => ({
       kind: 'call' as const,
       key: call.id,
       call,

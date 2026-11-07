@@ -13,14 +13,14 @@ import { dirname, join } from 'node:path';
 // Third-party imports
 import { Effect, Exit, FileSystem, Schema } from 'effect';
 
-import { defineTool } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness/host';
 import {
   boundFile,
   ChildRuns,
   requireRun,
   executed,
   ToolError,
+  defineTool,
+  Settings,
 } from '@texra-ai/harness/plugins';
 import {
   fileLocationDisplayPath,

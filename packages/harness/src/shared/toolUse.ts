@@ -169,17 +169,20 @@ export const BASH_TOOL_DEFAULT_TIMEOUT_MS = 120_000;
 /**
  * Max chars a background `bash` run records as `process.output` rows as
  * they arrive, both streams together. Past it the run writes a truncation
- * notice; a stream that has not yet recorded the delivery's head budget
- * (`BACKGROUND_OUTPUT_HEAD_CHARS` in `agent/runtime/delegation/bashDelivery.ts`)
- * still records up to it, and the rest is held back. When the command ends
- * the run writes how much it left out and records each stream's last
- * `BACKGROUND_OUTPUT_TAIL_CHARS` characters, so a capped log holds at most
- * one head and one tail per stream beyond this figure. Lives here
- * because the writer (`tools/bash.ts`) and the reader
+ * notice; a stream still records up to the delivery's head budget, and the
+ * rest is held back. When the command ends each stream's held-back tail is
+ * recorded as a row marking the gap before it (`elided`), so a capped log
+ * holds at most one head and one tail per stream beyond this figure. Lives
+ * here because the writer (`tools/bash.ts`) and the reader
  * (`/executions/{id}/output`) must agree on the figure the output header
  * reports.
  */
 export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
+
+/** The line a projection of a process run's rows shows where a capped log
+ *  left `elided` characters of a stream out. */
+export const outputGapNotice = (elided: number): string =>
+  `[${elided.toLocaleString()} characters elided]`;
 
 /** Default `executions wait` timeout (seconds) when the model omits `timeout`. */
 export const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS = 300;

@@ -232,16 +232,14 @@ function installSession(
     records: (runId: RunId) => {
       const records = mocks.getRunRecords(runId);
       return {
-        readConfig: () =>
-          Effect.tryPromise({
-            try: () => records.readConfig(),
-            catch: ensureError,
-          }),
-        exists: () =>
-          Effect.tryPromise({
-            try: () => records.exists(),
-            catch: ensureError,
-          }),
+        readConfig: Effect.tryPromise({
+          try: () => records.readConfig(),
+          catch: ensureError,
+        }),
+        exists: Effect.tryPromise({
+          try: () => records.exists(),
+          catch: ensureError,
+        }),
       };
     },
     // The chat's host attaches for the session's life; detaching it is the

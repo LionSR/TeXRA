@@ -15,7 +15,6 @@ import {
   readModelOptions,
   StateWriteFailed,
   type ModelOption,
-  type Secrets,
   REASONING_LEVELS_KEY,
 } from '@texra-ai/harness/host';
 import {
@@ -28,7 +27,7 @@ import {
   isFastFirstResponseModel,
 } from '@texra/shared/model/modelPicker';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
-import type { SettingsStores } from '@texra-ai/harness/host';
+import type { Secrets, SettingsStores } from '@texra-ai/harness/plugins';
 
 /** Membership form of the order the Models tab groups by. */
 const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);

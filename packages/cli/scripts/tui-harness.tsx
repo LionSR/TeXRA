@@ -29,11 +29,8 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import {
-  AgentCatalog,
-  describeFollowUpFailure,
-  Secrets,
-} from '@texra-ai/harness/host';
+import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
   Interactions,
@@ -1081,7 +1078,7 @@ function makeAgentProposalPayload(): AgentProposalRequest {
           script: {
             title: 'Review and fix chapter 2',
             source: [
-              "phase('Review')",
+              "section('Review')",
               'const reviews = await Promise.all(',
               "  ['A', 'B'].map((name) =>",
               "    agent(`Review chapter 2 as referee ${name}.`, { agentName: 'review' }),",

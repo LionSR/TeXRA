@@ -163,7 +163,8 @@ function backgroundBashTurn(params: {
   // up to the delivery's head budget, so its head survives the other
   // stream's volume; the rest it sends is held as a rolling tail (its
   // `elided` characters are what the tail let go), and the tails become the
-  // log's last rows when the command ends, however it ends.
+  // log's last rows when the command ends, however it ends, each marking
+  // the gap before it.
   const streams = {
     stdout: { recorded: 0, elided: 0, tail: '' },
     stderr: { recorded: 0, elided: 0, tail: '' },
@@ -207,13 +208,16 @@ function backgroundBashTurn(params: {
     held.tail = tail;
   };
   const recordTails = (): void => {
-    if (!capReached) return;
-    const { stdout, stderr } = streams;
-    logger.warn(
-      `[${(stdout.elided + stderr.elided).toLocaleString()} characters elided; the last ${(stdout.tail.length + stderr.tail.length).toLocaleString()} follow]`,
-    );
-    if (stdout.tail) logger.output('stdout', stdout.tail);
-    if (stderr.tail) logger.output('stderr', stderr.tail);
+    for (const stream of ['stdout', 'stderr'] as const) {
+      const { tail, elided } = streams[stream];
+      if (tail)
+        logger.emit({
+          type: 'process.output',
+          stream,
+          text: tail,
+          ...(elided > 0 ? { elided } : {}),
+        });
+    }
   };
 
   const run = Effect.gen(function* () {
@@ -237,10 +241,7 @@ function backgroundBashTurn(params: {
     // exit code, which the run's end reads as its failure, its output still
     // delivered. A timeout, a signal and a spawn failure answer no 0.
     return {
-      report: formatBashDelivery(runId, call, wallTimeMs, result, {
-        rows,
-        gaps: streams,
-      }),
+      report: formatBashDelivery(runId, call, wallTimeMs, result, rows),
       exit: {
         code: result.noExitCode === true ? null : result.exitCode,
         timedOut: result.timedOut,

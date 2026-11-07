@@ -1,11 +1,8 @@
 import { Effect, Schema } from 'effect';
 
 import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
-import {
-  Secrets,
-  type StateReadFailed,
-  type SettingsStores,
-} from '@texra-ai/harness/host';
+import { type StateReadFailed } from '@texra-ai/harness/host';
+import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';

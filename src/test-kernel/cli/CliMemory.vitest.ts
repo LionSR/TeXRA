@@ -7,7 +7,8 @@ import { Cause, Effect, Exit, FileSystem } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
 // Local imports
-import { sessionFsLayer, type StorageFs } from '@texra-ai/harness/host';
+import { sessionFsLayer } from '@texra-ai/harness/host';
+import type { StorageFs } from '@texra-ai/harness/plugins';
 import { loadCliMemoryDetail } from '@cli/runtime/memory';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 

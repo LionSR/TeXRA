@@ -24,9 +24,9 @@ import { type LocalSession, type Sessions } from '@texra-ai/harness';
 import {
   AppState,
   type GlobalValues,
-  withLogChannel,
   StateStores,
 } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   openNodeWorkspaceRoots,
   canonicalizeWorkspacePath,

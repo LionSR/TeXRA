@@ -42,7 +42,7 @@ function recipeSource(agentName: string): string {
 let revisions = 1;
 let critique = null;
 for (let revision = 0; revision < revisions; revision += 1) {
-  phase(\`Revision \${revision + 1}\`);
+  section(\`Revision \${revision + 1}\`);
   const context = await tools.document_context({ revision, critique });
   revisions = context.revisions;
   const reply = await agent(context.prompt, {

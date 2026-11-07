@@ -16,13 +16,14 @@ import {
   type ToolProbeInputs,
   ToolRegistry,
   type Plugin,
-} from '@texra-ai/harness/plugins';
-import {
   AppSignals,
-  type ConfigProvider,
   emitAppSignal,
   type PlatformSecrets,
   Secrets,
+  type ITool,
+} from '@texra-ai/harness/plugins';
+import {
+  type ConfigProvider,
   ToolAvailability,
   ToolCatalog,
 } from '@texra-ai/harness/host';
@@ -31,7 +32,6 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { toolTable } from '@tools/toolTable';
-import type { ITool } from '@texra-ai/harness';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
 const unreadSecret = (): never => {

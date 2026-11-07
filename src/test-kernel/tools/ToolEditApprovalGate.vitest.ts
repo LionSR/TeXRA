@@ -15,8 +15,8 @@ import { generateRunId, type RequestDecision } from '@texra-ai/harness/schemas';
 import {
   requestToolEditApproval,
   type PluginToolServices,
+  WorkspaceFs,
 } from '@texra-ai/harness/plugins';
-import { WorkspaceFs } from '@texra-ai/harness/host';
 import { SessionRequests } from '@agent/runtime/requests';
 import { SessionLog } from '@shared/session/runHistory';
 import {

@@ -40,12 +40,10 @@ import {
 import {
   AgentCatalog,
   AgentDirectories,
-  AppSignals,
   AppState,
   GlobalStorageFs,
   GlobalValues,
   processLayer,
-  Secrets,
   StateStores,
   ToolAvailability,
   ToolCatalog,
@@ -56,6 +54,7 @@ import {
   type ProcessServices,
   type ValidationModel,
 } from '@texra-ai/harness/host';
+import { AppSignals, Secrets } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
   Interactions,

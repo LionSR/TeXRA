@@ -1,6 +1,5 @@
 // Third-party imports
 import { Effect, type FileSystem, Schema } from 'effect';
-import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import { pathToLocationIn } from '@texra-ai/harness/host';
 
@@ -8,6 +7,9 @@ import { pathToLocationIn } from '@texra-ai/harness/host';
 import {
   formatToolOutput,
   type ToolFileAttachment,
+  defineTool,
+  type ToolResult,
+  type WorkspaceFs,
 } from '@texra-ai/harness/plugins';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import {
@@ -16,7 +18,6 @@ import {
   resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
-import type { WorkspaceFs } from '@texra-ai/harness/host';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

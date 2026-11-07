@@ -137,7 +137,7 @@ session is closed.
 A later process can open the same root and call `session.resume(runId)` to
 continue a run from its committed history, returning the same `Run` handle that
 `start` returns. A run that cannot continue fails with `ResumeRefused`, whose
-`reason` is a `ResumeRefusal`, the same value `records(runId).readRejection()`
+`reason` is a `ResumeRefusal`, the same value `records(runId).readRejection`
 gives: its `kind` is `finished`, `blocked` (the agent or plugin
 named by `name` is missing, off or not trusted), `unusableCheckpoint`,
 `earlierBuild` (with its `cause`), or `notResumable` (it was deleted). If
@@ -425,14 +425,14 @@ files.
 
 ## Entry points
 
-| Entry                          | Contents                                                                                                                                                                                                                                                                                        |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/harness`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, `defineTool`, and every tagged error the surface fails with. About fifty names; start here                                                                                                      |
-| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                  |
-| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                            |
-| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin or tool is written with: `definePlugin`, `ToolContext`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                                                                            |
-| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                           |
-| `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, settings and stores, skills, installed plugins, model options, the presentation surface (`HostInteractions`), and shared file, error and log helpers. TeXRA's own hosts read it; no stability promise |
+| Entry                          | Contents                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/harness`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, and every tagged error the surface fails with. About fifty names; start here                                                                                                                            |
+| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                          |
+| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                    |
+| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`              |
+| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                   |
+| `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, the config and state stores, skills, installed plugins, model options, the presentation surface (`HostInteractions`), and shared file, error and log helpers. TeXRA's own hosts read it; no stability promise |
 
 Every entry needs the peers installed. See [Install](#install). Each entry's
 exports, with their TSDoc and declarations, are listed in its API reference
@@ -529,7 +529,7 @@ interrupts tool work when the run stops. `defineTool` validates the input and
 normalizes ordinary failures into tool feedback; `execute` implements the work.
 
 ```ts
-import { defineTool } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness/plugins';
 import { Effect, Schema } from 'effect';
 
 const EchoTool = defineTool({

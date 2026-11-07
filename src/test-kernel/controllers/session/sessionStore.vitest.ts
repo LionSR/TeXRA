@@ -22,9 +22,12 @@ import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, PubSub, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { defineTool, Sessions } from '@texra-ai/harness';
-import { AppSignals } from '@texra-ai/harness/host';
-import { definePlugin } from '@texra-ai/harness/plugins';
+import { Sessions } from '@texra-ai/harness';
+import {
+  definePlugin,
+  defineTool,
+  AppSignals,
+} from '@texra-ai/harness/plugins';
 import {
   AgentConfigSchema,
   generateRunId,

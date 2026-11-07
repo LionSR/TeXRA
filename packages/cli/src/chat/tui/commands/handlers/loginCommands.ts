@@ -1,6 +1,11 @@
 import { Effect } from 'effect';
 
-import { emitAppSignal } from '@texra-ai/harness/host';
+import {
+  emitAppSignal,
+  type AppSignals,
+  type Secrets,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 
 import {
   toErrorMessage,
@@ -32,12 +37,7 @@ import {
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
-import type {
-  AgentCatalogServices,
-  AppSignals,
-  Secrets,
-  SettingsStores,
-} from '@texra-ai/harness/host';
+import type { AgentCatalogServices } from '@texra-ai/harness/host';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 

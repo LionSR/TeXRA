@@ -32,10 +32,15 @@ import {
   appSignalStream,
   getEnabledModels,
   readModelOptions,
-  Settings,
-  withLogChannel,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
+import {
+  Settings,
+  withLogChannel,
+  type AppSignals,
+  type Secrets,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 import {
   APPROVAL_POLICY_SETTING,
   GIT_COMMITS_TO_SHOW_SETTING,
@@ -58,12 +63,7 @@ import {
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import type {
-  AgentCatalog,
-  AppSignals,
-  Secrets,
-  SettingsStores,
-} from '@texra-ai/harness/host';
+import type { AgentCatalog } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 

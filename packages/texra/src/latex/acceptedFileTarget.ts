@@ -12,13 +12,16 @@ import { Effect, FileSystem, Option, type PlatformError } from 'effect';
 // Local imports
 import {
   pathToLocationIn,
-  withLogChannel,
-  WorkspaceFs,
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@texra-ai/harness/host';
-import { emitAppSignal, type AppSignals } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  WorkspaceFs,
+  emitAppSignal,
+  type AppSignals,
+} from '@texra-ai/harness/plugins';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 
 const CHANNEL = 'AcceptedFileTarget';

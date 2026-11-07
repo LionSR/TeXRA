@@ -166,7 +166,7 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
  *  service's, whichever holds the runs. */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Session) {
-    return (yield* session.listRuns()).map(toCliHistoryEntry);
+    return (yield* session.listRuns).map(toCliHistoryEntry);
   },
 );
 
@@ -189,13 +189,13 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       generatedFiles,
     ] = yield* Effect.all(
       [
-        records.readConfig(),
+        records.readConfig,
         session.view.read([id]),
-        records.readResult(),
-        records.readReport(),
-        records.readConversation(),
-        records.readWorkspaceFiles(),
-        records.readResumable(),
+        records.readResult,
+        records.readReport,
+        records.readConversation,
+        records.readWorkspaceFiles,
+        records.readResumable,
         listRunGeneratedFiles(id, storage),
       ],
       { concurrency: 8 },
@@ -276,7 +276,7 @@ export const readCliHistoryExportInput = Effect.fn(
   'cli.readCliHistoryExportInput',
 )(function* (session: Session, id: RunId) {
   const [exists, { config, exportInput }] = yield* Effect.all(
-    [session.records(id).exists(), loadChatExportInput(id, session)],
+    [session.records(id).exists, loadChatExportInput(id, session)],
     { concurrency: 2 },
   );
   if (exportInput)
