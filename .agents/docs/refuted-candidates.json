@@ -526,6 +526,19 @@
           "signature": "private get inquiry(): InquiryRequest {…}"
         }
       ]
+    },
+    {
+      "id": "G11g-usage-region-out-of-cache-key",
+      "candidate": "SubscriptionUsageService reads the GLM region inside the adapter's fetch and keys its cache by provider alone, deleting the optional resolveVariant member and the region column of UsageCacheKey",
+      "why": "The region is part of which request a usage read makes, and the cache key is read from the current setting on every lookup, so a region change misses the cache whichever path wrote it: the settings view, the CLI's /config, or a hand edit of config.json. With the region read inside fetch, the snapshot fetched from the old region's endpoint is served for up to the 30-second TTL after the user fixes the region. Avoiding that would need an `invalidatesUsage` write effect on the region row, which covers only the settings view's write path and is an option for one row. The forceRefresh half of G11g landed in #14824. Found in round 2 (G-app-controllers.md, finding 11g); refused in round 3, package G.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/G-app-controllers.md#finding-11-smaller-items-batched",
+      "symbols": [
+        {
+          "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts",
+          "symbol": "SubscriptionUsageAdapter",
+          "signature": "interface SubscriptionUsageAdapter { readonly resolveVariant?: () => Effect.Effect<boolean, Error>; readonly fetch: ( variant: boolean | undefined, ) => Effect.Effect< ParsedSubscriptionUsage | null, Error, HttpClient.HttpClient | Secrets >; }"
+        }
+      ]
     }
   ]
 }
