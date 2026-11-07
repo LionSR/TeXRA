@@ -111,6 +111,12 @@ import { build as bundle } from 'esbuild';
 import stableStringify from 'safe-stable-stringify';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
+import {
+  VALIDATION_FLAG,
+  VALIDATION_FLAG_CONTENT,
+  VALIDATION_SCENARIOS,
+  VALIDATION_SWITCH,
+} from '../src/runtime/validationSwitch.ts';
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 
 // Beside each scenario's own home: nothing this script starts, the build
@@ -131,7 +137,6 @@ const effectPath = path.join(
   'golden-effect',
   'approved.txt',
 );
-const FLAG_CONTENT = 'texra-cli-run-validation\n';
 const FAKE_KEY = 'texra-validation-fake-key';
 const PROVIDER_KEYS = [
   'OPENAI_API_KEY',
@@ -202,7 +207,7 @@ function scenario(root) {
   const agents = path.join(home, '.texra/v1/global-storage/custom_agents');
   mkdirSync(agents, { recursive: true });
   mkdirSync(project, { recursive: true });
-  writeFileSync(flag, FLAG_CONTENT);
+  writeFileSync(flag, VALIDATION_FLAG_CONTENT);
   cpSync(agentsDir, agents, { recursive: true });
   writeFileSync(
     path.join(project, 'notes.tex'),
@@ -323,10 +328,10 @@ process.stdin.on('end', function answer() {
     // Each chat is its runs' one writer, in the generator's order; a
     // service would outlive the generation.
     TEXRA_NO_SERVICE: '1',
-    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
-    TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
+    [VALIDATION_SWITCH]: '1',
+    [VALIDATION_FLAG]: flag,
     TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
-    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    [VALIDATION_SCENARIOS.golden]: '1',
   };
   const argv = (command) => [binaryPath, ...command, '--cwd', project];
   const run = (command, input, runEnv = env) => {

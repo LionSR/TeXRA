@@ -1,10 +1,6 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-
 import { layer } from '@effect/vitest';
 import { Effect, Layer, Schema, Context } from 'effect';
-import { afterAll, assert, beforeAll, expect, vi } from 'vitest';
+import { assert, expect, vi } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -16,6 +12,7 @@ import {
   AppState,
   mcpConfigPathOf,
   Secrets,
+  ValidationModel,
 } from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
@@ -27,7 +24,7 @@ import {
   type RunLaunch,
 } from '@agent/runtime/run/AgentRun';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { validationModelLayer } from '@cli/runtime/validationModel';
+import { validationModel } from '@cli/runtime/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -119,24 +116,23 @@ function runLayer(
       ),
     ),
     Layer.provideMerge(nodeSpawnerLayer),
-    Layer.provideMerge(validationModelLayer),
+    // Every launch here binds the deterministic in-process model through
+    // the real route.
+    Layer.provideMerge(
+      Layer.succeed(ValidationModel)({
+        enabled: Effect.succeed(true),
+        bind: validationModel(
+          Effect.succeed({
+            scriptFanout: false,
+            historyQuery: false,
+            echo: false,
+            golden: null,
+          }),
+        ),
+      }),
+    ),
   );
 }
-
-// Every launch here binds the deterministic in-process model through the
-// real route: the guarded package-validation gate, opened as validation opens it.
-beforeAll(() => {
-  const flag = path.join(mkdtempSync(path.join(tmpdir(), 'texra-vm-')), 'flag');
-  writeFileSync(flag, 'texra-cli-run-validation');
-  for (const [name, value] of Object.entries({
-    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
-    TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
-  }))
-    vi.stubEnv(name, value);
-});
-afterAll(() => {
-  vi.unstubAllEnvs();
-});
 
 layer(
   Layer.provideMerge(

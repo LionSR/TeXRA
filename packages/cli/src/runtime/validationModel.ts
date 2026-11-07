@@ -6,8 +6,10 @@
  * CLI and `executeAgent` path without a live model API.
  *
  * Only that build carries this module: a shipped CLI bundle loads a stub in
- * its place (`scripts/stub-internal-validation-model.mjs`). The switches go
- * through the ambient `ConfigProvider` (`envVar`), read when the program runs.
+ * its place (`scripts/stub-internal-validation-model.mjs`). The bundle's
+ * switches (`validationSwitch.ts`) go through the ambient `ConfigProvider`
+ * (`envVar`), read when the program runs; an in-process caller hands
+ * {@link validationModel} its scenario as a value.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
@@ -26,10 +28,23 @@ import {
 import { ValidationModel } from '@texra-ai/harness/host';
 import { envVar } from '@texra-ai/harness/node';
 
-/** The per-run switch, and the flag file's variable and sentinel. */
-const SWITCH = 'TEXRA_INTERNAL_VALIDATE_MODEL';
-const FLAG = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
-const FLAG_CONTENT = 'texra-cli-run-validation';
+// Local imports - component
+import {
+  VALIDATION_FLAG as FLAG,
+  VALIDATION_FLAG_CONTENT as FLAG_CONTENT,
+  VALIDATION_SCENARIOS,
+  VALIDATION_SWITCH as SWITCH,
+} from './validationSwitch';
+
+/** Which scripted conversations the model plays, as a turn reads them. */
+export interface ValidationScenario {
+  readonly scriptFanout: boolean;
+  readonly historyQuery: boolean;
+  readonly echo: boolean;
+  /** The golden store's conversation, whose held calls wait for their
+   *  `*.release` files in this directory; null when off. */
+  readonly golden: string | null;
+}
 // The harness's words for a compaction request and a call that never ran.
 const COMPACTION_SYSTEM_PROMPT_START = 'Summarize the conversation below.';
 const SKIPPED_NOT_STARTED = 'interrupted before the Harness recorded it';
@@ -98,15 +113,15 @@ const ANSWERED = 'The golden chat is answered.';
 /**
  * The golden 1.0 store's scripted conversation (`generate-golden-store.mjs`):
  * a system prompt names its part, a step is its count of tool results, and a
- * held call waits for its `*.release` file beside the flag file.
+ * held call waits for its `*.release` file in `releases`.
  */
 function goldenTurn(
   turn: ResolvedTurn,
-  flagPath: string,
+  releases: string,
   call: (name: string, input: unknown) => TurnResult['content'][number],
 ): Effect.Effect<TurnResult['content'] | null> {
   const gate = (name: string) => {
-    const file = path.join(path.dirname(flagPath), name);
+    const file = path.join(releases, name);
     return Effect.sync(() => existsSync(file)).pipe(
       Effect.repeat({ until: Boolean, schedule: Schedule.spaced('20 millis') }),
       Effect.asVoid,
@@ -402,172 +417,192 @@ const shouldUseInternalValidationModel = Effect.gen(function* () {
 
 const VALIDATION_ENDPOINT = 'https://validation.invalid/v1';
 
-/** The canned llm `Model` behind the validation backend. */
-function validationModel(config: ModelConfig): {
-  readonly model: Model;
-  readonly origin: ModelOrigin;
-} {
-  const origin = originOf({
-    protocol: 'openai-responses',
-    requestedModel: config.id,
-    deployment: {
-      endpoint: VALIDATION_ENDPOINT,
-      credentialScope: 'validation',
-    },
-  });
-  let responses = 0;
-  const call = (name: string, input: unknown) =>
-    ({
-      kind: 'local-call',
-      providerCallId: `validation-${name}-${responses}`,
-      name,
-      argumentsText: JSON.stringify(input),
-    }) as const;
-  const complete = (
-    turn: ResolvedTurn,
-    scriptFanout: boolean,
-    historyQuery: boolean,
-    echo: boolean,
-    golden: TurnResult['content'] | null,
-  ): TurnResult => {
-    const toolNames = new Set(turn.tools.map((tool) => tool.name));
-    const hasToolResult = turn.messages.some(
-      (message) => message.role === 'tool',
-    );
-    let content: TurnResult['content'];
-    if (golden !== null) {
-      content = golden;
-    } else if (
-      echo &&
-      turn.system?.startsWith(COMPACTION_SYSTEM_PROMPT_START)
-    ) {
-      content = text('Earlier turns, summarized.');
-    } else if (echo) {
-      // The user messages the request carries, in order, each by its last
-      // 60 characters: what a fork or a compaction left of the model's view.
-      const seen = turn.messages.flatMap((message) =>
-        message.role === 'user'
-          ? message.content.flatMap((part) =>
-              part.kind === 'text' ? [part.text.slice(-60)] : [],
-            )
-          : [],
-      );
-      content = text(`Model saw: ${seen.join(' | ')}`);
-    } else if (scriptFanout && toolNames.has('submit_output')) {
-      content = [
-        call(
-          'submit_output',
-          mathematicalValidationOutput(JSON.stringify(turn.messages)),
-        ),
-      ];
-    } else if (scriptFanout && !hasToolResult && toolNames.has('script')) {
-      content = [
-        call('script', {
-          title: 'Solve the validation problems',
-          code: SCRIPT_FANOUT_VALIDATION_SOURCE,
-        }),
-      ];
-    } else if (historyQuery && !hasToolResult && toolNames.has('executions')) {
-      content = [
-        call('executions', {
-          path: '/executions',
-          action: 'query',
-          sql: 'SELECT name, kind, status FROM runs ORDER BY started_at',
-        }),
-      ];
-    } else if ((scriptFanout && toolNames.has('script')) || historyQuery) {
-      // Hand the result back verbatim, so the run's report shows what the
-      // script's children answered or what the query returned.
-      const results = turn.messages.flatMap((message) =>
-        message.role === 'tool' ? message.results : [],
-      );
-      const what = scriptFanout ? 'Script' : 'History query';
-      content = text(`${what} result: ${JSON.stringify(results)}`);
-    } else {
-      content = text(
-        `<documents><document name="paper.polished.tex">${VALIDATION_OUTPUT}</document></documents>`,
-      );
-    }
-    const calls = content.some((part) => part.kind === 'local-call');
-    // About four characters a token, so compaction can be crossed.
-    const inputTokens = echo
-      ? Math.ceil(JSON.stringify(turn.messages).length / 4)
-      : 1;
+/** The scenario the bundle's switches select, read per turn so a run's
+ *  environment decides it; the golden releases go beside the flag file. */
+const scenarioFromEnv: Effect.Effect<ValidationScenario> = Effect.gen(
+  function* () {
+    const on = (name: string) => Effect.map(envVar(name), (v) => v === '1');
+    const flagPath = yield* envVar(FLAG);
     return {
-      kind: 'http',
-      providerResponseId: `validation-response-${responses}`,
-      requestedOrigin: origin,
-      returnedModel: config.id,
-      modelFingerprint: null,
-      content,
-      finishReason: calls ? 'tool-calls' : 'stop',
-      usage: {
-        inputTokens,
-        outputTokens: 1,
-        totalTokens: inputTokens + 1,
-        cachedInputTokens: null,
-        cacheWriteTokens: null,
-        reasoningTokens: null,
-        toolUsePromptTokens: null,
-      },
+      scriptFanout: yield* on(VALIDATION_SCENARIOS.scriptFanout),
+      historyQuery: yield* on(VALIDATION_SCENARIOS.historyQuery),
+      echo: yield* on(VALIDATION_SCENARIOS.echo),
+      golden:
+        (yield* on(VALIDATION_SCENARIOS.golden)) && flagPath
+          ? path.dirname(flagPath)
+          : null,
     };
-  };
-  const prepareTurn: Model['prepareTurn'] = (request) =>
-    Effect.succeed({
-      ...origin,
-      mode: 'foreground',
-      system: request.system,
-      messages: request.messages,
-      tools: request.tools ?? [],
-      transport: { kind: 'http' },
-      controls: {
-        temperature: 0,
-        maxOutputTokens: request.maxOutputTokens ?? config.maxOutputTokens,
-        store: false,
-        toolChoice: request.toolChoice ?? 'auto',
-        reasoning: null,
-        serviceTier: null,
-        ...(request.cacheKey === undefined
-          ? {}
-          : { promptCacheKey: request.cacheKey }),
+  },
+);
+
+/** The canned llm `Model` behind the validation backend, playing the
+ *  scenario `scenario` gives at each turn. */
+export const validationModel =
+  (scenario: Effect.Effect<ValidationScenario>) =>
+  (
+    config: ModelConfig,
+  ): {
+    readonly model: Model;
+    readonly origin: ModelOrigin;
+  } => {
+    const origin = originOf({
+      protocol: 'openai-responses',
+      requestedModel: config.id,
+      deployment: {
+        endpoint: VALIDATION_ENDPOINT,
+        credentialScope: 'validation',
       },
     });
-  // Read per turn, so a validation run can flip them between turns.
-  const streamTurn: Model['streamTurn'] = (turn) =>
-    Stream.fromEffect(
-      Effect.gen(function* () {
-        responses += 1;
-        const [scriptFanout, historyQuery, echo, golden, flagPath] =
-          yield* Effect.all([
-            envVar('TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT'),
-            envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
-            envVar('TEXRA_INTERNAL_VALIDATE_ECHO'),
-            envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
-            envVar(FLAG),
-          ]);
-        // A golden turn the provider refuses as too long for the model.
-        if (golden === '1' && turn.system?.includes('GOLDEN-OVERFLOW'))
-          return yield* new ModelError({
-            kind: 'context-overflow',
-            message: 'The request exceeds the context window.',
-            status: 400,
-          });
-        return complete(
-          turn,
-          scriptFanout === '1',
-          historyQuery === '1',
-          echo === '1',
-          golden === '1' && flagPath
-            ? yield* goldenTurn(turn, flagPath, call)
-            : null,
+    let responses = 0;
+    const call = (name: string, input: unknown) =>
+      ({
+        kind: 'local-call',
+        providerCallId: `validation-${name}-${responses}`,
+        name,
+        argumentsText: JSON.stringify(input),
+      }) as const;
+    const complete = (
+      turn: ResolvedTurn,
+      scriptFanout: boolean,
+      historyQuery: boolean,
+      echo: boolean,
+      golden: TurnResult['content'] | null,
+    ): TurnResult => {
+      const toolNames = new Set(turn.tools.map((tool) => tool.name));
+      const hasToolResult = turn.messages.some(
+        (message) => message.role === 'tool',
+      );
+      let content: TurnResult['content'];
+      if (golden !== null) {
+        content = golden;
+      } else if (
+        echo &&
+        turn.system?.startsWith(COMPACTION_SYSTEM_PROMPT_START)
+      ) {
+        content = text('Earlier turns, summarized.');
+      } else if (echo) {
+        // The user messages the request carries, in order, each by its last
+        // 60 characters: what a fork or a compaction left of the model's view.
+        const seen = turn.messages.flatMap((message) =>
+          message.role === 'user'
+            ? message.content.flatMap((part) =>
+                part.kind === 'text' ? [part.text.slice(-60)] : [],
+              )
+            : [],
         );
-      }),
-    ).pipe(Stream.map((result): TurnEvent => ({ kind: 'completed', result })));
-  return { origin, model: { prepareTurn, streamTurn } };
-}
+        content = text(`Model saw: ${seen.join(' | ')}`);
+      } else if (scriptFanout && toolNames.has('submit_output')) {
+        content = [
+          call(
+            'submit_output',
+            mathematicalValidationOutput(JSON.stringify(turn.messages)),
+          ),
+        ];
+      } else if (scriptFanout && !hasToolResult && toolNames.has('script')) {
+        content = [
+          call('script', {
+            title: 'Solve the validation problems',
+            code: SCRIPT_FANOUT_VALIDATION_SOURCE,
+          }),
+        ];
+      } else if (
+        historyQuery &&
+        !hasToolResult &&
+        toolNames.has('executions')
+      ) {
+        content = [
+          call('executions', {
+            path: '/executions',
+            action: 'query',
+            sql: 'SELECT name, kind, status FROM runs ORDER BY started_at',
+          }),
+        ];
+      } else if ((scriptFanout && toolNames.has('script')) || historyQuery) {
+        // Hand the result back verbatim, so the run's report shows what the
+        // script's children answered or what the query returned.
+        const results = turn.messages.flatMap((message) =>
+          message.role === 'tool' ? message.results : [],
+        );
+        const what = scriptFanout ? 'Script' : 'History query';
+        content = text(`${what} result: ${JSON.stringify(results)}`);
+      } else {
+        content = text(
+          `<documents><document name="paper.polished.tex">${VALIDATION_OUTPUT}</document></documents>`,
+        );
+      }
+      const calls = content.some((part) => part.kind === 'local-call');
+      // About four characters a token, so compaction can be crossed.
+      const inputTokens = echo
+        ? Math.ceil(JSON.stringify(turn.messages).length / 4)
+        : 1;
+      return {
+        kind: 'http',
+        providerResponseId: `validation-response-${responses}`,
+        requestedOrigin: origin,
+        returnedModel: config.id,
+        modelFingerprint: null,
+        content,
+        finishReason: calls ? 'tool-calls' : 'stop',
+        usage: {
+          inputTokens,
+          outputTokens: 1,
+          totalTokens: inputTokens + 1,
+          cachedInputTokens: null,
+          cacheWriteTokens: null,
+          reasoningTokens: null,
+          toolUsePromptTokens: null,
+        },
+      };
+    };
+    const prepareTurn: Model['prepareTurn'] = (request) =>
+      Effect.succeed({
+        ...origin,
+        mode: 'foreground',
+        system: request.system,
+        messages: request.messages,
+        tools: request.tools ?? [],
+        transport: { kind: 'http' },
+        controls: {
+          temperature: 0,
+          maxOutputTokens: request.maxOutputTokens ?? config.maxOutputTokens,
+          store: false,
+          toolChoice: request.toolChoice ?? 'auto',
+          reasoning: null,
+          serviceTier: null,
+          ...(request.cacheKey === undefined
+            ? {}
+            : { promptCacheKey: request.cacheKey }),
+        },
+      });
+    const streamTurn: Model['streamTurn'] = (turn) =>
+      Stream.fromEffect(
+        Effect.gen(function* () {
+          responses += 1;
+          const { scriptFanout, historyQuery, echo, golden } = yield* scenario;
+          // A golden turn the provider refuses as too long for the model.
+          if (golden !== null && turn.system?.includes('GOLDEN-OVERFLOW'))
+            return yield* new ModelError({
+              kind: 'context-overflow',
+              message: 'The request exceeds the context window.',
+              status: 400,
+            });
+          return complete(
+            turn,
+            scriptFanout,
+            historyQuery,
+            echo,
+            golden === null ? null : yield* goldenTurn(turn, golden, call),
+          );
+        }),
+      ).pipe(
+        Stream.map((result): TurnEvent => ({ kind: 'completed', result })),
+      );
+    return { origin, model: { prepareTurn, streamTurn } };
+  };
 
-/** The harness's `ValidationModel`: the canned model and its gate. */
+/** The harness's `ValidationModel` in the validation bundle: the canned
+ *  model and its gate, both over the bundle's switches. */
 export const validationModelLayer = Layer.succeed(ValidationModel)({
   enabled: shouldUseInternalValidationModel,
-  bind: validationModel,
+  bind: validationModel(scenarioFromEnv),
 });
