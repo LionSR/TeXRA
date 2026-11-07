@@ -290,11 +290,11 @@ rather than per finding:
   closes with its exit now, and while it stands it holds the plugin's
   session services (`PluginHold`, which had no user), so the claims outlive
   the switch.
-- **`ProcessReport.failure` beside `ProcessReport.exit`**: a failed exit is
-  said twice, as the exit code and as the failure message the end records.
-  One reading (`exit.code !== 0` is the failure, the message its report)
-  would own it; a provider SDK's error result, which has no exit, keeps
-  `failure`.
+- **`ProcessReport.failure` beside `ProcessReport.exit`, ended in lane 9.**
+  A failed exit was said twice, as the exit code and as the failure message
+  the end records. `processRun`'s `failureOf` is the one reading now: an
+  exit other than 0 is the failure, its message named from the exit; a
+  provider SDK's error result, which has no exit, keeps `failure`.
 - **`childEndReport`** switches on the child's kind (a background script's
   notice, a subagent's envelope) in one function; two delivery formats, one
   function, where the kind is known at the launch.
