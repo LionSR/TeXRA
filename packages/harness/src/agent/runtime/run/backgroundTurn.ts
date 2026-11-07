@@ -116,54 +116,45 @@ export const submitAndObserve = (
   invocation: InvocationRef,
   bound: BoundModel,
 ): Stream.Stream<TurnEvent, ModelError | InvokeError, SessionLog> =>
-  Stream.unwrap(submitted(run, cell, resolved, invocation, bound));
-
-const submitted = Effect.fn('ModelInvoker.background')(function* (
-  run: AgentRunShape,
-  cell: RunCell,
-  resolved: BackgroundTurn,
-  invocation: InvocationRef,
-  bound: BoundModel,
-): Effect.fn.Return<
-  Stream.Stream<TurnEvent, ModelError, SessionLog>,
-  ModelError | InvokeError,
-  SessionLog
-> {
-  const background = bound.model.background;
-  if (background === undefined) {
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message: 'The bound model resolved a background turn it cannot submit.',
-    });
-  }
-  const submission = yield* background.submit(resolved);
-  if (submission.kind === 'completed')
-    return Stream.succeed<TurnEvent>({
-      kind: 'completed',
-      result: submission.result,
-    });
-  const deadlineAtMs =
-    (yield* Clock.currentTimeMillis) + BACKGROUND_MAX_DURATION_MS;
-  const aggregateId = qualifyAggregateId('run', run.runId);
-  const { operation } = submission;
-  yield* cell.append([
-    {
-      type: 'model.message',
-      aggregateId,
-      payload: {
-        kind: 'identified',
-        invocation,
-        providerResponseId: operation.providerResponseId,
-      },
-    },
-    {
-      type: 'model.message',
-      aggregateId,
-      payload: { kind: 'accepted', invocation, operation, deadlineAtMs },
-    },
-  ]);
-  return observeBackground(run, cell, background, resolved, invocation, {
-    operation,
-    deadlineAtMs,
-  });
-});
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const background = bound.model.background;
+      if (background === undefined) {
+        return yield* new ModelError({
+          kind: 'invalid-request',
+          message:
+            'The bound model resolved a background turn it cannot submit.',
+        });
+      }
+      const submission = yield* background.submit(resolved);
+      if (submission.kind === 'completed')
+        return Stream.succeed<TurnEvent>({
+          kind: 'completed',
+          result: submission.result,
+        });
+      const deadlineAtMs =
+        (yield* Clock.currentTimeMillis) + BACKGROUND_MAX_DURATION_MS;
+      const aggregateId = qualifyAggregateId('run', run.runId);
+      const { operation } = submission;
+      yield* cell.append([
+        {
+          type: 'model.message',
+          aggregateId,
+          payload: {
+            kind: 'identified',
+            invocation,
+            providerResponseId: operation.providerResponseId,
+          },
+        },
+        {
+          type: 'model.message',
+          aggregateId,
+          payload: { kind: 'accepted', invocation, operation, deadlineAtMs },
+        },
+      ]);
+      return observeBackground(run, cell, background, resolved, invocation, {
+        operation,
+        deadlineAtMs,
+      });
+    }).pipe(Effect.withSpan('ModelInvoker.background')),
+  );
