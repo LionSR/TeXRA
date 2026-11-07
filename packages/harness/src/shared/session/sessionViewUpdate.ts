@@ -20,7 +20,7 @@
  * costs the chunk, never the row's text.
  */
 
-import { Equal, type Types } from 'effect';
+import { Equal, type Types, absurd } from 'effect';
 import {
   aggregateTarget,
   qualifyAggregateId,
@@ -778,6 +778,17 @@ function applyStanding(
   };
 }
 
+/** The rows that change a session-level field; every other row changes
+ *  only its run. */
+type SessionFactRow = Extract<
+  DisplayRow,
+  { type: 'run.start' | 'approval.policy' | 'plugin.fact' }
+>;
+const changesSessionFacts = (event: DisplayRow): event is SessionFactRow =>
+  event.type === 'run.start' ||
+  event.type === 'approval.policy' ||
+  event.type === 'plugin.fact';
+
 /** The session-level fields an event changes, applied before the run's own
  *  change so its derived fields see them. */
 function applySessionFacts(
@@ -785,6 +796,7 @@ function applySessionFacts(
   runId: RunId | null,
   event: DisplayRow,
 ): void {
+  if (!changesSessionFacts(event)) return;
   const { view } = u;
   switch (event.type) {
     case 'run.start':
@@ -816,7 +828,7 @@ function applySessionFacts(
       return;
     }
     default:
-      return;
+      absurd(event);
   }
 }
 
