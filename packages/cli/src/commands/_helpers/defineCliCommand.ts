@@ -118,9 +118,8 @@ export function defineCliCommand<const A extends ArgsDef, E>(
     args: options.args,
     setup: options.setup,
     async run(ctx) {
-      // The CLI's one pre-runtime run (pinned in `BARE_EFFECT_RUN_SITES`):
-      // the context program opens the config stores before any process
-      // runtime exists.
+      // A pre-runtime run: the context program opens the config stores
+      // before any process runtime exists.
       const context = await Effect.runPromise(
         contextFromArgs(ctx.args, ctx.rawArgs),
       );

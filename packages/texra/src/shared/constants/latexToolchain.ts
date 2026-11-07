@@ -202,8 +202,8 @@ interface LatexToolEntry {
  *
  * Lives in `shared` rather than `tools` or `latex` because all three
  * subsystems consume it — and `tools` already depends on `latex`, so a
- * `latex`-side or `tools`-side home would create the cross-subsystem cycle the
- * LAY-1 edge ratchet forbids. Keep the tool descriptions in
+ * `latex`-side or `tools`-side home would create a cross-subsystem import
+ * cycle (nothing checks that edge). Keep the tool descriptions in
  * `ProbeEnvironmentTool` aligned with the `required` and
  * `image` entries here — they appear verbatim in the LLM prompt.
  */

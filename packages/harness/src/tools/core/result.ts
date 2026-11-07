@@ -24,11 +24,10 @@ export function executed(
 
 /**
  * Build a `status: 'error'` result literal. Reserved for call sites that
- * cannot use the dominant `throw new ToolError(...)` convention (caught
- * centrally by `defineTool`'s `call`) — typically because the caller must keep
- * running after emitting a partial per-item error, or because a nested try/catch
- * would otherwise reformat the thrown message. Prefer `throw new ToolError(...)`
- * over this helper whenever the call site can support it.
+ * cannot fail the tool's Effect with a `ToolError` (the usual way, which
+ * `defineTool` turns into the call's error): typically a caller that must keep
+ * running after reporting a partial per-item error. Prefer failing with
+ * `ToolError` whenever the call site can.
  */
 export function errorResult(
   error: string,

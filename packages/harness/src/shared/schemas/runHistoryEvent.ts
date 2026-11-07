@@ -3,11 +3,11 @@
  * only: the arms themselves live in `sessionEvent.ts`, which is the single vocabulary
  * the publisher and both folds switch over.
  *
- * Every arm nests its payload under one key rather than spreading `.shape`
- * into `durable()`. `durable` builds a plain `Schema.Struct`, and spreading a
- * `strictObject`'s shape drops both its strictness and every refinement,
- * which would make the cross-field invariants below decorative at the one
- * boundary where persisted data is validated.
+ * Every case nests its payload under one key rather than spreading
+ * `.fields` into `durable()`. `durable` builds a plain `Schema.Struct`, and
+ * spreading a struct's fields drops every struct-level `.check`, which would
+ * make the cross-field invariants below decorative at the one boundary where
+ * persisted data is validated.
  *
  * No payload references a `commit`. Response identity is a runtime-minted
  * uuid, so no persisted row ever names an ordinal the publisher has not

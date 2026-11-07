@@ -296,10 +296,10 @@ function isRequestRefusal(error: unknown): error is RequestRefusal
 ## ITool
 
 Contract for tool implementations.
-`defineTool` provides the canonical implementation with schema validation. Expected
-tool failures are returned as literal `{ status: 'error', error: ... }`
-ToolResult values; unexpected/programmer failures should throw and let
-`defineTool` convert them at the boundary.
+`defineTool` provides the canonical implementation with schema validation.
+A tool fails with an `Error` (usually a `ToolError`) and the model reads its
+message as the call's error; a throw is a defect, which `defineTool` turns
+into a failed call and logs as a crash unless it is a `ToolError`.
 
 ```ts
 interface ITool<E = Error, R = never> {

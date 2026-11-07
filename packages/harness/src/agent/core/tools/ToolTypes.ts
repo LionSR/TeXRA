@@ -27,8 +27,9 @@ import type { StepRoot } from '@utils/files/externalRoots';
  * The guard the run loop applies before a tool's body runs, declared on the
  * tool instead of called inside it: the paths the call writes and the command
  * it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
- * either is asked for, so no tool body opens its own approval prompt or
- * re-checks its own roots.
+ * either is checked, so no tool body re-checks its own roots or asks for the
+ * command's approval; a tool whose body asks its own question declares
+ * `requiresApproval: 'inBody'` (below).
  */
 export interface ToolGuard<T> {
   /**
@@ -66,10 +67,10 @@ export interface ToolGuard<T> {
 
 /**
  * Contract for tool implementations.
- * `defineTool` provides the canonical implementation with schema validation. Expected
- * tool failures are returned as literal `{ status: 'error', error: ... }`
- * ToolResult values; unexpected/programmer failures should throw and let
- * `defineTool` convert them at the boundary.
+ * `defineTool` provides the canonical implementation with schema validation.
+ * A tool fails with an `Error` (usually a `ToolError`) and the model reads its
+ * message as the call's error; a throw is a defect, which `defineTool` turns
+ * into a failed call and logs as a crash unless it is a `ToolError`.
  */
 export interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;

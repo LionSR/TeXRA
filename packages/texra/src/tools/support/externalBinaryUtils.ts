@@ -9,7 +9,7 @@
  *   validate its export across the ESM/CJS interop shapes esbuild can produce.
  * - `resolveBinary()` — the 4-strategy native-binary probe, plus the identical
  *   Electron-detection and path-existence helpers it needs.
- * - `createCachedBinaryResolver()` — the per-session cache wrapper around
+ * - `createCachedBinaryResolver()` — a process-lifetime cache around
  *   `resolveBinary`.
  *
  * NOTE: the `await import('<specifier>')` that loads each SDK stays inline in
@@ -235,7 +235,7 @@ const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
 });
 
 /**
- * Wrap a per-session cache around {@link resolveBinary}. The returned program
+ * Wrap a process-lifetime cache around {@link resolveBinary}. The returned program
  * caches a resolved path for the process lifetime but always retries misses
  * (so a mid-session `npm install -g` is picked up). Probes run one at a
  * time, so callers racing on a miss share the first probe's answer instead of

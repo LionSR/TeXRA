@@ -44,9 +44,8 @@ export interface PerKeyLanes<Key> {
  * synchronous step as the insert, because a lane whose count drops to zero
  * ends its queue and a ticket offered to an ended queue waits forever. Its
  * interruption handling was the same single `ensuring` as here, with the
- * body still on the caller's fiber, and it measured 84 lines against these
- * 65 while adding two lifecycle cases (raced creation, ended queue) that the
- * chain does not have.
+ * body still on the caller's fiber, and it was longer while adding two
+ * lifecycle cases (raced creation, ended queue) that the chain does not have.
  *
  * `refuseClaim` makes the claim conditional: it reads the lane's current
  * occupant in the same synchronous step that would install the caller's own

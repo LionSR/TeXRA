@@ -355,7 +355,7 @@ type PackageCommandContribution = { command: string } & Pick<
 /**
  * The `contributes.commands` array, derived from {@link commandCatalog}. This
  * is the single source of truth: `scripts/sync-package-contributes.mjs` writes
- * it into `package.json`, and `CommandCatalog.vitest.ts` diff-checks it.
+ * it into `package.json`, and its `--check` (in `npm run gate`) fails on drift.
  */
 export const packageCommandContributions: PackageCommandContribution[] =
   commandCatalog.flatMap((entry: CommandCatalogEntry) =>

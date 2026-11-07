@@ -211,8 +211,9 @@ from the `RunState` each append returns; resume is the same function over the
 same rows. There is no flow engine: do not add a node, a cursor, a services
 bag, or a second writer of the run history. Every model call goes through
 `runtime/ModelInvoker.ts` and the `packages/llm` `Model` bound by
-`runtime/modelAccess/ModelAccess.ts`, and retries in the one loop in
-`runtime/run/invocation.ts`.
+`runtime/modelAccess/ModelAccess.ts`. A turn retries in `ModelInvoker.invoke`
+over its rows, a call off the rows in `runtime/run/modelCall.ts`
+(`packages/harness/AGENTS.md` "Run loop architecture").
 
 Hosts and the app start a run with `session.start(...)` and continue a
 stored one with `session.resume(runId, ...)` on the `LocalSession`

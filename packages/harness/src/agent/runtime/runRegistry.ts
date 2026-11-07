@@ -599,8 +599,8 @@ export class Runs extends Context.Service<Runs, RunsShape>()(
   '@texra-ai/harness/session/Runs',
 ) {}
 
-/** The registry behind a session's runs: harness internals only, the files
- *  `runRegistryAccessRatchet` names. */
+/** The registry behind a session's runs, for harness internals only. No
+ *  check limits its callers. */
 export const registryOf = (runs: RunsShape): RunRegistry =>
   // cast: the session layer builds every session's runs as a RunRegistry.
   runs as RunRegistry;
