@@ -436,8 +436,10 @@ export const createExtensionHostRequests = Effect.fn(
     bindings,
     own,
     window: options.window,
-    showInfoMessage: vscodeUi.showInfoMessage,
-    showWarningMessage: vscodeUi.showWarningMessage,
+    // The host's members read `this`, so they cross the boundary bound.
+    showInfoMessage: (message: string) => vscodeUi.showInfoMessage(message),
+    showWarningMessage: (message: string) =>
+      vscodeUi.showWarningMessage(message),
     runs: {
       revealProgress: options.revealProgress,
       openFinalOutput: previewFinalOutput,
