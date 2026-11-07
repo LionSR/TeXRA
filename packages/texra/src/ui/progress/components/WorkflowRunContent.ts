@@ -10,7 +10,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import {
-  documentsOf,
+  documentRoundsOf,
   isDocumentTaskRun,
 } from '@texra/shared/plugins/documents';
 
@@ -31,7 +31,7 @@ export class WorkflowRunContent extends BaseRunContent {
     if (!run || !view || !surface || !run.recipe) return nothing;
     // Any plugin's recipe run shows its log here; the files panel is the
     // documents plugin's, for its own tasks only.
-    const documents = isDocumentTaskRun(run) ? documentsOf(run) : null;
+    const rounds = isDocumentTaskRun(run) ? documentRoundsOf(run) : null;
     return html`
       <div class="conversation-content">
         ${this.renderApprovalDock()}
@@ -49,16 +49,12 @@ export class WorkflowRunContent extends BaseRunContent {
 
         <div class="conversation-column conversation-epilogue">
           ${
-            documents === null
+            rounds === null
               ? nothing
               : html`<file-list
                   .runId=${run.id}
                   .surface=${surface}
-                  .filesByRound=${documents.files}
-                  .failuresByRound=${documents.compileFailures}
-                  .missingByRound=${documents.missingOutputs}
-                  .latexdiffsByRound=${documents.latexdiffs}
-                  .repliesByRound=${documents.replies}
+                  .rounds=${rounds}
                 ></file-list>`
           }
           ${this.renderUsagePanel(run)}

@@ -16,10 +16,13 @@ import {
   Settings,
 } from '@texra-ai/harness/host';
 
-import { Cause, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
-import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
+import {
+  revisionLayout,
+  stripWorkflowRoundDir,
+} from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
 import {
@@ -35,44 +38,40 @@ import {
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { WorkspaceFs } from '@texra-ai/harness/host';
-import type { OutputState } from './outputState';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */
   roots: WorkspaceRoots;
   fileService: RunFileService;
-  outputState: OutputState;
   logger: AgentTrace;
   runId: RunId;
 }
 
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
-/**
- * Why a compile check checked nothing: auto-compile is off, the revision
- * wrote no `.tex` output, no LaTeX compiler is installed, or the check itself
- * failed. None of them is zero failures.
- */
-export type CompileSkip = 'disabled' | 'no-tex' | 'no-compiler' | 'errored';
-
-/** A round's check: what it found, or why it checked nothing (`skipped`). */
+/** A round's check: the outputs that failed and the PDFs of those that
+ *  built, or why it checked nothing, which is never zero failures. A check
+ *  with something to compile that could not compile it leaves the revision
+ *  unverified (`unverified`); one turned off or with no `.tex` output does
+ *  not. */
 type CompileCheckResult =
   | {
-      readonly skipped: null;
+      readonly _tag: 'checked';
       readonly artifacts: RunStorageFileLocation[];
       readonly failures: CompileFailure[];
     }
   | {
-      readonly skipped: CompileSkip;
-      readonly artifacts: [];
-      readonly failures: [];
+      readonly _tag: 'skipped';
+      readonly reason: string;
+      readonly unverified: boolean;
     };
 
-/** A check that checked nothing, and why. */
-export const skippedCompileCheck = (
-  skipped: CompileSkip,
-): CompileCheckResult => ({ skipped, artifacts: [], failures: [] });
+const skipped = (reason: string, unverified = false): CompileCheckResult => ({
+  _tag: 'skipped',
+  reason,
+  unverified,
+});
 
 /** Workflow auto-compile timeout, floored at the config-range minimum. */
 export const getWorkflowAutoCompileTimeoutMs = Effect.fn(
@@ -131,32 +130,33 @@ export function resolveWorkspaceSourceDir(
 /**
  * Compile each .tex output of a round to verify the workflow produced a
  * buildable document. Success is silent; failures write the log tail to
- * `<runDir>/compile/r<round>_<safe>.log`. Non-root fragments are skipped;
+ * the revision's compile log (`revisionLayout(...).compileLog`). Non-root fragments are skipped;
  * a check that compiles nothing says why (`skipped`).
  */
 export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
-  function* (ctx: CompileCheckContext, currentRound: number) {
+  function* (
+    ctx: CompileCheckContext,
+    currentRound: number,
+    outputs: readonly OutputFileInfo[],
+  ) {
     if (
       !(yield* Settings.get<boolean>(
         ctx.roots,
         DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
       ))
     ) {
-      return skippedCompileCheck('disabled');
+      return skipped('auto-compile is off');
     }
 
     const { runDirectory } = ctx.fileService;
 
-    const texOutputs = (
-      ctx.outputState.rounds.get(currentRound)?.outputs ?? []
-    ).filter((f) => hasExtension(f.location.absolutePath, '.tex'));
-    if (texOutputs.length === 0) return skippedCompileCheck('no-tex');
+    const texOutputs = outputs.filter((f) =>
+      hasExtension(f.location.absolutePath, '.tex'),
+    );
+    if (texOutputs.length === 0)
+      return skipped('the revision wrote no .tex output');
 
     const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(ctx.roots);
-    // compileRoot is created lazily on first failure so successful rounds
-    // leave no trace — the orchestrator can use "no compile/*.log entries" as
-    // proof the build succeeded.
-    const compileRoot = path.join(runDirectory, 'compile');
     const failures: CompileFailure[] = [];
     const artifacts: RunStorageFileLocation[] = [];
 
@@ -167,58 +167,23 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
         outputFile,
         currentRound,
         displayName,
-        { compileRoot, runDirectory, timeoutMs },
-      ).pipe(
-        // compileOne handles its own read/compile failures internally and
-        // reports them as failures, never as skips — this recovery is only a
-        // last-resort backstop for a defect in that handling itself. It must
-        // still never let an errored check masquerade as a successful round,
-        // so it records a failure (with no on-disk log, since we cannot trust
-        // the paths that failed to compute) rather than swallowing the cause.
-        // Interruption is not a failed compile and stays a cancelled run.
-        Effect.catchCause((cause) =>
-          Cause.hasInterrupts(cause)
-            ? Effect.failCause(cause)
-            : Effect.sync((): PerFileOutcome => {
-                const message = toErrorMessage(Cause.squash(cause));
-                ctx.logger.warn(
-                  `Compile check: ${displayName} errored: ${message}`,
-                  { data: cause },
-                );
-                return {
-                  // logRelativePath must stay a real, resolvable path:
-                  // downstream consumers build a `/files/${logRelativePath}`
-                  // deep link and an "open compile log" action around
-                  // `log.absolutePath` — a placeholder string here would
-                  // silently break both. Fall back to the output file's own
-                  // comparable path (still useful context, even though it is
-                  // not a log).
-                  failure: {
-                    round: currentRound,
-                    displayName,
-                    output: outputFile.location,
-                    log: outputFile.location,
-                    logRelativePath: fileLocationDisplayPath(
-                      outputFile.location,
-                    ),
-                  },
-                  artifact: null,
-                };
-              }),
-        ),
+        { runDirectory, timeoutMs },
       );
       // No compiler to drive is the whole check's skip, not a failure per
       // file: the run leaves no `compile/*.log` to read as a broken build.
       if (result === 'no-compiler') {
         ctx.logger.warn('Compile check skipped: no LaTeX compiler installed');
-        return skippedCompileCheck('no-compiler');
+        return skipped(
+          'no LaTeX compiler (latexmk or pdflatex) is installed',
+          true,
+        );
       }
       if (result.failure) failures.push(result.failure);
       if (result.artifact) artifacts.push(result.artifact);
     }
 
     return {
-      skipped: null,
+      _tag: 'checked',
       artifacts,
       failures,
     } satisfies CompileCheckResult;
@@ -226,7 +191,6 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
 );
 
 interface PerFileOptions {
-  compileRoot: string;
   runDirectory: string;
   timeoutMs: number;
 }
@@ -283,9 +247,8 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   // Full relative path keeps two outputs sharing a basename distinct
-  // (ch1/main.tex vs ch2/main.tex). Strip the leading r<N>/ segment because
-  // it is already added explicitly as `r${currentRound}_` below — without
-  // this, a location like `r0/main.tex` would produce `r0_r0_main.tex.log`.
+  // (ch1/main.tex vs ch2/main.tex). The revision's own folder is left out,
+  // since the log's name already carries the revision.
   const pathForSafeName = stripWorkflowRoundDir(
     normalizeFilePath(fileLocationDisplayPath(outputFile.location)),
     currentRound,
@@ -302,15 +265,10 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
   );
   const sanitizedStem = sanitizedName.slice(0, MAX_SANITIZED_STEM_LENGTH);
   const safeName = `${sanitizedStem}_${pathHash}`;
-  const buildDir = path.join(
-    opts.compileRoot,
-    'build',
-    `r${currentRound}`,
-    safeName,
-  );
-  const logFileName = `r${currentRound}_${safeName}.log`;
-  const logAbsolutePath = path.join(opts.compileRoot, logFileName);
-  const logRelativePath = path.join('compile', logFileName);
+  const layout = revisionLayout(currentRound);
+  const buildDir = path.join(opts.runDirectory, layout.compileBuild(safeName));
+  const logRelativePath = layout.compileLog(safeName);
+  const logAbsolutePath = path.join(opts.runDirectory, logRelativePath);
   const { runId } = ctx.fileService;
 
   const target: CompileTarget = {
@@ -466,7 +424,6 @@ interface WriteCompileFailureArgs extends CompileTarget {
 const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
   function* ({
     ctx,
-    opts,
     displayName,
     currentRound,
     outputFile,
@@ -477,7 +434,11 @@ const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
   }: WriteCompileFailureArgs) {
     const fs = yield* FileSystem.FileSystem;
     yield* Effect.gen(function* () {
-      yield* fs.makeDirectory(opts.compileRoot, { recursive: true });
+      // Created on the first failure, so a revision that compiles leaves
+      // no compile log behind.
+      yield* fs.makeDirectory(path.dirname(logAbsolutePath), {
+        recursive: true,
+      });
       yield* fs.writeFileString(logAbsolutePath, `${failureLogExcerpt}\n`);
     }).pipe(
       Effect.catch((writeErr) =>

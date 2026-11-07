@@ -22,11 +22,10 @@ import { pluralize } from '@texra-ai/harness/transcript';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import {
   type CompileFailure,
-  type ReadonlyRoundIndexed,
+  compileFailuresOf,
   formatRoundLabel,
-  type OutputFileInfo,
+  type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import type { documentsOf } from '@texra/shared/plugins/documents';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
 /** A workspace probe could not determine the compile-fixer's editable files. */
@@ -53,7 +52,8 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
   function* (input: {
     readonly runId: RunId;
     readonly runConfig: AgentConfig | undefined;
-    readonly documents: ReturnType<typeof documentsOf> | undefined;
+    /** The run's rounds, as its documents fact records them. */
+    readonly rounds: readonly RoundOutput[];
     readonly modelOptions: readonly Pick<
       ModelOptionData,
       'value' | 'availability'
@@ -64,9 +64,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     PlatformError.PlatformError,
     FileSystem.FileSystem
   > {
-    const compileFailures = Object.values(
-      input.documents?.compileFailures ?? {},
-    ).flat();
+    const compileFailures = input.rounds.flatMap(compileFailuresOf);
     // The compile-fixer planner serves document tasks only.
     const workflowConfig =
       input.runConfig && isTaskConfig(input.runConfig)
@@ -111,7 +109,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     const targets = yield* compileFixerTargets(
       workflowConfig,
       compileFailures,
-      input.documents?.files ?? {},
+      input.rounds,
       input.workspaceRoot,
     );
     if (targets.length === 0) {
@@ -155,7 +153,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
 );
 
 function buildCompileFixerQuestion(
-  compileFailures: CompileFailure[],
+  compileFailures: readonly CompileFailure[],
   targets: CompileFixerTarget[],
   runId: RunId,
 ): string {
@@ -206,8 +204,8 @@ function buildCompileFixerQuestion(
 const compileFixerTargets = Effect.fn('ProgressFollowUp.compileFixerTargets')(
   function* (
     originalConfig: AgentConfig,
-    compileFailures: CompileFailure[],
-    runOutputs: ReadonlyRoundIndexed<OutputFileInfo>,
+    compileFailures: readonly CompileFailure[],
+    rounds: readonly RoundOutput[],
     workspaceRoot: string | undefined,
   ): Effect.fn.Return<
     CompileFixerTarget[],
@@ -217,8 +215,8 @@ const compileFixerTargets = Effect.fn('ProgressFollowUp.compileFixerTargets')(
     if (!workspaceRoot) return [];
     // Prefer the recorded output source, followed by the original inputs.
     const outputByPath = new Map(
-      Object.values(runOutputs)
-        .flat()
+      rounds
+        .flatMap((round) => round.outputs)
         .map((output) => [output.location.absolutePath, output] as const),
     );
 

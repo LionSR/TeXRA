@@ -1,7 +1,7 @@
 import { Predicate } from 'effect';
 import { fileLocationAddressPath } from '@texra-ai/harness/schemas';
-import { documentsOf } from '@texra/shared/plugins/documents';
-import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
+import { documentRoundsOf } from '@texra/shared/plugins/documents';
+import { compileFailuresOf } from '@texra/shared/plugins/documentOutputs';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import type { RunView } from '@texra-ai/harness/schemas';
 
@@ -15,12 +15,10 @@ import type { RunView } from '@texra-ai/harness/schemas';
  */
 export function formatTaskDiagnostics(run: RunView): string {
   const model = run.modelLabel ?? run.model;
-  const documents = documentsOf(run);
-  const outputs = roundIndexedEntries(documents.files).filter(
-    ([, files]) => files.length > 0,
-  );
-  const failures = roundIndexedEntries(documents.compileFailures).filter(
-    ([, rows]) => rows.length > 0,
+  const rounds = documentRoundsOf(run);
+  const outputs = rounds.filter((round) => round.outputs.length > 0);
+  const failures = rounds.filter(
+    (round) => compileFailuresOf(round).length > 0,
   );
 
   const lines: (string | undefined)[] = [
@@ -34,7 +32,7 @@ export function formatTaskDiagnostics(run: RunView): string {
 
   if (outputs.length > 0) {
     lines.push('', 'Outputs:');
-    for (const [round, files] of outputs) {
+    for (const { round, outputs: files } of outputs) {
       for (const file of files) {
         const source = file.source ? ` (source: ${file.source})` : '';
         lines.push(
@@ -46,8 +44,9 @@ export function formatTaskDiagnostics(run: RunView): string {
 
   if (failures.length > 0) {
     lines.push('', 'Compile failures:');
-    for (const [round, rows] of failures) {
-      for (const failure of rows) {
+    for (const record of failures) {
+      const { round } = record;
+      for (const failure of compileFailuresOf(record)) {
         lines.push(
           `- ${passLabel(round)} ${failure.displayName}: log ${fileLocationAddressPath(failure.log)}`,
         );

@@ -269,6 +269,24 @@
           "signature": "export function createDesktopWindows(options: {…}): DesktopWindows {…}"
         }
       ]
+    },
+    {
+      "id": "DOC-user-edit-on-task-run",
+      "candidate": "the user's Accept-time edit recorded on the document task's own run: the revision record gains `userEdit: { round, diff } | null`, written by the progress view's Accept (ProgressWorkflowFileActionsController.userEdit), and document_context reads it into the next revision's prompt",
+      "why": "No supported write reaches the run's documents fact from the host's Accept path. A run's `plugin.fact` rows are committed only by the run's own tool calls (`ToolResult.facts`, in the call's `tool.result` batch); the one other plugin write, `RequestDecisionHook.commit`, runs only while a pending plugin request of the run is being decided and commits facts about the plugin's own aggregate (`ownFactRow` hangs them under the run as `plugin:<aggregate>`), which `RunView.facts` and `documentRoundsOf` never read. A host-side append to an ended run would be a new session-store write path in the harness. It would also have no reader: Accept acts on outputs the task already proposed, a completed recipe does not run another revision on resume, a fork drops the documents fact (`fork: 'drop'`), and Run again is a new run with fresh documents. An Accept while the task still runs would race the recipe's whole-list commit (`withRound`), which drops the other writer's change. The launcher note #14713 sends (`followUpLauncher`) is the reader that exists; a task with no launcher has no later turn to read the edit.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#c-plugins",
+      "symbols": [
+        {
+          "file": "packages/texra/src/shared/plugins/documents.ts",
+          "symbol": "documentsOutputFact",
+          "signature": "export function documentsOutputFact( rounds: readonly RoundOutput[], diffs: DocumentDiffs = {}, ): ToolFact {…}"
+        },
+        {
+          "file": "packages/harness/src/tools/plugins.ts",
+          "symbol": "ownFactRow",
+          "signature": "export const ownFactRow = ( { aggregate, ...fact }: ToolFact & { readonly aggregate: string }, runId: RunId, ): OwnFactRow => ({…});"
+        }
+      ]
     }
   ]
 }
