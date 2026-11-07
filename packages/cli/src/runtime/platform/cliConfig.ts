@@ -53,12 +53,6 @@ type CliCommandRole = keyof typeof COMMAND_SECTIONS;
 interface CliCommandDefaults {
   readonly agent?: string;
   readonly model?: string;
-  /**
-   * Which config tier supplied `model`. The model decision labels its choice
-   * with the tier it came from, and the label decides how an unavailable model
-   * is reported, so the merged read still names the file behind the value.
-   */
-  readonly modelScope?: 'workspace-config' | 'user-config';
 }
 
 function normalizeCliModelLookupKey(value: string): string {
@@ -139,21 +133,11 @@ export function cliCommandDefaults(
     { readonly agent?: string; readonly model?: string } | undefined
   > = COMMAND_SECTIONS[role];
   const section = Settings.getConfig(stores.config, sectionRow) ?? {};
-  const modelRow = section.model ? sectionRow : CLI_MODEL_SETTING;
-  const model =
-    section.model ?? Settings.getConfig(stores.config, CLI_MODEL_SETTING);
   return {
     agent:
       section.agent ?? Settings.getConfig(stores.config, CLI_AGENT_SETTING),
-    model,
-    ...(model === undefined
-      ? {}
-      : {
-          modelScope:
-            stores.config.inspect(modelRow.key).workspaceValue === undefined
-              ? ('user-config' as const)
-              : ('workspace-config' as const),
-        }),
+    model:
+      section.model ?? Settings.getConfig(stores.config, CLI_MODEL_SETTING),
   };
 }
 

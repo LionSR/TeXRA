@@ -2,7 +2,7 @@
 import { lookup } from 'node:dns';
 
 // Third-party imports
-import { Effect, Schema, Stream } from 'effect';
+import { Effect, Result, Schema, Stream } from 'effect';
 import { FetchHttpClient, HttpClient, type HttpClientError } from 'effect/http';
 import ipaddr from 'ipaddr.js';
 import { EnvHttpProxyAgent, type Dispatcher } from 'undici';
@@ -214,11 +214,12 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       const charset = /charset=([^\s;]+)/i
         .exec(contentType)?.[1]
         ?.replaceAll(/^["']|["']$/gu, '');
-      // Unsupported labels fall back to UTF-8, as for an absent charset.
-      const decoder = yield* Effect.try({
-        try: () => new TextDecoder(charset || 'utf-8'),
-        catch: ensureError,
-      }).pipe(Effect.orElseSucceed(() => new TextDecoder()));
+      // A label TextDecoder does not know decodes as UTF-8, as an absent
+      // one does, and the result says so: the text may read garbled.
+      const supported =
+        !charset ||
+        Result.isSuccess(Result.try(() => new TextDecoder(charset)));
+      const decoder = new TextDecoder(supported ? charset || 'utf-8' : 'utf-8');
       let total = 0;
       const parts = yield* response.stream.pipe(
         // A response without a body reads as empty text.
@@ -252,7 +253,11 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
           catch: ensureError,
         }),
       );
-      return { rawBody: parts.join(''), contentType };
+      return {
+        rawBody: parts.join(''),
+        contentType,
+        unsupportedCharset: supported ? null : (charset ?? null),
+      };
     }),
     {
       retries: WEB_FETCH_RETRIES,
@@ -281,7 +286,7 @@ const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
   url,
   prompt,
 }: WebFetchInput) {
-  const { rawBody, contentType } = yield* fetchPage(url);
+  const { rawBody, contentType, unsupportedCharset } = yield* fetchPage(url);
 
   const ctLower = contentType.toLowerCase();
   const isMarkupContent =
@@ -303,6 +308,11 @@ const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
   const cleaned = markdown.trim();
   const sections = [
     ...(prompt ? [`Prompt\n------\n${prompt.trim()}`] : []),
+    ...(unsupportedCharset === null
+      ? []
+      : [
+          `Note: the page declares the charset "${unsupportedCharset}", which is not supported; it was decoded as UTF-8 and may read garbled.`,
+        ]),
     cleaned.length > 0
       ? cleaned
       : 'No readable content was extracted from the provided URL.',

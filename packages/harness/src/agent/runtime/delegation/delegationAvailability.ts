@@ -210,7 +210,8 @@ const NO_DELEGATION_MODELS_MESSAGE =
  * Decide which model a delegated run uses: an explicit override, else the
  * parent run's model, else the first model the user has access to — checked
  * against the live availability list so an unavailable choice fails here rather
- * than after launch.
+ * than after launch. A parent model that cannot run falls back with the
+ * notice the caller shows.
  */
 export const selectAvailableDelegationModel = Effect.fn(
   'selectAvailableDelegationModel',
@@ -250,13 +251,12 @@ export const selectAvailableDelegationModel = Effect.fn(
   if (!decision) {
     return yield* Effect.fail(new Error(NO_DELEGATION_MODELS_MESSAGE));
   }
-  if (decision.unavailable) {
-    const requestedModel = input.requestedModel?.trim() || null;
+  if (decision._tag === 'Unavailable') {
     return yield* Effect.fail(
       new Error(
-        `Model "${requestedModel}" is not currently available for delegation with the currently configured model access. Available models: ${availableModels.join(', ')}.`,
+        `Model "${decision.model}" is not currently available for delegation with the currently configured model access. Available models: ${availableModels.join(', ')}.`,
       ),
     );
   }
-  return decision.model;
+  return decision;
 });

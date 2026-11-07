@@ -141,11 +141,8 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           mimeType === 'application/pdf' &&
           capabilities.supportsVision
         ) {
-          const base64 = (yield* log.blobs([digest])).get(digest);
-          const pages =
-            base64 === undefined
-              ? Result.fail(new Error('its bytes are not stored'))
-              : yield* Effect.result(storedPdfPages(name, base64));
+          const base64 = (yield* log.blobs([digest]))(digest);
+          const pages = yield* Effect.result(storedPdfPages(name, base64));
           if (Result.isSuccess(pages)) {
             parts.push(...pages.success);
             badges.push('document');

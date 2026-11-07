@@ -26,6 +26,7 @@ import {
   DatabaseRowEarlier,
   type DatabaseRowCorrupt,
   type DatabaseStoreNewer,
+  type StoredBlobs,
 } from '@shared/session/database';
 import type { FactKinds } from '@tools/plugins';
 import { sha256Hex } from '@utils/core/idHash';
@@ -160,9 +161,7 @@ export interface RowReader<E> {
    *  whichever of its rows it selected. */
   /** The strings stored under `digests`, inflated and verified; a digest
    *  the store lacks fails the read. */
-  readonly blobs: (
-    digests: readonly string[],
-  ) => Effect.Effect<ReadonlyMap<string, string>, E>;
+  readonly blobs: (digests: readonly string[]) => Effect.Effect<StoredBlobs, E>;
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,
@@ -264,7 +263,12 @@ export function rowReader<E>(
       const missing = digests.filter((digest) => !texts.has(digest));
       if (missing.length > 0)
         throw new Error(`${path} holds no readable blob ${missing.join(', ')}`);
-      return texts;
+      return (digest: string) => {
+        const text = texts.get(digest);
+        if (text === undefined)
+          throw new Error(`The blob ${digest} was not part of this read`);
+        return text;
+      };
     });
   const read = Effect.fnUntraced(function* (
     rows: readonly SqlRow[],
