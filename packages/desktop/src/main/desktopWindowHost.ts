@@ -111,12 +111,12 @@ export function createDesktopWindowHost(options: {
 
   /**
    * Open a documentation URL without keeping the caller waiting; the browser
-   * never opening is reported, not swallowed. This report names the
-   * documentation URL rather than the address the shell refused.
+   * never opening is shown in the window and logged, not swallowed. The log
+   * names the documentation URL rather than the address the shell refused.
    */
   const openExternalInBackground = (url: string): void => {
     spawn(
-      previewHost.openExternal(url).pipe(
+      presented(previewHost.openExternal(url)).pipe(
         Effect.mapError(
           (cause) =>
             new ExternalOpenFailed({

@@ -5,6 +5,13 @@ export interface DiffSource {
   filePath: string;
 }
 
+/** How a diff is named: the title its view shows, and the path the
+ *  desktop's Review pane files it under. */
+export interface DiffLabel {
+  readonly title: string;
+  readonly displayPath: string;
+}
+
 /**
  * The host's diff surface: showing a diff, the one verb the two windowed
  * hosts answer. The terminal has no second surface to show one in — its
@@ -24,13 +31,6 @@ export interface DiffSource {
  * command rejection, an `ExternalOpenFailed`, a filesystem error), and the
  * callers that need a tag map it into their own.
  */
-/** How a diff is named: the title its view shows, and the path the
- *  desktop's Review pane files it under. */
-export interface DiffLabel {
-  readonly title: string;
-  readonly displayPath: string;
-}
-
 export interface DiffViewHost {
   /** Show the diff. The caller already holds the session it described. */
   openDiff(
