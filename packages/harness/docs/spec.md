@@ -58,7 +58,7 @@ its kind is its `type` column.
   `shared/session/inFlight.ts#openedBy`).
 - **Step**: One model call as the loop prepares it: its offered tools and system
   text, recorded on `tools.offered` when they change
-  (`agent/runtime/loop/toolUse.ts#openStep`).
+  (`agent/runtime/loop/step.ts#stepFor`).
 - **Response**: One completed provider turn, committed as a `model.message`
   `response` row with a minted `responseId`
   (`shared/schemas/runHistoryEvent.ts#ResponseIdSchema`).

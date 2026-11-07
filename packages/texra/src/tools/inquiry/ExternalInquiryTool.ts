@@ -89,9 +89,10 @@ const InquiryInputSchema = Schema.Union([
         'Use this when a [inquiry] continuation truncated content you need, ' +
         'or when revisiting an earlier thread.',
     }),
-    thread_id: InquiryThreadIdSchema.annotate({
+    // Described on the encoded side, the one the model's JSON Schema shows.
+    thread_id: Schema.String.annotate({
       description: 'The thread to read.',
-    }),
+    }).pipe(Schema.decodeTo(InquiryThreadIdSchema)),
   }),
   Schema.Struct({
     command: Schema.Literal('list').annotate({

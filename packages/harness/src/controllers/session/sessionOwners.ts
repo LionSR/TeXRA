@@ -9,12 +9,12 @@
  */
 import {
   Cause,
+  Clock,
   Context,
   Effect,
   FiberMap,
   FiberSet,
   Layer,
-  Option,
   Scope,
   Semaphore,
   Stream,
@@ -88,22 +88,23 @@ const logFailure =
     log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
 /** Stop every run of `session`, cascading, and wait for them to end within
- *  the close budget: the runs still live past it are abandoned. */
+ *  the close budget, which starts before the stop rows: their writes are
+ *  durable appends and run whole, and the wait gets what they left of the
+ *  budget. The runs still live past it are abandoned. */
 export const stopSessionRuns = (
   session: Context.Context<SessionServices>,
 ): Effect.Effect<SessionCloseReport> =>
   Effect.gen(function* () {
     const runs = registryOf(Context.get(session, Runs));
+    const closeBy =
+      (yield* Clock.currentTimeMillis) + SESSION_CLOSE_DEADLINE_MS;
     yield* runs.stopAll();
-    const drained = yield* runs
+    const left = closeBy - (yield* Clock.currentTimeMillis);
+    yield* runs
       .awaitDrained()
-      .pipe(
-        Effect.interruptible,
-        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-      );
-    const settled = Option.isSome(drained);
-    const abandoned = settled ? [] : runs.get().map((run) => run.runId);
-    return { settled, abandoned };
+      .pipe(Effect.interruptible, Effect.timeoutOption(Math.max(left, 0)));
+    const abandoned = runs.get().map((run) => run.runId);
+    return { settled: abandoned.length === 0, abandoned };
   });
 
 /**
@@ -140,7 +141,7 @@ export const sessionOwnersLayer = (
       );
       // The store: the session's one publisher, and its doors past the log.
       const store = yield* makeSessionStore(roots.storage);
-      const collectDeletions = yield* deletionCollector(
+      const deletions = yield* deletionCollector(
         yield* Database,
         roots.storage,
       );
@@ -193,15 +194,14 @@ export const sessionOwnersLayer = (
           permission: sessionPermission(approvals, interactions),
         }),
       );
-      // The requests, over the store's removal door and the deletion pass.
+      // The requests, over the store's removal door.
       const database = yield* Database;
       const requests = sessionRequests({
         sessionLog: log,
         view,
         log: {
           aggregateState: database.aggregateState,
-          removeRun: (id, start) =>
-            Effect.tap(store.removeRun(id, start), () => collectDeletions),
+          removeRun: store.removeRun,
         },
         plugins: yield* ToolRegistry,
         services: yield* Effect.context<RunServices>(),
@@ -264,9 +264,13 @@ export const sessionOwnersLayer = (
       // and the dependency probes, held for its life and probed beside the
       // open (the gate withholds nothing until they answer).
       const plugins = yield* ToolRegistry;
-      // The local half of a committed removal; its plugin rows go with it.
+      // The local half of a committed removal (its plugin rows go with it)
+      // and its collection.
       yield* store
-        .deliver((runId) => inbox.forget(runId))
+        .deliver((runId, marker) => {
+          inbox.forget(runId);
+          deletions.removed(marker);
+        })
         .pipe(Scope.provide(consumers));
       // The registry's phase notification rides the fold-gated tail: its
       // waiters read `RunView.status` once the view holds a row's state.
@@ -296,7 +300,7 @@ export const sessionOwnersLayer = (
         Effect.forkIn(consumers),
       );
       yield* sweepLeftoverRuns.pipe(Effect.provide(session), Effect.forkScoped);
-      yield* collectDeletions;
+      yield* Effect.forkScoped(deletions.pending);
       yield* (yield* ToolAvailability).hold(roots);
       return session;
     }),

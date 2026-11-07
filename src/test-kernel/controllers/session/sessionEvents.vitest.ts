@@ -137,7 +137,7 @@ import { ProcessIdentity } from '@shared/session/sessionEvents';
 const [storage, owner, run] = process.argv.slice(2);
 const append = Effect.flatMap(Database, (db) =>
   db.appendAll([{ type: 'run.start', aggregateId: qualifyAggregateId('run', run),
-    identity: { kind: 'agent', agent: 'chat' }, userFollowUpSupport: 'unsupported',
+    identity: { kind: 'agent', agent: 'chat' }, takesFollowUps: false,
     parent: null, provenance: null }]));
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
   Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
@@ -208,7 +208,7 @@ const runStart: SessionEventDraft = {
   type: 'run.start',
   aggregateId: qualifyAggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
-  userFollowUpSupport: 'unsupported',
+  takesFollowUps: false,
   parent: null,
   provenance: null,
 };
@@ -910,7 +910,7 @@ describe('the session event table and its one publisher', () => {
               aggregateId: qualifyAggregateId('run', run),
             },
           ]);
-          yield* Fiber.join(yield* yield* deletionCollector(db, storage));
+          yield* (yield* deletionCollector(db, storage)).pending;
         });
       const opened = Layer.merge(substrate(storage), nodePlatformLayer);
       return Effect.gen(function* () {
@@ -1127,7 +1127,7 @@ describe('the session event table and its one publisher', () => {
       yield* first.appendAll([
         { type: 'run.removed', aggregateId: unrelated.aggregateId },
       ]);
-      yield* Fiber.join(yield* yield* deletionCollector(first, storage));
+      yield* (yield* deletionCollector(first, storage)).pending;
       expect(existsSync(join(outside, 'keep.tex'))).toBe(true);
       expect(
         yield* first.aggregateState([unrelated.aggregateId]),
@@ -1143,7 +1143,7 @@ describe('the session event table and its one publisher', () => {
         writeFileSync(accepted, 'accepted workspace output');
         symlinkSync(accepted, join(generated, 'reference.tex'));
       });
-      yield* Fiber.join(yield* yield* deletionCollector(first, storage));
+      yield* (yield* deletionCollector(first, storage)).pending;
       expect(existsSync(generated)).toBe(false);
       expect(existsSync(sibling)).toBe(true);
       expect(existsSync(accepted)).toBe(true);

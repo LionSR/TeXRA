@@ -50,7 +50,7 @@ export const sweepLeftoverRuns = Effect.gen(function* () {
       );
     if (facts == null || cutShort(facts)) continue;
     yield* requests
-      .removeRun(run.id, run.createdAt)
+      .request({ kind: 'run.delete', runId: run.id })
       .pipe(
         Effect.catch(
           warning(

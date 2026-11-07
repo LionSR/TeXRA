@@ -100,13 +100,11 @@ const InlineCommentInputSchema = Schema.Union([
     command: Schema.Literal('add').annotate({
       description: 'Open a new comment thread on a file range.',
     }),
-    path: Schema.Trim.check(Schema.isMinLength(1)).annotate({
+    // Described on the encoded side, the one the model's JSON Schema shows.
+    path: Schema.String.annotate({
       description:
-        // Provider conversion advertises one `path` for all commands and keeps
-        // this first-declared branch's description (flattenTopLevelUnion), so
-        // it must also carry the list command's guidance.
-        'File the comment anchors to (add), or the file to restrict to (list; omit for all threads). Workspace-relative or absolute.',
-    }),
+        'File the comment anchors to. Workspace-relative or absolute.',
+    }).pipe(Schema.decodeTo(Schema.Trim.check(Schema.isMinLength(1)))),
     line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
       description: '1-based start line the comment anchors to.',
     }),

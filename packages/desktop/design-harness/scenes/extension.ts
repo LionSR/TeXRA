@@ -233,7 +233,7 @@ function interruptedTasksView(): SessionView {
       worktree: { workingDirectory: '/paper' },
       parent: null,
       provenance: null,
-      userFollowUpSupport: 'nativeInteractive',
+      takesFollowUps: true,
     });
     log.emit(id, at, { type: 'run.activate' });
     log.emit(id, at + 1, {
@@ -249,7 +249,7 @@ function interruptedTasksView(): SessionView {
       identity: { kind: 'agent', agent: `referee-${index + 1}` },
       parent: log.parent(REVIEW_TASK),
       provenance: null,
-      userFollowUpSupport: 'nativeInteractive',
+      takesFollowUps: true,
     });
     log.emit(id, T.childProgress, { type: 'run.activate' });
   }
@@ -287,7 +287,7 @@ function forkView(): SessionView {
       worktree: { workingDirectory: '/paper' },
       parent: null,
       provenance,
-      userFollowUpSupport: 'nativeInteractive',
+      takesFollowUps: true,
     });
     log.emit(id, at, { type: 'run.activate' });
   };
@@ -594,7 +594,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       worktree: { workingDirectory: '/paper' },
       parent: null,
       provenance: null,
-      userFollowUpSupport: 'unsupported',
+      takesFollowUps: false,
     });
     log.emit(ROOT, T.root, {
       type: 'run.config',

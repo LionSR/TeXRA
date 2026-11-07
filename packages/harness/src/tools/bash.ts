@@ -277,7 +277,8 @@ function backgroundBashTurn(params: {
     });
     const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
     // `executeCommand` never fails on a non-zero exit: it answers with the
-    // exit code, so the failure is reported, its output still delivered.
+    // exit code, which the run's end reads as its failure, its output still
+    // delivered. A timeout, a signal and a spawn failure answer no 0.
     return {
       report: formatBashDelivery(
         runId,
@@ -287,11 +288,6 @@ function backgroundBashTurn(params: {
         toDeliveryExcerpt(stdout),
         toDeliveryExcerpt(stderr),
       ),
-      ...(result.success
-        ? {}
-        : {
-            failure: `Background bash failed with exit code ${result.exitCode}.`,
-          }),
       exit: {
         code: result.noExitCode === true ? null : result.exitCode,
         timedOut: result.timedOut,

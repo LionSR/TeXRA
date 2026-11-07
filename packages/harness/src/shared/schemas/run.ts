@@ -18,15 +18,6 @@ export const RUN_OUTCOME = {
 export const RunOutcomeSchema = Schema.Enum(RUN_OUTCOME);
 export type RunOutcome = typeof RunOutcomeSchema.Type;
 
-/** Runtime support declared by the launch source, independent of UI policy. */
-export const USER_FOLLOW_UP_SUPPORT = {
-  UNSUPPORTED: 'unsupported',
-  NATIVE_INTERACTIVE: 'nativeInteractive',
-} as const;
-
-export const UserFollowUpSupportSchema = Schema.Enum(USER_FOLLOW_UP_SUPPORT);
-export type UserFollowUpSupport = typeof UserFollowUpSupportSchema.Type;
-
 /**
  * Where a run's loop stands: `ready` takes an activation (none yet, or its
  * last one ended), `running` is inside a turn, `waiting` between turns. How

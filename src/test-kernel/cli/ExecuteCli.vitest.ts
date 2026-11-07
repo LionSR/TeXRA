@@ -202,7 +202,7 @@ const runStartRow = (runId: RunId) => ({
   type: 'run.start' as const,
   aggregateId: qualifyAggregateId('run', runId),
   identity: { kind: 'agent' as const, agent: 'chat' },
-  userFollowUpSupport: 'unsupported' as const,
+  takesFollowUps: false as const,
   parent: null,
   provenance: null,
 });

@@ -67,8 +67,8 @@ import {
   type RunExit,
 } from './runProgram';
 import { dispatchPendingResponse } from './toolUseDispatch';
-import { openingHooks, stopHooks } from './hooks';
-import { stepFor } from './step';
+import { hooksOf } from './hooks';
+import { dispatchTools, stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { registryOf, Runs, type AgentRunServices } from '../runRegistry';
 import type { RunControls } from '../runs';
@@ -83,13 +83,11 @@ interface ToolUseStart {
   readonly resume: boolean;
 }
 
-/** What {@link openToolUse} committed: the run's cell, the commit of the
- *  batch that opened this activation, and the system text a fresh run
- *  rendered (a resumed run's rows hold its own). */
+/** What {@link openToolUse} committed: the run's cell and the commit of
+ *  the batch that opened this activation. */
 export interface ToolUseOpening {
   readonly cell: RunCell;
   readonly activation: CommitOrdinal;
-  readonly openingSystem: string | undefined;
 }
 
 /** A user message the loop appends itself. */
@@ -158,16 +156,13 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
   const run = yield* AgentRun;
   const { runId, logger } = run;
   const roots = yield* SessionRoots;
-  const isChild = () => run.entry.parent !== null;
   // The system text a fresh run renders, until its opening batch records it.
   let openingSystem: string | undefined;
-  const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
-    stepFor(run, state, kind, isChild(), openingSystem);
   const cell = yield* openRun(runId, start.resume);
   const loaded = yield* cell.current;
   if (loaded.phase !== null) {
     logger.debug('Resuming tool-use run from the run history.');
-    return { cell, activation: cell.opened.commit, openingSystem: undefined };
+    return { cell, activation: cell.opened.commit };
   }
   const bound = yield* ScopedRef.get(run.model);
   // The state its first step opens on: what the opening batch records.
@@ -189,7 +184,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       .append(born, run.entry.opening)
       .pipe(Effect.tap(run.entry.entered), Effect.uninterruptible);
     run.callbacks.onProgress?.({ kind: 'started' });
-    return { cell, activation: state.commit, openingSystem };
+    return { cell, activation: state.commit };
   }
   // Keep preparation interruptible inside the masked acquire.
   const { content, offered, handed } = yield* Effect.interruptible(
@@ -197,7 +192,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       // A script's run renders no prompt: what it runs is its call.
       const { script } = run.config;
       if (script != null) {
-        const step = yield* openStep(opening, 'request');
+        const step = yield* stepFor(run, opening, false);
         const content: InputPart[] = [
           { kind: 'text', text: `Run the script "${script.title}".` },
         ];
@@ -210,7 +205,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
         { roots, textOnly: bound.textOnly },
       );
       // The first step renders the prompt, and stores its base text.
-      const step = yield* openStep(opening, 'request');
+      const step = yield* stepFor(run, opening, false, openingSystem);
       // The user's task is the user message.
       const userRequest = run.config.instruction.trim();
       if (!userRequest)
@@ -234,7 +229,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       }
       if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
       content.push(...media.value.parts, { kind: 'text', text: userRequest });
-      const hooked = yield* openingHooks(run, opening, userRequest);
+      const hooked = yield* step.tools.hooks.opening(opening, userRequest);
       content.push(...hooked.parts);
       return { content, offered: [...step.rows, ...hooked.rows], handed: [] };
     }),
@@ -259,7 +254,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
     .append(rows, run.entry.opening)
     .pipe(Effect.tap(run.entry.entered), Effect.uninterruptible);
   run.callbacks.onProgress?.({ kind: 'started' });
-  return { cell, activation: state.commit, openingSystem };
+  return { cell, activation: state.commit };
 });
 
 export const runToolUse = Effect.fn('toolUse.run')(function* (
@@ -287,9 +282,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   // ---------------------------------------------------------------- state
-  const { cell, openingSystem } = opened;
-  const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
-    stepFor(run, state, kind, isChild(), openingSystem);
+  const { cell } = opened;
 
   // ------------------------------------------------------------ host port
   const controls: RunControls = modelSwitchPort(
@@ -329,7 +322,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // Input queued meanwhile is delivered at the request that follows.
           const dispatched = yield* dispatchPendingResponse(
             cell,
-            (yield* openStep(state, 'dispatch')).tools,
+            yield* dispatchTools(run, state),
           );
           state = dispatched.state;
           if (dispatched.endTurn) return completeTurn(state);
@@ -364,7 +357,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             });
         }
         // The step this request opens, its offered set recorded when changed.
-        let step = yield* openStep(state, 'request');
+        let step = yield* stepFor(run, state, false);
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
         let tools = sentDefinitions(step.tools);
         // One round: the compaction the history may need, the `/compact`s
@@ -377,7 +370,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           state = yield* compaction.atBoundary(cell, bound, requests);
           // A compaction dropped the context updates: a new step renders them.
           if (state.offeredContext === null) {
-            step = yield* openStep(state, 'request');
+            step = yield* stepFor(run, state, false);
             state = yield* cell.append(step.rows);
             tools = sentDefinitions(step.tools);
           }
@@ -442,7 +435,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // A root's wait opens a step, recorded like a request's; a
         // child's idle is its parent's.
         if (!isChild()) {
-          const step = yield* openStep(state, 'park');
+          const step = yield* stepFor(run, state, true);
           if (step.rows.length > 0) state = yield* cell.append(step.rows);
         }
         // A one-shot run ends at its park, unless a message queued for it
@@ -478,7 +471,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // closes open streams and is the rest a resume's receipt reads), and
       // a Stop hook's block or input already queued.
       const reply = turnResponse(turn.state);
-      const { rows: hooks, block } = yield* stopHooks(run, turn, reply);
+      const { rows: hooks, block } = yield* (yield* hooksOf(run)).stop(
+        turn,
+        reply,
+      );
       const goesOn =
         !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
       const ending = [
@@ -489,7 +485,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const next =
         block ?? (goesOn ? yield* followUps.input.read('turn') : null);
       const pin =
-        next !== null && !isChild() ? yield* openStep(state, 'park') : null;
+        next !== null && !isChild() ? yield* stepFor(run, state, true) : null;
       state =
         next === null
           ? yield* cell.append([...hooks, ...ending])

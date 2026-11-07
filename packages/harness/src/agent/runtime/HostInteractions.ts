@@ -11,7 +11,6 @@ import {
   type LaunchNotice,
   type SessionEvent,
 } from '@shared/schemas';
-import { recordOf } from '@shared/session/runRowReads';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -304,10 +303,9 @@ export const presentTerminalResult = Effect.fn('presentTerminalResult')(
     row: SessionEvent,
   ): Effect.fn.Return<void, never, SessionViewAccess | Interactions> {
     const target = aggregateTarget(row.aggregateId);
-    const { end } = recordOf(row);
-    if (target.kind !== 'run' || end === null || !end.error) return;
+    if (target.kind !== 'run' || row.type !== 'run.end' || !row.error) return;
     if ((yield* SessionViewAccess).run(target.id)?.parentId != null) return;
-    yield* presentAgentFailure(yield* Interactions, end.error);
+    yield* presentAgentFailure(yield* Interactions, row.error);
   },
 );
 

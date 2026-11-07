@@ -194,7 +194,7 @@ export function buildScenario({ proposal = false } = {}) {
     worktree: { workingDirectory: '/paper' },
     parent: null,
     provenance: null,
-    userFollowUpSupport: 'unsupported',
+    takesFollowUps: false,
     approvalPolicy: ROOT_POLICY,
   });
   log.emit(ROOT, T.root, {
@@ -234,7 +234,7 @@ export function buildScenario({ proposal = false } = {}) {
       call: { callId: 'call-1', card: 'call-1', awaited: false },
     },
     provenance: null,
-    userFollowUpSupport: 'nativeInteractive',
+    takesFollowUps: true,
   });
   log.emit(CHILD, T.child, {
     type: 'run.config',
@@ -282,7 +282,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
     identity: GRANDCHILD_IDENTITY,
-    userFollowUpSupport: 'unsupported',
+    takesFollowUps: false,
     parent: log.parent(CHILD),
     provenance: null,
   });
@@ -333,7 +333,7 @@ export function buildScenario({ proposal = false } = {}) {
     identity: { kind: 'process', tool: 'bash' },
     parent: null,
     provenance: null,
-    userFollowUpSupport: 'unsupported',
+    takesFollowUps: false,
   });
   log.emit(PROCESS, T.process, {
     type: 'run.config',

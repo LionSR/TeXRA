@@ -513,7 +513,7 @@ export class SessionComposer extends LitElement {
    *  chat) leaves nothing to choose. */
   private renderRouting(run: RunView): TemplateResult | typeof nothing {
     const parent = run.parentId ? this.view?.runs.get(run.parentId) : undefined;
-    if (parent === undefined || parent.followUpSupport === 'unsupported') {
+    if (parent === undefined || !parent.takesFollowUps) {
       return nothing;
     }
     return html`<div class="routing">
@@ -533,7 +533,7 @@ export class SessionComposer extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     const run = this.run;
-    if (run && run.followUpSupport === 'unsupported') return nothing;
+    if (run && !run.takesFollowUps) return nothing;
     const compact = this.compact;
     const readOnly = run != null && isUnreadable(run);
     const queued = (

@@ -23,7 +23,6 @@ import type { SessionRoots } from '@platform/rootedFs';
 import {
   qualifyAggregateId,
   blocksCaller,
-  USER_FOLLOW_UP_SUPPORT,
   type RunId,
   generateRunId,
 } from '@shared/schemas';
@@ -237,7 +236,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
   const runId = generateRunId();
   const { rows } = yield* registrationRows(runId, record, {
     identity: start.identity,
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    takesFollowUps: true,
     provenance: { kind: 'fork', from, at: cut },
   });
   // Registration, the source's title (by whoever wrote it) and history are
