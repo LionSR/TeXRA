@@ -10,14 +10,16 @@
 
 // Third-party imports
 import {
+  Clock,
   Context,
   Deferred,
+  Duration,
   Effect,
   Fiber,
   Layer,
+  Queue,
+  Random,
   Schema,
-  Scope,
-  ScopedRef,
   Stream,
 } from 'effect';
 import { TestClock } from 'effect/testing';
@@ -26,52 +28,38 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 import {
   type Model,
-  MODEL_CONFIGS,
   ModelError,
-  type ModelOrigin,
   RemoteOperationSchema,
-  type ResolvedTurn,
-  type TurnResult,
-  TurnResultSchema,
+  ResolvedTurnSchema,
 } from '@texra-ai/llm';
 
 // Local imports
-import { DatabaseReadFailed } from '@texra-ai/harness';
-import {
-  RunIdSchema,
-  AgentConfigSchema,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  qualifyAggregateId,
-  type RunId,
-} from '@texra-ai/harness/schemas';
-import { DatabaseWriteFailed, UsageLog } from '@texra-ai/harness/host';
-import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
+import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
-import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import {
-  ModelAccess,
-  modelAccessLayer,
-} from '@agent/runtime/modelAccess/ModelAccess';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { SessionRoots } from '@platform/rootedFs';
 import {
   RunHistory,
-  RunHistoryRefused,
   type RunCell,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { freshRunState, type RunState } from '@shared/session/runState';
+import { freshRunState } from '@shared/session/runState';
 import {
+  publishTestRows,
   setTestApprovalPolicy,
-  publishTestRunStart,
   seedRows,
 } from '@test/support/sessionTestUtils';
-import { scriptedModel, testAgentRun } from '@test/support/scriptedRunLayers';
-import { noopTrace } from '@test/support/noopTrace';
+import {
+  agentRunTestLayer,
+  scriptedInvokerLayer,
+  scriptedModel,
+  startedRun,
+  testBinding,
+  textTurn,
+} from '@test/support/scriptedRunLayers';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
@@ -79,118 +67,17 @@ import {
   isolatedTestSession,
   SessionGraph,
 } from '@test/support/testKernel';
-import { judgeFailure } from '../../../../packages/llm/src/api/verdict.js';
-import {
-  BackgroundSubmissionSchema,
-  ResolvedTurnSchema,
-} from '../../../../packages/llm/src/turn.js';
 
 // Local file imports
-import { autoDecideRequests, seedActiveRun } from '../progressTestUtils';
-import { type BoundModel, Secrets, Settings } from '@texra-ai/harness/plugins';
+import { autoDecideRequests } from '../progressTestUtils';
+import type { BoundModel } from '@texra-ai/harness/plugins';
 
-const GPT54 = 'openai/gpt-5.4-2026-03-05';
-
-/** The gate's base backoff (`RETRY_BACKOFF_MS` in `ModelRetryGate.ts`). */
-const RETRY_BACKOFF_MS = 1000;
-
-/** One macrotask: lets the fiber under test reach its park. */
-const settle = Effect.promise(
-  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-);
-
-/** Advance the test clock past every park the invocation makes. */
-const pumpClock = Effect.forkChild(
-  Effect.forever(
-    settle.pipe(Effect.andThen(TestClock.adjust(RETRY_BACKOFF_MS * 10))),
-  ),
-);
-
-const ORIGIN = {
-  protocol: 'openai-responses',
-  codecVersion: 1,
-  requestedModel: 'gpt-test',
-  deployment: {
-    endpoint: 'https://api.example.test/v1',
-    credentialScope: 'openai',
-  },
-} satisfies ModelOrigin;
-
-const PREPARED: ResolvedTurn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
-  ...ORIGIN,
-  mode: 'foreground',
-  messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
-  tools: [],
-  controls: {
-    temperature: null,
-    maxOutputTokens: 1024,
-    store: false,
-    toolChoice: 'auto',
-    reasoning: null,
-    serviceTier: null,
-  },
-});
-
-const BACKGROUND_PREPARED = Schema.decodeUnknownSync(ResolvedTurnSchema)({
-  ...PREPARED,
-  mode: 'background',
-});
-
-const PROVIDER_RESPONSE_ID = 'resp-1';
-
-/** A completed turn with one assistant message and no tool calls. */
-function completedTurn(text: string): TurnResult {
-  return Schema.decodeUnknownSync(TurnResultSchema)({
-    kind: 'http',
-    providerResponseId: PROVIDER_RESPONSE_ID,
-    requestedOrigin: ORIGIN,
-    returnedModel: null,
-    modelFingerprint: null,
-    content: [{ kind: 'message', content: [{ kind: 'text', text }] }],
-    finishReason: 'stop',
-    usage: {
-      inputTokens: 10,
-      outputTokens: 5,
-      totalTokens: 15,
-      cachedInputTokens: null,
-      cacheWriteTokens: null,
-      reasoningTokens: null,
-      toolUsePromptTokens: null,
-    },
-  });
-}
-
-function boundModel(
-  model: Model,
-  overrides: Partial<BoundModel> = {},
-): BoundModel {
-  return {
-    modelId: GPT54,
-    catalogEntry: MODEL_CONFIGS[GPT54],
-    config: MODEL_CONFIGS[GPT54],
-    backend: 'openai',
-    declinedRoutes: [],
-    model,
-    origin: ORIGIN,
-    route: {
-      kind: 'api-key',
-      endpoint: 'https://api.openai.com/v1',
-      provider: 'openai',
-      usageRoute: 'api-key',
-    },
-    forcedToolChoice: true,
-    billing: 'api-key',
-    maxOutputTokens: 1024,
-    background: false,
-    serviceTier: null,
-    routes: routePolicies(['openai', 'api-key', ORIGIN.requestedModel], GPT54),
-    automaticRetries: Schema.decodeUnknownSync(
-      MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema,
-    )(undefined),
-    textOnly: false,
-    ...overrides,
-  };
-}
+/** A draw at the middle of [0, 1): the gate's ±20 % jitter scales by exactly
+ *  1, so a cooled route waits out its exact backoff (1 s, doubling). */
+const MIDPOINT_RANDOM: Random.Random = {
+  nextDoubleUnsafe: () => 0.5,
+  nextIntUnsafe: () => 0,
+};
 
 const REQUEST: InvokeRequest = {
   system: undefined,
@@ -198,125 +85,67 @@ const REQUEST: InvokeRequest = {
   toolChoice: 'auto',
 };
 
-let retryRunCounter = 0;
-
-/** Run ids are hex, so each scenario takes the next id in sequence. */
-function retryRunId(): RunId {
-  return Schema.decodeUnknownSync(RunIdSchema)(
-    `ac${(retryRunCounter++).toString(16).padStart(4, '0')}`,
-  );
-}
-
-const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
-  agent: 'assistant',
-  model: GPT54,
-});
-
-/** The run service the invoker reads: identity, session, trace, binding. */
-function agentRun(
-  runId: RunId,
-  session: Context.Context<SessionServices>,
-  model: ScopedRef.ScopedRef<BoundModel>,
-): AgentRunShape {
-  return testAgentRun(
-    { runId, session, logger: noopTrace, model, scope: Scope.makeUnsafe() },
-    { config: CONFIG },
-  );
-}
-
-/** The opening state of a fresh tool-use run, as the loop authors it. */
-const freshState = (): RunState => ({
-  ...freshRunState(0),
-  family: 'toolUse',
-  modelId: GPT54,
-  backend: 'openai',
-});
+/** A failure as llm raises it over a provider's reply status. */
+const httpError = (message: string, status: number): ModelError =>
+  new ModelError({ kind: 'provider-rejection', message, status });
 
 interface InvokerKit {
   readonly runId: RunId;
   /** The run's cell, holding the folded state of the freshly opened run. */
   readonly cell: RunCell;
-  /** `ModelInvoker` and this run's history, with nothing left to provide. */
-  readonly layer: Layer.Layer<
-    ModelInvoker | RunHistory | RouteRetries | SessionServices
-  >;
+  /** `ModelInvoker` over this run, with nothing left to provide. */
+  readonly layer: Layer.Layer<ModelInvoker | SessionServices>;
 }
 
 /**
- * Open a run aggregate the way the tool-use loop does, with its `opening`
- * messages, and build the invoker that writes to it over `binding`.
+ * Open an active run the way the tool-use loop does, with its `opening`
+ * messages, and the production invoker that writes to it over `model`,
+ * bound as `bound` says.
  */
 const openRun = Effect.fn('openRun')(function* (
   session: Context.Context<SessionServices>,
   model: Model,
+  bound: Partial<BoundModel> = {},
   opening: Parameters<typeof appendRow>[1] = [
     { role: 'user', content: [{ kind: 'text', text: 'go' }] },
   ],
-  binding: Partial<BoundModel> = {},
-): Effect.fn.Return<
-  InvokerKit,
-  RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed,
-  FakeHost
-> {
-  const runId = retryRunId();
-  yield* publishTestRunStart(session, runId);
-  yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+) {
+  const runId = yield* startedRun(session);
+  yield* publishTestRows(session, [
+    { type: 'run.activate', aggregateId: qualifyAggregateId('run', runId) },
+  ]);
   const cell = yield* Context.get(session, RunHistory).open(runId, {
     activation: () => Effect.succeed([]),
   });
   yield* cell.append([
     appendRow(runId, opening),
-    positionRow(runId, freshState(), 'turn.ready'),
+    positionRow(runId, freshRunState(0), 'turn.ready'),
   ]);
-  // The retries the binding carries, read from the session as `bindModel`
-  // reads them.
-  const automaticRetries = yield* Settings.get(
-    Context.get(session, SessionRoots),
-    MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ).pipe(Effect.orDie);
-  const bound = yield* ScopedRef.make(() =>
-    boundModel(model, { automaticRetries, ...binding }),
-  ).pipe(Scope.provide(Scope.makeUnsafe()));
-  // Model access as the host serves it, but a rebind keeps the stub (a
-  // fresh copy of the binding).
-  const host = yield* FakeHost;
-  const access = Layer.effect(
-    ModelAccess,
-    Effect.gen(function* () {
-      const served = yield* ModelAccess;
-      return {
-        ...served,
-        bind: () =>
-          Effect.map(ScopedRef.get(bound), (current) => ({ ...current })),
-      };
-    }),
-  ).pipe(
-    Layer.provide(
-      modelAccessLayer(host.roots).pipe(
-        Layer.provide(
-          Layer.merge(noHttpClientLayer, Secrets.layer(host.secrets)),
-        ),
-      ),
-    ),
+  const layer = scriptedInvokerLayer.pipe(
+    Layer.provideMerge(agentRunTestLayer({ runId, session, model, bound })),
   );
-  const layer = modelInvokerLayer().pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        Layer.succeed(AgentRun, agentRun(runId, session, bound)),
-        UsageLog.disabled,
-        access,
-      ),
-    ),
-    Layer.merge(Layer.succeed(RunHistory, Context.get(session, RunHistory))),
-    // The process's route gate, as `processLayer` serves it.
-    Layer.provideMerge(Layer.sync(RouteRetries, makeRetryGate)),
-    Layer.provideMerge(Layer.succeedContext(session)),
-  );
-  return { runId, cell, layer };
+  return { runId, cell, layer } satisfies InvokerKit;
 });
 
-/** One invocation on an opened run. */
-const invokeOn = ({ layer, cell }: InvokerKit) =>
+/**
+ * The case's test clock, which tells the case each delay the invocation
+ * starts to wait out: the case advances it by exactly that much.
+ */
+const observedWaits = Effect.gen(function* () {
+  const clock = yield* TestClock.testClockWith(Effect.succeed);
+  const waits = yield* Queue.unbounded<number>();
+  const observed: Clock.Clock = {
+    ...clock,
+    sleep: (duration) =>
+      Queue.offer(waits, Duration.toMillis(duration)).pipe(
+        Effect.andThen(clock.sleep(duration)),
+      ),
+  };
+  return { clock: observed, next: Queue.take(waits) };
+});
+
+/** One invocation on an opened run, on `clock` when given. */
+const invokeOn = ({ layer, cell }: InvokerKit, clock?: Clock.Clock) =>
   Effect.gen(function* () {
     const invoker = yield* ModelInvoker;
     return yield* invoker.invoke(cell, REQUEST);
@@ -327,56 +156,23 @@ const invokeOn = ({ layer, cell }: InvokerKit) =>
     Effect.provide(layer),
     Effect.provide(nodePlatformLayer),
     Effect.provide(noHttpClientLayer),
+    Effect.provideService(Random.Random, MIDPOINT_RANDOM),
+    clock === undefined
+      ? (effect) => effect
+      : Effect.provideService(Clock.Clock, clock),
   );
 
-/** A failure as the package's binding raises it: judged against its reply. */
-const judged = (error: ModelError): ModelError =>
-  judgeFailure(error, 'api-key', false);
-
-/**
- * What the package raises over an SDK reply: its kind, status and
- * `retry-after`, with the SDK error (and its reply body) as the cause.
- */
-function httpError(
-  message: string,
-  status: number,
-  {
-    headers,
-    ...body
-  }: Record<string, unknown> & {
-    headers?: Record<string, string>;
-  } = {},
-): ModelError {
-  const retryAfter = headers?.['retry-after'];
-  return judged(
-    new ModelError({
-      kind:
-        status === 401 || status === 403
-          ? 'authentication'
-          : 'provider-rejection',
-      message,
-      status,
-      ...(retryAfter === undefined
-        ? {}
-        : { retryAfterMs: Number(retryAfter) * 1000 }),
-      cause: Object.assign(new Error(message), { status, ...body }),
-    }),
-  );
-}
-
-/**
- * A case's fresh fake host, its automatic retry budget `maxAttempts` when
- * given, and a test clock of the case's own: the invocation's backoff parks
- * on it and `pumpClock` advances it.
- */
-const caseHost = (maxAttempts?: number) =>
-  Layer.merge(
-    FakeHost.layer(
-      maxAttempts === undefined
-        ? {}
-        : { config: { 'model.retry.maxAttempts': maxAttempts } },
-    ),
-    TestClock.layer(),
+/** The kinds of the run's `model.message` rows, in commit order. */
+const modelMessages = (
+  session: Context.Context<SessionServices>,
+  runId: RunId,
+) =>
+  Effect.map(
+    Context.get(session, SessionLog).history(qualifyAggregateId('run', runId)),
+    (rows) =>
+      rows.flatMap((row) =>
+        row.type === 'model.message' ? [row.payload] : [],
+      ),
   );
 
 // Live clock for the session graph and the sessions it opens, as on the
@@ -384,27 +180,35 @@ const caseHost = (maxAttempts?: number) =>
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'ModelInvoker retry',
   (it) => {
-    it.layer(caseHost(0), { buildPerTest: true })((it) => {
-      // The setting bounds the automatic batch; the human gate opens only once
-      // it is spent.
-      // The authorized attempt waits out the session gate's cooldown the failed
-      // attempt opened; the pump advances the test clock past it.
+    it.layer(Layer.merge(FakeHost.layer({}), TestClock.layer()), {
+      buildPerTest: true,
+    })((it) => {
+      // The binding's budget bounds the automatic batch; the human gate opens
+      // only once it is spent. The authorized attempt waits out the cooldown
+      // the failed attempt opened on its route.
       it.effect('admits a manual retry through a durable approval', () =>
         Effect.gen(function* () {
           const session = yield* isolatedTestSession();
-          const pump = yield* pumpClock;
           const requests = yield* autoDecideRequests(session, () => ({
             action: 'retry',
           }));
           const stub = scriptedModel([
             httpError('temporary provider failure', 503),
-            completedTurn('recovered'),
+            textTurn('recovered'),
           ]);
+          const waits = yield* observedWaits;
 
-          const kit = yield* openRun(session, stub.model);
+          const kit = yield* openRun(session, stub.model, {
+            automaticRetries: 0,
+          });
           const { runId } = kit;
-          yield* Effect.promise(() => seedActiveRun(session, runId));
-          const outcome = yield* invokeOn(kit);
+          const invocation = yield* Effect.forkChild(
+            invokeOn(kit, waits.clock),
+          );
+          expect(yield* waits.next).toBe(1000);
+          expect(stub.attempts()).toBe(1);
+          yield* TestClock.adjust(1000);
+          const outcome = yield* Fiber.join(invocation);
           expect(outcome.kind).toBe('response');
           expect(stub.attempts()).toBe(2);
           // The request the run opened carries the retry payload every surface
@@ -415,7 +219,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             data: expect.objectContaining({
               runId,
               operation: 'Model request',
-              model: GPT54,
+              model: 'test-model',
             }),
           });
           // The response the answer admitted closes the invocation: a resumed
@@ -434,7 +238,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           expect(
             Context.get(session, SessionViewAccess).run(runId)?.position,
           ).toBe('running');
-          yield* Fiber.interrupt(pump);
         }),
       );
 
@@ -450,31 +253,28 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const session = yield* isolatedTestSession();
             yield* setTestApprovalPolicy('yolo');
             const stub = scriptedModel([
-              judged(
-                new ModelError({
-                  kind: 'transport',
-                  message: 'stream dropped before first token',
-                }),
-              ),
+              new ModelError({
+                kind: 'transport',
+                message: 'stream dropped before first token',
+              }),
             ]);
 
-            const kit = yield* openRun(session, stub.model);
-            const { runId } = kit;
-            yield* Effect.promise(() => seedActiveRun(session, runId));
+            const kit = yield* openRun(session, stub.model, {
+              automaticRetries: 0,
+            });
             const outcome = yield* invokeOn(kit);
 
             expect(outcome.kind).toBe('failed');
             // The failure opened a retry request, so the policy's denial is
             // what ended the invocation, not a stop that never asked.
-            if (outcome.kind === 'failed') {
-              expect(outcome.state.invocation?.current.failed?.next.kind).toBe(
-                'ask',
-              );
-            }
+            const failed = (yield* modelMessages(session, kit.runId)).find(
+              (payload) => payload.kind === 'failed',
+            );
+            expect(failed?.kind === 'failed' && failed.next.kind).toBe('ask');
             // A denial is not a cancel: the run stays running so the failure
             // can terminalize (#7331).
             expect(
-              Context.get(session, SessionViewAccess).run(runId)?.position,
+              Context.get(session, SessionViewAccess).run(kit.runId)?.position,
             ).toBe('running');
             expect(stub.attempts()).toBe(1);
           }),
@@ -486,12 +286,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.effect('refuses, unsent, a PDF the context window cannot hold', () =>
         Effect.gen(function* () {
           const session = yield* isolatedTestSession();
-          const stub = scriptedModel([completedTurn('read')]);
+          const stub = scriptedModel([textTurn('read')]);
           const pdf = Buffer.from('%PDF-1.7').toString('base64');
 
           const kit = yield* openRun(
             session,
             stub.model,
+            { config: buildTestModelConfig({ contextWindow: 1_000 }) },
             [
               {
                 role: 'user',
@@ -505,52 +306,43 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 ],
               },
             ],
-            { config: { ...MODEL_CONFIGS[GPT54], contextWindow: 1_000 } },
           );
-          yield* Effect.promise(() => seedActiveRun(session, kit.runId));
           const outcome = yield* invokeOn(kit);
 
           expect(outcome.kind).toBe('failed');
           expect(stub.attempts()).toBe(0);
         }),
       );
-    });
-    it.layer(
-      caseHost(
-        Schema.decodeUnknownSync(MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema)(
-          undefined,
-        ),
-      ),
-      {
-        buildPerTest: true,
-      },
-    )((it) => {
+
+      // Each automatic resend waits out the route's cooldown, which doubles
+      // per failure; the budget spent, the run asks.
       it.effect('stops automatic attempts at the configured limit', () =>
         Effect.gen(function* () {
           const session = yield* isolatedTestSession();
-          const pump = yield* pumpClock;
           const requests = yield* autoDecideRequests(session, () => ({
             action: 'deny',
             reason: 'Denied by the approval policy.',
           }));
           const stub = scriptedModel([httpError('busy', 503)]);
+          const waits = yield* observedWaits;
 
-          const kit = yield* openRun(session, stub.model);
-          yield* Effect.promise(() => seedActiveRun(session, kit.runId));
-          yield* invokeOn(kit);
-
-          expect(stub.attempts()).toBe(
-            1 +
-              Schema.decodeUnknownSync(MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema)(
-                undefined,
-              ),
+          const kit = yield* openRun(session, stub.model, {
+            automaticRetries: 3,
+          });
+          const invocation = yield* Effect.forkChild(
+            invokeOn(kit, waits.clock),
           );
+          for (const backoff of [1000, 2000, 4000]) {
+            expect(yield* waits.next).toBe(backoff);
+            yield* TestClock.adjust(backoff);
+          }
+          yield* Fiber.join(invocation);
+
+          expect(stub.attempts()).toBe(4);
           expect(requests.opened).toHaveLength(1);
-          yield* Fiber.interrupt(pump);
         }),
       );
-    });
-    it.layer(caseHost(1), { buildPerTest: true })((it) => {
+
       // Failure mode: a response that kills the process while it is handled is
       // sent again on every open, without bound, because the attempt it cut
       // records no outcome.
@@ -566,15 +358,28 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const stub = scriptedModel([
               'hang',
               'hang',
-              completedTurn('sent again'),
+              textTurn('sent again'),
             ]);
-            const kit = yield* openRun(session, stub.model);
-            yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+            // The model tells the case each attempt it starts to serve.
+            const sent = yield* Queue.unbounded<void>();
+            const model: Model = {
+              ...stub.model,
+              streamTurn: (turn) =>
+                Stream.unwrap(
+                  Effect.as(
+                    Queue.offer(sent, undefined),
+                    stub.model.streamTurn(turn),
+                  ),
+                ),
+            };
+            const kit = yield* openRun(session, model, {
+              automaticRetries: 1,
+            });
             // Each open sends one attempt, and the process stops while it runs.
             let cell = kit.cell;
-            for (const sent of [1, 2]) {
+            for (const _open of [1, 2]) {
               const fiber = yield* Effect.forkChild(invokeOn({ ...kit, cell }));
-              while (stub.attempts() < sent) yield* settle;
+              yield* Queue.take(sent);
               yield* Fiber.interrupt(fiber);
               cell = yield* Context.get(session, RunHistory).open(kit.runId);
             }
@@ -588,8 +393,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(requests.opened).toHaveLength(1);
           }),
       );
-    });
-    it.layer(caseHost(), { buildPerTest: true })((it) => {
+
       // Failure modes: a user stop leaves the remote job billing; a
       // cancelled operation is re-observed on resume; a shutdown (or any
       // interrupt without a `user` stop reason) cancels work a resume should
@@ -599,9 +403,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
+            const foreground = scriptedModel([textTurn('unused')]).model;
             const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
-              origin: ORIGIN,
-              providerResponseId: PROVIDER_RESPONSE_ID,
+              origin: testBinding(foreground).origin,
+              providerResponseId: 'resp-background',
             });
             const scenario = Effect.fn('scenario')(function* (
               reason: 'user' | 'shutdown',
@@ -609,22 +414,28 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               const calls = { submit: 0, observe: 0, cancel: 0 };
               const observing = yield* Deferred.make<void>();
               const model: Model = {
-                prepareTurn: () => Effect.succeed(BACKGROUND_PREPARED),
+                prepareTurn: (request) =>
+                  Effect.map(foreground.prepareTurn(request), (turn) =>
+                    Schema.decodeUnknownSync(ResolvedTurnSchema)({
+                      ...turn,
+                      mode: 'background',
+                    }),
+                  ),
                 streamTurn: () => Stream.die('no foreground turn'),
                 background: {
                   submit: () =>
                     Effect.sync(() => {
                       calls.submit += 1;
-                      return Schema.decodeUnknownSync(
-                        BackgroundSubmissionSchema,
-                      )(
-                        calls.submit === 1
-                          ? { kind: 'accepted', operation, returnedModel: null }
-                          : {
-                              kind: 'completed',
-                              result: completedTurn('fresh'),
-                            },
-                      );
+                      return calls.submit === 1
+                        ? {
+                            kind: 'accepted' as const,
+                            operation,
+                            returnedModel: null,
+                          }
+                        : {
+                            kind: 'completed' as const,
+                            result: textTurn('fresh'),
+                          };
                     }),
                   observe: () => {
                     calls.observe += 1;
@@ -634,7 +445,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                         ).pipe(Stream.drain, Stream.concat(Stream.never))
                       : Stream.make({
                           kind: 'completed' as const,
-                          result: completedTurn('observed'),
+                          result: textTurn('observed'),
                         });
                   },
                   cancel: () =>
@@ -657,30 +468,36 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 },
               ]);
               yield* Fiber.interrupt(fiber);
-              const state = yield* Context.get(session, RunHistory).load(
-                kit.runId,
+              // What a resume reads: whether the stop retired the operation.
+              const stopped = (yield* modelMessages(session, kit.runId)).map(
+                (payload) => payload.kind,
               );
-              if (state === null)
-                throw new Error('The run has no run history state.');
               const resumed = yield* invokeOn({
                 ...kit,
                 cell: yield* Context.get(session, RunHistory).open(kit.runId),
               });
-              return {
-                calls,
-                accepted: state.invocation?.current.accepted,
-                resumed,
-              };
+              return { calls, stopped, resumed };
             });
 
             const user = yield* scenario('user');
-            expect(user.accepted).toBeNull();
+            expect(user.stopped).toEqual([
+              'append',
+              'attempt',
+              'identified',
+              'accepted',
+              'cancelled',
+            ]);
             // The resume submits anew instead of observing the cancelled work.
             expect(user.calls).toEqual({ submit: 2, observe: 1, cancel: 1 });
             expect(user.resumed.kind).toBe('response');
 
             const shutdown = yield* scenario('shutdown');
-            expect(shutdown.accepted?.operation).toEqual(operation);
+            expect(shutdown.stopped).toEqual([
+              'append',
+              'attempt',
+              'identified',
+              'accepted',
+            ]);
             // The resume observes the operation the shutdown left running.
             expect(shutdown.calls).toEqual({
               submit: 1,

@@ -5,7 +5,15 @@ import { strict as assert } from 'node:assert';
 import { layer } from '@effect/vitest';
 
 // Third-party imports
-import { Deferred, Effect, Layer, Schedule, Schema, Context } from 'effect';
+import {
+  Context,
+  Deferred,
+  Effect,
+  Layer,
+  Schedule,
+  Schema,
+  Stream,
+} from 'effect';
 import { afterEach, vi } from 'vitest';
 
 // Local imports
@@ -23,6 +31,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionViewAccess } from '@shared/session/runHistory';
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   publishTestRunStart,
@@ -55,12 +64,10 @@ function holdCommand(): (result: ExecResult) => void {
 }
 
 /** Close the parent's input so the background run's delivery ends. */
-function detachBackgroundRun(
+const detachBackgroundRun = (
   session: Context.Context<SessionServices>,
   parentRunId: RunId,
-): void {
-  Effect.runFork(Context.get(session, Inbox).closeInput(parentRunId));
-}
+) => Context.get(session, Inbox).closeInput(parentRunId);
 
 /**
  * Park a run WAITING the way its loop does: the `waiting` flow step is the
@@ -183,7 +190,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           yield* Effect.promise(() => parkRunWaiting(session, parentRunId));
 
           yield* Effect.addFinalizer(() =>
-            Effect.sync(() => detachBackgroundRun(session, parentRunId)),
+            detachBackgroundRun(session, parentRunId),
           );
           const launched = launchedRunId(
             yield* launchBackgroundBash(session, parentRunId),
@@ -204,25 +211,24 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
       () =>
         Effect.gen(function* () {
           // The 4,000-character head budget ends inside the emoji, so the
-          // head stops one short of it; the next chunk is not part of it.
-          const first = `${'a'.repeat(3_999)}😀${'z'.repeat(10)}`;
-          vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-            (_command, options) =>
-              Effect.sync(() => {
-                options?.onStdout?.(first);
-                options?.onStdout?.('b'.repeat(60_000));
-                return {
-                  success: true,
-                  stdout: '',
-                  stderr: '',
-                  timedOut: false,
-                  exitCode: 0,
-                };
-              }),
+          // head stops one short of it; the chunk after it is not part of
+          // it. The pipe splits the emoji's bytes across two reads, which
+          // the decoder must join.
+          const encode = (text: string) => new TextEncoder().encode(text);
+          const emoji = encode('😀');
+          const stdout = Stream.make(
+            Uint8Array.of(...encode('a'.repeat(3_999)), ...emoji.slice(0, 2)),
+            Uint8Array.of(...emoji.slice(2), ...encode('z'.repeat(10))),
+            encode('b'.repeat(60_000)),
           );
 
           const result = yield* BashTool.call({ command: 'make build' }).pipe(
-            Effect.provide(nativeToolTestLayer()),
+            Effect.provide(
+              Layer.merge(
+                nativeToolTestLayer(),
+                scriptedSpawnerLayer(() => ({ stdout })).layer,
+              ),
+            ),
           );
 
           const [head] = String(result.output ?? '').split('\n\n[... ');
@@ -268,7 +274,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
               Effect.timeout('1 second'),
               Effect.provide(session),
             );
-          detachBackgroundRun(session, parentRunId);
+          yield* detachBackgroundRun(session, parentRunId);
         }),
     );
   });
