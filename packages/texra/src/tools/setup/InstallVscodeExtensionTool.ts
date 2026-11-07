@@ -8,7 +8,13 @@ import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import { LEAN4_EXTENSION_ID } from '@texra/tools/lean/leanTypes';
 
 // Local file imports
-import { assertInSetupAllowlist, SetupPlatform } from './platform';
+import {
+  EDITOR_EXTENSIONS_CAPABILITY,
+  EditorIntegration,
+} from '@texra/hosts/editorIntegration';
+
+// Local file imports
+import { assertInSetupAllowlist } from './platform';
 
 /**
  * Allowlist of VS Code extensions the setup agent may install.
@@ -37,18 +43,17 @@ type InstallVscodeExtensionInput =
 
 const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
   function* (input: InstallVscodeExtensionInput) {
-    const platform = yield* SetupPlatform;
     const id = input.extensionId.trim();
 
     yield* assertInSetupAllowlist('Extension', id, ALLOWED_EXTENSIONS);
 
-    const extensions = platform.extensions;
+    const extensions = yield* EditorIntegration;
     if (!extensions) {
       return yield* Effect.fail(
         new ToolError('This host cannot install VS Code extensions.'),
       );
     }
-    if (extensions.isInstalled(id)) {
+    if (extensions.installed(id)) {
       return executed(
         `The "${id}" extension is already installed. No action taken.`,
         `Extension ${id} already installed`,
@@ -58,14 +63,17 @@ const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
     yield* extensions
       .install(id)
       .pipe(
-        Effect.catchTag('SetupExtensionInstallFailed', (failure) =>
-          Effect.fail(new ToolError(failure.message)),
+        Effect.mapError(
+          (failure) =>
+            new ToolError(
+              `VS Code refused to install "${id}": ${failure.message}`,
+            ),
         ),
       );
 
     // Poll until VS Code registers the new extension, up to the timeout.
     const installed = Option.getOrElse(
-      yield* Effect.sync(() => extensions.isInstalled(id)).pipe(
+      yield* Effect.sync(() => extensions.installed(id)).pipe(
         Effect.repeat({
           schedule: Schedule.spaced('100 millis'),
           until: (registered) => registered,
@@ -88,8 +96,8 @@ const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
 
 export const InstallVscodeExtensionTool = defineTool({
   name: 'install_vscode_extension',
-  // Offered where the host passes its extensions (VS Code).
-  hostCapability: 'extensions' satisfies keyof SetupPlatform['Service'],
+  // Offered where the host has an editor (VS Code).
+  hostCapability: EDITOR_EXTENSIONS_CAPABILITY,
   requiresApproval: true,
   description: `Install a VS Code extension from the Marketplace. Allowlisted: James-Yu.latex-workshop, leanprover.lean4. Blocks other extension IDs. Use this (rather than \`invoke_command workbench.extensions.installExtension\`) so the caller gets a clean success/failure status.`,
   schema: InstallVscodeExtensionInputSchema,

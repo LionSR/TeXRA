@@ -140,15 +140,18 @@ export class SettingsApp extends SignalWatcher(LitElement) {
   }
 
   /**
-   * The pages and sections this host shows: the recommended VS Code settings
-   * exist only in VS Code, and Appearance only on the desktop.
+   * The pages and sections this host shows: the recommended editor settings
+   * where the host has an editor, and Appearance only in the desktop shell.
    */
   private navEntries(): readonly SettingsNavEntry[] {
     const desktop = this.isDesktopHost;
+    const editor = hostState.get().latex?.settings.editor != null;
     return SETTINGS_NAV_ENTRIES.map((entry) => ({
       ...entry,
-      sections: entry.sections.filter(({ section }) =>
-        desktop ? section !== 'vscode' : section !== 'appearance',
+      sections: entry.sections.filter(
+        ({ section }) =>
+          (section !== 'vscode' || editor) &&
+          (section !== 'appearance' || desktop),
       ),
     }));
   }
@@ -289,7 +292,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .section=${section}
             .settings=${host.latex?.settings ?? DEFAULT_LATEX_SETTINGS_STATUS}
             .loaded=${host.latex !== undefined}
-            .desktopHost=${desktopHost}
           ></latex-tab>
         `;
       case 'memory':

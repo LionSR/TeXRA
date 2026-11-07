@@ -229,7 +229,7 @@ export class PluginCard extends LitElement {
             variant="brand"
             size="s"
             @click=${() =>
-              postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION, {
+              postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION, {
                 extensionId: action.extensionId,
               })}
           >

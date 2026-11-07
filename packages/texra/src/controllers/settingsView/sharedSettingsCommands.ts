@@ -6,12 +6,10 @@
  * own way: how a message reaches its view, how it asks and tells the user,
  * how it opens a file or picks a folder, and how its launchers reload.
  *
- * A host spreads the body's `handlers` into its
- * `SettingsViewInboundHandlerRegistry`, keeps its own entries for the
- * commands only it answers (its account sign-in, installing a VS Code
- * extension or writing VS Code's settings), and runs every message it has
- * parsed at its own edge through the body's `handleMessage`. The binding
- * table is `settingsHostBindings.ts`.
+ * The body answers every command; a host runs each message it has parsed at
+ * its own edge through the body's `handleMessage`, and what only some hosts
+ * can do (an editor's extensions and settings) is a binding the host fills
+ * or leaves out. The binding table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect, PubSub, Stream } from 'effect';
 import { apiKeyEntry } from '@texra-ai/llm';
@@ -31,7 +29,6 @@ import {
 import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
-import { UnsupportedCommandError } from '@texra/controllers/settingsView/settingsViewDispatch';
 import {
   subscriptionAuthStatus,
   subscriptionProvider,
@@ -83,8 +80,6 @@ type SettingsArms = SettingsViewInboundHandlerRegistry<
 >;
 
 interface SettingsViewBodyPorts {
-  /** The host installs an editor extension a plugin card names. */
-  readonly installsExtensions: boolean;
   readonly roots: WorkspaceRoots;
   /** The packaged resources root; the agent templates live under it. */
   readonly resourcesPath: string;
@@ -119,12 +114,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     const usage = new SubscriptionUsageService({ stores: roots });
     const memoryPage = settingsMemoryCommands({ bindings, present });
     const gitPage = settingsGitCommands({ bindings, present });
-    const toolsPage = settingsToolCommands({
-      roots,
-      bindings,
-      present,
-      installsExtensions: ports.installsExtensions,
-    });
+    const toolsPage = settingsToolCommands({ roots, bindings, present });
     const pluginsPage = settingsPluginCommands({ roots, bindings, present });
     const agents = settingsAgentCommands({
       roots,
@@ -359,7 +349,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       ...gitPage.handlers,
       ...toolsPage.handlers,
       ...pluginsPage.handlers,
-    } satisfies Partial<SettingsArms>;
+    } satisfies SettingsArms;
 
     // ── The boundary every settings program finishes on ──
 
@@ -369,10 +359,10 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       withSessionFs(roots, work).pipe(
         Effect.catchCause((cause) => {
           if (Cause.hasInterruptsOnly(cause)) return Effect.void;
-          const error = Cause.squash(cause);
-          return error instanceof UnsupportedCommandError
-            ? notice(error.reason)
-            : report('The settings view could not complete that action', error);
+          return report(
+            'The settings view could not complete that action',
+            Cause.squash(cause),
+          );
         }),
       );
 
@@ -399,20 +389,16 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       );
 
     return {
-      handlers,
       /** Finish the program one message the host already parsed selects. */
       handleMessage(
         message: SettingsViewInboundMessage,
-        registry: SettingsArms,
       ): Effect.Effect<void, never, ProcessServices> {
         return settle(
-          settingsViewProgram(message, registry).pipe(Effect.asVoid),
+          settingsViewProgram(message, handlers).pipe(Effect.asVoid),
         );
       },
-      /** Say an input changed; the host's own arms use it (the LaTeX page's
-       *  status, the view revealed). */
+      /** Say an input changed; the host says the view was revealed. */
       changed,
-      reported,
       signInSubscription,
       /**
        * Follow, until interrupted, every page's inputs and what feeds them:

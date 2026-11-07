@@ -7,12 +7,10 @@ import {
 import { Skills } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@texra-ai/harness/host';
-import { unsupported } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
-import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,
@@ -21,11 +19,8 @@ import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { StorageFs, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import type { DesktopSpawn } from './desktopWindows.js';
-
-const NO_EXTENSION_HOSTING =
-  'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
 
 export interface DesktopSettingsIpcOptions {
   /** This window's half of the shared settings body; the subscription
@@ -159,7 +154,6 @@ export function createDesktopSettingsIpc(
     };
 
     const body = yield* makeSettingsViewBody({
-      installsExtensions: false,
       // The approval policy is the project's persisted setting: the write
       // is the change, which this session and the service both read.
       roots: options.roots,
@@ -171,17 +165,6 @@ export function createDesktopSettingsIpc(
         signInSubscription,
       },
     });
-
-    const registry: SettingsViewInboundHandlerRegistry<
-      ProcessServices | StorageFs
-    > = {
-      ...body.handlers,
-      installToolExtension: unsupported(NO_EXTENSION_HOSTING),
-      installLatexWorkshop: unsupported(NO_EXTENSION_HOSTING),
-      applyLatexSettings: unsupported(
-        'Recommended VS Code settings can only be applied from the TeXRA VS Code extension.',
-      ),
-    };
 
     const subscriptions: Array<Effect.Effect<void, never, ProcessServices>> = [
       body.follow,
@@ -199,7 +182,7 @@ export function createDesktopSettingsIpc(
     const settingsIpc: DesktopSettingsIpc = {
       signInSubscription: body.signInSubscription,
       route: parsedRoute(SettingsViewInboundMessageSchema, (message) =>
-        body.handleMessage(message, registry),
+        body.handleMessage(message),
       ),
     };
     yield* Effect.forEach(

@@ -26,18 +26,10 @@ import {
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
-import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import {
-  latexEditorStatus,
-  vscodeLatexSettingsHandlers,
-} from './handlers/latexSettingsHandlers';
+import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  StorageFs,
-  ProcessRuntime,
-  ProcessServices,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
@@ -82,9 +74,6 @@ export class SettingsViewMessageHandler {
   /** Active webview reference, tracked on every dispatch. */
   private activeView: SettingsWebview | undefined;
 
-  private readonly handlerRegistry: SettingsViewInboundHandlerRegistry<
-    ProcessServices | StorageFs
-  >;
   /** The shared settings body: its programs, handlers and repaints. */
   readonly body: Effect.Success<ReturnType<typeof makeSettingsViewBody>>;
 
@@ -99,7 +88,6 @@ export class SettingsViewMessageHandler {
   ) {
     this.body = runtime.runSync(
       makeSettingsViewBody({
-        installsExtensions: true,
         roots,
         resourcesPath: path.join(context.extensionPath, 'resources'),
         skillDisplay: Skills.display(roots),
@@ -156,15 +144,11 @@ export class SettingsViewMessageHandler {
               terminal.show();
               terminal.sendText(command);
             }),
-          latexEditorStatus,
+          editor: vscodeEditorIntegration,
           requiresOpenWorkspace: () => !roots.workspace,
         },
       }),
     );
-    this.handlerRegistry = {
-      ...this.body.handlers,
-      ...vscodeLatexSettingsHandlers(this.body),
-    };
 
     // One fiber owns every page follower: disposing interrupts them all.
     const following = runtime.runFork(this.body.follow);
@@ -206,7 +190,7 @@ export class SettingsViewMessageHandler {
         SettingsViewInboundMessageSchema,
       )(message);
       if (Result.isSuccess(parsed)) {
-        return this.body.handleMessage(parsed.success, this.handlerRegistry);
+        return this.body.handleMessage(parsed.success);
       }
       // The webview's `postMessage` is untyped per command, so a malformed
       // request is a frontend bug the user just triggered with a click:

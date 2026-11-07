@@ -19,6 +19,7 @@ import {
   type ExternalToolCheckResult,
 } from '@texra-ai/harness/host';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
+import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
@@ -100,10 +101,10 @@ export function visibleToolPlugins(
   });
 }
 
-/** The asking workspace, and whether its host installs an editor extension
- *  (VS Code's settings view does; the desktop app and the CLI do not). */
+/** The asking workspace, and its host's code editor where it has one
+ *  (VS Code's settings view; not the desktop app or the CLI). */
 export type DashboardInputs = ToolProbeInputs & {
-  readonly installsExtensions?: boolean;
+  readonly editor?: EditorIntegrationShape;
 };
 
 /**
@@ -114,7 +115,7 @@ export type DashboardInputs = ToolProbeInputs & {
  * @param probeInputs - the asking workspace folder and configuration,
  *   carried as data for the probes that need them (the GitHub group asks
  *   whether the folder is a git repository, the Zotero group reads its port),
- *   and whether the host installs editor extensions. The probes are skipped
+ *   and the host's editor. The probes are skipped
  *   when `cachedResults` is given.
  * @param cachedResults - when provided, skips network probes and uses
  *   these results (including their `statusDetail`). Used by the toggle
@@ -183,10 +184,10 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
           ...(authCommand
             ? [{ kind: 'auth' as const, command: authCommand }]
             : []),
-          // Only a host that installs editor extensions gets an "Install
-          // Extension" button; the install guide and URL still describe the
-          // standalone path (Lean 4's `lake` build, for one).
-          ...(installExtensionId && probeInputs.installsExtensions
+          // Only a host with an editor gets an "Install Extension" button;
+          // the install guide and URL still describe the standalone path
+          // (Lean 4's `lake` build, for one).
+          ...(installExtensionId && probeInputs.editor
             ? [
                 {
                   kind: 'extension' as const,

@@ -28,6 +28,7 @@ import {
   installAdvice,
   LATEX_DEPENDENCIES,
   LATEX_RECOMMENDED_SETTINGS,
+  LATEX_WORKSHOP_EXT_ID,
   type LatexDependency,
   type LatexRecommendedSettingField,
   SCOOP_INSTALL_COMMAND,
@@ -135,17 +136,12 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
   @property({ attribute: false }) section: SettingsSectionName<'latex'> =
     'dependencies';
   @property({ type: Boolean }) loaded = false;
-  @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   private handleApply(
     field?: LatexRecommendedSettingField,
     reset = false,
   ): void {
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS, { field, reset });
-  }
-
-  private allSettingsSet(): boolean {
-    return this.settings.outDir && this.settings.autoRevealExclude;
   }
 
   /** How to install `key` on this machine's platform. */
@@ -172,7 +168,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
     const { key } = dep;
     const workshop = key === 'latexWorkshop';
     const installed = workshop
-      ? this.settings.latexWorkshopInstalled
+      ? (this.settings.editor?.latexWorkshopInstalled ?? false)
       : this.settings.installed[key];
     const name = workshop ? 'LaTeX Workshop' : LATEX_DEPENDENCIES[key].label;
     const advice = workshop || installed ? null : this.adviceFor(key);
@@ -195,7 +191,9 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
           size="s"
           title="Install"
           @click=${() =>
-            postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP)}
+            postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION, {
+              extensionId: LATEX_WORKSHOP_EXT_ID,
+            })}
         >
           ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
         </wa-button>
@@ -318,9 +316,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
           text: 'Run in Terminal',
           kind: 'secondary',
           appearance: 'outlined',
-          title: this.desktopHost
-            ? `Run ${pmName} installer`
-            : `Run ${pmName} installer in VS Code terminal`,
+          title: `Run ${pmName} installer in a terminal`,
           onClick: () => this.handleRunInTerminal(installCommand),
         })}
       `,
@@ -328,9 +324,10 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
   }
 
   private renderDependencies(): TemplateResult {
-    const dependencies = this.desktopHost
-      ? DEPENDENCIES.filter((dep) => dep.key !== 'latexWorkshop')
-      : DEPENDENCIES;
+    // LaTeX Workshop is an editor extension: shown where there is an editor.
+    const dependencies = this.settings.editor
+      ? DEPENDENCIES
+      : DEPENDENCIES.filter((dep) => dep.key !== 'latexWorkshop');
 
     return html`
       <div class="settings-section">
@@ -348,9 +345,9 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
 
   private renderSettingCard(
     field: LatexRecommendedSettingField,
+    isSet: boolean,
   ): TemplateResult {
     const info = LATEX_RECOMMENDED_SETTINGS[field];
-    const isSet = this.settings[field];
     // HTML collapses the indent newlines: an object reads `{ "key": value }`.
     const value =
       info.kind === 'scalar' ? info.value : JSON.stringify(info.value, null, 1);
@@ -405,14 +402,19 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
       dependencies: () => this.renderDependencies(),
       compile: () => this.renderCompileDiffSettings(),
       formatting: () => this.renderFormattingSettings(),
-      vscode: () => this.renderRecommendedSettings(),
+      vscode: () =>
+        this.settings.editor
+          ? this.renderRecommendedSettings(this.settings.editor.recommended)
+          : nothing,
     };
     return html`
       <div class="tab-content-container">${sections[this.section]()}</div>
     `;
   }
 
-  private renderRecommendedSettings(): TemplateResult {
+  private renderRecommendedSettings(
+    recommended: Readonly<Record<LatexRecommendedSettingField, boolean>>,
+  ): TemplateResult {
     return html`
       <div class="settings-section">
         ${renderSettingsSectionHeading({
@@ -420,7 +422,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
           description:
             'Keep generated files out of the VS Code sidebar and reduce noise during agent runs.',
           icon: 'gear',
-          actions: this.allSettingsSet()
+          actions: Object.values(recommended).every(Boolean)
             ? nothing
             : renderLabeledActionButton({
                 icon: 'check-double',
@@ -432,7 +434,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
               }),
         })}
         ${Struct.keys(LATEX_RECOMMENDED_SETTINGS).map((field) =>
-          this.renderSettingCard(field),
+          this.renderSettingCard(field, recommended[field]),
         )}
       </div>
     `;
@@ -475,12 +477,13 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
         })}
         ${renderStateSettingSelectRow(TexraStateKey.LATEX_FORMATTER)}
         ${
-          // Editor diagnostics are a VS Code surface; the desktop has none.
-          this.desktopHost
-            ? nothing
-            : renderStateSettingToggleRow(
+          // Inline criticism is an editor's diagnostics: shown where there is
+          // an editor.
+          this.settings.editor
+            ? renderStateSettingToggleRow(
                 TexraStateKey.INLINE_CRITICISM_ENABLED,
               )
+            : nothing
         }
       </div>
     `;

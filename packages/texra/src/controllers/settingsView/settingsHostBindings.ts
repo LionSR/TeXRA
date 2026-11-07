@@ -12,7 +12,7 @@ import type {
   ExternalOpener,
   NoticeLevel,
 } from '@texra/hosts/uiHosts';
-import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
+import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type {
@@ -56,9 +56,10 @@ export interface SettingsHostBindings {
   runLabel(runId: RunId): string | undefined;
   /** Run a command in a terminal the user sees and can type into. */
   runInTerminal(name: string, command: string): HostEffect;
-  /** The editor's side of the LaTeX page: its recommended settings applied,
-   *  and LaTeX Workshop installed. */
-  latexEditorStatus(): LatexEditorStatus;
+  /** The host's code editor, where it has one: the LaTeX page shows its
+   *  recommended settings and LaTeX Workshop, and a plugin card offers to
+   *  install the extension it names. */
+  readonly editor?: EditorIntegrationShape;
   /** A workspace-target config write needs an open folder (the extension). */
   readonly requiresOpenWorkspace?: () => boolean;
 }

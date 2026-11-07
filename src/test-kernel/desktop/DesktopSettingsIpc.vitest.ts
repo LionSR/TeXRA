@@ -48,11 +48,6 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
     runInTerminal: noOpEffect,
-    latexEditorStatus: () => ({
-      outDir: true,
-      autoRevealExclude: true,
-      latexWorkshopInstalled: false,
-    }),
   };
 }
 

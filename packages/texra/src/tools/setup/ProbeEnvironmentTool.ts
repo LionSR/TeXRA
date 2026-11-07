@@ -13,6 +13,7 @@ import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { homeDirectory, withExtendedPath } from '@texra-ai/harness/node';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
+import { EditorIntegration } from '@texra/hosts/editorIntegration';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
   IMAGE_LATEX_TOOLS,
@@ -29,11 +30,7 @@ import { detectPackageManager } from '@texra/utils/system/toolChecks';
 
 // Local file imports
 
-import {
-  getChatGptSubscriptionStatus,
-  SetupHost,
-  SetupPlatform,
-} from './platform';
+import { getChatGptSubscriptionStatus, SetupHost } from './platform';
 import { locateTool } from './toolProbing';
 
 const CHANNEL = 'Setup Credentials';
@@ -110,7 +107,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     );
   }
 
-  const platform = yield* SetupPlatform;
+  const editor = yield* EditorIntegration;
   const host = yield* SetupHost;
   const secrets = yield* Secrets;
   const { roots } = (yield* ToolContext).env;
@@ -200,9 +197,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     ...missing.filter((tool) => !tool.interchangeable).map((tool) => tool.name),
     ...(missing.some((tool) => tool.interchangeable) ? [IMAGE_TOOL_LABEL] : []),
   ];
-  const latexWorkshopInstalled = platform.extensions?.isInstalled(
-    LATEX_WORKSHOP_EXT_ID,
-  );
+  const latexWorkshopInstalled = editor?.installed(LATEX_WORKSHOP_EXT_ID);
 
   const summary = {
     host,

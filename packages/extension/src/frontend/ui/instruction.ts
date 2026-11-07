@@ -5,7 +5,8 @@ import * as vscode from 'vscode';
 // Local imports
 import { withLogChannel, Settings } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type {
   StateStore,
   StateReadFailed,
@@ -90,7 +91,7 @@ export const showInstructionWithSuppress = Effect.fn(
 /**
  * Prompt the user to install a VS Code extension, with a suppressible
  * "Never remind again" option. Fires the install command on confirm and
- * warns on failure via {@link safeExecuteCommand}.
+ * reports a refused install once.
  */
 export function promptExtensionInstall(
   store: StateStore,
@@ -105,11 +106,17 @@ export function promptExtensionInstall(
     {
       title: 'Install',
       callback: () =>
-        safeExecuteCommand(
-          'workbench.extensions.installExtension',
-          [opts.extensionId],
-          opts.channel,
-        ).pipe(Effect.asVoid),
+        vscodeEditorIntegration
+          .install(opts.extensionId)
+          .pipe(
+            Effect.catch((err) =>
+              showLoggedErrorMessage(
+                opts.channel,
+                `Error installing extension ${opts.extensionId}`,
+                err,
+              ).pipe(Effect.asVoid),
+            ),
+          ),
     },
   ]);
 }

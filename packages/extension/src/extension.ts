@@ -53,6 +53,7 @@ import { installUnhandledRejectionSurface } from '@frontend/system/unhandledReje
 import { initializeLatexSupport } from '@frontend/setup';
 import { taskStatusBar } from '@frontend/statusBar/taskStatusBar';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
+import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import {
   announce,
   showLoggedMessageWithDocs,
@@ -139,9 +140,10 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           LeanLanguageServices,
           Effect.map(AppState, createVscodeLeanLanguageServices),
         ),
-        // The editor's commands, extensions and terminal, for the setup tools
-        // and the Lean 4 probe.
+        // The editor's commands and terminal, for the setup tools.
         setup: vscodeSetupPlatform,
+        // The editor's extensions, for the setup tools and the Lean 4 probe.
+        editor: vscodeEditorIntegration,
         // `~/.texra`: one history across CLI, desktop and extension.
         storageRoot: defaultNodeStorageRoot(),
         resourcesPath: path.join(context.extensionPath, 'resources'),

@@ -28,9 +28,6 @@ export const fakeSetupPlatform: SetupPlatformShape = {
   get commands() {
     return installedHost().setup?.commands;
   },
-  get extensions() {
-    return installedHost().setup?.extensions;
-  },
   get terminal() {
     return installedHost().setup?.terminal;
   },

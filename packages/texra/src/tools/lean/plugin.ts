@@ -11,7 +11,7 @@ import {
   type ProcessPluginLayer,
 } from '@texra-ai/harness/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
-import type { SetupPlatformShape } from '@texra/tools/setup/platform';
+import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import { directLeanLanguageServices } from './direct/leanServerPool';
 import { LeanLanguageServices } from './leanLanguageServices';
@@ -30,7 +30,7 @@ import {
  * host's setup capabilities.
  */
 export const lean4 = (host: {
-  readonly setup: SetupPlatformShape;
+  readonly editor: EditorIntegrationShape | undefined;
   readonly services?: ProcessPluginLayer<LeanLanguageServices>['layer'];
 }): TexraPlugin => ({
   ...definePlugin<LeanLanguageServices>({
@@ -49,11 +49,11 @@ export const lean4 = (host: {
         const servers = Option.isSome(lean)
           ? yield* lean.value.listServers
           : [];
-        const { extensions } = host.setup;
+        const { editor } = host;
         const extensionAvailable =
-          extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
+          editor?.installed(LEAN4_EXTENSION_ID) ?? false;
         const lakeAvailable = (yield* findCommand('lake')) !== null;
-        const requiresExtension = extensions !== undefined;
+        const requiresExtension = editor !== undefined;
         // VS Code drives Lean through its extension; other hosts spawn lake.
         const available = requiresExtension
           ? extensionAvailable
