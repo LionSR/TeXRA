@@ -268,7 +268,7 @@ The fields every child launch takes beside its own: memories, the call's
 reuse id and card label, its time limit, and whether a script waits.
 
 ```ts
-const CALL_FIELDS: { memories: decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>; working_directory: decodeTo<optional<String>, optional<NullOr<String>>, never, never>; id: optional<NullOr<String>>; label: optional<NullOr<String>>; timeoutMs: optional<NullOr<Int>>; background: optional<NullOr<Boolean>>; }
+const CALL_FIELDS: Readonly<{ memories: decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>; working_directory: decodeTo<optional<String>, optional<NullOr<String>>, never, never>; id: optional<NullOr<String>>; label: optional<NullOr<String>>; timeoutMs: optional<NullOr<Int>>; background: optional<NullOr<Boolean>>; }>
 ```
 
 ## callerRun
