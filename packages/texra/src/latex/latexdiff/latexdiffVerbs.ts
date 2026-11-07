@@ -40,6 +40,7 @@ import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { documentsOf } from '@texra/shared/plugins/documents';
 import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
+import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 
 // Local file imports
 import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
@@ -176,7 +177,22 @@ export function latexdiffVerbs(parts: {
         betweenRounds ? (documents.files[round - 1] ?? []) : [],
       ),
     );
-    const total = recorded.length + pairs.length;
+    // Extraction records every output's lineage; one with no base in it is a
+    // new document, not a failure. An output whose lineage was never recorded
+    // lacks a base the run could have named: it counts as a failed diff.
+    const missingLineage = unrecorded.flatMap(([round, outputs]) =>
+      outputs
+        .filter((info) => info.lineage === null)
+        .map(
+          (info) => `${getSafeDocumentRelativePath(info.source)} (r${round})`,
+        ),
+    );
+    for (const description of missingLineage) {
+      yield* Effect.logWarning(
+        `Diff skipped (${description}): its lineage was never recorded`,
+      );
+    }
+    const total = recorded.length + pairs.length + missingLineage.length;
     if (total === 0) {
       yield* notify(
         messages.showInfoMessage(

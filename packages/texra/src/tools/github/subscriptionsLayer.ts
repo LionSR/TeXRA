@@ -149,70 +149,84 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
         );
     };
 
-    /** Deliver `events` to every run bound to `path` now, each as its own fiber in the drained set. */
-    const publish =
-      (path: string) =>
-      (events: readonly PollEvent[]): Effect.Effect<void> =>
-        Effect.forEach(
-          [...(subscriptions.get(path)?.runs ?? [])],
-          ([runId, binding]) =>
-            Effect.forEach(
-              events,
-              (event) => {
-                const text =
-                  typeof event === 'string'
-                    ? event
-                    : event(binding.minAnnotationLevel);
-                return text === undefined
-                  ? Effect.void
-                  : FiberSet.run(
-                      deliveries,
-                      deliver(path, runId, binding.inbox, text),
-                    );
-              },
-              { discard: true },
-            ),
-          { discard: true },
-        );
+    /** Deliver `events` to `runs` now, each as its own fiber in the drained set. */
+    const deliverTo = (
+      path: string,
+      runs: ReadonlyMap<RunId, Binding>,
+      events: readonly PollEvent[],
+    ): Effect.Effect<void> =>
+      Effect.forEach(
+        [...runs],
+        ([runId, binding]) =>
+          Effect.forEach(
+            events,
+            (event) => {
+              const text =
+                typeof event === 'string'
+                  ? event
+                  : event(binding.minAnnotationLevel);
+              return text === undefined
+                ? Effect.void
+                : FiberSet.run(
+                    deliveries,
+                    deliver(path, runId, binding.inbox, text),
+                  );
+            },
+            { discard: true },
+          ),
+        { discard: true },
+      );
 
-    /** The target's polling fiber; when polling stops for good, its runs
-     *  are unbound. */
-    const pollerOf = (target: SubscriptionTarget) => {
+    /** The target's polling fiber. Its last events end the subscription:
+     *  the runs are unbound and told in one step, so a bind that lands
+     *  meanwhile either is told too or starts a subscription of its own. */
+    const pollerOf = (
+      target: SubscriptionTarget,
+    ): Effect.Effect<void, never, GitHubServices | AppSignals> => {
       const path = targetPath(target);
-      const publishToRuns = publish(path);
-      const polling: Effect.Effect<void, never, GitHubServices | AppSignals> =
-        target._tag === 'pull'
+      const publish = (events: readonly PollEvent[]) =>
+        Effect.suspend(() => {
+          const subscription = subscriptions.get(path);
+          return subscription?.target === target
+            ? deliverTo(path, subscription.runs, events)
+            : Effect.void;
+        });
+      const finish = (events: readonly PollEvent[]) =>
+        Effect.suspend(() => {
+          const subscription = subscriptions.get(path);
+          if (subscription?.target !== target) return Effect.void;
+          subscriptions.delete(path);
+          stopHearing(subscription);
+          return deliverTo(path, subscription.runs, events).pipe(
+            Effect.andThen(
+              Effect.logInfo(`Subscription to ${path} ended`).pipe(
+                inLogChannel,
+              ),
+            ),
+            Effect.andThen(bindingsChanged),
+          );
+        });
+      return target._tag === 'pull'
+        ? pollTarget(
+            target,
+            (prior: PullState | undefined) =>
+              pollPull(target, claimAnnotation, prior),
+            publish,
+            finish,
+          )
+        : target._tag === 'issue'
           ? pollTarget(
               target,
-              (prior: PullState | undefined) =>
-                pollPull(target, claimAnnotation, prior),
-              publishToRuns,
+              (prior: IssueState | undefined) => pollIssue(target, prior),
+              publish,
+              finish,
             )
-          : target._tag === 'issue'
-            ? pollTarget(
-                target,
-                (prior: IssueState | undefined) => pollIssue(target, prior),
-                publishToRuns,
-              )
-            : pollTarget(
-                target,
-                (prior: RepoState | undefined) => pollRepo(target, prior),
-                publishToRuns,
-              );
-      return polling.pipe(
-        Effect.andThen(
-          Effect.suspend(() => {
-            const subscription = subscriptions.get(path);
-            if (subscription?.target !== target) return Effect.void;
-            subscriptions.delete(path);
-            stopHearing(subscription);
-            return Effect.logInfo(`Subscription to ${path} ended`).pipe(
-              inLogChannel,
-              Effect.andThen(bindingsChanged),
+          : pollTarget(
+              target,
+              (prior: RepoState | undefined) => pollRepo(target, prior),
+              publish,
+              finish,
             );
-          }),
-        ),
-      );
     };
 
     /** Remove `runIds`' bindings to `path`, stopping its polling once no

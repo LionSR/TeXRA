@@ -25,7 +25,11 @@ import {
 
 // Local imports
 import { jitteredExponentialBackoffMs } from '@texra-ai/harness/plugins';
-import { emitAppSignal, withLogChannel } from '@texra-ai/harness/host';
+import {
+  emitAppSignal,
+  withLogChannel,
+  type AppSignals,
+} from '@texra-ai/harness/host';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import { shouldDropBotEvent } from './botFilter';
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';
@@ -72,8 +76,9 @@ interface PollHealth<S> {
  * rejected (which also raises `githubTokenInvalid`), GitHub says the target
  * is gone, it stays unreachable for a day, or the poll has a bug. A halt
  * publishes the message that says why. Rate limits wait until GitHub's
- * reset; other failures back off exponentially. Returns when polling has
- * stopped for good; the caller unbinds the target's runs.
+ * reset; other failures back off exponentially. The last events go through
+ * `finish` instead of `publish`: it unbinds the target's runs and delivers to
+ * them in one step, so a run that binds after it starts a new subscription.
  */
 export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
   target: SubscriptionTarget,
@@ -81,10 +86,13 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
     prior: S | undefined,
   ) => Effect.Effect<PollResult<S>, GitHubFailure, R>,
   publish: (events: readonly PollEvent[]) => Effect.Effect<void>,
+  finish: (
+    events: readonly PollEvent[],
+  ) => Effect.Effect<void, never, AppSignals>,
 ) {
   const path = targetPath(target);
   const halt = (detail: string) =>
-    publish([formatSubscriptionHalted(target, detail)]).pipe(Effect.as(false));
+    finish([formatSubscriptionHalted(target, detail)]).pipe(Effect.as(false));
   const health = yield* Ref.make<PollHealth<S>>({
     state: undefined,
     lastSuccessAt: yield* Clock.currentTimeMillis,
@@ -134,8 +142,12 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
             lastSuccessAt: yield* Clock.currentTimeMillis,
             consecutiveFailures: 0,
           });
+          if (result.ended === true) {
+            yield* finish(result.events);
+            return false;
+          }
           yield* publish(result.events);
-          return result.ended !== true;
+          return true;
         }),
       ),
       Effect.catchTags({

@@ -144,8 +144,11 @@ export const runTool = Effect.fn('toolChecks.runTool')(function* (
   ) {
     return yield* new ToolMissing({
       tool,
-      guide: installAdvice(tool, [tool], normalizePlatform(process.platform))
-        .guide,
+      guide: installAdvice(
+        LATEX_TOOL_ENTRIES[tool].label ?? tool,
+        [tool],
+        normalizePlatform(process.platform),
+      ).guide,
     });
   }
   return result;
