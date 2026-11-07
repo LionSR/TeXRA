@@ -32,7 +32,7 @@ import {
 import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import {
@@ -78,7 +78,7 @@ interface DesktopWorkspaceIpcOptions {
 interface DesktopWorkspaceIpc {
   /** The editor pane's file I/O: one `host.request` program per action. */
   file(
-    action: Extract<HostRequest, { kind: 'workspaceFile' }>['action'],
+    action: Extract<HostCommand, { kind: 'workspaceFile' }>['action'],
   ): Effect.Effect<HostOutcome, Rejected, ProcessServices>;
 
   /** The program one parsed renderer request runs. */

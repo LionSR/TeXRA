@@ -65,7 +65,7 @@ import {
   RunIdSchema,
   type RunId,
   type RunOutcome,
-  type RuntimeRequest,
+  type RuntimeCommand,
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -343,7 +343,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           const session = makeSession({ runCompleted: true });
           // A resumed run the chat stopped through its session ends cancelled.
           const stops: RunId[] = [];
-          mocks.request.mockImplementation((req: RuntimeRequest) =>
+          mocks.request.mockImplementation((req: RuntimeCommand) =>
             Effect.sync((): Outcome => {
               if (req.kind === 'run.stop') stops.push(req.runId);
               return { kind: 'done' };
@@ -469,7 +469,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
             }),
           );
           const sent: string[] = [];
-          mocks.request.mockImplementation((req: RuntimeRequest) =>
+          mocks.request.mockImplementation((req: RuntimeCommand) =>
             Effect.sync((): Outcome => {
               if (req.kind === 'followUp.send')
                 sent.push(`${req.runId} ${req.text}`);

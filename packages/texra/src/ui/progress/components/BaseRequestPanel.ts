@@ -55,7 +55,7 @@ import {
   type RequestAnswerability,
   type RequestPayload,
   type RunId,
-  type RuntimeRequest,
+  type RuntimeCommand,
 } from '@texra-ai/harness/schemas';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
@@ -201,7 +201,7 @@ export abstract class BaseRequestPanel<
    * of its own (the tool-edit panel's approve) overrides this instead of
    * re-implementing `emitAction`'s read-only check and host-arm dispatch.
    */
-  protected emitRuntimeArm(runtime: RuntimeRequest): void {
+  protected emitRuntimeArm(runtime: RuntimeCommand): void {
     this.dispatchEvent(SessionUiEvents.runtime(runtime));
   }
 

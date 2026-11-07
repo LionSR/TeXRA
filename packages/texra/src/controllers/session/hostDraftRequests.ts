@@ -21,7 +21,7 @@ import {
   withLogChannel,
 } from '@texra-ai/harness/host';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { polishTextWithAI } from '@texra/agent/runtime/textEnhancement';
 import {
@@ -41,7 +41,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 const CHANNEL = 'HostDraftRequests';
 
 type DraftRequest = Extract<
-  HostRequest,
+  HostCommand,
   { kind: 'record' | 'polish' | 'savePastedImage' }
 >;
 type Recording = NonNullable<HostSnapshot['recording']>;

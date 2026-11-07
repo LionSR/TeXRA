@@ -83,7 +83,7 @@ import {
 import { useSignal } from './state/useSignal';
 import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness/host';
-import type { RuntimeRequest } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 import type { InputHistory } from './history/inputHistory';
 import { EMPTY_DRAFT, type Draft } from './input/draftAttachments';
 
@@ -195,7 +195,7 @@ export function App(props: AppProps): React.JSX.Element {
     activeRun?.transcript.taskGroups.some((group) => group.kind === 'script') ??
     false;
   // Kill, skip and retry; a refusal (a finished call) reads into the transcript.
-  const request = (req: RuntimeRequest): void => {
+  const request = (req: RuntimeCommand): void => {
     props.runtime.runFork(
       Effect.catch(requests.request(req), (error) =>
         Effect.sync(() => appendLocalRequestRefusal(error)),
