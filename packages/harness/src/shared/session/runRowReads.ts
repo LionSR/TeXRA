@@ -62,8 +62,6 @@ function sharedRowsFrom(rows: readonly SharedRunRow[]): SharedRunRows {
   return shared;
 }
 
-/** The key a plugin row kind's latest row is held under. */
-
 /**
  * The reads of a run's rows, by what each answers: its input (`Inbox.read`)
  * with the parent edge and lifecycle that bound it, its requests, its
