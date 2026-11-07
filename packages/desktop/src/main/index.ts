@@ -20,7 +20,6 @@ import {
   electronAttentionPort,
   followDesktopAttention,
 } from './desktopAttention.js';
-import { removeExternalDiffPatchDirs } from './desktopDiffHost.js';
 import {
   DesktopProjects,
   openDesktopProjectRegistry,
@@ -117,13 +116,6 @@ void Effect.runPromise(
       shutdownScope,
       Effect.suspend(
         () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
-      ),
-    );
-    yield* Scope.addFinalizer(
-      shutdownScope,
-      reported(
-        'removing the external-editor patch directories',
-        withProcessServices(runtime, removeExternalDiffPatchDirs),
       ),
     );
     yield* Scope.addFinalizer(

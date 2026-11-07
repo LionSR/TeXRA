@@ -108,7 +108,53 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     ),
     mainDir: options.mainDir,
   });
-  const host = createDesktopWindowHost({ window, runtime, spawn });
+  // The renderer's channels exist before anything can post to them; the
+  // routes and bindings they hand messages to are read as a message arrives,
+  // which is only once the page has loaded at the end of this open.
+  const commandRoutes = new Map<string, DesktopCommandRoute>();
+  const bridge = yield* installDesktopHostBridge(window, {
+    onCommand: (message) => {
+      const named = Schema.decodeUnknownResult(DesktopCommandMessageSchema)(
+        message,
+      );
+      if (!Result.isSuccess(named)) {
+        console.warn('Dropped a renderer command with no command name');
+        return;
+      }
+      const command = named.success;
+      const route = commandRoutes.get(command.command);
+      if (!route) {
+        console.warn(`Dropped ${command.command}: no surface routes it`);
+        return;
+      }
+      // The one run site for every command's program, and its one
+      // report: a failure or defect reaches the window's async-error
+      // reporter.
+      spawn(host.reported(route(command)));
+    },
+    // A session message names its project: that project's port answers
+    // it.
+    onSession: (message) => {
+      const addressed = Schema.decodeUnknownResult(
+        SessionMessageEnvelopeSchema,
+      )(message);
+      if (!Result.isSuccess(addressed)) {
+        console.warn('Dropped a session message with no session key');
+        return;
+      }
+      const { session } = addressed.success;
+      const receive = Effect.suspend(() => {
+        const binding = bindings.get(session);
+        return binding
+          ? binding.port.receive(message)
+          : Effect.logWarning(
+              `Dropped a renderer message for session ${session}: not open`,
+            ).pipe(withLogChannel('desktop'));
+      });
+      spawn(routing(receive), { startImmediately: true });
+    },
+  });
+  const host = createDesktopWindowHost({ window, runtime, spawn, bridge });
   const { previewHost } = host;
   const promptController = yield* Effect.acquireRelease(
     Effect.sync(
@@ -273,7 +319,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     route: DesktopCommandRoute,
   ): DesktopCommandRoutes =>
     Object.fromEntries(commands.map((command) => [command, route]));
-  const commandRoutes = new Map<string, DesktopCommandRoute>();
   for (const routes of [
     promptController.routes,
     claim(SETTINGS_VIEW_INBOUND_COMMANDS, (message) => {
@@ -333,49 +378,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       commandRoutes.set(command, route);
     }
   }
-  const hostBridge = yield* installDesktopHostBridge(window, {
-    onCommand: (message) => {
-      const named = Schema.decodeUnknownResult(DesktopCommandMessageSchema)(
-        message,
-      );
-      if (!Result.isSuccess(named)) {
-        console.warn('Dropped a renderer command with no command name');
-        return;
-      }
-      const command = named.success;
-      const route = commandRoutes.get(command.command);
-      if (!route) {
-        console.warn(`Dropped ${command.command}: no surface routes it`);
-        return;
-      }
-      // The one run site for every command's program, and its one
-      // report: a failure or defect reaches the window's async-error
-      // reporter.
-      spawn(host.reported(route(command)));
-    },
-    // A session message names its project: that project's port answers
-    // it.
-    onSession: (message) => {
-      const addressed = Schema.decodeUnknownResult(
-        SessionMessageEnvelopeSchema,
-      )(message);
-      if (!Result.isSuccess(addressed)) {
-        console.warn('Dropped a session message with no session key');
-        return;
-      }
-      const { session } = addressed.success;
-      const receive = Effect.suspend(() => {
-        const binding = bindings.get(session);
-        return binding
-          ? binding.port.receive(message)
-          : Effect.logWarning(
-              `Dropped a renderer message for session ${session}: not open`,
-            ).pipe(withLogChannel('desktop'));
-      });
-      spawn(routing(receive), { startImmediately: true });
-    },
-  });
-  host.connectRenderer(hostBridge);
   yield* reconcileLane.withPermits(1)(
     Effect.andThen(bindings.sync, surface.attach()),
   );
