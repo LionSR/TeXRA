@@ -347,11 +347,11 @@ const compileDiff = Effect.fn('documents.compileDiff')(function* (
       path.dirname(referenceLocation.absolutePath),
   ].filter(Predicate.isNotNull);
   const compiled = yield* compileLatex2Pdf(diffLocation, roots, {
-    channel: fileService.runId,
     outputDirectory: buildDir,
     timeout: timeoutMs,
     extraInputDirs,
   }).pipe(
+    withLogChannel(fileService.runId),
     // No compiler costs this diff its PDF, not the diff itself.
     Effect.catchTag('ToolMissing', (missing) =>
       Effect.succeed({ ok: false, logTail: missing.message } as const),

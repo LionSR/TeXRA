@@ -126,7 +126,6 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   // A missing latexindent is the caller's `ToolMissing`: it never started, so
   // it left no backup or log to clean up.
   const { success } = yield* runTool('latexindent', args, {
-    channel: CHANNEL,
     cwd: workspacePath,
     // The slots the caller resolved this formatter from.
     settings,
@@ -144,9 +143,7 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   }
 
   if (success) {
-    yield* Effect.logInfo(`Indented ${absolutePath}`).pipe(
-      withLogChannel(CHANNEL),
-    );
+    yield* Effect.logInfo(`Indented ${absolutePath}`);
   }
   return success;
-});
+}, withLogChannel(CHANNEL));

@@ -280,7 +280,6 @@ What a host's agent directories are built from.
 
 ```ts
 interface AgentDirectoryServiceOptions {
-  channel: string;
   /**
    * Packaged resources root holding the bundled agent directories. Hosts read
    * their built-in agents straight out of the bundle they shipped with, so one

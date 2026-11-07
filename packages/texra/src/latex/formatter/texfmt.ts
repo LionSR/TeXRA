@@ -19,13 +19,12 @@ export const runTexFmt = Effect.fn('latex.runTexFmt')(function* (
   ];
 
   const result = yield* runTool('tex-fmt', args, {
-    channel: CHANNEL,
     cwd: workspaceRoot,
     // The slots the caller resolved this formatter from.
     settings,
   });
   if (!result.success) return false;
 
-  yield* Effect.logInfo(`Formatted ${filePath}`).pipe(withLogChannel(CHANNEL));
+  yield* Effect.logInfo(`Formatted ${filePath}`);
   return true;
-});
+}, withLogChannel(CHANNEL));

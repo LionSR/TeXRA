@@ -14,6 +14,7 @@ import {
   createRunStorageLocation,
   pathToLocationIn,
   Settings,
+  withLogChannel,
 } from '@texra-ai/harness/host';
 
 import { Effect, FileSystem } from 'effect';
@@ -310,11 +311,11 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
     // On the timeout the command's scope kills the child, so we don't orphan
     // hanging latexmk/pdflatex runs.
     return yield* compileLatex2Pdf(outputFile.location, ctx.roots, {
-      channel: ctx.runId,
       outputDirectory: buildDir,
       timeout: opts.timeoutMs,
       extraInputDirs,
     }).pipe(
+      withLogChannel(ctx.runId),
       Effect.map((result): CompileAttempt => ({ kind: 'compiled', result })),
       Effect.catchTag('ToolMissing', () =>
         Effect.succeed<CompileAttempt>({ kind: 'no-compiler' }),

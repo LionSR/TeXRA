@@ -156,10 +156,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // `~/.texra`: one history across CLI, desktop and extension.
         storageRoot: defaultNodeStorageRoot(),
         resourcesPath: path.join(context.extensionPath, 'resources'),
-        agentIssues: (channel, message, docsId) =>
-          showLoggedMessageWithDocs(message, docsId).pipe(
-            withLogChannel(channel),
-          ),
+        agentIssues: showLoggedMessageWithDocs,
         usageLog: {
           version: extensionVersion,
           editorType: vscode.env.appName || undefined,

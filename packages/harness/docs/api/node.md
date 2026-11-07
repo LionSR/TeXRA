@@ -170,7 +170,7 @@ type ExecResult = typeof ExecResultSchema.Type;
 ## executeCommand
 
 Execute an external command in `cwd` with the workspace env, over the
-process's `ChildProcessSpawner`.
+process's `ChildProcessSpawner`. Its lines take the caller's log channel.
 
 Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
 timeout (`timedOut`) and a max-buffer trip (2,
@@ -194,7 +194,6 @@ const executeCommand: (command: string | string[], options: ExecuteCommandBaseOp
 
 ```ts
 interface ExecuteCommandBaseOptions {
-  readonly channel?: string;
   readonly env?: Record<string, string>;
   /** Milliseconds; undefined or `<= 0` sets no deadline. */
   readonly timeout?: number;

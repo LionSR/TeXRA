@@ -130,7 +130,6 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
         tempPath,
       ];
       const result = yield* executeCommand(convertArgs, {
-        channel: CHANNEL,
         // Both operands are absolute paths, so the conversion is
         // independent of where it runs: the process cwd is the honest
         // root rather than a workspace this module never receives, and
@@ -188,6 +187,7 @@ export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
     );
     return toBase64(mediaBytes);
   },
+  withLogChannel(CHANNEL),
 );
 
 /**
@@ -220,7 +220,6 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
   // delegate, so signal the tree: an interrupted conversion must not leave the
   // delegate running over the page it is still writing.
   const result = yield* executeCommand(convertArgs, {
-    channel: CHANNEL,
     // Absolute input and output paths, and no workspace of its own: see
     // `resizeImageIfNeeded`.
     cwd: process.cwd(),
@@ -277,7 +276,6 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(function* (
   const identified = yield* executeCommand(
     [tool, 'identify', '-ping', '-format', '%p\\n', pdfPath],
     {
-      channel: CHANNEL,
       // Absolute input path: see `resizeImageIfNeeded`.
       cwd: process.cwd(),
       settings: undefined,
@@ -312,4 +310,4 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(function* (
     (tempDir) => removeTemporary(fs, tempDir, 'temporary directory'),
   );
   return { pages, pageCount };
-});
+}, withLogChannel(CHANNEL));

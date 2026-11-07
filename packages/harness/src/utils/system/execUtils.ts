@@ -144,7 +144,6 @@ function resultFromProcessOutput(
 }
 
 export interface ExecuteCommandBaseOptions {
-  readonly channel?: string;
   readonly env?: Record<string, string>;
   /** Milliseconds; undefined or `<= 0` sets no deadline. */
   readonly timeout?: number;
@@ -437,7 +436,7 @@ const runSpawned = Effect.fnUntraced(function* (
 
 /**
  * Execute an external command in `cwd` with the workspace env, over the
- * process's `ChildProcessSpawner`.
+ * process's `ChildProcessSpawner`. Its lines take the caller's log channel.
  *
  * Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
  * timeout (`timedOut`) and a max-buffer trip (2,
@@ -457,13 +456,10 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   command: string | string[],
   options: ExecuteCommandBaseOptions,
 ): Effect.fn.Return<ExecResult, never, ChildProcessSpawner> {
-  const channel = options.channel ?? CHANNEL;
   const logError = (message: string) =>
     options.quiet
       ? Effect.void
-      : Effect.logError(`Error executing command: ${message}`).pipe(
-          withLogChannel(channel),
-        );
+      : Effect.logError(`Error executing command: ${message}`);
   const { cwd } = options;
   if (!cwd) {
     yield* logError('No workspace path found');
@@ -484,9 +480,7 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
     options.env,
   );
   if (!options.quiet) {
-    yield* Effect.logDebug(`Running command: ${displayCommand(command)}`).pipe(
-      withLogChannel(channel),
-    );
+    yield* Effect.logDebug(`Running command: ${displayCommand(command)}`);
   }
 
   const { outcome, result } = yield* Effect.scoped(
@@ -495,9 +489,7 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   if (outcome._tag === 'SpawnFailed') {
     yield* logError(result.stderr);
   } else if (!options.quiet && result.stderr) {
-    yield* Effect.logDebug(`Command stderr: ${result.stderr}`).pipe(
-      withLogChannel(channel),
-    );
+    yield* Effect.logDebug(`Command stderr: ${result.stderr}`);
   }
   return result;
 });
