@@ -97,7 +97,7 @@ export class SettingsViewProvider {
       );
     }
 
-    // this._view can be undefined here: the postAll above yields, and
+    // this._view can be undefined here: the `changed(view)` above yields, and
     // disposing the dashboard panel meanwhile runs cleanupView.
     if (tab == null || !this._view) return;
     if (this.viewReady) {
