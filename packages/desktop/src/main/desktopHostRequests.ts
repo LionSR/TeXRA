@@ -45,7 +45,6 @@ import {
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
 import type { WindowOnboarding } from './desktopWindowOnboarding.js';
-import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
@@ -67,7 +66,7 @@ interface DesktopHostRequestsOptions {
     WindowOnboarding,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
   >;
-  openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
+  openExternalUrl(url: string): Effect.Effect<void, ExternalOpenFailed>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Effect.Effect<void, never, ProcessServices>;
   /** The process runtime this window was handed; every request arm below runs
