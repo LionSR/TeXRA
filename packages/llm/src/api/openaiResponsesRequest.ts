@@ -229,14 +229,18 @@ export const authorized = <A, R>(
   request: (token: string) => Effect.Effect<A, ModelError, R>,
 ): Effect.Effect<A, ModelError, R> =>
   Effect.gen(function* () {
-    const token = yield* tokenOf(bearer);
+    // Reading and handing back the token hold nothing, so they stay
+    // interruptible where the caller masks the request (a connection's
+    // scoped acquisition): a stalled renewal never holds up cancellation.
+    const current = tokenOf(bearer).pipe(Effect.interruptible);
+    const token = yield* current;
     if (typeof bearer === 'string') return yield* request(token);
     const first = yield* Effect.result(request(token));
     if (Result.isSuccess(first)) return first.success;
     if (first.failure.kind !== 'authentication')
       return yield* Effect.fail(first.failure);
-    yield* bearer.rejected(token);
-    return yield* request(yield* tokenOf(bearer));
+    yield* bearer.rejected(token).pipe(Effect.interruptible);
+    return yield* request(yield* current);
   });
 
 /** The `Authorization` header a request sends `token` in. */
