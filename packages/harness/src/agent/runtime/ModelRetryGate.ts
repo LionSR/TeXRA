@@ -6,16 +6,7 @@
  * every call at once. How many times a call is resent is its loop's
  * business, not the gate's.
  */
-import {
-  Cause,
-  Clock,
-  Context,
-  Effect,
-  Exit,
-  Latch,
-  Random,
-  Semaphore,
-} from 'effect';
+import { Cause, Clock, Context, Effect, Exit, Random, Semaphore } from 'effect';
 import { ModelError } from '@texra-ai/llm';
 
 import { jitteredExponentialBackoffMs } from '@utils/core';
@@ -49,10 +40,11 @@ export class RouteRetries extends Context.Service<
 >()('@texra-ai/harness/RouteRetries') {}
 
 interface Route {
-  /** Open while the route is healthy; a cooling route's calls wait on it. */
-  readonly healthy: Latch.Latch;
-  /** The one recovery probe a cooling route lets through at a time. Only
-   *  its holder opens `healthy`. */
+  /** Whether the route admits every call at once. Only the holder of
+   *  `probe` changes it while the route cools. */
+  healthy: boolean;
+  /** The one recovery probe a cooling route lets through at a time; a
+   *  cooling route's calls queue on it. */
   readonly probe: Semaphore.Semaphore;
   /** Failures since the last success admitted while healthy. */
   failures: number;
@@ -64,46 +56,18 @@ interface Route {
  *  probe that holds the route's permit. */
 type Pass = 'healthy' | 'probe';
 
-/**
- * Admit a call to `route`: at once while it is healthy; otherwise when the
- * route opens, or as its probe once the backoff has passed. Taking the permit
- * and waiting out the backoff are one interruptible wait, and an interruption
- * hands the permit back.
- */
-const admit = (route: Route): Effect.Effect<Pass> =>
-  Effect.suspend(() =>
-    route.healthy.isOpen()
-      ? Effect.succeed<Pass>('healthy')
-      : Effect.raceFirst(
-          Effect.as(route.healthy.await, 'healthy' as const),
-          Effect.uninterruptibleMask((restore) =>
-            restore(route.probe.take(1)).pipe(
-              Effect.andThen(
-                restore(
-                  Effect.gen(function* () {
-                    const delayMs =
-                      route.retryAt - (yield* Clock.currentTimeMillis);
-                    if (delayMs > 0) {
-                      yield* Effect.logDebug(
-                        `Waiting ${delayMs}ms for the model recovery probe.`,
-                      );
-                      yield* Effect.sleep(delayMs);
-                    }
-                    return 'probe' as const;
-                  }),
-                ).pipe(Effect.onInterrupt(() => route.probe.release(1))),
-              ),
-            ),
-          ),
-        ),
-  );
+/** A route passed healthy cooled while a later one was waited on. */
+const COOLED = Symbol('cooled');
+
+/** A gated call's end: the attempt's exit, or `COOLED` to wait again. */
+type Through<A, E> = Exit.Exit<A, E> | typeof COOLED;
 
 /**
- * Record what a call's exit proved about one route it went through. A failure
- * scoped to the route cools it (a healthy route, or the probe's failure: a
- * call admitted before the route cooled says nothing new); any other end of
- * the probe opens it; a success, or a failure of the request alone, of a call
- * admitted while healthy ends the failure streak.
+ * Record what a call's exit proved about one route it went through. A
+ * failure scoped to the route cools it (a healthy route, or the probe's
+ * failure: a call admitted before the route cooled says nothing new); any
+ * other end of the probe opens it; a success, or a failure of the request
+ * alone, of a call admitted while healthy ends the failure streak.
  */
 const settle = (
   route: Route,
@@ -112,35 +76,87 @@ const settle = (
   exit: Exit.Exit<unknown, unknown>,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const released = pass === 'probe' ? route.probe.release(1) : Effect.void;
-    if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause))
-      return yield* released;
+    if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)) return;
     const error = Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
     if (error instanceof ModelError && error.scope === scope) {
-      if (pass === 'probe' || route.healthy.isOpen()) {
-        route.failures += 1;
-        route.retryAt =
-          (yield* Clock.currentTimeMillis) +
-          Math.max(
-            jitteredExponentialBackoffMs(
-              RETRY_BACKOFF_MS,
-              route.failures,
-              MAX_BACKOFF_MS,
-              yield* Random.next,
-            ),
-            error.retryAfterMs ?? 0,
-          );
-        yield* route.healthy.close;
-      }
-      return yield* released;
+      if (pass === 'healthy' && !route.healthy) return;
+      route.failures += 1;
+      route.retryAt =
+        (yield* Clock.currentTimeMillis) +
+        Math.max(
+          jitteredExponentialBackoffMs(
+            RETRY_BACKOFF_MS,
+            route.failures,
+            MAX_BACKOFF_MS,
+            yield* Random.next,
+          ),
+          error.retryAfterMs ?? 0,
+        );
+      route.healthy = false;
+      return;
     }
     // A success admitted while healthy proves a clean round trip, so the
     // streak ends here, not on the probe's success: the cohort it releases
     // may fail again at once (a rate window that fits one probe rarely fits
     // the herd), and resetting there would hold the backoff at its base.
-    if (pass === 'probe') yield* route.healthy.open;
-    else if (route.healthy.isOpen()) route.failures = 0;
-    yield* released;
+    if (pass === 'probe') route.healthy = true;
+    else if (route.healthy) route.failures = 0;
+  });
+
+/**
+ * Run `attempt` through `routes` from `index` on, narrowest first, `passed`
+ * the routes it went through healthy so far. A healthy route admits at once.
+ * A cooling route's call takes its probe permit: if the route opened while it
+ * queued it goes with the cohort, else it waits out the backoff and goes as
+ * the probe, holding the permit until its exit is recorded, so no
+ * interruption can lose it. Before the attempt, a route passed healthy that
+ * cooled meanwhile answers `COOLED`, and the call waits again.
+ */
+const through = <A, E, R>(
+  routes: readonly (readonly [Route, RoutePolicy])[],
+  index: number,
+  passed: readonly Route[],
+  attempt: Effect.Effect<A, E, R>,
+): Effect.Effect<Through<A, E>, never, R> =>
+  Effect.suspend((): Effect.Effect<Through<A, E>, never, R> => {
+    const step = routes[index];
+    if (step === undefined)
+      return passed.every((route) => route.healthy)
+        ? Effect.exit(attempt)
+        : Effect.succeed(COOLED);
+    const [route, policy] = step;
+    const healthy = Effect.flatMap(
+      through(routes, index + 1, [...passed, route], attempt),
+      (result): Effect.Effect<Through<A, E>> =>
+        result === COOLED
+          ? Effect.succeed(result)
+          : Effect.as(settle(route, policy, 'healthy', result), result),
+    );
+    if (route.healthy) return healthy;
+    return route.probe
+      .withPermit(
+        Effect.gen(function* (): Generator<
+          Effect.Effect<unknown, never, R>,
+          Through<A, E> | 'opened'
+        > {
+          if (route.healthy) return 'opened';
+          const delayMs = route.retryAt - (yield* Clock.currentTimeMillis);
+          if (delayMs > 0) {
+            yield* Effect.logDebug(
+              `Waiting ${delayMs}ms for the model recovery probe.`,
+            );
+            yield* Effect.sleep(delayMs);
+          }
+          const result = yield* through(routes, index + 1, passed, attempt);
+          if (result !== COOLED) yield* settle(route, policy, 'probe', result);
+          return result;
+        }),
+      )
+      .pipe(
+        Effect.flatMap((result) =>
+          result === 'opened' ? healthy : Effect.succeed(result),
+        ),
+      );
   });
 
 /**
@@ -163,7 +179,7 @@ export const makeRetryGate = (): ModelRetryGate => {
     const existing = routes.get(key);
     if (existing !== undefined) return existing;
     const created: Route = {
-      healthy: Latch.makeUnsafe(true),
+      healthy: true,
       probe: Semaphore.makeUnsafe(1),
       failures: 0,
       retryAt: 0,
@@ -172,52 +188,17 @@ export const makeRetryGate = (): ModelRetryGate => {
     return created;
   };
   return {
-    withRoutes: (policies) => (attempt) =>
-      Effect.uninterruptibleMask((restore) =>
-        Effect.gen(function* () {
-          const passed: [Route, RoutePolicy, Pass][] = [];
-          const exit = yield* Effect.exit(
-            restore(
-              Effect.gen(function* () {
-                for (;;) {
-                  for (const policy of policies) {
-                    const route = routeOf(policy.key);
-                    passed.push([route, policy, yield* admit(route)]);
-                  }
-                  // A route passed healthy may have cooled while a later one
-                  // was waited on: hand back the probes held and wait again,
-                  // so no call goes out inside a cooldown it was admitted
-                  // before.
-                  if (
-                    passed.every(
-                      ([route, , pass]) =>
-                        pass === 'probe' || route.healthy.isOpen(),
-                    )
-                  )
-                    return yield* attempt;
-                  yield* Effect.uninterruptible(
-                    Effect.suspend(() =>
-                      Effect.forEach(
-                        passed.splice(0),
-                        ([route, , pass]) =>
-                          pass === 'probe'
-                            ? route.probe.release(1)
-                            : Effect.void,
-                        { discard: true },
-                      ),
-                    ),
-                  );
-                }
-              }),
-            ),
-          );
-          yield* Effect.forEach(
-            passed,
-            ([route, policy, pass]) => settle(route, policy, pass, exit),
-            { discard: true },
-          );
-          return yield* exit;
-        }),
-      ),
+    withRoutes: (policies) => (attempt) => {
+      const steps = policies.map(
+        (policy) => [routeOf(policy.key), policy] as const,
+      );
+      const run = <A, E, R>(
+        effect: Effect.Effect<A, E, R>,
+      ): Effect.Effect<A, E, R> =>
+        Effect.flatMap(through(steps, 0, [], effect), (result) =>
+          result === COOLED ? run(effect) : result,
+        );
+      return run(attempt);
+    },
   };
 };

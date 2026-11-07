@@ -632,7 +632,7 @@ from 1,000 ms with each failure the route owns (up to five minutes, and never
 less than the provider's `retryAfterMs`); the probe's end opens the route
 unless it failed the same way, and a success admitted while the route was
 healthy ends the failure count
-(`agent/runtime/ModelRetryGate.ts#admit`, `#settle`). Before a `retry` or
+(`agent/runtime/ModelRetryGate.ts#through`, `#settle`). Before a `retry` or
 `unchain` that follows a recorded failure the loop pauses as long as the
 provider asked (`retryAfterMs`), else 1,000 ms, and not at all after a failure
 llm scoped to a route, which the gate cools and waits out
