@@ -50,7 +50,7 @@ process run's one turn (`Background command`, `Claude Code session`, no kind,
 plugin's `Revision 1`, no kind, `documentTools.ts:196`). One stage is held as:
 
 1. the `stage.start`/`stage.end` rows (`shared/schemas/traceEvent.ts:43-49`,
-   versions at `shared/schemas/rowVersions.ts:222-223`);
+   versions at `shared/schemas/rowVersions.ts:224-225`);
 2. the trace's `StageHandle` with its `ended` flag
    (`agent/trace/TraceEmitter.ts:210-232`);
 3. the publisher's open-work entry (`agent/runtime/SessionEvents.ts:75-110`);
@@ -238,7 +238,7 @@ define away.
   (`transcriptUpdate.ts:289-330`, "as the drain that ends a run no driver
   holds does"), which it must do anyway for a stage an earlier process left.
 - Open-ness held four times: `StageHandleImpl.ended`
-  (`TraceEmitter.ts:211,219-221`), the publisher's open work, the fold's
+  (`TraceEmitter.ts:211,221-222`), the publisher's open work, the fold's
   `isOpenGroup` (`transcriptUpdate.ts:330`), the dispatch's `stageOpened`
   (`loop/toolUseDispatch.ts:779-780`). A script stage closed by a stop's
   durable close is then reopened on resume with the same id
@@ -370,7 +370,7 @@ anti-pattern); repetition.
   `WorkflowRunDetails.tsx:56-58`).
 - A stage's root-ness is its place in the tree (`TaskGroupList.ts:472-484`),
   where it writes the stage id into `data-run-id` (`:481`); `data-group-id`
-  is written by five formatters (`bannerFormatters.ts:120,124`,
+  is written at seven sites in three formatter files (`bannerFormatters.ts:120,124`,
   `toolFormatters/helpers.ts:101`, `messageFormatters.ts:70,97,118,138`).
   Nothing reads either attribute (`grep -rn "dataset.groupId\|data-group-id]\|data-run-id]"`:
   no hit in `packages/*/src`, `src`, or the E2E suites).
