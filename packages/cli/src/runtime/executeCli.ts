@@ -129,16 +129,7 @@ export const executeCliToolUseConfig = Effect.fn('executeCliToolUseConfig')(
         : undefined,
     });
     if (!run.ok) return run;
-
-    const { result } = run;
-    return {
-      ok: true as const,
-      result: {
-        ...result,
-        workingDirectory: runContext.cwd,
-      },
-      exitCode: runOutcomeExitCode(result.outcome),
-    };
+    return { ...run, exitCode: runOutcomeExitCode(run.result.outcome) };
   },
 );
 
@@ -326,9 +317,13 @@ export const executeCliConfig: (
           Effect.uninterruptible(
             Effect.suspend(() => {
               accepted = true;
+              // The run's whole result, built once: what the command emits
+              // and what its `afterRun` finalizes.
               return Effect.map(run.result, (end) => ({
                 ...end,
                 runId: run.runId,
+                plugins,
+                workingDirectory: runContext.cwd,
               }));
             }),
           ),
@@ -501,7 +496,7 @@ export const executeCliConfig: (
     }
 
     yield* detachPresentation;
-    return { ok: true as const, result: { ...runResult.result, plugins } };
+    return runResult;
   },
   Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
 );

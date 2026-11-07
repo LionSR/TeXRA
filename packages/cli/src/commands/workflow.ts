@@ -425,10 +425,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       );
     }
 
-    // The envelope takes the committed verdict and the invocation's own
-    // fields, its plugins.
-    workflowResult = { ...result, ...workflowResult, outcome: result.outcome };
-
     yield* emitCliResult({
       json: workflowResult,
       ndjson: { kind: 'result', result: workflowResult },
