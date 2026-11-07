@@ -22,6 +22,7 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
   SessionStoreMovedAside,
+  StoredBlobs,
 } from './database';
 import type { RunRowRead, RunRowsRead } from './runRowReads';
 import type { RunRows } from './runRowsShape';
@@ -98,10 +99,11 @@ export interface SessionLogShape {
     through?: number,
   ): Effect.Effect<RunRowsRead<R>, DatabaseReadFailed>;
   /** The strings under `digests`: what the rows name by address (media
-   *  bytes, a tool edit's proposal). */
+   *  bytes, a tool edit's proposal). A digest the store lacks fails the
+   *  read, so the lookup it answers is total over `digests`. */
   blobs(
     digests: readonly string[],
-  ): Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
+  ): Effect.Effect<StoredBlobs, DatabaseReadFailed>;
   /** A run's facts, folded from its latest row of each record type (its
    *  requests and pending input left out: a `runRows` read holds those);
    *  null while the store holds no open run under the id. */

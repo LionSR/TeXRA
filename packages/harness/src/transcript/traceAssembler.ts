@@ -11,7 +11,7 @@
  * A fifth is redacted: a decided request keeps its action and loses what the
  * user typed or approved (see `decisionAction`).
  */
-import { Effect } from 'effect';
+import { Effect, absurd } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { getRunRecords } from '@agent/storage/runOwnership';
 
@@ -51,10 +51,14 @@ const decisionAction = (decision: RequestDecision): RequestDecision => {
       return { action: 'retry', credentials: decision.credentials };
     case 'reject':
       return { action: 'reject' };
-    default:
-      // `approve_and_goal`, `setup`, `deny` and `cancel` carry no user text:
-      // their fields are the policy's own reason or cause.
+    // These carry no user text: their fields are the policy's own reason
+    // or cause. A new action is redacted here before it can export.
+    case 'approve_and_goal':
+    case 'deny':
+    case 'cancel':
       return decision;
+    default:
+      return absurd(decision);
   }
 };
 

@@ -232,7 +232,9 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     // A missing dependency says so where the run declared the tool, before
     // any other gate, so an approval-gated tool's reason is not lost to the
     // approval notice.
-    const missing = probedOff.get(catalog.get(name)?.plugin ?? '');
+    // A name the catalog does not hold is reported below as unregistered.
+    const plugin = catalog.get(name)?.plugin;
+    const missing = plugin === undefined ? undefined : probedOff.get(plugin);
     if (missing !== undefined) {
       if (source === 'declared')
         warnings.push(

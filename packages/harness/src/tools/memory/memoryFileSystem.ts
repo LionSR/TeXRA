@@ -41,7 +41,7 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
-import { pathExists } from '@utils/files/fsEntryExists';
+import { absentReason, pathExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -166,10 +166,10 @@ const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
 /**
  * The frontmatter head of a memory file, or `null`.
  *
- * An entry lists without attribution when its head cannot be read or parsed
- * (a race deletion or permission error between the stat and the head read, a
- * truncated head). Skipping is the whole recovery: the walk continues and the
- * entry still appears, with the reason on the debug channel.
+ * An entry lists without attribution when its head cannot be read or parsed.
+ * The walk continues and the entry still appears. A file deleted between the
+ * stat and the head read is a race and logs at debug; any other cause (a
+ * permission or I/O error, a head that does not parse) warns with the cause.
  */
 const CHANNEL = 'memory';
 
@@ -183,7 +183,7 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
         }),
       ),
       Effect.catch((cause) =>
-        Effect.logDebug(
+        (absentReason(cause) ? Effect.logDebug : Effect.logWarning)(
           `Skipping attribution for unreadable memory file ${storagePath}`,
         ).pipe(
           withLogChannel(CHANNEL),

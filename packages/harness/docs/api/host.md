@@ -2068,34 +2068,37 @@ interface RunModelCandidate {
 
 ## RunModelDecision
 
-The model a run takes, why, and the candidate it fell back from.
+The model a run takes and why. `Fallback` runs another model than the one
+its candidate named and carries the sentence that tells the person;
+`Unavailable` names the candidate that cannot run and has nothing to fall
+back to. A caller matches every case.
 
 ```ts
-interface RunModelDecision {
-  readonly model: string;
-  readonly reason: RunModelDecisionReason;
-  readonly unavailable?: true;
-  readonly fallbackFrom?: {
+type RunModelDecision = Data.TaggedEnum<{
+  Chosen: {
     readonly model: string;
     readonly reason: RunModelDecisionReason;
-    readonly mode: RunModelFallbackMode;
   };
-}
+  Fallback: {
+    readonly model: string;
+    readonly reason: RunModelDecisionReason;
+    readonly from: {
+      readonly model: string;
+      readonly reason: RunModelDecisionReason;
+    };
+    readonly notice: string;
+  };
+  Unavailable: {
+    readonly model: string;
+    readonly reason: RunModelDecisionReason;
+  };
+}>;
 ```
 
 ## RunModelDecisionReason
 
 ```ts
 type RunModelDecisionReason = keyof typeof RUN_MODEL_REASONS;
-```
-
-## RunModelFallbackMode
-
-What happens when a candidate's model cannot run: refuse, run the next
-one with a notice, or run it silently.
-
-```ts
-type RunModelFallbackMode = 'reject' | 'notice' | 'silent';
 ```
 
 ## RunServices

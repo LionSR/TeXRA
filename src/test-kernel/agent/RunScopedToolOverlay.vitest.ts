@@ -43,6 +43,7 @@ import { texraPlugins } from '@texra/tools/registry';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 
 import { testLaunch } from '@test/support/scriptedRunLayers';
+import { noopTrace } from '@test/support/noopTrace';
 import { AppSignals, Secrets, type ITool } from '@texra-ai/harness/plugins';
 
 function tool(name: string): ITool {
@@ -196,5 +197,45 @@ layer(
           ],
         });
       }),
+  );
+
+  it.effect('a resumed step names an activated skill it no longer offers', () =>
+    Effect.gen(function* () {
+      const session = yield* isolatedTestSession({ emit: () => {} });
+      const runId = generateRunId();
+      yield* publishTestRunStart(session, runId);
+      const config = Schema.decodeUnknownSync(AgentConfigSchema)({
+        agent: 'chat',
+        model: 'test-model',
+        workingDirectory: process.cwd(),
+      });
+      const warnings: string[] = [];
+      const ctx = {
+        ...validationLaunch(runId, config),
+        logger: {
+          ...noopTrace,
+          warn: (message: string) => void warnings.push(message),
+        },
+      };
+      yield* Effect.flatMap(openToolUse({ resume: false }), (opened) =>
+        runToolUse({ resume: false }, opened),
+      ).pipe(Effect.provide(runLayer(session, ctx, [])), Effect.orDie);
+
+      // The user activated a Lean skill; the Lean plugin is not available
+      // in this workspace when the run resumes.
+      yield* Effect.gen(function* () {
+        const state = yield* Context.get(session, RunHistory).load(runId);
+        assert(state !== null);
+        return yield* stepFor(
+          yield* AgentRun,
+          { ...state, input: { ...state.input, activated: ['lean-search'] } },
+          false,
+        );
+      }).pipe(Effect.provide(runLayer(session, ctx, [])), Effect.orDie);
+
+      expect(warnings).toContainEqual(
+        expect.stringContaining('Skill "lean-search"'),
+      );
+    }),
   );
 });

@@ -327,9 +327,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             ],
           });
           expect(
-            (yield* Context.get(session, SessionLog).blobs([digest])).get(
-              digest,
-            ),
+            (yield* Context.get(session, SessionLog).blobs([digest]))(digest),
           ).toBe(PIXEL);
         }),
       );
