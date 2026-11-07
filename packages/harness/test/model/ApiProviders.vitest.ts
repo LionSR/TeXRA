@@ -5,8 +5,7 @@ import { describe, expect } from 'vitest';
 import {
   apiKeySecretName,
   hasUsableApiKey,
-  lookupApiKey,
-  lookupApiKeyOrigin,
+  apiKey,
   SecretsFailed,
 } from '@texra-ai/llm';
 
@@ -38,7 +37,7 @@ describe('API provider key resolution', () => {
           [apiKeySecretName('openai')]: '   ',
         });
 
-        expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('env');
+        expect((yield* apiKey(secrets, 'openai')).origin).toBe('env');
         expect(yield* hasUsableApiKey(secrets, 'openai')).toBe(true);
       }).pipe(withEnv({ OPENAI_API_KEY: '  from-env  ' })),
   );
@@ -56,9 +55,7 @@ describe('API provider key resolution', () => {
           get: () => Effect.fail(readFailure),
         };
 
-        expect(yield* Effect.flip(lookupApiKey(secrets, 'openai'))).toBe(
-          readFailure,
-        );
+        expect(yield* Effect.flip(apiKey(secrets, 'openai'))).toBe(readFailure);
       }).pipe(withEnv({})),
   );
 });

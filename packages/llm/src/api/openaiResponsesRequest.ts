@@ -1,6 +1,3 @@
-// Node imports
-import { isDeepStrictEqual } from 'node:util';
-
 // Third-party imports
 import { Effect, Result, Schema } from 'effect';
 import OpenAI from 'openai';
@@ -20,18 +17,12 @@ import type { UploadCache } from './uploadCache.js';
 import type { ModelCredential, SessionToken } from '../node.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
-type ResponsesTransport = Extract<
-  ResolvedTurn,
-  { protocol: 'openai-responses'; mode: 'foreground' }
->['transport'];
-
 /** Resolves controls before admission; a route with no output limit
  *  ignores the request's, and the lowering refuses a continuation on a
  *  route that does not store. No transport request is made here. */
 export const prepareResponsesTurn = (
   config: OpenAIResponsesConfiguration,
   origin: ResponseOrigin,
-  transport: ResponsesTransport,
   request: TurnRequest,
   uploads: UploadCache | null,
   background: Model['background'],
@@ -42,7 +33,6 @@ export const prepareResponsesTurn = (
     background,
     (author) =>
       Effect.succeed({
-        transport,
         controls: {
           temperature: config.defaults.temperature,
           maxOutputTokens:
@@ -57,8 +47,7 @@ export const prepareResponsesTurn = (
             : {}),
         },
       }),
-    (turn) =>
-      responseParameters(config, origin, transport, turn, turn.mode, uploads),
+    (turn) => responseParameters(config, origin, turn, turn.mode, uploads),
   );
 
 /** Validates the admitted binding and lowers one request without transport flags. */
@@ -66,14 +55,12 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
   function* (
     config: OpenAIResponsesConfiguration,
     origin: ResponseOrigin,
-    transport: ResponsesTransport,
     input: ResolvedTurn,
     mode: 'foreground' | 'background',
     uploads: UploadCache | null,
   ) {
     const turn = yield* boundTurn(input, origin, mode);
     if (
-      !isDeepStrictEqual(turn.transport, transport) ||
       (config.defaults.temperature === null &&
         turn.controls.temperature !== null) ||
       (config.defaults.maxOutputTokens === null &&
@@ -87,8 +74,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     )
       return yield* new ModelError({
         kind: 'invalid-request',
-        message:
-          'The prepared transport or controls are unsupported by the selected route.',
+        message: 'The prepared controls are unsupported by the selected route.',
       });
     const wireInput = yield* responseInput(turn, config, uploads);
     const reasoning = turn.controls.reasoning;

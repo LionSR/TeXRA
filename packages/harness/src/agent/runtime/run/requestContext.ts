@@ -275,9 +275,6 @@ export const admittedTurn = (
       ...origin,
       ...turn,
       messages,
-      ...(origin.protocol === 'openai-responses'
-        ? { transport: { kind: 'http' } }
-        : {}),
     });
     if (admitted.mode !== 'background')
       throw new Error('the open attempt admitted no background turn');

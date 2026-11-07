@@ -7,15 +7,15 @@
 import { Effect } from 'effect';
 
 import {
+  apiKey,
   type ApiKeyProviderId,
   type CredentialRoute,
+  decideModelRoute,
   exposeApiKey,
-  lookupApiKey,
   type ModelConfig,
   ModelError,
+  OWN_KEY_ROUTE_FACTS,
   PLAN_ROUTES,
-  resolveRouteEndpoint,
-  type RouteFacts,
 } from '@texra-ai/llm';
 import {
   chatgptCoordinator,
@@ -34,13 +34,12 @@ import type { SettingsStores } from '@shared/config/settings';
 type SessionRoute = Exclude<CredentialRoute['kind'], 'api-key'>;
 
 /**
- * The credential and endpoint of one route, resolved together. `bearer` is
- * what the transport sends: a key, or a session's token, which llm reads
- * per request and renews once when the provider rejects it.
+ * The credential of one route. `bearer` is what the transport sends: a key,
+ * or a session's token, which llm reads per request and renews once when
+ * the provider rejects it.
  */
 export type RouteCredential = {
   readonly provider: ApiKeyProviderId;
-  readonly endpoint: string;
 } & (
   | { readonly route: 'api-key'; readonly bearer: string }
   | { readonly route: 'xai-subscription'; readonly bearer: SessionToken }
@@ -52,7 +51,7 @@ export type RouteCredential = {
     }
 );
 
-/** An API-key route's credential: its key and endpoint. */
+/** An API-key route's credential: its key. */
 type KeyCredential = Extract<RouteCredential, { readonly route: 'api-key' }>;
 
 /**
@@ -74,29 +73,7 @@ const subscriptionUnavailable = (
   });
 
 /**
- * The endpoint `route` sends `config`'s requests to. A provider the catalog
- * states no endpoint for is a defect, not a route the user can fix.
- */
-const routeEndpoint = (
-  config: ModelConfig,
-  route: CredentialRoute,
-  facts: Pick<RouteFacts, 'endpoints'>,
-): Effect.Effect<string> => {
-  const endpoint = resolveRouteEndpoint(config, route, facts);
-  return endpoint === undefined
-    ? Effect.die(
-        new Error(
-          `No HTTP endpoint is configured for provider ${config.provider}.`,
-        ),
-      )
-    : Effect.succeed(endpoint);
-};
-
-/**
- * The OAuth session a subscription route bills, at `endpoint`: the
- * subscription's own surface, which `resolveRouteEndpoint` names ahead of
- * any per-model or dashboard endpoint, since the token is accepted nowhere
- * else. The decision already found the preference on, the model eligible
+ * The OAuth session a subscription route bills. The decision already found the preference on, the model eligible
  * and a session signed in; this reads the session once, for its plan and so
  * a signed-out session fails here, and hands the transport the session's
  * token, which llm reads before each request and renews once when the
@@ -105,7 +82,6 @@ const routeEndpoint = (
  */
 const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
   route: SessionRoute,
-  endpoint: string,
 ): Effect.fn.Return<
   RouteCredential,
   RouteUnavailable,
@@ -159,27 +135,23 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
       provider,
       bearer: tokenOf(coordinator),
       plan: fresh.planType,
-      endpoint,
     };
   }
   const coordinator = xaiCoordinator(secrets);
   yield* Effect.mapError(coordinator.getFreshSession(), unavailable);
-  return { route, provider, bearer: tokenOf(coordinator), endpoint };
+  return { route, provider, bearer: tokenOf(coordinator) };
 });
 
 /**
- * The key and endpoint of an API-key route: the provider key the decision
- * named, at the endpoint the facts name for it. The
- * one producer of the missing-credential failure; an unreadable key store
- * fails as itself, not as a missing key.
+ * The key of an API-key route: the provider key the decision named. The one
+ * producer of the missing-credential failure; an unreadable key store fails
+ * as itself, not as a missing key.
  */
 const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
   route: Extract<CredentialRoute, { kind: 'api-key' }>,
-  config: ModelConfig,
-  facts: Pick<RouteFacts, 'endpoints'>,
 ): Effect.fn.Return<KeyCredential, RouteUnavailable, Secrets> {
   const { provider } = route;
-  const key = yield* lookupApiKey(yield* Secrets, provider).pipe(
+  const { value: key } = yield* apiKey(yield* Secrets, provider).pipe(
     Effect.mapError(
       (cause) =>
         new RouteUnavailable({
@@ -194,50 +166,45 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
       message: `Missing API key for ${provider}. Set a provider API key in settings.`,
     });
   }
-  const bearer = exposeApiKey(key);
-  const endpoint = yield* routeEndpoint(config, route, facts);
-  return {
-    route: route.kind,
-    provider,
-    bearer,
-    endpoint,
-  };
+  return { route: route.kind, provider, bearer: exposeApiKey(key) };
 });
 
-/** The credential `route` bills for `config`. */
+/** The credential `route` bills. */
 export function routeCredential(
   route: CredentialRoute,
-  config: ModelConfig,
-  facts: Pick<RouteFacts, 'endpoints'>,
 ): Effect.Effect<
   RouteCredential,
   RouteUnavailable,
   HttpClient.HttpClient | Secrets
 > {
   return route.kind === 'api-key'
-    ? apiKeyCredential(route, config, facts)
-    : Effect.flatMap(routeEndpoint(config, route, facts), (endpoint) =>
-        subscriptionCredential(route.kind, endpoint),
-      );
+    ? apiKeyCredential(route)
+    : subscriptionCredential(route.kind);
 }
 
 /**
- * The user's own `provider` key and the endpoint they set for it, for a
- * request llm does not model (audio transcription): the route a model of
- * `config` takes with every preference off.
+ * The user's own key for `config` and the endpoint they set for its
+ * provider, for a request llm does not model (audio transcription): the
+ * route `config` takes with every preference off.
  */
 export const ownKeyCredential = Effect.fn('ownKeyCredential')(function* (
   stores: SettingsStores,
   config: ModelConfig,
-  provider: ApiKeyProviderId,
-): Effect.fn.Return<KeyCredential, RouteUnavailable, Secrets> {
+): Effect.fn.Return<
+  KeyCredential & { readonly endpoint: string },
+  RouteUnavailable,
+  Secrets
+> {
   // The key and its endpoint only: no other model setting can refuse it.
-  const endpoints = yield* readProviderEndpoint(stores, provider).pipe(
+  const endpoints = yield* readProviderEndpoint(stores, config.provider).pipe(
     Effect.mapError(RouteUnavailable.of),
   );
-  return yield* apiKeyCredential(
-    { kind: 'api-key', provider, usageRoute: 'api-key' },
-    config,
-    { endpoints },
-  );
+  const route = decideModelRoute(config, { ...OWN_KEY_ROUTE_FACTS, endpoints });
+  if (route.kind !== 'api-key') {
+    return yield* new RouteUnavailable({
+      message: `Model "${config.label}" has no direct API-key provider.`,
+    });
+  }
+  const credential = yield* apiKeyCredential(route);
+  return { ...credential, endpoint: route.endpoint };
 });

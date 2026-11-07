@@ -1,5 +1,4 @@
 // Node imports
-import { randomUUID } from 'node:crypto';
 
 // Third-party imports
 import {
@@ -50,7 +49,6 @@ const connect = Effect.fnUntraced(function* (
   config: OpenAIResponsesConfiguration,
   endpoint: URL,
   token: string,
-  transport: { readonly kind: 'websocket'; readonly connectionId: string },
 ) {
   const origin = originOf(config);
   const openedAt = yield* Clock.currentTimeMillis;
@@ -207,7 +205,6 @@ const connect = Effect.fnUntraced(function* (
       const { turn, parameters } = yield* responseParameters(
         config,
         origin,
-        transport,
         input,
         'foreground',
         null,
@@ -356,18 +353,14 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       kind: 'invalid-request',
       message: 'The Responses endpoint must use HTTP or HTTPS.',
     });
-  // A turn prepared on this model streams on whichever connection it holds.
-  const transport = { kind: 'websocket' as const, connectionId: randomUUID() };
   // Each connection opens on the token current then; one the handshake
   // rejects is handed back and the next tried once.
-  const open = authorized(bearer, (token) =>
-    connect(config, endpoint, token, transport),
-  );
+  const open = authorized(bearer, (token) => connect(config, endpoint, token));
   const connection = yield* ScopedRef.fromAcquire(open);
   const lane = yield* Semaphore.make(1);
 
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, transport, request, null, undefined);
+    prepareResponsesTurn(config, origin, request, null, undefined);
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.unwrap(
       Effect.gen(function* () {

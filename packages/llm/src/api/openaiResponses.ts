@@ -62,7 +62,6 @@ export function openaiResponsesModel(
   },
 ): Model {
   const origin = originOf(config);
-  const http = { kind: 'http' } as const;
   refuseAmbientHeaders();
   const bearer = bearerOf(transport.authentication);
   const client = openaiClient(
@@ -109,7 +108,7 @@ export function openaiResponsesModel(
         })
       : null;
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, http, request, uploads, background);
+    prepareResponsesTurn(config, origin, request, uploads, background);
 
   const createResponse = Effect.fn('llm.responses.create')(function* (
     input: ResolvedTurn,
@@ -118,7 +117,6 @@ export function openaiResponsesModel(
     const { turn, parameters } = yield* responseParameters(
       config,
       origin,
-      http,
       input,
       mode,
       uploads,

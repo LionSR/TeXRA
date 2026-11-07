@@ -129,7 +129,6 @@ const PREPARED: ResolvedTurn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
   mode: 'foreground',
   messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
   tools: [],
-  transport: { kind: 'http' },
   controls: {
     temperature: null,
     maxOutputTokens: 1024,
@@ -243,7 +242,12 @@ function boundModel(
     declinedRoutes: [],
     model,
     origin: ORIGIN,
-    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
+    route: {
+      kind: 'api-key',
+      endpoint: 'https://api.openai.com/v1',
+      provider: 'openai',
+      usageRoute: 'api-key',
+    },
     forcedToolChoice: true,
     billing: 'api-key',
     maxOutputTokens: 1024,
