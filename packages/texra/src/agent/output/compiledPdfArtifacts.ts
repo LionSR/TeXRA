@@ -14,7 +14,10 @@ import { absentReason } from '@texra-ai/harness/node';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
-import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
+import {
+  revisionLayout,
+  stripWorkflowRoundDir,
+} from '@texra/shared/constants/workflowOutput';
 
 interface PublishCompiledPdfOptions {
   runDirectory: string;
@@ -66,8 +69,8 @@ const copyArtifactFile = Effect.fn('publishCompiledPdfArtifact.copy')(
 );
 
 /**
- * Publish a compiled PDF under the run's `output/r<round>/` and
- * `output/latest/` directories. `compiledPdfPath` is a successful
+ * Publish a compiled PDF under the revision's `output/` folder and the run's
+ * `output/latest/`. `compiledPdfPath` is a successful
  * `compileLatex2Pdf`'s, so a PDF is there; a failed copy is the caller's to
  * report.
  */
@@ -75,11 +78,7 @@ export const publishCompiledPdfArtifact = Effect.fn(
   'publishCompiledPdfArtifact',
 )(function* (options: PublishCompiledPdfOptions) {
   const pdfRelativePath = toPdfRelativePath(options);
-  const roundRelativePath = path.posix.join(
-    'output',
-    `r${options.round}`,
-    pdfRelativePath,
-  );
+  const roundRelativePath = revisionLayout(options.round).pdf(pdfRelativePath);
   const latestRelativePath = path.posix.join(
     'output',
     'latest',

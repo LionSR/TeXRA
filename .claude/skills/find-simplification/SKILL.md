@@ -102,7 +102,7 @@ Diff the sibling branch against `origin/main`, not against the current PR branch
 
 ## Validation And PR Hygiene
 
-For docs-only proposal work, run `npm run format`, `npm run check:guidance-refs`, and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run typecheck`, `npm run lint`, and `npm test`.
+For docs-only proposal work, run `npm run format`, `npm run gate:docs`, and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run typecheck`, `npm run lint`, and `npm test`.
 
 A PR implementing a simplification is usually titled `refactor:` / `simplify:` / `consolidate:` / `dedupe:` — which activates the letter-level template requirements (checklist §14): the body must carry `## Net elements (R6)` (files, `^[+-]export` symbols, class/interface/enum declarations, net LoC from `git diff --stat origin/main`) and `## Consumer counts (R8)` (grepped subscriber/caller counts for every deleted emit path or public symbol). Build implies delete in the same PR; a net-positive-LOC "reduction" needs its stated reason. Use Conventional Commits.
 

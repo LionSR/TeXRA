@@ -16,7 +16,7 @@ describe('latexdiffPairs', () => {
     source,
     round,
     location: file(`r${round}/${source}`),
-    lineage: { original: null, diffBase: file(source) },
+    lineage: { base: file(source), document: null },
     diff: null,
   });
 

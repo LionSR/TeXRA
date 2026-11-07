@@ -1,22 +1,25 @@
 name: Require green CI
-description: Fail unless the CI workflow's `validate` check is green on the commit being released.
+description: Fail unless the commit being released has a green CI run of a push or a dispatch.
 
 runs:
   using: composite
   steps:
-    - name: Require a green validate check on the commit
+    - name: Require a green CI run on the commit
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
-      # The newest `validate` run decides, so a red run followed by a green
-      # rerun passes and the reverse fails. A commit whose run was cancelled (a
-      # later push to main supersedes it) or that CI never ran on (a tag off a
-      # side branch) fails closed: dispatch CI on that ref first. The calling
-      # job needs `checks: read`.
+      # A push or dispatch run is the one that runs every check; the nightly
+      # `schedule` run skips the static checks, the build and the e2e suites,
+      # so its green `validate` says nothing about this commit. The newest
+      # such run decides (a rerun updates its run), so a red run followed by
+      # a green rerun passes and the reverse fails. A commit whose run was
+      # cancelled or is still running, or that CI never ran on (a tag off a
+      # side branch), fails closed: dispatch CI on that ref first. The calling
+      # job needs `actions: read`.
       run: |
-        conclusion="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=validate" \
-          --jq '(.check_runs | sort_by(.started_at) | last | .conclusion) // "none"')"
+        conclusion="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100" \
+          --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.created_at) | last | .conclusion // "none"')"
         if [ "$conclusion" != success ]; then
-          echo "::error::CI 'validate' on $GITHUB_SHA is '$conclusion', not 'success'. Wait for CI (or dispatch it on this ref), then re-run this workflow."
+          echo "::error::CI's push or dispatch run on $GITHUB_SHA is '$conclusion', not 'success'. Wait for CI (or dispatch it on this ref), then re-run this workflow."
           exit 1
         fi

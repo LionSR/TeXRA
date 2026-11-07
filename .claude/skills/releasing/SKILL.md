@@ -36,8 +36,10 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    ```
 
    Both publish jobs and the desktop publish job refuse to run unless CI's
-   `validate` check is green on that commit (`.github/actions/require-green-ci`).
-   Wait for the push-to-`main` CI run first. A red, missing, or cancelled run
+   push or dispatch run is green on that commit
+   (`.github/actions/require-green-ci`); the nightly run does not count, since
+   it skips the static checks and the builds. Wait for the push-to-`main` CI
+   run first. A red, missing, or cancelled run
    fails the release job (a later push to `main` cancels the earlier commit's
    run): dispatch CI on the tag (`gh workflow run CI --ref vX.Y.Z`), then
    re-run the release job once it is green.

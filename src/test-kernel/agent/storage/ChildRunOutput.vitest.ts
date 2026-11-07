@@ -65,6 +65,8 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
           diff: null,
         },
       ],
+      compile: null,
+      missingOutputs: [],
       latexdiffs: [],
       reply: null,
     }),

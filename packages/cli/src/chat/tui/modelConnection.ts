@@ -4,7 +4,7 @@
 // connect mode; everything else about the state lives here.
 
 import { signal } from '@lit-labs/signals';
-import { Cause, Effect, Exit, Latch } from 'effect';
+import { Effect, Latch, Result } from 'effect';
 
 import {
   withLogChannel,
@@ -130,7 +130,9 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   // failed or stopped: a failure is said in the transcript, and a run
   // resolves the chat's model again when it starts.
   const messageWaiting = yield* Effect.gen(function* () {
-    const selection = yield* Effect.exit(
+    // A typed failure is said here; a defect goes to the reporting below, and
+    // an interruption (the chat closing) goes on unreported.
+    const selection = yield* Effect.result(
       selectCliRunnableModel(
         [{ model: sessionMeta.get().model, reason: options.modelSource }],
         {
@@ -141,12 +143,12 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
         },
       ),
     );
-    if (Exit.isFailure(selection)) {
-      appendLocalErrorTranscript(toErrorMessage(Cause.squash(selection.cause)));
+    if (Result.isFailure(selection)) {
+      appendLocalErrorTranscript(toErrorMessage(selection.failure));
     } else {
-      patchSessionMeta({ model: selection.value.model });
-      yield* setCliHelperModel(stores.globalState, selection.value.model);
-      appendLocalNotice(`Model connected: ${selection.value.model}.`);
+      patchSessionMeta({ model: selection.success.model });
+      yield* setCliHelperModel(stores.globalState, selection.success.model);
+      appendLocalNotice(`Model connected: ${selection.success.model}.`);
     }
     if (setupAgent && chatTuiCanStartRootRun(context.session)) {
       yield* applyInitialCliAgentSelection(setupAgent, context);
@@ -154,15 +156,18 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
     }
   }).pipe(
     Effect.onInterrupt(() => connection.open),
-    Effect.catchCause(reportInTranscript),
+    reportInTranscript,
     Effect.andThen(connection.open),
   );
   if (!messageWaiting && setupAgent) openCliSlashCommandForm('agent');
-}, Effect.catchCause(reportInTranscript));
+}, reportInTranscript);
 
-// Every step already speaks in the transcript; a failure in one does too.
-function reportInTranscript(cause: Cause.Cause<unknown>) {
-  return Effect.sync(() =>
-    appendLocalErrorTranscript(toErrorMessage(Cause.squash(cause))),
-  );
+// Every step already speaks in the transcript; a failure or defect in one does
+// too. An interruption is the chat closing, not a failure, so it goes on.
+function reportInTranscript<A, E, R>(
+  self: Effect.Effect<A, E, R>,
+): Effect.Effect<A | void, never, R> {
+  const report = (error: unknown) =>
+    Effect.sync(() => appendLocalErrorTranscript(toErrorMessage(error)));
+  return self.pipe(Effect.catch(report), Effect.catchDefect(report));
 }

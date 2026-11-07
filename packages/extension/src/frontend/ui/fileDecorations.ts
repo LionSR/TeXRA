@@ -59,8 +59,8 @@ export const registerFileDecorations = Effect.fn('registerFileDecorations')(
     yield* Effect.forkScoped(
       Stream.runForEach(outputFilesProduced(session), (files) =>
         Effect.sync(() => {
-          // Only mark the primary output location. Lineage entries (original,
-          // diffBase) are reference points; marking them would badge the
+          // Only mark the primary output location. Lineage entries (base,
+          // document) are reference points; marking them would badge the
           // source file as "Modified by TeXRA" before the user has actually
           // accepted the workflow output.
           const paths = new Set<string>();
