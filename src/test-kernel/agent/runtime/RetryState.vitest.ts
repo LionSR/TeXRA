@@ -99,7 +99,7 @@ import type { BoundModel } from '@texra-ai/harness/plugins';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
 
-/** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
+/** The gate's base backoff (`RETRY_BACKOFF_MS` in `ModelRetryGate.ts`). */
 const RETRY_BACKOFF_MS = 1000;
 
 /** One macrotask: lets the fiber under test reach its park. */
