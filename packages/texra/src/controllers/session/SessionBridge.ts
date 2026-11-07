@@ -14,10 +14,12 @@
  * framer fiber runs in a scope forked from that one, so closing a port
  * releases its transcript set and tells the host before it interrupts the
  * replay, and closing the bridge closes every port the same way. A request
- * runs in the bridge's scope, not the port's, and uninterruptible: a `stop`
- * or a decision sent just before a tab closes still completes, and closing
- * the bridge drains the requests in flight rather than cutting them; an
- * answer whose port is gone is dropped.
+ * runs in the bridge's set of requests, not the port's scope, so a `stop` or
+ * a decision sent just before a tab closes still completes: closing the
+ * bridge waits for the requests in flight, up to the session's close
+ * deadline, then interrupts what still hangs. A launch answers once its run
+ * is admitted, so nothing here waits for a run to end. An answer whose port
+ * is gone is dropped.
  *
  * A `runtime.request` runs the session's `request` and posts one
  * `Response` under the request's id; a `host.request` runs the host's
@@ -32,6 +34,7 @@ import {
   Effect,
   Exit,
   FiberHandle,
+  FiberSet,
   Result,
   Schema,
   Scope,
@@ -44,7 +47,10 @@ import {
   isRequestRefusal,
   type Session,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness/host';
+import {
+  SESSION_CLOSE_DEADLINE_MS,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import {
   Invalid,
   RequestErrorSchema,
@@ -166,10 +172,20 @@ export class SessionBridge {
   static make(
     options: SessionBridgeOptions,
   ): Effect.Effect<SessionBridge, never, Scope.Scope> {
-    return Effect.map(
-      Effect.scope,
-      (scope) => new SessionBridge(options, scope),
-    );
+    return Effect.gen(function* () {
+      const scope = yield* Effect.scope;
+      const requests = yield* FiberSet.make<void>();
+      // Added after the set, so it runs first: a close waits for the
+      // requests in flight, up to the session's close deadline, before the
+      // set interrupts what is still running.
+      yield* Effect.addFinalizer(() =>
+        FiberSet.awaitEmpty(requests).pipe(
+          Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+          Effect.asVoid,
+        ),
+      );
+      return new SessionBridge(options, scope, requests);
+    });
   }
 
   /** The session key on every message: the session's storage root. */
@@ -178,9 +194,16 @@ export class SessionBridge {
 
   private readonly options: SessionBridgeOptions;
   private readonly scope: Scope.Scope;
-  private constructor(options: SessionBridgeOptions, scope: Scope.Scope) {
+  /** The requests in flight, which the bridge's close waits for. */
+  private readonly requests: FiberSet.FiberSet<void>;
+  private constructor(
+    options: SessionBridgeOptions,
+    scope: Scope.Scope,
+    requests: FiberSet.FiberSet<void>,
+  ) {
     this.options = options;
     this.scope = scope;
+    this.requests = requests;
     this.key = options.session.roots.storage;
   }
 
@@ -364,8 +387,8 @@ export class SessionBridge {
   }
 
   /**
-   * Run one request's answer in the bridge's scope and post it under the
-   * request id. A handler that died has its cause logged here and the port
+   * Run one request's answer in the bridge's set of requests and post it
+   * under the request id. A handler that died has its cause logged here and the port
    * answered `Internal`, so the sender's latch clears.
    */
   private answer(
@@ -373,7 +396,8 @@ export class SessionBridge {
     requestId: string,
     result: Effect.Effect<Response['result'], never, ProcessServices>,
   ): Effect.Effect<void, never, ProcessServices> {
-    return Effect.forkIn(
+    return FiberSet.run(
+      this.requests,
       result.pipe(
         Effect.catchCause((cause) =>
           Effect.logError(
@@ -389,9 +413,7 @@ export class SessionBridge {
             entry.port.send(response(this.key, requestId, answer));
           }),
         ),
-        Effect.uninterruptible,
       ),
-      this.scope,
     ).pipe(Effect.asVoid);
   }
 }
