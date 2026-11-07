@@ -265,12 +265,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     );
   const config = yield* getRunRecords(runId).readConfig();
   const view = yield* (yield* SessionViewAccess).read([]);
-  const recipe = yield* readRecipeResult(
-    config,
-    result.output,
-    runId,
-    call.env.roots,
-  );
+  const recipe = yield* readRecipeResult(config, runId, call.env.roots);
   return {
     ...executed(
       formatSubagentDelivery(agentName, result, { runId, recipe }),

@@ -15,7 +15,7 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
+type ResolveArgs = Parameters<typeof resolveWorkflowOutput>;
 
 /** `resolveWorkflowOutput`, run at this suite's one Effect boundary. */
 const resolveOutput = (...args: Parameters<typeof resolveWorkflowOutput>) =>
@@ -55,29 +55,28 @@ function workflowResult(
     round?: number;
   }>,
   outcome: RunOutcome = RUN_OUTCOME.COMPLETED,
-): WorkflowResult {
-  return {
-    outcome,
-    output: {
-      response: '',
-      files: [],
-      // A document task's recipe returns its documents.
-      structured: {
-        compileFailures: [],
-        diffs: [],
-        outputs: outputs.map((output) => ({
-          round: output.round ?? 1,
-          relativePath: output.relativePath,
-          absolutePath: output.absolutePath,
-          location: 'runStorage',
-          originalPath: output.originalPath ?? null,
-          added: null,
-          removed: null,
-        })),
-      },
+): [ResolveArgs[2], ResolveArgs[3]] {
+  return [
+    {
+      outcome,
+      output: { response: '', files: [] },
+      runId: TEST_RUN_ID,
     },
-    runId: TEST_RUN_ID,
-  };
+    // What the task's documents row reports.
+    {
+      compileFailures: [],
+      diffs: [],
+      outputs: outputs.map((output) => ({
+        round: output.round ?? 1,
+        relativePath: output.relativePath,
+        absolutePath: output.absolutePath,
+        location: 'runStorage',
+        originalPath: output.originalPath ?? null,
+        added: null,
+        removed: null,
+      })),
+    },
+  ];
 }
 
 describe('CLI workflow output resolution', () => {
@@ -89,7 +88,7 @@ describe('CLI workflow output resolution', () => {
     const result = await resolveOutput(
       undefined,
       'out',
-      workflowResult([
+      ...workflowResult([
         {
           absolutePath: runRoot,
           relativePath: 'r1/main.tex',

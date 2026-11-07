@@ -22,7 +22,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   `withLogChannel`; tests assert on the sink's entries
   (`@test/support/logSinkCapture`). `Debug` entries below the host's
   `MinimumLogLevel` are dropped (the CLI shows them with `--verbose`).
-  `LatexMediaManager`'s `LatexTrace` is the run's product trace, not logging.
+  `LatexMediaManager`'s `AgentTrace` is the run's product trace, not logging.
 
 ## Files
 

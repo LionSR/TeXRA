@@ -3,14 +3,73 @@ import { GREEK_LETTERS } from './constants';
 import { NonRegexRuleSet, RegexRuleSet } from './types';
 import {
   createPatterns,
-  generateDecoratorShortcuts,
-  generateNestedDecoratorShortcuts,
-  generateDifferentialSpacing,
-  generateCommandShortcuts,
-  generateArrowRelationShortcuts,
   generateBackslashFixes,
-  generateLegacyTextCommandNormalization,
-} from './helpers';
+  type PatternDict,
+} from './patterns';
+
+/**
+ * Generate patterns for single-argument commands wrapping one letter, covering
+ * both decorators and math fonts.
+ * Examples:
+ * - \tilde{x} -> \tx
+ * - \hat{H} -> \hH
+ * - \mathcal{X} -> \cX
+ */
+function generateDecoratorShortcuts(
+  decorator: string,
+  letters: string[],
+  prefix: string,
+): PatternDict {
+  return createPatterns(letters, (letter) => [
+    [`\\${decorator}{${letter}}`, `\\${prefix}${letter}`],
+  ]);
+}
+
+/**
+ * Generate patterns for nested decorated variables (like tilde with mathbf)
+ * Examples:
+ * - \tilde{\mathbf{x}} -> \tbx
+ * - \hat{\mathcal{H}} -> \hcH
+ */
+function generateNestedDecoratorShortcuts(
+  outerDecorator: string,
+  innerCommand: string,
+  letters: string[],
+  outerPrefix: string,
+  innerPrefix: string,
+): PatternDict {
+  return createPatterns(letters, (letter) => [
+    [
+      `\\${outerDecorator}{\\${innerCommand}{${letter}}}`,
+      `\\${outerPrefix}${innerPrefix}${letter}`,
+    ],
+  ]);
+}
+
+/**
+ * Generate patterns to normalize legacy font commands like {\rm X}, {\bf X},
+ * or {\cal X}.
+ */
+function generateLegacyTextCommandNormalization(
+  terms: string[],
+  targetCommand: string,
+  variant: string,
+): PatternDict {
+  return createPatterns(terms, (term) => [
+    [`{\\${variant} ${term}}`, `\\${targetCommand}{${term}}`],
+    [`{\\${variant}{${term}}}`, `\\${targetCommand}{${term}}`],
+  ]);
+}
+
+/**
+ * Generate patterns for mapping commands to shorter versions
+ * Examples: \partial -> \der, \nabla -> \na, \alpha -> \al
+ */
+function generateCommandShortcuts(commandMap: PatternDict): PatternDict {
+  return createPatterns(Object.entries(commandMap), ([command, shortcut]) => [
+    [`\\${command}`, `\\${shortcut}`],
+  ]);
+}
 
 // Greek letter shortcut mappings
 const GREEK_LETTER_SHORTCUTS: Record<string, string> = {
@@ -218,7 +277,11 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     // on the non-conflicting '\sS' destination instead of '_\S'/'^\S'.
     '_{\\S}': '_\\sS',
     '^{\\S}': '^\\sS',
-    ...generateDifferentialSpacing(differentialVariables),
+    ...createPatterns(differentialVariables, (variable) => [
+      [` d\\${variable} `, ` d\\${variable}~`],
+      [`\\dd\\${variable}\\,`, `\\dd\\${variable}~`],
+      [`{d\\${variable}}`, `{\\dd\\${variable}}`],
+    ]),
     ...createPatterns(fractionDiffVariables, (variable) => [
       // Handle cases like {dx} -> {\\dd x}
       [`{d${variable}}`, `{\\dd${variable}}`],
@@ -229,7 +292,10 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     ]),
     '\\int d\\': '\\int \\dd\\',
     '\\int \\dd \\bx \\': '\\int \\dd \\bx~ \\',
-    ...generateArrowRelationShortcuts(arrowRelationMap),
+    ...createPatterns(Object.entries(arrowRelationMap), ([arrow, shortcut]) => [
+      [`\\${arrow} `, `\\${shortcut} `],
+      [`\\${arrow}\\`, `\\${shortcut}\\`],
+    ]),
     ...generateCommandShortcuts(calculusCommandMap),
     // Vector variables: \vec{x} -> \vx
     ...generateDecoratorShortcuts('vec', vectorLetters, 'v'),
