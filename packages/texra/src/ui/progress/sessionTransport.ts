@@ -9,7 +9,6 @@
  * else, and the desktop's session channel is its own.
  */
 import {
-  Cause,
   Deferred,
   Effect,
   Exit,
@@ -22,7 +21,6 @@ import {
 } from 'effect';
 
 import {
-  Cancelled,
   Invalid,
   Rejected,
   qualifyAggregateId,
@@ -76,14 +74,15 @@ export interface WebviewTransport {
   open(session: string): WebviewSession;
   /** A new generation over the named transcript aggregates. */
   subscribe(session: WebviewSession, aggregates: Subscribe['aggregates']): void;
-  /** Answered on the matching `response` message of its session; answered
-   *  `Cancelled` when that session closes first or is not open, and
-   *  `Rejected` when `timeoutMs` passes with no response (the host's late
-   *  answer is then dropped). */
+  /** Answered on the matching `response` message of its session. Run it
+   *  with {@link run}: closing the session interrupts it, and an answer that
+   *  arrives after is dropped. */
   request(
     message: Extract<UpMessage, { requestId: string }>,
-    timeoutMs?: number,
-  ): Promise<Response['result']>;
+  ): Effect.Effect<Response['result']>;
+  /** Run `program` as a fiber of the session's scope, so closing the session
+   *  interrupts it; a session that is not open runs nothing. */
+  run(session: string, program: Effect.Effect<void>): void;
   /** A `host.request` finished with the host's outcome, or failed with its
    *  refusal (a session that closes first, or `timeoutMs` passing, is a
    *  refusal too). */
@@ -104,8 +103,8 @@ export interface WebviewTransport {
 interface OpenSession extends WebviewSession {
   readonly graph: WebviewGraph;
   readonly scope: Scope.Closeable;
-  /** This session's requests awaiting their `response`, by request id. The
-   *  session's scope interrupts every one still here when it closes. */
+  /** This session's requests awaiting their `response`, by request id. Each
+   *  waits in a fiber of the session's scope and removes its own entry. */
   readonly pending: Map<string, Deferred.Deferred<Response['result']>>;
   /** The frames the host sent, in arrival order; one fiber of the session's
    *  scope feeds them to the frames service. */
@@ -120,12 +119,6 @@ const DownEnvelopeSchema = Schema.Struct({
   generation: Schema.optional(Schema.Number),
   requestId: Schema.optional(Schema.String),
 });
-
-/** What a request answers when its session closed before the host did. */
-const CANCELLED: Response['result'] = {
-  ok: false,
-  error: new Cancelled(),
-};
 
 export function installWebviewTransport(
   post: (message: UpMessage) => void,
@@ -225,48 +218,45 @@ export function installWebviewTransport(
     runtime.runFork(Scope.close(session.scope, Exit.void));
   };
 
-  const request = (
+  /** One request to the host, waiting for its response; `timeoutMs` turns
+   *  a host that never answers into a `Rejected` (its late answer is then
+   *  dropped). A session closed first interrupts the wait. */
+  const exchange = (
     message: Extract<UpMessage, { requestId: string }>,
     timeoutMs?: number,
-  ): Promise<Response['result']> => {
-    const session = sessions.get(message.session);
-    if (!session) {
-      console.warn(
-        `[progress] cancelled request ${message.requestId}: session ${message.session} is not open`,
-      );
-      return Promise.resolve(CANCELLED);
-    }
-    const settled = Deferred.makeUnsafe<Response['result']>();
-    session.pending.set(message.requestId, settled);
-    post(message);
-    const response =
-      timeoutMs === undefined
-        ? Deferred.await(settled)
-        : Deferred.await(settled).pipe(
-            Effect.timeoutOrElse({
-              duration: timeoutMs,
-              orElse: () =>
-                Effect.sync((): Response['result'] => {
-                  session.pending.delete(message.requestId);
-                  return {
-                    ok: false,
-                    error: new Rejected({
-                      reason: 'The host did not answer in time.',
-                    }),
-                  };
-                }),
-            }),
-          );
-    return runtime.runPromise(
-      response.pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.succeed(CANCELLED)
-            : Effect.failCause(cause),
+  ): Effect.Effect<Response['result']> =>
+    Effect.suspend(() => {
+      const session = sessions.get(message.session);
+      if (!session) return Effect.interrupt;
+      return Effect.acquireUseRelease(
+        Effect.flatMap(Deferred.make<Response['result']>(), (settled) =>
+          Effect.sync(() => {
+            session.pending.set(message.requestId, settled);
+            post(message);
+            return settled;
+          }),
         ),
-      ),
-    );
-  };
+        (settled) =>
+          timeoutMs === undefined
+            ? Deferred.await(settled)
+            : Deferred.await(settled).pipe(
+                Effect.timeoutOrElse({
+                  duration: timeoutMs,
+                  orElse: () =>
+                    Effect.succeed<Response['result']>({
+                      ok: false,
+                      error: new Rejected({
+                        reason: 'The host did not answer in time.',
+                      }),
+                    }),
+                }),
+              ),
+        () =>
+          Effect.sync(() => {
+            session.pending.delete(message.requestId);
+          }),
+      );
+    });
 
   return {
     receive,
@@ -281,18 +271,6 @@ export function installWebviewTransport(
           const scope = yield* Scope.make();
           const graph = yield* WebviewSessions.open(key).pipe(
             Effect.provideService(Scope.Scope, scope),
-          );
-          // Requests the host never answered end with the session: each
-          // caller's promise settles as `Cancelled` rather than leaking.
-          yield* Scope.addFinalizer(
-            scope,
-            Effect.suspend(() => {
-              const open = [...pending.values()];
-              pending.clear();
-              return Effect.forEach(open, Deferred.interrupt, {
-                discard: true,
-              });
-            }),
           );
           const inbox = yield* Queue.unbounded<EventsFrame | HostFrame>();
           yield* Effect.forkIn(
@@ -341,9 +319,15 @@ export function installWebviewTransport(
       );
       post(message);
     },
-    request,
+    request: exchange,
+    run(key, program) {
+      const session = sessions.get(key);
+      if (session) runtime.runFork(Effect.forkIn(program, session.scope));
+    },
+    // The desktop editor's file I/O awaits its answer as a promise; the
+    // session's close rejects it as interrupted.
     async answer(message, timeoutMs) {
-      const result = await request(message, timeoutMs);
+      const result = await runtime.runPromise(exchange(message, timeoutMs));
       if (result.ok) {
         const { outcome } = result;
         // The response's outcome is either side's; a host request is
