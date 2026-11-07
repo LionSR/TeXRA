@@ -10,8 +10,14 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 
 import { layer } from '@effect/vitest';
 import { Effect, Context, Schema } from 'effect';
-import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
-import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
+import {
+  RoundOutputSchema,
+  type RoundOutput,
+} from '@texra/shared/plugins/documentOutputs';
+import {
+  DocumentTaskOptionsSchema,
+  documentsOutputFact,
+} from '@texra/shared/plugins/documents';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { provideCliInvocation, type CliContext } from '@cli/runtime/cliContext';
 import type {
@@ -110,9 +116,9 @@ type WorkflowRunPayload = Extract<
   { ok: true }
 >['result'];
 
-/** Run ids the mocked launch has reported, waiting for the opening row its
- *  real counterpart would have committed. */
-let pendingRunStarts: RunId[] = [];
+/** Runs the mocked launch has reported, waiting for the opening row (and
+ *  the documents row) their real counterpart would have committed. */
+let pendingRunStarts: { runId: RunId; rounds: readonly RoundOutput[] }[] = [];
 
 /**
  * The workflow command's program over the shared happy-path inputs, on the
@@ -139,9 +145,11 @@ function workflowProgram(
         runtime: yield* SessionGraph.runtime,
       }),
     );
-    yield* Effect.forEach(starts, (runId) => seedStartedRun(handle, runId), {
-      discard: true,
-    });
+    yield* Effect.forEach(
+      starts,
+      ({ runId, rounds }) => seedStartedRun(handle, runId, rounds),
+      { discard: true },
+    );
     return yield* nativeRun(context, {
       agent: 'polish',
       inputFiles: ['paper.tex'],
@@ -165,35 +173,53 @@ function runOutputSummary(absolutePath: string, originalPath: string) {
   } as const;
 }
 
+/** The documents row's round that wrote `absolutePath` at `r1/paper.tex`,
+ *  revising `originalPath`. */
+function roundWriting(absolutePath: string, originalPath: string): RoundOutput {
+  return Schema.decodeUnknownSync(RoundOutputSchema)({
+    round: 1,
+    outputs: [
+      {
+        source: 'paper',
+        round: 1,
+        location: {
+          kind: 'runStorage',
+          absolutePath,
+          relativePath: 'r1/paper.tex',
+          runId: 'abc00a',
+        },
+        lineage: {
+          base: { kind: 'external', absolutePath: originalPath },
+          document: null,
+        },
+        diff: null,
+      },
+    ],
+    compile: null,
+    missingOutputs: [],
+    latexdiffs: [],
+    reply: null,
+  });
+}
+
 function workflowRun(
   runId: string,
-  overrides: Partial<
-    Pick<WorkflowRunPayload, 'outcome'> &
-      Pick<DocumentsResult, 'outputs' | 'compileFailures'>
-  > = {},
+  outcome: WorkflowRunPayload['outcome'] = RUN_OUTCOME.COMPLETED,
 ): WorkflowExecuteResult {
-  const { outcome = RUN_OUTCOME.COMPLETED, ...output } = overrides;
   return {
     ok: true,
     result: {
       outcome,
-      output: {
-        response: '',
-        files: [],
-        // A document task's recipe returns its documents.
-        structured: {
-          outputs: [],
-          compileFailures: [],
-          diffs: [],
-          ...output,
-        },
-      },
+      output: { response: '', files: [] },
       runId: Schema.decodeUnknownSync(RunIdSchema)(runId),
     },
   };
 }
 
-function mockWorkflowRun(result: WorkflowExecuteResult): void {
+function mockWorkflowRun(
+  result: WorkflowExecuteResult,
+  rounds: readonly RoundOutput[] = [],
+): void {
   // The finalization runs the command's post-run step on the committed
   // result, as the real skeleton does.
   const implementation = (
@@ -204,7 +230,7 @@ function mockWorkflowRun(result: WorkflowExecuteResult): void {
     result.ok && options.afterRun
       ? Effect.as(options.afterRun(result.result), result)
       : Effect.succeed(result);
-  if (result.ok) pendingRunStarts.push(result.result.runId);
+  if (result.ok) pendingRunStarts.push({ runId: result.result.runId, rounds });
   mocks.executeCliConfig.mockImplementationOnce(implementation);
 }
 
@@ -224,6 +250,7 @@ async function writeGeneratedOutput(root: string): Promise<string> {
 const seedStartedRun = (
   session: Context.Context<SessionServices>,
   runId: RunId,
+  rounds: readonly RoundOutput[],
 ) =>
   Context.get(session, SessionLog).transact([
     {
@@ -234,6 +261,16 @@ const seedStartedRun = (
       parent: null,
       provenance: null,
     },
+    ...(rounds.length === 0
+      ? []
+      : [
+          {
+            type: 'plugin.fact' as const,
+            aggregateId: qualifyAggregateId('run', runId),
+            parent: null,
+            ...documentsOutputFact(rounds),
+          },
+        ]),
   ]);
 
 layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
@@ -289,12 +326,9 @@ layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
               generated,
               path.join(root, 'paper.tex'),
             );
-            mockWorkflowRun(
-              workflowRun('abc00a', {
-                outcome: RUN_OUTCOME.FAILED,
-                outputs: [outputSummary],
-              }),
-            );
+            mockWorkflowRun(workflowRun('abc00a', RUN_OUTCOME.FAILED), [
+              roundWriting(generated, path.join(root, 'paper.tex')),
+            ]);
             const target = path.join(root, 'polished.tex');
             yield* Effect.promise(() => fs.writeFile(target, 'keep-me'));
 

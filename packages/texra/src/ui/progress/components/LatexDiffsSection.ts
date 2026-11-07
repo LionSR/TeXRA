@@ -15,7 +15,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - main view
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
@@ -28,7 +28,7 @@ import {
 } from '@ui/wa/actionButtons';
 import { fileSelectLayoutStyles } from '../fileSelectStyles';
 
-type LatexDiffsAction = Extract<HostRequest, { kind: 'latexdiffs' }>['action'];
+type LatexDiffsAction = Extract<HostCommand, { kind: 'latexdiffs' }>['action'];
 
 /** A labeled diff operation button rendered inside a wa-button-group. */
 interface DiffActionSpec {

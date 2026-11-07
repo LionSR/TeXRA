@@ -62,7 +62,7 @@ import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type {
   GettingStartedAction,
-  HostRequest,
+  HostCommand,
 } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { HostFailed } from '@texra/hosts/uiHosts';
@@ -81,12 +81,12 @@ import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostArms,
-  SharedHostRequestBindings,
+  SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
 import {
-  type HostRequestFailure,
+  type HostCommandFailure,
   type RequestRefusal,
 } from '@texra/controllers/session/hostCallFailure';
 
@@ -125,8 +125,8 @@ interface ExtensionHostRequestsOptions {
    *  read as that run starts. */
   launcher(): HostRunActions['runValidated'];
   /** The placement commands the sidebar and the editor tab share. */
-  popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
-  showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
+  popOutToEditor(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
+  showInSidebar(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
@@ -240,7 +240,7 @@ export const createExtensionHostRequests = Effect.fn(
 
   /** The editor's current file into a launcher field. */
   const useCurrentFile = Effect.fn('useCurrentFile')(function* (
-    request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
+    request: Extract<HostCommand, { kind: 'useCurrentFile' }>,
   ) {
     const currentOpenFile = yield* getCurrentFile(roots);
     if (!currentOpenFile) {
@@ -329,7 +329,7 @@ export const createExtensionHostRequests = Effect.fn(
 
   /** This host's half of the shared body's binding table: every verb mapped
    *  onto a VS Code command, an editor API, or the sidebar. */
-  const bindings: SharedHostRequestBindings = {
+  const bindings: SharedHostCommandBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
     // The picker reports its own failures where they happen and answers
     // `null`, as it does for a cancel.

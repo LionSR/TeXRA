@@ -156,7 +156,8 @@
     "packages/texra/src/**/*.ts",
     "packages/texra/src/**/*.tsx",
     "packages/extension/src/**/*.ts",
-    "packages/extension/src/**/*.tsx"
+    "packages/extension/src/**/*.tsx",
+    "oxlint.config.mts"
   ],
   "exclude": ["node_modules", "src/test-kernel"]
 }

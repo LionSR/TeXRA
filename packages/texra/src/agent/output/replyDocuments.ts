@@ -365,11 +365,7 @@ export const ensureCorrectXmlStructure = Effect.fn(
   const originalContent = (yield* fs.readFileString(
     fileLocation.absolutePath,
   )).replaceAll('\r\n', '\n');
-  const replaced = replacementEngine.applyFor(
-    originalContent,
-    'xml-content',
-    config,
-  );
+  const replaced = replacementEngine.applyToXmlContent(originalContent, config);
   yield* logReplacementDiagnostics(replaced.diagnostics);
   let content = replaced.text;
 

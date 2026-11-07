@@ -139,7 +139,7 @@ Each entry's exports, with their TSDoc and declarations, are listed in
 The protocols (`api/`), the prefix fingerprint and the upload cache are
 internal: `bindModel` loads the chosen protocol with a literal
 `import('./api/<protocol>.js')`, so a run loads only its provider's SDK.
-oxlint holds the rest (`.oxlintrc.json`): nothing under `src/` imports another repo module, and
+oxlint holds the rest (`oxlint.config.mts`): nothing under `src/` imports another repo module, and
 outside `api/`, `oauth/` and `node.ts` nothing imports a Node built-in or a
 vendor SDK.
 

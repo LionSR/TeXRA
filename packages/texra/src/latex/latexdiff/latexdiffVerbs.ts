@@ -32,7 +32,7 @@ import {
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
 import type { MessageHost } from '@texra/hosts/uiHosts';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
@@ -42,18 +42,18 @@ import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConf
 import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import { latexdiffPairs } from './diffOperations';
-import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
+import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
 type LatexdiffCommitAction = Extract<
-  Extract<HostRequest, { kind: 'latexdiffs' }>['action'],
+  Extract<HostCommand, { kind: 'latexdiffs' }>['action'],
   'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc'
 >;
 
 /** A host verb, run on the fiber of the window's request dispatch. */
 type LatexdiffVerb<A> = Effect.Effect<
   A,
-  HostRequestFailure,
+  HostCommandFailure,
   ProcessServices | StorageFs | WorkspaceFs
 >;
 
@@ -90,7 +90,7 @@ export function latexdiffVerbs(parts: {
 
   /** A notice the request does not wait on: a VS Code toast answers only
    *  when it is dismissed. */
-  const notify = (notice: Effect.Effect<void, HostRequestFailure>) =>
+  const notify = (notice: Effect.Effect<void, HostCommandFailure>) =>
     Effect.forkDetach(
       notice.pipe(
         Effect.catch((cause) =>

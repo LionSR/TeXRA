@@ -26,7 +26,7 @@ import {
   binaryIfPresent,
   createCachedBinaryResolver,
   importForeignSdk,
-} from '@texra/tools/support/externalBinaryUtils';
+} from './vendorPackages';
 
 // ---------------------------------------------------------------------------
 // SDK import

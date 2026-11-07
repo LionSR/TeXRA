@@ -43,7 +43,7 @@ import {
   Unavailable,
   type Outcome,
   type RequestError,
-  type RuntimeRequest,
+  type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -85,7 +85,7 @@ interface SessionRequestsInit {
 }
 
 /** The run action a request performs, where the run's `actions` gates it. */
-const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
+const GATED_ACTIONS: Partial<Record<RuntimeCommand['kind'], RunAction>> = {
   'run.delete': 'delete',
   'run.compact': 'compact',
   'run.rename': 'rename',
@@ -105,7 +105,7 @@ interface RequestDeps extends SessionRequestsInit {
  *  folded yet is left to `admit`. */
 const requireRunAction = (
   deps: RequestDeps,
-  req: RuntimeRequest,
+  req: RuntimeCommand,
 ): Effect.Effect<void, RequestError> => {
   let action = GATED_ACTIONS[req.kind];
   if (req.kind === 'policy.set' && narrows(req.change)) action = undefined;
@@ -121,7 +121,7 @@ const requireRunAction = (
 /** Admit on current sequence rows: the run exists and is open. */
 const admit = (
   deps: RequestDeps,
-  req: RuntimeRequest,
+  req: RuntimeCommand,
 ): Effect.Effect<AggregateState, RequestError> => {
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   return Effect.flatMap(
@@ -144,7 +144,7 @@ const admit = (
 /** The user's title: the run's `run.description` row. */
 const rename = (
   deps: RequestDeps,
-  req: Extract<RuntimeRequest, { kind: 'run.rename' }>,
+  req: Extract<RuntimeCommand, { kind: 'run.rename' }>,
 ): Effect.Effect<Outcome, RequestError> =>
   deps.sessionLog.transact([descriptionRow(req.runId, req.title, 'user')]).pipe(
     Effect.mapError(
@@ -164,7 +164,7 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
 
 const decideSurfaceRequest = (
   deps: RequestDeps,
-  req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
+  req: Extract<RuntimeCommand, { kind: 'request.decide' }>,
   heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError, GlobalValues | SessionServices> => {
   const answer = Effect.fn('answer')(function* <R>(
@@ -223,7 +223,7 @@ const decideSurfaceRequest = (
  *  input holds it. */
 const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
   deps: RequestDeps,
-  req: Extract<RuntimeRequest, { kind: `run.${'compact' | 'model'}` }>,
+  req: Extract<RuntimeCommand, { kind: `run.${'compact' | 'model'}` }>,
   runs: RunRegistry,
 ): Effect.fn.Return<Outcome, RequestError, Inbox> {
   const { runId } = req;
@@ -249,7 +249,7 @@ const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
 
 const handle = (
   deps: RequestDeps,
-  req: Exclude<RuntimeRequest, { kind: 'run.stop' | `followUp.${string}` }>,
+  req: Exclude<RuntimeCommand, { kind: 'run.stop' | `followUp.${string}` }>,
   admitted: AggregateState,
   heldHere: boolean,
   runs: RunRegistry,
@@ -296,7 +296,7 @@ export function sessionRequests(
 ): SessionRequestsShape {
   const deps: RequestDeps = { ...init, decisionLanes: new Map() };
   const request = Effect.fn('SessionRequests.request')(function* (
-    req: RuntimeRequest,
+    req: RuntimeCommand,
   ) {
     // A message skips `admit`: `submitFollowUp` refuses on the run's rows
     // and keeps its run's sends in order, its media read included; a

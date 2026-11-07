@@ -24,7 +24,7 @@ import { toErrorMessage, type PendingRequest } from '@texra-ai/harness/schemas';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { readToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
 import {
   ApiKeyPromptFailed,
@@ -117,7 +117,7 @@ export function createTuiHostInteractions(
    * the user picks again.
    */
   const useOwnApiKey = (
-    request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
+    request: Extract<HostCommand, { kind: 'useOwnApiKey' }>,
   ): void => {
     const { runId, requestId } = request;
     stores.runtime.runFork(
@@ -154,7 +154,7 @@ export function createTuiHostInteractions(
     );
   };
 
-  const performHostCapability = (arm: HostRequest): void => {
+  const performHostCapability = (arm: HostCommand): void => {
     if (arm.kind === 'useOwnApiKey') {
       useOwnApiKey(arm);
       return;

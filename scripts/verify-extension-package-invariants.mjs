@@ -8,7 +8,6 @@ import {
   REQUIRED_PACKAGED_PATHS,
   reportCheckFailures,
 } from './extension-package-utils.mjs';
-import { walkFiles } from './walkFiles.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -85,7 +84,9 @@ function isBuildTimePackagedPath(relativePath) {
 function hasFiles(relativeDir) {
   const absoluteDir = path.join(packageDir, relativeDir);
   if (!fs.existsSync(absoluteDir)) return false;
-  return walkFiles(absoluteDir, { limit: 1 }).length > 0;
+  return fs
+    .readdirSync(absoluteDir, { recursive: true, withFileTypes: true })
+    .some((entry) => entry.isFile());
 }
 
 function verifyAssets(packageJson, failures) {

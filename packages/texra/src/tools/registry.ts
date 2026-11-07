@@ -154,7 +154,7 @@ export type TexraPlugin = Plugin & {
  *  replacement rules of the call's workspace. */
 const texWriteFilter: WriteFilter = (path, content, config) => {
   if (!isTexFile(path)) return Effect.succeed(content);
-  const replaced = replacementEngine.applyFor(content, 'tex-write', config);
+  const replaced = replacementEngine.applyToTexWrite(content, config);
   return logReplacementDiagnostics(replaced.diagnostics).pipe(
     Effect.as(replaced.text),
   );

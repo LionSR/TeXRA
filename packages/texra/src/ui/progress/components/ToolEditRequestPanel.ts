@@ -24,7 +24,7 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - styles
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
-import type { RuntimeRequest } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
@@ -48,7 +48,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
    * stays the runtime arm it is; a host without a diff view (the TUI)
    * decides from the payload alone and never reaches this override.
    */
-  protected override emitRuntimeArm(runtime: RuntimeRequest): void {
+  protected override emitRuntimeArm(runtime: RuntimeCommand): void {
     if (
       runtime.kind === 'request.decide' &&
       runtime.decision.action === 'approve'

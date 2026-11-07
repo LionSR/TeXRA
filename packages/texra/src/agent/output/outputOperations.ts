@@ -3,16 +3,11 @@ import { Effect } from 'effect';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 
-/** Trace levels that the output managers use for recoverable failures. */
-type OutputLogLevel = 'error' | 'warn';
-
 interface RecoverOptions<T, R> {
-  /** Trace used for the failure line. */
+  /** Trace used for the warning. */
   logger: AgentTrace;
-  /** Trace level for the failure line (mirrors each call site's prior level). */
-  level: OutputLogLevel;
   /**
-   * Prefix for the failure line. The resolved error message is appended as
+   * Prefix for the warning. The resolved error message is appended as
    * `${label}: ${toErrorMessage(err)}`.
    */
   label: string;
@@ -21,9 +16,9 @@ interface RecoverOptions<T, R> {
 }
 
 /**
- * Shared `run → log → recover` combinator for the output pipeline. A
- * **typed** failure of `effect` is logged on the transcript as
- * `${label}: ${message}` at `level`, then replaced by the caller's fallback —
+ * Shared `run → warn → recover` combinator for an optional step of the output
+ * pipeline. A **typed** failure of `effect` is logged on the transcript as a
+ * warning, `${label}: ${message}`, then replaced by the caller's fallback —
  * the fallback is loud by construction, never silent.
  *
  * Defects and interruption deliberately pass straight through: a bug in this
@@ -38,9 +33,7 @@ export const recoverOutputFailure =
   ): Effect.Effect<A | T, never, R | R2> =>
     Effect.catch(effect, (error: E) =>
       Effect.suspend(() => {
-        options.logger[options.level](
-          `${options.label}: ${toErrorMessage(error)}`,
-        );
+        options.logger.warn(`${options.label}: ${toErrorMessage(error)}`);
         return options.recover(error);
       }),
     );

@@ -18,7 +18,7 @@ import {
 } from '@texra/shared/state/PersistedState';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 import type { WebviewTransport } from '@ui/progress/sessionTransport';
-import type { RuntimeRequest } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 import { Rejected } from '@texra-ai/harness/schemas';
 
 const transport = vi.hoisted(() => ({
@@ -131,7 +131,7 @@ describe('session Surface ownership', () => {
       runId: ROOT,
       patch: { images: [image] },
     });
-    const request: Extract<RuntimeRequest, { kind: 'followUp.send' }> = {
+    const request: Extract<RuntimeCommand, { kind: 'followUp.send' }> = {
       kind: 'followUp.send',
       runId: ROOT,
       text: 'Saved text',

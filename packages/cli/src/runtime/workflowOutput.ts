@@ -19,11 +19,11 @@ import {
   type CliRunResult,
   type CliWorkflowRunResult,
 } from '@cli/schemas/cliOutput';
-import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
+import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import {
-  documentsResultOf,
-  finalWorkflowOutput,
+  finalDocumentOutput,
+  type DocumentsResult,
   type OutputFileSummary,
 } from '@texra/shared/plugins/documentOutputs';
 
@@ -198,7 +198,7 @@ function outputCopyRelativePathForExpectedOutput(
   expectedRelativePaths: readonly string[],
 ): string {
   const generatedRelativePath = getSafeDocumentRelativePath(
-    stripWorkflowRoundDir(
+    stripRevisionDir(
       toPosixPath(output.relativePath || path.basename(output.absolutePath)),
     ),
   );
@@ -296,24 +296,19 @@ export const resolveWorkflowOutput = Effect.fn('resolveWorkflowOutput')(
     outputFile: string | undefined,
     outputDir: string | undefined,
     result: CliRunResult,
+    /** What the run's documents row reports; none for a task that ended
+     *  before it extracted any. */
+    reported: DocumentsResult | undefined,
     context: CliContext,
     options: WorkflowOutputResolutionOptions,
   ): Effect.fn.Return<CliWorkflowRunResult, Error, FileSystem.FileSystem> {
-    // A document task's recipe returns its documents, diffs included: its
-    // run's `structured` value, which the CLI's result names `documents`.
-    const { structured, ...output } = result.output;
-    // A task that failed or stopped before it proposed returned none: it
-    // reports its own outcome with no documents. A completed one without
-    // them is a defect.
-    const documents =
-      documentsResultOf(structured) ??
-      (result.outcome === RUN_OUTCOME.COMPLETED
-        ? yield* Effect.die(
-            new Error(
-              `Document task ${result.runId} ended without its documents.`,
-            ),
-          )
-        : { outputs: [], compileFailures: [], diffs: [] });
+    // A recipe returns no value: its documents are its documents row.
+    const { structured: _none, ...output } = result.output;
+    const documents = reported ?? {
+      outputs: [],
+      compileFailures: [],
+      diffs: [],
+    };
     const { runDirectory } = new RunFileService(result.runId, {
       storage: options.storageRoot,
       workspace: undefined,
@@ -382,7 +377,7 @@ export const resolveWorkflowOutput = Effect.fn('resolveWorkflowOutput')(
       return { ...baseResult, copiedOutputs };
     }
 
-    const finalOutput = finalWorkflowOutput(documents.outputs);
+    const finalOutput = finalDocumentOutput(documents.outputs);
     if (!outputFile || !finalOutput) {
       return baseResult;
     }
@@ -422,7 +417,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
     return result.copiedOutput;
   }
 
-  const finalOutput = finalWorkflowOutput(result.output.documents.outputs);
+  const finalOutput = finalDocumentOutput(result.output.documents.outputs);
   return finalOutput?.absolutePath ?? result.runDirectory;
 }
 

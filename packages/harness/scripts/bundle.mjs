@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { codeSandboxWorker } from '../../../scripts/code-sandbox-worker.mjs';
+import { harnessBundleOptions } from '../../../scripts/code-sandbox-worker.mjs';
 
 const packageRoot = new URL('..', import.meta.url);
 const manifest = JSON.parse(
@@ -19,10 +19,11 @@ const entryPoints = Object.fromEntries(
     ]),
 );
 const quickJsWasmSpecifier = '@jitl/quickjs-wasmfile-release-sync/wasm';
+const base = harnessBundleOptions();
 
 await build({
+  ...base,
   absWorkingDir: fileURLToPath(packageRoot),
-  bundle: true,
   entryPoints,
   format: 'esm',
   logLevel: 'info',
@@ -41,11 +42,8 @@ await build({
         );
       },
     },
-    codeSandboxWorker,
+    ...base.plugins,
   ],
-  loader: {
-    '.wasm': 'binary',
-  },
   sourcemap: false,
   splitting: true,
   target: 'es2022',

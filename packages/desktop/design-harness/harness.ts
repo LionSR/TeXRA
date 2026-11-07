@@ -1,6 +1,6 @@
 // Design harness: renders the proposed shell layouts with the real TeXRA
 // components (run-tabs, run-header, follow-up-input) and Web Awesome
-// controls on fixture data. Untracked; screenshots feed the design canvas.
+// controls on fixture data. Its screenshots (shoot.mjs) feed the design canvas.
 import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 import '../src/renderer/styles.css';
@@ -158,6 +158,8 @@ const scenes: Record<string, () => TemplateResult> = {
   ...desktopScenes,
   ...settingsScenes,
 };
+// shoot.mjs reads the scene list from here.
+document.documentElement.dataset.scenes = Object.keys(scenes).join(',');
 const scene =
   new URLSearchParams(location.search).get('scene') ?? 'ext-session';
 render(

@@ -47,11 +47,11 @@ import {
   type RunId,
   type ToolEditContent,
   type ToolEditRequest,
-  type RuntimeRequest,
+  type RuntimeCommand,
 } from '@texra-ai/harness/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
   previewProposedLatex,
   runLatexdiff,
@@ -59,7 +59,7 @@ import {
   type LatexPreviewEntry,
 } from '@texra/tools/latex/latexPreview';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
+import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -69,9 +69,9 @@ const CHANNEL = 'ToolEditApproval';
  * once, where it forks {@link ToolEditApprovalController.follow}.
  */
 type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
-type PreviewCall<A> = Effect.Effect<A, HostRequestFailure, PreviewServices>;
+type PreviewCall<A> = Effect.Effect<A, HostCommandFailure, PreviewServices>;
 /** An approval's session bypass, sent with its `request.decide`. */
-type Grant = Extract<HostRequest, { kind: 'toolEdit' }>['grant'];
+type Grant = Extract<HostCommand, { kind: 'toolEdit' }>['grant'];
 
 /** What a tool edit's prompt shows: the session's preview of the edit, or
  *  why there is none. No surface stands an empty diff in for a missing
@@ -89,7 +89,7 @@ export type ToolEditPreviewRead =
 export function readToolEditPreview(
   session: {
     readonly request: (
-      request: Extract<RuntimeRequest, { kind: 'request.preview' }>,
+      request: Extract<RuntimeCommand, { kind: 'request.preview' }>,
     ) => Effect.Effect<OutcomeOf<'request.preview'>, Error>;
   },
   runId: RunId,
@@ -211,7 +211,7 @@ export class ToolEditApprovalController {
 
   handleAction(
     payload: Pick<
-      Extract<HostRequest, { kind: 'toolEdit' }>,
+      Extract<HostCommand, { kind: 'toolEdit' }>,
       'requestId' | 'action' | 'grant'
     >,
   ): Effect.Effect<void, never, PreviewServices> {
@@ -272,7 +272,7 @@ export class ToolEditApprovalController {
    *  until its scope closes. */
   private stage(
     pending: PendingToolEdit,
-  ): Effect.Effect<never, HostRequestFailure, PreviewServices | Scope.Scope> {
+  ): Effect.Effect<never, HostCommandFailure, PreviewServices | Scope.Scope> {
     const { session, host, roots } = this.options;
     const { runId, requestId } = pending;
     return Effect.gen({ self: this }, function* () {
@@ -391,7 +391,7 @@ export class ToolEditApprovalController {
     pending: PendingRequest,
     grant?: Grant,
     content?: string,
-  ): Effect.Effect<void, HostRequestFailure> {
+  ): Effect.Effect<void, HostCommandFailure> {
     const { runId, requestId } = pending;
     return this.options.session
       .request({

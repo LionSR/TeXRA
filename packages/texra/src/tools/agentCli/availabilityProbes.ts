@@ -98,7 +98,7 @@ export const probeSdkBinaryStatus = Effect.fn('probeSdkBinaryStatus')(
  *
  * `win32` takes precedence over any package manager: a global npm install
  * leaves only shell shims on Windows, which TeXRA cannot spawn (see
- * support/externalBinaryUtils.ts), so a CLI with a Windows installer uses it.
+ * vendorPackages.ts), so a CLI with a Windows installer uses it.
  *
  * Only managers this command map names are probed, so a Linux box with both
  * apt and Linuxbrew still gets the brew command rather than npm.

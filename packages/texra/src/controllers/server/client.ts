@@ -35,7 +35,7 @@ import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 import { isOutcomeOf } from '@texra-ai/harness';
 import {
   ensureError,
-  type RuntimeRequest,
+  type RuntimeCommand,
   Rejected,
 } from '@texra-ai/harness/schemas';
 import { nodeFileServices } from '@texra-ai/harness/node';
@@ -81,7 +81,7 @@ export const environmentApiKeys = (): Readonly<Record<string, string>> =>
  * run resumes with if the message wakes it. An answer of another kind (a
  * service from another build) is `Rejected`.
  */
-export const requestOnService = <R extends RuntimeRequest>(
+export const requestOnService = <R extends RuntimeCommand>(
   client: ServiceClient,
   workspace: string,
   request: R,

@@ -1,0 +1,47 @@
+name: Release channel
+description: >-
+  Check that a release tag names its manifest's version and that the GitHub
+  pre-release flag agrees with the version's form, and choose the channel the
+  release publishes to. Any mismatch fails the step before anything publishes.
+
+inputs:
+  manifest:
+    description: The package.json whose version the release publishes.
+    required: true
+  tag-prefix:
+    description: What the release tag puts before the version (`v`, `cli-v`, `sdk-v`).
+    required: true
+  tag:
+    description: The release tag.
+    default: ${{ github.event.release.tag_name }}
+  prerelease:
+    description: Whether the GitHub release is marked pre-release (`true` or `false`).
+    default: ${{ github.event.release.prerelease }}
+
+outputs:
+  channel:
+    description: '`stable` for X.Y.Z, `preview` for X.Y.Z-preview.N.'
+    value: ${{ steps.channel.outputs.channel }}
+  npm_tag:
+    description: '`latest` for X.Y.Z, `preview` for X.Y.Z-preview.N.'
+    value: ${{ steps.channel.outputs.npm_tag }}
+  marketplace_version:
+    description: >-
+      For a `v` tag, the version the VS Code Marketplace publishes: X.Y.Z for a
+      stable version, X.(Y+1).N for X.Y.0-preview.N.
+    value: ${{ steps.channel.outputs.marketplace_version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the release and resolve its channel
+      id: channel
+      shell: bash
+      env:
+        MANIFEST: ${{ inputs.manifest }}
+        TAG_PREFIX: ${{ inputs.tag-prefix }}
+        RELEASE_TAG: ${{ inputs.tag }}
+        RELEASE_IS_PRERELEASE: ${{ inputs.prerelease }}
+      run: >-
+        node scripts/release-version.mjs --tag "$RELEASE_TAG" --prefix "$TAG_PREFIX"
+        --manifest "$MANIFEST" --prerelease "$RELEASE_IS_PRERELEASE"

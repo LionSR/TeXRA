@@ -17,7 +17,7 @@
  */
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
@@ -25,11 +25,7 @@ import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { pluralize } from '@texra-ai/harness/schemas';
 
 // Local file imports
-import {
-  callZoteroConnector,
-  checkZoteroRunning,
-  type ConnectorResult,
-} from './bbtClient';
+import { callZoteroConnector, checkZoteroRunning } from './bbtClient';
 
 /**
  * Schema for a single item to add to Zotero.
@@ -188,14 +184,21 @@ const addItem = Effect.fn('ZoteroAddTool.addItem')(function* (
   const hasMetadata = Object.values(metadata).some((value) =>
     Array.isArray(value) ? value.length > 0 : Boolean(value),
   );
-  const result: ConnectorResult =
+  const saved = yield* Effect.result(
     url && !hasMetadata
-      ? yield* callZoteroConnector('saveSnapshot', { url, ...collectionBody })
-      : yield* callZoteroConnector('saveItems', {
+      ? callZoteroConnector('saveSnapshot', { url, ...collectionBody })
+      : callZoteroConnector('saveItems', {
           items: [toZoteroItem(item)],
           ...collectionBody,
-        });
-  return { item: itemLabel, ...result };
+        }),
+  );
+  return Result.isSuccess(saved)
+    ? { item: itemLabel, status: 'success' as const }
+    : {
+        item: itemLabel,
+        status: 'error' as const,
+        message: saved.failure.message,
+      };
 });
 
 const addItems = Effect.fn('ZoteroAddTool.execute')(function* ({

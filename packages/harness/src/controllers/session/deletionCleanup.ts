@@ -39,7 +39,7 @@ import {
   type RequestError,
   type OutcomeOf,
   type RunFilesResult,
-  type RuntimeRequest,
+  type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionViewAccess } from '@shared/session/runHistory';
@@ -271,7 +271,7 @@ export const deleteAdmittedRun = (
  */
 export const runFiles = Effect.fn('runFiles')(function* (
   runs: InactiveRunStep,
-  req: Extract<RuntimeRequest, { kind: 'run.files' }>,
+  req: Extract<RuntimeCommand, { kind: 'run.files' }>,
 ): Effect.fn.Return<
   OutcomeOf<'run.files'>,
   RequestError,

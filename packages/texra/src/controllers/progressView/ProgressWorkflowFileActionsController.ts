@@ -19,18 +19,18 @@ import {
   type RunId,
   Rejected,
 } from '@texra-ai/harness/schemas';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
-import { revisionLayout } from '@texra/shared/constants/workflowOutput';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
+import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import type { AppSignals, ProcessServices } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
 import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
-import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
+import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
 
 /**
  * One file action. Its failure channel is the host's own vocabulary: every
- * host answers a request with a tag ({@link HostRequestFailure}), so a
+ * host answers a request with a tag ({@link HostCommandFailure}), so a
  * refusal a host already worded — the desktop error notice is one — travels
  * as itself and no case re-enters a runtime to finish this. It runs on the
  * process `FileSystem` its run-storage reads take, and an accept announces
@@ -39,11 +39,11 @@ const CHANNEL = 'ProgressWorkflowFileActions';
  */
 type FileAction<A> = Effect.Effect<
   A,
-  HostRequestFailure,
+  HostCommandFailure,
   FileSystem.FileSystem | AppSignals | ProcessServices
 >;
 
-type FileActionRequest = Extract<HostRequest, { kind: 'fileAction' }>;
+type FileActionRequest = Extract<HostCommand, { kind: 'fileAction' }>;
 
 /** The workflow toolbar's file verbs a host performs. */
 export interface ProgressWorkflowFileActionsHost {
@@ -54,9 +54,9 @@ export interface ProgressWorkflowFileActionsHost {
     title: string,
   ): FileAction<void>;
   /** Ask to write an accepted file; false when the user declines. */
-  confirmAccept(message: string): Effect.Effect<boolean, HostRequestFailure>;
+  confirmAccept(message: string): Effect.Effect<boolean, HostCommandFailure>;
   openDirectory(directory: string): FileAction<void>;
-  showInfo(message: string): Effect.Effect<void, HostRequestFailure>;
+  showInfo(message: string): Effect.Effect<void, HostCommandFailure>;
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {

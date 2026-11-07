@@ -47,7 +47,7 @@ import {
   withLogChannel,
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   DownMessageSchema,
@@ -65,7 +65,7 @@ import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import {
   isRequestRefusal,
-  type HostRequestFailure,
+  type HostCommandFailure,
 } from '@texra/controllers/session/hostCallFailure';
 import {
   Internal,
@@ -95,15 +95,15 @@ interface SessionBridgeOptions {
    *  the host's transport runs `receive` on. A handler cancels with
    *  `Cancelled` or refuses with `Unavailable` or `Rejected`; anything else
    *  it fails or dies with is a defect, logged here and answered
-   *  `Internal`. The channel is {@link HostRequestFailure}: each host lifts
+   *  `Internal`. The channel is {@link HostCommandFailure}: each host lifts
    *  a Promise-faced capability once, under the member's name, so every case
    *  fails with a tag and a bare rejection value can no longer reach this
    *  channel. The last case that widened it to `Error` was the transcript
    *  export; its steps carry tags now. */
-  readonly handleHostRequest: (
-    request: HostRequest,
+  readonly handleHostCommand: (
+    request: HostCommand,
     port: string,
-  ) => Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
+  ) => Effect.Effect<HostOutcome, HostCommandFailure, ProcessServices>;
 }
 
 /** One attached transport port: the host posts `send`'s messages to it. */
@@ -387,7 +387,7 @@ export class SessionBridge {
               requestId: up.requestId,
               result,
             }),
-            this.options.handleHostRequest(up.request, port.id).pipe(
+            this.options.handleHostCommand(up.request, port.id).pipe(
               Effect.matchEffect({
                 onFailure: (error) =>
                   isRequestRefusal(error)
