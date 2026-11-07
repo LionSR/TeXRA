@@ -1001,7 +1001,7 @@ function applyTranscriptRow(u: Update, event: DisplayRow): boolean {
     event,
     {
       debug: u.view.debug,
-      lifecycleToTaskGroups: isPlainAgentIdentity(run.identity),
+      lifecycleStages: isPlainAgentIdentity(run.identity),
       runLabels: u.view.runs,
     },
   );
@@ -1077,7 +1077,7 @@ function applyLocal(u: Update, local: LocalRuntimeState): void {
 /**
  * The transcript subscription set: an aggregate entering it gets its
  * `transcriptSeq` entry at the seq the subscription names; one leaving it
- * loses its transcript (rows, task groups, compactions, live text) and its
+ * loses its transcript (rows, stages, compactions, live text) and its
  * entry, keeping every listing fact.
  */
 function applySubscriptions(

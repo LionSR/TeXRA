@@ -37,7 +37,7 @@ describe('round-dir ownership', () => {
     // The file service takes the roots it works under as a value.
     const { roots } = createFakeHost(
       {
-        workspacePath: workspaceDir,
+        workspaceRoot: workspaceDir,
         storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
         globalStoragePath: resolveGlobalStoragePath(storageRoot),
       },

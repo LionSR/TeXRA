@@ -19,7 +19,7 @@ import { Effect, Layer, Option, Predicate, Schema, Stream } from 'effect';
 import { GlobalValues } from '@texra-ai/harness/host';
 import { nodePlatformServices } from '@texra-ai/harness/node';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
-import { globalDatabaseLayer } from '@controllers/session/Database';
+import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';

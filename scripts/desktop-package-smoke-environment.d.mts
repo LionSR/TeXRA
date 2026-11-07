@@ -9,7 +9,7 @@ export function buildDesktopSmokeEnvironment(
 ): NodeJS.ProcessEnv;
 
 export type DatabaseFixture = Pick<
-  typeof import('@controllers/session/Database'),
+  typeof import('@controllers/session/databaseLayer'),
   'databaseLayer' | 'globalDatabaseLayer'
 > &
   Pick<typeof import('@controllers/session/WorkspaceRoots'), 'WorkspaceRoots'> &
@@ -45,5 +45,5 @@ export function loadDatabaseFixture(
 ): Promise<DatabaseFixture>;
 export function rememberOpenProject(
   userDataPath: string,
-  workspacePath: string,
+  workspaceRoot: string,
 ): Promise<void>;

@@ -45,7 +45,7 @@ import type {
 } from '@shared/session/sessionLog';
 
 import { makeRunTrace } from './runTrace';
-import { SessionViewService } from './SessionView';
+import { SessionViewService } from './sessionViewService';
 import { TextChunkSource } from './sessionSources';
 
 /** What the session layer composes a session from, beside the handle. The

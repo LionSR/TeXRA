@@ -48,7 +48,7 @@ const TextPartSchema = Schema.Struct({
  * `digest` is the session store's blob address of the part's base64 text
  * (`blobAddress` in `@utils/core/idHash`): every reader of the history sees
  * the address, and only the invocation resolves it, right before the
- * provider call (`agent/runtime/storedTurn.ts`).
+ * provider call (`agent/runtime/providerMessages.ts`).
  */
 const MediaAddress = {
   mimeType: Schema.String.check(Schema.isMinLength(1)),

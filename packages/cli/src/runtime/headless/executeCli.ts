@@ -219,7 +219,7 @@ export const executeCliConfig: (
     const presentationScope = yield* Scope.make();
     yield* Scope.addFinalizer(presentationScope, presentationHost.close());
     let failurePresented = false;
-    const renderWorkflowPlainProgress =
+    const renderPlainProgress =
       runContext.outputFormat === 'text' && runContext.renderRunProgress;
     yield* presentationHost
       .attachRunProgressRenderer(session, request.runId)
@@ -261,7 +261,7 @@ export const executeCliConfig: (
         yield* attachCliSessionProgressProjection(session),
       );
     }
-    if (renderWorkflowPlainProgress) {
+    if (renderPlainProgress) {
       yield* attachScriptPlainOutput(session, {
         runId: request.runId,
         beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
@@ -285,7 +285,7 @@ export const executeCliConfig: (
     // Whether a shutdown reached this run: its finalization then reads
     // whether the stopped run can be resumed, once its end is committed.
     let shutdown = false;
-    const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
+    const finalized = yield* Deferred.make<void>();
     const stopThroughSession = session
       .request({
         kind: 'run.stop',
@@ -301,69 +301,46 @@ export const executeCliConfig: (
           ),
         ),
       );
-    // Set as the session's acceptance opens the wait for the run's end,
-    // inside that wait's uninterruptible region: an interrupt that landed
-    // before it aborted the launch, one after it is answered by the
-    // session's stop.
-    let accepted = false;
-    /** The run's acceptance and its committed end. Once accepted, the end is
-     *  the session's to deliver: a shutdown reaches it as a stop, never as an
-     *  abandoned wait. */
+    /** The run's launch and its committed end. The end is the session's to
+     *  deliver, so its wait is not abandoned: a shutdown reaches the run as
+     *  a stop, which its end answers. */
     const launched = yield* Effect.forkChild(
       Effect.suspend(() =>
         launchOn(session, request, runContext, options),
       ).pipe(
         Effect.flatMap((run) =>
           Effect.uninterruptible(
-            Effect.suspend(() => {
-              accepted = true;
-              // The run's whole result, built once: what the command emits
-              // and what its `afterRun` finalizes.
-              return Effect.map(run.result, (end) => ({
-                ...end,
-                runId: run.runId,
-                plugins,
-                workingDirectory: runContext.cwd,
-              }));
-            }),
+            // The run's whole result, built once: what the command emits and
+            // what its `afterRun` finalizes.
+            Effect.map(run.result, (end) => ({
+              ...end,
+              runId: run.runId,
+              plugins,
+              workingDirectory: runContext.cwd,
+            })),
           ),
         ),
       ),
     );
-    const shutdownStatus = Effect.suspend(
-      Effect.fnUntraced(function* () {
-        // The run's finalization is done: nothing is left to stop or wait for.
-        if (Deferred.isDoneUnsafe(shutdownFinalizationDone)) return;
-        shutdown = true;
-        // Headless shutdown cascades into active children: a detached child
-        // cannot outlive the exiting CLI process, so the detach-on-stop
-        // toggle is not consulted here.
-        yield* withProcessServices(
-          options.services.runtime,
-          Effect.gen(function* () {
-            // The launch is interrupted where it still can be, before the
-            // session accepted the run; one accepted by then, or while the
-            // interrupt was on its way, is stopped through the session, which
-            // its own end answers (an ended run's stop is the registry's
-            // quiet no-op). A launch the session already holds is stopped
-            // for the shutdown first, so the run it opens records that, not
-            // the launch's release, and resumes as a shutdown's.
-            if (!accepted) {
-              if (session.held(launchRunId) !== undefined)
-                yield* stopThroughSession;
-              yield* Effect.forkDetach(Fiber.interrupt(launched));
-            }
-            // Read again: acceptance may have landed while the interrupt was
-            // being forked, and an interrupt that reaches the launch after it
-            // waits on the uninterruptible acceptance instead of stopping it.
-            if (accepted) yield* stopThroughSession;
-            // The run's end, its recovery notice and the command's own
-            // finalization, within the deadline below.
-            yield* Deferred.await(shutdownFinalizationDone);
-          }),
-        );
-      }),
-    );
+    const shutdownStatus = Effect.gen(function* () {
+      // The run's finalization is done: nothing is left to stop or wait for.
+      if (yield* Deferred.isDone(finalized)) return;
+      shutdown = true;
+      // Headless shutdown cascades into active children: a detached child
+      // cannot outlive the exiting CLI process, so the detach-on-stop toggle
+      // is not consulted here. The stop lands whether or not the session has
+      // started the run yet: one that has not starts it stopped, so it ends
+      // cancelled as soon as it opens.
+      yield* withProcessServices(
+        options.services.runtime,
+        Effect.gen(function* () {
+          yield* stopThroughSession;
+          // The run's end, its recovery notice and the command's own
+          // finalization, within the deadline below.
+          yield* Deferred.await(finalized);
+        }),
+      );
+    });
     // Registered only once `shutdownStatus` exists: a shutdown scope already
     // closing runs this finalizer at once. A child of the process's shutdown
     // scope, so a shutdown runs this step before it closes the sessions;
@@ -397,11 +374,10 @@ export const executeCliConfig: (
     // `ensuring`s it.
     const detachPresentation = Scope.close(presentationScope, Exit.void);
     const exit = yield* Fiber.await(launched);
-    // A run the shutdown stopped after the session accepted it stores its
-    // cancelled end, which is its result (exit 130, from its outcome). An
-    // interrupts-only exit is the shutdown's interrupt: of the launch, which
-    // it aborted, or, landing as the accepted wait opened, of the fiber once
-    // the stopped run's end let it go (exit 130 as well).
+    // A run the shutdown stopped stores its cancelled end, which is its
+    // result (exit 130, from its outcome). An interrupts-only exit after a
+    // shutdown is the process's own interruption of the launch (exit 130 as
+    // well).
     const interrupted =
       shutdown && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
     if (Exit.isSuccess(exit)) {
@@ -442,16 +418,13 @@ export const executeCliConfig: (
 
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
-        // A run the shutdown stopped after the session accepted it (it ended
-        // cancelled, or its result could not be read): its committed rows
-        // say whether it can be resumed, read once its end is committed;
-        // rows that cannot be read (logged) say no. A launch the shutdown
-        // aborted before acceptance gets no notice: it has no end here to
-        // read after.
+        // A run the shutdown stopped (it ended cancelled): its committed
+        // rows say whether it can be resumed, read once its end is
+        // committed. A launch that answered no end has nothing to read.
         const stopped =
           shutdown &&
-          accepted &&
-          (!runResult.ok || runResult.result.outcome === RUN_OUTCOME.CANCELLED);
+          runResult.ok &&
+          runResult.result.outcome === RUN_OUTCOME.CANCELLED;
         const onFinalized = options.onInterruptedRunFinalized;
         if (
           stopped &&
@@ -469,7 +442,7 @@ export const executeCliConfig: (
     );
     // Done only now: a signal during the finalization waits for it, and the
     // step the close below runs finds nothing left to do.
-    Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
+    yield* Deferred.succeed(finalized, undefined);
     yield* Scope.close(shutdownStatusScope, Exit.void);
     if (!runResult.ok || Result.isFailure(finalization)) {
       yield* detachPresentation;

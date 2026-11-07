@@ -26,7 +26,7 @@ import {
 import {
   absentReason,
   openNodeWorkspaceRoots,
-  canonicalizeWorkspacePath,
+  canonicalizeWorkspaceRoot,
 } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
@@ -158,7 +158,7 @@ const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
     const kept: string[] = [];
     // Dedupe first, stat the roots at once, then sort the results in the
     // remembered order.
-    const unique = [...new Set(candidates.map(canonicalizeWorkspacePath))];
+    const unique = [...new Set(candidates.map(canonicalizeWorkspaceRoot))];
     const stats = yield* Effect.forEach(
       unique,
       (root) => fs.stat(root).pipe(Effect.result),
@@ -340,7 +340,7 @@ export const openDesktopProjectRegistry: (
     return {
       state,
       open(rootInput) {
-        const root = canonicalizeWorkspacePath(rootInput);
+        const root = canonicalizeWorkspaceRoot(rootInput);
         return Effect.gen(function* () {
           const existing = byRoot(root);
           if (existing) return existing;
@@ -357,7 +357,7 @@ export const openDesktopProjectRegistry: (
               },
             );
             const roots = yield* openNodeWorkspaceRoots({
-              workspacePath: root,
+              workspaceRoot: root,
               storageRoot: options.dataRoot,
               config: {
                 ...workspaceConfigs,

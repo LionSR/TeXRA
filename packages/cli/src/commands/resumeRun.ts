@@ -14,7 +14,7 @@ import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
-import { executeCliWorkflowConfig } from './workflow';
+import { executeCliRun } from './run';
 import {
   formatResumeCommand,
   oneShotResumeNotice,
@@ -28,9 +28,9 @@ import { resolveCliRunAgent } from '../runtime/agents';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
-  resumeWorkflowOutputDirectory,
-  resumeWorkflowOutputFile,
-} from '../runtime/headless/workflowOutput';
+  resumeDocumentTaskOutputDirectory,
+  resumeDocumentTaskOutputFile,
+} from '../runtime/headless/documentTaskOutput';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -55,10 +55,10 @@ function resumeFailureExit(id: RunId, error: unknown): number {
 /** Every recorded input and context file is still there: an absent path
  *  (ENOENT or ENOTDIR) means "not durable"; any other failure fails the
  *  resume instead of reading as absent. */
-const workflowRecoveryInputsAreDurable = Effect.fn(
-  'workflowRecoveryInputsAreDurable',
+const documentTaskRecoveryInputsAreDurable = Effect.fn(
+  'documentTaskRecoveryInputsAreDurable',
 )(function* (
-  config: Parameters<typeof executeCliWorkflowConfig>[0],
+  config: Parameters<typeof executeCliRun>[0],
   fallbackCwd: string,
 ): Effect.fn.Return<
   boolean,
@@ -79,7 +79,7 @@ const workflowRecoveryInputsAreDurable = Effect.fn(
 /**
  * Continue a stored session through the session's resume: a tool-use
  * session reopens the interactive chat TUI (so a usable terminal is
- * required), whose `/resume` calls it; a workflow run resumes headless under
+ * required), whose `/resume` calls it; a document task run resumes headless under
  * its persisted run id, in the same run skeleton as `texra run`. The chat case names the session with its persisted
  * record rather than mounting the TUI itself: `defineCliCommand` mounts it
  * once this program has finished. This entry never suppresses the platform's
@@ -211,7 +211,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   if (Result.isFailure(agent)) return resumeFailureExit(id, agent.failure);
 
   // Fast-fail on an unusable destination before the run restarts;
-  // `executeCliWorkflowConfig` reads the same persisted `cli` block. Each
+  // `executeCliRun` reads the same persisted `cli` block. Each
   // stored-destination reader throws on a bad persisted path, so
   // `Effect.try` keeps that refusal on the typed channel — interleaved with
   // its own probe, because the file probe's `mkdir -p` runs before the
@@ -219,30 +219,24 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
       const outputFile = yield* Effect.try({
-        try: () => resumeWorkflowOutputFile(config),
+        try: () => resumeDocumentTaskOutputFile(config),
         catch: ensureError,
       });
       yield* assertOutputFileAvailable(outputFile, context.cwd);
       const outputDirectory = yield* Effect.try({
-        try: () => resumeWorkflowOutputDirectory(config),
+        try: () => resumeDocumentTaskOutputDirectory(config),
         catch: ensureError,
       });
       yield* assertOutputDirAvailable(outputDirectory, context.cwd);
-      const recoveryInputIsDurable = yield* workflowRecoveryInputsAreDurable(
-        config,
-        context.cwd,
-      );
+      const recoveryInputIsDurable =
+        yield* documentTaskRecoveryInputsAreDurable(config, context.cwd);
       // The run continues through the session's resume, inside the
       // headless run skeleton the fresh launch uses.
-      return yield* executeCliWorkflowConfig(
-        config,
-        buildHeadlessRunContext(context),
-        {
-          services: stores,
-          runId: id,
-          recoveryInputIsDurable,
-        },
-      );
+      return yield* executeCliRun(config, buildHeadlessRunContext(context), {
+        services: stores,
+        runId: id,
+        recoveryInputIsDurable,
+      });
     }),
   );
   if (Result.isSuccess(resumed)) return resumed.success;

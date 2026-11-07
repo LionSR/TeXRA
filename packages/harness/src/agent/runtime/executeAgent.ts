@@ -45,7 +45,7 @@ import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 import { endRun } from './AgentRunLifecycle';
 import { ChildRunBudget } from './childRunBudget';
-import { openToolUse, runToolUse } from './loop/toolUse';
+import { openToolUse, runToolUse } from './loop/runLoop';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, type RunLaunch } from './run/AgentRun';
 import {
@@ -218,7 +218,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
             // The session's own roots, handed to prompt assembly as data,
             // so file reads resolve in this project, not the calling
             // fiber's.
-            workspacePath: roots.workspace,
+            workspaceRoot: roots.workspace,
             workingDirectory,
             storageRoot: roots.storage,
           },

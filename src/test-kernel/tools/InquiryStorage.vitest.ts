@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { ToolError } from '@texra-ai/harness/plugins';
-import { globalDatabaseLayer } from '@controllers/session/Database';
+import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { globalValuesOver } from '@test/support/setupPlatform';

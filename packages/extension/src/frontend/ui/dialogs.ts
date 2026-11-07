@@ -71,7 +71,7 @@ interface FileDialogOptions {
   /** Mapping from filter name to array of extensions without dots */
   filters: { [name: string]: string[] };
   /** The workspace root the dialog opens in and relativizes picks against. */
-  workspacePath: string | undefined;
+  workspaceRoot: string | undefined;
 }
 
 /**
@@ -81,8 +81,8 @@ interface FileDialogOptions {
 export const selectFiles = Effect.fn('selectFiles')(function* (
   options: FileDialogOptions,
 ): Effect.fn.Return<string[] | null, OpenDialogFailed> {
-  const { workspacePath } = options;
-  if (!workspacePath) {
+  const { workspaceRoot } = options;
+  if (!workspaceRoot) {
     // The notice is detached, as the caller's `runFork` left it: the picker
     // answers "nothing picked" straight away rather than waiting on a toast
     // the user may never dismiss.
@@ -97,7 +97,7 @@ export const selectFiles = Effect.fn('selectFiles')(function* (
         openLabel: options.openLabel,
         canSelectFiles: true,
         canSelectFolders: false,
-        defaultUri: vscode.Uri.file(workspacePath),
+        defaultUri: vscode.Uri.file(workspaceRoot),
         filters: options.filters,
       }),
     catch: (cause) =>
@@ -112,7 +112,7 @@ export const selectFiles = Effect.fn('selectFiles')(function* (
     return null;
   }
   return fileUris.map((uri) =>
-    workspaceRelativePath(workspacePath, uri.fsPath),
+    workspaceRelativePath(workspaceRoot, uri.fsPath),
   );
 });
 

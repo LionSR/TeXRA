@@ -3,7 +3,7 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { AgentCatalog } from '@agent/index/agentCatalog';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import {
   launchChildAgent,
   type ChildLaunch,

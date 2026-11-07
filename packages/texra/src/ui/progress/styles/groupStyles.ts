@@ -3,7 +3,7 @@ import { css } from 'lit';
 import { panelFrameStyles } from '@ui/styles/surfaceStyles';
 
 /**
- * Log group styles for collapsible task groups and run containers.
+ * Log group styles for collapsible stages and run containers.
  */
 export const groupStyles = css`
   .log-group-header {
@@ -61,7 +61,7 @@ export const groupStyles = css`
      boxed panel — our .log-group-header (frame + padding) and
      .log-group-content (dashed connector) own the visuals. Unlike the shared
      .collapsible-quiet panels, collapse here is by lazy DOM removal in
-     TaskGroupList (not the 1fr/0fr grid trick), so no content-grid rules. */
+     StageList (not the 1fr/0fr grid trick), so no content-grid rules. */
   wa-details.log-group::part(base) {
     background: transparent;
     border: none;

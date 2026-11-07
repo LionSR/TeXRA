@@ -24,7 +24,7 @@ import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
  * decode is refused the same way.
  */
 const droppedWorkspaceFile = Effect.fn('droppedWorkspaceFile')(function* (
-  workspacePath: string,
+  workspaceRoot: string,
   raw: string,
 ) {
   const trimmed = raw.trim();
@@ -37,11 +37,11 @@ const droppedWorkspaceFile = Effect.fn('droppedWorkspaceFile')(function* (
           }),
       })
     : trimmed;
-  const relative = relativeToRoot(workspacePath, dropped);
+  const relative = relativeToRoot(workspaceRoot, dropped);
   if (relative === undefined) return null;
   const fs = yield* FileSystem.FileSystem;
   const info = yield* fs
-    .stat(path.resolve(workspacePath, relative))
+    .stat(path.resolve(workspaceRoot, relative))
     .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
   return info?.type === 'File' ? relative : null;
 });
@@ -52,16 +52,16 @@ const droppedWorkspaceFile = Effect.fn('droppedWorkspaceFile')(function* (
  * The one plan every host applies to `attachDroppedFiles`.
  */
 export const attachDroppedFiles = Effect.fn('attachDroppedFiles')(function* (
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
   rawPaths: readonly string[],
   allowedExtensions: readonly string[],
 ) {
   const resolved =
-    workspacePath === undefined
+    workspaceRoot === undefined
       ? rawPaths.map(() => null)
       : yield* Effect.forEach(
           rawPaths,
-          (raw) => droppedWorkspaceFile(workspacePath, raw),
+          (raw) => droppedWorkspaceFile(workspaceRoot, raw),
           { concurrency: 8 },
         );
   return yield* attachDroppedPaths(resolved, allowedExtensions);

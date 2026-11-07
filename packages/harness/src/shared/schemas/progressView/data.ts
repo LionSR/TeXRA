@@ -24,7 +24,7 @@ export type MediaAttachmentKind = typeof MediaAttachmentKindSchema.Type;
  * `media` is what a follow-up attached, by address (the follow-up's row
  * links the blobs), so "Fork from here" puts it back in the fork's composer
  * beside the text without a file to re-read.
- * `scriptSummary` carries a workflow delivery's typed presentation facts
+ * `scriptSummary` carries a script delivery's typed presentation facts
  * beside the rendered text, so the progress view renders structured data
  * instead of re-parsing it out of the row text.
  */

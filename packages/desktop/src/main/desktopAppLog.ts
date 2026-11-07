@@ -63,16 +63,16 @@ export function getDesktopLogFilePath(): string {
 }
 
 export function readDesktopLogSnapshot(options: {
-  workspacePath?: string | undefined;
+  workspaceRoot?: string | undefined;
 }): DesktopLogSnapshot {
   const path = getDesktopLogFilePath();
-  const workspacePath =
-    options.workspacePath == null
+  const workspaceRoot =
+    options.workspaceRoot == null
       ? undefined
-      : normalizeFilePath(options.workspacePath);
+      : normalizeFilePath(options.workspaceRoot);
   const redactedPath = redactDesktopLogText(
     normalizeFilePath(path),
-    workspacePath,
+    workspaceRoot,
   );
   try {
     const buffer = readFileSync(path);
@@ -83,7 +83,7 @@ export function readDesktopLogSnapshot(options: {
     return {
       path: redactedPath,
       truncated,
-      text: redactDesktopLogText(excerpt.toString('utf8'), workspacePath),
+      text: redactDesktopLogText(excerpt.toString('utf8'), workspaceRoot),
     };
   } catch (error) {
     return {
@@ -91,7 +91,7 @@ export function readDesktopLogSnapshot(options: {
       truncated: false,
       text: redactDesktopLogText(
         format('Desktop log is not available: %s', error),
-        workspacePath,
+        workspaceRoot,
       ),
     };
   }
@@ -186,10 +186,10 @@ function rotateDesktopLogFile(path: string): void {
 
 function redactDesktopLogText(
   text: string,
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
 ): string {
   return redactSecrets(
-    redactPathPrefixes(text, workspacePath, normalizeFilePath(homedir())),
+    redactPathPrefixes(text, workspaceRoot, normalizeFilePath(homedir())),
   );
 }
 

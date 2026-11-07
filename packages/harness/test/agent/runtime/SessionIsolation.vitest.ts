@@ -36,11 +36,11 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           // and are read back from the root they landed in.
           const host = yield* FakeHost;
           const rootsA = createFakeWorkspaceRoots({
-            workspacePath: host.path('papers/a'),
+            workspaceRoot: host.path('papers/a'),
             storagePath: host.path('storage/a'),
           });
           const rootsB = createFakeWorkspaceRoots({
-            workspacePath: host.path('papers/b'),
+            workspaceRoot: host.path('papers/b'),
             storagePath: host.path('storage/b'),
           });
           const sessions = yield* Sessions;

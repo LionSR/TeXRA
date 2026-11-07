@@ -16,15 +16,15 @@ interface DesktopFileSelectionDialogOptions {
 }
 
 interface DesktopFileSelectionOptions {
-  /** The paper's folder; undefined for the no-workspace session. */
-  workspacePath: string | undefined;
+  /** The project's folder; undefined for the no-workspace session. */
+  workspaceRoot: string | undefined;
   showOpenFileDialog(
     options: DesktopFileSelectionDialogOptions,
   ): Effect.Effect<string[] | undefined, Error>;
 }
 
 /**
- * The file lists and pickers of one paper: the `host` snapshot's file
+ * The file lists and pickers of one project: the `host` snapshot's file
  * catalogs and the `pickFiles` arm of `host.request` (8.3).
  */
 export interface DesktopFileSelection {
@@ -37,7 +37,7 @@ export interface DesktopFileSelection {
   >;
   /**
    * The native picker for one multi-file list. Succeeds with the chosen
-   * files, workspace-relative where they are inside the paper, or null when
+   * files, workspace-relative where they are inside the project, or null when
    * the dialog was cancelled.
    */
   pickFiles(fileType: ListableFileType): Effect.Effect<string[] | null, Error>;
@@ -49,26 +49,26 @@ const DIALOG_TITLE_BY_FILE_TYPE: Record<ListableFileType, string> = {
   media: 'Select media files',
 };
 
-function toWorkspaceRelative(workspacePath: string, filePath: string): string {
-  const absolutePath = resolve(workspacePath, filePath);
+function toWorkspaceRelative(workspaceRoot: string, filePath: string): string {
+  const absolutePath = resolve(workspaceRoot, filePath);
   // A pick that resolves through a symlink inside the workspace lands
   // workspace-relative; an outside-workspace pick stays a normalized
   // absolute path, so the renderer can still open it.
-  return workspaceRelativePath(workspacePath, absolutePath);
+  return workspaceRelativePath(workspaceRoot, absolutePath);
 }
 
 export function createDesktopFileSelection(
   options: DesktopFileSelectionOptions,
 ): DesktopFileSelection {
-  const { workspacePath } = options;
+  const { workspaceRoot } = options;
   return {
-    fileOptions: () => workspaceFileOptions(workspacePath),
+    fileOptions: () => workspaceFileOptions(workspaceRoot),
     pickFiles(fileType) {
-      if (!workspacePath) return Effect.succeed(null);
+      if (!workspaceRoot) return Effect.succeed(null);
       return options
         .showOpenFileDialog({
           title: DIALOG_TITLE_BY_FILE_TYPE[fileType],
-          defaultPath: workspacePath,
+          defaultPath: workspaceRoot,
           allowMultiple: true,
           filters: [
             {
@@ -81,7 +81,7 @@ export function createDesktopFileSelection(
           Effect.map(
             (selectedFiles) =>
               selectedFiles?.map((file) =>
-                toWorkspaceRelative(workspacePath, file),
+                toWorkspaceRelative(workspaceRoot, file),
               ) ?? null,
           ),
         );

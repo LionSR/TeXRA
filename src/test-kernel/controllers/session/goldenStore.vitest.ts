@@ -57,8 +57,8 @@ import {
 import { ResumeRefused, Sessions } from '@texra-ai/harness';
 import { AgentCatalog, ValidationModel } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { makeRunHistory } from '@agent/runtime/RunHistory';
-import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import { makeRunHistory } from '@agent/runtime/makeRunHistory';
+import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';
 import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import {
   VALIDATION_FLAG,
@@ -66,7 +66,7 @@ import {
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
 } from '@cli/runtime/models/validationSwitch';
-import { databaseLayer } from '@controllers/session/Database';
+import { databaseLayer } from '@controllers/session/databaseLayer';
 import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
 import { rowReader } from '@controllers/session/rowReader';
 import {
@@ -74,8 +74,8 @@ import {
   TextChunkSource,
   TranscriptSubscriptions,
 } from '@controllers/session/sessionSources';
-import { SessionViewService } from '@controllers/session/SessionView';
-import { sessionInputsLayer } from '@controllers/session/sessionInputs';
+import { SessionViewService } from '@controllers/session/sessionViewService';
+import { sessionInputsLayer } from '@controllers/session/sessionInputsLayer';
 import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { ROW_KINDS } from '@shared/schemas';

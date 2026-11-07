@@ -27,7 +27,7 @@ import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { dispatchFactsFor } from '../run/tools';
-import { addressedMessages, type AppendedMessage } from '../storedTurn';
+import { addressedMessages, type AppendedMessage } from '../providerMessages';
 import type { TurnResult } from '@texra-ai/llm';
 
 import type { AgentRunShape } from '../run/AgentRun';

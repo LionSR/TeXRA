@@ -124,7 +124,7 @@ export const initializeElectronPlatform = Effect.fn(
     // its own roots (desktopProjects.ts); these only back the window before
     // a folder is open.
     const processRoots = yield* openNodeWorkspaceRoots({
-      workspacePath: undefined,
+      workspaceRoot: undefined,
       storageRoot: dataRoot,
       config: configStores,
       stateStores: yield* StateStores,

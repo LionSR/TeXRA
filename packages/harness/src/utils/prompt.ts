@@ -7,7 +7,7 @@ import { locateInWorkspace } from '@utils/files/workspaceFS';
 import type { Environment } from 'nunjucks';
 
 /**
- * File name exposed to prompt XML and workflow output instructions.
+ * File name exposed to prompt XML and document task output instructions.
  *
  * Keep workspace files workspace-relative so sibling documents with the same
  * basename remain distinct. For external absolute paths, expose only the

@@ -22,10 +22,10 @@ import { DISABLED_SKILLS_SETTING } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 
 const tempRoots = useTempDirs();
-/** The run catalog of `workspacePath` over `roots`, with no installed
+/** The run catalog of `workspaceRoot` over `roots`, with no installed
  *  plugin loading. */
-const runCatalog = (roots: WorkspaceRoots, workspacePath: string) => ({
-  roots: { ...roots, workspace: workspacePath },
+const runCatalog = (roots: WorkspaceRoots, workspaceRoot: string) => ({
+  roots: { ...roots, workspace: workspaceRoot },
   plugins: { loadable: [], withheld: [] },
 });
 
@@ -54,7 +54,7 @@ async function createTempRoot(): Promise<string> {
 const WORKSPACE_ROOT = '/workspace';
 
 // Each test's host is its own, so a skill one disables reaches no other.
-layer(FakeHost.layer({ workspacePath: WORKSPACE_ROOT }), {
+layer(FakeHost.layer({ workspaceRoot: WORKSPACE_ROOT }), {
   buildPerTest: true,
 })('runtime skills', (it) => {
   it.effect('filters runtime skills disabled by name', () =>

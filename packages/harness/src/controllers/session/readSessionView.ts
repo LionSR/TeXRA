@@ -28,10 +28,10 @@ import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { ToolRegistry } from '@tools/toolTable';
 import { absentReason } from '@utils/files/fsEntryExists';
 
-import { databaseLayer } from './Database';
+import { databaseLayer } from './databaseLayer';
 import { projectStores } from './projectDatabase';
 import { cannotOpen } from './storeAside';
-import { readReplay } from './sessionInputs';
+import { readReplay } from './sessionInputsLayer';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 /** A cold read holds no run. */

@@ -93,7 +93,7 @@ test('browses agents and opens read-only and editable YAML inside the workbench'
     expect(errors).toEqual([]);
   } finally {
     if (launched) await closeTexraApp(launched);
-    cleanupDirectory(profile.workspacePath);
+    cleanupDirectory(profile.workspaceRoot);
     cleanupDirectory(profile.userDataPath);
   }
 });
@@ -182,7 +182,7 @@ test('a picked document agent hidden in Settings is no agent to the form or the 
     expect(errors).toEqual([]);
   } finally {
     if (launched) await closeTexraApp(launched);
-    cleanupDirectory(profile.workspacePath);
+    cleanupDirectory(profile.workspaceRoot);
     cleanupDirectory(profile.userDataPath);
   }
 });

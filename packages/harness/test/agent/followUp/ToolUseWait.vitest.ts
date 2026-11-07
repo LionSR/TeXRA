@@ -10,7 +10,7 @@ import { describe, expect } from 'vitest';
 // Local imports
 import { generateRunId, qualifyAggregateId } from '@texra-ai/harness/schemas';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionRoots } from '@platform/rootedFs';

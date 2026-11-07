@@ -188,47 +188,43 @@ const absoluteWorkspacePath = (
     catch: ensureError,
   });
 
-interface WorkflowFileGroup {
+interface InputFileGroup {
   readonly label: string;
   readonly files: readonly string[];
 }
 
 /**
- * Validate workspace-backed workflow inputs before launching a child run.
+ * Validate workspace-backed input files before launching a child run.
  * `workspaceRoot` is the owning session's workspace folder, handed in as
  * data, so a relative declaration resolves against that session.
  */
-const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
-  function* (
-    workspaceRoot: string | undefined,
-    groups: readonly WorkflowFileGroup[],
-  ): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
-    const fs = yield* FileSystem.FileSystem;
-    const entries = groups.flatMap(({ label, files }) =>
-      files
-        .filter((file) => file.trim() !== '')
-        .map((path) => ({ label, path })),
+const assertInputFilesExist = Effect.fn('assertInputFilesExist')(function* (
+  workspaceRoot: string | undefined,
+  groups: readonly InputFileGroup[],
+): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
+  const entries = groups.flatMap(({ label, files }) =>
+    files.filter((file) => file.trim() !== '').map((path) => ({ label, path })),
+  );
+  const inspected = yield* Effect.forEach(
+    entries,
+    (entry) =>
+      absoluteWorkspacePath(workspaceRoot, entry.path).pipe(
+        Effect.flatMap((absolute) => entryExists(fs, absolute)),
+        Effect.map((exists) => ({ ...entry, exists })),
+      ),
+    { concurrency: 'unbounded' },
+  );
+  const missing = inspected.find((entry) => !entry.exists);
+  if (missing) {
+    return yield* Effect.fail(
+      new Error(`${missing.label} not found: ${missing.path}`),
     );
-    const inspected = yield* Effect.forEach(
-      entries,
-      (entry) =>
-        absoluteWorkspacePath(workspaceRoot, entry.path).pipe(
-          Effect.flatMap((absolute) => entryExists(fs, absolute)),
-          Effect.map((exists) => ({ ...entry, exists })),
-        ),
-      { concurrency: 'unbounded' },
-    );
-    const missing = inspected.find((entry) => !entry.exists);
-    if (missing) {
-      return yield* Effect.fail(
-        new Error(`${missing.label} not found: ${missing.path}`),
-      );
-    }
-  },
-);
+  }
+});
 
 /**
- * Resolve workflow file dependencies against their owning session's roots,
+ * Resolve input files against their owning session's roots,
  * read once from the session's `SessionRoots`.
  */
 export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
@@ -292,7 +288,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
       );
       // After the paths resolve, as it ran before: a reference this run does
       // not own is refused before anything is probed on disk.
-      yield* assertWorkflowFilesExist(workspace, [
+      yield* assertInputFilesExist(workspace, [
         {
           label,
           files: references
@@ -311,7 +307,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
             if (!output)
               return yield* Effect.fail(
                 new Error(
-                  `${runStoragePath}; pass a matching workflow file option whose files still exist.`,
+                  `${runStoragePath}; pass a matching file option whose files still exist.`,
                 ),
               );
           }
@@ -326,7 +322,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
       Effect.mapError(
         (error) =>
           new Error(
-            formatError(`Workflow ${label} files could not be resolved`, error),
+            formatError(`The ${label} files could not be resolved`, error),
             { cause: error },
           ),
       ),

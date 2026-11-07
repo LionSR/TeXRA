@@ -7,7 +7,7 @@ import {
   AgentConfigSchema,
   qualifyAggregateId,
 } from '@texra-ai/harness/schemas';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
@@ -58,7 +58,7 @@ const withStartedSession = <A, E>(
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'canonical run records',
   (it) => {
-    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+    it.layer(FakeHost.layer({ workspaceRoot: '/workspace' }), {
       buildPerTest: true,
     })((it) => {
       it.effect(

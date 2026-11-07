@@ -310,7 +310,7 @@ export class RunFileService {
     },
   );
 
-  /** Create a FileLocation for a workflow output file. */
+  /** Create a FileLocation for a declared output file. */
   public createLocation(inputPath: string): FileLocation {
     const runStorageLocation = runStorageLocationUnder(
       this.roots.storage,

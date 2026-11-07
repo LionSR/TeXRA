@@ -62,12 +62,12 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { LocalRuntimeStateSchema } from '@shared/schemas';
-import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import { makeRunHistory } from '@agent/runtime/RunHistory';
+import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';
+import { makeRunHistory } from '@agent/runtime/makeRunHistory';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { sessionInputsLayer } from '@controllers/session/sessionInputs';
-import { SessionViewService } from '@controllers/session/SessionView';
+import { sessionInputsLayer } from '@controllers/session/sessionInputsLayer';
+import { SessionViewService } from '@controllers/session/sessionViewService';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -78,7 +78,7 @@ import { deletionCollector } from '@controllers/session/deletionCleanup';
 import {
   databaseLayer,
   STORE_HELD_MESSAGE,
-} from '@controllers/session/Database';
+} from '@controllers/session/databaseLayer';
 import {
   runStateAppend,
   RunHistory,
@@ -128,7 +128,7 @@ vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
  *  `storage`, as `owner`, creating `run`. */
 const STORE_WRITER = `
 import { Effect, Layer } from 'effect';
-import { databaseLayer } from '@controllers/session/Database';
+import { databaseLayer } from '@controllers/session/databaseLayer';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';

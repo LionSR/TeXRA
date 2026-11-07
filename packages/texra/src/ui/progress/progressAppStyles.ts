@@ -195,7 +195,7 @@ export const progressAppStyles = css`
     .shell.is-editor .dock {
       display: flex;
     }
-    /* The dock cell names the paper and the docked list replaces the
+    /* The dock cell names the project and the docked list replaces the
        drawer; New task and Settings stay at the main cell's end. */
     .shell.is-editor .sessions-button,
     .shell.is-editor .header-main-title,

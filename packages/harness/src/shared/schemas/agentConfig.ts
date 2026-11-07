@@ -8,7 +8,7 @@ import { NullableFileFieldsSchema } from './fileFields';
 import { JsonValueSchema } from './jsonValue';
 
 /** Agent selected when launch input names none. */
-export const DEFAULT_WORKFLOW_AGENT = 'correct';
+export const DEFAULT_TASK_AGENT = 'correct';
 
 /**
  * Fields a command-line launch sets, grouped so their footprint on
@@ -50,7 +50,7 @@ const ScriptFieldsSchema = Schema.Struct({
 const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
   Struct.assign({
     agent: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed(DEFAULT_WORKFLOW_AGENT)),
+      Schema.withDecodingDefault(Effect.succeed(DEFAULT_TASK_AGENT)),
     ),
     /**
      * Resolved source of `agent`. A boundary that validated the agent pins it;
@@ -163,3 +163,9 @@ export const AgentConfigSchema = AgentConfigObjectSchema.check(
   }),
 );
 export type AgentConfigInput = typeof AgentConfigObjectSchema.Encoded;
+
+export type AgentConfig = typeof AgentConfigSchema.Type;
+
+/** Partial agent configuration accepted before launch-time normalization. */
+export type AgentConfigPayload = Partial<AgentConfig> &
+  Pick<AgentConfig, 'agent' | 'model'>;

@@ -12,7 +12,6 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect, absurd } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   attentionOf,
   type RequestPayload,
@@ -75,14 +74,23 @@ export type SessionRequests = Pick<Session, 'request'>;
 
 export interface PendingApproval {
   readonly payload: TuiRequest;
-  /** Answer this request. Where requests land and the runtime come from the
-   *  surface that renders the modal: this entry is a level of a module-level
-   *  computed, so it has neither of its own to close over. */
+  /** Answer this request on `surface`, which the view that renders the
+   *  modal holds: this entry is a level of a module-level computed, so it
+   *  has none of its own to close over. */
   readonly decide: (
-    requests: SessionRequests,
-    runtime: ProcessRuntime,
+    surface: DecisionSurface,
     decision: SurfaceDecision,
   ) => void;
+}
+
+/** Where a decision goes: the session its `request.decide` lands on, the
+ *  runtime that request runs on, and the chat's attached host, which
+ *  performs the host command a decision names instead (a retry on the
+ *  user's own key lands the decision itself once the key is in place). */
+export interface DecisionSurface {
+  readonly requests: SessionRequests;
+  readonly runtime: ProcessRuntime;
+  readonly performHost: (command: HostCommand) => void;
 }
 
 /** A pending `request.opened` fact, typed to {@link PendingRequestKind}. */
@@ -123,23 +131,6 @@ const decided = signal<ReadonlySet<string>>(new Set());
 
 /** Jump-to-waiting: the focused stream's requests lead the order. */
 const promoted = signal<RunId | undefined>(undefined);
-
-/**
- * The host capabilities a decision can name (`approvalDecisionArm`'s host
- * arms): the attached TUI host installs its executor for as long as it is
- * attached. A capability named while nothing is attached cannot be dropped
- * quietly — the request would stay pending with nobody working on it.
- */
-let hostCapability: ((arm: HostCommand) => void) | undefined;
-
-export function useHostCapability(
-  execute: (arm: HostCommand) => void,
-): () => void {
-  hostCapability = execute;
-  return () => {
-    if (hostCapability === execute) hostCapability = undefined;
-  };
-}
 
 /** Whether the promoted stream's requests lead `request`'s. */
 function leads(request: { readonly runId: RunId }): boolean {
@@ -244,8 +235,8 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   if (!first) return undefined;
   return {
     payload: first.payload,
-    decide: (requests, runtime, decision) =>
-      decideRequest(requests, runtime, first.request, first.payload, decision),
+    decide: (surface, decision) =>
+      decideRequest(surface, first.request, first.payload, decision),
   };
 });
 
@@ -339,13 +330,12 @@ function issue(
 
 /**
  * Apply one decision: the case the shared vocabulary names, the
- * `request.decide`, or the host capability a retry on the user's own key
+ * `request.decide`, or the host command a retry on the user's own key
  * needs instead of a decision, since that host lands the decision itself
  * once the credential is in place.
  */
 function decideRequest(
-  requests: SessionRequests,
-  runtime: ProcessRuntime,
+  { requests, runtime, performHost }: DecisionSurface,
   request: AttentionRequest,
   payload: RequestPayload,
   decision: SurfaceDecision,
@@ -355,13 +345,7 @@ function decideRequest(
   const arm = approvalDecisionArm(payload, decision);
   if ('runtime' in arm)
     issue(requests, runtime, runId, request.requestId, arm.runtime);
-  else if (hostCapability) hostCapability(arm.host);
-  else
-    runtime.runFork(
-      Effect.logWarning(
-        `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
-      ).pipe(withLogChannel('cli.tui')),
-    );
+  else performHost(arm.host);
 }
 
 /** Forget every staged presentation and local decision: the Surface reset

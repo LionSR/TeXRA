@@ -156,7 +156,7 @@ export class RunTabs extends LitElement {
 
   /** The tree under a row, at any depth. The rail (`topLevelOnly`) shows
    *  none and carries the rollup alone (W2); the drawer and the docked
-   *  list show every child, a workflow run's calls included, so a call's
+   *  list show every child, a document task run's calls included, so a call's
    *  own subagents stay reachable under their parent (issue decision). */
   private childrenOf(run: RunView): RunView[] {
     if (this.topLevelOnly) return [];

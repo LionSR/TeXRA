@@ -228,7 +228,7 @@ const contentOrMissing = Effect.fn('acceptedFileTarget.contentOrMissing')(
  * Resolve the accept target beside the base file, confirm the write, then
  * commit it via {@link commitAcceptedFile}. Answers the content written,
  * or none when nothing was (the user declined, or the target changed while
- * the confirmation was open). The workflow toolbar's accept, on both
+ * the confirmation was open). The document task toolbar's accept, on both
  * hosts, runs it with the host's confirmation.
  */
 export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(

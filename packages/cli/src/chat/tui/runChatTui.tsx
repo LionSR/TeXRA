@@ -118,11 +118,7 @@ import {
   modelConnectionNeeded,
 } from './modelConnection';
 import { installTerminalTitleUpdates } from './terminalTitle';
-import {
-  chatTuiCanStartRootRun,
-  chatTuiRunPending,
-  TuiSession,
-} from './state/sessionRunState';
+import { TuiSession } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
 
 interface ChatResult {
@@ -345,7 +341,7 @@ export async function runChat(
     const leaving = chatPolicy === 'yolo' && policy !== 'yolo';
     chatPolicy = policy;
     patchSessionMeta({ approvalPolicy: getApprovalPolicy() });
-    const run = runViewOf(currentView(), session.runId ?? rootRunId.get());
+    const run = runViewOf(currentView(), rootRunId.get());
     if (run === undefined) return Effect.void;
     const bypass = (enabled: boolean): PolicyChange => ({
       field: 'bypass',
@@ -491,12 +487,12 @@ export async function runChat(
   const getModelSwitchDisabledReason = (
     candidateModel: string,
   ): Effect.Effect<string | undefined, Error> => {
-    if (chatTuiCanStartRootRun(session) || !session.canSelectModel()) {
+    if (session.canStartRootRun() || !session.canSelectModel()) {
       return Effect.succeed(undefined);
     }
     // The run's loop answers in this process; the service checks the
     // switch against the run when it is asked.
-    const { runId } = session;
+    const runId = rootRunId.get();
     if (runId === undefined || runsElsewhere) return Effect.succeed(undefined);
     return Effect.flatMap(
       services.session,
@@ -532,9 +528,9 @@ export async function runChat(
   const scrollback = chatScrollback(runtime, inkRef);
 
   const resetSessionForClear = (): boolean => {
-    const currentRunId = session.runId ?? selectedRunIdSignal.get();
+    const currentRunId = rootRunId.get() ?? selectedRunIdSignal.get();
     const activeRun = runViewOf(currentView(), currentRunId);
-    const isRunPending = chatTuiRunPending(session);
+    const isRunPending = !session.canStartRootRun();
 
     if (
       (isRunPending && activeRun?.position !== 'waiting') ||
@@ -549,7 +545,6 @@ export async function runChat(
     const meta = sessionMetaSignal.get();
     if (isRunPending) chatController.stop('user');
     chatController.clearPendingSkills();
-    session.clearRunState();
     resetCliState(meta);
     // The erase happens outside Ink, so the scrollback prints again from a
     // new origin even when the history it rebuilds is empty.
@@ -574,7 +569,7 @@ export async function runChat(
       ),
     stores: services,
     runtime,
-    canSelectAgent: () => chatTuiCanStartRootRun(session),
+    canSelectAgent: () => session.canStartRootRun(),
     onAgentSelect: (nextAgent) =>
       applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
     onTeamSelect: (teamId) =>
@@ -637,6 +632,7 @@ export async function runChat(
         onCtrlC={() => exitController.handleSigint()}
         onSuspend={() => exitController.handleSigtstp()}
         history={inputHistory}
+        performHost={chatController.performHost}
       />
     </SlashCommandsProvider>,
     {
@@ -689,6 +685,7 @@ export async function runChat(
     runtime,
     leaveProcess: services.leave,
     submitted: chatController.submitted,
+    rootRunEnded: chatController.rootRunEnded,
     getApprovalPolicy,
     // What the session's publisher still holds, drained before shutdown
     // within the close budget; one that does not drain is said on stderr.
@@ -713,22 +710,23 @@ export async function runChat(
   // Interactive resume: kick off the continued tool-use run now that Ink is
   // mounted (so the rehydrated transcript + streamed continuation render) and
   // the signal handlers are armed. Fire-and-forget, the resume claims the
-  // root-run slot, and the normal first-input path stays available so the
-  // user can keep chatting (follow-ups target session.runId as usual).
+  // root launch, and the normal first-input path stays available so the
+  // user can keep chatting (follow-ups target the root run as usual).
   if (initialResume) {
     runtime.runFork(chatController.resume(initialResume.id));
   }
 
-  // The one "agent finished" notification: the claimed run's turn finishes,
+  // The one "agent finished" notification: the root run's turn finishes,
   // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
   // A run that ends after waiting was already announced, and a stop the user
   // asked for is not news. A turn end, not `attentionOf`'s `finished`: a
   // conversation's turn ends at WAITING with no outcome.
-  let rootStanding = session.standing();
+  const rootStandingNow = () => runViewOf(currentView(), rootRunId.get());
+  let rootStanding = rootStandingNow();
   onChatClose(
     subscribeToSignalChanges([sessionView()], () => {
       const previous = rootStanding;
-      rootStanding = session.standing();
+      rootStanding = rootStandingNow();
       const outcome = rootStanding?.outcome ?? null;
       if (
         previous?.position !== 'waiting' &&

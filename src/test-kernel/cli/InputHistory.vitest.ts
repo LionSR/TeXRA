@@ -6,7 +6,7 @@ import { Effect, Layer } from 'effect';
 
 import { GlobalDatabase } from '@texra-ai/harness/node';
 import { loadInputHistory } from '@cli/chat/tui/history/inputHistory';
-import { globalDatabaseLayer } from '@controllers/session/Database';
+import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
