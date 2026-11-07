@@ -204,6 +204,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
 export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   docs: Documents,
   revision: number,
+  critique?: string | null,
 ) {
   const { task, run, deps } = docs;
   const { inputs, entries } = yield* taskInputs(docs);
@@ -257,7 +258,19 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     ),
     `</${OUTPUT_DOCUMENTS_TAG}>`,
   ].join('\n');
-  parts.push(appendCompileFailureRoundContext(request, feedback).trim(), reply);
+  // The critic's review of the last revision goes with this revision's
+  // request; the reply format stays last, where the recipe's parser needs
+  // the model to have read it most recently.
+  const review = critique?.trim();
+  parts.push(
+    appendCompileFailureRoundContext(request, feedback).trim(),
+    ...(review
+      ? [
+          `A reviewer read your last revision. Apply the corrections that hold, and the suggested improvement where it serves this request:\n<critique revision="${revision}">\n${review}\n</critique>`,
+        ]
+      : []),
+    reply,
+  );
   return {
     prompt: parts.filter(Boolean).join('\n\n'),
     media: yield* revisionMedia(docs, revision, files),

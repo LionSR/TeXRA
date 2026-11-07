@@ -225,7 +225,7 @@ const scanInto = Effect.fn('agentCatalog.scanInto')(function* (
   state.skippedFiles = Object.freeze(
     [custom, builtIn, plugin].flatMap((scan) => scan.issues),
   );
-  yield* Effect.logInfo(
+  yield* Effect.logDebug(
     `Loaded ${state.entries.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
   ).pipe(withLogChannel(CHANNEL));
 });

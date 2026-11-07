@@ -555,11 +555,11 @@ export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
     slow: true,
     description: `Run a named agent as a child of this run: it works with its own tools on the prompt you give it.
 
-From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\` (the user stopped the child). With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
+From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, \`Skipped\` (the user stopped the child), \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.
 
 Called directly, the child runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.
 
-It returns the agent's final reply, or a \`schema\` value. Pick the agent whose description fits the task.`,
+Its result is the agent's final reply, or a \`schema\` value. Pick the agent whose description fits the task.`,
     schema: AgentInputSchema,
     execute: (input: AgentInput) =>
       launchChildAgent({

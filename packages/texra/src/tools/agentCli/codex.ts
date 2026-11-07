@@ -424,8 +424,8 @@ export const CodexTool = defineTool({
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
     'Pass thread_id on a later call to continue that thread with a follow-up instruction, one turn per call. ' +
     'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like `agent`. ' +
-    'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`); codex runs in the working directory of the calling agent and takes no directory argument. ' +
-    'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
+    'It runs in the working directory of the calling agent and takes no directory argument, so give parallel codex agents disjoint files to edit. ' +
+    'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',
   schema: CodexInputSchema,
   card: (raw) => {
     const input = Schema.decodeUnknownResult(CodexInputSchema)(raw);

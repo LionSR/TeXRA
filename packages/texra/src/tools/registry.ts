@@ -233,7 +233,11 @@ const core = (
       AskUserQuestionTool,
       LeanLoogleTool,
     ],
-    prompt: ({ config }) => {
+    // The section finds sources with bash and writes math for a rendered
+    // reply: a run that writes a document, with no tool offered, gets none
+    // of it (`$$\\begin{align}` inside a .tex file does not compile).
+    prompt: ({ config, offered }) => {
+      if (offered.length === 0) return '';
       const bibPath = Settings.getConfig(config, BIB_DEFAULT_PATH_SETTING);
       return bibPath
         ? `${TEX_INSTRUCTIONS}\nThe default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
@@ -308,9 +312,8 @@ const documents: TexraPlugin = {
   prompt: ({ offered }) =>
     offered.includes('document_task')
       ? [
-          'An agent marked (task) in the available agents also runs a document task over files with `document_task`.',
           'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the task started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
-          "The host compiles each .tex the task writes: a file that failed to build leaves `compile/<name>.log` among the run's files (list them at `/executions/{id}/files`), and no log means every build passed or no LaTeX toolchain is installed.",
+          "The host compiles each .tex the task writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
           ...(offered.includes('script')
             ? [
                 "In a script, `const { revise, from } = await import('builtIn:documents')`: `revise(agentName, args)` runs a task (`args` as `document_task`'s) and resolves to its result; `from(result, args)` is `args` with that result's revised files as the input files, to chain tasks.",

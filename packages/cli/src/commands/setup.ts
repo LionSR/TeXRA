@@ -43,7 +43,7 @@ export const setupCommand = withUsageSections(
     meta: {
       name: 'setup',
       description:
-        'Guided setup with the setup agent: environment, agents, and your first task (ChatGPT or an API key first)',
+        'Guided setup with the setup agent: environment, agents, and your first task (a ChatGPT or Grok subscription, or an API key, first)',
     },
     args: {
       ...INTERACTIVE_GLOBAL_ARGS,

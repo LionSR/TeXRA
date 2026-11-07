@@ -163,7 +163,8 @@ The publisher offers these doors:
   `#inTransaction`).
 - `detach(job)`: Enqueue a job and return at once, for a producer with no fiber;
   its order is the moment of the call (`agent/runtime/SessionEvents.ts#detach`).
-- `removeRun`: Prove owners, then commit a run's tombstone as the next job
+- `removeRun`: Commit a run's deletion marker (`run.removed`) as the next
+  job, refused unless the run's start commit is the one the caller read
   (`agent/runtime/SessionEvents.ts#removeRun`).
 - `drain`: End the inbox and run what it holds within the close deadline of
   5,000 ms (`agent/runtime/SessionEvents.ts#drain`,
@@ -346,7 +347,7 @@ also read by `applyRunRows`.
   binding.
 - `run.detach` (folded: no): A stop severed the parent edge.
 - `run.end` (folded: no): The terminal fact: outcome, classified error, output.
-- `run.removed` (folded: no): The tombstone: last row of its aggregate, final.
+- `run.removed` (folded: no): The deletion marker: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
 - `plugin.fact` (folded: no): A plugin's own kind; core never reads `value`.
 - `followup.queued` (folded: no): Input not taken yet, whole.
@@ -515,8 +516,9 @@ The fold maps a position to a loop phase: `turn.ready` and `waiting` to
 `results.ready` to `results.ready`, and `turn.end` to `turn.ended`
 (`shared/session/runState.ts#PHASE_AT`).
 
-A `halted` position keeps the phase the loop stopped in, so a resume continues
-from there (`shared/session/runState.ts#phaseAfter`).
+There is no halted position: a `run.end` is the halt, and a resume continues
+from the phase the last `run.position` recorded
+(`shared/session/runActions.ts#continuesFromRows`).
 
 ### 5.4 The commit path
 
@@ -862,11 +864,11 @@ What survives at each commit point follows from sections 2 to 8:
   `results.ready` (`shared/session/runState.ts#PHASE_AT`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
-- `run.end` with `halted`: The lifecycle is over. A recipe task stays finished,
-  and a resume answers `finished`
+- `run.end`: The lifecycle is over. A recipe task stays finished, and a
+  resume answers `finished`
   (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
-  conversation continues on a resume in a new lifecycle, from the phase
-  `halted` kept (`shared/session/runActions.ts#continuesFromRows`).
+  conversation continues on a resume in a new lifecycle, from the phase its
+  last `run.position` kept (`shared/session/runActions.ts#continuesFromRows`).
 
 These are guarantees about committed state. An external effect that finished
 before its result committed stays uncertain; I4 governs it, and the suite cannot

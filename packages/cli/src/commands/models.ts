@@ -228,7 +228,7 @@ const modelsEnableCommand = defineCliCommand({
     id: {
       type: 'positional',
       required: true,
-      description: 'Model id (e.g. grok47, deepseekproT)',
+      description: 'Model id, as `texra models list --all` shows it',
     },
   },
   run: (_, ctx) => setModelEnabled(ctx.args.id, true),

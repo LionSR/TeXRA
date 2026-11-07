@@ -9,6 +9,7 @@ import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { usageAgentName } from '@shared/usageLog';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import {
   jsonResponse,
   testHttpClientLayer,
@@ -121,6 +122,20 @@ describe('UsageLogService', () => {
 
       expect(fetchMock).not.toHaveBeenCalled();
     }
+
+    // The notice and the doctor hint quote the line a user pastes into the
+    // config file, where keys carry the catalog's namespace: the bare row
+    // key is ignored there and logging stays on.
+    it.effect('the first-run notice names the stored key', () =>
+      Effect.gen(function* () {
+        const host = yield* FakeHost;
+        const notice = yield* telemetryNoticeIfDue(host.roots.config).pipe(
+          Effect.provide(AppState.layer(host.roots.globalState)),
+        );
+        expect(notice).toContain('"texra.telemetry.enabled": false');
+        expect(notice).not.toContain('"telemetry.enabled": false');
+      }),
+    );
 
     it.effect('does not let a project opt in over a user-wide opt-out', () =>
       Effect.gen(function* () {

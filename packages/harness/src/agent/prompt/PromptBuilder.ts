@@ -28,7 +28,7 @@ Prefer using tools over asking the user to take manual actions.
 Do not ask for permission in chat before editing a file or running a command: when the user's approval settings require confirmation, the harness asks before the call runs.
 If you say you will perform an action, immediately call the corresponding tool.
 Do only what the task requires. Do not refactor, restructure, or "improve" material beyond it. When the user describes a problem without asking for a change, deliver your assessment before editing files.
-When an approved plan or autonomous objective is active, work toward it end to end. Keep going and verify against real evidence rather than pausing to confirm each step or summarize progress. Stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
+When this run carries out an approved plan or a goal's round, work toward it end to end. Keep going and verify against real evidence rather than pausing to confirm each step or summarize progress. Stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
 In replies, lead with the outcome. Keep responses short by being selective about what to include, not by compressing the writing.
 Never mention tool names when speaking to the user.
 </tool_use_instructions>`;
@@ -63,15 +63,21 @@ export function stepInstructions(
   ctx: Parameters<PromptSection>[0],
 ): RunContext {
   const sections = Object.fromEntries([
-    [
-      'tool-call',
-      ctx.isAnthropic ? ANTHROPIC_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
-    ],
+    // A step that offers no tool (a document reviser, the critic) has no
+    // calls to make.
+    ...(ctx.offered.length > 0
+      ? [
+          [
+            'tool-call',
+            ctx.isAnthropic ? ANTHROPIC_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
+          ],
+        ]
+      : []),
     ...(skills.length > 0
       ? [
           [
             'skills',
-            `<available_skills>\nThe following imported skills are available. If one is relevant, inspect its SKILL.md at the listed path before applying it.\n${skills.map(({ text }) => text).join('\n')}\n</available_skills>`,
+            `<available_skills>\nThe following skills are available. If one is relevant, inspect its SKILL.md at the listed path before applying it; a skill's relative links resolve against its own directory.\n${skills.map(({ text }) => text).join('\n')}\n</available_skills>`,
           ],
         ]
       : []),
