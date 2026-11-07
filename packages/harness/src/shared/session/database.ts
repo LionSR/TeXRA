@@ -9,6 +9,10 @@
  * - `DatabaseStoreNewer`, the cause of any of these: the store is refused whole.
  * - `DatabaseAggregateClosed`, never wrapped: a batch named a closed
  *   aggregate; nothing written.
+ * - `RunChanged`, never wrapped: a run's removal named a lifetime that has
+ *   since ended; nothing written.
+ * A row or draft that breaks the store's own protocol is a defect, never one
+ * of these.
  */
 import {
   Context,
@@ -81,6 +85,14 @@ export class DatabaseAggregateClosed extends Schema.TaggedError<DatabaseAggregat
   { aggregateId: AggregateIdSchema },
 ) {
   override readonly message = `${this.aggregateId} is closed; nothing was written.`;
+}
+
+/** A run's removal found a later lifetime of the run than the one its
+ *  request read (it ended and started again since); nothing was written. */
+export class RunChanged extends Schema.TaggedError<RunChanged>()('RunChanged', {
+  aggregateId: AggregateIdSchema,
+}) {
+  override readonly message = `${this.aggregateId} changed since its removal was asked for; nothing was written.`;
 }
 
 /** A query failed or encountered an invalid persisted row. */
@@ -262,14 +274,15 @@ export class Database extends Context.Service<
       fromSeq: number,
     ) => Effect.Effect<readonly DisplayRow[], DatabaseReadFailed>;
     /** The job that removes a run tree (`SessionEvents.removeRun`): reread
-     *  it, refuse one that changed since `expectedStartCommit`, append the
-     *  deletion marker. */
+     *  it, refuse one already closed (`DatabaseAggregateClosed`) or started
+     *  again since `expectedStartCommit` (`RunChanged`), append the deletion
+     *  marker. */
     readonly runRemoval: (
       id: AggregateId,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
       readonly SessionRow[],
-      DatabaseAggregateClosed | DatabaseWriteFailed
+      DatabaseAggregateClosed | RunChanged | DatabaseWriteFailed
     >;
     /** The deletion markers not collected yet, and one's collection: `cleanup`
      *  removes its run directories, then its closed aggregate, dependents, rows

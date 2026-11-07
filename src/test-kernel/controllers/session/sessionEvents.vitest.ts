@@ -810,11 +810,10 @@ describe('the session event table and its one publisher', () => {
         );
         expect(yield* db.currentCommit).toBe(4);
         // A run begins with exactly one `run.start` (decision 9): a second
-        // creation of a live run is refused, and the sequence it allocated
-        // rolls back with it.
-        expect((yield* Effect.flip(db.appendAll([runStart])))._tag).toBe(
-          'DatabaseWriteFailed',
-        );
+        // creation of a live run is the caller's defect, and the sequence it
+        // allocated rolls back with it.
+        const again = yield* Effect.exit(db.appendAll([runStart]));
+        expect(Exit.isFailure(again) && Cause.hasDies(again.cause)).toBe(true);
         expect((yield* db.appendAll([waiting]))[0]?.seq).toBe(4);
         expect(yield* db.currentCommit).toBe(5);
       }).pipe(Effect.provide(substrate(storage)));
@@ -1107,7 +1106,7 @@ describe('the session event table and its one publisher', () => {
         }),
       );
       expect(yield* first.aggregateState([root, inquiry])).toEqual([]);
-      // Collecting it again, as a second process would, is a no-op.
+      // Collecting it again, as the open's pass would, is a no-op.
       const again = vi.fn(() => Effect.void);
       yield* first.deletions.collect(tombstone, again);
       expect(again).not.toHaveBeenCalled();
@@ -1115,10 +1114,12 @@ describe('the session event table and its one publisher', () => {
         olderStart.aggregateId,
         unrelated.aggregateId,
       ]);
+      // A removal admitted against the run's earlier lifetime is refused as
+      // such, never as a failed write.
       const replacement = yield* first.appendAll([runStart]);
       expect(
         (yield* Effect.flip(first.runRemoval(root, initialCommit)))._tag,
-      ).toBe('DatabaseWriteFailed');
+      ).toBe('RunChanged');
       expect(yield* first.readAggregate(root, 0, ROW_TYPES)).toEqual(
         replacement,
       );

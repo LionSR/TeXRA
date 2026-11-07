@@ -24,6 +24,7 @@ import type {
   SessionRowDraft,
 } from '@shared/schemas';
 import type {
+  RunChanged,
   DatabaseAggregateClosed,
   DatabaseReadFailed,
   DatabaseWriteFailed,
@@ -155,7 +156,7 @@ export class SessionEvents extends Context.Service<
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
       readonly SessionRow[],
-      DatabaseAggregateClosed | DatabaseWriteFailed
+      DatabaseAggregateClosed | RunChanged | DatabaseWriteFailed
     >;
     /** Close the plane: end the inbox and run what it holds, inside the
      *  one close deadline (`SESSION_CLOSE_DEADLINE_MS`). At the deadline

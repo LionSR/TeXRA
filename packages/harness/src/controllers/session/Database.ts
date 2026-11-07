@@ -53,8 +53,8 @@ import {
   DatabaseOpenFailed,
   DatabaseAggregateClosed,
   DatabaseReadFailed,
-  DatabaseStoreNewer,
   DatabaseWriteFailed,
+  RunChanged,
   type SessionOpenError,
 } from '@shared/session/database';
 import { factKindsOf } from '@tools/plugins';
@@ -290,7 +290,7 @@ export const databaseLayer = (
       /** The store gate (`storeGate`), run at open. A project store's one
        *  writer is this process, so what it holds cannot change under it;
        *  the global store's other processes can be newer builds, so there
-       *  the gate runs again in every outermost write. */
+       *  the gate runs again in every value write (`transact`). */
       const factKinds = factKindsOf((yield* ToolRegistry).entries.values());
       const gate = storeGate(exec, factKinds);
       const reader = rowReader(path, factKinds, exec);
@@ -438,13 +438,9 @@ export const databaseLayer = (
         Effect.flatMap(TxMode, (outer) =>
           outer !== null
             ? withTransaction(body)
-            : retryBusy(
-                withTransaction(
-                  mode === 'global' && txMode !== 'read'
-                    ? Effect.andThen(gate, body)
-                    : body,
-                ),
-              ).pipe(Effect.provideService(TxMode, txMode)),
+            : retryBusy(withTransaction(body)).pipe(
+                Effect.provideService(TxMode, txMode),
+              ),
         );
       const transaction = <A, E, EBody>(
         mode: 'read' | 'write',
@@ -453,13 +449,18 @@ export const databaseLayer = (
       ) => own(mode, body).pipe(mapDatabaseFailure(failed));
       /** A write transaction. A closed-aggregate rejection the body raised
        *  leaves as itself, as it does from `job`; any other failure is the
-       *  write's. */
+       *  write's. On the global store, whose other processes can be newer
+       *  builds, the gate runs first in each (`job` serves a project store
+       *  alone, whose gate ran at open). */
       const transact = <A, E>(body: Effect.Effect<A, E>) =>
-        transaction('write', body, (cause) =>
-          cause instanceof DatabaseAggregateClosed
-            ? // cast: only a body raises it, so it is one of its errors.
-              (cause as Extract<E, DatabaseAggregateClosed>)
-            : writeFailed(cause),
+        transaction(
+          'write',
+          mode === 'global' ? Effect.andThen(gate, body) : body,
+          (cause) =>
+            cause instanceof DatabaseAggregateClosed
+              ? // cast: only a body raises it, so it is one of its errors.
+                (cause as Extract<E, DatabaseAggregateClosed>)
+              : writeFailed(cause),
         );
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND closed_by IS NULL`;
@@ -537,13 +538,16 @@ export const databaseLayer = (
         const target = aggregateTarget(draft.aggregateId);
         const columns = aggregateColumns(draft.aggregateId);
         if (edges.reparent != null) {
-          // A new parent run must be open.
+          // A new parent run must be open; a late plugin writer under a
+          // removed run is refused as a failed write, not a defect.
           const current = (yield* readState([draft.aggregateId]))[0];
           if (current?.parentId !== edges.reparent) {
             const parent = (yield* readState([edges.reparent]))[0];
             if (!parent || parent.closed) {
-              return yield* invariant(
-                `A plugin aggregate's new parent must be open: ${edges.reparent}`,
+              return yield* Effect.fail(
+                new Error(
+                  `A plugin aggregate's new parent must be open: ${edges.reparent}`,
+                ),
               );
             }
           }
@@ -566,14 +570,17 @@ export const databaseLayer = (
           )).findLast(
             (row) => row.type === 'plugin.fact' && factName(row) === name,
           );
-          const refused =
-            target.kind === 'run' && draft.parent !== null
-              ? `A run's own plugin fact names no parent: ${name}`
-              : factKinds[name]?.accepts?.(
-                  last?.type === 'plugin.fact' ? last : undefined,
-                  draft,
-                );
-          if (refused) return yield* invariant(refused);
+          if (target.kind === 'run' && draft.parent !== null)
+            return yield* invariant(
+              `A run's own plugin fact names no parent: ${name}`,
+            );
+          // A fact kind's own transition rule refuses a stale writer, which
+          // a race can make: the write's failure, not a defect.
+          const refused = factKinds[name]?.accepts?.(
+            last?.type === 'plugin.fact' ? last : undefined,
+            draft,
+          );
+          if (refused) return yield* Effect.fail(new Error(refused));
         }
         // The seq-1 rule: a run aggregate begins with exactly
         // one `run.start`, and nothing else ever lands at seq 1.
@@ -765,29 +772,32 @@ export const databaseLayer = (
             }),
           ),
         runRemoval: (id, expectedStartCommit) =>
-          transact(
+          transaction(
+            'write',
             Effect.gen(function* () {
               const observed = yield* readDependents(id);
               const target = observed.find((row) => row.aggregateId === id);
               if (target === undefined || observed.some((row) => row.closed))
-                return yield* Effect.fail(
-                  new Error(`Deletion target is missing or closed: ${id}`),
-                );
+                return yield* new DatabaseAggregateClosed({ aggregateId: id });
               if (target.startCommit !== expectedStartCommit)
-                return yield* Effect.fail(
-                  new Error(`Deletion target changed since admission: ${id}`),
-                );
+                return yield* new RunChanged({ aggregateId: id });
               return yield* appendRows(
                 [prepareEventDraft({ type: 'run.removed', aggregateId: id })],
                 yield* Clock.currentTimeMillis,
               );
             }),
+            (cause) =>
+              cause instanceof DatabaseAggregateClosed ||
+              cause instanceof RunChanged
+                ? cause
+                : writeFailed(cause),
           ),
         deletions: {
           pending: () => query(decodedRows(pendingDeletions, [])),
           collect: Effect.fn('collect')(function* (tombstone, cleanup) {
             const columns = aggregateColumns(tombstone.aggregateId);
-            // Already collected (by this pass before, or another process).
+            // Already collected: the open's pass and the collector can both
+            // hold a marker.
             if (
               (yield* query(
                 execOne(closedBy, [...columns, tombstone.commit]),
@@ -812,10 +822,7 @@ export const databaseLayer = (
         job: (body) =>
           own('write', Effect.provideService(body, InPublisherJob, true)).pipe(
             // BEGIN's or COMMIT's failure; the body's leave typed.
-            Effect.catchIf(
-              (e) => isSqlError(e) || e instanceof DatabaseStoreNewer,
-              (e) => Effect.fail(writeFailed(e)),
-            ),
+            Effect.catchIf(isSqlError, (e) => Effect.fail(writeFailed(e))),
             Effect.catchDefect((d) =>
               isSqlError(d) ? Effect.fail(writeFailed(d)) : Effect.die(d),
             ),
@@ -878,15 +885,18 @@ export const globalDatabaseLayer = (
     ),
   );
 
-/** Interruption stays; a failure or a driver defect becomes `failed`'s,
- *  the store's own protocol refusals (`invariant`) included: the batch
- *  rolled back whole, and the refusal's message is the failure's cause. */
+/** Interruption stays; a failure, or SQLite's error raised as a defect (a
+ *  failed COMMIT), becomes `failed`'s. Any other defect dies: the store's
+ *  own protocol refusals (`invariant`) are a caller's defect, never a disk
+ *  failure. */
 function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
   return <A, EOp, R>(
     operation: Effect.Effect<A, EOp, R>,
   ): Effect.Effect<A, E, R> =>
     operation.pipe(
-      Effect.catchDefect((defect) => Effect.fail(defect)),
+      Effect.catchDefect((defect) =>
+        isSqlError(defect) ? Effect.fail(defect) : Effect.die(defect),
+      ),
       Effect.mapError(failed),
     );
 }
