@@ -627,12 +627,14 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     );
   }
 
-  /** The tree's top-level listing, from scratch. */
+  /** The tree's top-level listing, from scratch. Each run asks anew: a
+   *  listing request is made when `listFiles` is called, and an interrupted
+   *  one's late answer must not satisfy the next. */
   const listTree = SubscriptionRef.update(tree, (state) => ({
     ...state,
     loading: true,
   })).pipe(
-    Effect.andThen(callbacks.listFiles('')),
+    Effect.andThen(() => callbacks.listFiles('')),
     Effect.match({
       onSuccess: (listedFiles) => ({
         nodes: buildEditorDirectoryEntries(listedFiles),
