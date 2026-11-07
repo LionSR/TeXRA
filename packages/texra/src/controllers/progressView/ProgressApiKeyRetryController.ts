@@ -4,7 +4,7 @@ import { Effect, Equal, Schema } from 'effect';
 import {
   hasUsableApiKey,
   isApiProvider,
-  lookupApiKey,
+  apiKey,
   providerDisplayName,
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
@@ -136,9 +136,9 @@ export class ProgressApiKeyRetryController {
   ) {
     const secrets = yield* Secrets;
     if (requireNewKey) {
-      const before = yield* lookupApiKey(secrets, provider);
+      const { value: before } = yield* apiKey(secrets, provider);
       yield* this.deps.promptForApiKey(provider);
-      const after = yield* lookupApiKey(secrets, provider);
+      const { value: after } = yield* apiKey(secrets, provider);
       // Sealed values are compared by `Equal`, never unwrapped: this only
       // needs to know whether the credential changed, not what it is.
       return after !== undefined && !Equal.equals(after, before);

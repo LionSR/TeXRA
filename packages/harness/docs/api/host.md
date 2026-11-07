@@ -1442,12 +1442,12 @@ function onAppSignal<K extends AppSignal>(
 
 ## ownKeyCredential
 
-The user's own `provider` key and the endpoint they set for it, for a
-request llm does not model (audio transcription): the route a model of
-`config` takes with every preference off.
+The user's own key for `config` and the endpoint they set for its
+provider, for a request llm does not model (audio transcription): the
+route `config` takes with every preference off.
 
 ```ts
-const ownKeyCredential: (stores: SettingsStores, config: ModelConfig, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode") => Effect<RouteCredential, RouteUnavailable, Secrets>
+const ownKeyCredential: (stores: SettingsStores, config: ModelConfig) => Effect<{ readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; } & { readonly route: "api-key"; readonly bearer: string; } & { readonly endpoint: string; }, RouteUnavailable, Secrets>
 ```
 
 ## pathToLocationIn
@@ -2049,18 +2049,19 @@ interface RootedFileSystem extends FileSystem.FileSystem {
 
 ## RouteCredential
 
-The credential and endpoint of one route, resolved together.
+The credential of one route. `bearer` is what the transport sends: a key,
+or a session's token, which llm reads per request and renews once when
+the provider rejects it.
 
 ```ts
 type RouteCredential = {
   readonly provider: ApiKeyProviderId;
-  readonly endpoint: string;
-  /** The secret the transport sends as its bearer. */
-  readonly bearer: string;
 } & (
-  | { readonly route: 'api-key' | 'xai-subscription' }
+  | { readonly route: 'api-key'; readonly bearer: string }
+  | { readonly route: 'xai-subscription'; readonly bearer: SessionToken }
   | {
       readonly route: 'chatgpt-subscription';
+      readonly bearer: SessionToken;
       /** The ChatGPT plan the session's token names; display-only. */
       readonly plan: string | undefined;
     }

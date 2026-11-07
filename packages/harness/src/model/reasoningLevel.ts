@@ -146,11 +146,13 @@ export interface RouteReasoning {
 /** One decision as what it sends: the wire's own effort for it. */
 function sentOf(
   config: ModelConfig,
+  route: ReasoningRoute,
   decided: Result.Result<ReasoningChoice, Error>,
 ): SentReasoning {
   if (Result.isFailure(decided)) return { refused: decided.failure.message };
   const { note } = decided.success;
-  const sent = wireEffort(config, decided.success) ?? undefined;
+  const sent =
+    wireEffort(config, llmRoute(route), decided.success) ?? undefined;
   return note === undefined ? { effort: sent } : { effort: sent, note };
 }
 
@@ -167,11 +169,11 @@ export function routeReasoningOf(input: {
 }): RouteReasoning | undefined {
   const { config, request, saved, route } = input;
   const chosen = chooseOnRoute(config, request, saved, route);
-  const sent = sentOf(config, chosen);
+  const sent = sentOf(config, route, chosen);
   const fallback =
     saved === undefined
       ? sent
-      : sentOf(config, chooseOnRoute(config, request, undefined, route));
+      : sentOf(config, route, chooseOnRoute(config, request, undefined, route));
   const efforts = acceptedEfforts(config, llmRoute(route));
   // The model does not reason on the route: no level, and no thinking.
   if (

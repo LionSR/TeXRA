@@ -10,6 +10,17 @@
  * serves), the ChatGPT and Grok subscriptions, then the direct
  * provider key, which may pay through Kimi Code or the GLM Coding Plan.
  *
+ * The decision names the route's endpoint too, as an explicit URL: the
+ * package binds a model to a stated deployment, never an SDK default. A
+ * subscription token is accepted only at its own surface, so the ChatGPT
+ * plan goes to the public Responses API its token is issued for and the Grok
+ * plan to xAI's API, never to a per-model or dashboard endpoint. A key route
+ * takes the per-model base URL, then (Kimi Code) the coding endpoint, then
+ * the host's endpoint for the provider, then the provider plugin's default
+ * (`../providers/providerPlugins.ts`), a regional one's international
+ * platform as the region setting defaults. A GLM Coding Plan key takes its
+ * region's Responses endpoint, the same one an API key does.
+ *
  * Kimi Code has two eligibility shapes:
  *  - **exclusive** models (`kimi-for-coding`, `kimi-for-coding-highspeed`)
  *    are served ONLY by the coding endpoint (llm-zoo pins their `baseUrl` to
@@ -24,7 +35,12 @@ import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 import { PLAN_ROUTES, type PlanRoute } from '../errors.js';
 import { isApiProvider } from '../providers/apiProviders.js';
 import { KIMI_CODE_BASE_URL } from '../providers/providers.js';
-import type { ApiKeyProviderId } from '../providers/providerPlugins.js';
+import {
+  type ApiKeyProviderId,
+  findModelProviderPlugin,
+  OPENAI_DEFAULT_ENDPOINT,
+  XAI_DEFAULT_ENDPOINT,
+} from '../providers/providerPlugins.js';
 
 /** What a direct provider key pays through: a `key` plan, or nothing. */
 export type ApiKeyUsageRoute =
@@ -53,30 +69,33 @@ export interface RouteFacts {
   /**
    * The host's endpoint per provider id: a dashboard URL, or the default of
    * the region the provider's toggle picks. A provider absent here takes its
-   * catalog default (`resolveRouteEndpoint`).
+   * plugin's default.
    */
   readonly endpoints: Readonly<Partial<Record<string, string>>>;
 }
 
-/** The facts {@link decideModelRoute} reads. */
-export type RouteDecisionFacts = Omit<RouteFacts, 'endpoints'>;
-
-/** The facts under which a model takes its own key: no plan is on. */
-export const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts = {
-  plans: [],
+/**
+ * The facts under which a model takes its own key at its default endpoint:
+ * no plan is on and the host names no endpoint.
+ */
+export const OWN_KEY_ROUTE_FACTS: RouteFacts = Object.freeze({
+  plans: Object.freeze([]),
   chatgptContextWindow: undefined,
-};
+  endpoints: Object.freeze({}),
+});
 
 /** The route a model's next request takes, decided by {@link decideModelRoute}. */
 export type ModelRoute =
   | {
       readonly kind: 'chatgpt-subscription';
+      readonly endpoint: string;
       /** The input window: the user's override, else what the Codex backend grants. */
       readonly contextWindow: number;
     }
-  | { readonly kind: 'xai-subscription' }
+  | { readonly kind: 'xai-subscription'; readonly endpoint: string }
   | {
       readonly kind: 'api-key';
+      readonly endpoint: string;
       readonly provider: ApiKeyProviderId;
       readonly usageRoute: ApiKeyUsageRoute;
     }
@@ -186,10 +205,19 @@ function zeroCostAccessOverrides(contextWindow: number): {
   };
 }
 
+/**
+ * A provider plugin's default endpoint: its one URL, or its international
+ * platform's; `undefined` for a provider with no HTTP route.
+ */
+function pluginEndpoint(provider: string): string | undefined {
+  const baseUrl = findModelProviderPlugin(provider)?.baseUrl;
+  return typeof baseUrl === 'string' ? baseUrl : baseUrl?.international;
+}
+
 /** Decide the route `config` takes under `facts`. Pure. */
 export function decideModelRoute(
   config: ModelConfig,
-  facts: RouteDecisionFacts,
+  facts: RouteFacts,
 ): ModelRoute {
   if (isUnservedModel(config)) return { kind: 'unserved' };
   const { plans } = facts;
@@ -203,6 +231,7 @@ export function decideModelRoute(
   ) {
     return {
       kind: 'chatgpt-subscription',
+      endpoint: OPENAI_DEFAULT_ENDPOINT,
       contextWindow: facts.chatgptContextWindow ?? codex.contextWindow,
     };
   }
@@ -210,7 +239,7 @@ export function decideModelRoute(
     plans.includes('xai-subscription') &&
     config.provider === ModelProvider.XAI
   ) {
-    return { kind: 'xai-subscription' };
+    return { kind: 'xai-subscription', endpoint: XAI_DEFAULT_ENDPOINT };
   }
   if (
     isKimiCodeExclusiveModel(config) ||
@@ -219,18 +248,26 @@ export function decideModelRoute(
   ) {
     return {
       kind: 'api-key',
+      endpoint: config.baseUrl ?? KIMI_CODE_BASE_URL,
       provider: PLAN_ROUTES['kimi-code-subscription'].provider,
       usageRoute: 'kimi-code-subscription',
     };
   }
-  if (!isApiProvider(config.provider)) return { kind: 'no-api-key' };
-  // A per-model base URL outranks the plan's path (`./routeEndpoint.ts`).
+  // A provider with no HTTP route of its own has no key route either.
+  const endpoint =
+    config.baseUrl ??
+    facts.endpoints[config.provider] ??
+    pluginEndpoint(config.provider);
+  if (!isApiProvider(config.provider) || endpoint === undefined)
+    return { kind: 'no-api-key' };
+  // A per-model base URL outranks the plan's path.
   const onCodingPlan =
     config.provider === ModelProvider.GLM &&
     plans.includes('glm-coding-plan-subscription') &&
     !config.baseUrl;
   return {
     kind: 'api-key',
+    endpoint,
     provider: config.provider,
     usageRoute: onCodingPlan ? 'glm-coding-plan-subscription' : 'api-key',
   };
@@ -256,7 +293,7 @@ const KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW = 262_144;
  * The config `config` runs with on `route`: a subscription's zero per-token
  * price and context ceiling, and for a dual-backend Kimi model on Kimi Code
  * the coding wire id and tier window. The endpoint is not part of it: the
- * route itself names the credential and endpoint (`./routeEndpoint.ts`).
+ * route itself names it.
  */
 export function routeConfig(
   config: ModelConfig,
@@ -276,10 +313,6 @@ export function routeConfig(
             config.contextWindow,
           ),
         ),
-        // The ChatGPT-subscription backend takes no input files, so the
-        // binding's PDF admission degrades a PDF instead of sending a shape
-        // the backend rejects.
-        capabilities: { ...config.capabilities, supportsNativePdf: false },
       };
     }
     case 'xai-subscription':
