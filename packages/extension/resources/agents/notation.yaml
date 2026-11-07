@@ -22,9 +22,8 @@ prompt: |
               \item Find symbols defined but never used anywhere in the document
               \item For notation conflicts, propose graceful solutions that minimize changes (e.g., introduce new symbol once rather than changing all occurrences of existing notation)
           \end{itemize}
-      \item Use the command \criticize{comment text}{severity}{confidence} where severity and confidence are 1-5:
+      \item Use the command \criticize{comment text}{severity}{confidence} on the scale given with its definition:
           \begin{itemize}
-              \item Severity: Level 5 (Critical), 4 (Major), 3 (Moderate), 2 (Minor), 1 (Cosmetic)
               \item Confidence: Level 5 (Certain), 4 (High), 3 (Moderate), 2 (Low), 1 (Speculative)
           \end{itemize}
       \item The text inside \criticize{...}{...}{...} must use proper LaTeX syntax:
@@ -69,6 +68,8 @@ prompt: |
   \end{itemize}
 
 task:
+  files:
+    CRITICIZE: criticize.tex
   prefix: |
     The following \LaTeX documents need notation analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read every document to identify its notation system and conventions.
 
@@ -80,6 +81,9 @@ task:
     </documents>
 
     Read the entire collection before proceeding.
+
+    The \criticize annotation, its scale and its definition; add the definition to the preamble if it is not already there:
+    {{ CRITICIZE_CONTENT }}
   requests:
     - |
       Analyze the paper's notation according to:
@@ -171,9 +175,7 @@ task:
       - \criticize{Cross-document inconsistency: Main paper uses $\mathcal{H}$ for Hilbert space, but appendix uses $H$. Graceful solution: standardize on $\mathcal{H}$ across documents.}{3}{5}
       - \criticize{Unused across all documents: The quantity $\Gamma$ is defined here but never used in \cref{sec:main} or appendices. Consider removing.}{2}{5}
 
-      Add the comment command definition in the preamble if not already present:
-      \usepackage{xcolor}
-      \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\textit{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
+      Add the \criticize definition given above to the preamble if it is not already there.
     - |
       Review the identified notation issues and plan improvements. Separate direct fixes from systemic changes.
 

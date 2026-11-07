@@ -77,10 +77,10 @@ prompt: |
 
   Write the explanatory prose around derivations in plain technical English for the paper's reader: lead with the mathematical content, give each step's justification once and concretely (``by periodicity the boundary terms vanish''), use plain verbs, and remark only on the steps a reader would stumble on; routine steps pass without comment.
 
-  Add this command to the preamble if not present:
-  \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
 task:
+  files:
+    CRITICIZE: criticize.tex
   prefix: |
     The following LaTeX documents need mathematical review. Read the full collection, including appendices and supplementary materials, and improve its mathematical substance rather than its writing style.
 
@@ -92,6 +92,9 @@ task:
     </documents>
 
     Read every document and identify mathematical improvements across the collection.
+
+    The \criticize annotation, its scale and its definition; add the definition to the preamble if it is not already there:
+    {{ CRITICIZE_CONTENT }}
   requests:
     - |
       Enhance these documents focusing on:
