@@ -332,6 +332,14 @@ function decideModelRoute(
 ): ModelRoute
 ```
 
+## DEFAULT_EFFORT
+
+The effort used when neither the caller nor the user names one.
+
+```ts
+const DEFAULT_EFFORT: ReasoningEffort.MEDIUM
+```
+
 ## DEFAULT_MODEL_CAPABILITIES
 
 Base model capabilities with sensible defaults.
