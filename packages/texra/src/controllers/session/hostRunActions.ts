@@ -2,6 +2,7 @@
 
 import {
   Cancelled,
+  isRequestRefusal,
   Rejected,
   type LaunchError,
   type RequestError,
@@ -223,23 +224,26 @@ export const createHostRunActions = Effect.fn(
       if (output) yield* ports.openFinalOutput(output.absolutePath);
     }).pipe(Effect.ignore({ log: 'Warn', message: 'Opening the output' }));
   /**
-   * Every run this window starts, resumes or forks: a failure before the run
-   * opens has no row to show it, so it is logged and shown here, once, by
-   * the notice a refused launch carries; the launched run is the window's
-   * (`launched`), and what follows its end is forked into the window's
-   * scope. The failure still fails the action, which no caller presents
-   * again.
+   * Every run this window starts, resumes or forks: a launch that fails
+   * before its run opens has no row to show it, so it is logged and shown
+   * here, once, by the notice it carries; a request refusal (a resume the
+   * run does not take) is the surface's to word, so it passes through. The
+   * launched run is the window's (`launched`), and what follows its end is
+   * forked into the window's scope. The failure still fails the action,
+   * which no caller presents again.
    */
   const launch = <E>(
     start: Effect.Effect<Run, E, ProcessServices>,
   ): Effect.Effect<Run, E, ProcessServices> =>
     start.pipe(
       Effect.tapError((error) =>
-        Effect.logWarning('A run did not start').pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-          Effect.andThen(presentRunFailure(ports.present, error)),
-        ),
+        isRequestRefusal(error)
+          ? Effect.void
+          : Effect.logWarning('A run did not start').pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(CHANNEL),
+              Effect.andThen(presentRunFailure(ports.present, error)),
+            ),
       ),
       Effect.tap(ports.launched),
       Effect.tap((run) => Effect.forkIn(whenEnded(run), scope)),

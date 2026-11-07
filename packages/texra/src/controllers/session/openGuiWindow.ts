@@ -8,10 +8,10 @@
  * order, the guards, the refusal wording, the guide pages) lives here once,
  * and the difference between the hosts is the table.
  *
- * A host answers its own way only the kinds left out of
- * `SHARED_HOST_REQUEST_KINDS` ({@link OwnHostRequest}: its file pickers, its
- * editor's current file, its tab pop-out), so its switch stays exhaustive
- * and the compiler still names a kind it forgot.
+ * A host answers its own way only the kinds `OWN_REQUEST_LABEL` lists
+ * ({@link OwnHostRequest}: its file pickers, its editor's current file, its
+ * tab pop-out), so its switch stays exhaustive and the compiler still names
+ * a kind it forgot.
  */
 import * as path from 'node:path';
 
