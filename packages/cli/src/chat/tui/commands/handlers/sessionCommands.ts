@@ -18,6 +18,7 @@ import {
   closeForegroundReader,
   openInfoPane,
   openWorkPlanReader,
+  rootRunId,
   sessionMeta,
   setTransientNotice,
 } from '@cli/chat/tui/state/cliState';
@@ -108,7 +109,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         statusLabel: run && runStatus(run).word,
         activeChildSessions,
         activeSkills,
-        sessionId: run ? context.session.runId : undefined,
+        sessionId: run ? rootRunId.get() : undefined,
         commandName: context.cliContext.commandName,
         cwd: context.cliContext.cwd,
         processCwd: context.processCwd,
@@ -228,7 +229,7 @@ function renameCliTask(
  */
 const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
   Effect.fn('forkCliTask')(function* (context: SlashCommandContext) {
-    const runId = selectedRunIdSignal.get() ?? context.session.runId;
+    const runId = selectedRunIdSignal.get() ?? rootRunId.get();
     if (runId === undefined) {
       setTransientNotice('No conversation to fork yet.');
       return;

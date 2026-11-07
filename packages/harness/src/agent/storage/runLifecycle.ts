@@ -335,21 +335,23 @@ export const endRunRows = Effect.fn('endRunRows')(function* (
 /**
  * The rows a stop commits for `runId`: its `run.stop` row, and, for a run
  * no fiber here drives (`end`), its CANCELLED end in the same batch. A run
- * with no rows, or whose lifecycle ended, gets none: there is nothing to
- * stop. The first stop of a lifecycle stands: a person's outranks the
- * shutdown that follows it, and a second ask adds no row.
+ * whose lifecycle ended gets none: there is nothing to stop. The first stop
+ * of a lifecycle stands: a person's outranks the shutdown that follows it,
+ * and a second ask adds no row. Answers whether the run has rows at all:
+ * one that has none yet is a launch that has not registered.
  */
 export const stopRun = Effect.fn('stopRun')(function* (
   runId: RunId,
   reason: RunStopReason,
   end: boolean,
-): Effect.fn.Return<void, Error, EndServices> {
+): Effect.fn.Return<boolean, Error, EndServices> {
   const log = yield* SessionLog;
   const services = yield* endServices;
-  yield* log.transact((tx) =>
+  return yield* log.transact((tx) =>
     Effect.gen(function* () {
       const facts = yield* log.facts(runId);
-      if (facts === null || facts.end !== null) return;
+      if (facts === null) return false;
+      if (facts.end !== null) return true;
       const stop =
         facts.stop === null
           ? [
@@ -362,9 +364,10 @@ export const stopRun = Effect.fn('stopRun')(function* (
           : [];
       if (!end) {
         if (stop.length > 0) yield* tx.append(stop);
-        return;
+        return true;
       }
       yield* endIn(tx, { runId, outcome: RUN_OUTCOME.CANCELLED }, stop);
+      return true;
     }).pipe(Effect.scoped, Effect.provide(services)),
   );
 });

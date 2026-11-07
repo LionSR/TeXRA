@@ -15,10 +15,10 @@ import {
 
 import {
   patchSessionMeta,
+  rootRunId,
   setTransientNotice,
   setCliSessionModelOverride,
 } from '@cli/chat/tui/state/cliState';
-import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import {
   appendLocalNotice,
   appendLocalRequestRefusal,
@@ -53,7 +53,7 @@ export const applyInitialCliAgentSelection = Effect.fn(
 )(function* (agentName: string, context: SlashCommandContext) {
   const fixedAgentNotice =
     'The agent is fixed for this task. Start a new task to use a different agent.';
-  if (!chatTuiCanStartRootRun(context.session)) {
+  if (!context.session.canStartRootRun()) {
     setTransientNotice(fixedAgentNotice);
     return;
   }
@@ -65,7 +65,7 @@ export const applyInitialCliAgentSelection = Effect.fn(
     return;
   }
   // State validation can yield while another input claims the root run.
-  if (!chatTuiCanStartRootRun(context.session)) {
+  if (!context.session.canStartRootRun()) {
     setTransientNotice(fixedAgentNotice);
     return;
   }
@@ -89,7 +89,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
   function* (teamId: string, context: SlashCommandContext) {
     const fixedTeamNotice =
       'The agent is fixed for this task. Start a new task to use a team.';
-    if (!chatTuiCanStartRootRun(context.session)) {
+    if (!context.session.canStartRootRun()) {
       setTransientNotice(fixedTeamNotice);
       return;
     }
@@ -118,7 +118,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       return;
     }
     // Validation yields; another input may have claimed the root run.
-    if (!chatTuiCanStartRootRun(context.session)) {
+    if (!context.session.canStartRootRun()) {
       setTransientNotice(fixedTeamNotice);
       return;
     }
@@ -149,7 +149,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
 export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
   function* (model: string, context: SlashCommandContext) {
     const nextModel = model.trim();
-    if (chatTuiCanStartRootRun(context.session)) {
+    if (context.session.canStartRootRun()) {
       const selection = yield* selectCliRunnableModel(
         [{ model: nextModel, reason: 'explicit-override' }],
         {
@@ -170,8 +170,8 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       return;
     }
 
-    const { runId } = context.session;
-    if (runId === undefined || !context.session.runLive()) {
+    const runId = rootRunId.get();
+    if (runId === undefined) {
       setTransientNotice(
         'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
       );
