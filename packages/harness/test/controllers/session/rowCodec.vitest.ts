@@ -1,7 +1,11 @@
 import { Result, Schema } from 'effect';
 import { expect, it } from 'vitest';
 
-import { qualifyAggregateId, RunIdSchema } from '@texra-ai/harness/schemas';
+import {
+  factName,
+  qualifyAggregateId,
+  RunIdSchema,
+} from '@texra-ai/harness/schemas';
 import { decodeRow, encodeDraft } from '@controllers/session/rowCodec';
 import type { FactKinds } from '@tools/plugins';
 
@@ -36,7 +40,7 @@ const read = (factKinds: FactKinds, version: number, value: number) =>
 // read as the kind's, or one at the kind's version is refused.
 it("reads a fact at its kind's version and refuses any other", () => {
   const factKinds: FactKinds = {
-    'example/count': {
+    [factName({ plugin: 'example', kind: 'count' })]: {
       plugin: 'example',
       kind: 'count',
       version: 4,

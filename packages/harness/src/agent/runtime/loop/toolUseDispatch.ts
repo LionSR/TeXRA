@@ -68,6 +68,7 @@ import {
   type StoredMediaPart,
   type ToolResult,
   type ToolResultPayload,
+  scriptCallId,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import {
@@ -804,7 +805,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
     source: ScriptSource,
     answer?: () => ToolResultPayload['result'],
   ) {
-    const callId = `${script.callId}/${op.seq}`;
+    const callId = scriptCallId(script.callId, op.seq);
     const input = toJsonValue(op.input);
     const known = recordOf(dispatch, yield* cell.current, callId);
     const recorded = known?.script;
@@ -867,7 +868,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   ) =>
     Effect.suspend(() => {
       const fiber = fork(
-        `${script.callId}/${op.seq}`,
+        scriptCallId(script.callId, op.seq),
         settle(op, source, answer),
       );
       return Effect.onInterrupt(Fiber.join(fiber), () =>

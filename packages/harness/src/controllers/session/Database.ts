@@ -44,6 +44,7 @@ import {
   type RunParent,
   type SessionRow,
   type SessionRowDraft,
+  factName,
 } from '@shared/schemas';
 import { InPublisherJob, ProcessIdentity } from '@shared/session/sessionEvents';
 import {
@@ -606,15 +607,13 @@ export const databaseLayer = (
           );
         }
         if (draft.type === 'plugin.fact') {
-          const name = `${draft.plugin}/${draft.kind}`;
+          const name = factName(draft);
           // Never over a corrupt row of the aggregate: it fails whole.
           const last = (yield* reader.read(
             yield* exec(pluginRows, [aggregate]),
             true,
           )).findLast(
-            (row) =>
-              row.type === 'plugin.fact' &&
-              `${row.plugin}/${row.kind}` === name,
+            (row) => row.type === 'plugin.fact' && factName(row) === name,
           );
           const refused =
             target.kind === 'run' && draft.parent !== null

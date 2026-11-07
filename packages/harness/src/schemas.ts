@@ -320,6 +320,8 @@ export {
   type RequestKind,
   type ProposalFileFields,
   qualifyAggregateId,
+  factName,
+  type FactName,
   recipeBlockOf,
   referencedAggregates,
   type RequestDecision,

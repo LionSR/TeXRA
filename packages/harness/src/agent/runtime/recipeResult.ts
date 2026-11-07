@@ -5,6 +5,7 @@
  * read from the run's latest row of the block's fact kind. A run that is no
  * recipe has none.
  */
+import { factName } from '@shared/schemas';
 import { Effect, Result, Schema, SchemaIssue } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -51,10 +52,9 @@ export const readRecipeResult = Effect.fn('readRecipeResult')(function* (
     ).pipe(withLogChannel('RecipeResult'));
     return { key, delivery: [], changes: [] };
   }
-  const { plugin, kind, schema } = result.fact;
-  const row = (yield* (yield* SessionLog).facts(runId))?.facts[
-    `${plugin}/${kind}`
-  ];
+  const { schema } = result.fact;
+  const name = factName(result.fact);
+  const row = (yield* (yield* SessionLog).facts(runId))?.facts[name];
   const refused = (reason: string) =>
     Effect.logWarning(
       `Recipe run ${runId} reports nothing its '${key}' block reads: ${reason}`,
@@ -67,7 +67,7 @@ export const readRecipeResult = Effect.fn('readRecipeResult')(function* (
       }),
     );
   if (row === undefined)
-    return yield* refused(`the run recorded no '${plugin}/${kind}' row`);
+    return yield* refused(`the run recorded no '${name}' row`);
   const parsed = Schema.decodeUnknownResult(schema)(row.value, {
     errors: 'all',
   });

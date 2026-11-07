@@ -54,6 +54,11 @@ export const turnText = (turn: Pick<TurnResult, 'content'>): string =>
     .join('');
 
 /** What a run answers and produced, as its rows record it. */
+/** The key of a call among a run's calls: its id within the response that
+ *  issued it, as a provider reuses call ids across responses. */
+export const callKey = (responseId: string, callId: string): string =>
+  `${responseId}/${callId}`;
+
 export type RunFacts = {
   /** The latest nonempty text from this turn's response rows. A new turn
    *  clears it; tool-only responses, nudges and context edits keep it. */
@@ -83,8 +88,8 @@ export type RunFacts = {
   /** The latest response's answer was finalized for display. */
   readonly answerFinalized: boolean;
   /** Each call a response issued, and each call a script of it issued, by
-   *  `responseId/callId`: its tool and card, and the response that issued
-   *  it (a script's call: its script's) with that row's commit and seq. */
+   *  {@link callKey}: its tool and card, and the response that issued it (a
+   *  script's call: its script's) with that row's commit and seq. */
   readonly calls: Readonly<
     Record<
       string,

@@ -104,6 +104,23 @@ export type LogicalId = string & {
   readonly '~effect/Brand'?: { readonly AggregateId?: never };
 };
 
+/**
+ * A plugin fact's name, `plugin/kind`: the key of every map of a run's facts
+ * (`RunView.facts`, its rows' `facts`, the plugins' fact kinds). Built only
+ * by {@link factName}, so no reader spells the grammar; the stored kind of a
+ * `plugin.fact` row is `plugin.fact/` and this name.
+ */
+export const FactNameSchema = Schema.String.pipe(Schema.brand('FactName'));
+/** {@link FactNameSchema}'s value. */
+export type FactName = typeof FactNameSchema.Type;
+
+/** The name of the fact kind `plugin` declares as `kind`. */
+export const factName = (fact: {
+  readonly plugin: string;
+  readonly kind: string;
+}): FactName =>
+  Schema.decodeUnknownSync(FactNameSchema)(`${fact.plugin}/${fact.kind}`);
+
 /** Qualify a logical id once. An already-qualified key is not an input. */
 export function qualifyAggregateId(kind: 'run', logicalId: RunId): AggregateId;
 export function qualifyAggregateId(

@@ -15,6 +15,7 @@ import {
   type RunOutcome,
   type RunPosition,
   type SessionRow,
+  factName,
 } from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
@@ -62,7 +63,6 @@ function sharedRowsFrom(rows: readonly SharedRunRow[]): SharedRunRows {
 }
 
 /** The key a plugin row kind's latest row is held under. */
-const factKey = (row: RowOf<'plugin.fact'>) => `${row.plugin}/${row.kind}`;
 
 /**
  * The reads of a run's rows, by what each answers: its input (`Inbox.read`)
@@ -98,7 +98,7 @@ export const RUN_ROW_READS = {
     lifecycles,
   })),
   facts: rowRead(['plugin.fact'], (rows) => ({
-    facts: Object.fromEntries(rows.map((row) => [factKey(row), row])),
+    facts: Object.fromEntries(rows.map((row) => [factName(row), row])),
   })),
   results: rowRead(['tool.result'], (rows) => ({
     results: rows.map((row) => row.payload),
@@ -166,7 +166,7 @@ function recordFacts(rows: RunRows, row: SessionRow): Partial<RunRows> {
     case 'run.position':
       return { position: row };
     case 'plugin.fact':
-      return { facts: { ...rows.facts, [factKey(row)]: row } };
+      return { facts: { ...rows.facts, [factName(row)]: row } };
     case 'run.description': {
       const label = row.by === 'model' ? { label: row } : {};
       // A user's title stands until the user renames again.

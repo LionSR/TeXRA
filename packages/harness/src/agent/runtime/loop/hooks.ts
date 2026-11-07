@@ -9,6 +9,7 @@
  * belongs to; a point the run already recorded is never run again, and its
  * recorded effect is used instead.
  */
+import { callKey } from '@shared/session/runFacts';
 import * as path from 'node:path';
 
 import {
@@ -392,8 +393,7 @@ export function stepHooks(
         tool_input: claude.toolInput,
         tool_use_id: call.callId,
       };
-      // Call ids are unique within one response only.
-      const point = `${responseId}/${call.callId}`;
+      const point = callKey(responseId, call.callId);
       const pre = yield* hooksAt(
         run,
         yield* cell.current,

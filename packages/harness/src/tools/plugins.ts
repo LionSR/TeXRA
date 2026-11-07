@@ -33,6 +33,8 @@ import {
   type SessionRow,
   type SessionRowDraft,
   type ToolFact,
+  factName,
+  type FactName,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import type { RunHistoryDraft } from '@shared/session/runState';
@@ -218,7 +220,7 @@ export const announceWrites = (
       row.type !== 'plugin.fact'
     )
       return Effect.void;
-    const writes = writing.get(`${row.plugin}/${row.kind}`);
+    const writes = writing.get(factName(row));
     if (writes === undefined) return Effect.void;
     // File notifications are advisory; a plugin callback must not stop the
     // reader that acknowledges committed rows.
@@ -249,17 +251,17 @@ export const announceWrites = (
 };
 
 /** The plugin fact kinds a store reads, by `plugin/kind`. */
-export type FactKinds = Readonly<Record<string, FactKind>>;
+export type FactKinds = Readonly<Record<FactName, FactKind>>;
 
 /**
  * The fact kinds `plugins` contribute, by `plugin/kind`. A fact kind of another
  * plugin's id, or a kind contributed twice, is a defect of the plugin list.
  */
 export function factKindsOf(plugins: Iterable<Plugin>): FactKinds {
-  const factKinds = new Map<string, FactKind>();
+  const factKinds = new Map<FactName, FactKind>();
   for (const { id, factKinds: own = [] } of plugins)
     for (const factKind of own) {
-      const name = `${factKind.plugin}/${factKind.kind}`;
+      const name = factName(factKind);
       if (factKind.plugin !== id || factKinds.has(name))
         throw new Error(
           `The plugin list is not valid: plugin ${id} contributes the row kind ${name}, which is not its own or is contributed twice.`,
@@ -343,7 +345,7 @@ export function factRows(
     const factKind = plugin?.factKinds?.find((one) => one.kind === draft.kind);
     if (factKind?.supersedes === undefined) return true;
     const latest = (yield* log.runRows(draft.aggregateId, 'facts')).facts[
-      `${draft.plugin}/${draft.kind}`
+      factName(draft)
     ];
     if (latest === undefined || !factKind.supersedes(latest, draft))
       return true;

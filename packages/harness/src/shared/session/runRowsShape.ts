@@ -12,6 +12,7 @@ import type {
   RunFamily,
   RunOutcome,
   SessionRow,
+  FactName,
 } from '@shared/schemas';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import type { QueuedFollowUp } from './runRows';
@@ -105,7 +106,7 @@ export type RunRows = {
   readonly grants: ApprovalGrants | null;
   /** Each plugin row kind's latest row, by `plugin/kind` (`plugin.fact`):
    *  read through its plugin's own reader. */
-  readonly facts: Readonly<Record<string, RowOf<'plugin.fact'>>>;
+  readonly facts: Readonly<Record<FactName, RowOf<'plugin.fact'>>>;
 };
 
 /** A consumed follow-up: its row's `disposition` and commit. */

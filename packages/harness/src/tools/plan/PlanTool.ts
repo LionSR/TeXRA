@@ -8,6 +8,7 @@
  */
 
 // Third-party imports
+import { callKey } from '@shared/session/runFacts';
 import { Effect, Result, Schema, SubscriptionRef } from 'effect';
 
 // Local imports
@@ -143,7 +144,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
           ? launched.success.runId
           : undefined;
       return goal !== undefined &&
-        issued[`${responseId}/${callId}`]?.toolName === PLAN
+        issued[callKey(responseId, callId)]?.toolName === PLAN
         ? [goal]
         : [];
     })
