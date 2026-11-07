@@ -668,9 +668,6 @@ importers:
       monaco-editor:
         specifier: ^0.57.0
         version: 0.57.0
-      nunjucks:
-        specifier: 'catalog:'
-        version: 3.2.4(chokidar@3.6.0)
       openai:
         specifier: 'catalog:'
         version: 7.51.0(google-auth-library@10.9.1(supports-color@10.2.2))(undici@8.12.3)(ws@8.22.1)(zod@4.6.5)
@@ -692,13 +689,13 @@ importers:
       which:
         specifier: 'catalog:'
         version: 7.0.0
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.1
     devDependencies:
       '@types/diff-match-patch':
         specifier: ^1.0.36
         version: 1.0.36
-      '@types/nunjucks':
-        specifier: ^3.2.6
-        version: 3.2.6
       '@types/semver':
         specifier: ^7.8.0
         version: 7.8.0

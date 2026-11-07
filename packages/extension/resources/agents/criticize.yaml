@@ -26,7 +26,7 @@ prompt: |
       \item If derivations are in appendices, comment should be: \criticize{The derivation is provided in Appendix~\ref{app:X}. Consider adding a brief outline here for readability.}{1}{5} (low severity, high confidence)
       \item If appendices have the full derivation but with errors, focus your criticism on the appendix errors, not the main text brevity.
       \item Focus on technical issues requiring action, prioritized by severity.
-      \item Use the command \criticize{comment text}{severity}{confidence} where severity is 1-5 and confidence is 1-5.
+      \item Use the command \criticize{comment text}{severity}{confidence} on the scale given with its definition.
       \item Be strategic: fewer, targeted comments are better than many.
       \item Focus on points that matter for the paper's validity.
       \item Group related minor issues into single comments when possible.
@@ -98,10 +98,9 @@ prompt: |
           \end{itemize}
   \end{itemize}
 
-  Add this command to the preamble if it is not already there:
-  \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
-
 task:
+  files:
+    CRITICIZE: criticize.tex
   prefix: |
     The following LaTeX documents require examination. This could be a polished paper, a draft, or working notes. Read every document, including appendices and supplementary materials, before proceeding. Adjust your severity ratings based on the document's apparent state - be more lenient with polish issues in obvious drafts while maintaining high standards for mathematical correctness.
 
@@ -113,6 +112,9 @@ task:
     </documents>
 
     Read through the document(s) including appendices and prepare for a thorough critical analysis.
+
+    The \criticize annotation, its scale and its definition; add the definition to the preamble if it is not already there:
+    {{ CRITICIZE_CONTENT }}
   requests:
     - |
       Examine this paper according to the following instruction:
@@ -120,8 +122,6 @@ task:
       {{ INSTRUCTION }}
       </instruction>
       If no specific instruction is given, apply your full critical scrutiny to all mathematical content.
-
-      The output documents should use the selected input filenames in this order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 
       FIRST PHASE - DERIVATION EXPANSION: First, create an expanded version showing all mathematical steps explicitly. This is your working document where you verify every claim.
 
@@ -211,14 +211,6 @@ task:
       - For verified sections: \criticize{Verified: Calculated entropy production $\dot{S} = k_B\int J^2/(D\rho) \dd x$ and obtained positive value as required.}{0}{1}
       - Be specific about what calculation you performed and what result you obtained
       This helps track both problems and verified sections during the expansion phase.
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
     - |
       SECOND PHASE - PRIORITIZED CRITICAL COMMENTARY: Consolidate the commentary around issues that affect the collection's validity.
 
@@ -293,8 +285,7 @@ task:
 
       Now output the original documents with STRATEGIC critical comments using \criticize{comment}{severity}{confidence}.
 
-      Add this command to the preamble if it is not already there:
-      \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
+      Add the \criticize definition given above to the preamble if it is not already there.
 
       COMMENTING STRATEGY: If there is one document, limit yourself to 15-20 total comments, focusing on severity 3-5 issues while including 1-2 severity 0 verifications. If there are multiple documents, limit yourself to 10-15 comments per document and prioritize cross-document issues (often severity 4-5). When the same issue appears in multiple documents, comment in the first occurrence and reference it in others. For systemic problems across documents, add one comment in the first document. Include verification confirmations where derivations are particularly well-done. Balance comments across documents; do not overwhelm one document.
 
@@ -324,13 +315,3 @@ task:
       \end{itemize}
 
       Prioritize consequential issues over minor ones. Five well-supported critical findings are better than fifty minor comments. An appendix error that invalidates main results has severity 5. Apply severity consistently, identify issues that cascade between documents, and place comments where readers can connect them to the affected claim.
-
-      Ensure that the output documents use the selected input filenames in this order: {{ INPUT_FILES | default([], true) | join(', ') }}.
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>

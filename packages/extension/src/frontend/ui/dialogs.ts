@@ -88,9 +88,7 @@ export const selectFiles = Effect.fn('selectFiles')(function* (
     // The notice is detached, as the caller's `runFork` left it: the picker
     // answers "nothing picked" straight away rather than waiting on a toast
     // the user may never dismiss.
-    yield* Effect.forkDetach(
-      showLoggedMessage(CHANNEL, 'No workspace folder open'),
-    );
+    yield* showLoggedMessage(CHANNEL, 'No workspace folder open');
     return null;
   }
 

@@ -44,7 +44,11 @@ import {
   documentTaskOptions,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
+import {
+  OUTPUT_DOCUMENT_TAG,
+  OUTPUT_DOCUMENTS_TAG,
+  type RoundOutput,
+} from '@texra/shared/plugins/documentOutputs';
 import { documentTaskKey } from '@texra/agent/output/documentRecipe';
 import type { OutputDependencies } from '@texra/agent/output/outputFileExtraction';
 import { expectedDocuments } from '@texra/agent/output/extraction/filenameHeaders';
@@ -238,7 +242,22 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     task.requests[revision] ?? '',
     inputs,
   )).trim();
-  parts.push(appendCompileFailureRoundContext(request, feedback).trim());
+  // The reply format the recipe parses, written here so no task restates
+  // it: one document per name the revision writes (its outputs, or the
+  // inputs it rewrites), in order.
+  const names =
+    (deps.expected.rewritesInputs ? inputs.INPUT_FILES : inputs.OUTPUT_FILES) ??
+    [];
+  const reply = [
+    `Output the documents, complete and in this order, as:`,
+    `<${OUTPUT_DOCUMENTS_TAG}>`,
+    ...names.map(
+      (name) =>
+        `<${OUTPUT_DOCUMENT_TAG} name="${name}">\n...\n</${OUTPUT_DOCUMENT_TAG}>`,
+    ),
+    `</${OUTPUT_DOCUMENTS_TAG}>`,
+  ].join('\n');
+  parts.push(appendCompileFailureRoundContext(request, feedback).trim(), reply);
   return {
     prompt: parts.filter(Boolean).join('\n\n'),
     media: yield* revisionMedia(docs, revision, files),

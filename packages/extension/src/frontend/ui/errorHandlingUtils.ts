@@ -74,21 +74,32 @@ export function showLoggedErrorMessage(
   });
 }
 
-/** Log a pre-formatted message and display it to the user as an error. */
+// A notice with no action has nothing to answer, but VS Code finishes its
+// promise only when the user dismisses it; the two helpers below show it on
+// a fiber of its own, so the caller (a command an `executeCommand` caller
+// awaits) does not wait for the dismissal.
+
+/** Log a pre-formatted message and display it to the user as an error,
+ *  without waiting for the notice to be dismissed. */
 export const showLoggedMessage = Effect.fn('showLoggedMessage')(function* (
   channel: string,
   message: string,
 ): Effect.fn.Return<string> {
   yield* Effect.logError(message).pipe(withLogChannel(channel));
-  yield* announce(channel, vscodeUi.showErrorMessage(message), undefined);
+  yield* Effect.forkDetach(
+    announce(channel, vscodeUi.showErrorMessage(message), undefined),
+  );
   return message;
 });
 
-/** Log a message and display it to the user as an information notification. */
+/** Log a message and display it to the user as an information notification,
+ *  without waiting for the notice to be dismissed. */
 export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
   function* (channel: string, message: string): Effect.fn.Return<string> {
     yield* Effect.logInfo(message).pipe(withLogChannel(channel));
-    yield* announce(channel, vscodeUi.showInfoMessage(message), undefined);
+    yield* Effect.forkDetach(
+      announce(channel, vscodeUi.showInfoMessage(message), undefined),
+    );
     return message;
   },
 );

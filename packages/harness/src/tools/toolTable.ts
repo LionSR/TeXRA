@@ -135,6 +135,10 @@ export interface AgentBlock<A = unknown, R = unknown> {
   readonly schema: Schema.Codec<A, unknown>;
   /** How a run of this block's recipe reads to whoever launched it. */
   readonly result?: AgentBlockResult<R>;
+  /** The files the block binds, relative to its agent file: part of the
+   *  agent, so a customized copy carries them and the file's digest covers
+   *  them. */
+  files?(block: A): readonly string[];
 }
 
 /**
@@ -168,6 +172,17 @@ export interface RecipeChange {
   readonly base: string | null;
   readonly added: number | null;
   readonly removed: number | null;
+}
+
+/** The files the blocks of an agent file bind (`AgentBlock.files`),
+ *  relative to it, in block order; `owners` is the plugin table's blocks. */
+export function boundFiles(
+  blocks: Readonly<Record<string, unknown>>,
+  owners: ReadonlyMap<string, AgentBlock>,
+): readonly string[] {
+  return Object.entries(blocks).flatMap(
+    ([key, value]) => owners.get(key)?.files?.(value) ?? [],
+  );
 }
 
 /** The value of `block` on `entry`, as the catalog scan parsed it with the

@@ -1,4 +1,5 @@
 import type { CommandKeybinding } from '@texra/shared/commands/catalog';
+import type { OsPlatform } from '@texra/shared/osPlatform';
 
 /**
  * Pure string transformations for keyboard accelerators. The catalog stores
@@ -9,19 +10,9 @@ import type { CommandKeybinding } from '@texra/shared/commands/catalog';
  * (CLI palette, web) share the same normalization rules.
  */
 
-/**
- * The three platform ids the accelerator rules distinguish. Declared here
- * rather than reused from `NodeJS.Platform` because every consumer of these
- * helpers also runs in a browser context — the desktop renderer and the two
- * webview frontends — whose TypeScript projects carry no Node types. Callers
- * on the Node side narrow `process.platform` into this union at their own
- * boundary; browser callers derive it from `navigator`.
- */
-export type DesktopPlatform = 'darwin' | 'win32' | 'linux';
-
 export function toElectronAccelerator(
   keybinding: CommandKeybinding,
-  platform: DesktopPlatform,
+  platform: OsPlatform,
 ): string {
   const key =
     platform === 'darwin' && keybinding.mac ? keybinding.mac : keybinding.key;
@@ -30,7 +21,7 @@ export function toElectronAccelerator(
 
 export function formatDesktopAccelerator(
   accelerator: string | undefined,
-  platform: DesktopPlatform,
+  platform: OsPlatform,
 ): string | undefined {
   if (!accelerator) return undefined;
   const isMac = platform === 'darwin';
@@ -75,10 +66,7 @@ const DISPLAY_ACCELERATOR_PARTS: Record<
   shift: ['⇧', 'Shift'],
 };
 
-function toDisplayAcceleratorPart(
-  part: string,
-  platform: DesktopPlatform,
-): string {
+function toDisplayAcceleratorPart(part: string, platform: OsPlatform): string {
   const trimmed = part.trim();
   const mapped = DISPLAY_ACCELERATOR_PARTS[trimmed.toLowerCase()];
   if (mapped) return platform === 'darwin' ? mapped[0] : mapped[1];

@@ -58,7 +58,7 @@ import {
   originUrl,
 } from '@texra/utils/git/gitReads';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { GhIssue } from './prTypes';
+import { GhIssueSchema } from './prTypes';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
@@ -257,9 +257,10 @@ function pullOf(issue: IssueTarget): PullTarget {
 /** The 200 body of an unconditional GET, or a ToolError naming the status. */
 const ghGetOk = <T>(
   path: string,
+  schema: Schema.Codec<T, unknown>,
   failure = (status: number) => `Unexpected GitHub response status: ${status}`,
 ): Effect.Effect<T, Error, GitHubServices> =>
-  Effect.flatMap(ghGet<T>(path), (res) =>
+  Effect.flatMap(ghGet(path, schema), (res) =>
     res.status === 200
       ? Effect.succeed(res.data)
       : Effect.fail(new ToolError(failure(res.status))),
@@ -274,8 +275,9 @@ const resolveIssueIsPR = (
   issue: IssueTarget,
 ): Effect.Effect<boolean, Error, GitHubServices> =>
   Effect.map(
-    ghGetOk<GhIssue>(
+    ghGetOk(
       `/repos/${issue.owner}/${issue.repo}/issues/${issue.number}`,
+      GhIssueSchema,
       (status) =>
         `Failed to resolve ${targetPath(issue)}: GitHub returned status ${status}. ` +
         `Verify the number exists and the repo is accessible.`,
@@ -325,11 +327,15 @@ const execList = Effect.fn('GitHubSubscriptionTool.list')(function* (
   );
 });
 
-interface OpenPullSummary {
-  number: number;
-  title?: string;
-  head?: { ref?: string };
-}
+const OpenPullSummariesSchema = Schema.Array(
+  Schema.Struct({
+    number: Schema.Number,
+    title: Schema.optional(Schema.String),
+    head: Schema.optional(
+      Schema.Struct({ ref: Schema.optional(Schema.String) }),
+    ),
+  }),
+);
 
 /** The repository's default branch as GitHub reports it; a response that
  *  names none leaves it unconfirmed rather than guessed. */
@@ -338,7 +344,10 @@ const getDefaultBranch = (
   repo: string,
 ): Effect.Effect<string | undefined, Error, GitHubServices> =>
   Effect.map(
-    ghGetOk<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
+    ghGetOk(
+      `/repos/${owner}/${repo}`,
+      Schema.Struct({ default_branch: Schema.optional(Schema.String) }),
+    ),
     (repository) => repository.default_branch,
   );
 
@@ -347,8 +356,9 @@ const listOpenPullSuggestions = (
   repo: string,
 ): Effect.Effect<string, Error, GitHubServices> =>
   Effect.map(
-    ghGet<OpenPullSummary[]>(
+    ghGet(
       `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
+      OpenPullSummariesSchema,
     ),
     (res) => {
       if (res.status !== 200 || res.data.length === 0) {
@@ -442,8 +452,12 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
       );
     }
     const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
-    const [pr] =
-      yield* ghGetOk<Array<{ number: number; html_url: string }>>(apiPath);
+    const [pr] = yield* ghGetOk(
+      apiPath,
+      Schema.Array(
+        Schema.Struct({ number: Schema.Number, html_url: Schema.String }),
+      ),
+    );
     if (!pr) {
       const { defaultBranch, suggestions } = yield* getFindCurrentFallbackInfo(
         remote.owner,

@@ -33,18 +33,17 @@
     "markdown-it": "^15.0.3",
     "markdown-it-texmath": "^1.0.0",
     "monaco-editor": "^0.57.0",
-    "nunjucks": "catalog:",
     "openai": "catalog:",
     "pretty-bytes": "catalog:",
     "pretty-ms": "catalog:",
     "semver": "^7.8.6",
     "sortablejs": "^1.15.7",
     "tar": "catalog:",
-    "which": "catalog:"
+    "which": "catalog:",
+    "yaml": "catalog:"
   },
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",
-    "@types/nunjucks": "^3.2.6",
     "@types/semver": "^7.8.0",
     "@types/sortablejs": "^1.15.9"
   }

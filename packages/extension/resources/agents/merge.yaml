@@ -50,11 +50,3 @@ task:
       - {% if INPUT_FILES[1] %}Each output is{% else %}The output is{% endif %} a complete \LaTeX document, including the preamble, document class declarations, and all content up to \end{document}.
 
       Provide your output as complete \LaTeX document{% if INPUT_FILES[1] %}s{% endif %}. Small discrepancies can affect diff tools, so preserve the source exactly where no edit applies.
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % Merged LaTeX document {{ loop.index }} here
-      </document>
-      {% endfor %}
-      </documents>

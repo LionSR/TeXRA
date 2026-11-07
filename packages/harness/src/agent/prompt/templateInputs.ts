@@ -78,26 +78,14 @@ export type TemplateInputs = typeof TemplateInputsSchema.Type;
  */
 export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
-/** The fixed vocabulary as a runtime list; its reader builds a map from it,
- *  so its order is irrelevant. */
-const TEMPLATE_INPUT_TOKENS = Object.keys(TemplateInputsSchema.fields);
-
 /**
- * Render the fixed runtime template variables as literal `{{ TOKEN }}` text.
- *
- * Agent-creation templates render once when a YAML file is produced, then the
- * generated agent renders again at runtime. These tokens must pass through the
- * creation render literally so the runtime render can substitute them later.
- * A plugin's own variables are not in this fixed list; `throwOnUndefined`
- * stays disabled, so a template tolerates their absence.
+ * The names of the fixed template variables, the keys of
+ * {@link TemplateInputsSchema}. A plugin that adds variables of its own
+ * checks them against this list, so none shadows a fixed one.
  */
-export function buildTemplatePassthrough(): Readonly<Record<string, string>> {
-  return Object.freeze(
-    Object.fromEntries(
-      TEMPLATE_INPUT_TOKENS.map((token) => [token, `{{ ${token} }}`]),
-    ),
-  );
-}
+export const TEMPLATE_INPUT_NAMES: readonly string[] = Object.freeze(
+  Object.keys(TemplateInputsSchema.fields),
+);
 
 /**
  * The roots of the session this run belongs to, held as data, so a run never

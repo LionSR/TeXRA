@@ -13,8 +13,8 @@ import {
 
 describe('commandCatalog', () => {
   // package.json contributes.commands/keybindings are code-generated from the
-  // catalog by scripts/sync-package-contributes.mjs; these are the CI diff
-  // checks that fail when the committed manifest drifts from the catalog.
+  // catalog by scripts/sync-package-contributes.mjs, whose `--check` is the
+  // CI gate on the committed manifest; these check the catalog itself.
 
   // commandKeybindings is derived from a hand-mirrored order list
   // (commandKeybindingOrder) in catalog.ts; this guards the silent-drift case

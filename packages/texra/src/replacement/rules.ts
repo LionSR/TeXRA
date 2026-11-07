@@ -594,7 +594,7 @@ export const SECTION_REPLACEMENTS: NonRegexRuleSet = {
 export const LATEX_SPACING_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
     // ===== Basic spacing fixes =====
-    // Remove unnecessary spacing commands (order matters: longer patterns first)
+    // Remove unnecessary spacing commands
     ' \\; ': ' ',
     ', \\;': ', ',
     ' \\;': ' ',

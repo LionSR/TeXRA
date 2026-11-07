@@ -2,29 +2,38 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 
 import {
   AGENT_TEMPLATE_FILES,
-  renderAgentTemplateString,
+  agentFileFromTemplate,
 } from '@texra/agent/templates/agentTemplateRenderer';
 
-describe('renderAgentTemplateString', () => {
-  it('keeps {{ ALL_CONTEXTS }} literal when the settings-view creation path renders the bundled workflow template (issue #7678)', () => {
-    // The settings-view agent-creation path (agentHandlers.ts createAgentFromTemplate)
-    // only supplies AGENT_NAME/DESCRIPTION/TOOLS_YAML, so {{ ALL_CONTEXTS }} must
-    // survive via AGENT_RUNTIME_TOKENS passthrough or nunjucks blanks it in the written YAML.
-    const templatePath = path.join(
-      process.cwd(),
-      'packages/extension/resources/templates',
-      AGENT_TEMPLATE_FILES.workflowSingle,
+describe('agentFileFromTemplate', () => {
+  // A task's templates render when it runs, over the run's files. Rendered
+  // at creation, a loop over `INPUT_FILES` walked the characters of its
+  // placeholder and asked for documents named `{`, `I`, `N`, ….
+  it('writes the document task template with only its name and description changed', () => {
+    const raw = readFileSync(
+      path.join(
+        process.cwd(),
+        'packages/extension/resources/templates',
+        AGENT_TEMPLATE_FILES.documentTask,
+      ),
+      'utf8',
     );
-    const raw = readFileSync(templatePath, 'utf8');
 
-    const rendered = renderAgentTemplateString(raw, {
-      AGENT_NAME: 'my_agent',
-      DESCRIPTION: 'a test agent',
+    const written = parse(
+      agentFileFromTemplate(raw, {
+        name: 'my_agent',
+        description: "an agent's description",
+      }),
+    );
+
+    expect(written).toStrictEqual({
+      ...parse(raw),
+      name: 'my_agent',
+      description: "an agent's description",
     });
-
-    expect(rendered).toMatch(/\{\{ ALL_CONTEXTS \}\}/);
   });
 });

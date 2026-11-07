@@ -28,7 +28,6 @@ import { pluralize } from '@texra-ai/harness/transcript';
 import {
   callZoteroConnector,
   checkZoteroRunning,
-  withZoteroPort,
   type ConnectorResult,
 } from './bbtClient';
 
@@ -182,7 +181,6 @@ function toZoteroItem(item: typeof ZoteroItemSchema.Type): ZoteroConnectorItem {
  */
 const addItem = Effect.fn('ZoteroAddTool.addItem')(function* (
   item: typeof ZoteroItemSchema.Type,
-  port: number,
   collectionBody: object,
 ) {
   const itemLabel = item.url || item.title || 'Unknown item';
@@ -192,29 +190,24 @@ const addItem = Effect.fn('ZoteroAddTool.addItem')(function* (
   );
   const result: ConnectorResult =
     url && !hasMetadata
-      ? yield* callZoteroConnector(
-          'saveSnapshot',
-          { url, ...collectionBody },
-          port,
-        )
-      : yield* callZoteroConnector(
-          'saveItems',
-          { items: [toZoteroItem(item)], ...collectionBody },
-          port,
-        );
+      ? yield* callZoteroConnector('saveSnapshot', { url, ...collectionBody })
+      : yield* callZoteroConnector('saveItems', {
+          items: [toZoteroItem(item)],
+          ...collectionBody,
+        });
   return { item: itemLabel, ...result };
 });
 
-const addItems = Effect.fn('ZoteroAddTool.execute')(function* (
-  { items, collection }: ZoteroAddInput,
-  port: number,
-) {
+const addItems = Effect.fn('ZoteroAddTool.execute')(function* ({
+  items,
+  collection,
+}: ZoteroAddInput) {
   // Fails with a ToolError if Zotero is not running.
-  yield* checkZoteroRunning(port);
+  yield* checkZoteroRunning();
 
   const collectionBody = collection ? { targetID: collection } : {};
   const results = yield* Effect.forEach(items, (item) =>
-    addItem(item, port, collectionBody),
+    addItem(item, collectionBody),
   );
 
   const successCount = results.filter((r) => r.status === 'success').length;
@@ -248,5 +241,5 @@ export const ZoteroAddTool = defineTool({
   description:
     'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by URL or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files).',
   schema: ZoteroAddInputSchema,
-  execute: withZoteroPort(addItems),
+  execute: addItems,
 });

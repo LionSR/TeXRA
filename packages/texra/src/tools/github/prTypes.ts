@@ -177,5 +177,11 @@ export type GhPullsListEntry = typeof GhPullsListEntrySchema.Type;
 
 /** Array wrappers consumed by the repo poller's non-throwing boundary parse. */
 export const GhIssueCommentArraySchema = Schema.Array(GhIssueCommentSchema);
+export const GhReviewArraySchema = Schema.Array(GhReviewSchema);
+/** One page of `GET …/commits/{sha}/check-runs`. */
+export const GhCheckRunsPageSchema = Schema.Struct({
+  total_count: Schema.Number,
+  check_runs: Schema.Array(GhCheckRunSchema),
+});
 export const GhReviewCommentArraySchema = Schema.Array(GhReviewCommentSchema);
 export const GhPullsListEntryArraySchema = Schema.Array(GhPullsListEntrySchema);

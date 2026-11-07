@@ -17,7 +17,6 @@ import { HttpBody, HttpClientError } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 
 // Local imports
-import { type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import { Settings } from '@texra-ai/harness/host';
 import {
@@ -27,43 +26,24 @@ import {
   withRequestTimeout,
   ToolError,
 } from '@texra-ai/harness/plugins';
-import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
 const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 
 /** The configured Zotero port: one port for both the Connector API and the
- *  Better BibTeX JSON-RPC (different paths). Every reader takes it from the
- *  configuration it was handed — a tool from its call
- *  (`Settings.get(call.env.roots, ZOTERO_PORT_KEY)`), the dashboard's
- *  availability group from its probe inputs. */
+ *  Better BibTeX JSON-RPC (different paths). The transports below read it
+ *  from the calling tool's project; the availability probe from its
+ *  inputs. */
 export const ZOTERO_PORT_KEY = 'bib.zoteroPort';
 
-/**
- * The `execute` every Zotero tool wants: take the call, read the configured
- * port off its roots, and hand both to the tool's own program. The port is
- * the only thing these tools need from the call, and every one of them
- * reached for it the same way, so the read lives here beside the key it
- * reads rather than once per tool.
- */
-export const withZoteroPort =
-  <I>(
-    run: (
-      input: I,
-      port: number,
-    ) => Effect.Effect<ToolResult, Error, PluginToolServices>,
-  ) =>
-  (input: I): Effect.Effect<ToolResult, Error, PluginToolServices> =>
-    Effect.gen(function* () {
-      const call = yield* ToolContext;
-      return yield* run(
-        input,
-        yield* Settings.get<number>(call.env.roots, ZOTERO_PORT_KEY),
-      );
-    });
+/** The port the calling tool's project configures. */
+const zoteroPort = Effect.flatMap(ToolContext, (call) =>
+  Settings.get<number>(call.env.roots, ZOTERO_PORT_KEY),
+);
 
-function zoteroUrl(port: number, pathname: string): string {
+/** The URL of `pathname` on the local Zotero at `port`. */
+export function zoteroUrl(port: number, pathname: string): string {
   return `http://127.0.0.1:${port}${pathname}`;
 }
 
@@ -263,7 +243,6 @@ function bbtRequestError(
  *
  * @param method - JSON-RPC method name (e.g., 'item.search', 'item.export')
  * @param params - Method parameters
- * @param port - Zotero Connector port (default: 23119)
  * @param resultSchema - schema for the method's `result`, validated at the boundary
  * @param timeout - Request timeout in milliseconds
  * @returns The validated result; fails with a ToolError if Zotero is not
@@ -273,10 +252,10 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
   function* <T>(
     method: string,
     params: unknown[],
-    port: number,
     resultSchema: Schema.Codec<T, unknown>,
     timeout: number = ZOTERO_BBT_TIMEOUT_MS,
   ) {
+    const port = yield* zoteroPort;
     const url = zoteroUrl(port, '/better-bibtex/json-rpc');
 
     const raw = yield* withRequestTimeout(
@@ -337,16 +316,15 @@ export type ConnectorResult =
  * user-friendly ToolError if it is not reachable within the ping deadline.
  */
 export const checkZoteroRunning = Effect.fn('bbtClient.checkZoteroRunning')(
-  (port: number) =>
-    withRequestTimeout(
+  function* () {
+    const port = yield* zoteroPort;
+    yield* withRequestTimeout(
       ZOTERO_PING_TIMEOUT_MS,
       Effect.flatMap(scopedOkClient, (client) =>
         client.get(zoteroUrl(port, '/connector/ping')),
       ),
-    ).pipe(
-      Effect.mapError(() => zoteroUnreachableError(port)),
-      Effect.asVoid,
-    ),
+    ).pipe(Effect.mapError(() => zoteroUnreachableError(port)));
+  },
 );
 
 /** The `ConnectorResult` for a request that produced no response. */
@@ -399,8 +377,9 @@ function connectorRequestFailure(error: Error, port: number): ConnectorResult {
  * the worse failure.
  */
 export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
-  (endpoint: string, body: object, port: number) =>
-    withRequestTimeout(
+  function* (endpoint: string, body: object) {
+    const port = yield* zoteroPort;
+    return yield* withRequestTimeout(
       ZOTERO_CONNECTOR_TIMEOUT_MS,
       Effect.gen(function* () {
         // The request scope stays open through the body read, after the
@@ -439,5 +418,6 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
       Effect.catch((error) =>
         Effect.succeed(connectorRequestFailure(error, port)),
       ),
-    ),
+    );
+  },
 );

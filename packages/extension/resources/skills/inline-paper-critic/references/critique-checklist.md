@@ -30,11 +30,11 @@ Use this checklist for inline technical criticism of a manuscript.
 - Severity 3: important but not fatal gap or inconsistency
 - Severity 2: local but worthwhile fix
 - Severity 1: cosmetic or low-impact cleanup
+- Severity 0: verified correct; say what you checked
 
 ## LaTeX safety
 
 - Write inline comments that compile cleanly.
 - Use proper math mode, escaped special characters, and reference syntax.
-- If `\criticize` is undefined, add a minimal macro such as
-  `\newcommand{\criticize}[3]{\textcolor{red}{\textbf{[#2|#3]} #1}}` and match local style conventions.
+- If `\criticize` is undefined, add the definition given in `SKILL.md`.
 - Prefer fewer precise comments over many noisy ones.

@@ -115,11 +115,15 @@ if (check) {
     normalizeLineEndings(nextPackageText) !== normalizeLineEndings(packageText)
   ) {
     throw new Error(
-      'packages/extension/package.json contributes.* is out of sync with the settings/command catalogs. Run npm run sync:package-contributes.',
+      'packages/extension/package.json contributes.* is out of sync with the command catalog or the bundled skills. Run npm run sync:package-contributes.',
     );
   }
-  console.log('package.json contributes.* is in sync with the catalogs');
+  console.log(
+    'package.json contributes.* is in sync with the command catalog and the bundled skills',
+  );
 } else {
   await writeFile(packagePath, nextPackageText);
-  console.log('Synced package.json contributes.* from the catalogs');
+  console.log(
+    'Synced package.json contributes.* from the command catalog and the bundled skills',
+  );
 }
