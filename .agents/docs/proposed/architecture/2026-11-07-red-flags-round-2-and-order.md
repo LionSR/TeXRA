@@ -111,8 +111,9 @@ zero.
 
 ### Rules the order follows
 
-1. **A small fix that changes behaviour goes first.** Two findings are latent
-   defects rather than structure, and each is one PR (step 0).
+1. **A small fix that changes behaviour goes first.** I9 is a latent defect
+   rather than structure, and one PR (step 0). M3 was the other; it was
+   refused on investigation (below).
 2. **A root before what it replaces.** The root note's rule stands: no
    consolidation lands inside a model a root below replaces. G4, G5, N2, K5
    and K9's controller half are R10's; J7 is R6's; M8's tag side is R8's.
@@ -126,24 +127,42 @@ zero.
    template methods delete what they replace in the same PR"). A PR body cites
    the finding ids it closes and the ones in its files it leaves, with why.
 
-### Step 0: two small fixes, any time
+### Step 0: one small fix, any time
 
-- **M3, what a child process sees of the environment.** One
-  `childEnvironment` owner in `packages/harness/src/utils/system/` over
-  `environment` (the project's `.env` over `process.env`) replaces the four
-  spawn sites' three policies. The harness's own credentials
-  (`API_KEY_ENV_NAMES`) and control variables are withheld from every child;
-  the credential-shaped name test (`/KEY|PASSWORD|SECRET|TOKEN|CREDENTIAL/i`)
-  stays an extra withholding for third-party MCP servers, as today; the git
-  helper starts from `environment` too. **Decided (owner, 2026-11-07):**
-  shell commands keep the credential-shaped names they see today, so a
-  project's `GITHUB_TOKEN` still reaches `gh` in a bash command; only the
-  harness's own credentials are withheld from them.
 - **I9, a compile that succeeds without a PDF.** `compileLatex2Pdf`
-  (`latex/texTools.ts:295-299`) answers `ok` on the engine's exit code, and two
-  of its seven callers (`compileCheck.ts`, `LatexDiffManager.ts`) trust it. One
+  (`latex/texTools.ts`) answered `ok` on the engine's exit code; five of its
+  seven callers trusted it and two checked the file their own way. One
   `fs.stat` inside its `Effect.fn` makes `ok` mean "a non-empty PDF exists";
-  the three callers' post-checks and the options schema decode go.
+  the callers' post-checks and the options schema decode go. In review as
+  PR 14783.
+
+#### M3: refused on investigation
+
+M3 proposed one owner for the environment a child process starts from, over
+`inheritedEnv` (shell commands, agent CLIs), `serverEnv` (MCP servers) and
+`makeMachineGitEnv` (plugin fetches, Overleaf clones), with the git helper
+moved onto the project's `.env`. Checked against the tree on 2026-11-07, it
+buys nothing and costs a hole:
+
+- The two credential vocabularies leave no gap. All eleven names in
+  `API_KEY_ENV_NAMES` match the MCP server's
+  `/KEY|PASSWORD|SECRET|TOKEN|CREDENTIAL/i`, so every credential the harness
+  reads is already withheld from an MCP server. The only name one withholds
+  and the other does not is `TEXRA_APPROVAL_POLICY`, which matters only to a
+  nested texra.
+- The machine git helper reads `process.env` on purpose. It runs at plugin
+  install and Overleaf clone, outside any project's approval; a project's
+  `.env` that set `GIT_SSH_COMMAND` (not in `GIT_UNSAFE_ENV_KEYS`) would run
+  an arbitrary command there. Shell commands already see the project's
+  `.env`, but they run under the run's approval policy.
+- The owner kept shell commands' credential-shaped names (2026-11-07), so a
+  shared policy would differ per kind of child anyway: the three functions
+  are three policies, not one policy spelled three times.
+
+Recorded as `RT-child-environment-one-owner` in
+`.agents/docs/refuted-candidates.json`. New evidence that reopens it: a
+credential the harness reads whose name the MCP regex misses, or a child
+kind that should see a project's `.env` without running under approval.
 
 ### Lanes that run in parallel
 
@@ -330,7 +349,7 @@ its files are open.
 
 ### If one driver does it all
 
-Step 0; then R6 (2.1), since it unblocks the most; then the tool-edit
+Step 0 (I9); then R6 (2.1), since it unblocks the most; then the tool-edit
 preview (3.1); the host snapshot (3.2); R10's two PRs (2.2); a window's
 session (3.3); the settings view (3.4); the document task's record (4.3,
 once 14713 is in); the webview transport (3.5); R8's second half (2.3);
@@ -364,10 +383,6 @@ GitHub and Lean (4.1, 4.2); then lanes 5, 6, 7, 8 and 9 in that order. Lane
 
 ## What we give up, and risks
 
-- **M3** changes nothing a shell command or an MCP server sees. The git
-  helper gains the project's `.env`, so a project's proxy or
-  `GIT_SSH_COMMAND` now reaches a plugin's git fetch as it already reaches
-  the project's shell commands.
 - **J1** puts `effect/rpc` in the webview bundle; if the bundle budget or the
   browser-bundle rule refuses it, the transport keeps its own framing and
   only the Promise layer and in-flight Sets go.
@@ -442,7 +457,7 @@ item a report lists without a lane. Full deletion lists are in the reports.
 | K11 | batched                                                                                     | —       | —         |
 | M1  | `toolAvailability`'s latest-wins scheduler, refcount and signal relay                       | S2      | 5.2       |
 | M2  | the MCP pool caches a failed start as a success and remembers it in a Set                   | S3, S6  | 5.1       |
-| M3  | a child process's environment decided in four modules, two vocabularies                     | S5      | 0         |
+| M3  | a child process's environment decided in four modules, two vocabularies                     | S5      | refused   |
 | M4  | the plan tool decodes its own past results to find its goal                                 | S5      | held      |
 | M5  | `/executions` paths per run kind spelled three times                                        | S5      | 5.3       |
 | M6  | the background shell's in-memory capture beside its `process.output` rows                   | S5      | 5.3       |
