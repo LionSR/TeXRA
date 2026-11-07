@@ -16,6 +16,7 @@ import {
   rememberOpenProject,
 } from '../../../../scripts/desktop-package-smoke-environment.mjs';
 import { isolatedHomeEnv } from '../../../../scripts/isolated-home.mjs';
+import { alive } from './serviceFixture.js';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
 
@@ -75,16 +76,6 @@ export async function stopServices(dataRoot: string): Promise<void> {
     }
   }
   await expect.poll(() => pids.filter(alive), { timeout: 30_000 }).toEqual([]);
-}
-
-/** Whether process `pid` still runs. */
-export function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** Stop the profile's services and remove its home. */

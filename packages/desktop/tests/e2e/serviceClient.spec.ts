@@ -18,9 +18,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import { alive, closeTexraApp, expect, test } from './electronApp.js';
+import { closeTexraApp, expect, test } from './electronApp.js';
 import {
   NEXT_BUILD,
+  alive,
   buildCli,
   cli,
   scriptedModel,
