@@ -33,6 +33,7 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import {
+  documentsOutputFact,
   documentsSummary,
   documentTaskOptions,
 } from '@texra/shared/plugins/documents';
@@ -43,13 +44,9 @@ import {
 } from '@texra/agent/output/compileCheck';
 import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
 import { recoverOutputFailure } from '@texra/agent/output/outputOperations';
-import {
-  ensureRoundData,
-  roundsToPersisted,
-  setCompileFailures,
-} from '@texra/agent/output/outputState';
-import { checkExpectedOutputs } from '@texra/agent/output/outputValidation';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
+import { LatexDiffManager } from '@texra/agent/output/LatexDiffManager';
+import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { revisionLayout } from '@texra/shared/constants/workflowOutput';
 import {
@@ -57,6 +54,8 @@ import {
   openDocuments,
   rejectsOnCompileFailure,
   revisionPrompt,
+  roundOf,
+  withRound,
   type Documents,
 } from '@texra/tools/documents/documentState';
 import { computeDocumentDiffs } from '@texra/tools/documents/documentResult';
@@ -65,6 +64,7 @@ import {
   latexdiffDisplayName,
   roundOutputsToOutputSummaries,
   OUTPUT_END_TAG,
+  type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 
 /** A revision of a document task, by its zero-based index. */
@@ -280,18 +280,12 @@ export const DocumentExtractTool = defineTool({
       return yield* Effect.fail(
         new ToolError(`Run ${run} gave no reply to take documents from.`),
       );
-    const { logger } = docs.deps;
+    const { logger, config, fileService, roots } = docs.deps;
     const location = yield* keepReply(docs, revision, reply);
-    // Clear what an earlier attempt of this revision extracted.
-    const round = ensureRoundData(docs.state, revision);
-    round.outputs = [];
-    round.missingOutputs = [];
-    round.compileFailures = [];
-    round.latexdiffs = [];
-    round.reply = location;
+    const xml = new XmlOutputManager(config, logger, fileService, roots.config);
     // A broken structure costs the repair, not the revision: reported, and
     // extraction reads the reply as it is.
-    yield* docs.xml.ensureCorrectXmlStructure(location).pipe(
+    yield* xml.ensureCorrectXmlStructure(location).pipe(
       recoverOutputFailure({
         logger,
         level: 'warn',
@@ -299,18 +293,17 @@ export const DocumentExtractTool = defineTool({
         recover: () => Effect.void,
       }),
     );
-    yield* extractFilesFromXml(
-      docs.state,
+    const extracted = yield* extractFilesFromXml(
       docs.deps,
-      docs.xml,
+      xml,
       location,
       revision,
+      roundOf(docs.rounds, revision - 1)?.outputs ?? [],
     );
-    round.outputs = yield* computeOutputDiffStats(
-      docs.state,
-      docs.deps.roots.workspace,
+    const outputs = yield* computeOutputDiffStats(
+      extracted.outputs,
+      roots.workspace,
       docs.baseFiles,
-      revision,
       // A task that names no outputs rewrites its inputs: its outputs descend
       // from them.
       docs.task.outputs.length === 0,
@@ -318,12 +311,12 @@ export const DocumentExtractTool = defineTool({
     // Without the model's version, a later Accept cannot tell the model
     // what the user changed: reported, and the revision keeps its outputs.
     yield* Effect.forEach(
-      round.outputs,
+      outputs,
       Effect.fnUntraced(function* ({ round: outputRound, location }) {
         const copyPath = revisionLayout(outputRound).modelCopy(location);
         if (copyPath === undefined) return;
         const fs = yield* FileSystem.FileSystem;
-        const copy = join(docs.deps.fileService.runDirectory, copyPath);
+        const copy = join(fileService.runDirectory, copyPath);
         yield* fs.makeDirectory(dirname(copy), { recursive: true });
         yield* fs.copyFile(location.absolutePath, copy);
       }),
@@ -336,7 +329,15 @@ export const DocumentExtractTool = defineTool({
         recover: () => Effect.void,
       }),
     );
-    checkExpectedOutputs(docs.state, docs.deps, revision);
+    // The revision anew: what an earlier attempt of it recorded is replaced.
+    const round: RoundOutput = {
+      round: revision,
+      outputs,
+      missingOutputs: extracted.missing,
+      compileFailures: [],
+      latexdiffs: [],
+      reply: location,
+    };
     const missing = round.missingOutputs;
     if (missing.length > 0)
       yield* docs.requests.present('requestShowInstruction', {
@@ -356,9 +357,9 @@ export const DocumentExtractTool = defineTool({
     }
     yield* present(
       docs,
-      round.outputs.map((output) => output.location),
+      outputs.map((output) => output.location),
     );
-    const files = round.outputs.map((output) =>
+    const files = outputs.map((output) =>
       fileLocationDisplayPath(output.location),
     );
     return {
@@ -371,7 +372,7 @@ export const DocumentExtractTool = defineTool({
         `Revision ${revision + 1}: ${files.length} files`,
       ),
       value: { files, missing },
-      facts: [docs.fact()],
+      facts: [documentsOutputFact(withRound(docs.rounds, round))],
     };
   }),
 });
@@ -396,15 +397,11 @@ export const DocumentCompileTool = defineTool({
   execute: Effect.fn('document_compile')(function* ({ revision }) {
     const docs = yield* documentsOfCall('document_compile');
     const { roots, fileService, logger } = docs.deps;
+    const recorded = roundOf(docs.rounds, revision);
     const check = yield* runCompileCheck(
-      {
-        roots,
-        fileService,
-        outputState: docs.state,
-        logger,
-        runId: docs.run.runId,
-      },
+      { roots, fileService, logger, runId: docs.run.runId },
       revision,
+      recorded?.outputs ?? [],
     ).pipe(
       // A check that could not run (an unreadable setting) checked nothing.
       recoverOutputFailure({
@@ -415,7 +412,19 @@ export const DocumentCompileTool = defineTool({
       }),
     );
     const { failures } = check;
-    setCompileFailures(docs.state, revision, failures);
+    // A revision with no record extracted nothing, so its check checked
+    // nothing and records nothing.
+    const facts =
+      recorded === undefined
+        ? []
+        : [
+            documentsOutputFact(
+              withRound(docs.rounds, {
+                ...recorded,
+                compileFailures: failures,
+              }),
+            ),
+          ];
     if (yield* autoOpensPdf(docs))
       yield* present(
         docs,
@@ -443,7 +452,7 @@ export const DocumentCompileTool = defineTool({
           'Not checked',
         ),
         value,
-        facts: [docs.fact()],
+        facts,
       };
     }
     let message = `Revision ${revision + 1} compiles.`;
@@ -455,7 +464,7 @@ export const DocumentCompileTool = defineTool({
         failures.length === 0 ? 'Compiles' : `${failures.length} failed`,
       ),
       value,
-      facts: [docs.fact()],
+      facts,
     };
   }),
 });
@@ -471,8 +480,9 @@ export const DocumentDiffTool = defineTool({
   schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_diff')(function* ({ revision }) {
     const docs = yield* documentsOfCall('document_diff');
-    const outputs = docs.state.rounds.get(revision)?.outputs ?? [];
-    if (outputs.length === 0)
+    const recorded = roundOf(docs.rounds, revision);
+    const outputs = recorded?.outputs ?? [];
+    if (recorded === undefined || outputs.length === 0)
       return {
         ...executed(
           `Revision ${revision + 1} has no outputs to diff.`,
@@ -480,13 +490,17 @@ export const DocumentDiffTool = defineTool({
         ),
         value: { diffs: [], failed: [], notRun: null },
       };
-    const { artifacts, entries, notRun } =
-      yield* docs.diff.handleLatexdiffOfOutput(
-        revision,
-        outputs,
-        docs.state.rounds.get(revision - 1)?.outputs ?? [],
-      );
-    ensureRoundData(docs.state, revision).latexdiffs = entries;
+    const { logger, fileService, roots } = docs.deps;
+    const { artifacts, entries, notRun } = yield* new LatexDiffManager(
+      logger,
+      docs.run.runId,
+      fileService,
+      roots,
+    ).handleLatexdiffOfOutput(
+      revision,
+      outputs,
+      roundOf(docs.rounds, revision - 1)?.outputs ?? [],
+    );
     if (yield* autoOpensPdf(docs)) yield* present(docs, artifacts);
     const diffs = entries.flatMap((entry) =>
       entry.status === 'ok' ? [fileLocationDisplayPath(entry.diff)] : [],
@@ -515,7 +529,11 @@ export const DocumentDiffTool = defineTool({
     return {
       ...executed(lines.join('\n'), summary),
       value: { diffs, failed, notRun },
-      facts: [docs.fact()],
+      facts: [
+        documentsOutputFact(
+          withRound(docs.rounds, { ...recorded, latexdiffs: entries }),
+        ),
+      ],
     };
   }),
 });
@@ -534,8 +552,7 @@ export const DocumentProposeTool = defineTool({
   schema: Schema.Struct({}),
   execute: Effect.fn('document_propose')(function* () {
     const docs = yield* documentsOfCall('document_propose');
-    const rounds = roundsToPersisted(docs.state);
-    const last = rounds.findLast((round) => round.outputs.length > 0);
+    const last = docs.rounds.findLast((round) => round.outputs.length > 0);
     if (last === undefined)
       return yield* Effect.fail(
         new ToolError('The task produced no documents to propose.'),
@@ -563,7 +580,7 @@ export const DocumentProposeTool = defineTool({
       docs.run.runId,
       roundOutputsToOutputSummaries([last]),
     );
-    const fact = docs.fact(diffs);
+    const fact = documentsOutputFact(docs.rounds, diffs);
     return {
       ...executed(`Proposed: ${files.join(', ')}`, `${files.length} documents`),
       value: { files, documents: documentsSummary(fact) },

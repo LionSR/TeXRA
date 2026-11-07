@@ -4,7 +4,7 @@
  * the catalog), its launch inputs, and the revisions
  * its latest `documents/output` row records. Each document tool
  * (`./documentTools`) opens it, does its one step over one revision, and
- * commits the documents again through the one publisher. Nothing is held
+ * commits the revisions with that one's next record. Nothing is held
  * between calls, except the task's file variables, read once per opening,
  * so a resumed recipe sees what the rows say.
  *
@@ -27,7 +27,6 @@ import {
   toErrorMessage,
   fileLocationDisplayPath,
   type FileLocation,
-  type ToolFact,
 } from '@texra-ai/harness/schemas';
 import {
   AgentCatalog,
@@ -43,20 +42,12 @@ import {
 } from '@texra/shared/constants/workflowOutput';
 import {
   DOCUMENTS_OUTPUT_KIND,
-  documentsOutputFact,
   documentTaskOptions,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import type { DocumentDiffs } from '@texra/shared/plugins/documentOutputs';
-import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
+import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
 import { documentTaskKey } from '@texra/agent/output/documentRecipe';
-import {
-  roundsFromPersisted,
-  roundsToPersisted,
-  type OutputDependencies,
-  type OutputState,
-} from '@texra/agent/output/outputState';
-import { LatexDiffManager } from '@texra/agent/output/LatexDiffManager';
+import type { OutputDependencies } from '@texra/agent/output/outputFileExtraction';
 import {
   appendCompileFailureRoundContext,
   failureContextFromLogs,
@@ -99,27 +90,38 @@ export interface Documents {
    *  the task's `files`. */
   readonly entry: AgentEntry;
   readonly deps: OutputDependencies;
-  readonly state: OutputState;
-  readonly xml: XmlOutputManager;
-  readonly diff: LatexDiffManager;
+  /** The revisions so far, by `round`, as the run's latest documents fact
+   *  records them. A step commits the next list
+   *  (`documentsOutputFact(withRound(...))`) in its result's facts; a call
+   *  running beside it would commit a list without the other's revision, so
+   *  one run's document tools run one at a time (the recipe's order). */
+  readonly rounds: readonly RoundOutput[];
   /** Where each base file's pre-run content lives: every revision diffs
    *  against these, never the live file an in-place revision overwrote. */
   readonly baseFiles: FileLocation[];
-  /** The revisions as the run's documents: the fact the call's result
-   *  states (`ToolResult.facts`), the whole state as the call left it. The
-   *  call loaded that state from the run's latest fact when it opened, so
-   *  a call running beside it would record its own copy, and the later
-   *  write drops the other's changes: one run's document tools run one at
-   *  a time (the recipe's order). */
-  readonly fact: (diffs?: DocumentDiffs) => ToolFact;
 }
+
+/** The record of `revision` among `rounds`, if it has one. */
+export const roundOf = (
+  rounds: readonly RoundOutput[],
+  revision: number,
+): RoundOutput | undefined => rounds.find((round) => round.round === revision);
+
+/** `rounds` with `next` in its revision's place, in revision order. */
+export const withRound = (
+  rounds: readonly RoundOutput[],
+  next: RoundOutput,
+): RoundOutput[] =>
+  [...rounds.filter((round) => round.round !== next.round), next].toSorted(
+    (a, b) => a.round - b.round,
+  );
 
 /** The files a revision works on: the inputs, then the last outputs. */
 function revisionFiles(docs: Documents, revision: number): FileLocation[] {
   const { config, fileService } = docs.deps;
   if (revision === 0)
     return config.inputFiles.map((file) => fileService.createLocation(file));
-  const previous = docs.state.rounds.get(revision - 1);
+  const previous = roundOf(docs.rounds, revision - 1);
   if (previous?.outputs.length)
     return previous.outputs.map((output) => output.location);
   return config.outputFiles.map((file) => fileService.createLocation(file));
@@ -161,15 +163,12 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
       ),
     );
   const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
-  const state: OutputState = {
-    rounds: roundsFromPersisted(output?.rounds ?? []),
-  };
   const sources: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
   ).map((file) => fileService.locateSource(file));
   const deps: OutputDependencies = {
     config,
-    baseFiles: sources,
+    sources,
     logger,
     fileService,
     roots,
@@ -198,12 +197,8 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
     task,
     entry,
     deps,
-    state,
-    xml: new XmlOutputManager(config, logger, fileService, state, roots.config),
-    diff: new LatexDiffManager(logger, runId, fileService, roots),
+    rounds: output?.rounds ?? [],
     baseFiles,
-    fact: (diffs?: DocumentDiffs) =>
-      documentsOutputFact(roundsToPersisted(state), diffs),
   } satisfies Documents;
 });
 
@@ -244,7 +239,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   }
   // The compile failures that rejected the last revision, from the logs its
   // check wrote, while the setting rejects on them.
-  const failures = docs.state.rounds.get(revision - 1)?.compileFailures ?? [];
+  const failures = roundOf(docs.rounds, revision - 1)?.compileFailures ?? [];
   const feedback =
     failures.length > 0 && (yield* rejectsOnCompileFailure(docs))
       ? yield* failureContextFromLogs(failures, deps.logger)

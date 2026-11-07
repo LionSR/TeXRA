@@ -25,7 +25,6 @@ import {
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 
 import { pairOutputsWithBases } from './lineageMapping';
-import { ensureRoundData, type OutputState } from './outputState';
 
 const CHANNEL = 'OutputDiffStats';
 
@@ -113,15 +112,13 @@ const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
 export const computeOutputDiffStats = Effect.fn(
   'documents.computeOutputDiffStats',
 )(function* (
-  state: OutputState,
+  roundOutputs: readonly OutputFileInfo[],
   /** The run's workspace root, which a snapshot's lineage re-resolves to. */
   workspace: string | undefined,
   baseFiles: FileLocation[],
-  currRound: number,
   /** Whether the outputs descend from the inputs (false for new documents). */
   lineage: boolean,
 ) {
-  const roundOutputs = ensureRoundData(state, currRound).outputs;
   const mapping = pairOutputsWithBases(baseFiles, roundOutputs);
 
   return yield* Effect.forEach(

@@ -12,6 +12,7 @@ import { executed, renderPrompt } from '@texra-ai/harness/plugins';
 import { fileLocationDisplayPath } from '@texra-ai/harness/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
 import {
+  roundOf,
   taskInputs,
   type Documents,
 } from '@texra/tools/documents/documentState';
@@ -84,7 +85,7 @@ export const DocumentReviewTool = defineTool({
   }),
   execute: Effect.fn('document_review')(function* ({ revision, checked }) {
     const docs = yield* documentsOfCall('document_review');
-    const round = docs.state.rounds.get(revision);
+    const round = roundOf(docs.rounds, revision);
     const fs = yield* FileSystem.FileSystem;
     const { inputs } = yield* taskInputs(docs);
     const instruction = docs.run.config.instruction.trim();

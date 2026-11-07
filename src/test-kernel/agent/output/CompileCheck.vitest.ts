@@ -11,10 +11,6 @@ import { expect, vi } from 'vitest';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import { fakePath } from '@test/support/FakePlatform';
-import {
-  ensureRoundData,
-  type OutputState,
-} from '@texra/agent/output/outputState';
 import { runCompileCheck } from '@texra/agent/output/compileCheck';
 
 // Local file imports
@@ -47,15 +43,9 @@ layer(latexHost({}), { excludeTestServices: true })('runCompileCheck', (it) => {
     () =>
       Effect.gen(function* () {
         const runId = Schema.decodeUnknownSync(RunIdSchema)('c0e0e1');
-        const outputState: OutputState = { rounds: new Map() };
-        ensureRoundData(outputState, 0).outputs = [
+        const result = yield* runCompileCheck(compileContext(runId), 0, [
           outputFile(runId, path.join('r0', 'main.tex'), 'main.tex', 0),
-        ];
-
-        const result = yield* runCompileCheck(
-          compileContext(runId, outputState),
-          0,
-        );
+        ]);
 
         const { failures } = result;
         expect(failures).toHaveLength(1);

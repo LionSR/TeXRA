@@ -37,7 +37,6 @@ import {
   extractFilenameHeaderDocuments,
   normalizeDocumentName,
 } from './extraction/filenameHeaders';
-import { reportMissingOutputs, type OutputState } from './outputState';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { ConfigProvider } from '@texra-ai/harness/host';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
@@ -64,21 +63,17 @@ export class XmlOutputManager {
   private readonly agentConfig: AgentConfig;
   private readonly logger: AgentTrace;
   private readonly fileService: RunFileService;
-  private readonly outputState: OutputState;
   private readonly config: ConfigProvider;
   constructor(
     agentConfig: AgentConfig,
     logger: AgentTrace,
     fileService: RunFileService,
-    /** The run's round map, where a missing-output report records the round. */
-    outputState: OutputState,
     /** The run's session configuration: the replacement rules it applies. */
     config: ConfigProvider,
   ) {
     this.agentConfig = agentConfig;
     this.logger = logger;
     this.fileService = fileService;
-    this.outputState = outputState;
     this.config = config;
   }
 
@@ -107,39 +102,6 @@ export class XmlOutputManager {
     return null;
   }
 
-  private warnPartialExtraction(
-    round: number,
-    expectedCount: number,
-    extractedCount: number,
-  ): void {
-    if (expectedCount <= extractedCount) {
-      return;
-    }
-    const missingCount = expectedCount - extractedCount;
-    const missing = Array.from(
-      { length: missingCount },
-      (_, i) => `<unextracted document ${i + 1}>`,
-    );
-
-    reportMissingOutputs(this.outputState, round, missing);
-  }
-
-  private warnMissingExpectedFiles(
-    round: number,
-    expectedFiles: readonly string[],
-    documents: ReadonlyArray<{ name: string }>,
-  ): void {
-    const recoveredNames = new Set(
-      documents.map((doc) => normalizeDocumentName(doc.name)),
-    );
-    const missing = expectedFiles.filter(
-      (name) => !recoveredNames.has(normalizeDocumentName(name)),
-    );
-    if (missing.length === 0) return;
-
-    reportMissingOutputs(this.outputState, round, missing);
-  }
-
   private collectLatexFencedBlocks(outputContent: string): string[] {
     return collectLatexFencedBlocksFromResponse(outputContent, {
       onUnclosedFence: (lineCount) => {
@@ -164,9 +126,12 @@ export class XmlOutputManager {
     { self: this },
     function* (
       outputContent: string,
-      round: number,
       baseFiles: readonly FileLocation[],
-    ): Effect.fn.Return<NamedDocument[] | null, never, FileSystem.FileSystem> {
+    ): Effect.fn.Return<
+      { documents: NamedDocument[]; unmatched: string[] } | null,
+      never,
+      FileSystem.FileSystem
+    > {
       const fs = yield* FileSystem.FileSystem;
       const blocks = this.collectLatexFencedBlocks(outputContent);
       if (blocks.length === 0) return null;
@@ -205,21 +170,16 @@ export class XmlOutputManager {
           `blocks against the original input files (${formatResultCount(documents.length, 'document')})`,
       );
 
-      // Recovery is best-effort per block: surface what stayed unmatched so a
-      // partially recovered round never silently reads as a complete one.
       const matchedNames = new Set(documents.map((doc) => doc.name));
-      const unmatchedFiles = files
+      const unmatched = files
         .map((file) => file.name)
         .filter((name) => !matchedNames.has(name));
-      if (unmatchedFiles.length > 0) {
-        reportMissingOutputs(this.outputState, round, unmatchedFiles);
-      }
       if (documents.length < blocks.length) {
         this.logger.debug(
           `${blocks.length - documents.length} of ${formatResultCount(blocks.length, 'fenced block')} matched no input file and were dropped`,
         );
       }
-      return documents;
+      return { documents, unmatched };
     },
   );
 
@@ -231,7 +191,13 @@ export class XmlOutputManager {
       outputLocation: FileLocation,
       round: number,
       baseFiles: readonly FileLocation[] = [],
-    ): Effect.fn.Return<OutputFileInfo[], Error, FileSystem.FileSystem> {
+    ): Effect.fn.Return<
+      { outputs: OutputFileInfo[]; missing: string[] },
+      Error,
+      FileSystem.FileSystem
+    > {
+      /** What the reply should have held and did not. */
+      const missing: string[] = [];
       const fs = yield* FileSystem.FileSystem;
       const rawOutputContent = (yield* fs.readFileString(
         outputLocation.absolutePath,
@@ -282,7 +248,14 @@ export class XmlOutputManager {
             `Recovered ${OUTPUT_DOCUMENTS_TAG} from filename headers (${formatResultCount(documents.length, 'document')})`,
           );
           if (expectedFiles.length > 1) {
-            this.warnMissingExpectedFiles(round, expectedFiles, documents);
+            const recovered = new Set(
+              documents.map((doc) => normalizeDocumentName(doc.name)),
+            );
+            missing.push(
+              ...expectedFiles.filter(
+                (name) => !recovered.has(normalizeDocumentName(name)),
+              ),
+            );
           }
         }
       }
@@ -348,28 +321,29 @@ export class XmlOutputManager {
         // declares any (single-artifact-from-many-inputs agents like ocr/
         // paper2slide), so zipping baseFiles[i] with inputFiles[i] there would
         // label a matched block with the wrong input filename.
-        documents = yield* this.extractDocumentsByContentSimilarity(
+        const matched = yield* this.extractDocumentsByContentSimilarity(
           rawOutputContent,
-          round,
           baseFiles,
         );
+        // Recovery is best-effort per block: what stayed unmatched is
+        // missing, so a partial recovery never reads as a complete one.
+        if (matched) missing.push(...matched.unmatched);
+        documents = matched?.documents ?? null;
       }
 
-      if (!documents) {
-        this.warnPartialExtraction(round, expectedDocumentCount, 0);
-        return [];
-      }
-
-      this.warnPartialExtraction(
-        round,
-        expectedDocumentCount,
-        documents.length,
-      );
-      return yield* this.processMultipleLatexDocuments(
-        documents,
-        outputLocation,
-        round,
-      );
+      // Each document tag the reply held that did not extract.
+      const extractedCount = documents?.length ?? 0;
+      for (let i = extractedCount; i < expectedDocumentCount; i += 1)
+        missing.push(`<unextracted document ${i - extractedCount + 1}>`);
+      if (!documents) return { outputs: [], missing };
+      return {
+        outputs: yield* this.processMultipleLatexDocuments(
+          documents,
+          outputLocation,
+          round,
+        ),
+        missing,
+      };
     },
   );
 

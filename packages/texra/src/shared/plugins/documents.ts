@@ -14,7 +14,6 @@ import { Effect, Record as Rec, Result, Schema, Struct } from 'effect';
 import { type FileLocation, type ToolFact } from '@texra-ai/harness/schemas';
 import {
   DocumentDiffsSchema,
-  DocumentsResultSchema,
   RoundOutputSchema,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
@@ -125,14 +124,17 @@ export function documentRoundsOf(
 /** The documents a run's end reports of its documents fact: every
  *  revision's outputs and compile failures, and the proposed diffs. */
 export function documentsSummary(fact: ToolFact): DocumentsResult {
-  const { rounds, ...diffs } = Schema.decodeUnknownSync(DocumentsOutputSchema)(
-    fact.value,
-  );
-  return Schema.decodeUnknownSync(DocumentsResultSchema)({
+  const {
+    rounds,
+    diffs = [],
+    diffsUnavailable,
+  } = Schema.decodeUnknownSync(DocumentsOutputSchema)(fact.value);
+  return {
     outputs: roundOutputsToOutputSummaries(rounds),
     compileFailures: roundOutputsToCompileFailureSummaries(rounds),
-    ...diffs,
-  });
+    diffs,
+    ...(diffsUnavailable === undefined ? {} : { diffsUnavailable }),
+  };
 }
 
 /** The run's documents by round, from its latest documents row; empty for a

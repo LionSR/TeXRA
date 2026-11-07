@@ -42,7 +42,6 @@ function createXmlManager(
     }),
     logger,
     new RunFileService(RUN_ID, testWorkspaceRoots()),
-    { rounds: new Map() },
     testWorkspaceRoots().config,
   );
 }
@@ -62,7 +61,7 @@ const writeAndSplitDocuments = Effect.fn('writeAndSplitDocuments')(function* (
   options: XmlManagerOptions = {},
 ) {
   yield* write(fakePath('tmp/run/output.xml'), output.join('\n'));
-  return yield* createXmlManager(
+  const { outputs } = yield* createXmlManager(
     inputFiles,
     options,
   ).splitScratchpadMultipleOutputXml(
@@ -72,6 +71,7 @@ const writeAndSplitDocuments = Effect.fn('writeAndSplitDocuments')(function* (
       createExternalLocation(fakePath('tmp/run', name)),
     ),
   );
+  return outputs;
 });
 
 const expectWritten = Effect.fn('expectWritten')(function* (

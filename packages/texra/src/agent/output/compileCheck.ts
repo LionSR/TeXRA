@@ -38,14 +38,12 @@ import {
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { WorkspaceFs } from '@texra-ai/harness/host';
-import type { OutputState } from './outputState';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */
   roots: WorkspaceRoots;
   fileService: RunFileService;
-  outputState: OutputState;
   logger: AgentTrace;
   runId: RunId;
 }
@@ -138,7 +136,11 @@ export function resolveWorkspaceSourceDir(
  * a check that compiles nothing says why (`skipped`).
  */
 export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
-  function* (ctx: CompileCheckContext, currentRound: number) {
+  function* (
+    ctx: CompileCheckContext,
+    currentRound: number,
+    outputs: readonly OutputFileInfo[],
+  ) {
     if (
       !(yield* Settings.get<boolean>(
         ctx.roots,
@@ -150,9 +152,9 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
 
     const { runDirectory } = ctx.fileService;
 
-    const texOutputs = (
-      ctx.outputState.rounds.get(currentRound)?.outputs ?? []
-    ).filter((f) => hasExtension(f.location.absolutePath, '.tex'));
+    const texOutputs = outputs.filter((f) =>
+      hasExtension(f.location.absolutePath, '.tex'),
+    );
     if (texOutputs.length === 0) return skippedCompileCheck('no-tex');
 
     const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(ctx.roots);

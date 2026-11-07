@@ -7,7 +7,7 @@
  * harness holds none of it. Browser-safe: it imports only schemas and
  * browser-safe path helpers.
  */
-import { Effect, Result, Schema, Struct } from 'effect';
+import { Result, Schema, Struct } from 'effect';
 import {
   getBasename,
   DiffStatsSchema,
@@ -31,7 +31,7 @@ const FileLineageSchema = Schema.Struct({
 const OutputFileInfoSchema = Schema.Struct({
   source: Schema.String,
   location: FileLocationSchema,
-  round: RoundNumberSchema.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
+  round: RoundNumberSchema,
   lineage: Schema.NullOr(FileLineageSchema),
   diff: Schema.NullOr(DiffStatsSchema),
 });
@@ -223,16 +223,12 @@ export function latexdiffDisplayName(entry: LatexdiffEntry): string {
 export const RoundOutputSchema = Schema.Struct({
   round: RoundNumberSchema,
   outputs: Schema.Array(OutputFileInfoSchema),
-  compileFailures: Schema.Array(CompileFailureSchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  compileFailures: Schema.Array(CompileFailureSchema),
   /** What this round should have written and did not: the expected output
    *  files it lacks (the disk check owns those) and the documents its reply
    *  held that did not extract. Persisted with all round outputs in the
    *  documents plugin's output fact. */
-  missingOutputs: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  missingOutputs: Schema.Array(Schema.String),
   /** The round's latexdiffs, as its last `document_diff` wrote them. */
   latexdiffs: Schema.Array(LatexdiffEntrySchema),
   /** Where the round's reply is kept, which a reader opens to check the
@@ -300,12 +296,8 @@ export type DocumentDiffs = typeof DocumentDiffsSchema.Type;
  */
 export const DocumentsResultSchema = Schema.Struct({
   outputs: Schema.Array(OutputFileSummarySchema),
-  compileFailures: Schema.Array(CompileFailureSummarySchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  diffs: Schema.Array(ResultDiffSummarySchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  compileFailures: Schema.Array(CompileFailureSummarySchema),
+  diffs: Schema.Array(ResultDiffSummarySchema),
   diffsUnavailable: Schema.optional(Schema.String),
 });
 export type DocumentsResult = typeof DocumentsResultSchema.Type;
