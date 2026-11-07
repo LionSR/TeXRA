@@ -184,17 +184,24 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
       );
     }
     if (resumeId === undefined) return yield* launch(undefined);
-    const claim = yield* (yield* store)(resumeId);
-    if (claim === undefined)
-      return yield* Effect.fail(
-        new ToolError(
-          `${threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
-        ),
-      );
-    // A launch that fails before its turn started closes the claim; the
-    // turn closes it as it ends.
-    return yield* Effect.suspend(() => launch(claim)).pipe(
-      Effect.onError((cause) => Scope.close(claim, Exit.failCause(cause))),
+    const claimThread = yield* store;
+    // The claim is taken with interruption masked, so it is never left
+    // standing with no one to close it; only the launch is interruptible. A
+    // launch that fails before its turn started closes the claim; the turn
+    // closes it as it ends.
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const claim = yield* claimThread(resumeId);
+        if (claim === undefined)
+          return yield* Effect.fail(
+            new ToolError(
+              `${threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
+            ),
+          );
+        return yield* restore(Effect.suspend(() => launch(claim))).pipe(
+          Effect.onError((cause) => Scope.close(claim, Exit.failCause(cause))),
+        );
+      }),
     );
   });
 }

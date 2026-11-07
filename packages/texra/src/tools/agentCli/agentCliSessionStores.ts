@@ -37,16 +37,18 @@ const claimThread = Effect.gen(function* () {
   return (threadId: string) =>
     Effect.gen(function* () {
       if (busy.has(threadId)) return undefined;
-      busy.add(threadId);
       const claim = yield* Scope.make();
       const ended = yield* Deferred.make<void>();
-      yield* hold(Deferred.await(ended));
+      // The release is in place before the thread reads as busy, so a claim
+      // closed at any point after this frees it.
       yield* Scope.addFinalizer(
         claim,
         Effect.sync(() => busy.delete(threadId)).pipe(
           Effect.andThen(Deferred.succeed(ended, undefined)),
         ),
       );
+      busy.add(threadId);
+      yield* hold(Deferred.await(ended));
       return claim;
     });
 });
