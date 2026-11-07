@@ -154,16 +154,23 @@ export function latexdiffVerbs(parts: {
   /**
    * The latexdiffs of a whole run, opened: first each round's diffs as its
    * `document_diff` recorded them, then for each round with outputs and no
-   * recorded diff, a latexdiff of the pairs it calls for. A run whose every
+   * recorded diff (or a failed one), a latexdiff of the pairs it calls for. A run whose every
    * diff failed is refused.
    */
   const run = Effect.fn('latexdiffVerbs.run')(function* (runId: RunId) {
     const documents = documentsOf(
       session.view.current().runs.get(runId) ?? { facts: {} },
     );
-    const recorded = Object.values(documents.latexdiffs).flat();
+    // A round whose recorded diffs all succeeded opens them; a round that
+    // recorded none, or a failed one, is diffed again.
+    const reusable = (round: number) =>
+      documents.latexdiffs[round]?.every((entry) => entry.status === 'ok') ??
+      false;
+    const recorded = roundIndexedEntries(documents.latexdiffs)
+      .filter(([round]) => reusable(round))
+      .flatMap(([, entries]) => entries);
     const unrecorded = roundIndexedEntries(documents.files).filter(
-      ([round]) => documents.latexdiffs[round] === undefined,
+      ([round]) => !reusable(round),
     );
     const betweenRounds =
       unrecorded.length > 0 &&
