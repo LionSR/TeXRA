@@ -1394,7 +1394,7 @@ async function smokePackagedLaunch(args) {
   const label = 'Desktop package launch smoke';
   const desktopRequire = createRequire(join(desktopRoot, 'package.json'));
   const { _electron: electron } = desktopRequire('@playwright/test');
-  const { buildDesktopSmokeEnvironment, rememberOpenProject } =
+  const { buildDesktopSmokeEnvironment, rememberOpenProject, stopServices } =
     await import('./desktop-package-smoke-environment.mjs');
 
   let executablePath;
@@ -1468,6 +1468,8 @@ async function smokePackagedLaunch(args) {
 
     if (temporaryRoot) {
       try {
+        // The app's detached service outlives it; it goes before its home.
+        await stopServices(join(temporaryRoot, 'profile', '.texra'));
         await rm(temporaryRoot, {
           force: true,
           maxRetries: 3,

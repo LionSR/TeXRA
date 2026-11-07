@@ -4,6 +4,7 @@ import { Effect, Layer } from 'effect';
 import type { RunId } from '@shared/schemas';
 import {
   loadDatabaseFixture,
+  stopServices,
   type DatabaseFixture,
 } from '../../../../scripts/desktop-package-smoke-environment.mjs';
 
@@ -13,7 +14,6 @@ import {
   dismissOnboarding,
   expect,
   findWorkspaceStoragePath,
-  stopServices,
   test,
   type LaunchedApp,
   type Profile,

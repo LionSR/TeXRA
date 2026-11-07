@@ -171,10 +171,11 @@ test.beforeAll(async () => {
   await dismissOnboarding(launched.page);
 });
 
+// A failed beforeAll leaves either unset; its own error is the one reported.
 test.afterAll(async () => {
-  await closeTexraApp(launched);
-  await removeProfile(profile);
-  expect(launched.rendererErrors).toEqual([]);
+  if (launched) await closeTexraApp(launched);
+  if (profile) await removeProfile(profile);
+  if (launched) expect(launched.rendererErrors).toEqual([]);
 });
 
 test('splits in both directions, keeps the explorer and agent, and restores the grid', async () => {

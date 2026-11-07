@@ -2,7 +2,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   realpathSync,
   symlinkSync,
 } from 'node:fs';
@@ -14,9 +13,10 @@ import { _electron as electron, test as base, expect } from '@playwright/test';
 import {
   loadDatabaseFixture,
   rememberOpenProject,
+  servicePids,
+  stopServices,
 } from '../../../../scripts/desktop-package-smoke-environment.mjs';
 import { isolatedHomeEnv } from '../../../../scripts/isolated-home.mjs';
-import { alive } from './serviceFixture.js';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
 
@@ -48,34 +48,6 @@ export function createProfile(): Profile {
   const trust = join(homedir(), '.pki');
   if (existsSync(trust)) symlinkSync(trust, join(home, '.pki'));
   return { home, dataRoot: join(home, '.texra'), workspaceRoot };
-}
-
-/** The background services of `dataRoot`: each listens on a socket named
- *  by its process id. */
-async function servicePids(dataRoot: string): Promise<number[]> {
-  const { servicePaths } = await loadDatabaseFixture();
-  const { socketDirectory } = servicePaths(dataRoot);
-  return (existsSync(socketDirectory) ? readdirSync(socketDirectory) : [])
-    .map((name) => /^serve-(\d+)\.sock$/.exec(name)?.[1])
-    .filter((pid) => pid !== undefined)
-    .map((pid) => Number.parseInt(pid, 10))
-    .filter(alive);
-}
-
-/**
- * Stop the background services of `dataRoot`, which outlive the app that
- * started them; a test that writes the store a service holds stops it first.
- */
-export async function stopServices(dataRoot: string): Promise<void> {
-  const pids = await servicePids(dataRoot);
-  for (const pid of pids) {
-    try {
-      process.kill(pid, 'SIGTERM');
-    } catch {
-      // Already gone.
-    }
-  }
-  await expect.poll(() => pids.filter(alive), { timeout: 30_000 }).toEqual([]);
 }
 
 /** Stop the profile's services and remove its home. */

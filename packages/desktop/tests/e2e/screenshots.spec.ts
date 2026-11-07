@@ -43,10 +43,11 @@ test.beforeAll(async () => {
   launched = await launchTexraApp(profile);
 });
 
+// A failed beforeAll leaves either unset; its own error is the one reported.
 test.afterAll(async () => {
-  await closeTexraApp(launched);
-  await removeProfile(profile);
-  expect(launched.rendererErrors).toEqual([]);
+  if (launched) await closeTexraApp(launched);
+  if (profile) await removeProfile(profile);
+  if (launched) expect(launched.rendererErrors).toEqual([]);
 });
 
 // No startup dialog: a fresh profile opens on the conversation, where the

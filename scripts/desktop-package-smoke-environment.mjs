@@ -1,5 +1,6 @@
 // Node imports
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -120,6 +121,9 @@ async function bundleDatabaseFixture() {
     format: 'esm',
     target: 'node22.16',
     tsconfig: join(root, 'tsconfig.json'),
+    // macOS's native file watcher, an optional dependency of a watcher the
+    // bundle reaches; a `.node` binary cannot be bundled.
+    external: ['fsevents'],
     banner: {
       js: "import { createRequire as __texraCreateRequire } from 'node:module'; const require = __texraCreateRequire(import.meta.url);",
     },
@@ -153,4 +157,49 @@ export async function rememberOpenProject(dataRoot, workspaceRoot) {
       );
     }).pipe(Effect.provide(fixture.nodePlatformServices)),
   );
+}
+
+/** Whether process `pid` still runs. */
+export function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The background services of `dataRoot` that still run: each listens on a
+ *  socket named by its process id. */
+export async function servicePids(dataRoot) {
+  const { servicePaths } = await loadDatabaseFixture();
+  const { socketDirectory } = servicePaths(dataRoot);
+  return (existsSync(socketDirectory) ? readdirSync(socketDirectory) : [])
+    .map((name) => /^serve-(\d+)\.sock$/.exec(name)?.[1])
+    .filter((pid) => pid !== undefined)
+    .map((pid) => Number.parseInt(pid, 10))
+    .filter(alive);
+}
+
+/**
+ * Stop the background services of `dataRoot` and wait for them to exit. A
+ * service is detached, so it outlives the app that started it and holds the
+ * profile's stores (and, under Playwright, the app's pipes) until it stops.
+ */
+export async function stopServices(dataRoot) {
+  const pids = await servicePids(dataRoot);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Already gone.
+    }
+  }
+  for (let waited = 0; pids.some(alive); waited += 100) {
+    if (waited >= 30_000)
+      throw new Error(
+        `TeXRA services ${pids.filter(alive).join(', ')} did not stop`,
+      );
+    await sleep(100);
+  }
 }

@@ -72,10 +72,11 @@ test.afterEach(async () => {
   });
 });
 
+// A failed beforeAll leaves either unset; its own error is the one reported.
 test.afterAll(async () => {
-  await closeTexraApp(launched);
-  await removeProfile(profile);
-  expect(launched.rendererErrors).toEqual([]);
+  if (launched) await closeTexraApp(launched);
+  if (profile) await removeProfile(profile);
+  if (launched) expect(launched.rendererErrors).toEqual([]);
 });
 
 test('approval menu shows the current policy and keeps selection marks inside its rows', async () => {
