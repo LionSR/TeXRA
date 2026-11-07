@@ -14,6 +14,7 @@ import { createFakeHost } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
+import { TEXRA_APP } from '@test/support/texraApp';
 import {
   autoDecideRequests,
   createRecordingHost,
@@ -23,21 +24,34 @@ import { UpdateConfigTool } from '@texra/tools/setup/ConfigTools';
 layer(SessionGraph.hosted)('ConfigTools — update_config allowlist', (it) => {
   it.effect('rejects a non-allowlisted key without writing', () =>
     Effect.gen(function* () {
-      const { roots } = createFakeHost();
+      // TeXRA's catalog: the allowlisted keys are its rows.
+      const { roots } = createFakeHost({ app: TEXRA_APP });
+
+      const update = (key: string, value: unknown) =>
+        UpdateConfigTool.call({ key, value, target: 'user' }).pipe(
+          Effect.provide(nativeToolTestLayer({ roots })),
+        );
 
       const key = 'texra.model.useGoogleInteractionsServerState';
-      const result = yield* UpdateConfigTool.call({
-        key,
-        value: true,
-        target: 'user',
-      }).pipe(Effect.provide(nativeToolTestLayer({ roots })));
+      const result = yield* update(key, true);
 
       assert.equal(result.status, 'error');
+      // Rejected by the allowlist itself: the key fails the input's key
+      // literals, not some other step of the call.
+      assert.match(
+        result.error ?? '',
+        /^Invalid input:\nExpected "texra\.bib\.defaultPath" \| [^\n]*\n {2}at \["key"\]$/,
+      );
       assert.deepEqual(
         roots.config.inspect(key.slice('texra.'.length)),
         { globalValue: undefined, workspaceValue: undefined },
         'must not write rejected settings',
       );
+
+      // Control: an allowlisted key on the same layer is written.
+      const allowed = yield* update('texra.bib.zoteroPort', 23200);
+      assert.equal(allowed.status, 'executed');
+      assert.equal(roots.config.get('bib.zoteroPort'), 23200);
     }),
   );
 });

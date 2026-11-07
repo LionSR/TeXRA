@@ -2,67 +2,34 @@
  * The dispatch guarantees the loop must keep: barrier segmentation, the
  * parallel-safe concurrency window, duplicate fan-out without repeated
  * effects, the terminal-result stop, and the deliberate absence of
- * fail-fast sibling interruption. Settlements are read where the model
- * reads them — the one delivered tool group — and, where a dispatch is
- * interrupted, off the run history it did or did not commit to.
+ * fail-fast sibling interruption. Each case runs the tool-use loop over a
+ * scripted model whose first turn calls the tools; settlements are read
+ * off the run history the dispatch did or did not commit to.
  */
 
 // Third-party imports
-
-import {
-  Context,
-  Deferred,
-  Effect,
-  Fiber,
-  Layer,
-  Schema,
-  Scope,
-  ScopedRef,
-  Stream,
-} from 'effect';
+import { Context, Deferred, Effect, Fiber, Layer } from 'effect';
 import { layer } from '@effect/vitest';
 
 import { expect } from 'vitest';
-import {
-  type Model,
-  MODEL_CONFIGS,
-  type ModelOrigin,
-  type TurnResult,
-  TurnResultSchema,
-} from '@texra-ai/llm';
 
 // Local imports
-import {
-  RunIdSchema,
-  AgentConfigSchema,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  qualifyAggregateId,
-  type RunId,
-  type ToolDefinition,
-} from '@texra-ai/harness/schemas';
-import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
-import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
-import { stepHooks } from '@agent/runtime/loop/hooks';
-import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
-import type { Runs } from '@agent/runtime/runRegistry';
-import type {
-  PluginToolServices,
-  RunServices,
-} from '@agent/runtime/ToolServices';
-import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { RunHistory, SessionLog } from '@shared/session/runHistory';
+import type { RunState } from '@shared/session/runState';
 import {
-  RunHistory,
-  type RunCell,
-  SessionLog,
-} from '@shared/session/runHistory';
-import { freshRunState, type RunState } from '@shared/session/runState';
-import { testAgentRun } from '@test/support/scriptedRunLayers';
-import { noopTrace } from '@test/support/noopTrace';
+  agentRunTestLayer,
+  scriptedInvokerLayer,
+  scriptedModel,
+  startedRun,
+  textTurn,
+  toolCallTurn,
+} from '@test/support/scriptedRunLayers';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   FakeHost,
   isolatedTestSession,
@@ -72,10 +39,7 @@ import { ScriptTool } from '@tools/codemode/ScriptTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 import { recordSessionEvents } from './progressTestUtils';
-import type { BoundModel } from '@texra-ai/harness/plugins';
 import type { ITool, ToolResult } from '@texra-ai/harness';
-
-const GPT54 = 'openai/gpt-5.4-2026-03-05';
 
 /** The calls a folded state holds settled. */
 const settledIds = (state: RunState | null | undefined): string[] =>
@@ -83,15 +47,8 @@ const settledIds = (state: RunState | null | undefined): string[] =>
     call.status.kind === 'settled' ? [id] : [],
   );
 
-const ORIGIN = {
-  protocol: 'openai-responses',
-  codecVersion: 1,
-  requestedModel: 'gpt-test',
-  deployment: {
-    endpoint: 'https://api.example.test/v1',
-    credentialScope: 'openai',
-  },
-} satisfies ModelOrigin;
+/** A tool as the step's registry holds it. */
+type StepTool = ITool<Error, PluginToolServices>;
 
 interface DispatchProbe {
   events: string[];
@@ -99,244 +56,89 @@ interface DispatchProbe {
   maxInFlight: number;
 }
 
-function newProbe(): DispatchProbe {
-  return { events: [], inFlight: 0, maxInFlight: 0 };
-}
+const newProbe = (): DispatchProbe => ({
+  events: [],
+  inFlight: 0,
+  maxInFlight: 0,
+});
 
-function probeTool(
+/** A tool that records its start and end on `probe` and holds on `hold`
+ *  between them. */
+const probeTool = (
   probe: DispatchProbe,
   name: string,
-  wait: number | Effect.Effect<void>,
-  options: { endTurn?: boolean; lane?: StepTool['lane'] } = {},
-): StepTool {
-  return {
-    definition: { name, description: name, parameters: {} },
-    lane: options.lane,
-    call: Effect.fn(function* (input: unknown): Effect.fn.Return<ToolResult> {
-      const tag = `${name}:${JSON.stringify(input)}`;
-      probe.events.push(`start ${tag}`);
-      probe.inFlight += 1;
-      probe.maxInFlight = Math.max(probe.maxInFlight, probe.inFlight);
-      yield* typeof wait === 'number' ? Effect.sleep(wait) : wait;
-      probe.inFlight -= 1;
-      probe.events.push(`end ${tag}`);
-      return {
-        status: 'executed',
-        output: `${tag} ok`,
-        endTurn: options.endTurn,
-      };
-    }),
-  };
-}
-
-interface Call {
-  readonly callId: string;
-  readonly name: string;
-  readonly input: Record<string, unknown>;
-}
-
-const makeCall = (
-  callId: string,
-  name: string,
-  input: Record<string, unknown>,
-): Call => ({ callId, name, input });
-
-/** The completed turn whose calls the dispatch settles. */
-function turnWithCalls(calls: readonly Call[]): TurnResult {
-  return Schema.decodeUnknownSync(TurnResultSchema)({
-    kind: 'http',
-    providerResponseId: 'resp-1',
-    requestedOrigin: ORIGIN,
-    returnedModel: null,
-    modelFingerprint: null,
-    content: calls.map((call) => ({
-      kind: 'local-call',
-      providerCallId: call.callId,
-      name: call.name,
-      argumentsText: JSON.stringify(call.input),
-    })),
-    finishReason: 'tool-calls',
-    usage: null,
-  });
-}
-
-/** A binding whose model is never called: dispatch only reads capabilities. */
-function boundModel(): BoundModel {
-  const model: Model = {
-    prepareTurn: () => Effect.die(new Error('dispatch issues no turn')),
-    streamTurn: () => Stream.die(new Error('dispatch issues no turn')),
-  };
-  return {
-    modelId: GPT54,
-    catalogEntry: MODEL_CONFIGS[GPT54],
-    config: MODEL_CONFIGS[GPT54],
-    backend: 'openai',
-    declinedRoutes: [],
-    model,
-    origin: ORIGIN,
-    route: {
-      kind: 'api-key',
-      endpoint: 'https://api.openai.com/v1',
-      provider: 'openai',
-      usageRoute: 'api-key',
-    },
-    forcedToolChoice: true,
-    billing: 'api-key',
-    maxOutputTokens: null,
-    background: false,
-    serviceTier: null,
-    routes: routePolicies(['wire'], GPT54),
-    automaticRetries: Schema.decodeUnknownSync(
-      MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema,
-    )(undefined),
-    textOnly: false,
-  };
-}
-
-let dispatchRunCounter = 0;
-const dispatchRunId = (): RunId =>
-  Schema.decodeUnknownSync(RunIdSchema)(
-    `dd${(dispatchRunCounter++).toString(16).padStart(4, '0')}`,
-  );
-
-/** The opening state of a fresh tool-use run, as the loop authors it. */
-const freshState = (): RunState => ({
-  ...freshRunState(0),
-  family: 'toolUse',
-  modelId: GPT54,
-  backend: 'openai',
+  hold: Effect.Effect<void>,
+  lane?: StepTool['lane'],
+): StepTool => ({
+  definition: { name, description: name, parameters: {} },
+  lane,
+  call: Effect.fn(function* (input: unknown): Effect.fn.Return<ToolResult> {
+    const tag = `${name}:${JSON.stringify(input)}`;
+    probe.events.push(`start ${tag}`);
+    probe.inFlight += 1;
+    probe.maxInFlight = Math.max(probe.maxInFlight, probe.inFlight);
+    yield* hold;
+    probe.inFlight -= 1;
+    probe.events.push(`end ${tag}`);
+    return { status: 'executed', output: `${tag} ok` };
+  }),
 });
 
-const INVOCATION = {
-  invocationId: '0f1e2d3c-4b5a-4a9b-8c7d-6e5f4a3b2c1d',
-  attempt: 1,
-} as const;
-const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
-
-function agentRun(
-  runId: RunId,
-  session: Context.Context<SessionServices>,
-  model: ScopedRef.ScopedRef<BoundModel>,
-): AgentRunShape {
-  return testAgentRun(
-    { runId, session, logger: noopTrace, model, scope: Scope.makeUnsafe() },
-    {
-      config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'assistant',
-        model: GPT54,
-      }),
-    },
-  );
-}
-
-interface DispatchKit {
-  readonly runId: RunId;
-  readonly session: Context.Context<SessionServices>;
-  /** The folded state with the turn's response pending and unsettled. */
-  readonly state: RunState;
-  /** The cell a live dispatch runs on: opened before the response, which
-   *  it then committed, as the invoker's does. */
-  readonly cell: RunCell;
-  /** The tools the dispatch's step offers. */
-  readonly tools: ResolvedTools['registry'];
-  /** The run's services and its calls', over the block's process services
-   *  and the test's host. */
-  readonly layer: Layer.Layer<
-    | AgentRun
-    | RunHistory
-    | Runs
-    | Exclude<PluginToolServices, RunServices | Scope.Scope>,
-    never,
-    RunServices | FakeHost
-  >;
-}
-
-/** A tool as the step's registry holds it. */
-type StepTool = ITool<Error, PluginToolServices>;
-
-interface HarnessOptions {
-  readonly tools: Record<string, StepTool>;
-  readonly calls: readonly Call[];
-}
+type Call = Parameters<typeof toolCallTurn>[0][number];
 
 /**
- * Open a run aggregate and commit the completed turn the dispatch continues
- * from, exactly as `ModelInvoker` does before it hands over.
+ * A headless run of the tool-use loop whose first turn makes `calls`
+ * against `tools`, and whose second ends the run.
  */
-const openDispatch = Effect.fn('openDispatch')(function* (
-  options: HarnessOptions,
-) {
-  const session = yield* isolatedTestSession();
-  const runId = dispatchRunId();
-  const tools = new Map(Object.entries(options.tools));
-  yield* publishTestRunStart(session, runId);
-  yield* Context.get(session, SessionLog).settled;
-  const cell = yield* Context.get(session, RunHistory).open(runId, {
-    activation: () => Effect.succeed([]),
-  });
-  yield* cell.append([
-    appendRow(runId, [
-      { role: 'user', content: [{ kind: 'text', text: 'go' }] },
-    ]),
-    positionRow(runId, freshState(), 'turn.ready'),
-  ]);
-  const turn = turnWithCalls(options.calls);
-  const state = yield* cell.append([
-    {
-      type: 'model.message',
-      aggregateId: qualifyAggregateId('run', runId),
-      payload: {
-        kind: 'attempt',
-        request: '0'.repeat(64),
-        invocation: INVOCATION,
-        origin: ORIGIN,
-      },
-    },
-    {
-      type: 'model.message',
-      aggregateId: qualifyAggregateId('run', runId),
-      payload: {
-        kind: 'response',
-        responseId: RESPONSE_ID,
-        invocation: INVOCATION,
-        turn,
-        calls: dispatchFactsFor(localCallsOf(turn.content), tools, noopTrace),
-        usage: null,
-      },
-    },
-  ]);
-  const model = yield* ScopedRef.make(() => boundModel());
-  const run = agentRun(runId, session, model);
-  const layer = Layer.mergeAll(
-    nativeToolTestLayer({ run: { ...run, session } }),
-    Layer.succeed(AgentRun, run),
-    Layer.succeed(RunHistory, Context.get(session, RunHistory)),
+const runLoop = (
+  session: Context.Context<SessionServices>,
+  runId: RunId,
+  tools: Record<string, StepTool>,
+  calls: readonly Call[],
+) =>
+  Effect.flatMap(openToolUse({ resume: false }), (opened) =>
+    runToolUse({ resume: false }, opened),
+  ).pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        scriptedInvokerLayer,
+        nativeToolTestLayer({ run: { runId, session, toolPolicy: {} } }),
+      ).pipe(
+        Layer.provideMerge(
+          agentRunTestLayer({
+            runId,
+            session,
+            tools,
+            model: scriptedModel([toolCallTurn(calls), textTurn('done')]).model,
+            stopAfterCycle: true,
+          }),
+        ),
+        Layer.provideMerge(
+          Layer.succeed(RunHistory)(Context.get(session, RunHistory)),
+        ),
+      ),
+    ),
+    // The invoker's debug-object sink writes through the process `FileSystem`.
+    Effect.provide(nodePlatformLayer),
   );
-  return {
-    runId,
-    session,
-    state,
-    cell,
-    tools,
-    layer,
-  } satisfies DispatchKit;
+
+/** A fresh session and a started run on it. */
+const openRun = Effect.gen(function* () {
+  const session = yield* isolatedTestSession();
+  return { session, runId: yield* startedRun(session) };
 });
 
-/** Dispatch the pending response of an opened run; `definitions` are the
- *  tools a script run in it may call. */
-const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
+/** The run's tool results, in commit order. */
+const committedResults = (
+  session: Context.Context<SessionServices>,
+  runId: RunId,
+) =>
   Effect.gen(function* () {
-    const run = yield* AgentRun;
-    return yield* dispatchPendingResponse(kit.cell, {
-      definitions,
-      registry: kit.tools,
-      offered: [],
-      services: Context.empty(),
-      stepRoots: [],
-      hooks: stepHooks(run, new Map(), null),
-      modules: {},
-    });
-  }).pipe(Effect.provide(kit.layer), Effect.provide(kit.session));
+    const log = Context.get(session, SessionLog);
+    yield* log.settled;
+    return (yield* log.runRows(qualifyAggregateId('run', runId), 'results'))
+      .results;
+  });
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool-use dispatch',
@@ -350,15 +152,21 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.effect('delivers bounded SQL pages as data to a script', () =>
         Effect.gen(function* () {
           const text = `${'x'.repeat(3000)}|\nend`;
-          const kit = yield* openDispatch({
-            tools: {
+          const { session, runId } = yield* openRun;
+          yield* runLoop(
+            session,
+            runId,
+            {
               // cast: the built-ins' services are the dispatch's.
               script: ScriptTool as unknown as StepTool,
               executions: ExecutionsTool,
             },
-            calls: [
-              makeCall('query-script', 'script', {
-                code: `const page = await tools.executions({
+            [
+              {
+                id: 'query-script',
+                name: 'script',
+                input: {
+                  code: `const page = await tools.executions({
   path: '/executions', action: 'query',
   sql: 'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 201) SELECT x AS number, ? AS text, NULL AS absent FROM n',
   params: [${JSON.stringify(text)}],
@@ -374,15 +182,11 @@ try {
 }
 return { columns: page.columns, count: page.rows.length,
   first: page.rows[0], last: page.rows.at(-1), more: page.more, oversized };`,
-              }),
+                },
+              },
             ],
-          });
-          yield* dispatch(kit, [ExecutionsTool.definition]);
-          yield* Context.get(kit.session, SessionLog).settled;
-          const { results } = yield* Context.get(
-            kit.session,
-            SessionLog,
-          ).runRows(qualifyAggregateId('run', kit.runId), 'results');
+          );
+          const results = yield* committedResults(session, runId);
           const script = results.find(
             ({ callId }) => callId === 'query-script',
           );
@@ -427,43 +231,42 @@ return { columns: page.columns, count: page.rows.length,
             // `slow` never settles on its own; `fast` settles once `slow`
             // has started, so the guest ends while `slow` has its rows and no
             // result.
-            const never = yield* Deferred.make<void>();
             const slowStarted = yield* Deferred.make<void>();
             const probe = newProbe();
-            const kit = yield* openDispatch({
-              tools: {
+            const { session, runId } = yield* openRun;
+            yield* runLoop(
+              session,
+              runId,
+              {
                 // cast: the built-in's services are the dispatch's.
                 script: ScriptTool as unknown as StepTool,
                 slow: probeTool(
                   probe,
                   'slow',
                   Deferred.succeed(slowStarted, undefined).pipe(
-                    Effect.andThen(Deferred.await(never)),
+                    Effect.andThen(Effect.never),
                   ),
-                  { lane: 'parallel' },
+                  'parallel',
                 ),
-                fast: probeTool(probe, 'fast', Deferred.await(slowStarted), {
-                  lane: 'parallel',
-                }),
+                fast: probeTool(
+                  probe,
+                  'fast',
+                  Deferred.await(slowStarted),
+                  'parallel',
+                ),
               },
-              calls: [
-                makeCall('c1', 'script', {
-                  code: 'const pending = tools.slow({}); await tools.fast({}); throw new Error("the guest gave up");',
-                }),
+              [
+                {
+                  id: 'c1',
+                  name: 'script',
+                  input: {
+                    code: 'const pending = tools.slow({}); await tools.fast({}); throw new Error("the guest gave up");',
+                  },
+                },
               ],
-            });
+            );
 
-            yield* dispatch(kit, [
-              { name: 'slow', description: 'slow', parameters: {} },
-              { name: 'fast', description: 'fast', parameters: {} },
-            ]);
-
-            // The results as the run history committed them, in commit order.
-            yield* Context.get(kit.session, SessionLog).settled;
-            const { results } = yield* Context.get(
-              kit.session,
-              SessionLog,
-            ).runRows(qualifyAggregateId('run', kit.runId), 'results');
+            const results = yield* committedResults(session, runId);
             const nested = results.findIndex((r) => r.callId === 'c1/0');
             const own = results.findIndex((r) => r.callId === 'c1');
             expect(results[nested]?.disposition).toBe('skipped');
@@ -481,21 +284,39 @@ return { columns: page.columns, count: page.rows.length,
       it.effect('treats non-safe tools as ordering barriers', () =>
         Effect.gen(function* () {
           const probe = newProbe();
-          const kit = yield* openDispatch({
-            tools: {
-              read_file: probeTool(probe, 'read_file', 20, {
-                lane: 'parallel',
-              }),
-              write_file: probeTool(probe, 'write_file', 10),
+          // The first read holds until the write starts, or for the window a
+          // dispatch that ran the write beside it has to start it. No row marks
+          // a write that is waiting, and the call's prelude does real I/O, so
+          // a live window, not a latch or the test clock, bounds the wait.
+          const writeStarted = yield* Deferred.make<void>();
+          const { session, runId } = yield* openRun;
+          yield* runLoop(
+            session,
+            runId,
+            {
+              read_file: probeTool(
+                probe,
+                'read_file',
+                Deferred.await(writeStarted).pipe(
+                  Effect.timeoutOrElse({
+                    duration: '200 millis',
+                    orElse: () => Effect.void,
+                  }),
+                ),
+                'parallel',
+              ),
+              write_file: probeTool(
+                probe,
+                'write_file',
+                Deferred.succeed(writeStarted, undefined),
+              ),
             },
-            calls: [
-              makeCall('c1', 'read_file', { n: 1 }),
-              makeCall('c2', 'write_file', { n: 2 }),
-              makeCall('c3', 'read_file', { n: 3 }),
+            [
+              { id: 'c1', name: 'read_file', input: { n: 1 } },
+              { id: 'c2', name: 'write_file', input: { n: 2 } },
+              { id: 'c3', name: 'read_file', input: { n: 3 } },
             ],
-          });
-
-          yield* dispatch(kit);
+          );
 
           expect(probe.maxInFlight).toBe(1);
           expect(probe.events).toEqual([
@@ -514,55 +335,52 @@ return { columns: page.columns, count: page.rows.length,
       // fold reads off the result need no other row.
       it.effect('commits the card and the workspace with the tool result', () =>
         Effect.gen(function* () {
-          const probe = newProbe();
           const editingTool: StepTool = {
             definition: { name: 'edit_file', description: 'edit_file' },
             call: () =>
-              Effect.sync((): ToolResult => {
-                probe.events.push('end edit_file');
-                return {
-                  status: 'executed',
-                  output: 'edited',
-                  edits: [
-                    {
-                      path: 'notes.tex',
-                      lineChanges: { added: 3, removed: 1 },
-                    },
-                  ],
-                };
+              Effect.succeed({
+                status: 'executed',
+                output: 'edited',
+                edits: [
+                  {
+                    path: 'notes.tex',
+                    lineChanges: { added: 3, removed: 1 },
+                  },
+                ],
               }),
           };
-          const kit = yield* openDispatch({
-            tools: {
-              edit_file: editingTool,
-              slow_barrier: probeTool(probe, 'slow_barrier', 5_000),
-            },
-            calls: [
-              makeCall('c1', 'edit_file', { path: 'notes.tex' }),
-              makeCall('c2', 'slow_barrier', {}),
-            ],
-          });
-          const recorded = recordSessionEvents(kit.session, {
-            aggregateId: qualifyAggregateId('run', kit.runId),
-          });
-
-          const fiber = yield* Effect.forkChild(dispatch(kit));
           // The barriers are ordered, so the second call starting is proof the
-          // first has settled; the dispatch is then stopped before delivery.
-          while (
-            !probe.events.some((event) => event.startsWith('start slow'))
-          ) {
-            yield* Effect.sleep(5);
-          }
-          yield* Fiber.interrupt(fiber);
+          // first has settled; the run is then stopped before delivery.
+          const barrierStarted = yield* Deferred.make<void>();
+          const { session, runId } = yield* openRun;
+          const recorded = recordSessionEvents(session, {
+            aggregateId: qualifyAggregateId('run', runId),
+          });
 
-          const folded = yield* Effect.provide(
-            Effect.gen(function* () {
-              const runHistory = yield* RunHistory;
-              return yield* runHistory.load(kit.runId);
-            }),
-            kit.layer,
+          const loop = yield* Effect.forkChild(
+            runLoop(
+              session,
+              runId,
+              {
+                edit_file: editingTool,
+                slow_barrier: probeTool(
+                  newProbe(),
+                  'slow_barrier',
+                  Deferred.succeed(barrierStarted, undefined).pipe(
+                    Effect.andThen(Effect.never),
+                  ),
+                ),
+              },
+              [
+                { id: 'c1', name: 'edit_file', input: { path: 'notes.tex' } },
+                { id: 'c2', name: 'slow_barrier' },
+              ],
+            ),
           );
+          yield* Deferred.await(barrierStarted);
+          yield* Fiber.interrupt(loop);
+
+          const folded = yield* Context.get(session, RunHistory).load(runId);
           expect(settledIds(folded)).toEqual(['c1']);
           // No delivery ran: the edit and the call are folded from the
           // settlement itself. The interrupted barrier's call is not counted,
@@ -570,10 +388,9 @@ return { columns: page.columns, count: page.rows.length,
           expect(folded?.edited).toEqual(['notes.tex']);
           expect(folded?.toolCalls).toBe(1);
 
-          // The fast tool's card is now two rows of that same batch rather
-          // than a pair of trace publications: exactly one open and one close
-          // reach the display plane, and the interrupted second call opens
-          // none.
+          // The fast tool's card is two rows of that same batch rather than a
+          // pair of trace publications: exactly one open and one close reach
+          // the display, and the interrupted second call opens none.
           const types = (yield* recorded.read).map((event) => event.type);
           expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
           expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);

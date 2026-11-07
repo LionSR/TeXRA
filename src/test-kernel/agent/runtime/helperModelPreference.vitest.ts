@@ -4,10 +4,14 @@ import { expect } from 'vitest';
 
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { applyHelperModelPreference } from '@agent/runtime/helperModelName';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { withEnv } from '@test/support/testEnv';
-import { FakeHost, SessionGraph } from '@test/support/testKernel';
+import { FakeHost } from '@test/support/testKernel';
+import { texraHosted } from '@test/support/texraApp';
 
-layer(SessionGraph.hosted, { excludeTestServices: true })(
+// TeXRA's catalog names a helper model by default; the harness's names none,
+// and a launch with no helper keeps its model before availability is asked.
+layer(texraHosted, { excludeTestServices: true })(
   'applyHelperModelPreference',
   (it) => {
     // No credential is stored or in the environment, so the helper model
@@ -17,6 +21,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       'falls back to the selected model when the helper model is unavailable',
       () =>
         Effect.gen(function* () {
+          const capture = yield* captureLogEntries;
           const selected = 'anthropic/claude-sonnet-4-6';
           const config = Schema.decodeUnknownSync(AgentConfigSchema)({
             agent: 'latexFixer',
@@ -29,6 +34,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           ).pipe(withEnv({}));
 
           expect(result.model).toBe(selected);
+          expect(
+            capture.has(
+              'WARN',
+              'helperModel',
+              `Keeping ${selected} for latexFixer: helper model deepseek/deepseek-flash@none is unavailable.`,
+            ),
+          ).toBe(true);
         }),
     );
   },
