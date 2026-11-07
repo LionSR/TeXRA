@@ -11,6 +11,7 @@ import {
   type Model,
   type ResolvedTurn,
   type TurnResult,
+  backgroundCapable,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
@@ -29,7 +30,7 @@ import {
   callsAnsweredBy,
   systemUpdateText,
 } from '../message.js';
-import { backgroundCapable, originOf, sameModelOrigin } from '../protocol.js';
+import { originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
   RemoteOperationSchema,

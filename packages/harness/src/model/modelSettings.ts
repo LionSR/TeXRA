@@ -6,7 +6,7 @@
 import { Effect, Struct } from 'effect';
 
 import {
-  type EndpointProviderId,
+  type BackendProviderId,
   findModelProviderPlugin,
   hasUsableApiKey,
   MODEL_PROVIDER_PLUGINS,
@@ -51,12 +51,12 @@ type AssertNever<T extends never> = T;
  */
 type _EndpointRowsCoverTheCatalog = AssertNever<
   | Exclude<
-      EndpointProviderId,
+      BackendProviderId,
       (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['id']
     >
   | Exclude<
       (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['id'],
-      EndpointProviderId
+      BackendProviderId
     >
 >;
 type _RegionRowsCoverTheCatalog = AssertNever<
@@ -109,14 +109,17 @@ const readEndpoints = Effect.fn('modelSettings.endpoints')(function* (
 /** One provider's endpoint entry: its dashboard URL, else its region's default. */
 const readEndpointEntries = Effect.fn('modelSettings.endpoint')(function* (
   stores: SettingsStores,
-  { id, baseUrl }: (typeof MODEL_PROVIDER_PLUGINS)[number],
+  plugin: (typeof MODEL_PROVIDER_PLUGINS)[number],
 ) {
+  const { id } = plugin;
   const endpointKey = providerEndpointKey(id);
   const custom = endpointKey
     ? yield* Settings.get<string>(stores, endpointKey)
     : '';
   if (custom) return [[id, `https://${hostPath(custom)}`] as const];
-  if (baseUrl == null || typeof baseUrl === 'string') return [];
+  if (plugin.kind !== 'backend' || typeof plugin.baseUrl === 'string')
+    return [];
+  const { baseUrl } = plugin;
   const regionKey = providerRegionSetting(id)?.key;
   const region =
     regionKey && (yield* Settings.get<boolean>(stores, regionKey))

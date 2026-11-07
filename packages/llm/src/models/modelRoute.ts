@@ -157,7 +157,7 @@ export function codexBackendModelId(config: Pick<ModelConfig, 'id'>): string {
  * the Kimi Code backend, not derivable from other model fields.
  */
 export function isKimiSubscriptionEligible(
-  model: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
+  model: Pick<ModelConfig, 'provider' | 'kimiSubscription'>,
 ): boolean {
   return (
     model.provider === ModelProvider.MOONSHOT && model.kimiSubscription === true
@@ -210,8 +210,11 @@ function zeroCostAccessOverrides(contextWindow: number): {
  * platform's; `undefined` for a provider with no HTTP route.
  */
 function pluginEndpoint(provider: string): string | undefined {
-  const baseUrl = findModelProviderPlugin(provider)?.baseUrl;
-  return typeof baseUrl === 'string' ? baseUrl : baseUrl?.international;
+  const plugin = findModelProviderPlugin(provider);
+  if (plugin?.kind !== 'backend') return undefined;
+  return typeof plugin.baseUrl === 'string'
+    ? plugin.baseUrl
+    : plugin.baseUrl.international;
 }
 
 /** Decide the route `config` takes under `facts`. Pure. */
