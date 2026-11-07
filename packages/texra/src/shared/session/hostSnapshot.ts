@@ -112,10 +112,22 @@ export const HostSnapshotSchema = Schema.Struct({
     /** The tools TeXRA needs that this machine lacks; never empty. */
     dependency: Schema.NullOr(Schema.Array(MissingToolSchema)),
     gettingStarted: Schema.Boolean,
-    /** Why the background service this window's tasks run in is out of
-     *  reach (it went away and the window is reaching it again, or a newer
-     *  TeXRA's service refused this window); null while it is reached. */
-    serviceOffline: Schema.NullOr(Schema.String),
+    /** Where this window's tasks run, when the user should be told:
+     *  `offline` while the background service they run in is out of reach
+     *  (it went away and the window is reaching it again, or a newer
+     *  TeXRA's service refused this window), and no task starts; `local`
+     *  when the window's folder runs its tasks in this process, because the
+     *  service was out of reach when it opened. Null while a service
+     *  window's service is reached, and for a window with no folder. */
+    service: Schema.NullOr(
+      Schema.Union([
+        Schema.Struct({
+          kind: Schema.Literal('offline'),
+          reason: Schema.String,
+        }),
+        Schema.Struct({ kind: Schema.Literal('local'), reason: Schema.String }),
+      ]),
+    ),
   }),
   onboarding: OnboardingFunnelStateSchema,
 });
@@ -138,7 +150,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
       agentConfig: null,
       dependency: null,
       gettingStarted: false,
-      serviceOffline: null,
+      service: null,
     },
     onboarding: 'done',
   };

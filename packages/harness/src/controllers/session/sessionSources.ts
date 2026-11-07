@@ -12,8 +12,8 @@
  * - `TranscriptSubscriptions`: the aggregates some surface holds a
  *   transcript subscription on, the union of one set per port.
  *
- * The runtime input reader captures these levels before its finite event
- * read. A webview receives the resulting ordered inputs directly, without
+ * The runtime input reader captures these levels before it takes the
+ * batches the publisher committed by then. A webview receives the resulting ordered inputs directly, without
  * constructing another copy of the accumulated text.
  */
 import { Context, Effect, Layer, type Scope, SubscriptionRef } from 'effect';

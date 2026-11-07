@@ -24,7 +24,6 @@ import {
   Clock,
   Context,
   Effect,
-  Exit,
   Layer,
   Option,
   Schema,
@@ -54,15 +53,15 @@ import {
   DatabaseOpenFailed,
   DatabaseAggregateClosed,
   DatabaseReadFailed,
-  DatabaseStoreNewer,
   DatabaseWriteFailed,
+  RunChanged,
   type SessionOpenError,
 } from '@shared/session/database';
 import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
-import { LISTED_TYPES, projectionUpkeep } from './projections';
+import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
 import {
   EVENT_COLUMNS,
   EVENT_FROM,
@@ -80,6 +79,7 @@ import {
 } from './rowCodec';
 import {
   AGGREGATE,
+  DISPLAY_READ_KINDS,
   DISPLAY_READ_TYPES,
   PROJECTED_COLUMNS,
   PROJECTED_FROM,
@@ -95,9 +95,8 @@ export const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
-/** The open transaction's mode, null outside one; `derive` (projection
- *  catch-up) takes the write lock and wakes no reader. */
-const TxMode = Context.Reference<'read' | 'write' | 'derive' | null>(
+/** The open transaction's mode, null outside one. */
+const TxMode = Context.Reference<'read' | 'write' | null>(
   '@texra-ai/harness/session/TxMode',
   { defaultValue: () => null },
 );
@@ -139,10 +138,6 @@ SELECT s.kind, s.logical_id AS logicalId, s.uid,
 FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
 WHERE s.id IN (${AGGREGATE_LIST})
 `;
-/** The aggregates whose existence changed after an ordinal
- *  (`aggregate_change`, `storeSchema.ts`), a primary-key range. */
-const CHANGED_SINCE = `SELECT kind, logical_id AS logicalId, change
-  FROM aggregate_change WHERE change > ? ORDER BY change`;
 
 /** Stored rows a display page reads before it runs on to its batch's end. */
 const DISPLAY_PAGE_ROWS = 2000;
@@ -174,6 +169,17 @@ const displayUnion = (where: string, order: string, arm?: string) =>
     UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
     ${arm === undefined ? '' : `UNION ALL ${arm}`}
   ) WHERE ${where} ORDER BY ${order}`;
+/** A committed batch's display rows, as a display read of its commits
+ *  selects and settles them: the display kinds and tool results, each priced
+ *  row's projected `usage` row after it, each card's output projected. */
+const displayRows = (rows: readonly SessionRow[]) =>
+  settleCards(
+    rows.flatMap((row) => [
+      ...(DISPLAY_READ_KINDS.has(row.type) ? [row] : []),
+      ...usageRows(row),
+    ]),
+  ).filter(isDisplayRow);
+
 /** How a store is opened: a project store, created if absent
  *  (`persistent`) or only opened (`existing`), is held exclusively by this
  *  process for the connection's life; the `global` store is shared across
@@ -259,12 +265,9 @@ export const databaseLayer = (
           ),
           mapDatabaseFailure(openFailed),
         );
-      const level = yield* SubscriptionRef.make(0);
-      const observedCommit = yield* SubscriptionRef.make(0);
-      /** Commits only move forward: a poll that read the high-water mark
-       *  before a local commit never sets it back. */
-      const observe = (commit: number) =>
-        SubscriptionRef.update(observedCommit, (c) => Math.max(c, commit));
+      /** Moved by every value write, this process's or (on the global
+       *  store, by the poll) another's: what `values.changes` wakes on. */
+      const valuesWritten = yield* SubscriptionRef.make(0);
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
       const commitFromRows = ([row]: readonly SqlRow[]) =>
         row === undefined
@@ -287,7 +290,7 @@ export const databaseLayer = (
       /** The store gate (`storeGate`), run at open. A project store's one
        *  writer is this process, so what it holds cannot change under it;
        *  the global store's other processes can be newer builds, so there
-       *  the gate runs again in every outermost write. */
+       *  the gate runs again in every value write (`transact`). */
       const factKinds = factKindsOf((yield* ToolRegistry).entries.values());
       const gate = storeGate(exec, factKinds);
       const reader = rowReader(path, factKinds, exec);
@@ -302,10 +305,6 @@ export const databaseLayer = (
         );
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
-      );
-      yield* SubscriptionRef.set(
-        observedCommit,
-        yield* currentCommit.pipe(mapDatabaseFailure(openFailed)),
       );
       yield* gate.pipe(mapDatabaseFailure(openFailed));
       const dependents = `WITH RECURSIVE dependents(id) AS (
@@ -362,8 +361,8 @@ export const databaseLayer = (
       let version = (yield* execOne(dataVersion, []).pipe(
         mapDatabaseFailure(openFailed),
       ))?.data_version;
-      // Only the global store has other writers to watch for. A failed read
-      // logs and retries; `version` moves once its commit is read.
+      // Only the global store has other writers to watch for, and it holds
+      // values alone. A failed read logs and retries.
       if (mode === 'global')
         yield* Effect.forkScoped(
           Stream.tick('250 millis').pipe(
@@ -373,10 +372,11 @@ export const databaseLayer = (
                   const next = (yield* query(execOne(dataVersion, [])))
                     ?.data_version;
                   if (next !== version) {
-                    const commit = yield* query(currentCommit);
                     version = next;
-                    yield* observe(commit);
-                    yield* SubscriptionRef.update(level, (wake) => wake + 1);
+                    yield* SubscriptionRef.update(
+                      valuesWritten,
+                      (wake) => wake + 1,
+                    );
                   }
                 },
                 Effect.tapError((error) =>
@@ -398,31 +398,7 @@ export const databaseLayer = (
       const withTransaction = SqlClient.makeWithTransaction({
         transactionService: sql.transactionService,
         spanAttributes: [['db.system.name', 'sqlite']],
-        acquireConnection: Effect.fn('Database.acquireConnection')(
-          function* (restore) {
-            const mode = yield* TxMode;
-            const connection = yield* restore(sql.reserve);
-            // Runs before the release (added after it): a COMMIT is published
-            // before the connection goes, even with an interrupt pending.
-            yield* Effect.addFinalizer((exit) =>
-              mode === 'write' && Exit.isSuccess(exit)
-                ? Effect.gen(function* () {
-                    yield* observe(
-                      commitFromRows(
-                        yield* connection.executeUnprepared(
-                          highWater,
-                          [],
-                          undefined,
-                        ),
-                      ),
-                    );
-                    yield* SubscriptionRef.update(level, (wake) => wake + 1);
-                  }).pipe(Effect.orDie)
-                : Effect.void,
-            );
-            return connection;
-          },
-        ),
+        acquireConnection: (restore) => restore(sql.reserve),
         begin: (connection) =>
           Effect.flatMap(TxMode, (mode) =>
             connection.executeUnprepared(
@@ -458,35 +434,33 @@ export const databaseLayer = (
       // Every body is database-only. A busy lock (the global store's other
       // writers) runs the body again whole. In a caller's transaction a body
       // is a savepoint.
-      const own = <A, E>(
-        txMode: 'read' | 'write' | 'derive',
-        body: Effect.Effect<A, E>,
-      ) =>
+      const own = <A, E>(txMode: 'read' | 'write', body: Effect.Effect<A, E>) =>
         Effect.flatMap(TxMode, (outer) =>
           outer !== null
             ? withTransaction(body)
-            : retryBusy(
-                withTransaction(
-                  mode === 'global' && txMode !== 'read'
-                    ? Effect.andThen(gate, body)
-                    : body,
-                ),
-              ).pipe(Effect.provideService(TxMode, txMode)),
+            : retryBusy(withTransaction(body)).pipe(
+                Effect.provideService(TxMode, txMode),
+              ),
         );
       const transaction = <A, E, EBody>(
-        mode: 'read' | 'write' | 'derive',
+        mode: 'read' | 'write',
         body: Effect.Effect<A, EBody>,
         failed: (cause: unknown) => E,
       ) => own(mode, body).pipe(mapDatabaseFailure(failed));
       /** A write transaction. A closed-aggregate rejection the body raised
        *  leaves as itself, as it does from `job`; any other failure is the
-       *  write's. */
+       *  write's. On the global store, whose other processes can be newer
+       *  builds, the gate runs first in each (`job` serves a project store
+       *  alone, whose gate ran at open). */
       const transact = <A, E>(body: Effect.Effect<A, E>) =>
-        transaction('write', body, (cause) =>
-          cause instanceof DatabaseAggregateClosed
-            ? // cast: only a body raises it, so it is one of its errors.
-              (cause as Extract<E, DatabaseAggregateClosed>)
-            : writeFailed(cause),
+        transaction(
+          'write',
+          mode === 'global' ? Effect.andThen(gate, body) : body,
+          (cause) =>
+            cause instanceof DatabaseAggregateClosed
+              ? // cast: only a body raises it, so it is one of its errors.
+                (cause as Extract<E, DatabaseAggregateClosed>)
+              : writeFailed(cause),
         );
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND closed_by IS NULL`;
@@ -532,35 +506,13 @@ export const databaseLayer = (
         return yield* new DatabaseAggregateClosed({ aggregateId: id });
       });
       const upkeep = projectionUpkeep(exec, reader.read, path);
-      /** A read of the projections, in the same read transaction as the
-       *  check that they are current, so another build's rebuild never hands
-       *  it a half-built one; a stale one catches up, a transaction a step,
-       *  and the read runs again. */
-      const projected = Effect.fn('projected')(function* <A, E>(
-        read: Effect.Effect<A, E>,
-      ) {
-        for (;;) {
-          const result = yield* transaction(
-            'read',
-            Effect.gen(function* () {
-              if (!(yield* upkeep.current(yield* currentCommit))) return null;
-              return { value: yield* read };
-            }),
-            readFailed,
-          );
-          if (result !== null) return result.value;
-          yield* transaction(
-            'derive',
-            Effect.flatMap(currentCommit, upkeep.catchUp),
-            readFailed,
-          ).pipe(Effect.repeat({ until: (done) => done }));
-        }
-      });
+      /** A read of several statements, as one snapshot. */
+      const snapshot = <A, E>(read: Effect.Effect<A, E>) =>
+        transaction('read', read, readFailed);
       const appendRows = Effect.fn('appendRows')(function* (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
       ) {
-        const before = yield* currentCommit;
         const committed = yield* Effect.forEach(prepared, ({ draft, row }) =>
           appendRow(draft, row, at),
         );
@@ -574,7 +526,7 @@ export const databaseLayer = (
         );
         for (const [type, version] of kinds)
           yield* exec(UPSERT_KIND, [type, version]);
-        yield* upkeep.follow(committed, before);
+        yield* upkeep.follow(committed);
         return committed;
       });
       const appendRow = Effect.fn('appendRow')(function* (
@@ -586,13 +538,16 @@ export const databaseLayer = (
         const target = aggregateTarget(draft.aggregateId);
         const columns = aggregateColumns(draft.aggregateId);
         if (edges.reparent != null) {
-          // A new parent run must be open.
+          // A new parent run must be open; a late plugin writer under a
+          // removed run is refused as a failed write, not a defect.
           const current = (yield* readState([draft.aggregateId]))[0];
           if (current?.parentId !== edges.reparent) {
             const parent = (yield* readState([edges.reparent]))[0];
             if (!parent || parent.closed) {
-              return yield* invariant(
-                `A plugin aggregate's new parent must be open: ${edges.reparent}`,
+              return yield* Effect.fail(
+                new Error(
+                  `A plugin aggregate's new parent must be open: ${edges.reparent}`,
+                ),
               );
             }
           }
@@ -615,14 +570,17 @@ export const databaseLayer = (
           )).findLast(
             (row) => row.type === 'plugin.fact' && factName(row) === name,
           );
-          const refused =
-            target.kind === 'run' && draft.parent !== null
-              ? `A run's own plugin fact names no parent: ${name}`
-              : factKinds[name]?.accepts?.(
-                  last?.type === 'plugin.fact' ? last : undefined,
-                  draft,
-                );
-          if (refused) return yield* invariant(refused);
+          if (target.kind === 'run' && draft.parent !== null)
+            return yield* invariant(
+              `A run's own plugin fact names no parent: ${name}`,
+            );
+          // A fact kind's own transition rule refuses a stale writer, which
+          // a race can make: the write's failure, not a defect.
+          const refused = factKinds[name]?.accepts?.(
+            last?.type === 'plugin.fact' ? last : undefined,
+            draft,
+          );
+          if (refused) return yield* Effect.fail(new Error(refused));
         }
         // The seq-1 rule: a run aggregate begins with exactly
         // one `run.start`, and nothing else ever lands at seq 1.
@@ -719,16 +677,23 @@ export const databaseLayer = (
           at,
         };
       });
+      // Every projection is caught up here, before the first read: from then
+      // on this process is the store's one writer (the global store holds no
+      // event rows), and each append keeps them current (`follow`).
+      yield* transaction(
+        'write',
+        Effect.flatMap(currentCommit, upkeep.catchUp),
+        openFailed,
+      ).pipe(Effect.repeat({ until: (done) => done }));
       return {
-        observedCommit,
         movedAside,
-        level,
         currentCommit: query(currentCommit),
+        displayRows,
         readDisplay: (fromCommit) => {
           // Pages are separate snapshots: a deletion marker seen stays in view.
           const tombstones = new Map<number, SessionRow>();
           return Stream.paginate(fromCommit, (from) =>
-            projected(
+            snapshot(
               Effect.gen(function* () {
                 const top = yield* currentCommit;
                 const end = yield* top - from > DISPLAY_PAGE_ROWS
@@ -758,16 +723,16 @@ export const databaseLayer = (
             ),
           );
         },
-        readListing: () => projected(decodedRows(READ_LISTING, [])),
+        readListing: () => query(decodedRows(READ_LISTING, [])),
         readBlobs: (digests) => query(reader.blobs(digests)),
         readRunRecords: (id) =>
-          projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id), true)),
+          query(decodedRows(READ_RUN_RECORDS, aggregateColumns(id), true)),
         ...currentValues({
           exec,
           execOne,
           transact,
           query,
-          level,
+          written: valuesWritten,
           valueWritten: Effect.asVoid(
             exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
           ),
@@ -781,7 +746,7 @@ export const databaseLayer = (
             ),
           ),
         readDisplayAggregate: (id, fromSeq) =>
-          projected(
+          query(
             decodedRows(displayAggregate, [
               DISPLAY_READ_TYPES,
               ...aggregateColumns(id),
@@ -789,58 +754,50 @@ export const databaseLayer = (
             ]).pipe(Effect.map((rows) => rows.filter(isDisplayRow))),
           ),
         aggregateState: (ids) => query(readState(ids)),
-        readInputBatch: (ids, fromCommit, checkedIds, since) =>
-          projected(
+        readInputBatch: (ids, fromCommit, throughCommit, checkedIds) =>
+          snapshot(
             Effect.gen(function* () {
-              const cursor = yield* currentCommit;
-              const changed =
-                since === undefined ? [] : yield* exec(CHANGED_SINCE, [since]);
-              const change = Number(changed.at(-1)?.change ?? since ?? 0);
               const events = yield* decodedRows(inputRows, [
                 LISTED_TYPES,
                 ...aggregateLists(ids),
                 LISTED_TYPES,
                 fromCommit,
-                cursor,
+                throughCommit,
               ]);
-              const checked = new Set(checkedIds);
-              for (const row of changed)
-                checked.add(aggregateOf(row.kind, row.logicalId));
-              const checkedAggregateIds = [...checked];
               return {
-                cursor,
-                change,
                 events,
-                checkedAggregateIds,
-                state: yield* readState(checkedAggregateIds),
+                state: yield* readState(checkedIds),
                 damaged: yield* reader.damaged,
               };
             }),
           ),
         runRemoval: (id, expectedStartCommit) =>
-          transact(
+          transaction(
+            'write',
             Effect.gen(function* () {
               const observed = yield* readDependents(id);
               const target = observed.find((row) => row.aggregateId === id);
               if (target === undefined || observed.some((row) => row.closed))
-                return yield* Effect.fail(
-                  new Error(`Deletion target is missing or closed: ${id}`),
-                );
+                return yield* new DatabaseAggregateClosed({ aggregateId: id });
               if (target.startCommit !== expectedStartCommit)
-                return yield* Effect.fail(
-                  new Error(`Deletion target changed since admission: ${id}`),
-                );
+                return yield* new RunChanged({ aggregateId: id });
               return yield* appendRows(
                 [prepareEventDraft({ type: 'run.removed', aggregateId: id })],
                 yield* Clock.currentTimeMillis,
               );
             }),
+            (cause) =>
+              cause instanceof DatabaseAggregateClosed ||
+              cause instanceof RunChanged
+                ? cause
+                : writeFailed(cause),
           ),
         deletions: {
           pending: () => query(decodedRows(pendingDeletions, [])),
           collect: Effect.fn('collect')(function* (tombstone, cleanup) {
             const columns = aggregateColumns(tombstone.aggregateId);
-            // Already collected (by this pass before, or another process).
+            // Already collected: the open's pass and the collector can both
+            // hold a marker.
             if (
               (yield* query(
                 execOne(closedBy, [...columns, tombstone.commit]),
@@ -865,10 +822,7 @@ export const databaseLayer = (
         job: (body) =>
           own('write', Effect.provideService(body, InPublisherJob, true)).pipe(
             // BEGIN's or COMMIT's failure; the body's leave typed.
-            Effect.catchIf(
-              (e) => isSqlError(e) || e instanceof DatabaseStoreNewer,
-              (e) => Effect.fail(writeFailed(e)),
-            ),
+            Effect.catchIf(isSqlError, (e) => Effect.fail(writeFailed(e))),
             Effect.catchDefect((d) =>
               isSqlError(d) ? Effect.fail(writeFailed(d)) : Effect.die(d),
             ),
@@ -931,15 +885,18 @@ export const globalDatabaseLayer = (
     ),
   );
 
-/** Interruption stays; a failure or a driver defect becomes `failed`'s,
- *  the store's own protocol refusals (`invariant`) included: the batch
- *  rolled back whole, and the refusal's message is the failure's cause. */
+/** Interruption stays; a failure, or SQLite's error raised as a defect (a
+ *  failed COMMIT), becomes `failed`'s. Any other defect dies: the store's
+ *  own protocol refusals (`invariant`) are a caller's defect, never a disk
+ *  failure. */
 function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
   return <A, EOp, R>(
     operation: Effect.Effect<A, EOp, R>,
   ): Effect.Effect<A, E, R> =>
     operation.pipe(
-      Effect.catchDefect((defect) => Effect.fail(defect)),
+      Effect.catchDefect((defect) =>
+        isSqlError(defect) ? Effect.fail(defect) : Effect.die(defect),
+      ),
       Effect.mapError(failed),
     );
 }

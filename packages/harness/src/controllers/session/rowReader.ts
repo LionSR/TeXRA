@@ -59,10 +59,12 @@ export const PROJECTED_FROM = `projected_row p
   JOIN event_sequence s ON s.id = e.aggregate`;
 /** The kinds a display read selects: the display rows, and the settlements
  *  their tool cards' output is projected from (`settleCards`). */
-export const DISPLAY_READ_TYPES = JSON.stringify([
+export const DISPLAY_READ_KINDS: ReadonlySet<string> = new Set([
   ...DISPLAY_ROW_TYPES,
   'tool.result',
 ]);
+/** {@link DISPLAY_READ_KINDS} as the JSON list a display read binds. */
+export const DISPLAY_READ_TYPES = JSON.stringify([...DISPLAY_READ_KINDS]);
 /** The listing (each aggregate's `listing_entry` rows and each run's spend
  *  on its newest priced row's envelope, in commit order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
  *  store is never `ANALYZE`d), each by its event's primary key. */
@@ -161,7 +163,9 @@ export interface RowReader<E> {
    *  whichever of its rows it selected. */
   /** The strings stored under `digests`, inflated and verified; a digest
    *  the store lacks fails the read. */
-  readonly blobs: (digests: readonly string[]) => Effect.Effect<StoredBlobs, E>;
+  readonly blobs: (
+    digests: readonly string[],
+  ) => Effect.Effect<StoredBlobs, E | Error>;
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,
@@ -258,17 +262,21 @@ export function rowReader<E>(
           }
           return texts;
         });
+  /** A blob a row names that the store no longer holds readable fails the
+   *  read, typed. */
   const blobs = (digests: readonly string[]) =>
-    Effect.map(inflated(READ_BLOBS, digests), (texts) => {
+    Effect.flatMap(inflated(READ_BLOBS, digests), (texts) => {
       const missing = digests.filter((digest) => !texts.has(digest));
       if (missing.length > 0)
-        throw new Error(`${path} holds no readable blob ${missing.join(', ')}`);
-      return (digest: string) => {
+        return Effect.fail(
+          new Error(`${path} holds no readable blob ${missing.join(', ')}`),
+        );
+      return Effect.succeed((digest: string) => {
         const text = texts.get(digest);
         if (text === undefined)
           throw new Error(`The blob ${digest} was not part of this read`);
         return text;
-      };
+      });
     });
   const read = Effect.fnUntraced(function* (
     rows: readonly SqlRow[],

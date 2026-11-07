@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Logger } from 'effect';
 import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
@@ -272,5 +272,31 @@ describe('ChatGPT session coordinator', () => {
       });
       expect(storage.peek()?.refreshToken).toBe('refresh-0');
     }),
+  );
+
+  it.effect(
+    'warns that an unreadable session was not ended at the provider',
+    () =>
+      Effect.gen(function* () {
+        const warnings: string[] = [];
+        const captured = Logger.make(({ logLevel, message }) => {
+          if (logLevel === 'Warn') warnings.push(String(message));
+        });
+        let value: string | undefined = '{not json';
+        const storage: CredentialStore = {
+          get: () => Effect.sync(() => value),
+          set: () => Effect.void,
+          delete: () =>
+            Effect.sync(() => {
+              value = undefined;
+            }),
+        };
+        const coordinator = yield* makeCoordinator(storage);
+        yield* withHttp(coordinator.signOut()).pipe(
+          Effect.provide(Logger.layer([captured])),
+        );
+        expect(value).toBeUndefined();
+        expect(warnings.join('\n')).toMatch(/not ended/);
+      }),
   );
 });

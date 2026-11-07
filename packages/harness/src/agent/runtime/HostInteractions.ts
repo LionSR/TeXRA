@@ -321,7 +321,8 @@ function presentAgentFailure(
 }
 
 /**
- * The session's one terminal-result presenter, run over each folded row:
+ * The session's one terminal-result presenter, run over each committed row
+ * once the view has applied it:
  * a `run.end` presents a root run's failure to the attached host, or
  * replays it to the next one. A child's (its attached parent is the view's,
  * which has the run's `run.start` once it ended) is its parent's to report;

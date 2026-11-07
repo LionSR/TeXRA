@@ -160,7 +160,7 @@ import { defaultShortcutModifierLabel } from '../src/runtime/terminal/shortcutLa
 import { updateCliModelAccess } from '../src/runtime/models/modelAccessSelection';
 import { makeCliProcessRuntime } from '../src/runtime/platform/cliProcessRuntime';
 import { cliPlatform } from '../src/runtime/platform/initPlatform';
-import { resolveCliResourcesPath } from '../src/runtime/platform/resourcesPath';
+import { resolveCliResourcesPath } from '../src/runtime/platform/cliContext';
 import {
   createCliRuntimeHost,
   type CliRuntimeHost,

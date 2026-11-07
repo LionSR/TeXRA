@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   Context,
   Effect,
   FileSystem,
-  Result,
   Config,
   Option,
   Schema,
@@ -15,6 +15,7 @@ import {
 
 import { DatabaseOpenFailed } from '@texra-ai/harness';
 import {
+  BUNDLED_AGENTS_DIRECTORY,
   type ConfigProvider,
   type SkillSourceOptions,
 } from '@texra-ai/harness/host';
@@ -23,6 +24,7 @@ import { modelConfig } from '@texra-ai/llm';
 import {
   absentReason,
   canonicalizeWorkspaceRoot,
+  pathExists,
 } from '@texra-ai/harness/node';
 import {
   APPROVAL_POLICY_SETTING,
@@ -42,7 +44,6 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
 import { loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
-import { resolveCliResourcesPath } from './resourcesPath';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settingsView/texraSettings';
@@ -233,56 +234,62 @@ const CliPackageManifest = Schema.Struct({
 });
 type CliPackageManifest = typeof CliPackageManifest.Type;
 
-const decodeCliPackageManifest = Schema.decodeUnknownResult(
+const decodeCliPackageManifest = Schema.decodeUnknownSync(
   Schema.fromJsonString(CliPackageManifest),
 );
 
 /**
- * The CLI's `package.json`, read once and synchronously: a few hundred bytes
- * off the package root, needed before any runtime exists (`--version`, the
- * process-runtime build, the crash report), so it has no Promise or Effect
- * face to keep in step with.
+ * The CLI's `package.json` facts, read once and synchronously: needed before
+ * any runtime exists (`--version`, the process-runtime build, the crash
+ * report), so it has no Promise or Effect face to keep in step with. Every
+ * bundle carries them, stamped by `scripts/build-bundle.mjs`; a source run
+ * reads the package's own manifest, three directories above this module. A
+ * manifest that does not decode is a broken build or checkout, and throws.
  */
-function readCliPackageManifest(): CliPackageManifest | undefined {
-  // The bundled `dist/bin` entry reaches the manifest two levels up, this
-  // module run from source (`src/runtime/platform/`) three; the one-level
-  // candidate is for build layouts that place runtime files just below the
-  // package root.
-  const candidates = [
-    new URL('../../package.json', import.meta.url),
-    new URL('../../../package.json', import.meta.url),
-    new URL('../package.json', import.meta.url),
-  ];
-  for (const candidate of candidates) {
-    // A candidate that is absent, unreadable or not a manifest with a
-    // version is the expected answer for the layout this build is not: try
-    // the next one.
-    let text: string;
-    try {
-      text = readFileSync(candidate, 'utf8');
-    } catch {
-      continue;
-    }
-    const pkg = decodeCliPackageManifest(text);
-    if (Result.isSuccess(pkg)) return pkg.success;
-  }
-  return undefined;
-}
-
-let cachedManifest:
-  | { readonly value: CliPackageManifest | undefined }
-  | undefined;
-
-/** The one cached read of the CLI's `package.json`; `readCliVersion` and
- *  `formatCrashReportLine` both derive from it. */
-function loadCliPackageManifest(): CliPackageManifest | undefined {
-  cachedManifest ??= { value: readCliPackageManifest() };
-  return cachedManifest.value;
+let cachedManifest: CliPackageManifest | undefined;
+function loadCliPackageManifest(): CliPackageManifest {
+  cachedManifest ??= decodeCliPackageManifest(
+    process.env.TEXRA_CLI_MANIFEST ??
+      readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
+  );
+  return cachedManifest;
 }
 
 export function readCliVersion(): string {
-  return loadCliPackageManifest()?.version ?? 'unknown';
+  return loadCliPackageManifest().version;
 }
+
+/** This build's resources do not hold the bundled agents. */
+class CliResourcesNotFound extends Schema.TaggedError<CliResourcesNotFound>()(
+  'CliResourcesNotFound',
+  {
+    message: Schema.String,
+  },
+) {}
+
+/**
+ * This build's resources directory. Every bundle `scripts/build-bundle.mjs`
+ * writes sits one directory below its `resources/` (`dist/bin/` beside
+ * `dist/resources/`, the service's `serve/` beside the extension's and the
+ * desktop app's `resources/`), and the build stamps that location; a source
+ * run reads the extension package's own tree, four directories above this
+ * module. Fails by its path when it holds no bundled agents (a bundle copied
+ * without its `resources/`).
+ */
+export const resolveCliResourcesPath = Effect.fn(
+  'cliContext.resolveCliResourcesPath',
+)(function* () {
+  const resources = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    process.env.TEXRA_CLI_RESOURCES ?? '../../../../extension/resources',
+  );
+  const fs = yield* FileSystem.FileSystem;
+  if (!(yield* pathExists(fs, path.join(resources, BUNDLED_AGENTS_DIRECTORY))))
+    return yield* new CliResourcesNotFound({
+      message: `TeXRA CLI resources not found: ${resources} holds no ${BUNDLED_AGENTS_DIRECTORY}/ directory`,
+    });
+  return resources;
+});
 
 /**
  * The follow-up line appended to the top-level crash message pointing users at
@@ -292,10 +299,17 @@ export function readCliVersion(): string {
  * clean), for a store this process could not open (a remote mount, a store a
  * newer build wrote: the message says what to do), or when no tracker URL is
  * configured — only an UNEXPECTED crash with a known `bugs.url` gets the
- * report prompt.
+ * report prompt. It runs in the last-resort crash handler, so it never
+ * throws: a manifest that does not decode is the crash being reported (its
+ * message is already on stderr), and the report line is left off.
  */
 export function formatCrashReportLine(error: unknown): string | undefined {
-  const bugsUrl = loadCliPackageManifest()?.bugs?.url;
+  let bugsUrl: string | undefined;
+  try {
+    bugsUrl = loadCliPackageManifest().bugs?.url;
+  } catch {
+    return undefined;
+  }
   if (
     error instanceof CliUsageError ||
     error instanceof DatabaseOpenFailed ||

@@ -64,7 +64,10 @@ export const initializeElectronPlatform = Effect.fn(
   const { mainDir, resourcesPath, configStores } = yield* Effect.gen(
     function* () {
       const mainDir = yield* resolveDesktopMainDir(moduleDirname);
-      const resourcesPath = yield* resolveResourcesPath(mainDir);
+      const resourcesPath = yield* resolveResourcesPath(
+        mainDir,
+        app.isPackaged,
+      );
       const configStores = yield* openTexraConfigStores(
         TEXRA_SETTINGS.catalog,
         dataRoot,

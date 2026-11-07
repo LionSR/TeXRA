@@ -3060,16 +3060,22 @@ try {
 // --- harness bundle ------------------------------------------------------
 if (!useExistingHarness) {
   // Rebuild the committed harness on every run so local TUI source edits are
-  // tested against the current tree instead of a stale dist/bin artifact.
+  // tested against the current tree instead of a stale dist/bin artifact,
+  // with the `resources/` every bundle reads beside its directory.
   console.error('[validate-tui] building tui-harness bundle…');
-  const r = spawnSync(
-    process.execPath,
-    [path.join(CLI_ROOT, 'scripts', 'build-bundle.mjs'), '--harness'],
-    { cwd: CLI_ROOT, stdio: 'inherit' },
-  );
-  if (r.status !== 0 || !existsSync(HARNESS)) {
-    console.error('[validate-tui] failed to build', HARNESS);
-    process.exit(1);
+  for (const args of [
+    ['build-bundle.mjs', '--harness'],
+    ['copy-resources.mjs'],
+  ]) {
+    const r = spawnSync(
+      process.execPath,
+      [path.join(CLI_ROOT, 'scripts', args[0]), ...args.slice(1)],
+      { cwd: CLI_ROOT, stdio: 'inherit' },
+    );
+    if (r.status !== 0 || !existsSync(HARNESS)) {
+      console.error(`[validate-tui] scripts/${args[0]} failed for`, HARNESS);
+      process.exit(1);
+    }
   }
 }
 

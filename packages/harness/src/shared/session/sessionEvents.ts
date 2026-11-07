@@ -1,18 +1,17 @@
 /**
- * The runtime event plane: the publisher and exhaustive event
- * readers, including the NDJSON projection. Renderers read SessionInputs,
- * which orders this log against the transient text and local levels.
+ * The runtime event plane: the publisher, what it publishes as each job
+ * commits, and the exhaustive event readers, including the NDJSON
+ * projection. Renderers read SessionInputs, which orders this log against
+ * the transient text and local levels.
  */
 import {
-  Array as Arr,
   Context,
-  Effect,
-  Exit,
+  type Effect,
   Layer,
-  PubSub,
+  type PubSub,
   type Scope,
-  Stream,
-  SubscriptionRef,
+  type Stream,
+  type SubscriptionRef,
   type Take,
 } from 'effect';
 
@@ -25,7 +24,7 @@ import type {
   SessionRowDraft,
 } from '@shared/schemas';
 import type {
-  Database,
+  RunChanged,
   DatabaseAggregateClosed,
   DatabaseReadFailed,
   DatabaseWriteFailed,
@@ -36,6 +35,13 @@ import type { WithBlobs } from './historyTurns';
 /** A stream a run's rows left open (`SessionEvents.openWork`). */
 export interface OpenWork {
   readonly id: string;
+}
+
+/** One committed job as the publisher publishes it: its display rows, as
+ *  a display read of the store returns them, and the commit it reached. */
+export interface CommittedBatch {
+  readonly rows: readonly DisplayRow[];
+  readonly through: CommitOrdinal;
 }
 
 /** Whether this fiber runs a publisher job: inside one, the store's write
@@ -149,7 +155,7 @@ export class SessionEvents extends Context.Service<
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
       readonly SessionRow[],
-      DatabaseAggregateClosed | DatabaseWriteFailed
+      DatabaseAggregateClosed | RunChanged | DatabaseWriteFailed
     >;
     /** Close the plane: end the inbox and run what it holds, inside the
      *  one close deadline (`SESSION_CLOSE_DEADLINE_MS`). At the deadline
@@ -164,19 +170,32 @@ export class SessionEvents extends Context.Service<
      *  run's wait or end closes. Read on the publisher fiber (inside a job) or after
      *  `SessionLog.settled`, it counts every job committed before. */
     readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];
+    /** The last commit this publisher published; the store's commit when
+     *  it opened, before any. Where a reader that starts now begins. */
+    readonly head: () => CommitOrdinal;
+    /** Subscribe, for the caller's scope, to every job committed from here
+     *  on, one batch per job in commit order, published from what the job
+     *  wrote (nothing is read back); it ends (a final `Take`) when the
+     *  publisher closes. A subscriber that must not miss a batch subscribes
+     *  before it reads {@link head}. */
+    readonly subscribe: Effect.Effect<
+      PubSub.Subscription<Take.Take<CommittedBatch>>,
+      never,
+      Scope.Scope
+    >;
     /** The listing read from storage: the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */
     readonly listing: () => Stream.Stream<DisplayRow, DatabaseReadFailed>;
     /** Every event with commit above `fromCommit`, in commit order across
-     *  aggregates, then the tail, which ends when the session closes; every
-     *  tail shares one read of each commit. Transcript rows of unsubscribed
+     *  aggregates, then the tail, which ends when the session closes: what
+     *  the reader starts behind {@link head} is read from the store, the rest
+     *  is the publisher's batches. Transcript rows of unsubscribed
      *  aggregates included: the live tail and the frozen NDJSON projection
      *  read it.
-     *  `drained`, when given, receives the commit each forward read of the
-     *  tail covered, rows it could not materialize included, once every row
-     *  of that read has reached the reader; the transport plane never sets
-     *  it. */
+     *  `drained`, when given, receives the commit each read or batch
+     *  covered, rows it could not materialize included, once every row of
+     *  it has reached the reader; the transport plane never sets it. */
     readonly all: (
       fromCommit: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
@@ -185,150 +204,3 @@ export class SessionEvents extends Context.Service<
 >()('@texra-ai/harness/session/SessionEvents') {}
 
 export type SessionEventsShape = Context.Service.Shape<typeof SessionEvents>;
-
-/** A read's share of the log in commit order: its rows (a page at a time)
- *  and the commit they reach. A read's last share covers its whole range,
- *  rows the store no longer held included. */
-interface Delivery<A> {
-  readonly rows: readonly A[];
-  readonly through: CommitOrdinal;
-}
-
-/** A read of the rows above a commit, and what wakes a drain of them: the
- *  committed upper bound to read to, and its moves. */
-type Read<A, E> = (fromCommit: CommitOrdinal) => Stream.Stream<A, E>;
-interface DrainLevel<E> {
-  readonly get: Effect.Effect<CommitOrdinal, E>;
-  readonly changes: Stream.Stream<unknown>;
-}
-
-/** One read of the rows above `fromCommit` through `upTo`, never past it. */
-const readThrough = <A extends SessionRow, E>(
-  read: Read<A, E>,
-  fromCommit: CommitOrdinal,
-  upTo: CommitOrdinal,
-): Stream.Stream<Delivery<A>, E> =>
-  Stream.concat(
-    read(fromCommit).pipe(
-      Stream.takeWhile((event) => event.commit <= upTo),
-      Stream.mapArray((rows) => [
-        { rows, through: Arr.lastNonEmpty(rows).commit },
-      ]),
-    ),
-    Stream.succeed({ rows: [], through: Math.max(fromCommit, upTo) }),
-  );
-
-/** The forward reads: on each wake, read on from where the last read
- *  stopped to the upper bound captured for it. A level says "there is
- *  more", not "there is one more", so the wakes during a read collapse into
- *  one further read, and a row a read could not deliver is not read again. */
-const forwardReads = <A extends SessionRow, E>(
-  read: Read<A, E>,
-  level: DrainLevel<E>,
-  fromCommit: CommitOrdinal,
-): Stream.Stream<Delivery<A>, E> =>
-  Stream.suspend(() => {
-    let at = fromCommit;
-    const forward = Stream.unwrap(
-      Effect.map(level.get, (upTo) => readThrough(read, at, upTo)),
-    ).pipe(
-      Stream.tap(({ through }) =>
-        Effect.sync(() => {
-          at = through;
-        }),
-      ),
-    );
-    return level.changes.pipe(
-      Stream.buffer({ capacity: 1, strategy: 'dropping' }),
-      Stream.flatMap(() => forward),
-    );
-  });
-
-/** The rows of `deliveries` above `fromCommit`, each once. `drained`, when
- * given, receives the commit each share covered, rows the store no longer
- * held included, only once its rows have reached the reader (as the reader
- * pulls past them). A row the store no longer holds emits nothing, so a
- * reader that must know the tail passed an ordinal (the NDJSON detach
- * drain) waits on this coordinate, never on the events alone. */
-const released = <A extends SessionRow, E>(
-  deliveries: Stream.Stream<Delivery<A>, E>,
-  fromCommit: CommitOrdinal,
-  drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-): Stream.Stream<A, E> =>
-  Stream.suspend(() => {
-    let at = fromCommit;
-    return Stream.flatMap(deliveries, ({ rows, through }) => {
-      const fresh = Stream.fromIterable(rows.filter((row) => row.commit > at));
-      at = Math.max(at, through);
-      if (drained === undefined) return fresh;
-      const covered = Stream.fromEffect(SubscriptionRef.set(drained, at));
-      return Stream.concat(fresh, Stream.drain(covered));
-    });
-  });
-
-/** A drain of its own for one reader: {@link forwardReads} on `level`,
- *  {@link released} from `fromCommit`. */
-export const tailFrom = <A extends SessionRow, E>(
-  read: Read<A, E>,
-  level: DrainLevel<E>,
-  fromCommit: CommitOrdinal,
-  drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-): Stream.Stream<A, E> =>
-  released(forwardReads(read, level, fromCommit), fromCommit, drained);
-
-/**
- * The tails of `log`: one drain from its current commit for the caller's
- * scope, fanned out, so a commit costs one read however many tails wait on
- * it. A tail subscribes first, so every share past `published` reaches it,
- * then reads what it starts behind from the database itself. Unbounded, so
- * a slow tail never holds the drain back (the session's own delivery, which
- * settles transactions, is a tail too). It ends with the scope or the
- * drain's read failure, and every tail with it, one opened later at once.
- */
-export const logTails = Effect.fnUntraced(function* (
-  log: Context.Service.Shape<typeof Database>,
-): Effect.fn.Return<
-  SessionEventsShape['all'],
-  DatabaseReadFailed,
-  Scope.Scope
-> {
-  const fanout =
-    yield* PubSub.unbounded<
-      Take.Take<Delivery<DisplayRow>, DatabaseReadFailed>
-    >();
-  let published = yield* log.currentCommit;
-  const level = {
-    get: log.currentCommit,
-    changes: SubscriptionRef.changes(log.level),
-  };
-  yield* forwardReads(log.readDisplay, level, published).pipe(
-    Stream.runForEach((delivery) =>
-      Effect.suspend(() => {
-        // `published` moves first: a tail that subscribes between the two
-        // steps reads the share from the database and drops its copy.
-        published = delivery.through;
-        return PubSub.publish(fanout, [delivery]);
-      }),
-    ),
-    // A read failure ends every tail with it; the scope's close, cleanly.
-    Effect.exit,
-    Effect.flatMap((exit) => PubSub.end(fanout, exit)),
-    Effect.onInterrupt(() => PubSub.end(fanout, Exit.void)),
-    Effect.forkScoped,
-  );
-  return (fromCommit, drained) =>
-    Stream.unwrap(
-      Effect.map(PubSub.subscribe(fanout), (subscription) =>
-        released(
-          Stream.concat(
-            fromCommit < published
-              ? readThrough(log.readDisplay, fromCommit, published)
-              : Stream.empty,
-            Stream.flattenTake(Stream.fromSubscription(subscription)),
-          ),
-          fromCommit,
-          drained,
-        ),
-      ),
-    );
-});

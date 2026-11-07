@@ -3,9 +3,10 @@
  * a folder whose window reached the background service runs its tasks
  * there, and this process opens no session for it; any other window (no
  * folder, no service) opens the project's session here, for the caller's
- * scope.
+ * scope. The window's state carries the answer (`GuiSession.where`), so its
+ * banner says when a folder's tasks run here.
  */
-import { type Context, Effect, type Scope } from 'effect';
+import { type Context, Effect, Result, type Scope } from 'effect';
 
 import {
   type LocalSession,
@@ -13,6 +14,7 @@ import {
   Sessions,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
@@ -20,26 +22,42 @@ import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import type { GuiSession } from './openGuiWindow';
 
+const CHANNEL = 'openProjectSession';
+
 /**
- * Open the session of the project at `roots`. `service` is the link the
- * window reached, if any; `warn` tells the user what opening a session here
- * found (a store moved aside at open), as each host shows a warning.
+ * Open the session of the project at `roots`. `reached` is the host's one
+ * attempt to reach the background service; `warn` tells the user what
+ * opening a session here found (a store moved aside at open), as each host
+ * shows a warning.
  */
 export const openProjectSession = Effect.fn('openProjectSession')(function* (
   roots: WorkspaceRoots,
-  service: ServiceLink | undefined,
+  reached: Result.Result<ServiceLink, Error>,
   warn: (message: string) => Effect.Effect<void>,
 ): Effect.fn.Return<GuiSession, Error, Scope.Scope | Sessions | HostWindows> {
-  if (service !== undefined && roots.workspace !== undefined)
+  if (roots.workspace !== undefined && Result.isSuccess(reached))
     return {
-      link: service,
-      session: yield* serviceSession(service, roots.workspace, roots),
+      where: 'service',
+      link: reached.success,
+      session: yield* serviceSession(reached.success, roots.workspace, roots),
     };
+  // A folder the service would hold runs here because it is out of reach;
+  // a window with no folder always runs here.
+  const local =
+    roots.workspace !== undefined && Result.isFailure(reached)
+      ? `TeXRA runs this project's tasks in this window only, so other windows and terminals will not see them: ${reached.failure.message}`
+      : null;
+  if (local !== null)
+    yield* Effect.logWarning(local).pipe(withLogChannel(CHANNEL));
   const session = yield* openLocalSession(yield* Sessions, roots);
   // A store moved aside at open (pre-1.0 or corrupt) is said once.
   if (session.storeMovedAside)
     yield* warn(sessionStoreMovedAsideMessage(session.storeMovedAside));
-  return { session, link: yield* (yield* HostWindows).localLink(session) };
+  return {
+    where: { local },
+    session,
+    link: yield* (yield* HostWindows).localLink(session),
+  };
 });
 
 /**

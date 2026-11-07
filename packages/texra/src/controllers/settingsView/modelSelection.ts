@@ -50,11 +50,14 @@ export const buildModelSelectionPage = Effect.fn('buildModelSelectionPage')(
     Secrets | SubscriptionAccounts
   > {
     const models = yield* buildSelectionItems(stores);
-    return {
-      models,
-      // TeXRA's catalog always names one; '' is the select's empty value.
-      helperModel: (yield* getHelperModelName(stores)) ?? '',
-    };
+    const helperModel = yield* getHelperModelName(stores);
+    // TeXRA's catalog names a default, so none is a broken catalog, said
+    // instead of shown as an empty select.
+    if (helperModel === undefined)
+      return yield* Effect.fail(
+        new Error('The settings catalog names no default helper model.'),
+      );
+    return { models, helperModel };
   },
 );
 

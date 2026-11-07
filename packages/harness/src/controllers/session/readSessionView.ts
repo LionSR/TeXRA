@@ -1,7 +1,7 @@
 /**
  * A session's view read cold, from its store alone, for a host that lists
  * the projects under a storage root without opening a session on each: the
- * listing replayed through the session's own input reader and applied once.
+ * listing replayed as a session's input reader replays it, applied once.
  * A store another process holds exclusively does not open: the read fails
  * with the holder's refusal (`STORE_HELD_MESSAGE`).
  */
@@ -13,8 +13,6 @@ import {
   Layer,
   Option,
   RcMap,
-  Stream,
-  SubscriptionRef,
 } from 'effect';
 
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
@@ -26,7 +24,6 @@ import {
 } from '@shared/session/database';
 import type { SessionView } from '@shared/session/readonlyViews';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
-import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { ToolRegistry } from '@tools/toolTable';
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -34,8 +31,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
 import { databaseLayer } from './databaseLayer';
 import { projectStores } from './projectDatabase';
 import { cannotOpen } from './storeAside';
-import { sessionInputsLayer } from './sessionInputsLayer';
-import { LocalRuntimeSource, TextChunkSource } from './sessionSources';
+import { readReplay } from './sessionInputsLayer';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 /** A cold read holds no run. */
@@ -90,24 +86,15 @@ export const readSessionView = Effect.fn('readSessionView')(function* (
           ),
           Database,
         );
-    const local = yield* SubscriptionRef.make(NO_LOCAL_STATE);
-    const inputs = yield* SessionInputs.pipe(
-      Effect.provide(
-        sessionInputsLayer.pipe(
-          Layer.provide(
-            Layer.mergeAll(
-              Layer.succeed(Database)(database),
-              Layer.succeed(LocalRuntimeSource)({ ref: local }),
-              TextChunkSource.layer,
-              Layer.succeed(WorkspaceRoots)({ storage }),
-            ),
-          ),
-        ),
-      ),
-    );
-    const replay = yield* Stream.runHead(inputs.read([], 0, false));
+    const replay = yield* readReplay(database, {
+      debug: false,
+      local: NO_LOCAL_STATE,
+      subscriptions: [],
+      // A failed read fails the cold read; `projectViews` says so.
+      at: yield* Effect.orDie(database.currentCommit),
+    });
     const updater = makeSessionViewUpdater(storage);
-    return Option.some(updater.apply(Option.getOrElse(replay, () => [])));
+    return Option.some(updater.apply(replay));
   });
   return yield* Effect.scoped(read).pipe(
     Effect.catch((error) =>

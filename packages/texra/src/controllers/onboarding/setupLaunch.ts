@@ -34,8 +34,9 @@ class NoSetupModel extends Schema.TaggedError<NoSetupModel>()('NoSetupModel', {
  * host's setup entry point comes through here. It fails with
  * {@link SetupAlreadyRunning} or {@link NoSetupModel}, and with an `Error`
  * when the credential check cannot be answered. A refusal of the launch path
- * is that path's to show, and a failure once the run started is its result
- * row's: neither is a failure here.
+ * is that path's to show, and a run that fails ends with its result row:
+ * neither is a failure here. A run whose end cannot be read is logged at
+ * warn.
  */
 export const launchSetup = Effect.fn('launchSetup')(function* <E, R>(options: {
   readonly session: Pick<Session, 'view'>;
@@ -79,8 +80,13 @@ export const launchSetup = Effect.fn('launchSetup')(function* <E, R>(options: {
     Effect.flatMap((run) =>
       run.result.pipe(
         Effect.asVoid,
+        // The result fails only when the run stored no end that can be
+        // read: no result row shows that, and the view reads the run as
+        // interrupted without saying why, so the cause is logged here.
         Effect.catch((failure) =>
-          Effect.logDebug(`The setup run failed: ${failure.message}`),
+          Effect.logWarning(
+            `The setup run's end could not be read: ${failure.message}`,
+          ),
         ),
       ),
     ),

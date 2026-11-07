@@ -2024,6 +2024,17 @@ function runBypasses<Id>(
 ): Readonly<Record<ApprovalBypassKind, boolean>>
 ```
 
+## RunChanged
+
+A run's removal found a later lifetime of the run than the one its
+request read (it ended and started again since); nothing was written.
+
+```ts
+class RunChanged extends Schema.TaggedError<RunChanged>()('RunChanged', {
+  aggregateId: AggregateIdSchema,
+})
+```
+
 ## RunEndOutput
 
 ```ts

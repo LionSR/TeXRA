@@ -66,7 +66,16 @@ export interface LaunchedApp {
   readonly rendererErrors: string[];
 }
 
-type Launch = (env?: Record<string, string>) => Promise<LaunchedApp>;
+type Launch = (
+  env?: Record<string, string>,
+  options?: LaunchOptions,
+) => Promise<LaunchedApp>;
+
+interface LaunchOptions {
+  /** Whether the app reaches its service, which the launch then waits for;
+   *  false for a profile whose service cannot start. */
+  readonly reachesService?: boolean;
+}
 
 /**
  * The runner owns each app's lifetime: `profile` is the test's own,
@@ -94,8 +103,12 @@ export const test = base.extend<{
   },
   launch: async ({ profile, launchEnv }, use) => {
     const apps: LaunchedApp[] = [];
-    await use(async (env = {}) => {
-      const launched = await launchTexraApp(profile, { ...launchEnv, ...env });
+    await use(async (env = {}, options = {}) => {
+      const launched = await launchTexraApp(
+        profile,
+        { ...launchEnv, ...env },
+        options,
+      );
       apps.push(launched);
       return launched;
     });
@@ -166,6 +179,7 @@ export async function findWorkspaceStoragePath(
 export async function launchTexraApp(
   profile: Profile,
   env: Record<string, string> = {},
+  { reachesService = true }: LaunchOptions = {},
 ): Promise<LaunchedApp> {
   if (!existsSync(MAIN_ENTRY)) {
     throw new Error(
@@ -229,7 +243,7 @@ export async function launchTexraApp(
   );
   // Every launch is the service's client, as a user's is; the service it
   // starts listens before the test begins, so the teardown finds it.
-  if (process.platform !== 'win32')
+  if (reachesService && process.platform !== 'win32')
     await expect
       .poll(async () => (await servicePids(profile.dataRoot)).length, {
         timeout: 30_000,

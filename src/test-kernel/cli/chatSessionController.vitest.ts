@@ -558,6 +558,36 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     );
 
     it.effect(
+      'exits as a usage error when the task to resume is not found',
+      () =>
+        Effect.gen(function* () {
+          const session = new TuiSession();
+          mocks.getRunRecords.mockReturnValue({
+            readConfig: async () => null,
+            exists: async () => false,
+          });
+          const ctrl = createChatSessionController(
+            yield* makeInit({ session }),
+          );
+          yield* ctrl.resume(decodeRunId('aaaaaa'));
+
+          expect(mocks.resumeRun).not.toHaveBeenCalled();
+          expect(session.exitCode).toBe(CliExitCode.Usage);
+        }),
+    );
+
+    it.effect('exits as a failure when the root is missing from the view', () =>
+      Effect.sync(() => {
+        // The root's result arrives only once the view shows its end, so a
+        // root the view no longer holds lost its end.
+        const session = new TuiSession();
+        rootRunId.set(decodeRunId('a11111'));
+
+        expect(session.exitCode).toBe(CliExitCode.AgentError);
+      }),
+    );
+
+    it.effect(
       "keeps a newer launch when the older root's result fails meanwhile",
       () =>
         Effect.sync(() => {

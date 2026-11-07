@@ -526,6 +526,7 @@ export function createChatSessionController(
           );
           if (!config || !exists) {
             appendLocalErrorTranscript(`Task not found: ${id}`);
+            yield* endWithout(CliExitCode.Usage);
             return;
           }
           // A document task takes no chat: it resumes beside this one, as
@@ -558,6 +559,7 @@ export function createChatSessionController(
             appendLocalErrorTranscript(
               oneShotResumeNotice(init.sessionContext.commandName, id),
             );
+            yield* endWithout(CliExitCode.Usage);
             return;
           }
 
@@ -601,12 +603,14 @@ export function createChatSessionController(
         });
         // A defect reaches the transcript as a failure does. The program
         // completes once the session holds the run, or the resume ended
-        // without one; the run itself goes on.
+        // without one; the run itself goes on. Every path above ends the
+        // launch with its own code, so the `ensuring` counts only for a
+        // resume interrupted before it did (the chat is leaving).
         return recoverRun(attemptResume, (error) => {
           reportRunFailure(error);
           session.endLaunch(launched, { exitCode: CliExitCode.AgentError });
         }).pipe(
-          Effect.ensuring(endWithout(CliExitCode.Success)),
+          Effect.ensuring(endWithout(CliExitCode.Interrupted)),
           Effect.forkIn(shutdownScope),
           Effect.andThen(restore(Deferred.await(launched))),
           Effect.asVoid,

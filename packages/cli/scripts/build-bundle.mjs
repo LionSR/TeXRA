@@ -63,12 +63,23 @@ try {
     import('semver'),
   ]);
 
-  const { engines } = JSON.parse(
+  const { engines, version, bugs } = JSON.parse(
     await readFile(new URL('../package.json', import.meta.url), 'utf8'),
   );
   const base = harnessBundleOptions();
   await build({
     ...base,
+    define: {
+      ...base.define,
+      // What the bundle knows of its own layout and package
+      // (src/runtime/platform/cliContext.ts): every outfile sits one
+      // directory below its `resources/`, and the manifest facts ride in
+      // the bundle, so nothing is looked up at run time.
+      'process.env.TEXRA_CLI_RESOURCES': JSON.stringify('../resources'),
+      'process.env.TEXRA_CLI_MANIFEST': JSON.stringify(
+        JSON.stringify({ version, bugs }),
+      ),
+    },
     entryPoints: [entryPoint],
     platform: 'node',
     format: 'esm',

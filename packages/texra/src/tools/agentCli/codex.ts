@@ -136,6 +136,25 @@ function logCodexItem(item: ThreadItem, logger: AgentTrace): void {
   }
 }
 
+/** Every item type this build renders: total over the SDK's union, so an SDK
+ *  that names a new one fails to compile here. */
+const CODEX_ITEM_TYPES: Readonly<Record<ThreadItem['type'], true>> = {
+  agent_message: true,
+  reasoning: true,
+  command_execution: true,
+  file_change: true,
+  mcp_tool_call: true,
+  web_search: true,
+  todo_list: true,
+  error: true,
+};
+
+/** The SDK types its items as a closed union, but the codex binary it drives
+ *  may be newer and send a type the union does not name. */
+function isKnownCodexItem(item: { readonly type: string }): item is ThreadItem {
+  return Object.hasOwn(CODEX_ITEM_TYPES, item.type);
+}
+
 function buildCodexLiveToolLog(
   item: ThreadItem,
   status: ToolCallStatus,
@@ -201,6 +220,7 @@ function runStreamedTurn(
     const responseParts: string[] = [];
     let usage: RunResult['usage'] = null;
     const itemCards = new StreamedToolCards(logger);
+    const unknownItemTypes = new Set<string>();
 
     // The live "Codex Turn" card is opened on turn.started and closed on
     // turn.completed / turn.failed with the measured wall time. The
@@ -238,19 +258,26 @@ function runStreamedTurn(
           break;
         case 'item.started':
         case 'item.updated':
-          publishCodexItemProgress({
-            item: event.item,
-            status: 'in_progress',
-            cards: itemCards,
-          });
-          break;
         case 'item.completed': {
-          const { item } = event;
+          const item: { readonly type: string } = event.item;
+          const completed = event.type === 'item.completed';
+          if (!isKnownCodexItem(item)) {
+            // A newer codex binary's item: said once, then shown as data.
+            if (!unknownItemTypes.has(item.type)) {
+              unknownItemTypes.add(item.type);
+              logger.warn(
+                `Codex sent an item of a type this TeXRA build does not know (${item.type}); it is shown as raw data.`,
+              );
+            }
+            if (completed) logger.info(`Codex ${item.type}`, { data: item });
+            break;
+          }
           const wasRenderedAsProgress = publishCodexItemProgress({
             item,
-            status: 'completed',
+            status: completed ? 'completed' : 'in_progress',
             cards: itemCards,
           });
+          if (!completed) break;
           if (!wasRenderedAsProgress) logCodexItem(item, logger);
           if (item.type === 'agent_message') responseParts.push(item.text);
           break;

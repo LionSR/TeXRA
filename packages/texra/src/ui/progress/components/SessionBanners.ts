@@ -1,11 +1,12 @@
 /**
  * `<session-banners>`: the one warning slot above the launch composer. The
- * host raises up to four warnings (the background service offline, a
- * credential that stopped working, a missing agent file, missing tools);
- * the slot shows the first that is visible, in that order, because each
- * blocks the next: with the service away no task starts, without a key
- * nothing runs, and a missing agent file fails the launch before a tool is
- * ever needed. Each
+ * host raises up to five warnings (the background service offline, a
+ * credential that stopped working, a missing agent file, missing tools, a
+ * folder's tasks running in this window only); the slot shows the first
+ * that is visible, in that order, because each blocks the next: with the
+ * service away no task starts, without a key nothing runs, and a missing
+ * agent file fails the launch before a tool is ever needed. Tasks running
+ * in this window still run, so that notice yields to every other. Each
  * warning dispatches its own `host.request` arm. The onboarding and
  * "no LaTeX files yet" cards are not warnings: they take the hero's place.
  */
@@ -37,13 +38,13 @@ export class SessionBanners extends LitElement {
 
   @property({ attribute: false }) banners!: HostSnapshot['banners'];
   override render(): TemplateResult | typeof nothing {
-    const { apiKey, agentConfig, dependency, serviceOffline } = this.banners;
+    const { apiKey, agentConfig, dependency, service } = this.banners;
     let warning: TemplateResult;
-    if (serviceOffline !== null) {
+    if (service?.kind === 'offline') {
       warning = renderWarningBanner({
         id: 'serviceOfflineBanner',
         role: 'status',
-        body: html`<span>${serviceOffline}</span>`,
+        body: html`<span>${service.reason}</span>`,
       });
     } else if (apiKey) {
       warning = html`<api-key-banner></api-key-banner>`;
@@ -55,6 +56,12 @@ export class SessionBanners extends LitElement {
       warning = html`<dependency-banner
         .missingTools=${dependency}
       ></dependency-banner>`;
+    } else if (service?.kind === 'local') {
+      warning = renderWarningBanner({
+        id: 'serviceLocalBanner',
+        role: 'status',
+        body: html`<span>${service.reason}</span>`,
+      });
     } else {
       return nothing;
     }
