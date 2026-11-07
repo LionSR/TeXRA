@@ -1,4 +1,4 @@
-import { defineCommand, parseArgs, runCommand } from 'citty';
+import { defineCommand, parseArgs } from 'citty';
 
 import {
   isInteractiveCli,
@@ -24,7 +24,7 @@ import {
   detectUnknownCliFlag,
   formatUnknownCliFlag,
 } from './_helpers/dispatch';
-import { getExitCode, setExitCode } from './_helpers/exitCode';
+import { runCommandForExitCode } from './_helpers/exitCode';
 import { AGENT_RUN_GLOBAL_ARGS, pickGlobalArgs } from './_helpers/globalArgs';
 
 import { agentsCommand } from './agents';
@@ -160,7 +160,6 @@ export const rootCommand = withUsageSections(
 export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {
-  setExitCode(CliExitCode.Success);
   let rawArgs = reorderGlobalFlags(
     normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
   );
@@ -191,7 +190,7 @@ export async function runCli(
   }
 
   try {
-    await runCommand(rootCommand, { rawArgs });
+    return { exitCode: await runCommandForExitCode(rootCommand, rawArgs) };
   } catch (error) {
     if (error instanceof CliUsageError) {
       writeTextStderr(error.message);
@@ -213,5 +212,4 @@ export async function runCli(
     }
     throw error;
   }
-  return { exitCode: getExitCode() };
 }
