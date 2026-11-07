@@ -356,7 +356,10 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   options: {
     /** Runs whenever the connection ends (see {@link connectService}). */
     readonly onDisconnect?: Effect.Effect<void>;
-  } = {},
+    /** Told, once, when an older or draining service must exit first: the
+     *  wait lasts until its running tasks end. */
+    readonly waiting: (message: string) => Effect.Effect<void>;
+  },
 ): Effect.fn.Return<
   ServiceConnection,
   ServiceUnavailable,
@@ -370,21 +373,23 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     Effect.catchIf(
       (error) => error.unspoken !== undefined,
       (error) =>
-        Effect.logInfo(
-          "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
-        ).pipe(
-          Effect.andThen(
-            stopService(error.unspoken ?? '', true).pipe(
-              Effect.mapError(
-                (failure) =>
-                  new ServiceUnavailable({
-                    reason: `The older TeXRA service could not be asked to retire: ${failure.message}`,
-                  }),
+        options
+          .waiting(
+            "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
+          )
+          .pipe(
+            Effect.andThen(
+              stopService(error.unspoken ?? '', true).pipe(
+                Effect.mapError(
+                  (failure) =>
+                    new ServiceUnavailable({
+                      reason: `The older TeXRA service could not be asked to retire: ${failure.message}`,
+                    }),
+                ),
               ),
             ),
+            Effect.as(null),
           ),
-          Effect.as(null),
-        ),
     ),
   );
   if (info !== null && isNewer(info))
@@ -392,7 +397,8 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   if (info !== null && (isOlder(info) || info.draining)) {
     const leaving = info;
     const tasks = `${leaving.running} running task${leaving.running === 1 ? '' : 's'}`;
-    yield* Effect.logInfo(
+    // With no task running it exits at once: nothing to wait for.
+    yield* (leaving.running > 0 ? options.waiting : Effect.logInfo)(
       leaving.draining
         ? `The TeXRA service ${leaving.version} (pid ${leaving.pid}) is finishing its ${tasks} before it exits; waiting for it.`
         : `Retiring the TeXRA service ${leaving.version} (protocol ${leaving.protocol}): it finishes its ${tasks} and exits, then this build's starts.`,
@@ -544,34 +550,45 @@ const RECONNECT = Schedule.min([
  * {@link ensureService} reaches it. When the service goes away (a newer
  * build retired it, or it died), the link goes null, which a window shows
  * as offline, and reaches the service again the same way, starting one
- * when none answers, until it is back.
+ * when none answers, until it is back. A first reach that must wait for an
+ * older service to finish its tasks says so through `waiting`, the host's
+ * way to tell its user; a later one says it as the link's `away`.
  */
 export const linkService = Effect.fn('server.linkService')(function* (
   storageRoot: string,
   start: Effect.Effect<void, Error>,
+  waiting: (message: string) => Effect.Effect<void>,
 ): Effect.fn.Return<
   ServiceLink,
   ServiceUnavailable,
   Scope.Scope | GlobalValues
 > {
+  const away = yield* SubscriptionRef.make(SERVICE_OFFLINE);
   const connect = Effect.fn('connect')(function* (
     begin: Effect.Effect<void, Error>,
+    told: (message: string) => Effect.Effect<void>,
   ) {
     const scope = yield* Scope.make();
     const lost = yield* Deferred.make<void>();
     const connection = yield* ensureService(storageRoot, begin, {
       onDisconnect: Effect.asVoid(Deferred.succeed(lost, undefined)),
+      waiting: told,
     }).pipe(
       Scope.provide(scope),
       Effect.onError(() => Scope.close(scope, Exit.void)),
     );
     return { connection, lost, scope };
   });
-  let current = yield* connect(start);
+  let current = yield* connect(start, waiting);
   const client = yield* SubscriptionRef.make<ServiceClient | null>(
     current.connection.client,
   );
-  const away = yield* SubscriptionRef.make(SERVICE_OFFLINE);
+  // While the link is down, a wait on an older service is what the
+  // window's banner says.
+  const awayWaiting = (message: string) =>
+    SubscriptionRef.set(away, message).pipe(
+      Effect.andThen(Effect.logWarning(message)),
+    );
   const refusalTold = yield* Ref.make(false);
   yield* Effect.addFinalizer(() =>
     Effect.suspend(() => Scope.close(current.scope, Exit.void)),
@@ -591,8 +608,8 @@ export const linkService = Effect.fn('server.linkService')(function* (
         // older window never races it with one of its build, and starts
         // one itself only when none came, as at startup.
         let told = '';
-        current = yield* connect(Effect.void).pipe(
-          Effect.catch(() => connect(start)),
+        current = yield* connect(Effect.void, awayWaiting).pipe(
+          Effect.catch(() => connect(start, awayWaiting)),
           // Said once per reason: a newer protocol's service stays until it
           // exits, and the link keeps trying meanwhile.
           Effect.tapError((error) =>
