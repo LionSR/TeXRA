@@ -115,7 +115,7 @@ const LAUNCH_FIELDS = {
 
 /** The fields every child launch takes beside its own: memories, the call's
  *  reuse id and card label, its time limit, and whether a script waits. */
-export const CALL_FIELDS = {
+export const CALL_FIELDS = Object.freeze({
   memories: memoriesField,
   working_directory: workingDirectoryField,
   id: Schema.optional(Schema.NullOr(Schema.String)).annotate({
@@ -138,7 +138,7 @@ export const CALL_FIELDS = {
     description:
       'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run.',
   }),
-};
+});
 const AgentInputSchema = Schema.Struct({ ...LAUNCH_FIELDS, ...CALL_FIELDS });
 type AgentInput = typeof AgentInputSchema.Type;
 

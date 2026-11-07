@@ -157,7 +157,7 @@ const OPEN_STATUS = `CASE WHEN run_id IN
 /** The store's writes, by the name an append op starts with: calls are
  *  added as their facts arrive, the runs table is replaced whole, and open
  *  calls are read against it again. */
-export const HISTORY_WRITE_SQL = {
+export const HISTORY_WRITE_SQL = Object.freeze({
   toolCall: `INSERT INTO tool_calls
     (position, run_id, call_id, script_call_id, tool, input, status, issued_at)
     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
@@ -179,7 +179,7 @@ export const HISTORY_WRITE_SQL = {
     WHERE status IN ('running', 'unknown')`,
   openModels: `UPDATE model_calls SET status = ${OPEN_STATUS}
     WHERE status IN ('running', 'unknown')`,
-};
+});
 
 /** One write: its `HISTORY_WRITE_SQL` statement's name, then its values. */
 export type HistoryWrite = readonly [

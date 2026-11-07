@@ -199,7 +199,7 @@ function decodeXaiJwtClaims(token: string): XaiJwtClaims {
  * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT,
  * so the shared coordinator runs it as is.
  */
-const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
+const XAI_POLICY = Object.freeze<SubscriptionOAuthPolicy<XaiSession>>({
   secretKey: XAI_SESSION_SECRET_KEY,
   sessionSchema: XaiSessionSchema,
   tokenEndpoint: {
@@ -233,7 +233,7 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
       email: idClaims.email ?? accessClaims.email ?? previous?.email,
     };
   },
-};
+});
 
 /**
  * The coordinator for the caller's secret store: one coordinator per store

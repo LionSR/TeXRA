@@ -88,7 +88,7 @@ const AGENT_NAME = 'TeXRA';
  * host must be `127.0.0.1`, not `localhost`. 1455 first, as OpenAI's
  * examples use; any free port when it is taken.
  */
-const CHATGPT_CALLBACK_PORTS = [1455, 0];
+const CHATGPT_CALLBACK_PORTS = Object.freeze([1455, 0]);
 const CHATGPT_CALLBACK_PATH = '/auth/callback';
 
 /**
@@ -315,7 +315,7 @@ const hostId = Effect.fn('chatgpt.hostId')(function* (
  * Single-flight refresh, storage races and error mapping live in the shared
  * machine; this names the endpoints, the per-user client and the grant check.
  */
-const CHATGPT_POLICY: SubscriptionOAuthPolicy<ChatgptSession> = {
+const CHATGPT_POLICY = Object.freeze<SubscriptionOAuthPolicy<ChatgptSession>>({
   secretKey: CHATGPT_SESSION_SECRET_KEY,
   sessionSchema: ChatgptSessionSchema,
   tokenEndpoint: {
@@ -370,7 +370,7 @@ const CHATGPT_POLICY: SubscriptionOAuthPolicy<ChatgptSession> = {
       planType: claims.planType ?? previous?.planType,
     };
   },
-};
+});
 
 /**
  * The coordinator for the caller's secret store: one coordinator per store

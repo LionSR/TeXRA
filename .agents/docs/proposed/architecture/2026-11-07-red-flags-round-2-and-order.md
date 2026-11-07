@@ -349,6 +349,16 @@ inside one plugin).
    ten singletons), N11's in the desktop. `Context.Reference` for a defaulted value,
    `Effect.cachedWithTTL` with an `Exit`-computed lifetime for a probe,
    `Layer.effect` for a resource.
+   - **`packages/llm/src` and `packages/harness/src/agent/runtime/`: done
+     (package E).** Re-read on main at 18cecd8: neither holds a module `let`
+     or a mutable singleton. Frozen: the tables they hand across a module
+     boundary (`EVIDENCE_PROTOCOL`, the Google status lists, the OAuth
+     policies and callback ports, `HISTORY_WRITE_SQL`, `CALL_FIELDS`). File-local
+     lookup tables nothing mutates or returns stay as they are. Stays, with
+     its owner: `SubscriptionOAuthCoordinator.forProvider`'s per-store
+     `WeakMap`, the memo O3 replaces with one account service per
+     subscription; and `ModelInvoker`'s `attemptStarts`, which is per
+     invocation, not module state, and goes with R9's verdict row (D8).
 2. G9: `UsageLogService` as `Queue.sliding` into `Stream.groupedWithin` into
    `Effect.retry`.
 3. G10's error tags nothing branches on (H3 is step 4.1's): the unread
