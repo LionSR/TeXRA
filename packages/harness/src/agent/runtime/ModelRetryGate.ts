@@ -1,6 +1,7 @@
 import {
   Cause,
   Clock,
+  Context,
   Deferred,
   Effect,
   Exit,
@@ -13,6 +14,13 @@ import { jitteredExponentialBackoffMs } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
+
+/** The process's one retry gate, served by `processLayer`: a 429 cools a
+ *  credential for every run of every project. */
+export class RouteRetries extends Context.Service<
+  RouteRetries,
+  ModelRetryGate
+>()('@texra-ai/harness/RouteRetries') {}
 
 type RoutePhase = 'healthy' | 'cooling' | 'probing';
 
@@ -62,7 +70,7 @@ export interface RoutePolicy {
 /** How a call waits on its routes: the base backoff, and who hears a wait. */
 export interface RouteOptions {
   readonly baseBackoffMs: number;
-  readonly onWait?: (delayMs: number) => void;
+  readonly onWait?: (delayMs: number) => Effect.Effect<void>;
 }
 
 interface AcquiredRoute extends RoutePolicy {
@@ -235,22 +243,27 @@ export class ModelRetryGate {
     return Effect.uninterruptibleMask((restore) =>
       Effect.gen({ self: this }, function* () {
         if (this.scope.state._tag === 'Closed') return yield* Effect.interrupt;
+        // Nothing yields between reading the route's phase and joining its
+        // waiters, so a probe that heals the route meanwhile cannot miss
+        // this waiter; the wait is said only once the waiter is queued.
+        const now = yield* Clock.currentTimeMillis;
         const state = this.routeState(route);
         if (state.phase === 'healthy') {
           return { version: state.version, probe: false };
         }
 
-        const now = yield* Clock.currentTimeMillis;
-        onWait?.(Math.max(0, state.retryAt - now));
+        const delayMs = Math.max(0, state.retryAt - now);
         const waiter: Waiter = {
           permit: Deferred.makeUnsafe<RetryPermit>(),
           granted: undefined,
         };
         state.waiters.push(waiter);
         yield* this.scheduleProbe(state);
-        return yield* restore(Deferred.await(waiter.permit)).pipe(
-          Effect.onInterrupt(() => this.leave(state, waiter)),
-        );
+        return yield* restore(
+          (onWait === undefined ? Effect.void : onWait(delayMs)).pipe(
+            Effect.andThen(Deferred.await(waiter.permit)),
+          ),
+        ).pipe(Effect.onInterrupt(() => this.leave(state, waiter)));
       }),
     );
   }

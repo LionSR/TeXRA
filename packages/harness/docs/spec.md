@@ -378,10 +378,9 @@ A run's history is written through its run cell, `RunCell.append`, which commits
 one batch per call (`agent/runtime/RunHistory.ts#'RunCell.commit'`). The loop's
 write points are normative:
 
-- **W1**, `model.message` `attempt`: for a turn or a summary, commits before the
-  billed request leaves the process
-  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.attempt'`; summary:
-  `#'summary'`).
+- **W1**, `model.message` `attempt`: for a turn, commits before the billed
+  request leaves the process
+  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.attempt'`).
 - **W2**, `model.message` `response`: commits, with `run.position`
   `response.ready`, before any tool call dispatches
   (`agent/runtime/ModelInvoker.ts#'ModelInvoker.finish'`;
@@ -397,10 +396,10 @@ write points are normative:
   request's wait keeps the position in force and writes `request.opened` instead
   (`agent/runtime/loop/toolUse.ts#positionRow`;
   `agent/storage/runLifecycle.ts#endIn`).
-- **W6**, `model.message` `failed`: for a turn or a summary, commits for every
-  recorded failure, naming the next move
-  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.failed'`;
-  `agent/runtime/run/invocation.ts#runInvocation`).
+- **W6**, `model.message` `failed`: for a turn, commits for every recorded
+  failure, naming the next move
+  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.failed'`,
+  `#'ModelInvoker.invoke'`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
   wait; a decision commits once (`agent/runtime/requests.ts#openRequest`,
   `#decideRequest`).
@@ -408,11 +407,11 @@ write points are normative:
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
 context and the `attempt` row, before it streams or submits the request
 (`agent/runtime/ModelInvoker.ts#'ModelInvoker.attempt'`,
-`agent/runtime/run/requestContext.ts#attemptRows`). A compaction summary records
-its attempt the same way, with `purpose: 'summary'`
-(`agent/runtime/ModelInvoker.ts#'summary'`). A helper call belongs to no run
-history and records no row, its attempts and failures included
-(`agent/runtime/run/modelCall.ts#'modelCall.attempt'`, `#'modelCall.failed'`).
+`agent/runtime/run/requestContext.ts#attemptRows`). A call off the rows (a
+compaction summary, a helper call) records no row, its attempts and failures
+included (`agent/runtime/run/modelCall.ts#'modelCall.attempt'`); a summary's
+usage rides the `context.edit` that lands it
+(`agent/runtime/run/compaction.ts#'compaction.land'`).
 
 **W2.** A completed provider turn of a loop invocation (one invocation's answer;
 a loop turn may hold none, or several as the loop calls the model again after
@@ -469,12 +468,12 @@ end queues its report on its parent's input in the same transaction, under
 `${runId}:${activation}` (`agent/storage/runLifecycle.ts#parentDelivery`),
 unless the parent's call awaits it or the child was detached.
 
-**W6.** Every failed attempt of a turn or a summary that reaches failure
-recording MUST commit a `failed` row whose `next` is the move after it; a
-renewed observation of an accepted operation repeats without one (section 6),
-and a helper call records none (`agent/runtime/run/modelCall.ts#'modelCall.failed'`)
-(`agent/runtime/run/invocation.ts#runInvocation`,
-`agent/runtime/ModelInvoker.ts#failedRows`). A `failed` row that asks MUST be
+**W6.** Every failed attempt of a turn that reaches failure recording MUST
+commit a `failed` row whose `next` is the move after it; a renewed observation
+of an accepted operation repeats without one (section 6), and a call off the
+rows records none (`agent/runtime/run/modelCall.ts#callModel`)
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#failedRows`). A
+`failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request
 (`agent/runtime/ModelInvoker.ts#failedRows`,
 `shared/session/turnRowHandlers.ts#a failed attempt asks`).
@@ -559,14 +558,14 @@ be refused when the run already holds history state
 
 ## 6. Retry
 
-Every model call the harness makes MUST go through one loop, `runInvocation`
-(`agent/runtime/run/invocation.ts#runInvocation`; callers
-`agent/runtime/ModelInvoker.ts#runInvocation`,
-`agent/runtime/run/modelCall.ts#runInvocation`). Its next move is
-`nextAttempt(invocation, requests, retries)`, read off the invocation's rows
-before every move but the repeat of a renewed observation
-(`agent/runtime/run/invocation.ts#runInvocation`,
-`shared/session/inFlight.ts#nextAttempt`):
+A turn's model call MUST go through one loop over its rows,
+`ModelInvoker.invoke` (`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`).
+Its next move is `nextAttempt(invocation, requests, retries)`, read off the
+invocation's rows before every move but the repeat of a renewed observation
+(`shared/session/inFlight.ts#nextAttempt`). A call off the rows (a compaction
+summary, a helper call) is the other loop, `callModel`
+(`agent/runtime/run/modelCall.ts#callModel`): `Effect.retry` while llm says the
+same request can succeed, under the same gate, with no row and no person:
 
 | Rows show                                                        | Move                                        |
 | ---------------------------------------------------------------- | ------------------------------------------- |
@@ -586,12 +585,12 @@ before every move but the repeat of a renewed observation
 The move a `failed` row records is decided once, by `failedNext`
 (`shared/session/inFlight.ts#failedNext`), except for two rows that name their
 move themselves: a renewed credential's resend, `retry`
-(`agent/runtime/run/invocation.ts#afterFailure`), and a re-ask, `ask` under a
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`), and a re-ask, `ask` under a
 fresh request id (`agent/runtime/ModelInvoker.ts#'ModelInvoker.reask'`):
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
   `unchain`, once per invocation (`shared/session/inFlight.ts#failedNext`,
-  `agent/runtime/run/invocation.ts#moveAfter`).
+  `agent/runtime/ModelInvoker.ts#moveAfter`).
 - A retryable failure answers `retry` while the invocation's earlier failures,
   `unchain` ones excluded, are fewer than the budget
   (`shared/session/inFlight.ts#failuresBefore`, `#spentRetries`,
@@ -605,21 +604,21 @@ fresh request id (`agent/runtime/ModelInvoker.ts#'ModelInvoker.reask'`):
   (`shared/session/runFacts.ts#closedBy`,
   `shared/session/inFlight.ts#failuresBefore`).
   For a turn's invocation the budget is
-  counted from rows, so a crash does not refill it. A compaction summary or a helper call holds its
-  invocation in memory (`agent/runtime/run/modelCall.ts#callModel`); a summary's
-  `attempt` and `failed` rows are an audit the run fold skips
-  (`shared/session/turnRowHandlers.ts#isSummaryAttempt`), so a resumed summary
-  starts a fresh budget.
+  counted from rows, so a crash does not refill it. A call off the rows counts
+  its resends in memory (`agent/runtime/run/modelCall.ts#callModel`): a
+  compaction cut short is made anew, with a fresh budget.
 - Past the budget, a failure a person may retry answers `ask` under a fresh
   request id; where nobody can be asked, `stop`
   (`shared/session/inFlight.ts#failedNext`).
 - A failed observation of an accepted operation never resubmits it automatically
-  (`agent/runtime/run/invocation.ts#moveAfter`). The one automatic repeat is a
+  (`agent/runtime/ModelInvoker.ts#moveAfter`). The one automatic repeat is a
   renewed observation after a rejected subscription token, which observes the
-  same operation again (`agent/runtime/run/invocation.ts#afterFailure`).
+  same operation again (`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`).
 
 Every automatic send MUST run under the process's `ModelRetryGate`
-(`agent/runtime/run/invocation.ts#RouteRetries`, `#tryAttempt`). The gate cools
+(`agent/runtime/ModelRetryGate.ts#RouteRetries`,
+`agent/runtime/ModelInvoker.ts#tryAttempt`,
+`agent/runtime/run/modelCall.ts#callModel`). The gate cools
 two keys per binding: a 429 the provider scoped to the model cools that model on
 its wire route, and a failure scoped to the route cools the wire route itself,
 which every model on that route shares. The wire key is the binding's own tuple:
@@ -627,11 +626,14 @@ provider, credential route, endpoint and key fingerprint for a credential-backed
 HTTP route; provider for the validation model
 (`agent/runtime/modelAccess/binding.ts#routePolicies`,
 `agent/runtime/modelAccess/failureInfo.ts#routePolicies`). An observation runs
-outside it (`agent/runtime/run/invocation.ts#tryAttempt`). The loop pauses
-1,000 ms before a `retry` or `unchain` that follows a recorded failure
-(`agent/runtime/run/invocation.ts#RETRY_BACKOFF_MS`, `#pauseBefore`); a resend
-after a crash, of an attempt no row recorded an outcome for, goes out without
-it.
+outside it (`agent/runtime/ModelInvoker.ts#tryAttempt`). Before a `retry` or
+`unchain` that follows a recorded failure the loop pauses as long as the
+provider asked (`retryAfterMs`), else 1,000 ms, and not at all after a failure
+llm scoped to a route, which the gate cools and waits out
+(`agent/runtime/run/modelCall.ts#RETRY_BACKOFF_MS`,
+`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`,
+`agent/runtime/run/modelCall.ts#pauseOf`); a resend after a crash, of an
+attempt no row recorded an outcome for, goes out without it.
 
 An attempt of an invocation a person admitted, whose outcome no row recorded and
 which holds no accepted operation, MUST be asked about again and MUST NOT be
@@ -643,13 +645,14 @@ admitted, whose outcome no row recorded, is resent only while automatic retries
 remain; otherwise it is asked about again
 (`shared/session/inFlight.ts#nextAttempt`).
 
-A rejected subscription token MAY be renewed once per execution of
-`runInvocation` (`agent/runtime/run/invocation.ts#credentialRenewal`). The limit
-is held in memory, not in a row, so a resume may renew the same invocation
-again. On a send, the renewal records a `failed` row with `next: retry` (a
-helper call records none) and the attempt is resent; while observing an accepted
-operation, the renewed observation repeats with no row and is never a resend
-(`agent/runtime/run/invocation.ts#afterFailure`).
+A rejected subscription token MAY be renewed once per execution of the loop
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`,
+`agent/runtime/run/modelCall.ts#callModel`). The limit is held in memory, not
+in a row, so a resume may renew the same invocation again. On a send, the
+renewal records a `failed` row with `next: retry` (a call off the rows records
+none) and the attempt is resent; while observing an accepted operation, the
+renewed observation repeats with no row and is never a resend. In both loops the
+renewed resend spends one automatic retry and waits as any resend does.
 
 ## 7. One process per project store
 

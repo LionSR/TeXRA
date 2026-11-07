@@ -227,7 +227,6 @@ function scriptedInvoker(
                     payload: {
                       kind: 'failed',
                       invocation: { invocationId: randomUUID(), attempt: 1 },
-                      purpose: 'turn',
                       error: scripted.failWith,
                       next: { kind: 'stop' },
                     },
@@ -249,7 +248,6 @@ function scriptedInvoker(
                   request: '0'.repeat(64),
                   invocation,
                   origin: bound.origin,
-                  purpose: 'turn',
                 },
               },
               ...('compactTo' in scripted

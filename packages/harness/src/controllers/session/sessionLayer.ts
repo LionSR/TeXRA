@@ -19,8 +19,7 @@ import {
 } from 'effect';
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import { RouteRetries } from '@agent/runtime/run/invocation';
+import { ModelRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
   SESSION_CLOSE_DEADLINE_MS,

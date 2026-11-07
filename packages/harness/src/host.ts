@@ -170,7 +170,7 @@ export { SubscriptionPreference } from '@model/subscriptionAccess';
 export type { RouteReasoning, SentReasoning } from '@model/reasoningLevel';
 export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
 // The process's retry gate every model call (a helper call's too) waits on.
-export type { RouteRetries } from '@agent/runtime/run/invocation';
+export type { RouteRetries } from '@agent/runtime/ModelRetryGate';
 // Who a helper call's usage is billed to, and why a model call can fail.
 export type { UsageAttribution } from '@agent/runtime/run/pricing';
 export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
