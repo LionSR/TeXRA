@@ -2,11 +2,9 @@
 
 import console from 'node:console';
 import process from 'node:process';
-import { chmod, writeFile } from 'node:fs/promises';
+import { chmod, readFile, writeFile } from 'node:fs/promises';
 
 import { fileURLToPath, URL } from 'node:url';
-
-import { buildIdentityDefine } from '../../../scripts/build-identity.mjs';
 
 const reactDevtoolsStub = fileURLToPath(
   new URL('./react-devtools-core-stub.mjs', import.meta.url),
@@ -54,24 +52,29 @@ try {
     { reactCompilerPlugin },
     { esmCjsGlobalsBanner },
     { stubInternalValidationModel },
-    { codeSandboxWorker },
+    { harnessBundleOptions },
+    { default: semver },
   ] = await Promise.all([
     import('esbuild'),
     import('./reactCompilerPlugin.mjs'),
     import('../../../scripts/esm-cjs-globals-banner.mjs'),
     import('../../../scripts/stub-internal-validation-model.mjs'),
     import('../../../scripts/code-sandbox-worker.mjs'),
+    import('semver'),
   ]);
 
+  const { engines } = JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+  );
+  const base = harnessBundleOptions();
   await build({
+    ...base,
     entryPoints: [entryPoint],
-    bundle: true,
     platform: 'node',
     format: 'esm',
-    target: 'node20',
+    // The lowest Node the package's `engines` admits.
+    target: `node${semver.minVersion(engines.node).version}`,
     external: ['fsevents'],
-    loader: { '.wasm': 'binary' },
-    define: buildIdentityDefine(),
     alias: {
       // Ink statically imports `react-devtools-core` from its `devtools.js`,
       // which is only reached when `process.env.DEV === 'true'`. We never
@@ -82,10 +85,6 @@ try {
     },
     outfile,
     minify: !harness,
-    // SDK error classification (packages/harness/src/common/errors/sdkError/) reads
-    // `constructor.name` off the prototype chain, so minified class names
-    // would silently misclassify provider errors in the published binary.
-    keepNames: true,
     sourcemap: false,
     legalComments: 'none',
     // The React Compiler runs as a Babel pre-pass scoped to .tsx files under
@@ -94,7 +93,7 @@ try {
     // 2026-05-14-20-implementation.md (Phase 0). Risk R12.
     plugins: [
       reactCompilerPlugin(),
-      codeSandboxWorker,
+      ...base.plugins,
       ...(includeInternalValidationModel ? [] : [stubInternalValidationModel]),
     ],
     // JSX needs to be transformed for ink (which uses React's JSX runtime).

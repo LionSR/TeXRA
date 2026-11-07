@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
 // Shared aliases keep desktop renderer imports aligned with extension webviews.
-import { aliases } from '../../scripts/aliases.mjs';
+import { aliases, dedupe } from '../../scripts/aliases.mjs';
 
 // Monaco belongs to the shared app package after the source split.
 const requireApp = createRequire(
@@ -37,11 +37,6 @@ export default defineConfig({
   },
   resolve: {
     alias: aliases,
-    dedupe: [
-      '@awesome.me/webawesome',
-      '@lit-labs/signals',
-      'lit',
-      'signal-polyfill',
-    ],
+    dedupe: [...dedupe],
   },
 });

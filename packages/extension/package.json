@@ -544,8 +544,8 @@
     "vite": "^8.3.6"
   },
   "scripts": {
-    "clean:dist": "node ../../scripts/clean-extension-dist.mjs",
-    "prepare:docs": "node ../../scripts/copy-extension-docs.mjs",
+    "clean:dist": "node scripts/clean-dist.mjs",
+    "prepare:docs": "node scripts/copy-docs.mjs",
     "prepare:trace-viewer-assets": "corepack pnpm --filter @texra/trace-viewer run build",
     "bundle:serve": "node scripts/build-serve.mjs",
     "esbuild:ext": "node esbuild.config.mjs",

@@ -1,4 +1,4 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import ts from 'typescript';
@@ -10,18 +10,6 @@ export async function isFile(filePath) {
     if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return false;
     throw error;
   }
-}
-
-export async function walkFiles(directory, predicate) {
-  const entries = await readdir(directory, {
-    recursive: true,
-    withFileTypes: true,
-  });
-  return entries
-    .filter(
-      (entry) => !entry.isDirectory() && (!predicate || predicate(entry.name)),
-    )
-    .map((entry) => path.join(entry.parentPath, entry.name));
 }
 
 /** A static or dynamic import specifier in emitted JavaScript or declarations. */

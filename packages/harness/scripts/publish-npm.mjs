@@ -1,9 +1,11 @@
 // Publishes `@texra-ai/llm` and `@texra-ai/harness` to npm at their shared
 // version, llm first: the harness names the llm version as its peer floor.
 //
-//   node packages/harness/scripts/publish-npm.mjs --tag <latest|preview> [--dry-run]
+//   node packages/harness/scripts/publish-npm.mjs [--dry-run]
 //
-// Release CI runs it on an `sdk-vX.Y.Z` release over npm Trusted Publishing.
+// The version names the dist-tag: `latest` for X.Y.Z, `preview` for
+// X.Y.Z-preview.N. Release CI runs it on an `sdk-vX.Y.Z` release over npm
+// Trusted Publishing.
 // pnpm packs (only it applies `publishConfig.exports` and resolves the
 // `workspace:` and `catalog:` specifiers) and npm publishes each tarball. A
 // version already on npm is skipped, so a failed run can be run again.
@@ -14,17 +16,16 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import {
+  parseVersion,
+  releaseChannel,
+} from '../../../scripts/release-version.mjs';
+
 const { values } = parseArgs({
   options: {
-    tag: { type: 'string' },
     'dry-run': { type: 'boolean', default: false },
   },
 });
-const distTag = values.tag;
-if (distTag !== 'latest' && distTag !== 'preview') {
-  console.error('Usage: publish-npm.mjs --tag <latest|preview> [--dry-run]');
-  process.exit(1);
-}
 const dryRun = values['dry-run'];
 
 const packagesRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -42,6 +43,14 @@ if (versions.size !== 1) {
   );
   process.exit(1);
 }
+const version = parseVersion(packages[0].version);
+if (version == null) {
+  console.error(
+    `Version '${packages[0].version}' is neither X.Y.Z nor X.Y.Z-preview.N; nothing publishes it.`,
+  );
+  process.exit(1);
+}
+const distTag = releaseChannel(version).npmTag;
 
 /** Run a command; a failure ends the publish with its output shown. */
 const run = (command, args, options = {}) => {
