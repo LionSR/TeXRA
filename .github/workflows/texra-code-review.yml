@@ -29,25 +29,6 @@ jobs:
       pull-requests: write
       id-token: write
     steps:
-      # Consume the trigger label so a later `re-review` re-application fires
-      # a fresh run. Fork PR tokens are read-only and their provider-key check
-      # below skips the review.
-      - name: Remove re-review label
-        if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v9
-        with:
-          script: |
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                name: 're-review',
-              });
-            } catch (error) {
-              if (error.status !== 404) throw error;
-            }
-
       # Provider keys are unavailable to pull_request runs from forks; skip
       # gracefully instead of failing the agent when no key is configured.
       - name: Check provider key
@@ -92,15 +73,28 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Checkout trusted review prompt
-        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
+      # The label action and the review prompt come from the base commit, never
+      # from the pull request. Checked out after it: checking out into the
+      # workspace root empties it first.
+      - name: Checkout trusted automation
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
-          path: .trusted-review-prompt
-          sparse-checkout: .github/prompts/texra-code-review-prompt.md
+          path: .trusted-actions
+          sparse-checkout: |
+            .github/actions/consume-label/
+            .github/prompts/texra-code-review-prompt.md
           sparse-checkout-cone-mode: false
           persist-credentials: false
+
+      # Consume the trigger label so a later `re-review` re-application fires
+      # a fresh run. Fork PR tokens are read-only and their provider-key check
+      # skips the review.
+      - name: Remove re-review label
+        if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: ./.trusted-actions/.github/actions/consume-label
+        with:
+          label: re-review
 
       - name: TeXRA review
         if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
@@ -116,7 +110,7 @@ jobs:
         # provider keys are present, so shell/tool mutations must stay disabled.
         uses: texra-ai/texra-action/review@2a327e4f0419ce5a53e271611c89bc6c0268fa7d
         with:
-          prompt-file: .trusted-review-prompt/.github/prompts/texra-code-review-prompt.md
+          prompt-file: .trusted-actions/.github/prompts/texra-code-review-prompt.md
           approval-policy: yolo
           require-write-access: 'true'
           allow-bots: dependabot[bot],github-actions[bot]

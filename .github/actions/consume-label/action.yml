@@ -1,0 +1,29 @@
+name: Consume label
+description: >-
+  Remove a label from the pull request or issue that triggered the run, so
+  that applying it again starts a fresh run. A label already gone is fine.
+
+inputs:
+  label:
+    description: The label to remove.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Remove the label
+      uses: actions/github-script@v9
+      env:
+        LABEL: ${{ inputs.label }}
+      with:
+        script: |
+          try {
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              name: process.env.LABEL,
+            });
+          } catch (error) {
+            if (error.status !== 404) throw error;
+          }
