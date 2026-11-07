@@ -5,7 +5,6 @@
 // with an outcome or a request error; an arm the desktop does not perform is
 // `Rejected` with its reason, never dropped.
 
-import path from 'node:path';
 import { Effect } from 'effect';
 import {
   AppSignals,
@@ -191,7 +190,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
               { filePath: baseFile },
               { filePath: editedFile },
               {
-                title: `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
+                title,
                 // Each compared pair is a review of its own.
                 displayPath: `${editedFile} <-> ${baseFile}`,
               },
