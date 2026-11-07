@@ -37,7 +37,7 @@ import {
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
-import type { DownMessage } from '@texra/shared/session/sessionFrames';
+import type { DownWire } from '@texra/shared/session/sessionFrames';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -467,7 +467,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     ): Effect.fn.Return<void, SurfacePlacementFailed, FileSystem.FileSystem> {
       this.closeSurface(this.surfaces[id]);
       // The post starts synchronously inside runFork, so sends keep their order.
-      const send = (message: DownMessage): void => {
+      const send = (message: DownWire): void => {
         this.runtime.runFork(
           Effect.tryPromise({
             try: () => view.webview.postMessage(message),

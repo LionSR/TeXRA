@@ -9,13 +9,16 @@
  * the host bridge for a session.
  */
 import { signal, type Signal } from '@lit-labs/signals';
-import { Effect, Schema } from 'effect';
+import { Effect, Result } from 'effect';
 
-import { BridgeErrorSchema } from '@texra/shared/session/bridgeErrors';
+import type { BridgeError } from '@texra/shared/session/bridgeErrors';
 
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import type { Response, UpMessage } from '@texra/shared/session/sessionFrames';
+import type {
+  HostOutcome,
+  UpMessage,
+} from '@texra/shared/session/sessionFrames';
 import {
   applySurfaceAction,
   canSendFollowUp,
@@ -46,10 +49,15 @@ import {
   type WebviewTransport,
 } from './sessionTransport';
 import type {
+  OutcomeSchema,
   SessionView,
   RuntimeRequest,
   RunId,
 } from '@texra-ai/harness/schemas';
+
+type Outcome = typeof OutcomeSchema.Type;
+/** How a request ended: its outcome, or the error it failed with. */
+type Answer<A> = Result.Result<A, BridgeError>;
 
 /** A short beep for a run the host decided to chime for. Autoplay
  *  restrictions and a missing audio device are expected, not fatal, but the
@@ -243,16 +251,15 @@ export function createSessionSurfaces(options: {
     act(entry, { kind: 'launch', patch: { instruction: text } });
   }
 
-  /** A refused request's error as its class; null for success and for a
-   *  cancellation, which needs no notice. The message was decoded whole, so
-   *  the error's wire form always decodes: a failure here is a defect. */
-  function refusal(result: Response['result']): Surface['requestError'] {
-    if (result.ok) return null;
-    const error = Schema.decodeUnknownSync(BridgeErrorSchema)(result.error);
+  /** A refused request's error; null for success and for a cancellation,
+   *  which needs no notice. */
+  function refusal(result: Answer<unknown>): Surface['requestError'] {
+    if (Result.isSuccess(result)) return null;
+    const error = result.failure;
     return error._tag === 'Cancelled' ? null : error;
   }
 
-  function presentResult(entry: Held, result: Response['result']): void {
+  function presentResult(entry: Held, result: Answer<unknown>): void {
     const error = refusal(result);
     if (error !== null) {
       setSurface(entry, { ...entry.surface$.get(), requestError: error });
@@ -264,10 +271,10 @@ export function createSessionSurfaces(options: {
     entry: Held,
     request: HostRequest,
     origin: DraftOrigin,
-    result: Response['result'],
+    result: Answer<HostOutcome>,
   ): void {
-    if (!result.ok) return;
-    const { outcome } = result;
+    if (Result.isFailure(result)) return;
+    const outcome = result.success;
     const { launch } = entry.surface$.get();
     switch (request.kind) {
       case 'pickFiles':
@@ -347,7 +354,7 @@ export function createSessionSurfaces(options: {
     entry: Held,
     request: HostRequest,
     origin: DraftOrigin,
-    result: Response['result'],
+    result: Answer<HostOutcome>,
   ): void {
     presentResult(entry, result);
     settleHost(entry, request, origin, result);
@@ -384,12 +391,14 @@ export function createSessionSurfaces(options: {
     // Built when it runs: a click that finds the stream busy sends nothing.
     const exchange = Effect.flatMap(
       Effect.suspend(() =>
-        transport.request({
-          kind: 'host.request',
-          session: entry.key,
-          requestId: requestId(),
-          request,
-        }),
+        Effect.result(
+          transport.hostRequest({
+            kind: 'host.request',
+            session: entry.key,
+            requestId: requestId(),
+            request,
+          }),
+        ),
       ),
       (result) =>
         Effect.sync(() => settleHostResponse(entry, request, origin, result)),
@@ -435,17 +444,19 @@ export function createSessionSurfaces(options: {
     const fromForm =
       request.kind === 'request.decide' &&
       isProposalForm(entry.surface$.get(), request.requestId);
-    const answered = (result: Response['result']) =>
+    const answered = (result: Answer<Outcome>) =>
       Effect.sync(() =>
         settleRuntimeResponse(entry, request, result, submitted, fromForm),
       );
     const exchange = Effect.flatMap(
-      transport.request({
-        kind: 'runtime.request',
-        session: key,
-        requestId: requestId(),
-        request,
-      }),
+      Effect.result(
+        transport.runtimeRequest({
+          kind: 'runtime.request',
+          session: key,
+          requestId: requestId(),
+          request,
+        }),
+      ),
       answered,
     );
     transport.run(
@@ -466,7 +477,7 @@ export function createSessionSurfaces(options: {
   function settleRuntimeResponse(
     entry: Held,
     request: RuntimeRequest,
-    result: Response['result'],
+    result: Answer<Outcome>,
     submitted: Draft | undefined,
     fromForm: boolean,
   ): void {
@@ -485,11 +496,15 @@ export function createSessionSurfaces(options: {
     }
     // The form's approval went through: back to the run that asked, where
     // its child starts.
-    if (result.ok && fromForm && request.kind === 'request.decide') {
+    if (
+      Result.isSuccess(result) &&
+      fromForm &&
+      request.kind === 'request.decide'
+    ) {
       act(entry, { kind: 'launch', patch: { instruction: '' } });
       act(entry, { kind: 'select', runId: request.runId });
     }
-    if (request.kind !== 'followUp.send' || !result.ok) return;
+    if (request.kind !== 'followUp.send' || Result.isFailure(result)) return;
     if (
       submitted !== undefined &&
       entry.surface$.get().runs.get(request.runId)?.draft === submitted
