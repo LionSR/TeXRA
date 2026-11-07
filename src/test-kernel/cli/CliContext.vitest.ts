@@ -114,6 +114,45 @@ describe('CLI context config defaults', () => {
   });
 });
 
+describe('CLI config values a row rejects', () => {
+  it('reads a malformed value as its row does in the other hosts, never as a looser tier', async () => {
+    const storageRoot = await makeTempDir('texra-cli-user-config-', tempDirs);
+    const globalStorage = resolveGlobalStoragePath(storageRoot);
+    await mkdir(globalStorage, { recursive: true });
+    await writeFile(
+      join(globalStorage, 'config.json'),
+      JSON.stringify({ 'texra.approvalPolicy': 'yolo' }),
+    );
+    // A hand-typed string opt-out in the project file.
+    const workspace = await workspaceWithConfig(
+      JSON.stringify({ 'texra.telemetry.enabled': 'false' }),
+    );
+    const first = await cliContext({
+      ambient,
+      globalArgs: { cwd: workspace },
+      storageRoot,
+    });
+    const localDir = resolveWorkspaceStoragePath(storageRoot, first.cwd);
+    await mkdir(localDir, { recursive: true });
+    // A misspelled policy in the user's own file for this workspace.
+    await writeFile(
+      join(localDir, 'config.json'),
+      JSON.stringify({ 'texra.approvalPolicy': 'nevr' }),
+    );
+    const context = await cliContext({
+      ambient,
+      globalArgs: { cwd: workspace },
+      storageRoot,
+    });
+
+    // The telemetry reader sees the string and stays off; it must not see
+    // the row's default `true` in its place.
+    expect(context.config.get('telemetry.enabled')).toBe('false');
+    // The policy reads as its default, not the user-wide Auto-approve.
+    expect(context.approvalPolicy).toBe('ask');
+  });
+});
+
 describe('CLI color/no-input flag wiring', () => {
   it('--no-input forces headless mode and defaults approval policy to never', async () => {
     const context = await cliContext({
