@@ -6,7 +6,7 @@ import { css, type CSSResult } from 'lit';
  * Every state expresses its step in colour alone. The previous version layered
  * an element `opacity` on top of `--wa-color-text-quiet`, which is itself
  * `color-mix(… 70%, transparent)` — so the quiet states composited to 0.49 and
- * the `is-ready` state to 0.35 effective alpha, measuring 2.65:1 and 1.94:1
+ * the ready state to 0.35 effective alpha, measuring 2.65:1 and 1.94:1
  * against the 3:1 minimum for a non-text indicator. `--color-text-muted`
  * carries that de-emphasis once, at a value that holds in every theme.
  *

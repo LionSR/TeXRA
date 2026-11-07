@@ -41,10 +41,6 @@ interface WorkflowRunDetailLine {
 
 type WorkflowRunFacts = {
   readonly taskGroups: readonly TaskGroup[];
-  /** The outcome the run durably finished on — terminal with no producer left
-   *  anywhere — so a group it never closed paints as that outcome instead of
-   *  running forever. `undefined` paints each group as the transcript
-   *  recorded it. */
   readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
   readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
   readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
