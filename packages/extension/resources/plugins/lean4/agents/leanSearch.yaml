@@ -139,7 +139,7 @@ prompt: |
   ## Communication Style
 
   - Use `$...$` for inline math when explaining concepts
-  - Show your search process: which tools you tried, what you found, and what you didn't find
+  - Show your search process: which sources and queries you tried, what you found, and what you didn't find
   - When reporting Mathlib results, always include: full qualified name, type signature, import path (`import Mathlib.X.Y.Z`)
   - Distinguish between: (a) exact match found, (b) close match that needs adaptation, (c) genuinely missing
   - When a lemma is missing from Mathlib, note whether it's a reasonable contribution or too specialized

@@ -21,14 +21,14 @@ prompt: |
   \begin{itemize}
       \item Follow best practices to ensure zero warnings when checked by chktex.
       \item Use consistent and appropriate mathematical notation and terminology throughout all papers.
-      \item Preserve comments starting with % in the document.
+      \item Keep every \LaTeX comment (a line or line tail starting with an unescaped %).
       \item Use either `` or '' as an alternative to `"'.
       \item Put punctuation outside inner math mode.
-      \item Use $\tr$ instead of \text{tr} or \textrm{tr}.
-      \item Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$.
+      \item When the document defines or loads $\tr$, use it instead of \text{tr} or \textrm{tr}.
+      \item When the document defines or loads them, prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$.
       \item Add punctuation in displayed math environments based on sentence continuity.
-      \item Use the math commands defined in commands.tex or preamble.tex if provided.
-      \item When referring to equations, always use \cref{...} instead of numbers.
+      \item Use the macros the context documents and the preamble define; do not redefine them.
+      \item Refer to equations by label, never by number, with the reference command the document already uses (\cref if it loads cleveref, else Eq.~\ref).
       \item Give complete output containing every section in each input file's original order.
 
       \item Ensure that you maintain the structure and formatting of each individual paper while making improvements.
@@ -66,9 +66,7 @@ task:
       </instruction>
       Apply only the given instruction. If asked to revise section A in all papers, do not modify section B unless consistency requires it.
 
-      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
-
-      FIRST PHASE: In this initial phase, I want you to focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail to ensure complete mathematical rigor. Think of this as creating detailed mathematical drafts where all steps are shown.
+      FIRST PHASE: In this initial phase, I want you to focus on DERIVATION. Within the parts the instruction names, start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail to ensure complete mathematical rigor. Think of this as creating detailed mathematical drafts where all steps are shown.
 
       In the scratchpad below, plan how to expand the mathematical derivations to show every step clearly across all papers. Consider:
       - What are the fundamental principles and definitions we start from
@@ -114,7 +112,7 @@ task:
 
       Following the scratchpad plan, output updated LaTeX with every mathematical step and coefficient derived explicitly. These fully derived versions will be revised in the next phase.
     - |
-      SECOND PHASE - REVISION: Revise the fully derived version(s) for scientific publication. Most scientific writing does not need every intermediate step, but it should motivate the argument clearly. Keep the original level of detail unless the instruction asks for more.
+      SECOND PHASE - REVISION: Revise the fully derived version(s) for scientific publication. Most scientific writing does not need every intermediate step, but it should motivate the argument clearly. Keep the input document's level of detail unless the instruction asks for more.
 
       Again, the specific instruction is:
       <instruction>

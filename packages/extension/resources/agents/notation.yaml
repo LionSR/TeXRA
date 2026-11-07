@@ -1,5 +1,5 @@
 name: notation
-description: Notation consistency checker for research papers. Ensures consistent symbol usage throughout documents.
+description: Notation consistency checker for research papers. Fixes local symbol inconsistencies and leaves \criticize comments for systemic ones.
 
 prompt: |
   Analyze and improve notation, symbol usage, and mathematical conventions across the papers, including appendices and supplementary materials.
@@ -64,7 +64,7 @@ prompt: |
               \item Brief \criticize{Fixed: [description]}{severity}{confidence} for: notation unified in local equations, unused symbols removed
               \item Full \criticize{Issue: [...]. Graceful solution: [...]}{severity}{confidence} for: systemic and cross-document issues with proposed minimal-change solution
           \end{itemize}
-      \item Keep all comments that start with `\%'
+      \item Keep every \LaTeX comment (a line or line tail starting with an unescaped %).
   \end{itemize}
 
 task:
@@ -91,8 +91,6 @@ task:
       {{ INSTRUCTION }}
       </instruction>
       If no specific instruction is given, analyze overall notation consistency, symbol usage, and mathematical conventions across all documents.
-
-      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
       In the scratchpad below, track symbols across the document(s) and identify issues:
       <scratchpad>
@@ -164,7 +162,7 @@ task:
       Following your analysis, output the document(s) with \criticize{...}{...}{...} annotations highlighting notation issues. Focus on symbol consistency, mathematical conventions, and clarity.
 
       EXAMPLES of notation comments:
-      - \criticize{Notation inconsistency: Here $v^i$ uses upper index, but in \cref{sec:previous} it was $v_i$ with lower index. Graceful solution: introduce $w_i$ here to avoid changing \cref{sec:previous}.}{4}{5}
+      - \criticize{Notation inconsistency: Here $v^i$ uses upper index, but in \cref{sec:previous} it was $v_i$ with lower index. Graceful solution: lower the index here to $v_i$ to match \cref{sec:previous}.}{4}{5}
       - \criticize{Symbol reuse: $\lambda$ was used for eigenvalue in \cref{sec:spectral}, but here it means wavelength. Graceful solution: use $\Lambda$ for wavelength to distinguish.}{3}{4}
       - \criticize{Undefined notation: $\mathcal{H}$ appears here but is not defined until \cref{sec:later}. Define earlier or reorder.}{4}{5}
       - \criticize{Unused definition: The quantity $\Gamma$ is defined here but never used in the paper. Consider removing.}{2}{5}
@@ -172,7 +170,7 @@ task:
       - \criticize{Index inconsistency: Earlier equations use subscript $x_i$ but here uses superscript $x^i$ for the same vector component. Standardize.}{3}{5}
       - \criticize{Convention conflict: \Cref{sec:vectors} treats vectors as column vectors, but here they are row vectors in matrix multiplication. Clarify or make consistent.}{4}{4}
 
-      - \criticize{Cross-document inconsistency: Main paper uses $\mathcal{H}$ for Hilbert space, but appendix uses $H$. Graceful solution: standardize on $\mathcal{H}$ across documents.}{3}{5}
+      - \criticize{Cross-document inconsistency: Main paper uses $\mathcal{H}$ for Hilbert space, but appendix uses $H$. Graceful solution: replace $H$ with $\mathcal{H}$ in the appendix; the main paper needs no change.}{3}{5}
       - \criticize{Unused across all documents: The quantity $\Gamma$ is defined here but never used in \cref{sec:main} or appendices. Consider removing.}{2}{5}
 
       Add the \criticize definition given above to the preamble if it is not already there.
