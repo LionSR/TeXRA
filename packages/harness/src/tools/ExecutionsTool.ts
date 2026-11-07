@@ -19,6 +19,7 @@ import {
 } from 'effect';
 
 // Local imports
+import { isDeliveryOf } from '@agent/storage/runLifecycle';
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
   listRunWorkspaceFiles,
@@ -211,7 +212,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
         );
         const answered = followUps
           .map(({ followUpId }) => followUpId)
-          .filter((followUpId) => followUpId.startsWith(`${runId}:`));
+          .filter((followUpId) => isDeliveryOf(runId, followUpId));
         const summary = yield* showSummary(context, runId);
         return { ...summary, consumedFollowUps: answered };
       }),

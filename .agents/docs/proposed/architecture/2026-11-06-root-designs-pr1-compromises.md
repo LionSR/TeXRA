@@ -239,9 +239,12 @@ rather than per finding:
   `agentChild.standingOf` reads `leftoverChildren.cutShort` now.
 - **`ToolPolicy.oneShot`, ended in PR 3** (§1.6): `noLaterTurn` reads the
   policy and the parent edge off the run.
-- **`reportInterrupted`'s delivery id** carries an `:interrupted` suffix the
-  end's `${runId}:${activation}` does not; the executions tool's `wait`
-  consumes both by prefix. Two id shapes for one lifecycle's deliveries.
+- **`reportInterrupted`'s delivery id, ended in lane 9.** It carried an
+  `:interrupted` suffix the end's `${runId}:${activation}` did not; the
+  executions tool's `wait` consumed both by prefix. A lifecycle delivers
+  once (a stopped end delivers nothing, and the notice goes only to such a
+  run), so both are `deliveryId` now, read by `isDeliveryOf`
+  (`agent/storage/runLifecycle.ts`).
 - **`check-guidance-refs.mjs` `NOT_ROWS`**: a two-entry exclusion list for
   Node's `process` global, since `process.*` is now a row namespace. A list
   by name is a special case written as data; the checker could instead
@@ -305,11 +308,15 @@ rather than per finding:
   client of the service, whose windows answer prompts through
   `request.decide`), §1.5 (R8's second half), §1.4 (denied-request
   notice). §3's one reading of a grant landed there (PR 14772).
-- Harness, small: one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
-  boolean, the await's interruption through `RunRegistry.stop` (the
-  registry's `stop` already cascades a stop row to every held descendant;
-  what is left is a tool call interrupted for another reason), the close
-  deadline over the stop writes, a hold per agent-CLI turn.
+- Harness, small, taken by lane 9 (each item's §3 entry says how it
+  ended):
+  - one delivery-id shape (ended in lane 9);
+  - `USER_FOLLOW_UP_SUPPORT` as a boolean;
+  - the await's interruption through `RunRegistry.stop` (the registry's
+    `stop` already cascades a stop row to every held descendant; what is
+    left is a tool call interrupted for another reason);
+  - the close deadline over the stop writes;
+  - a hold per agent-CLI turn.
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.
 - The CLI service and its sessions, read after this PR's review rounds:
