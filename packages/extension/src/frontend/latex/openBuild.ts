@@ -44,7 +44,10 @@ const CHANNEL = 'OpenBuildUtils';
  * Falls back to a relative path resolved against the file's directory when the
  * result is not absolute.
  */
-function resolveLatexWorkshopOutDir(filePath: string): string {
+function resolveLatexWorkshopOutDir(
+  filePath: string,
+  workspace: string | undefined,
+): string {
   const raw = vscode.workspace
     .getConfiguration('latex-workshop.latex')
     .get<string>('outDir', '%DIR%/build');
@@ -57,12 +60,11 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
 
   const docfile = getFileStem(filePath);
   const doc = path.join(dir, docfile);
-  // The first folder, not the file's own: LaTeX Workshop's
-  // `replaceArgumentPlaceholders` expands these against
-  // `workspaceFolders[0]`, and the viewer looks for the PDF where it would.
-  // The callers' files sit outside every folder anyway.
-  const workspaceFolder =
-    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? dir;
+  // The window's workspace, not the file's folder: LaTeX Workshop's
+  // `replaceArgumentPlaceholders` expands these against the first workspace
+  // folder, which is the one the window's roots name, and the viewer looks
+  // for the PDF where it would. The callers' files sit outside it anyway.
+  const workspaceFolder = workspace ?? dir;
   const relativeDir = path.relative(workspaceFolder, dir);
   const relativeDoc = path.relative(workspaceFolder, doc);
 
@@ -91,8 +93,11 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
 }
 
 /** The PDF a build of `texPath` writes, where LaTeX Workshop's viewer reads it. */
-const builtPdfPath = (texPath: string): string =>
-  path.join(resolveLatexWorkshopOutDir(texPath), `${getFileStem(texPath)}.pdf`);
+const builtPdfPath = (texPath: string, workspace: string | undefined): string =>
+  path.join(
+    resolveLatexWorkshopOutDir(texPath, workspace),
+    `${getFileStem(texPath)}.pdf`,
+  );
 
 /**
  * Invoke the LaTeX Workshop build command for a file, warn-logging on failure.
@@ -153,9 +158,12 @@ export const openBuilt = Effect.fn('openBuild.openBuilt')(function* (
           ready
             ? // In the caller's scope: the viewer opens after this returns,
               // and closing that scope cancels an open still waiting.
-              Effect.forkScoped(openViewer(builtPdfPath(target.absolutePath)), {
-                startImmediately: true,
-              })
+              Effect.forkScoped(
+                openViewer(builtPdfPath(target.absolutePath, roots.workspace)),
+                {
+                  startImmediately: true,
+                },
+              )
             : Effect.void,
         ),
       );
@@ -253,7 +261,7 @@ const prepareLatexBuild = Effect.fn('openBuild.prepareLatexBuild')(function* (
   // Outside workspace — LaTeX Workshop cannot resolve project-local
   // packages, so compile internally with TEXINPUTS set.
   // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
-  const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
+  const outDir = resolveLatexWorkshopOutDir(uri.fsPath, roots.workspace);
   const compiled = yield* withSessionFs(
     roots,
     compileLatex2Pdf(pathToLocationIn(roots.workspace, uri.fsPath), roots, {
