@@ -297,6 +297,8 @@ const documents: TexraPlugin = {
     offered.includes('document_task')
       ? [
           'An agent marked (task) in the available agents also runs a document task over files with `document_task`.',
+          'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the task started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
+          'The host compiles each .tex the task writes: a file that failed to build leaves `compile/<name>.log` among the run\'s files (list them at `/executions/{id}/files`), and no log means every build passed or no LaTeX toolchain is installed.',
           ...(offered.includes('script')
             ? [
                 "In a script, `const { revise, from } = await import('builtIn:documents')`: `revise(agentName, args)` runs a task (`args` as `document_task`'s) and resolves to its result; `from(result, args)` is `args` with that result's revised files as the input files, to chain tasks.",
