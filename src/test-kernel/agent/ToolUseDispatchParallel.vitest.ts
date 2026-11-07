@@ -302,9 +302,10 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     },
   ]);
   const model = yield* ScopedRef.make(() => boundModel());
+  const run = agentRun(runId, session, model);
   const layer = Layer.mergeAll(
-    nativeToolTestLayer(),
-    Layer.succeed(AgentRun, agentRun(runId, session, model)),
+    nativeToolTestLayer({ run: { ...run, session } }),
+    Layer.succeed(AgentRun, run),
     Layer.succeed(RunHistory, Context.get(session, RunHistory)),
   );
   return {

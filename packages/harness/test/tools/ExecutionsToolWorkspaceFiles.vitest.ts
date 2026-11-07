@@ -9,7 +9,7 @@ import { expect } from 'vitest';
 
 import {
   AgentConfigSchema,
-  type RunId,
+  generateRunId,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import { SessionLog } from '@shared/session/runHistory';
@@ -39,7 +39,7 @@ const toolTestCall = Layer.unwrap(
   Effect.map(sessionHandle, (session) =>
     nativeToolTestLayer({
       // cast: a fixture run id; no stored run is read under it.
-      run: { session, runId: 'tool-test' as RunId, toolPolicy: {} },
+      run: { session, runId: generateRunId(), toolPolicy: {} },
     }),
   ),
 );

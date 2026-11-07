@@ -4,15 +4,13 @@ import {
   Effect,
   Layer,
   Schema,
-  Scope,
   ScopedRef,
   Semaphore,
   SynchronizedRef,
 } from 'effect';
 
 import { RunFileService } from '@texra-ai/harness/plugins';
-import { Interactions } from '@agent/runtime/HostInteractions';
-import { openRequest } from '@agent/runtime/requests';
+import { callRequests } from '@agent/runtime/loop/toolGuard';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
@@ -23,7 +21,7 @@ import {
 } from '@agent/core/tools/ToolTypes';
 import { RunCall, type RunCallShape } from '@agent/runtime/RunCall';
 import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { OpenStep } from '@agent/runtime/loop/step';
+import { ProjectTools, type OpenStep } from '@agent/runtime/loop/step';
 import {
   ChildRuns,
   childRuns,
@@ -31,22 +29,12 @@ import {
 } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { sessionFsLayer } from '@platform/rootedFs';
-import type { DraftBlob } from '@shared/session/historyTurns';
-import {
-  RunHistory,
-  runStateAppend,
-  SessionLog,
-} from '@shared/session/runHistory';
+import { RunHistory } from '@shared/session/runHistory';
 import { NO_FACTS } from '@shared/session/runFacts';
-import {
-  AgentConfigSchema,
-  qualifyAggregateId,
-  type RequestPayload,
-} from '@shared/schemas';
+import { AgentConfigSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
-import { testCallPluginServices } from '@test/support/testPluginServices';
 
 /** The run a test call is made under: what every fixture names, plus whatever
  *  else of the run the case under test actually reads. */
@@ -54,15 +42,6 @@ type TestCallRun = Pick<RunCallShape['run'], 'runId' | 'toolPolicy'> &
   Partial<RunCallShape['run']> & {
     readonly session: Context.Context<SessionServices>;
   };
-
-/** A run's live model cell holding only the id a tool reads off it. */
-export const testModelCell = (modelId: string) =>
-  Effect.runSync(
-    // cast: a tool reads only the id off the run's model cell.
-    ScopedRef.make(() => ({ modelId }) as BoundModel).pipe(
-      Scope.provide(Scope.makeUnsafe()),
-    ),
-  );
 
 /** A run that has opened no step yet. */
 const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
@@ -97,132 +76,132 @@ export function nativeToolTestLayer(
       >;
     } = {},
 ) {
-  const roots = options.roots ?? testWorkspaceRoots();
-  const { run, origin, workingDirectory, stepRoots } = options;
-  const callId = options.callId ?? `call-${crypto.randomUUID()}`;
-  // A fixture is the slice of the run its case reads; the run answers for
-  // its own config and trace with the inert pair.
-  const { session, ...runFields } = run ?? {};
-  const toolRun: RunCallShape['run'] | undefined = run && {
-    config: Schema.decodeUnknownSync(AgentConfigSchema)({
-      agent: 'test',
-      model: 'test-model',
-    }),
-    model: testModelCell('test-model'),
-    logger: noopTrace,
-    parentStage: noopTrace.openStage('Run: test'),
-    steps: noStep(),
-    scope: Scope.makeUnsafe(),
-    opening: null,
-    fileService: new RunFileService(run.runId, roots),
-    callbacks: {},
-    awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
-    // A root unless the fixture names its parent edge.
-    entry: { parent: null, awaited: false },
-    ...runFields,
-    runId: run.runId,
-    toolPolicy: run.toolPolicy,
-  };
-  // One layer value, which the plugin services are built over; the child
-  // door reads the same runs off the call's session.
-  const runs =
-    session === undefined
-      ? Layer.effect(Runs, testRunRegistry)
-      : Layer.succeed(Runs)(Context.get(session, Runs));
-  // A test call is no script's and issues none; under a run it launches
-  // children through the door over its own place in the run, and outside
-  // one the place and the door keep their defaults (null, a refusal).
-  const runCall: RunCallShape | null =
-    toolRun === undefined || session === undefined
-      ? null
-      : {
-          run: toolRun,
-          session,
-          responseId: 'test-response',
-          instruction: undefined,
-          attempt: 1,
-          logId: `log-${callId}`,
-          // The run's rows as the store holds them: what a case seeds
-          // (`seedEditedFiles`) is what the call reads.
-          facts: Context.get(session, RunHistory)
-            .load(toolRun.runId)
-            .pipe(
-              Effect.map((state) => state ?? NO_FACTS),
-              Effect.orDie,
-            ),
-          script: null,
-          scriptCalls: null,
-          ...origin,
-        };
-  const childDoor =
-    runCall === null
-      ? Layer.effectDiscard(Effect.void)
-      : Layer.succeed(ChildRuns)(childRuns(runCall));
-  return Layer.mergeAll(
-    // The call's rooted filesystems, from the same roots it is given.
-    sessionFsLayer(roots),
-    Layer.sync(ToolContext, (): ToolContextShape => ({
-      callId,
-      env: {
-        roots,
-        ...(workingDirectory !== undefined && { workingDirectory }),
-        ...(stepRoots !== undefined && { stepRoots }),
-        ...(toolRun !== undefined && { run: toolRun }),
-      },
-      emit: options.emit ?? (() => undefined),
-      ...(toolRun !== undefined &&
-        session !== undefined && {
-          // A run's requests open unbound on its session: a test call has no
-          // loop to bind them to.
-          requests: {
-            nextId: (prefix: string) => `${prefix}-${crypto.randomUUID()}`,
-            open: <P extends RequestPayload>(
-              payload: P,
-              blobs?: readonly DraftBlob[],
-            ) =>
-              openRequest(toolRun.runId, payload, {
-                ...(blobs && { blobs }),
-                commit: (rows) =>
-                  Context.get(session, SessionLog)
-                    .transact((tx) => runStateAppend(tx.append)(rows))
-                    .pipe(Effect.as(Context.get(session, SessionLog).now())),
-              }).pipe(
-                Effect.provide(session),
-                Effect.map((decision) => ({
-                  // cast: the answer is to the request supplied, of its kind.
-                  payload: payload as Extract<
-                    RequestPayload,
-                    { kind: P['kind'] }
-                  >,
-                  decision,
-                })),
-              ),
-            post: (requestId: string, payload: RequestPayload) =>
-              Context.get(session, RunHistory)
-                .open(toolRun.runId)
-                .pipe(
-                  Effect.flatMap((cell) =>
-                    cell.append([
-                      {
-                        type: 'request.opened',
-                        aggregateId: qualifyAggregateId('run', toolRun.runId),
-                        requestId,
-                        payload,
-                      },
-                    ]),
-                  ),
-                  Effect.asVoid,
-                ),
-            present: (event, payload) =>
-              Context.get(session, Interactions).emit(event, payload),
-          },
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      const roots = options.roots ?? testWorkspaceRoots();
+      const { run, origin, workingDirectory, stepRoots } = options;
+      const callId = options.callId ?? `call-${crypto.randomUUID()}`;
+      // A fixture is the slice of the run its case reads; the run answers for
+      // its own config and trace with the inert pair.
+      const { session, ...runFields } = run ?? {};
+      const toolRun: RunCallShape['run'] | undefined = run && {
+        config: Schema.decodeUnknownSync(AgentConfigSchema)({
+          agent: 'test',
+          model: 'test-model',
         }),
-    })),
-    runs,
-    Layer.succeed(RunCall)(runCall),
-    childDoor,
-    // The session's plugin services, over the same `Runs`, as a step pins
-    // them for the call.
-    testCallPluginServices.pipe(Layer.provideMerge(runs)),
+        // cast: a tool reads only the id off the run's model cell.
+        model: yield* ScopedRef.make(
+          () => ({ modelId: 'test-model' }) as BoundModel,
+        ),
+        logger: noopTrace,
+        parentStage: noopTrace.openStage('Run: test'),
+        steps: noStep(),
+        scope: yield* Effect.scope,
+        opening: null,
+        fileService: new RunFileService(run.runId, roots),
+        callbacks: {},
+        awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
+        // A root unless the fixture names its parent edge.
+        entry: { parent: null, awaited: false },
+        ...runFields,
+        runId: run.runId,
+        toolPolicy: run.toolPolicy,
+      };
+      // One layer value, which the plugin services are built over; the child
+      // door reads the same runs off the call's session.
+      const runs =
+        session === undefined
+          ? Layer.effect(Runs, testRunRegistry)
+          : Layer.succeed(Runs)(Context.get(session, Runs));
+      // A test call is no script's and issues none; under a run it launches
+      // children through the door over its own place in the run, and outside
+      // one the place and the door keep their defaults (null, a refusal).
+      const runCall: RunCallShape | null =
+        toolRun === undefined || session === undefined
+          ? null
+          : {
+              run: toolRun,
+              session,
+              responseId: 'test-response',
+              instruction: undefined,
+              attempt: 1,
+              logId: `log-${callId}`,
+              // The run's rows as the store holds them: what a case seeds
+              // (`seedEditedFiles`) is what the call reads.
+              facts: Context.get(session, RunHistory)
+                .load(toolRun.runId)
+                .pipe(
+                  Effect.map((state) => state ?? NO_FACTS),
+                  Effect.orDie,
+                ),
+              script: null,
+              scriptCalls: null,
+              ...origin,
+            };
+      const childDoor =
+        runCall === null
+          ? Layer.effectDiscard(Effect.void)
+          : Layer.succeed(ChildRuns)(childRuns(runCall));
+      return Layer.mergeAll(
+        // The call's rooted filesystems, from the same roots it is given.
+        sessionFsLayer(roots),
+        Layer.effect(
+          ToolContext,
+          Effect.gen(function* () {
+            // A run's requests are its loop's: `callRequests` over the run's
+            // cell, under the ids this call's first attempt derives.
+            const requests =
+              runCall === null
+                ? undefined
+                : yield* Effect.map(
+                    Context.get(runCall.session, RunHistory)
+                      .open(runCall.run.runId)
+                      .pipe(Effect.orDie),
+                    (cell) =>
+                      callRequests(
+                        runCall.run,
+                        runCall.session,
+                        cell,
+                        cell.append,
+                        { responseId: runCall.responseId, callId, attempt: 1 },
+                        0,
+                        null,
+                        'The test call ended.',
+                      ).requests,
+                  );
+            return {
+              callId,
+              env: {
+                roots,
+                ...(workingDirectory !== undefined && { workingDirectory }),
+                ...(stepRoots !== undefined && { stepRoots }),
+                ...(toolRun !== undefined && { run: toolRun }),
+              },
+              emit: options.emit ?? (() => undefined),
+              ...(requests !== undefined && { requests }),
+            } satisfies ToolContextShape;
+          }),
+        ),
+        runs,
+        Layer.succeed(RunCall)(runCall),
+        childDoor,
+        // The session's plugin services as a step pins them for the call, every
+        // plugin on, built in this layer's scope; a call outside a session has
+        // none.
+        session === undefined
+          ? Layer.empty
+          : Layer.effectContext(
+              Effect.gen(function* () {
+                const pinned = yield* Context.get(session, ProjectTools).pin(
+                  Effect.succeed(new Set<string>()),
+                  { installed: true },
+                );
+                return yield* pinned.services(
+                  new Set(pinned.plugins.map(({ id }) => id)),
+                );
+              }),
+            ),
+      );
+    }),
   );
 }
