@@ -111,16 +111,15 @@ export {
   providerDisplayName,
 } from './providers/providers.js';
 export {
+  apiKey,
   apiKeySecretName,
   apiProviderOfSecretName,
   exposeApiKey,
   hasUsableApiKey,
   isApiProvider,
   loadApiKeyStatusMap,
-  lookupApiKey,
-  lookupApiKeyOrigin,
 } from './providers/apiProviders.js';
-export type { ApiKeyStatus } from './providers/apiProviders.js';
+export type { ApiKeyStatus, ResolvedApiKey } from './providers/apiProviders.js';
 
 // Choosing a model: selection, the route decision, reasoning and pricing.
 export {

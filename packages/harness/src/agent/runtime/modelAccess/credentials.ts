@@ -7,11 +7,11 @@
 import { Effect } from 'effect';
 
 import {
+  apiKey,
   type ApiKeyProviderId,
   type CredentialRoute,
   decideModelRoute,
   exposeApiKey,
-  lookupApiKey,
   type ModelConfig,
   ModelError,
   OWN_KEY_ROUTE_FACTS,
@@ -151,7 +151,7 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
   route: Extract<CredentialRoute, { kind: 'api-key' }>,
 ): Effect.fn.Return<KeyCredential, RouteUnavailable, Secrets> {
   const { provider } = route;
-  const key = yield* lookupApiKey(yield* Secrets, provider).pipe(
+  const { value: key } = yield* apiKey(yield* Secrets, provider).pipe(
     Effect.mapError(
       (cause) =>
         new RouteUnavailable({

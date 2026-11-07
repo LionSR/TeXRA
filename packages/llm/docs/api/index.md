@@ -60,6 +60,21 @@ Order = display order in the settings key rows.
 const API_KEY_PROVIDER_IDS: readonly ApiKeyProviderId[]
 ```
 
+## apiKey
+
+The provider's key and where it came from, through the one credential
+ladder: the secret store (the authority; no copy of it is cached here),
+then the provider's conventional environment variable. A program: a caller
+yields it and matches {@link SecretsFailed} instead of catching `unknown`
+from a rejected read.
+
+```ts
+function apiKey(
+  credentials: CredentialStore,
+  provider: ApiKeyProviderId,
+): Effect.Effect<ResolvedApiKey, SecretsFailed>
+```
+
 ## apiKeyEnvName
 
 Environment variable for a provider's API key.
@@ -472,31 +487,6 @@ Every API-key provider's status, from its resolved key origin.
 function loadApiKeyStatusMap(
   credentials: CredentialStore,
 ): Effect.Effect<Record<ApiKeyProviderId, ApiKeyStatus>, SecretsFailed>
-```
-
-## lookupApiKey
-
-The key's value, or `undefined` if absent. It and {@link lookupApiKeyOrigin}
-share one {@link resolveApiKey} pass over secret storage then the env var.
-Both are programs: a caller yields one and matches {@link SecretsFailed}
-instead of catching `unknown` from a rejected read.
-
-```ts
-function lookupApiKey(
-  credentials: CredentialStore,
-  provider: ApiKeyProviderId,
-): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed>
-```
-
-## lookupApiKeyOrigin
-
-Origin of the resolved key (`secret` / `env` / `none`).
-
-```ts
-function lookupApiKeyOrigin(
-  credentials: CredentialStore,
-  provider: ApiKeyProviderId,
-): Effect.Effect<CredentialOrigin, SecretsFailed>
 ```
 
 ## MessageSchema
@@ -1070,6 +1060,23 @@ reports can never disagree.
 
 ```ts
 const resolveCredential: (store: Pick<CredentialStore, "get">, name: string, envNames: readonly string[]) => Effect<{ readonly value: string | undefined; readonly origin: CredentialOrigin; }, SecretsFailed, never>
+```
+
+## ResolvedApiKey
+
+A provider's key, sealed, and its origin.
+
+```ts
+interface ResolvedApiKey {
+  /**
+   * Held as `Redacted` from the store outward, so every caller carries a value
+   * that renders as `<redacted:provider>` if it ever reaches a log, a trace,
+   * or `JSON.stringify`. Only the call that hands the credential to a
+   * provider client unwraps it.
+   */
+  value: Redacted.Redacted<string> | undefined;
+  origin: CredentialOrigin;
+}
 ```
 
 ## ResolvedTurn
