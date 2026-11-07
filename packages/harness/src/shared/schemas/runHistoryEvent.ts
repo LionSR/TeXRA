@@ -1,5 +1,5 @@
 /**
- * Payloads for the run-history arms of `SessionEventDraftSchema`. Shapes
+ * Payloads for the run-history arms of `SessionRowDraftSchema`. Shapes
  * only: the arms themselves live in `sessionEvent.ts`, which is the single vocabulary
  * the publisher and both folds switch over.
  *
@@ -20,7 +20,8 @@ import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
-import { NormalizedUsageSchema, RunInputSchema } from './runInput';
+import { RunInputSchema } from './runInput';
+import { NormalizedUsageSchema } from './usage';
 import {
   StoredMessageSchema,
   StoredOperationSchema,

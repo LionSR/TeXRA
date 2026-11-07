@@ -37,7 +37,7 @@ import type { CallResult } from './modelCall';
  *  message: the same marker for every provider. */
 const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
 
-/** The message a `/compact` on an idle run wakes it with (`RunInput.next`);
+/** The message a `/compact` on an idle run wakes it with (`FollowUpReader.next`);
  *  the compaction at that turn's request boundary consumes the request. */
 export const COMPACTION_REQUEST =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';

@@ -48,8 +48,8 @@ export type RowOf<T extends SessionRow['type']> = Extract<
   { type: T }
 >;
 
-/** The input these rows say a run has not taken. */
-export type PendingInput = {
+/** The follow-ups these rows say a run has not taken. */
+export type PendingFollowUps = {
   /** Queued without consumed, in commit order. */
   readonly followUps: readonly QueuedFollowUp[];
   /**
@@ -64,11 +64,12 @@ export type PendingInput = {
 
 /**
  * What the shared rows (`runRows.ts`) say about one run: its row state and
- * the input it has not taken. The session view keeps one per run and builds
- * its request and follow-up lists from it. The loop reads its pending input
- * from the rows (`Inbox.read`), so `RunState` carries only the row state.
+ * the follow-ups it has not taken. The session view keeps one per run and
+ * builds its request and follow-up lists from it. The loop reads its
+ * pending follow-ups from the rows (`Inbox.read`), so `RunState` carries
+ * only the row state.
  */
-export type SharedRunRows = RunRowState & PendingInput;
+export type SharedRunRows = RunRowState & PendingFollowUps;
 
 /**
  * What a run's record rows say about it (`runRowsFrom`), each field from the

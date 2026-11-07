@@ -1,5 +1,7 @@
 import { Schema, Struct, type Types } from 'effect';
 
+import { StoredProtocolSchema } from './storedTurn';
+
 export const TokenCountSchema = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),
 );
@@ -125,3 +127,20 @@ export function addUsage(
 ): TokenUsageStats {
   return usage === null ? total : sumUsageStats([total, usage]);
 }
+
+/**
+ * The priced usage of one model call: the counts under `TurnUsage`'s names,
+ * its cost, route and plan ({@link TokenUsageStatsSchema}), and the wire
+ * surface and response time of the call. `run/pricing.ts` prices the
+ * package's `TurnResult.usage` into this shape.
+ */
+export const NormalizedUsageSchema = TokenUsageStatsSchema.mapFields(
+  Struct.assign({
+    /** Response time in milliseconds */
+    responseTimeMs: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+    /** Wire surface that produced this usage; usage is billed per surface. */
+    provider: StoredProtocolSchema,
+  }),
+);
+/** Normalized, priced usage of one call ({@link NormalizedUsageSchema}). */
+export type NormalizedUsage = typeof NormalizedUsageSchema.Type;

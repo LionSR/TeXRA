@@ -5,7 +5,8 @@ import { Effect, FileSystem } from 'effect';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import { delegationUpdate } from '@agent/runtime/delegation/delegationAvailability';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { RunContext, SkillCatalogEntry } from '@shared/schemas';
+import type { RunContext } from '@shared/schemas';
+import type { SkillCatalogEntry } from '@skills/runtimeSkills';
 import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
 

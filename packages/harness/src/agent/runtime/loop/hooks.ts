@@ -22,7 +22,7 @@ import {
   SynchronizedRef,
 } from 'effect';
 
-import type { FollowUpBatch } from '@agent/followUp/RunInput';
+import type { FollowUpBatch } from '@agent/followUp/FollowUpReader';
 import {
   claudeToolCall,
   matchesHook,

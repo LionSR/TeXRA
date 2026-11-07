@@ -2076,7 +2076,7 @@ it lives on. The publisher stamps the rest of the envelope
 Parsing a draft removes caller-supplied envelope fields before storage.
 
 ```ts
-type SessionRowDraft = typeof SessionEventDraftSchema.Type;
+type SessionRowDraft = typeof SessionRowDraftSchema.Type;
 ```
 
 ## SessionStoreMovedAside

@@ -35,7 +35,7 @@ import {
   RETIRED_PLUGIN_FACTS,
   RETIRED_ROW_KINDS,
   ROW_KINDS,
-  SessionEventDraftSchema,
+  SessionRowDraftSchema,
   SessionRowSchema,
   unavailableFactReason,
   type AggregateId,
@@ -178,7 +178,7 @@ export function prepareEventDraft(input: WithBlobs<SessionRowDraft>): {
   readonly row: EncodedRow;
 } {
   const { blobs = [], ...rest } = input;
-  const draft = Schema.decodeUnknownSync(SessionEventDraftSchema)(rest);
+  const draft = Schema.decodeUnknownSync(SessionRowDraftSchema)(rest);
   return { draft, row: encodeDraft(draft, blobs) };
 }
 
