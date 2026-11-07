@@ -35,7 +35,7 @@
  */
 
 // Third-party imports
-import { Clock, Effect, Exit, Result, Schema } from 'effect';
+import { Clock, Effect, Exit } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 // Local imports
@@ -48,11 +48,9 @@ import {
   formatRepoPROpened,
   formatRepoReviewComment,
 } from './formatRepoEvent';
-import { ghGet } from './githubClient';
 import {
-  logWarning,
+  pollGet,
   readNewItems,
-  validateOrSkip,
   type PollEvent,
   type PollResult,
 } from './poller';
@@ -67,7 +65,7 @@ import {
   type GhPullsListEntry,
   type GhReviewComment,
 } from './prTypes';
-import { targetPath, type RepoTarget } from './subscriptionTarget';
+import type { RepoTarget } from './subscriptionTarget';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
 // catch transitions even after a brief network outage. GitHub caps these
@@ -140,7 +138,6 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
   repo: RepoTarget,
   prior: RepoState | undefined,
 ) {
-  const slug = targetPath(repo);
   const subscribedAt =
     prior?.subscribedAt ??
     new Date(yield* Clock.currentTimeMillis).toISOString();
@@ -157,36 +154,16 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
   // transition tracker is what makes that safe.
   const pullsPath = `/repos/${repo.owner}/${repo.repo}/pulls?state=all&per_page=${PER_PAGE}&sort=updated&direction=desc`;
 
-  const [rawIssueRes, rawReviewRes, rawPullsRes] = yield* Effect.all(
+  // Each list stands on its own: a malformed one is skipped for this poll
+  // (`pollGet`) and keeps its cursor, so the same window is read again.
+  const [issueRes, reviewRes, pullsRes] = yield* Effect.all(
     [
-      ghGet(issuePath, Schema.Unknown),
-      ghGet(reviewPath, Schema.Unknown),
-      ghGet(pullsPath, Schema.Unknown),
+      pollGet(issuePath, GhIssueCommentArraySchema),
+      pollGet(reviewPath, GhReviewCommentArraySchema),
+      pollGet(pullsPath, GhPullsListEntryArraySchema),
     ],
     { concurrency: 3 },
   );
-
-  // One malformed payload skips the whole poll; the state is unchanged, so
-  // the same window is evaluated again next tick.
-  const skipped: PollResult<RepoState> = { next: prior, events: [] };
-  const issueRes = yield* validateOrSkip(
-    rawIssueRes,
-    GhIssueCommentArraySchema,
-    `Skipping ${slug} tick: issue-comments payload failed validation`,
-  );
-  if (!issueRes) return skipped;
-  const reviewRes = yield* validateOrSkip(
-    rawReviewRes,
-    GhReviewCommentArraySchema,
-    `Skipping ${slug} tick: review-comments payload failed validation`,
-  );
-  if (!reviewRes) return skipped;
-  const pullsRes = yield* validateOrSkip(
-    rawPullsRes,
-    GhPullsListEntryArraySchema,
-    `Skipping ${slug} tick: pulls-list payload failed validation`,
-  );
-  if (!pullsRes) return skipped;
 
   const prStateByNumber = prior
     ? copyLru(prior.prStateByNumber)
@@ -383,23 +360,15 @@ const probeOne = Effect.fn('github.probeOne')(function* (
   repo: RepoTarget,
   pr: GhPullsListEntry,
 ) {
-  const res = yield* ghGet(
+  const res = yield* pollGet(
     `/repos/${repo.owner}/${repo.repo}/pulls/${pr.number}`,
-    Schema.Unknown,
+    GhPullRequestSchema,
   );
   if (res.status !== 200) return undefined;
-  const parsed = Schema.decodeUnknownResult(GhPullRequestSchema)(res.data);
-  if (!Result.isSuccess(parsed)) {
-    yield* logWarning(
-      `Skipping merge probe for ${targetPath(repo)}#${pr.number}: payload failed validation`,
-      parsed.failure,
-    );
-    return undefined;
-  }
   return {
     number: pr.number,
     updatedAt: pr.updated_at,
-    mergeable: parsed.success.mergeable_state,
+    mergeable: res.data.mergeable_state,
   };
 });
 

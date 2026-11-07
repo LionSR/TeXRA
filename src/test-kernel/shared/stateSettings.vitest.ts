@@ -7,9 +7,9 @@ import { Effect } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { orchestratorKillDenial } from '@tools/executions/killPolicy';
+import { ALLOW_ORCHESTRATOR_KILL_SETTING } from '@texra-ai/harness/schemas';
 
 describe('Settings', () => {
   // #11797: the kill gate's permissive default answers only for an absent
@@ -18,10 +18,7 @@ describe('Settings', () => {
     Effect.gen(function* () {
       const { stores, globalState } = makeFakeSettingsStores();
       assert.equal(yield* orchestratorKillDenial(stores), undefined);
-      yield* globalState.update(
-        GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-        'false',
-      );
+      yield* globalState.update(ALLOW_ORCHESTRATOR_KILL_SETTING.key, 'false');
       const denial = yield* orchestratorKillDenial(stores);
       assert.match(String(denial), /denied: .* is invalid/);
     }),

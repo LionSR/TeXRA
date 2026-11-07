@@ -12,8 +12,8 @@
  */
 
 import { Schema } from 'effect';
-import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { html, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -31,7 +31,6 @@ import {
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { createFlushableDebounce } from '@texra/shared/utils/flushableDebounce';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderDotMeta } from '@ui/wa/metaStrip';
@@ -40,7 +39,10 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { BaseRequestPanel } from './BaseRequestPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 
-const DRAFT_SAVE_DELAY_MS = 400;
+const EMPTY_DRAFT: InquiryDraft = Object.freeze({
+  answer: '',
+  sessionLinks: '',
+});
 
 /** `Surface.inquiryDrafts` is keyed by inquiry turn, never by stream
  * : the thread and the number of turns already answered. */
@@ -67,53 +69,12 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
     externalInquiryPanelStyles,
   ];
 
-  @state() private answerText = '';
-  @state() private sessionLinksText = '';
-
   /** The surface whose `inquiryDrafts` holds this inquiry's answer in progress. */
   @property({ attribute: false }) surface: Surface | null = null;
 
   /** The last decoded request data and the inquiry it holds. */
   private decoded: { data: unknown; inquiry: InquiryRequest } | undefined;
   private copyController = new CopyButtonController(this);
-  private draftRestored = false;
-  /** The key the pending debounced write belongs to. */
-  private pendingDraftKey: string | null = null;
-  private readonly draftSaveDebounce = createFlushableDebounce(() => {
-    const key = this.pendingDraftKey;
-    this.pendingDraftKey = null;
-    if (key === null) return;
-    this.writeDraft(key, this.currentDraft());
-  }, DRAFT_SAVE_DELAY_MS);
-
-  // ── Lifecycle ──
-
-  override disconnectedCallback(): void {
-    this.draftSaveDebounce.flush();
-    super.disconnectedCallback();
-  }
-
-  protected override willUpdate(changed: PropertyValues): void {
-    super.willUpdate(changed);
-    if (changed.has('permission')) {
-      // The text still belongs to the previous inquiry here: a pending
-      // write lands on its key before the fields reset for the new one.
-      this.draftSaveDebounce.flush();
-      this.answerText = '';
-      this.sessionLinksText = '';
-      this.draftRestored = false;
-    }
-    // Restore the draft once on first update (avoids the extra render from
-    // connectedCallback): the surface owns the draft.
-    if (!this.draftRestored) {
-      this.draftRestored = true;
-      const draft = this.surface?.inquiryDrafts.get(draftKey(this.inquiry));
-      if (draft) {
-        this.answerText = draft.answer;
-        this.sessionLinksText = draft.sessionLinks;
-      }
-    }
-  }
 
   /** The inquiry the request holds, decoded once per request. */
   private get inquiry(): InquiryRequest {
@@ -127,46 +88,48 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
     return this.decoded.inquiry;
   }
 
-  private currentDraft(): InquiryDraft | null {
-    if (!this.answerText && !this.sessionLinksText) return null;
-    return {
-      answer: this.answerText,
-      sessionLinks: this.sessionLinksText,
-    };
-  }
-
-  private writeDraft(key: string, draft: InquiryDraft | null): void {
-    this.dispatchEvent(
-      SessionUiEvents.surface({ kind: 'inquiryDraft', key, draft }),
+  /** The answer in progress, as the surface holds it. */
+  private get draft(): InquiryDraft {
+    return (
+      this.surface?.inquiryDrafts.get(draftKey(this.inquiry)) ?? EMPTY_DRAFT
     );
   }
 
-  private scheduleDraftSave(): void {
+  private writeDraft(draft: InquiryDraft | null): void {
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'inquiryDraft',
+        key: draftKey(this.inquiry),
+        draft,
+      }),
+    );
+  }
+
+  /** Store one field's edit; a draft with both fields empty is none. */
+  private editDraft(patch: Partial<InquiryDraft>): void {
     // Read-only trace-viewer export: nothing owns a draft.
     if (this.readOnly) return;
-    this.pendingDraftKey = draftKey(this.inquiry);
-    this.draftSaveDebounce.schedule();
+    const next = { ...this.draft, ...patch };
+    this.writeDraft(next.answer || next.sessionLinks ? next : null);
   }
 
   /** A decision resolves the inquiry: its draft goes with it. */
   protected override emitAction(decision: SurfaceDecision): void {
     if (this.readOnly) return;
-    this.draftSaveDebounce.cancel();
-    this.pendingDraftKey = null;
-    this.writeDraft(draftKey(this.inquiry), null);
+    this.writeDraft(null);
     super.emitAction(decision);
   }
 
   // ── Render ──
 
   private get hasAnswer(): boolean {
-    return this.answerText.trim().length > 0;
+    return this.draft.answer.trim().length > 0;
   }
 
   private get normalizedSessionLinks(): string[] {
     return [
       ...new Set(
-        this.sessionLinksText
+        this.draft.sessionLinks
           .split('\n')
           .map((value) => value.trim())
           .filter((value) => value.length > 0),
@@ -280,7 +243,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
   }
 
   private renderQuestion(question: string): TemplateResult {
-    const { copied } = this.copyController.state;
+    const { copied } = this.copyController;
 
     return html`
       <div class="external-inquiry-request__question">
@@ -355,7 +318,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
           required
           autocomplete="off"
           spellcheck="true"
-          .value=${live(this.answerText)}
+          .value=${live(this.draft.answer)}
           @input=${this.handleAnswerInput}
           @keydown=${this.handleKeyDown}
         >
@@ -396,7 +359,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
         autocapitalize="none"
         spellcheck="false"
         inputmode="url"
-        .value=${live(this.sessionLinksText)}
+        .value=${live(this.draft.sessionLinks)}
         @input=${this.handleSessionLinksInput}
       >
         <span
@@ -432,16 +395,14 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
 
   private handleAnswerInput(e: Event): void {
     if (!(e.currentTarget instanceof WaTextarea)) return;
-    this.answerText = e.currentTarget.value ?? '';
     e.currentTarget.setCustomValidity('');
-    this.scheduleDraftSave();
+    this.editDraft({ answer: e.currentTarget.value ?? '' });
   }
 
   private handleSessionLinksInput(e: Event): void {
     if (!(e.currentTarget instanceof WaTextarea)) return;
-    this.sessionLinksText = e.currentTarget.value ?? '';
     e.currentTarget.setCustomValidity('');
-    this.scheduleDraftSave();
+    this.editDraft({ sessionLinks: e.currentTarget.value ?? '' });
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
@@ -488,7 +449,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
       return;
     }
 
-    const answer = this.answerText.trim();
+    const answer = this.draft.answer.trim();
 
     this.emitAction({
       action: 'answer',

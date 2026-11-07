@@ -65,7 +65,8 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       fullConfig.persona != null
         ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
         : yield* (yield* AgentCatalog)
-            .forLaunch(roots, fullConfig.agent, fullConfig.agentSource)
+            .workspaceAgents(roots)
+            .forLaunch(fullConfig.agent, fullConfig.agentSource)
             .pipe(
               Effect.catchTag('AgentNotFound', (miss) =>
                 Effect.fail(missingAgentRefusal(miss)),

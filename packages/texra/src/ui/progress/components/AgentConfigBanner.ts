@@ -13,9 +13,7 @@ export class AgentConfigBanner extends LitElement {
   static override styles = [designTokens, commonViewStyles, bannerStyles];
 
   @property({ attribute: false })
-  state: HostSnapshot['banners']['agentConfig'] = {
-    visible: false,
-  };
+  state: NonNullable<HostSnapshot['banners']['agentConfig']> = {};
 
   private handleAction(action: 'edit' | 'dir' | 'docs'): void {
     this.dispatchEvent(

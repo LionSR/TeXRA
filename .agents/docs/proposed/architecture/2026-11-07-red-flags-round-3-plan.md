@@ -305,3 +305,102 @@ a new PR.
 NM1 ("settle" for eight things) and the banned-word counts (NM9) are not a
 mass rename. Each owner renames what it touches, as root `AGENTS.md`
 "Terminology" asks.
+
+## 5. Round 4: unaudited areas, today's compromises, and what today's code added
+
+Round 4 (`.agents/docs/evidence/2026-11-07-design-red-flags-round-4/`, read
+at main `363d484`) read three things the earlier rounds had not. The
+catalogue's "Status at main `ed2004a`" gives the counts: of the 225 ids of
+rounds 1 to 3, 164 have landed, 50 are assigned, 7 refused and 4 held.
+Round 4 adds 32: 1 has landed (X-R10, #14812), 30 are assigned, and 1 is
+the owner's call. The
+ids are the catalogue's: X's rows are X-R1 to X-R12, and Y's batched
+sections are Y-B and Y-C.
+
+- **W, the directories no audit read:** `supabase/functions/`, the Lean
+  plugin's agents and `packages/desktop/build/`. The edge functions hold
+  defects in hardening and in device approval (W3, W4); their details stay
+  out of this public record until the fixes are deployed. The edge also
+  prices a subscription call a second time, from a lossy copy of the
+  client's evidence (W1).
+- **X, the compromises today's PRs accepted:** 83 in all, 29 of them for
+  ownership, order or scope. For 8 of those the reason is gone. Two design
+  compromises have a better shape now. `overwrite` stamps a digest over
+  bound files it kept, so a changed template goes unnoticed (X-R1). The
+  documents settings keys can be renamed for free only until 1.0 (X-R4).
+- **Y, the red flags today's diffs added:** the code is mostly clean, and
+  the new flags are of three kinds.
+  - A public "one rule" the enforcing code does not use: Y1, `launchPolicy`,
+    a defect.
+  - Two policies for one failure, where a fix left the old path beside the
+    new one: Y2, Y3 and Y6.
+  - Options and failure branches nothing exercises: Y4, Y5 and Y7.
+
+A defect goes first in its PR, with one regression test written to fail
+first.
+
+### 5.1 By owner
+
+- **A, in the K4 + K11 PR:**
+  - Y1, `launchPolicy`, first;
+  - Y5, the catalog's miss as a `LaunchRefused` with a UI notice;
+  - Y8, the stdin lane;
+  - Y-B's `SessionInteractions` and `RunLoopPhase`;
+  - Y-C's `RUN_GRANT_CLI_ACTION` and `RUN_GRANT_LABEL`;
+  - X-R8, one shared local session open;
+  - V's `hostCapability` (F2);
+  - X-R2's reply on #14809.
+  - After K4, in the same PR, the catalogue's "at risk" items, which no PR
+    from #14794 to #14813 named: F1, the CLI's `RootRunClaim`; F3, the
+    chat's launch path through `createHostRunActions`; F5's rest, the
+    headless shutdown's fence and `settleExitCode`; and J1's generation
+    counter.
+- **B, in R3-B:**
+  - X-R7, the editor pane's state as one value;
+  - X-R12, T4's range comment;
+  - Y-B's second run-keyed map in `surface.ts` (`rejected`);
+  - Y-C's "settled" in `openProjectSession.ts`.
+  - X-R10, the flaky `serviceClient` test, landed in #14812:
+    `request.preview` and `request.decide` read the request from the log,
+    not from a view that may lag it.
+- **C, in one PR:**
+  - X-R1, `overwrite` and the bound files it keeps;
+  - Y6, a bound file located three times, with a silent `orElseSucceed`;
+  - X-R4, the documents settings keys renamed before 1.0;
+  - Y2, a malformed GitHub body's two outcomes;
+  - Y-B's `OrderedRuleSet` and `isRegex`;
+  - Y-C's `agentTemplateRenderer.ts`.
+- **D, in R3-R:** X-R9, the crash-conformance suites as their own project.
+- **E:**
+  - R3-E2, after R3-R, now holds O3, the storage-format batch, GS1 and Q2
+    (#14813). #14741, the blob-link column, folds into the storage-format
+    batch: E closed it, because its open-time `ALTER` is a migration.
+  - In R3-E2: X-R6, `allowBypass` renamed; NC4's eighth spelling
+    (`recipeResult.ts:56,70`); and, if the format batch has room, Y3, a
+    gap-marker row, so the shell's delivery needs no writer counters.
+    Otherwise Y3 stays open, with E.
+  - The keyless wake landed in #14813, E's lifecycle and R3-Q PR: a
+    follow-up send carries the requesting client's keys, and the wake
+    provides them as the run's `LaunchKeys`.
+- **F, in one round-4 PR:**
+  - W1, the client sends the subscription list price, and the edge stops
+    recomputing it;
+  - W2, `log-usage-v2`'s own usage validation;
+  - W3, the device page's hardening;
+  - W4, the device approval kept on a transient failure;
+  - W6, required edge clients and a three-way `authenticateJwt`;
+  - W9 and W10, the edge's small items, names and comments;
+  - Y4, the usage log's dead `enabled` and `config` option;
+  - W5, the orchestrator prompts and the real names in `leanBlueprint.yaml`;
+  - W8, desktop signing decided once;
+  - X-R3, the changelog;
+  - X-R2's `Exit` comment, unless Y7 removes the `Exit`;
+  - V-R21, the CLI title flags and heartbeat;
+  - Y7, one plugin's failure must not end every plugin's round;
+  - Y-C's budgets restated in `toolUse.ts`;
+  - Y-B's `subscribeAppSignal`, which the Y report gives F.
+  - Later: X-R5 (NM4's rest), T6, NM7 and NM8.
+- **The owner's call:**
+  - W3's alternative design, and W7, the server half's two copies: both
+    held for the owner, with details shared outside this record;
+  - the GitHub account-age rule, decided in two places (W9).

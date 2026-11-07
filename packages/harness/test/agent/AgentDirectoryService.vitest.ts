@@ -26,7 +26,6 @@ describe('AgentDirectoryService', () => {
         );
         const reports: Array<{ message: string; docsId: string }> = [];
         const service = new AgentDirectoryService({
-          channel: 'AgentDirectoryServiceTest',
           resourcesPath: path.resolve('/texra-resources'),
           state: { get: () => Effect.succeed('relative/custom') },
           issueReporter: {

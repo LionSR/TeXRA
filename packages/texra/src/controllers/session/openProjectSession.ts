@@ -56,7 +56,7 @@ export const openLocalSession = (
   Effect.acquireRelease(
     sessions.open(roots, { persistent: true, host: {} }),
     // The one close every session takes: its runs stopped under the
-    // shutdown deadline, the ones still live past it settled, its
+    // shutdown deadline, the ones still live past it ended, its
     // artifacts flushed, its entry released.
     (opened) => Effect.asVoid(sessions.close(opened.roots)),
   ).pipe(Effect.tap(recordFirstCompletedRun));

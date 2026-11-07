@@ -99,6 +99,9 @@ function emitCopyResult(result: {
   readonly action: 'customized' | 'reset' | 'kept';
   readonly name: string;
   readonly path: string;
+  /** Files the agent binds that were already beside the copy and kept
+   *  although they differ from the bundled ones. */
+  readonly keptDiffering?: readonly string[];
   readonly text: string;
 }) {
   const { text, ...copy } = result;
@@ -120,12 +123,19 @@ const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
   const builtIn = yield* bundledAgentNamed(name);
   if (!builtIn) return refuse(`No built-in agent named ${name}.`);
   return yield* (yield* AgentCatalog).customize(builtIn, 'copy').pipe(
-    Effect.flatMap((target) =>
+    Effect.flatMap(({ path, keptDiffering }) =>
       emitCopyResult({
         action: 'customized',
         name: builtIn.name,
-        path: target,
-        text: `Created custom copy of ${builtIn.name}: ${target}`,
+        path,
+        ...(keptDiffering.length > 0 && { keptDiffering }),
+        text: [
+          `Created custom copy of ${builtIn.name}: ${path}`,
+          ...keptDiffering.map(
+            (file) =>
+              `Kept your existing ${file}; it differs from the built-in one.`,
+          ),
+        ].join('\n'),
       }).pipe(Effect.as(CliExitCode.Success)),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>

@@ -35,7 +35,7 @@ export const enabledBuiltInRoots = (
     ]),
     ([disabled, registry]) => [
       coreDirectory,
-      ...(resourcesRoot === undefined || resourcesRoot === ''
+      ...(resourcesRoot === undefined
         ? []
         : [...registry.entries.keys()].flatMap((id) =>
             disabled.has(id)

@@ -15,8 +15,8 @@ import { Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 // Local imports - shared contracts
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStores } from '@shared/config/settings';
+import type { StateKey } from '@shared/state/stateSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** One configured stdio server, as the MCP plugin spawns it. */
@@ -39,7 +39,13 @@ export function mcpConfigPathOf(storageRoot: string): string {
 export const mcpPluginId = (server: string): string => `mcp:${server}`;
 
 /** A revision key as app state stores it: 32 random bytes, hex. */
-const REVISION_KEY_PATTERN = /^[0-9a-f]{64}$/;
+/** The per-install key MCP env values are digested under: 32 random bytes,
+ *  hex. */
+const MCP_REVISION_KEY = {
+  key: 'mcp.revisionKey',
+  slot: 'globalState',
+  schema: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
+} as const satisfies StateKey<string>;
 
 /**
  * The key a server's env values are digested under: random per install,
@@ -54,19 +60,15 @@ const REVISION_KEY_PATTERN = /^[0-9a-f]{64}$/;
 export const revisionKey = Effect.fn('mcpServers.revisionKey')(function* (
   globalState: SettingsStores['globalState'],
 ) {
-  const isKey = (value: unknown): value is string =>
-    typeof value === 'string' && REVISION_KEY_PATTERN.test(value);
-  const stored = yield* globalState.get(GlobalStateKey.MCP_REVISION_KEY);
+  const isKey = Schema.is(MCP_REVISION_KEY.schema);
+  const stored = yield* globalState.get(MCP_REVISION_KEY.key);
   if (isKey(stored)) return stored;
   let replaced = false;
-  const key = yield* globalState.modify(
-    GlobalStateKey.MCP_REVISION_KEY,
-    (current) => {
-      if (isKey(current)) return Result.succeed(current);
-      replaced = current !== undefined;
-      return Result.succeed(randomBytes(32).toString('hex'));
-    },
-  );
+  const key = yield* globalState.modify(MCP_REVISION_KEY.key, (current) => {
+    if (isKey(current)) return Result.succeed(current);
+    replaced = current !== undefined;
+    return Result.succeed(randomBytes(32).toString('hex'));
+  });
   if (replaced)
     yield* Effect.logWarning(
       'The stored MCP revision key was not a key; a new one was created, so every MCP server records a new revision once.',

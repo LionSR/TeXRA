@@ -13,14 +13,19 @@ import {
   type SettingsStores,
 } from '@shared/config/settings';
 import type { SubscriptionAuthProvider } from '@shared/model/subscriptionAuth';
+import {
+  CHATGPT_PREFER_SUBSCRIPTION_SETTING,
+  XAI_PREFER_SUBSCRIPTION_SETTING,
+  type SettingRow,
+} from '@shared/state/stateSettings';
 import type { Effect } from 'effect';
 
-/** Config key of each provider's "prefer my subscription" switch. */
-const PREFER_SUBSCRIPTION_KEYS: Readonly<
-  Record<SubscriptionAuthProvider, string>
+/** Each provider's "prefer my subscription" switch. */
+const PREFER_SUBSCRIPTION: Readonly<
+  Record<SubscriptionAuthProvider, SettingRow<boolean>>
 > = {
-  chatgpt: 'chatgptCodex.preferSubscription',
-  grok: 'xaiGrok.preferSubscription',
+  chatgpt: CHATGPT_PREFER_SUBSCRIPTION_SETTING,
+  grok: XAI_PREFER_SUBSCRIPTION_SETTING,
 };
 
 /** Whether the user has switched on "prefer my subscription" for `provider`. */
@@ -28,10 +33,7 @@ function isPreferSubscription(
   provider: SubscriptionAuthProvider,
   stores: SettingsStores,
 ): boolean {
-  return Settings.getConfig<boolean>(
-    stores.config,
-    PREFER_SUBSCRIPTION_KEYS[provider],
-  );
+  return Settings.getConfig(stores.config, PREFER_SUBSCRIPTION[provider]);
 }
 
 /**
@@ -46,15 +48,15 @@ function setPreferSubscription(
   stores: SettingsStores,
   enabled: boolean,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  const configKey = PREFER_SUBSCRIPTION_KEYS[provider];
+  const row = PREFER_SUBSCRIPTION[provider];
   // The scope that currently controls the value: a project that already
   // names the preference keeps owning it, everyone else writes the user
   // file. Passed to the catalog write path as the explicit target, so the
   // row's schema still validates the value.
-  const inspection = stores.config.inspect<boolean>(configKey);
+  const inspection = stores.config.inspect<boolean>(row.key);
   const target: ConfigTarget =
     inspection.workspaceValue !== undefined ? 'workspace' : 'global';
-  return Settings.set(stores, configKey, enabled, target);
+  return Settings.set(stores, row, enabled, target);
 }
 
 /** Each subscription's "prefer my subscription" switch: its read (`get`) and

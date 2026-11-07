@@ -104,10 +104,16 @@ import {
   SetupPlatform,
   type SetupPlatformShape,
 } from './setup/platform';
+import {
+  EDITOR_EXTENSIONS_CAPABILITY,
+  EditorIntegration,
+  type EditorIntegrationShape,
+} from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
 import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import type { WriteFilter } from '@texra-ai/harness/plugins';
+import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {
@@ -228,7 +234,7 @@ const core = (
       LeanLoogleTool,
     ],
     prompt: ({ config }) => {
-      const bibPath = Settings.getConfig<string>(config, 'bib.defaultPath');
+      const bibPath = Settings.getConfig(config, BIB_DEFAULT_PATH_SETTING);
       return bibPath
         ? `${TEX_INSTRUCTIONS}\nThe default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
         : TEX_INSTRUCTIONS;
@@ -255,18 +261,24 @@ const core = (
 /** The onboarding agent's narrow set, one concern per tool, over the host's
  *  setup capabilities: a tool that needs a member the host left undefined
  *  is not offered. The members are read when asked, not here. */
-const setup = (platform: SetupPlatformShape, host: SetupHost['Service']) =>
+const setup = (
+  platform: SetupPlatformShape,
+  host: SetupHost['Service'],
+  editor: EditorIntegrationShape | undefined,
+) =>
   definePlugin<SetupPlatform | SetupHost>({
     id: 'setup',
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(SetupPlatform)(platform),
         Layer.succeed(SetupHost)(host),
-        serves(() =>
-          Object.entries(platform).flatMap(([member, value]) =>
+        Layer.succeed(EditorIntegration)(editor),
+        serves(() => [
+          ...Object.entries(platform).flatMap(([member, value]) =>
             value === undefined ? [] : [member],
           ),
-        ),
+          ...(editor ? [EDITOR_EXTENSIONS_CAPABILITY] : []),
+        ]),
       ),
     },
     tools: [
@@ -329,9 +341,11 @@ export const texraPlugins = (host: {
   readonly lean?: ProcessPluginLayer<LeanLanguageServices>['layer'];
   /** The host's Comments UI behind `inline_comment`. */
   readonly inlineComments?: InlineCommentProvider;
-  /** The host's setup capabilities (VS Code's commands, extensions and
-   *  terminal); none elsewhere. */
+  /** The host's setup capabilities (VS Code's commands and terminal);
+   *  none elsewhere. */
   readonly setup?: SetupPlatformShape;
+  /** The host's code editor (VS Code); none elsewhere. */
+  readonly editor?: EditorIntegrationShape;
   /** The composition's editor registry its hosts attach to
    *  (`makeEditorHost`); none attached when absent. */
   readonly editors?: EditorRegistry;
@@ -392,7 +406,7 @@ export const texraPlugins = (host: {
     },
     wolfram,
     zotero,
-    lean4({ setup: host.setup ?? {}, services: host.lean }),
+    lean4({ editor: host.editor, services: host.lean }),
     {
       ...multiAgent,
       icons: { agent: 'circle-user' },
@@ -421,7 +435,7 @@ export const texraPlugins = (host: {
     claudeAgent,
     core(editors, host.inlineComments),
     { ...codemode, icons: { script: 'code' } },
-    setup(host.setup ?? {}, host.name),
+    setup(host.setup ?? {}, host.name, host.editor),
     documents,
   ];
 };

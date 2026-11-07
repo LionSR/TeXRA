@@ -353,7 +353,7 @@ export class FileList extends LitElement {
   }
 
   private dispatchFileAction(actionEl: HTMLElement): void {
-    const { command, file, base, prev } = actionEl.dataset;
+    const { command, file, base } = actionEl.dataset;
     const runId = this.runId;
     if (!command || !file || runId === null) return;
     if (command === OPEN_FILE) {
@@ -367,14 +367,18 @@ export class FileList extends LitElement {
       console.warn(`Unknown file action: ${command}`);
       return;
     }
+    // Every verb button carries its base file (`renderBaseActions`).
+    if (!base) {
+      console.warn(`File action ${command} carries no base file`);
+      return;
+    }
     this.dispatchEvent(
       SessionUiEvents.host({
         kind: 'fileAction',
         runId,
         action: command,
         file,
-        base: base ?? null,
-        prev: prev ?? null,
+        base,
       }),
     );
   }

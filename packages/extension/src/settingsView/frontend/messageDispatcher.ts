@@ -4,7 +4,6 @@
  */
 import { Result, Schema } from 'effect';
 
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   SettingsViewOutboundMessageSchema,
@@ -22,6 +21,7 @@ import {
   settingSignal,
   settingsSnapshotRevisions,
 } from './settingsState';
+import { HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';
 
 const decodeOutbound = Schema.decodeUnknownResult(
   SettingsViewOutboundMessageSchema,
@@ -47,9 +47,7 @@ function apply(message: SettingsViewOutboundMessage): void {
       hostState.set({ ...hostState.get(), ...patch });
       // The helper model is a catalog setting the Models page also sends.
       if (patch.models)
-        settingSignal<string>(GlobalStateKey.HELPER_MODEL).set(
-          patch.models.helperModel,
-        );
+        settingSignal(HELPER_MODEL_SETTING).set(patch.models.helperModel);
       return;
     }
     case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW: {

@@ -15,6 +15,10 @@ import { errnoError } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { TEXRA_APP } from '@test/support/texraApp';
+import {
+  CLI_CHAT_SETTING,
+  CLI_MODEL_SETTING,
+} from '@texra/shared/settingsView/texraSettings';
 
 const tempDirs = useTempDirs();
 
@@ -35,14 +39,14 @@ layer(
     () =>
       Effect.gen(function* () {
         const { roots } = yield* FakeHost;
-        const chatSection = () => Settings.get(roots, 'chat');
+        const chatSection = () => Settings.get(roots, CLI_CHAT_SETTING);
 
         yield* setWorkspaceCliChatAgent(roots, 'builtIn:review');
         expect(yield* chatSection()).toEqual({
           agent: 'builtIn:review',
           model: 'deepseek/deepseek-v4-flash',
         });
-        expect(yield* Settings.get(roots, 'model')).toBe(
+        expect(yield* Settings.get(roots, CLI_MODEL_SETTING)).toBe(
           'deepseek/deepseek-v4-flash',
         );
 

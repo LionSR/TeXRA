@@ -306,7 +306,6 @@ export function notifyCliUpdate(
         confirmed =
           normalized === '' || normalized === 'y' || normalized === 'yes';
       }),
-      stampFailure: 'ignore',
     }).pipe(
       Effect.provide(updateCheckRecordsLayer),
       Effect.catchCause((cause) =>

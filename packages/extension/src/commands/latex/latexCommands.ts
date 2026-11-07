@@ -83,7 +83,6 @@ export function handleIndentCurrentTeX(
       const formatter = yield* resolveLatexFormatter(roots);
       if (!formatter) {
         yield* showLoggedInfoMessage(
-          CHANNEL,
           'LaTeX formatter is disabled; no file was indented',
         );
         return;
@@ -97,13 +96,9 @@ export function handleIndentCurrentTeX(
       );
 
       if (success) {
-        yield* Effect.sleep(100);
-        yield* showLoggedInfoMessage(
-          CHANNEL,
-          'LaTeX file indented successfully',
-        );
+        yield* showLoggedInfoMessage('LaTeX file indented successfully');
       } else {
-        yield* showLoggedMessage(CHANNEL, 'Failed to indent LaTeX file');
+        yield* showLoggedMessage('Failed to indent LaTeX file');
       }
     }),
   );
@@ -168,7 +163,7 @@ export function handleGetTeXCount(
             const message =
               errors[0] ??
               'Failed to get tex count. Please verify the file path.';
-            yield* showLoggedMessage(CHANNEL, message);
+            yield* showLoggedMessage(message);
             return;
           }
 

@@ -25,7 +25,7 @@ import {
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_SETTING,
   APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseApprovalPolicy,
   launchPolicy,
@@ -45,6 +45,7 @@ import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 type CliMode = 'headless' | 'interactive';
 
@@ -60,9 +61,10 @@ export interface CliContext {
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
-  /** The policy this invocation's launches run under: the configured one,
-   *  narrowed by {@link requestedApprovalPolicy} through
-   *  {@link effectiveApprovalPolicy}. */
+  /** The policy this invocation's launches decide privileged actions
+   *  under (`launchPolicy` over the configured one and
+   *  `launchApproval({@link requestedApprovalPolicy})`); what the CLI's
+   *  headless guards and resume hints read. */
   readonly approvalPolicy: ApprovalPolicy;
   /** The policy this invocation asked for itself (`--approval-policy`,
    *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
@@ -479,7 +481,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
           Schema.is(CliOutputFormatSchema)(format) ? format : undefined,
         configWarnings,
       )) ??
-      Settings.getConfig<CliOutputFormat>(config, 'outputFormat');
+      Settings.getConfig(config, CLI_OUTPUT_FORMAT_SETTING);
     let minimumLogLevel: LogLevel.LogLevel = 'Info';
     if (init.globalArgs.quiet) minimumLogLevel = 'None';
     else if (init.globalArgs.verbose) minimumLogLevel = 'Debug';
@@ -533,11 +535,11 @@ export function launchApproval(
 /** The project's persisted approval policy, as the session reads it at each
  *  decision. */
 export function projectApprovalPolicy(config: ConfigProvider): ApprovalPolicy {
-  return Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
+  return Settings.getConfig(config, APPROVAL_POLICY_SETTING);
 }
 
-/** The policy a launch runs under: the harness's rule (`launchPolicy`)
- *  over what this invocation asked for. */
+/** The policy a launch decides privileged actions under: the harness's
+ *  rule (`launchPolicy`) over what this invocation asked for. */
 export function effectiveApprovalPolicy(
   requested: ApprovalPolicy | undefined,
   configured: ApprovalPolicy,
@@ -545,9 +547,9 @@ export function effectiveApprovalPolicy(
   return launchPolicy(configured, launchApproval(requested));
 }
 
-/** Why a request is not what a launch runs under: one more permissive than
- *  the project's policy cannot widen it, and Auto-approve, which widens its
- *  own task, cannot override Block. */
+/** Why a request is not what a launch decides privileged actions under: one
+ *  more permissive than the project's policy cannot widen it, and
+ *  Auto-approve, which widens its own task, cannot override Block. */
 export function launchApprovalNotice(
   requested: ApprovalPolicy | undefined,
   configured: ApprovalPolicy,

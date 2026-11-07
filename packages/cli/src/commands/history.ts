@@ -3,7 +3,7 @@ import { Effect, absurd } from 'effect';
 
 import { type RunId } from '@texra-ai/harness/schemas';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
-import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
+import { traceHtml } from '@texra/agent/export/standaloneTraceHtml';
 import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
@@ -19,11 +19,11 @@ import {
   parseCliHistoryId,
   readCliHistoryDetails,
   readCliHistoryExportInput,
-  readCliHistoryStandaloneTemplate,
   type CliHistoryDeleteResult,
 } from '../runtime/history';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
+  cliErrorMessage,
   writeErrorStderr,
   writeRawStdout,
   writeTextStderr,
@@ -122,35 +122,48 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
     return CliExitCode.Success;
   }
 
-  const traceResult = yield* (yield* stores.runSession).records(id).readTrace();
-  if (traceResult.status !== 'ok') {
-    switch (traceResult.status) {
-      case 'config_missing':
-        writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-        break;
-      case 'streamLogs_missing':
-        writeTextStderr(
-          `Run ${id} exists but has no replayable run-root transcript ` +
-            "(it produced no output, or only its child runs' transcripts remain).",
-        );
-        break;
-      default:
-        absurd(traceResult);
-    }
-    return CliExitCode.Usage;
-  }
-  const template = yield* readCliHistoryStandaloneTemplate(
+  const page = yield* traceHtml(
+    yield* stores.runSession,
+    id,
     context.resourcesPath,
+  ).pipe(
+    Effect.catchTags({
+      TraceUnavailable: ({ status }) => {
+        switch (status) {
+          case 'config_missing':
+            writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+            break;
+          case 'streamLogs_missing':
+            writeTextStderr(
+              `Run ${id} exists but has no replayable run-root transcript ` +
+                "(it produced no output, or only its child runs' transcripts remain).",
+            );
+            break;
+          default:
+            absurd(status);
+        }
+        return Effect.succeed(null);
+      },
+      TraceViewerMissing: () => {
+        writeTextStderr(
+          'The bundled trace-viewer standalone template was not found in this ' +
+            'CLI install. Rebuild the CLI (`npm run texra-local:build`) so ' +
+            'packages/trace-viewer builds.',
+        );
+        return Effect.succeed(null);
+      },
+      // Any other failure to read the bundle (EACCES, a transient I/O
+      // error) is not "rebuild the CLI": it names the real cause.
+      PlatformError: (error) =>
+        Effect.fail(
+          new CliUsageError({
+            message: `history export: cannot read the trace-viewer bundle: ${cliErrorMessage(error)}`,
+          }),
+        ),
+    }),
   );
-  if (template === null) {
-    writeTextStderr(
-      'The bundled trace-viewer standalone template was not found in this ' +
-        'CLI install. Rebuild the CLI (`npm run texra-local:build`) so ' +
-        'packages/trace-viewer builds.',
-    );
-    return CliExitCode.Usage;
-  }
-  writeRawStdout(injectStandaloneTrace(template, traceResult.trace));
+  if (page === null) return CliExitCode.Usage;
+  writeRawStdout(page.html);
   return CliExitCode.Success;
 });
 

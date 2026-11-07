@@ -20,7 +20,7 @@ import {
 export function settingsMemoryCommands(ports: {
   readonly bindings: Pick<
     SettingsHostBindings,
-    'post' | 'prompt' | 'openPath' | 'revealPath'
+    'post' | 'dialogs' | 'openPath' | 'revealPath'
   >;
   readonly present: Pick<
     SettingsPresentation,
@@ -41,7 +41,8 @@ export function settingsMemoryCommands(ports: {
   ) {
     const result = yield* MemoryStore.pin(storagePath, pinned);
     if (result.status === 'cap-reached') {
-      yield* bindings.prompt.warning(
+      yield* bindings.dialogs.notify(
+        'warning',
         `Cannot pin: maximum of ${result.max} pinned memories reached. Unpin an existing memory first.`,
       );
       return;
@@ -105,10 +106,10 @@ export function settingsMemoryCommands(ports: {
         // A declined delete changes nothing. A prompt that cannot show and a
         // failed remove stay typed, so the failure is reported and the list
         // the view is waiting on is read again.
-        const confirmed = yield* bindings.prompt.confirm(
-          `Delete "${displayPath}"?`,
-          { modal: true, confirmLabel: 'Delete' },
-        );
+        const confirmed = yield* bindings.dialogs.confirm({
+          message: `Delete "${displayPath}"?`,
+          action: 'Delete',
+        });
         if (!confirmed) return;
         // On the memory tree's lane, as every memory tool command is: a delete
         // from here never races an agent's edit beneath it.

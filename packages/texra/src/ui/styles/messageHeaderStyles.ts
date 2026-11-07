@@ -44,7 +44,8 @@ export const messageHeaderStyles = css`
     justify-content: flex-end;
     gap: var(--wa-space-3xs);
   }
-  .message-header > .banner-content-copy {
+  /* A formatter's Copy is a light-DOM <copy-button> laid out as its button. */
+  .message-header > copy-button > .banner-content-copy {
     flex: none;
     margin: 0;
     padding: 0;
@@ -57,13 +58,6 @@ export const messageHeaderStyles = css`
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-normal);
     color: var(--wa-color-text-quiet);
-  }
-  .message-copy .copied-label,
-  .message-copy.copy-success .copy-label {
-    display: none;
-  }
-  .message-copy.copy-success .copied-label {
-    display: inline;
   }
   .message-copy.copy-success::part(base) {
     color: var(--color-success);

@@ -26,7 +26,7 @@ const viaTui = (
     controller: SettingsProfileKeyController,
   ) => Effect.Effect<void, Error, Secrets>,
 ): Effect.Effect<void, Error, Secrets> =>
-  action(new SettingsProfileKeyController({ prompt: tuiUi, stores })).pipe(
+  action(new SettingsProfileKeyController({ dialogs: tuiUi, stores })).pipe(
     Effect.mapError((error) =>
       error instanceof ProviderKeyActionFailed
         ? new Error(`${error.message}: ${toErrorMessage(error.cause)}`, {

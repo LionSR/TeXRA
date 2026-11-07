@@ -11,6 +11,7 @@ import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { executed } from '@tools/core/result';
 import { executeCommand } from '@utils/system/execUtils';
+import { withLogChannel } from '@logger/effectLog';
 
 // Local file imports
 import { defineTool } from './core/definition';
@@ -163,7 +164,6 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
     cwd: call.workingDirectory ?? call.roots.workspace,
     // The call's own setting slots.
     settings: call.roots,
-    channel: CHANNEL,
     maxBuffer: GREP_MAX_BUFFER_CHARS,
   });
 
@@ -236,5 +236,5 @@ export const GrepTool = defineTool({
   schema: GrepInputSchema,
   execute: Effect.fn('GrepTool.call')(function* (input: GrepInput) {
     return yield* runGrep((yield* ToolContext).env, input);
-  }),
+  }, withLogChannel(CHANNEL)),
 });

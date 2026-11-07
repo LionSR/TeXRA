@@ -139,8 +139,8 @@ const runTeam = Effect.fn('runTeam')(function* (
   }
   const services = yield* cliPlatform;
 
-  // The policy the team's launch runs under: an Ask request under a Block
-  // project runs under Block, which needs no prompt.
+  // The policy the team's launch decides privileged actions under: an Ask
+  // request under a Block project gets Block, which needs no prompt.
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
   const plan = yield* loadTeamRunPlan(init, services);

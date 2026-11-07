@@ -190,6 +190,28 @@ Fail when a raw tool path contains a parent-directory segment.
 const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, never>
 ```
 
+## boundFile
+
+The file an agent file at `agentPath` binds as `file`: where it is
+(beside the agent file, or an absolute path as written) and how to read
+it. A file that cannot be read fails the read; every reader of a bound
+file goes through this, so none mistakes a missing file for an empty or
+a changed one.
+
+```ts
+function boundFile(
+  agentPath: string,
+  file: string,
+): {
+  readonly path: string;
+  readonly read: Effect.Effect<
+    string,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  >;
+}
+```
+
 ## BoundModel
 
 One bound model: llm's `Binding` (or the validation model's) and the facts
@@ -1072,10 +1094,10 @@ interface Plugin {
   readonly toggle?: 'on' | 'off';
   /** Tools of this plugin offered to every agent with tools, declared or not,
    *  while the plugin is on and a boolean catalog setting is on: tool name to
-   *  setting key, or `true` for no setting but the plugin's own switch. An
+   *  setting row, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
    *  run (a task's recipe) and a text-only persona get none. */
-  readonly injectedWhen?: Readonly<Record<string, string | true>>;
+  readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>;
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
   /** Process-lifetime services, up while the plugin is switched on or a step

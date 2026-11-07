@@ -266,7 +266,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         snapshot: {
           fileOptions: () => files.fileOptions(),
           workspaceRoots: () => [],
-          dependencyBanner: () => Effect.succeed({ visible: false }),
+          missingTools: () => Effect.succeed([]),
           shows: { apiKeyBanner: false, gettingStarted: false },
         },
         // The tool-edit preview: staged copies of the original and proposed
@@ -275,8 +275,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         toolEdits: new DesktopToolEditApprovalHost({
           ui: {
             ...hosts.toolEditPreview,
-            showErrorMessage: hosts.run.showErrorMessage,
-            showWarningMessage: hosts.run.showWarningMessage,
+            notify: hosts.run.notify,
           },
           spawn,
           focused: () => shown() && host.window.isFocused(),

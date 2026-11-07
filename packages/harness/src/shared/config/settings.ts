@@ -5,8 +5,9 @@ import { Effect, Result, Schema } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import type {
+  SettingRow,
   SettingsCatalog,
-  StateSettingEntry,
+  StateKey,
 } from '@shared/state/stateSettings';
 
 const CHANNEL = 'settings';
@@ -19,9 +20,12 @@ const CHANNEL = 'settings';
  * `WorkspaceRoots` carries all of them, so a tool call's `call.roots`, a run's
  * `SessionRoots` and a host command's `session.roots` are passed directly,
  * and the value answers for that project rather than for whichever roots the
- * calling fiber happens to carry. The row is looked up by key in the
- * catalog the stores' `ConfigProvider` carries (`config.catalog`); a key that
- * catalog lacks is a defect and throws.
+ * calling fiber happens to carry.
+ *
+ * A reader names the row itself (`Settings.get(stores, ROW)`), and the row's
+ * schema types the value. The read uses the row the stores' catalog holds
+ * under the same key (`config.catalog`), so an app's default for a harness
+ * row applies; a row the catalog does not list reads by its own schema.
  *
  * Reads go through the row's one declared `slot`: application-state Effects
  * for the state slots, a synchronous read for `config`.
@@ -72,8 +76,8 @@ export interface ConfigProvider {
    *
    * It is synchronous, and it casts: the value it returns is whatever the
    * store holds. A reader that needs the value checked reads through
-   * `Settings.get`, which resolves the key's catalog row and safe-parses the
-   * stored value against the row's schema; a hand-edited `"false"` in a
+   * `Settings.get`, which safe-parses the stored value against the row's
+   * schema; a hand-edited `"false"` in a
    * boolean row is a truthy string here and silently means the opposite.
    * Nothing may cache what either read returns: a setting the user changes
    * mid-process is read on the next call.
@@ -161,12 +165,10 @@ export type StoredSetting<T = unknown> =
   | { readonly kind: 'value'; readonly value: T }
   | { readonly kind: 'invalid'; readonly cause: string };
 
-function entryOf(catalog: SettingsCatalog, key: string): StateSettingEntry {
-  const entry = catalog.byKey(key);
-  if (!entry) {
-    throw new Error(`No setting catalog entry for key: ${key}`);
-  }
-  return entry;
+/** The row `catalog` holds under `row`'s key, which carries any app default;
+ *  `row` itself when the catalog does not list it. */
+function entryOf(catalog: SettingsCatalog, row: SettingRow): SettingRow {
+  return catalog.byKey(row.key) ?? row;
 }
 
 /** A stored value against the row's schema; absent resolves to its default. */
@@ -208,29 +210,15 @@ const valueOrDefault = (
         Effect.map(() => Schema.decodeUnknownSync(schema)(undefined)),
       );
 
-/**
- * Read the scope the row is written to: `set` targets `entry.configTarget`,
- * so a global-target row read through the merged `get()` could report a
- * workspace value the settings view can never write.
- */
-function rawConfigValue(
-  entry: StateSettingEntry,
-  config: ConfigProvider,
-): unknown {
-  return entry.configTarget === 'global'
-    ? config.inspect<unknown>(entry.key).globalValue
-    : config.get<unknown>(entry.key);
-}
-
 function inspectEntry(
-  entry: StateSettingEntry,
+  entry: SettingRow,
   stores: SettingsStores,
 ): Effect.Effect<StoredSetting, StateReadFailed> {
   return Effect.suspend(() => {
     const slot = entry.slot;
     return slot === 'config'
       ? Effect.sync(() =>
-          classifyStored(entry.schema, rawConfigValue(entry, stores.config)),
+          classifyStored(entry.schema, stores.config.get<unknown>(entry.key)),
         )
       : Effect.map(stores[slot].get(entry.key), (raw) =>
           classifyStored(entry.schema, raw),
@@ -245,7 +233,7 @@ function inspectEntry(
  * own failure (`ConfigWriteFailed`, the port's `StateWriteFailed`) unchanged.
  */
 function writeSlot(
-  entry: StateSettingEntry,
+  entry: SettingRow,
   value: unknown,
   stores: SettingsStores,
   target: ConfigTarget | undefined,
@@ -266,15 +254,15 @@ function writeSlot(
  * schema, else the row's default (after a warning when a present value fails
  * it).
  */
-function get<T>(
+function get<A>(
   stores: SettingsStores,
-  key: string,
-): Effect.Effect<T, StateReadFailed> {
-  const entry = entryOf(stores.config.catalog, key);
-  // cast: the caller names the row's value type; the row's schema parsed it.
+  row: SettingRow<A>,
+): Effect.Effect<A, StateReadFailed> {
+  const entry = entryOf(stores.config.catalog, row);
+  // cast: the catalog's row under this key has `row`'s schema, which parsed it.
   return Effect.flatMap(inspectEntry(entry, stores), (stored) =>
     valueOrDefault(entry.key, entry.schema, stored),
-  ) as Effect.Effect<T, StateReadFailed>;
+  ) as Effect.Effect<A, StateReadFailed>;
 }
 
 /**
@@ -283,15 +271,15 @@ function get<T>(
  * gate whose absent default is permissive, where corruption of a deliberate
  * denial must deny rather than re-permit.
  */
-function inspect<T>(
+function inspect<A>(
   stores: SettingsStores,
-  key: string,
-): Effect.Effect<StoredSetting<T>, StateReadFailed> {
-  // cast: the caller names the row's value type; the row's schema parsed it.
+  row: SettingRow<A>,
+): Effect.Effect<StoredSetting<A>, StateReadFailed> {
+  // cast: the catalog's row under this key has `row`'s schema, which parsed it.
   return inspectEntry(
-    entryOf(stores.config.catalog, key),
+    entryOf(stores.config.catalog, row),
     stores,
-  ) as Effect.Effect<StoredSetting<T>, StateReadFailed>;
+  ) as Effect.Effect<StoredSetting<A>, StateReadFailed>;
 }
 
 /**
@@ -301,22 +289,22 @@ function inspect<T>(
  * that process exist, and this is the whole rule for a config-backed row, so
  * both readers run the same body rather than two that can drift.
  */
-function getConfig<T>(config: ConfigProvider, key: string): T {
-  const entry = entryOf(config.catalog, key);
-  const stored = classifyStored(entry.schema, rawConfigValue(entry, config));
-  // cast: the caller names the row's value type; the row's schema parsed it.
-  if (stored.kind === 'value') return stored.value as T;
+function getConfig<A>(config: ConfigProvider, row: SettingRow<A>): A {
+  const entry = entryOf(config.catalog, row);
+  const stored = classifyStored(entry.schema, config.get<unknown>(entry.key));
+  // cast: the catalog's row under this key has `row`'s schema, which parsed it.
+  if (stored.kind === 'value') return stored.value as A;
   // Direct sink write: config reads are synchronous by ruling and this one
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
   writeLogLine(CHANNEL, invalidStoredMessage(entry.key, stored.cause));
-  return defaultOf<T>(config.catalog, key);
+  return defaultOf(config.catalog, row);
 }
 
 /** What a row reads as while its key is absent: the default its catalog
  *  gives it, `undefined` for a row that names none. */
-function defaultOf<T>(catalog: SettingsCatalog, key: string): T {
-  // cast: the caller names the row's value type; the row's schema produced it.
-  return Schema.decodeUnknownSync(entryOf(catalog, key).schema)(undefined) as T;
+function defaultOf<A>(catalog: SettingsCatalog, row: SettingRow<A>): A {
+  // cast: the catalog's row under this key has `row`'s schema, which produced it.
+  return Schema.decodeUnknownSync(entryOf(catalog, row).schema)(undefined) as A;
 }
 
 /**
@@ -335,23 +323,18 @@ function defaultOf<T>(catalog: SettingsCatalog, key: string): T {
  * subscription" switches), else the row's `configTarget`, else
  * `'workspace'`. State slots ignore `target`.
  */
-function set(
+function set<A>(
   stores: SettingsStores,
-  key: string,
-  value: unknown,
+  row: SettingRow<A>,
+  value: A,
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  const entry = entryOf(stores.config.catalog, key);
-  // A schema rejection is thrown rather than constructed as a typed failure:
-  // a value the catalog's schema refuses is a defect of the caller, not a
-  // `ConfigWriteFailed` the store reported.
+  const entry = entryOf(stores.config.catalog, row);
+  // The store holds the row's encoded form. A value the schema refuses is
+  // thrown rather than constructed as a typed failure: it is a defect of
+  // the caller, not a `ConfigWriteFailed` the store reported.
   return Effect.suspend(() =>
-    writeSlot(
-      entry,
-      Schema.decodeUnknownSync(entry.schema)(value),
-      stores,
-      target,
-    ),
+    writeSlot(entry, Schema.encodeSync(entry.schema)(value), stores, target),
   );
 }
 
@@ -362,11 +345,11 @@ function set(
  */
 function reset(
   stores: SettingsStores,
-  key: string,
+  row: SettingRow,
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
   return writeSlot(
-    entryOf(stores.config.catalog, key),
+    entryOf(stores.config.catalog, row),
     undefined,
     stores,
     target,
@@ -375,21 +358,20 @@ function reset(
 
 /**
  * Read a state key that is not a catalog row (onboarding flags, the custom
- * agent directory, the reasoning overrides) as `schema` decodes it: the
+ * agent directory, the reasoning overrides) as its schema decodes it: the
  * schema's default when the key is absent, and, as for a catalog row, the
  * default after a warning when a present value fails it. The one decode of
  * these keys, so no reader casts the store's `unknown` to the type it hopes
  * for.
  */
-function state<S extends Schema.Codec<unknown, unknown>>(
+function state<A>(
   store: Pick<StateStore, 'get'>,
-  key: string,
-  schema: S,
-): Effect.Effect<S['Type'], StateReadFailed> {
-  // cast: `valueOrDefault` returns the value `schema` parsed.
-  return Effect.flatMap(store.get(key), (raw) =>
-    valueOrDefault(key, schema, classifyStored(schema, raw)),
-  ) as Effect.Effect<S['Type'], StateReadFailed>;
+  key: StateKey<A>,
+): Effect.Effect<A, StateReadFailed> {
+  // cast: `valueOrDefault` returns the value the key's schema parsed.
+  return Effect.flatMap(store.get(key.key), (raw) =>
+    valueOrDefault(key.key, key.schema, classifyStored(key.schema, raw)),
+  ) as Effect.Effect<A, StateReadFailed>;
 }
 
 /** Every read and write of a setting; see the module comment. */

@@ -82,9 +82,13 @@ interface RecordedRejection {
   readonly decision: RefusalDecision;
 }
 
-/** The declining kinds, highest first: a cancellation outranks a denial,
- *  which outranks a person's rejection. */
-const DECLINE_RANK = ['cancel', 'deny', 'reject'] as const;
+/** The declining kinds' rank, lowest first: a cancellation outranks a
+ *  denial, which outranks a person's rejection. */
+const DECLINE_RANK: Readonly<Record<RefusalDecision['action'], number>> = {
+  cancel: 0,
+  deny: 1,
+  reject: 2,
+};
 
 /**
  * The one decision a whole-run rejection reports: the highest-ranked kind
@@ -94,8 +98,7 @@ const DECLINE_RANK = ['cancel', 'deny', 'reject'] as const;
 function summarizeRejections(
   rejections: Arr.NonEmptyReadonlyArray<RecordedRejection>,
 ): RecordedRejection {
-  const rank = (r: RecordedRejection) =>
-    DECLINE_RANK.indexOf(r.decision.action);
+  const rank = (r: RecordedRejection) => DECLINE_RANK[r.decision.action];
   const [first, ...rest] = rejections;
   // The first of the highest-ranked rejections.
   const top = rest.reduce(

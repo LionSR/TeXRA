@@ -14,8 +14,6 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -28,6 +26,7 @@ import {
   installAdvice,
   LATEX_DEPENDENCIES,
   LATEX_RECOMMENDED_SETTINGS,
+  LATEX_WORKSHOP_EXT_ID,
   type LatexDependency,
   type LatexRecommendedSettingField,
   SCOOP_INSTALL_COMMAND,
@@ -54,6 +53,18 @@ import {
 } from '../components/shared/stateSettingRows';
 import { settingSignal } from '../settingsState';
 import { latexTabStyles } from './LaTeXTab.styles';
+import {
+  INLINE_CRITICISM_SETTING,
+  LATEX_FORMATTER_SETTING,
+} from '@texra/shared/settingsView/texraSettings';
+import {
+  LATEXDIFF_BETWEEN_ROUNDS_SETTING,
+  LATEXDIFF_CHANGES_ONLY_SETTING,
+  LATEXDIFF_MATH_MARKUP_SETTING,
+  DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
+  DOCUMENTS_OPEN_PDF_SETTING,
+  DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey = Extract<keyof LatexSettingsStatus, `${string}Path`>;
@@ -135,17 +146,12 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
   @property({ attribute: false }) section: SettingsSectionName<'latex'> =
     'dependencies';
   @property({ type: Boolean }) loaded = false;
-  @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   private handleApply(
     field?: LatexRecommendedSettingField,
     reset = false,
   ): void {
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS, { field, reset });
-  }
-
-  private allSettingsSet(): boolean {
-    return this.settings.outDir && this.settings.autoRevealExclude;
   }
 
   /** How to install `key` on this machine's platform. */
@@ -172,7 +178,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
     const { key } = dep;
     const workshop = key === 'latexWorkshop';
     const installed = workshop
-      ? this.settings.latexWorkshopInstalled
+      ? (this.settings.editor?.latexWorkshopInstalled ?? false)
       : this.settings.installed[key];
     const name = workshop ? 'LaTeX Workshop' : LATEX_DEPENDENCIES[key].label;
     const advice = workshop || installed ? null : this.adviceFor(key);
@@ -195,7 +201,9 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
           size="s"
           title="Install"
           @click=${() =>
-            postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP)}
+            postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION, {
+              extensionId: LATEX_WORKSHOP_EXT_ID,
+            })}
         >
           ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
         </wa-button>
@@ -318,9 +326,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
           text: 'Run in Terminal',
           kind: 'secondary',
           appearance: 'outlined',
-          title: this.desktopHost
-            ? `Run ${pmName} installer`
-            : `Run ${pmName} installer in VS Code terminal`,
+          title: `Run ${pmName} installer in a terminal`,
           onClick: () => this.handleRunInTerminal(installCommand),
         })}
       `,
@@ -328,9 +334,10 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
   }
 
   private renderDependencies(): TemplateResult {
-    const dependencies = this.desktopHost
-      ? DEPENDENCIES.filter((dep) => dep.key !== 'latexWorkshop')
-      : DEPENDENCIES;
+    // LaTeX Workshop is an editor extension: shown where there is an editor.
+    const dependencies = this.settings.editor
+      ? DEPENDENCIES
+      : DEPENDENCIES.filter((dep) => dep.key !== 'latexWorkshop');
 
     return html`
       <div class="settings-section">
@@ -348,9 +355,9 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
 
   private renderSettingCard(
     field: LatexRecommendedSettingField,
+    isSet: boolean,
   ): TemplateResult {
     const info = LATEX_RECOMMENDED_SETTINGS[field];
-    const isSet = this.settings[field];
     // HTML collapses the indent newlines: an object reads `{ "key": value }`.
     const value =
       info.kind === 'scalar' ? info.value : JSON.stringify(info.value, null, 1);
@@ -405,14 +412,19 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
       dependencies: () => this.renderDependencies(),
       compile: () => this.renderCompileDiffSettings(),
       formatting: () => this.renderFormattingSettings(),
-      vscode: () => this.renderRecommendedSettings(),
+      vscode: () =>
+        this.settings.editor
+          ? this.renderRecommendedSettings(this.settings.editor.recommended)
+          : nothing,
     };
     return html`
       <div class="tab-content-container">${sections[this.section]()}</div>
     `;
   }
 
-  private renderRecommendedSettings(): TemplateResult {
+  private renderRecommendedSettings(
+    recommended: Readonly<Record<LatexRecommendedSettingField, boolean>>,
+  ): TemplateResult {
     return html`
       <div class="settings-section">
         ${renderSettingsSectionHeading({
@@ -420,7 +432,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
           description:
             'Keep generated files out of the VS Code sidebar and reduce noise during agent runs.',
           icon: 'gear',
-          actions: this.allSettingsSet()
+          actions: Object.values(recommended).every(Boolean)
             ? nothing
             : renderLabeledActionButton({
                 icon: 'check-double',
@@ -432,15 +444,15 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
               }),
         })}
         ${Struct.keys(LATEX_RECOMMENDED_SETTINGS).map((field) =>
-          this.renderSettingCard(field),
+          this.renderSettingCard(field, recommended[field]),
         )}
       </div>
     `;
   }
 
   private renderCompileDiffSettings(): TemplateResult {
-    const autoCompile = settingSignal<boolean>(
-      DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
+    const autoCompile = settingSignal(
+      DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
     ).get();
     return html`
       <div class="settings-section">
@@ -450,18 +462,17 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
             'What TeXRA does with the LaTeX an agent writes in this workspace.',
           icon: 'bolt',
         })}
-        ${renderStateSettingToggleRow(DocumentsStateKey.WORKFLOW_AUTO_COMPILE)}
+        ${renderStateSettingToggleRow(DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING)}
+        ${renderStateSettingToggleRow(DOCUMENTS_OPEN_PDF_SETTING, {
+          disabled: !autoCompile,
+        })}
         ${renderStateSettingToggleRow(
-          DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
+          DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
           { disabled: !autoCompile },
         )}
-        ${renderStateSettingToggleRow(
-          DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-          { disabled: !autoCompile },
-        )}
-        ${renderStateSettingToggleRow(DocumentsStateKey.LATEXDIFF_CHANGES_ONLY)}
-        ${renderStateSettingSelectRow(DocumentsStateKey.LATEXDIFF_MATH_MARKUP)}
-        ${renderStateSettingToggleRow(DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS)}
+        ${renderStateSettingToggleRow(LATEXDIFF_CHANGES_ONLY_SETTING)}
+        ${renderStateSettingSelectRow(LATEXDIFF_MATH_MARKUP_SETTING)}
+        ${renderStateSettingToggleRow(LATEXDIFF_BETWEEN_ROUNDS_SETTING)}
       </div>
     `;
   }
@@ -473,14 +484,13 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
           title: 'Formatting and review',
           icon: 'wand-magic-sparkles',
         })}
-        ${renderStateSettingSelectRow(TexraStateKey.LATEX_FORMATTER)}
+        ${renderStateSettingSelectRow(LATEX_FORMATTER_SETTING)}
         ${
-          // Editor diagnostics are a VS Code surface; the desktop has none.
-          this.desktopHost
-            ? nothing
-            : renderStateSettingToggleRow(
-                TexraStateKey.INLINE_CRITICISM_ENABLED,
-              )
+          // Inline criticism is an editor's diagnostics: shown where there is
+          // an editor.
+          this.settings.editor
+            ? renderStateSettingToggleRow(INLINE_CRITICISM_SETTING)
+            : nothing
         }
       </div>
     `;

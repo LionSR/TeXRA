@@ -12,11 +12,10 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import {
-  WorkspaceStateKey,
   GOAL_MAX_COST_SETTING,
   parseApprovalPolicy,
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
+  APPROVAL_POLICY_SETTING,
+  TOOL_PATH_PROTECTION_SETTING,
 } from '@texra-ai/harness/schemas';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { commonViewStyles, designTokens } from '@ui/styles';
@@ -50,13 +49,11 @@ export class ApprovalTab extends SignalWatcher(LitElement) {
     if (!(group instanceof WaRadioGroup) || typeof group.value !== 'string')
       return;
     const policy = parseApprovalPolicy(group.value);
-    if (policy) postStateSetting(APPROVAL_POLICY_CONFIG_KEY, policy);
+    if (policy) postStateSetting(APPROVAL_POLICY_SETTING.key, policy);
   };
 
   override render(): TemplateResult {
-    const policy = settingSignal<ApprovalPolicy>(
-      APPROVAL_POLICY_CONFIG_KEY,
-    ).get();
+    const policy = settingSignal(APPROVAL_POLICY_SETTING).get();
     return html`
       <div class="tab-content-container">
         <div class="category-section">
@@ -92,12 +89,8 @@ export class ApprovalTab extends SignalWatcher(LitElement) {
                 }
               </p>
             </div>
-            ${renderStateSettingToggleRow(
-              WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-            )}
-            ${renderStateSettingNumberRow(GOAL_MAX_COST_SETTING.configKey, {
-              min: GOAL_MAX_COST_SETTING.min,
-              max: GOAL_MAX_COST_SETTING.max,
+            ${renderStateSettingToggleRow(TOOL_PATH_PROTECTION_SETTING)}
+            ${renderStateSettingNumberRow(GOAL_MAX_COST_SETTING, {
               step: 0.5,
             })}
           </div>

@@ -278,7 +278,9 @@ export class ScriptStage extends LitElement {
     const talk = call.talkable;
     const last = scriptCallSummary(call) ?? '';
     const rejected =
-      child === undefined ? undefined : this.surface.rejected.get(child.id);
+      child === undefined
+        ? undefined
+        : this.surface.runs.get(child.id)?.rejected;
     return html`<div
       class=${classMap({
         row: true,

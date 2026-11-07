@@ -219,9 +219,9 @@ export async function runChat(
         envAgent: context.envAgent,
         envModel: context.envModel,
         // The implicit chat default is a persona with no document task.
-        visibleToolUseAgents: (yield* (yield* AgentCatalog).visible(
-          services,
-        )).filter((agent) => documentTaskOf(agent) === null),
+        visibleToolUseAgents: (yield* (yield* AgentCatalog)
+          .workspaceAgents(services)
+          .visible()).filter((agent) => documentTaskOf(agent) === null),
       });
       const agentEntry = yield* resolveChatToolUseAgent(
         services,

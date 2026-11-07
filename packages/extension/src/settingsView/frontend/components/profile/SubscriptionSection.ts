@@ -180,21 +180,16 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
             // catalog row; the card keeps one line.
             contextWindowSetting
               ? html`<wa-details class="panel-collapsible" summary="Advanced">
-                  ${renderStateSettingNumberRow(
-                    contextWindowSetting.configKey,
-                    {
-                      label: 'Input token budget',
-                      description:
-                        'How much context TeXRA sends per request on your ChatGPT plan. Leave it empty for the window Codex grants each model.',
-                      placeholder: 'Model default',
-                      min: contextWindowSetting.min,
-                      max: contextWindowSetting.max,
-                      unit: contextWindowSetting.unitLabel,
-                      // An empty field is each model's own window.
-                      onClear: () =>
-                        postStateSetting(contextWindowSetting.configKey, null),
-                    },
-                  )}
+                  ${renderStateSettingNumberRow(contextWindowSetting, {
+                    label: 'Input token budget',
+                    description:
+                      'How much context TeXRA sends per request on your ChatGPT plan. Leave it empty for the window Codex grants each model.',
+                    placeholder: 'Model default',
+                    unit: 'K tokens',
+                    // An empty field is each model's own window.
+                    onClear: () =>
+                      postStateSetting(contextWindowSetting.key, null),
+                  })}
                 </wa-details>`
               : nothing
           }

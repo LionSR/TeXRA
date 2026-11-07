@@ -8,12 +8,11 @@ import { Cause, Effect, PubSub } from 'effect';
 import { withLogChannel } from '@texra-ai/harness/host';
 import { formatError } from '@texra-ai/harness/schemas';
 import type {
+  Dialogs,
   ExternalOpener,
-  MessageHost,
-  HostFailed,
-  PromptHost,
+  NoticeLevel,
 } from '@texra/hosts/uiHosts';
-import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
+import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type {
@@ -35,8 +34,7 @@ export interface SettingsHostBindings {
   post<E, R>(
     message: Effect.Effect<SettingsViewOutboundMessage, E, R>,
   ): Effect.Effect<void, E | Error, R>;
-  readonly notify: Pick<MessageHost, 'showInfoMessage' | 'showErrorMessage'>;
-  readonly prompt: Pick<PromptHost, 'input' | 'confirm' | 'info' | 'warning'>;
+  readonly dialogs: Dialogs;
   readonly externalOpener: ExternalOpener;
   /** Open a file to read or edit it. */
   openPath(filePath: string): HostEffect;
@@ -58,9 +56,10 @@ export interface SettingsHostBindings {
   runLabel(runId: RunId): string | undefined;
   /** Run a command in a terminal the user sees and can type into. */
   runInTerminal(name: string, command: string): HostEffect;
-  /** The editor's side of the LaTeX page: its recommended settings applied,
-   *  and LaTeX Workshop installed. */
-  latexEditorStatus(): LatexEditorStatus;
+  /** The host's code editor, where it has one: the LaTeX page shows its
+   *  recommended settings and LaTeX Workshop, and a plugin card offers to
+   *  install the extension it names. */
+  readonly editor?: EditorIntegrationShape;
   /** A workspace-target config write needs an open folder (the extension). */
   readonly requiresOpenWorkspace?: () => boolean;
 }
@@ -124,32 +123,24 @@ export interface SettingsPresentation {
 }
 
 /** The presentation every page of the body reports through: a notice never
- *  holds the program that raised it, and a refused notice is logged. */
+ *  holds the program that raised it. */
 export function settingsPresentation(
   bindings: SettingsHostBindings,
   inputs: PubSub.PubSub<SettingsInput>,
 ): SettingsPresentation {
-  const shown = (notice: Effect.Effect<void, HostFailed>) =>
-    Effect.forkDetach(
-      notice.pipe(
-        Effect.catchTag('HostFailed', (failure) =>
-          Effect.logWarning(
-            `Could not show a settings notice: ${failure.message}`,
-          ).pipe(withLogChannel(SETTINGS_LOG_CHANNEL)),
-        ),
-      ),
-    ).pipe(Effect.asVoid);
+  const shown = (level: NoticeLevel, message: string) =>
+    Effect.asVoid(Effect.forkDetach(bindings.dialogs.notify(level, message)));
   const alert = (message: string) =>
     Effect.andThen(
       Effect.logError(message).pipe(withLogChannel(SETTINGS_LOG_CHANNEL)),
-      shown(bindings.notify.showErrorMessage(message)),
+      shown('error', message),
     );
   const report = (prefix: string, cause: unknown) =>
     alert(formatError(prefix, cause));
   return {
     post: bindings.post,
     changed: (input) => Effect.asVoid(PubSub.publish(inputs, input)),
-    notice: (message) => shown(bindings.notify.showInfoMessage(message)),
+    notice: (message) => shown('info', message),
     alert,
     report,
     // An interrupt is the runtime going away with the view it would report

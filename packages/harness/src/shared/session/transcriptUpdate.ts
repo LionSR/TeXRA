@@ -51,7 +51,8 @@ import { standingAfter, type RunStanding } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
 /** A stage start opens its task group whole; a stage end closes the group
- *  its start opened and writes nothing for a group no start opened. */
+ *  its start opened and writes nothing for a group no start opened. A
+ *  group's parent is a group this transcript opened, or it has none. */
 function applyTaskGroup(
   d: Draft,
   event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
@@ -64,7 +65,9 @@ function applyTaskGroup(
       name: event.label,
       startTime: d.at,
       status: 'running',
-      ...(event.parentId ? { parentGroupId: event.parentId } : {}),
+      ...(event.parentId && d.ix.taskGroupIndex.has(event.parentId)
+        ? { parentGroupId: event.parentId }
+        : {}),
       ...(event.kind != null ? { kind: event.kind } : {}),
     };
   } else {

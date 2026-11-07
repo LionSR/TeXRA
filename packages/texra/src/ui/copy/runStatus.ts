@@ -10,6 +10,7 @@ import {
   isPlainAgentIdentity,
   type RunStanding,
   type RunView,
+  type ToolCallStatus,
 } from '@texra-ai/harness/schemas';
 import type { IconName } from '@ui/wa/iconNames';
 
@@ -19,6 +20,14 @@ export function formatLoopPositionLabel(
 ): string | undefined {
   return turn == null ? undefined : `t${turn}`;
 }
+
+/** How a tool card's status section reads. */
+export const TOOL_STATUS_WORD: Readonly<Record<ToolCallStatus, string>> =
+  Object.freeze({
+    in_progress: 'Running',
+    completed: 'Completed',
+    failed: 'Failed',
+  });
 
 /** The section a run list puts a run in. */
 export type RunSection = 'running' | 'waiting' | 'interrupted' | 'recent';

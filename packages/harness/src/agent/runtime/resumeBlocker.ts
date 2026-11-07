@@ -37,7 +37,8 @@ export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
   // The launch's own resolution: the settled catalog, rescanned once on a
   // miss, so an agent saved a moment ago is found.
   const entry = yield* (yield* AgentCatalog)
-    .forLaunch(roots, config.agent, config.agentSource)
+    .workspaceAgents(roots)
+    .forLaunch(config.agent, config.agentSource)
     .pipe(Effect.catchTag('AgentNotFound', () => Effect.void));
   // The catalog lists a plugin's agents only while the plugin loads, so a
   // plugin agent it misses is answered by the plugin's install record.

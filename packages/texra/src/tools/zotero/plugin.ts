@@ -10,12 +10,13 @@ import { Duration, Effect, type Cause } from 'effect';
 import { Settings } from '@texra-ai/harness/host';
 import { scopedClient } from '@texra-ai/harness/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
-import { ZOTERO_PORT_KEY, zoteroUrl } from './bbtClient';
+import { zoteroUrl } from './bbtClient';
 import { ZoteroAddTool } from './ZoteroAddTool';
 import { ZoteroCollectionsTool } from './ZoteroCollectionsTool';
 import { ZoteroExportTool } from './ZoteroExportTool';
 import { ZoteroSearchTool } from './ZoteroSearchTool';
 import type { HttpClient, HttpClientError } from 'effect/http';
+import { ZOTERO_PORT_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 const PROBE_TIMEOUT_MS = 2000;
 
@@ -65,7 +66,7 @@ export const zotero: TexraPlugin = {
   toggle: 'off',
   availability: {
     check: Effect.fn('zotero.availability')(function* ({ config }) {
-      const port = Settings.getConfig<number>(config, ZOTERO_PORT_KEY);
+      const port = Settings.getConfig(config, ZOTERO_PORT_SETTING);
       // The connector endpoint responds while Zotero runs; the Better
       // BibTeX JSON-RPC endpoint, while that plugin is installed.
       const bbt = yield* probeLocalhost(

@@ -4,7 +4,6 @@ import { Effect, Result } from 'effect';
 
 // Local imports
 import { ToolError } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -21,6 +20,7 @@ import {
   isPathWithin,
   toPosixPath,
 } from '@utils/core/pathCore';
+import { TOOL_PATH_PROTECTION_SETTING } from '@shared/state/stateSettings';
 
 /** A tool path resolved against the call's roots: its root-relative and
  *  absolute spellings, the path filesystem calls take, and the external root
@@ -182,10 +182,7 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
   // containment override, so keep their resolution independent of the store.
   if (
     !resolution.match &&
-    (yield* Settings.get<boolean>(
-      settings,
-      WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-    ))
+    (yield* Settings.get(settings, TOOL_PATH_PROTECTION_SETTING))
   ) {
     return yield* Effect.fail(new ToolError(resolution.outsideMessage));
   }

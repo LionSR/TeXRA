@@ -27,7 +27,6 @@ import type {
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
@@ -37,6 +36,7 @@ import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { absentReason, entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, formatError } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
+import { GIT_WORKTREE_SUPPORT_SETTING } from '@shared/state/stateSettings';
 
 /**
  * Shared field for the `memories` parameter on delegation tools.
@@ -76,10 +76,7 @@ export const rejectUnusableWorkingDirectory = Effect.fn(function* (
   workingDirectory: string | undefined,
 ) {
   if (!workingDirectory) return null;
-  const worktrees = yield* Settings.get<boolean>(
-    stores,
-    WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-  );
+  const worktrees = yield* Settings.get(stores, GIT_WORKTREE_SUPPORT_SETTING);
   if (!worktrees) return errorResult(WORKTREE_DISABLED_MESSAGE);
   const fs = yield* FileSystem.FileSystem;
   const stat = yield* Effect.result(fs.stat(workingDirectory));

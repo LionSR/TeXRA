@@ -53,6 +53,7 @@ export {
 export type { WriteFilter } from '@tools/WriteTool';
 export {
   agentBlockOf,
+  boundFile,
   PluginHold,
   ToolRegistry,
   type AgentBlock,

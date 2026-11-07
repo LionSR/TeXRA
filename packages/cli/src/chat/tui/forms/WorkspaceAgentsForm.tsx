@@ -7,7 +7,10 @@ import {
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
-import { agentKeyOf } from '@texra-ai/harness/schemas';
+import {
+  agentKeyOf,
+  type WorkspaceAgentsSelection,
+} from '@texra-ai/harness/schemas';
 import {
   readCliWorkspaceAgents,
   type CliWorkspaceAgentsRecord,
@@ -226,28 +229,17 @@ export function WorkspaceAgentsForm(
     return frame(
       items,
       (value) => {
-        const workspaceAgents = workspaceAgentsOf(roots);
-        if (value === 'inherit')
-          write(
-            () =>
-              Effect.flatMap(workspaceAgents, (agents) =>
-                agents.setInherited(),
-              ),
-            'overview',
-          );
-        else if (value === 'all')
-          write(
-            () => Effect.flatMap(workspaceAgents, (agents) => agents.setAll()),
-            'overview',
-          );
-        else
-          write(
-            () =>
-              Effect.flatMap(workspaceAgents, (agents) =>
-                agents.setTeam(value.slice('team:'.length)),
-              ),
-            'overview',
-          );
+        const selection: WorkspaceAgentsSelection =
+          value === 'inherit' || value === 'all'
+            ? { kind: value }
+            : { kind: 'team', teamId: value.slice('team:'.length) };
+        write(
+          () =>
+            Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
+              agents.select(selection),
+            ),
+          'overview',
+        );
       },
       () => setMode('overview'),
     );
@@ -275,7 +267,7 @@ export function WorkspaceAgentsForm(
         write(
           () =>
             Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
-              value ? agents.setDefaultTeam(value) : agents.clearDefaultTeam(),
+              agents.setDefaultTeam(value || undefined),
             ),
           'overview',
         );

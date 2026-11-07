@@ -3,6 +3,7 @@ import { Effect, Fiber } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - common
+import { withLogChannel } from '@texra-ai/harness/host';
 import { invokeLatexWorkshopBuild } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
@@ -66,11 +67,16 @@ const triggerLaTeXBuild = (
     });
 
   return Effect.gen(function* () {
-    yield* openFileInEditor(fileUri.fsPath, {
+    // The build reads the file from disk, so a dirty buffer is saved first.
+    const { editor } = yield* openFileInEditor(fileUri.fsPath, {
       preserveFocus: true,
-      save: true,
-      reuseVisible: true,
     }).pipe(Effect.mapError(buildFailed));
+    if (editor.document.isDirty) {
+      yield* Effect.tryPromise({
+        try: () => editor.document.save(),
+        catch: buildFailed,
+      });
+    }
 
     // Subscribed on this frame, before the build is triggered, so an update
     // the build produces is not missed. The wait is the `finally` of the
@@ -82,11 +88,7 @@ const triggerLaTeXBuild = (
       { startImmediately: true },
     );
 
-    yield* invokeLatexWorkshopBuild(
-      fileUri,
-      CHANNEL,
-      'Failed to trigger LaTeX build',
-    );
+    yield* invokeLatexWorkshopBuild(fileUri, 'Failed to trigger LaTeX build');
     yield* Fiber.join(diagnosticsWait);
-  });
+  }).pipe(withLogChannel(CHANNEL));
 };

@@ -224,7 +224,7 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v2: a tool's card is stated (`card`), not derived from its name, so the
   // fold has no Codex builders (an earlier build's card would read without
   // its sections).
-  'tool.start': { version: 2, listing: 'none' },
+  'tool.start': { version: 3, listing: 'none' },
   'tool.end': { ...V1, listing: 'none' },
   // v2: the counts carry `TurnUsage`'s names (`cachedInputTokens`,
   // `cacheWriteTokens`, `toolUsePromptTokens`), and `elapsedTime` is gone (an

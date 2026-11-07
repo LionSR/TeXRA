@@ -157,7 +157,7 @@ const runInit = Effect.fn('runInit')(function* (
 
   // The chat default is a persona with no document task.
   const agents = implicitDefaultToolUseAgents(
-    (yield* (yield* AgentCatalog).visible(services)).filter(
+    (yield* (yield* AgentCatalog).workspaceAgents(services).visible()).filter(
       (agent) => documentTaskOf(agent) === null,
     ),
   );

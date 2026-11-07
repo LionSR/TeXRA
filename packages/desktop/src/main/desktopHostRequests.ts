@@ -174,8 +174,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
             absolutePaths: [...absolutePaths],
           }),
       },
-      showInfoMessage: host.showInfoMessage,
-      showWarningMessage: host.showWarningMessage,
+      notify: host.notify,
       runs: {
         // Desktop has no editor integration to preview through, so the
         // output goes to the preview-with-fallback host directly.

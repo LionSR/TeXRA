@@ -140,7 +140,8 @@ export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
   C extends Pick<AgentConfig, 'agent'> & Partial<AgentConfig>,
 >(config: C, stores: WorkspaceAgentsStores) {
   const entry = yield* (yield* AgentCatalog)
-    .forLaunch(stores, config.agent, config.agentSource)
+    .workspaceAgents(stores)
+    .forLaunch(config.agent, config.agentSource)
     .pipe(
       Effect.catchTag('AgentNotFound', (missed) =>
         Effect.fail(new DocumentTaskRefused({ message: missed.message })),

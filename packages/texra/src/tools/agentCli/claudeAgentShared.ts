@@ -11,7 +11,6 @@ import { Effect, Predicate } from 'effect';
 import { withLogChannel, Settings } from '@texra-ai/harness/host';
 import { isClaudeCodeModel } from '@texra/shared/agentCliSettings';
 import type { AgentCliEffort } from '@texra/shared/agentCliSettings';
-import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
 
 import {
   agentCliReasoning,
@@ -29,6 +28,10 @@ import type {
   SDKResultMessage,
   ThinkingConfig,
 } from '@anthropic-ai/claude-agent-sdk';
+import {
+  CLAUDE_AGENT_EFFORT_SETTING,
+  CLAUDE_AGENT_MODEL_SETTING,
+} from '@texra/shared/settingsView/integrationSettings';
 
 /**
  * Compile-time guard: the agent CLI effort vocabulary in `@shared` (the one
@@ -116,12 +119,8 @@ export const readClaudeCodeRun = Effect.fn('claudeAgent.readClaudeCodeRun')(
     },
   ): Effect.fn.Return<ClaudeCodeRun, ToolError | StateReadFailed> {
     const modelString =
-      input.model ??
-      (yield* Settings.get<string>(stores, ClaudeAgentStateKey.MODEL));
-    const userEffort = yield* Settings.get<AgentCliEffort>(
-      stores,
-      ClaudeAgentStateKey.EFFORT,
-    );
+      input.model ?? (yield* Settings.get(stores, CLAUDE_AGENT_MODEL_SETTING));
+    const userEffort = yield* Settings.get(stores, CLAUDE_AGENT_EFFORT_SETTING);
     const run = yield* resolveAgentCliModel(() =>
       claudeCodeRun(modelString, input.effort ?? undefined, userEffort),
     );

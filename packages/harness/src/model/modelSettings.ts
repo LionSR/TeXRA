@@ -25,21 +25,27 @@ import {
   StateReadFailed,
   type SettingsStores,
 } from '@shared/config/settings';
+import { type DeclinableUsageRoute } from '@shared/schemas';
 import {
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  type DeclinableUsageRoute,
-} from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  PROVIDER_ENDPOINT_STATE_ENTRIES,
+  GLM_ENDPOINT_SETTING,
+  PROVIDER_ENDPOINT_SETTINGS,
   PROVIDER_REGION_SETTINGS,
-  providerEndpointKey,
+  providerEndpointSetting,
   providerRegionSetting,
 } from '@shared/state/providerSettings';
 
 import { reasoningEffortOverrides } from './reasoningLevel';
 import { SubscriptionPreference } from './subscriptionAccess';
+import {
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  GLM_CODING_PLAN_SETTING,
+  GOOGLE_BACKGROUND_RESPONSES_SETTING,
+  KIMI_CODE_PREFER_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  WEBSOCKET_OPENAI_SETTING,
+  GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
+  OPENAI_FAST_TIER_SETTING,
+} from '@shared/state/stateSettings';
 
 type AssertNever<T extends never> = T;
 
@@ -52,10 +58,10 @@ type AssertNever<T extends never> = T;
 type _EndpointRowsCoverTheCatalog = AssertNever<
   | Exclude<
       EndpointProviderId,
-      (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['id']
+      (typeof PROVIDER_ENDPOINT_SETTINGS)[number]['id']
     >
   | Exclude<
-      (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['id'],
+      (typeof PROVIDER_ENDPOINT_SETTINGS)[number]['id'],
       EndpointProviderId
     >
 >;
@@ -111,15 +117,13 @@ const readEndpointEntries = Effect.fn('modelSettings.endpoint')(function* (
   stores: SettingsStores,
   { id, baseUrl }: (typeof MODEL_PROVIDER_PLUGINS)[number],
 ) {
-  const endpointKey = providerEndpointKey(id);
-  const custom = endpointKey
-    ? yield* Settings.get<string>(stores, endpointKey)
-    : '';
+  const endpoint = providerEndpointSetting(id);
+  const custom = endpoint ? yield* Settings.get(stores, endpoint) : '';
   if (custom) return [[id, `https://${hostPath(custom)}`] as const];
   if (baseUrl == null || typeof baseUrl === 'string') return [];
-  const regionKey = providerRegionSetting(id)?.key;
+  const regionToggle = providerRegionSetting(id);
   const region =
-    regionKey && (yield* Settings.get<boolean>(stores, regionKey))
+    regionToggle && (yield* Settings.get(stores, regionToggle))
       ? 'china'
       : 'international';
   return [[id, baseUrl[region]] as const];
@@ -184,9 +188,8 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
   Secrets
 > {
   const secrets = yield* Secrets;
-  const flag = (key: string) => Settings.get<boolean>(stores, key);
   // One read decides both the route and how an unreadable key fails.
-  const preferKimiCode = yield* flag(GlobalStateKey.KIMI_CODE_PREFER);
+  const preferKimiCode = yield* Settings.get(stores, KIMI_CODE_PREFER_SETTING);
   const [
     { chatgpt, xai, glm, glmEndpoint, kimiCodeKey, ...route },
     rest,
@@ -197,8 +200,8 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
         {
           chatgpt: subscriptionOn(stores, 'chatgpt'),
           xai: subscriptionOn(stores, 'grok'),
-          glm: flag(GlobalStateKey.GLM_CODING_PLAN),
-          glmEndpoint: Settings.get<string>(stores, 'endpoint.glm'),
+          glm: Settings.get(stores, GLM_CODING_PLAN_SETTING),
+          glmEndpoint: Settings.get(stores, GLM_ENDPOINT_SETTING),
           // Under the Kimi Code preference the key picks the billing route,
           // so an unreadable one fails the read rather than routing to the
           // pay-per-token key. Otherwise it reads as absent and warns, the
@@ -215,15 +218,8 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
           ),
           // Stored in thousands of tokens; this is its only reader.
           chatgptContextWindow: Effect.map(
-            Settings.get<number | null>(
-              stores,
-              CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
-            ),
-            (thousands) =>
-              thousands === null
-                ? undefined
-                : thousands *
-                  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit,
+            Settings.get(stores, CHATGPT_CODEX_CONTEXT_WINDOW_SETTING),
+            (thousands) => (thousands === null ? undefined : thousands * 1000),
           ),
           endpoints: readEndpoints(stores),
         },
@@ -233,19 +229,22 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
         // Whether Google text-only turns go out as background Interactions; a
         // Responses turn goes out so whenever its route can.
-        googleBackground: Settings.get<boolean>(
+        googleBackground: Settings.get(
           stores,
-          'model.useGoogleBackgroundResponses',
+          GOOGLE_BACKGROUND_RESPONSES_SETTING,
         ),
-        automaticRetries: Settings.get<number>(
+        automaticRetries: Settings.get(
           stores,
-          MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+          MODEL_RETRY_MAX_ATTEMPTS_SETTING,
         ),
       }),
       Effect.all({
-        serverState: flag('model.useGoogleInteractionsServerState'),
-        fastTier: flag('model.openaiFastTier'),
-        webSocket: flag(GlobalStateKey.WEBSOCKET_OPENAI),
+        serverState: Settings.get(
+          stores,
+          GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
+        ),
+        fastTier: Settings.get(stores, OPENAI_FAST_TIER_SETTING),
+        webSocket: Settings.get(stores, WEBSOCKET_OPENAI_SETTING),
       }),
     ],
     { concurrency: 'unbounded' },

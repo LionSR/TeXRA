@@ -3,15 +3,14 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   HostFailed,
-  type MessageHost,
-  type PromptConfirmOptions,
-  type PromptHost,
-  type PromptInputOptions,
-  type PromptMessageItem,
-  type PromptMessageOptions,
+  type ConfirmQuestion,
+  type Dialogs,
+  type InputField,
+  type NoticeLevel,
 } from '@texra/hosts/uiHosts';
 
 /**
@@ -20,21 +19,34 @@ import {
  * that swaps the window surface (a test double, a reloaded API) is the one
  * that answers the call.
  */
-const SHOW_OF_MEMBER: Record<
-  HostFailed['member'],
+const SHOW_OF_LEVEL: Record<
+  NoticeLevel,
   (
     message: string,
     options: vscode.MessageOptions,
     ...items: vscode.MessageItem[]
   ) => Thenable<vscode.MessageItem | undefined>
 > = {
-  showInfoMessage: (message, options, ...items) =>
+  info: (message, options, ...items) =>
     vscode.window.showInformationMessage(message, options, ...items),
-  showWarningMessage: (message, options, ...items) =>
+  warning: (message, options, ...items) =>
     vscode.window.showWarningMessage(message, options, ...items),
-  showErrorMessage: (message, options, ...items) =>
+  error: (message, options, ...items) =>
     vscode.window.showErrorMessage(message, options, ...items),
 };
+
+/** A button of an answerable message; the close affordance is the one VS
+ *  Code also answers for Escape. */
+type MessageItem<T extends string> =
+  | T
+  | { readonly label: T; readonly isCloseAffordance?: boolean };
+
+/** What an answerable message takes, in VS Code's `MessageOptions` words. */
+interface MessageOptions<T extends string> {
+  readonly items?: readonly MessageItem<T>[];
+  readonly detail?: string;
+  readonly modal?: boolean;
+}
 
 /**
  * A cancellable VS Code call the calling fiber owns — a quick pick, an input
@@ -58,66 +70,45 @@ export const withCancellationToken = <A, E>(
 
 /**
  * VS Code's message and dialog surfaces behind the host-neutral
- * {@link MessageHost} and {@link PromptHost}.
+ * {@link Dialogs}, plus the message with buttons only VS Code's own
+ * modules ask (`ask`).
  *
- * Both ports end in the same three `vscode.window.show*Message` calls — a
- * toast is that call with no items and no answer — so this holds one wrap of
- * them, in `showMessage`. The fire-and-forget members are that program with
- * the answer voided.
- *
- * Notifications and modal message boxes have no cancellation channel in the
- * VS Code API, so an interrupted fiber detaches from them and the dialog stays
- * on screen until the user dismisses it. The input box does have one: it takes
- * a `CancellationToken`, so an interrupted `input` closes the box the run
- * opened instead of leaving it waiting for an answer nobody will read.
+ * Every member ends in one of the three `vscode.window.show*Message` calls
+ * (`showMessage`), except the input box. Notifications and modal message
+ * boxes have no cancellation channel in the VS Code API, so an interrupted
+ * fiber detaches from them and the dialog stays on screen until the user
+ * dismisses it. The input box takes a `CancellationToken`, so an interrupted
+ * `input` closes the box the run opened instead of leaving it waiting for
+ * an answer nobody will read.
  */
-class VscodeUiHost implements MessageHost, PromptHost {
-  showInfoMessage(message: string): Effect.Effect<void, HostFailed> {
-    return Effect.asVoid(this.info(message));
+class VscodeUiHost implements Dialogs {
+  notify(level: NoticeLevel, message: string): Effect.Effect<void> {
+    return this.showMessage(level, message, {}).pipe(
+      Effect.asVoid,
+      Effect.catch((failure) =>
+        Effect.logWarning(
+          `VS Code would not show a notice: ${failure.message}`,
+        ).pipe(withLogChannel('VscodeUiHost')),
+      ),
+    );
   }
 
-  showWarningMessage(message: string): Effect.Effect<void, HostFailed> {
-    return Effect.asVoid(this.warning(message));
-  }
-
-  showErrorMessage(message: string): Effect.Effect<void, HostFailed> {
-    return Effect.asVoid(this.error(message));
-  }
-
-  info<T extends string = string>(
+  /** A message with buttons, which only VS Code's own modules ask; the label
+   *  chosen, or `undefined` when dismissed. */
+  ask<T extends string = string>(
+    level: NoticeLevel,
     message: string,
-    options: PromptMessageOptions<T> = {},
+    options: MessageOptions<T> = {},
   ): Effect.Effect<T | undefined, HostFailed> {
-    return this.showMessage('showInfoMessage', message, options);
+    return this.showMessage(level, message, options);
   }
 
-  warning<T extends string = string>(
-    message: string,
-    options: PromptMessageOptions<T> = {},
-  ): Effect.Effect<T | undefined, HostFailed> {
-    return this.showMessage('showWarningMessage', message, options);
-  }
-
-  error<T extends string = string>(
-    message: string,
-    options: PromptMessageOptions<T> = {},
-  ): Effect.Effect<T | undefined, HostFailed> {
-    return this.showMessage('showErrorMessage', message, options);
-  }
-
-  /**
-   * A confirmation is a warning message carrying the two buttons this port
-   * mandates, so it runs the same wrap, failing as `confirm`.
-   */
-  confirm(
-    message: string,
-    options: PromptConfirmOptions,
-  ): Effect.Effect<boolean, HostFailed> {
-    const confirmLabel = options.confirmLabel;
-    return this.showMessage('showWarningMessage', message, {
-      detail: options.detail,
-      modal: options.modal ?? true,
-      items: [confirmLabel, { label: 'Cancel', isCloseAffordance: true }],
+  /** A modal warning carrying the action and Cancel. */
+  confirm(question: ConfirmQuestion): Effect.Effect<boolean, HostFailed> {
+    return this.showMessage('warning', question.message, {
+      detail: question.detail,
+      modal: true,
+      items: [question.action, { label: 'Cancel', isCloseAffordance: true }],
     }).pipe(
       Effect.mapError(
         (failure) =>
@@ -127,18 +118,24 @@ class VscodeUiHost implements MessageHost, PromptHost {
             cause: failure.cause,
           }),
       ),
-      Effect.map((selected) => selected === confirmLabel),
+      Effect.map((selected) => selected === question.action),
     );
   }
 
   /** Ask for one line of text in a box {@link withCancellationToken} owns. */
-  input(
-    options: PromptInputOptions,
-  ): Effect.Effect<string | undefined, HostFailed> {
+  input(field: InputField): Effect.Effect<string | undefined, HostFailed> {
     return withCancellationToken(
       // A secret pasted from another window must not dismiss the box.
       (token) =>
-        vscode.window.showInputBox({ ...options, ignoreFocusOut: true }, token),
+        vscode.window.showInputBox(
+          {
+            prompt: field.prompt,
+            placeHolder: field.placeholder,
+            password: field.secret,
+            ignoreFocusOut: true,
+          },
+          token,
+        ),
       (cause) =>
         new HostFailed({
           member: 'input',
@@ -150,21 +147,26 @@ class VscodeUiHost implements MessageHost, PromptHost {
 
   /** The one wrap of `vscode.window.show*Message` this host holds. */
   private showMessage<T extends string>(
-    member: HostFailed['member'],
+    level: NoticeLevel,
     message: string,
-    options: PromptMessageOptions<T>,
+    options: MessageOptions<T>,
   ): Effect.Effect<T | undefined, HostFailed> {
-    const items = this.toVscodeItems(options.items);
+    const items = (options.items ?? []).map(
+      (item): vscode.MessageItem & { title: T } =>
+        typeof item === 'string'
+          ? { title: item }
+          : { title: item.label, isCloseAffordance: item.isCloseAffordance },
+    );
     return Effect.tryPromise({
       try: async () =>
-        SHOW_OF_MEMBER[member](
+        SHOW_OF_LEVEL[level](
           message,
           { detail: options.detail, modal: options.modal },
           ...items,
         ),
       catch: (cause) =>
         new HostFailed({
-          member,
+          member: `window.show ${level} message`,
           message: toErrorMessage(cause),
           cause,
         }),
@@ -174,20 +176,6 @@ class VscodeUiHost implements MessageHost, PromptHost {
           items.find((item) => item.title === selected?.title)?.title,
       ),
     );
-  }
-
-  private toVscodeItems<T extends string>(
-    items: readonly PromptMessageItem<T>[] = [],
-  ): (vscode.MessageItem & { title: T })[] {
-    return items.map((item) => {
-      if (typeof item === 'string') {
-        return { title: item };
-      }
-      return {
-        title: item.label,
-        isCloseAffordance: item.isCloseAffordance,
-      };
-    });
   }
 }
 

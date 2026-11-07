@@ -5,6 +5,7 @@ import { withLogChannel } from '@texra-ai/harness/host';
 import { withExtendedPath } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
+import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import type { StateStore } from '@texra-ai/harness/host';
@@ -45,29 +46,31 @@ export function initializeLatexSupport(
   );
 
   const recommendLatexWorkshop = Effect.gen(function* () {
-    const latexWorkshop = vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID);
-    if (!latexWorkshop && (yield* workspaceContainsLatexFiles)) {
+    if (
+      !vscodeEditorIntegration.installed(LATEX_WORKSHOP_EXT_ID) &&
+      (yield* workspaceContainsLatexFiles)
+    ) {
       // Only nag if the workspace actually contains LaTeX files; a user
       // evaluating TeXRA or using it on a non-LaTeX project should not be
       // prompted to install a TeX extension they don't need. They'll still
       // discover it via the LaTeX settings tab or compile errors later.
       yield* Effect.logInfo(
         'LaTeX Workshop extension not found, prompting installation',
-      ).pipe(withLogChannel(CHANNEL));
+      );
       yield* promptExtensionInstall(globalState, {
         suppressKey: 'latex-workshop-install',
         message:
           'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',
         extensionId: LATEX_WORKSHOP_EXT_ID,
-        channel: 'extension',
       });
     }
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.logError(
         `Error initializing LaTeX support: ${toErrorMessage(Cause.squash(cause))}`,
-      ).pipe(withLogChannel(CHANNEL)),
+      ),
     ),
+    withLogChannel(CHANNEL),
   );
 
   return Effect.andThen(extendPath, recommendLatexWorkshop);

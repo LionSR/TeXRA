@@ -51,8 +51,8 @@ export interface TexraProcessHost extends Omit<
   /** The storage root the process opens: sessions, global state, secrets. */
   readonly storageRoot: string;
   /** The packaged resources root the built-in agents and bundled skills are
-   *  read from. Absent only for a CLI entry that loads neither. */
-  readonly resourcesPath?: string;
+   *  read from. */
+  readonly resourcesPath: string;
   /** The flags every skill read uses (the CLI's `--source`). */
   readonly skillSourceOptions?: SkillSourceOptions;
   /** What the usage log stamps on each entry, and the host's own live
@@ -62,10 +62,9 @@ export interface TexraProcessHost extends Omit<
   readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
-  /** Where a custom agent directory's problem is shown, on the agent-load
-   *  log channel it is given; absent, the problem is logged there. */
+  /** Where a custom agent directory's problem is shown (on the agent
+   *  directories' log channel); absent, the problem is logged there. */
   readonly agentIssues?: (
-    channel: string,
     message: string,
     docsId: 'custom-agents',
   ) => Effect.Effect<void>;
@@ -80,9 +79,6 @@ export interface TexraProcessHost extends Omit<
     readonly globalDatabase: Layer.Layer<GlobalDatabase>;
   };
 }
-
-/** The log channel the agent directories report on. */
-const AGENT_LOAD_CHANNEL = 'AgentLoad';
 
 /** The process services, sessions and windows of one TeXRA host process. */
 export const texraProcessLayer = ({
@@ -102,14 +98,12 @@ export const texraProcessLayer = ({
     storageRoot,
     settings: TEXRA_SETTINGS.catalog,
     plugins,
-    ...(resourcesPath !== undefined && {
-      skills: {
-        resourcesPath,
-        // A project's skills sit beside its `.texra/config.json`.
-        projectFolder: TEXRA_STORAGE_DIR_NAME,
-        skillSourceOptions,
-      },
-    }),
+    skills: {
+      resourcesPath,
+      // A project's skills sit beside its `.texra/config.json`.
+      projectFolder: TEXRA_STORAGE_DIR_NAME,
+      skillSourceOptions,
+    },
     // One credential store every host shares, announcing each key it writes.
     secrets: Secrets.announcing(
       (announce) => new FileSecrets(secretsDirectory(storageRoot), announce),
@@ -122,16 +116,10 @@ export const texraProcessLayer = ({
         AppState,
         (state) =>
           new AgentDirectoryService({
-            channel: AGENT_LOAD_CHANNEL,
-            resourcesPath: resourcesPath ?? '',
+            resourcesPath,
             state,
             teamMembers,
-            ...(agentIssues && {
-              issueReporter: {
-                report: (message, docsId) =>
-                  agentIssues(AGENT_LOAD_CHANNEL, message, docsId),
-              },
-            }),
+            ...(agentIssues && { issueReporter: { report: agentIssues } }),
           }),
       ),
     ),

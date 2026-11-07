@@ -22,13 +22,17 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { repositoryRoot } from '@texra/utils/git/gitReads';
 import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from './latexParsingUtils';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
+import {
+  LATEXDIFF_CHANGES_ONLY_SETTING,
+  LATEXDIFF_MATH_MARKUP_SETTING,
+  LATEXDIFF_TIMEOUT_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 /** One latexdiff or latexdiff-vc run that did not succeed. Its `stderr` is
  *  scrubbed of secrets on the way in: a run writes the message verbatim into
@@ -98,13 +102,10 @@ const markupFlags = Effect.fn('latexdiff.markupFlags')(function* (
 ) {
   const mathMarkup =
     options.mathMarkup ??
-    (yield* Settings.get<LatexdiffMathMarkupValue>(
-      roots,
-      DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-    ));
-  const changesOnly = yield* Settings.get<boolean>(
+    (yield* Settings.get(roots, LATEXDIFF_MATH_MARKUP_SETTING));
+  const changesOnly = yield* Settings.get(
     roots,
-    DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
+    LATEXDIFF_CHANGES_ONLY_SETTING,
   );
   const subtype =
     options.subtype ??
@@ -137,10 +138,7 @@ const runWithFlattenFallback = Effect.fn('latexdiff.runWithFlattenFallback')(
     cwd: string | undefined,
   ) {
     // Read once, so the --flatten attempt and its retry share one deadline.
-    const timeoutMs = yield* Settings.get<number>(
-      roots,
-      DocumentsStateKey.LATEXDIFF_TIMEOUT_MS,
-    );
+    const timeoutMs = yield* Settings.get(roots, LATEXDIFF_TIMEOUT_SETTING);
     const attempt = Effect.fn('latexdiff.attempt')(function* (
       flatten: boolean,
     ) {

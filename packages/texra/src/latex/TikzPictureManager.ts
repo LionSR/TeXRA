@@ -17,6 +17,7 @@ import { compileLatex2Pdf } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
+import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 /**
  * Create a standalone LaTeX file for a TikZ picture
@@ -133,10 +134,7 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
     `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
   ).pipe(withLogChannel(CHANNEL));
 
-  const template = Settings.getConfig<string>(
-    roots.config,
-    'latex.tikzTemplate',
-  );
+  const template = Settings.getConfig(roots.config, TIKZ_TEMPLATE_SETTING);
   const compiledFiles: FileLocation[] = [];
 
   for (const [label, tikzPictures] of labeledTikzPictures) {

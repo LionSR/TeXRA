@@ -36,7 +36,6 @@ const runScoped = { runId: RunIdSchema };
 /** The verbs an output file offers on a workflow run's file list. */
 export const FileActionSchema = Schema.Literals([
   'compareOriginal',
-  'comparePrevious',
   'latexdiff',
   'accept',
   'merge',
@@ -202,8 +201,8 @@ export const HostCommandSchema = Schema.Union([
     ...runScoped,
     action: FileActionSchema,
     file: Schema.String.check(Schema.isMinLength(1)),
-    base: Schema.optional(Schema.NullOr(Schema.String)),
-    prev: Schema.optional(Schema.NullOr(Schema.String)),
+    /** The workspace file the output is compared with or written into. */
+    base: Schema.String.check(Schema.isMinLength(1)),
   }),
   // The New-task state's banners and onboarding cards (host-owned state,
   // HostSnapshot.banners and .onboarding).

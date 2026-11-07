@@ -1,127 +1,64 @@
-import {
-  createFlushableDebounce,
-  type FlushableDebounce,
-} from '@texra/shared/utils/flushableDebounce';
-import {
-  copyTextToClipboard,
-  COPY_RESET_DELAY_MS,
-} from '@texra/shared/utils/clipboard';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
-interface CopyButtonConfig {
-  /** Default button title/tooltip */
-  defaultTitle?: string;
-  /** Title shown after successful copy */
-  successTitle?: string;
-}
-
-/** CSS class applied during the success state. */
-const SUCCESS_CLASS = 'copy-success';
+/** How long a Copy button reads as copied. */
+const COPY_RESET_DELAY_MS = 2000;
 
 /**
- * Computed state for copy button (used in templates).
+ * Copy text to the clipboard with LF line endings. False when the browser
+ * refuses the write (access denied or unavailable): only that call is
+ * caught, so the button shows no success it did not have.
  */
-interface CopyButtonState {
-  /** Current title/tooltip text */
-  title: string;
-  /** Current aria-label */
-  ariaLabel: string;
-  /** Whether in success/copied state */
-  copied: boolean;
-  /** CSS class for success state */
-  successClass: string;
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text.replaceAll('\r\n', '\n'));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Lit reactive controller for managing a copy button with visual feedback.
- *
- * Exposes computed state that the host component can use in templates:
- * ```typescript
- * // In host component
- * private copyController = new CopyButtonController(this, {
- *   defaultTitle: 'Copy instruction',
- *   successTitle: 'Copied!',
- * });
- *
- * render() {
- *   const { title, ariaLabel, copied, successClass } = this.copyController.state;
- *   return html`
- *     <vscode-toolbar-button
- *       icon="copy"
- *       title=${title}
- *       aria-label=${ariaLabel}
- *       class=${classMap({ [successClass]: copied })}
- *       @click=${() => this.copyController.copy(this.textToCopy)}
- *     ></vscode-toolbar-button>
- *   `;
- * }
- * ```
+ * The one copy feedback: `copy(text)` writes the clipboard and `copied`
+ * reads true for two seconds after a write that succeeded, the host
+ * re-rendering on each change. A second copy restarts the two seconds. The
+ * host words its own button from `copied`.
  */
 export class CopyButtonController implements ReactiveController {
   private _copied = false;
-  private readonly _config: Required<CopyButtonConfig>;
-  private readonly _resetTimer: FlushableDebounce;
+  private resetTimer: ReturnType<typeof setTimeout> | undefined;
 
   private readonly host: ReactiveControllerHost;
-  constructor(host: ReactiveControllerHost, config: CopyButtonConfig = {}) {
+  constructor(host: ReactiveControllerHost) {
     this.host = host;
-    this._config = {
-      defaultTitle: config.defaultTitle ?? 'Copy to clipboard',
-      successTitle: config.successTitle ?? 'Copied!',
-    };
-    this._resetTimer = createFlushableDebounce(() => {
-      this._copied = false;
-      this.host.requestUpdate();
-    }, COPY_RESET_DELAY_MS);
     this.host.addController(this);
   }
 
   hostDisconnected(): void {
-    this._resetTimer.cancel();
+    clearTimeout(this.resetTimer);
   }
 
-  /**
-   * Get computed state for use in templates (Lit-native approach).
-   * The host component should use these values in its template bindings.
-   */
-  get state(): CopyButtonState {
-    const title = this._copied
-      ? this._config.successTitle
-      : this._config.defaultTitle;
-    return {
-      title,
-      ariaLabel: title,
-      copied: this._copied,
-      successClass: SUCCESS_CLASS,
-    };
+  /** Whether the last copy succeeded less than two seconds ago. */
+  get copied(): boolean {
+    return this._copied;
   }
 
-  /**
-   * Copy text to clipboard and show success feedback.
-   * Automatically resets to default state after `COPY_RESET_DELAY_MS`.
-   */
+  /** Copy `text` (nothing for blank text); true when the clipboard took it. */
   copy = async (text: string): Promise<boolean> => {
-    if (!text.trim()) {
-      return false;
-    }
-
-    this._resetTimer.cancel();
-
-    if (this._copied) {
-      this._copied = false;
-      this.host.requestUpdate();
-    }
-
-    const success = await copyTextToClipboard(text);
-    if (!success) {
-      return false;
-    }
-
-    this._copied = true;
-    this.host.requestUpdate();
-
-    this._resetTimer.schedule();
-
+    if (!text.trim()) return false;
+    clearTimeout(this.resetTimer);
+    this.setCopied(false);
+    if (!(await copyTextToClipboard(text))) return false;
+    this.setCopied(true);
+    this.resetTimer = setTimeout(
+      () => this.setCopied(false),
+      COPY_RESET_DELAY_MS,
+    );
     return true;
   };
+
+  private setCopied(copied: boolean): void {
+    if (this._copied === copied) return;
+    this._copied = copied;
+    this.host.requestUpdate();
+  }
 }

@@ -17,7 +17,6 @@ import { spiedTrace } from '@test/support/spiedTrace';
 import { FakeHost } from '@test/support/testKernel';
 import { TEXRA_APP } from '@test/support/texraApp';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 
 // Local file imports
@@ -28,6 +27,7 @@ import {
   storagePath,
   workspacePath,
 } from './compileCheckTestUtils';
+import { LATEXDIFF_BETWEEN_ROUNDS_SETTING } from '@texra/shared/settingsView/documentsSettings';
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(
@@ -82,7 +82,7 @@ layer(
     storagePath,
     workspacePath,
     workspaceState: {
-      [DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS]: true,
+      [LATEXDIFF_BETWEEN_ROUNDS_SETTING.key]: true,
     },
   }),
   { excludeTestServices: true },

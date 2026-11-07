@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Config, Effect, FileSystem, Option, Schema } from 'effect';
 
 // Local imports
-import { withLogChannel, WorkspaceFs, Settings } from '@texra-ai/harness/host';
+import { WorkspaceFs, Settings } from '@texra-ai/harness/host';
 import { absentReason } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -14,9 +14,12 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runTool, type ToolMissing } from '@texra/utils/system/toolChecks';
-import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import {
+  INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
+  TIKZ_INPUT_DIRECTORY_SETTING,
+} from '@texra/shared/settingsView/texraSettings';
 
 // Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
 // tex compile logs are noisy and heuristic parsing is a losing game, so every
@@ -26,7 +29,6 @@ const LOG_TAIL_LINES = 200;
 /** Options for {@link compileLatex2Pdf}; every caller is TypeScript, so the
  *  type is the check. */
 interface LaTeXCompileOptions {
-  readonly channel?: string;
   readonly outputDirectory?: string;
   /** The engine to drive: latexmk unless named. */
   readonly compiler?: (typeof SUPPORTED_LATEX_COMPILERS)[number];
@@ -170,7 +172,7 @@ export type CompileLatex2PdfResult =
  *
  * @param latexLocation FileLocation for the LaTeX file
  * @param roots The session's setting slots
- * @param options Compilation options (channel defaults to module CHANNEL)
+ * @param options Compilation options; its lines take the caller's log channel
  * @returns `{ ok: true, pdfPath } | { ok: false, logTail }` -- `pdfPath` is the
  * absolute path of a non-empty PDF where the engine writes (an earlier
  * build's in a reused output directory counts); `logTail` is always
@@ -188,7 +190,6 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
 > {
   const {
-    channel = CHANNEL,
     outputDirectory,
     compiler = 'latexmk',
     timeout,
@@ -218,13 +219,13 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // revised sibling wins over the original source fallback.
     const documentDir = path.dirname(latexFile);
 
-    const tikzInputDirectory = yield* Settings.get<string>(
+    const tikzInputDirectory = yield* Settings.get(
       roots,
-      'latex.tikzInputDirectory',
+      TIKZ_INPUT_DIRECTORY_SETTING,
     );
-    const includeWorkspace = yield* Settings.get<boolean>(
+    const includeWorkspace = yield* Settings.get(
       roots,
-      'latex.includeWorkspaceInTexinputs',
+      INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
     );
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir,
@@ -237,9 +238,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // any inherited values. `path.delimiter` keeps it cross-platform.
     const env = yield* latexInputEnv(texInputParts, bibSearchParts);
     for (const [key, value] of Object.entries(env)) {
-      yield* Effect.logDebug(`Setting ${key} to: ${value}`).pipe(
-        withLogChannel(channel),
-      );
+      yield* Effect.logDebug(`Setting ${key} to: ${value}`);
     }
 
     // The compiler's cwd is the workspace root: a session with no folder open
@@ -268,7 +267,6 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // it, so it keeps the single-process form.
     const runEngine = (tool: 'latexmk' | 'pdflatex', args: string[]) =>
       runTool(tool, args, {
-        channel,
         cwd: workspacePath,
         // A TeX engine spawns no git command that an identity could mark.
         settings: undefined,
@@ -287,7 +285,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
               Effect.logWarning(
                 'latexmk not found, falling back to single-pass pdflatex: ' +
                   'bibliography, cross-references, and index may be incomplete',
-              ).pipe(withLogChannel(channel), Effect.andThen(pdflatex)),
+              ).pipe(Effect.andThen(pdflatex)),
             ),
           )
         : yield* pdflatex;
@@ -300,9 +298,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
         .stat(pdfPath)
         .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
       if (written?.type === 'File' && Number(written.size) > 0) {
-        yield* Effect.logDebug(`Successfully compiled ${latexFile}`).pipe(
-          withLogChannel(channel),
-        );
+        yield* Effect.logDebug(`Successfully compiled ${latexFile}`);
         return { ok: true, pdfPath } as const;
       }
       return {
@@ -317,9 +313,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   });
 
   const failed = Effect.fnUntraced(function* (message: string) {
-    yield* Effect.logError(`Error compiling LaTeX: ${message}`).pipe(
-      withLogChannel(channel),
-    );
+    yield* Effect.logError(`Error compiling LaTeX: ${message}`);
     const tail = yield* readCompileLogTail(`${outputStem}.log`);
     return {
       ok: false,
