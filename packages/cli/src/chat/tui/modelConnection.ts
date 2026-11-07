@@ -1,10 +1,10 @@
-// The chat's "no model connected yet" state: the fact itself, the message a
-// user typed before connecting, and re-resolving the chat's model once a
-// credential lands. The "Connect a model" panel is the `/login` form in
+// The chat's "no model connected yet" state: the fact itself, the wait a
+// message typed before connecting goes through, and re-resolving the chat's
+// model once a credential lands. The "Connect a model" panel is the `/login` form in
 // connect mode; everything else about the state lives here.
 
 import { signal } from '@lit-labs/signals';
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Latch } from 'effect';
 
 import {
   withLogChannel,
@@ -23,7 +23,6 @@ import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 
 import { applyInitialCliAgentSelection } from './commands/handlers/agentModelCommands';
 import { openCliSlashCommandForm } from './commands/slashForms';
-import { parseSlashInput } from './commands/slashRegistry';
 import {
   patchSessionMeta,
   sessionMeta,
@@ -34,11 +33,7 @@ import {
   appendLocalErrorTranscript,
   appendLocalNotice,
 } from './state/transcript';
-import type {
-  SlashCommandContext,
-  SlashCommandEffect,
-} from './commands/handlers/slashContext';
-import type { PastedImageEntry } from './input/draftAttachments';
+import type { SlashCommandContext } from './commands/handlers/slashContext';
 
 /**
  * No model route is usable yet: the chat opened without a credential, so the
@@ -48,29 +43,39 @@ import type { PastedImageEntry } from './input/draftAttachments';
  */
 export const modelConnectionNeeded = signal(false);
 
-interface HeldMessage {
-  readonly line: string;
-  readonly mediaFiles: readonly string[] | undefined;
-  readonly images: readonly PastedImageEntry[] | undefined;
+/** The chat's model, connected or awaited: chat messages wait in order until
+ *  it is (slash commands never wait: `/login` is how a connection happens). */
+export interface ModelConnection {
+  /** Waits until a model is connected; with none, puts the connect panel
+   *  back in front first. */
+  readonly connected: Effect.Effect<void>;
+  /** The model is connected: every waiting message goes out. True when one
+   *  was waiting. */
+  readonly open: Effect.Effect<boolean>;
 }
 
-let heldMessage: HeldMessage | undefined;
-
-/**
- * With no model connected, keep a chat message (the latest wins) and put the
- * connect panel back in front; the connection sends it. Slash commands never
- * wait: `/login` is how a connection happens. True when the message was held.
- */
-export function holdUntilConnected(message: HeldMessage): boolean {
-  if (!modelConnectionNeeded.get() || parseSlashInput(message.line)) {
-    return false;
-  }
-  heldMessage = message;
-  setTransientNotice(
-    'Connect a model and your message will be sent right away.',
-  );
-  openCliSlashCommandForm('login');
-  return true;
+/** The chat's model connection, open unless {@link modelConnectionNeeded}. */
+export function makeModelConnection(): ModelConnection {
+  const latch = Latch.makeUnsafe(!modelConnectionNeeded.get());
+  let waiting = 0;
+  return {
+    connected: Effect.suspend(() => {
+      if (Latch.isOpen(latch)) return Effect.void;
+      setTransientNotice(
+        'Connect a model and your message will be sent right away.',
+      );
+      openCliSlashCommandForm('login');
+      waiting += 1;
+      return Latch.await(latch).pipe(
+        Effect.ensuring(Effect.sync(() => (waiting -= 1))),
+      );
+    }),
+    open: Effect.sync(() => {
+      const messageWaiting = waiting > 0;
+      Latch.openUnsafe(latch);
+      return messageWaiting;
+    }),
+  };
 }
 
 /**
@@ -99,8 +104,8 @@ export const checkModelConnection = Effect.fn('checkModelConnection')(
 /**
  * Re-check after an account change. When a model can answer now: clear the
  * state, resolve the chat's model the way startup does, hand a first run to
- * the setup agent, then send the held message — or, with none waiting on a
- * first run, open `/agent` so a newcomer sees the agents and teams.
+ * the setup agent, then let the waiting messages go — or, with none waiting
+ * on a first run, open `/agent` so a newcomer sees the agents and teams.
  */
 export const connectChatModel = Effect.fn('connectChatModel')(function* (
   context: SlashCommandContext,
@@ -109,7 +114,7 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
     readonly recovery: CliNoAvailableModelsRecoveryOptions;
     readonly firstRunSetupAgent: string | undefined;
   },
-  send: (message: HeldMessage) => SlashCommandEffect,
+  connection: ModelConnection,
 ) {
   if (!modelConnectionNeeded.get()) return;
   const { stores, runtime } = context;
@@ -117,36 +122,42 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   // leaves the panel state as it was.
   const ready = yield* hasUsableSetupCredential(stores);
   // Checked again after the read: a recheck forked by an earlier form may
-  // have connected meanwhile, and only one may send the held message.
+  // have connected meanwhile, and only one connects.
   if (!ready || !modelConnectionNeeded.get()) return;
   modelConnectionNeeded.set(false);
-  const selection = yield* Effect.exit(
-    selectCliRunnableModel(
-      [{ model: sessionMeta.get().model, reason: options.modelSource }],
-      {
-        stores: { ...stores, runtime },
-        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-          options.recovery,
-        ),
-      },
-    ),
-  );
-  if (Exit.isFailure(selection)) {
-    appendLocalErrorTranscript(toErrorMessage(Cause.squash(selection.cause)));
-  } else {
-    patchSessionMeta({ model: selection.value.model });
-    yield* setCliHelperModel(stores.globalState, selection.value.model);
-    appendLocalNotice(`Model connected: ${selection.value.model}.`);
-  }
   const setupAgent = options.firstRunSetupAgent;
-  if (setupAgent && chatTuiCanStartRootRun(context.session)) {
-    yield* applyInitialCliAgentSelection(setupAgent, context);
-    appendLocalNotice(SETUP_AGENT_HANDOFF_NOTICE);
-  }
-  const held = heldMessage;
-  heldMessage = undefined;
-  if (held) yield* send(held);
-  else if (setupAgent) openCliSlashCommandForm('agent');
+  // The waiting messages go once the model is resolved, or once resolving it
+  // failed or stopped: a failure is said in the transcript, and a run
+  // resolves the chat's model again when it starts.
+  const messageWaiting = yield* Effect.gen(function* () {
+    const selection = yield* Effect.exit(
+      selectCliRunnableModel(
+        [{ model: sessionMeta.get().model, reason: options.modelSource }],
+        {
+          stores: { ...stores, runtime },
+          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+            options.recovery,
+          ),
+        },
+      ),
+    );
+    if (Exit.isFailure(selection)) {
+      appendLocalErrorTranscript(toErrorMessage(Cause.squash(selection.cause)));
+    } else {
+      patchSessionMeta({ model: selection.value.model });
+      yield* setCliHelperModel(stores.globalState, selection.value.model);
+      appendLocalNotice(`Model connected: ${selection.value.model}.`);
+    }
+    if (setupAgent && chatTuiCanStartRootRun(context.session)) {
+      yield* applyInitialCliAgentSelection(setupAgent, context);
+      appendLocalNotice(SETUP_AGENT_HANDOFF_NOTICE);
+    }
+  }).pipe(
+    Effect.onInterrupt(() => connection.open),
+    Effect.catchCause(reportInTranscript),
+    Effect.andThen(connection.open),
+  );
+  if (!messageWaiting && setupAgent) openCliSlashCommandForm('agent');
 }, Effect.catchCause(reportInTranscript));
 
 // Every step already speaks in the transcript; a failure in one does too.

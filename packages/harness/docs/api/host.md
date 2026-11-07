@@ -478,13 +478,27 @@ interface AppSignalPayloads {
    *
    * Consumed by: extension and desktop (an `apiKey.*` change repaints the
    * credential-dependent settings, launcher and model surfaces), the CLI chat
-   * TUI (an `apiKey.*` change bumps the subscription-preference version its
-   * status bar reads), and the `ToolAvailability` process service on every
+   * TUI (an `apiKey.*` change re-reads the model route and quota its status
+   * bar shows), and the `ToolAvailability` process service on every
    * host and the agent package (a key a plugin lists in `reprobeOnSecrets`,
    * such as the GitHub token, re-probes each workspace it holds, which the
    * next step's tool list reads).
    */
   credentialChanged: { key: string };
+
+  /**
+   * A model-access preference was written in this process: a subscription's
+   * preference, the access route picked for a provider, a subscription
+   * sign-out, or a setting whose write re-routes models
+   * (`onWrite.invalidatesModelOptions`). Keyless on purpose: a listener
+   * re-reads the routes it shows.
+   *
+   * Emitted by the CLI's writers of those settings. Consumed by: the CLI chat
+   * TUI's status bar, which re-reads the route and quota it shows. Not the
+   * extension or desktop: their settings views repaint model options in the
+   * write's own round-trip (`sharedSettingsCommands.ts`).
+   */
+  modelAccessChanged: undefined;
 
   /**
    * The active GitHub subscriptions (PR, repo, or issue) or their stream owners

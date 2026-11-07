@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
 
+import { emitAppSignal } from '@texra-ai/harness/host';
+
 import {
   toErrorMessage,
   SUBSCRIPTION_AUTH_PROVIDERS,
 } from '@texra-ai/harness/schemas';
-import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
-import { setCliSubscriptionPreference } from '@cli/chat/tui/state/subscriptionPreference';
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
@@ -22,7 +22,10 @@ import {
   type CliLoginSlashArgs,
   type CliLogoutTarget,
 } from '@cli/runtime/loginOptions';
-import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import {
+  subscriptionProvider,
+  type SubscriptionProviderId,
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 
 import {
@@ -31,6 +34,7 @@ import {
 } from './slashContext';
 import type {
   AgentCatalogServices,
+  AppSignals,
   Secrets,
   SettingsStores,
 } from '@texra-ai/harness/host';
@@ -63,7 +67,8 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
   const account = yield* signInCliSubscription(providerId, args, {
     writeProgress: output.writeProgress,
   });
-  yield* setCliSubscriptionPreference(stores, providerId, true);
+  yield* subscriptionProvider(providerId).setPreferSubscription(stores, true);
+  yield* emitAppSignal('modelAccessChanged', undefined);
   output.appendOutcome(
     SUBSCRIPTION_AUTH_COPY[providerId].signedInEnabled(account.label),
   );
@@ -107,7 +112,7 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
 ): Effect.fn.Return<
   readonly string[],
   never,
-  Secrets | AgentCatalogServices | HttpClient.HttpClient
+  Secrets | AgentCatalogServices | HttpClient.HttpClient | AppSignals
 > {
   const lines: string[] = [];
 
@@ -115,6 +120,7 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
     if (target !== providerId && target !== 'all') continue;
     const { label } = SUBSCRIPTION_AUTH_COPY[providerId];
     yield* signOutCliSubscription(stores, providerId).pipe(
+      Effect.tap(() => emitAppSignal('modelAccessChanged', undefined)),
       Effect.match({
         onFailure: (error) => {
           lines.push(
@@ -125,7 +131,6 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
           );
         },
         onSuccess: (update) => {
-          bumpCodexPreferenceVersion();
           lines.push(ACCOUNT_OUTCOME.signedOut(label));
           lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
         },

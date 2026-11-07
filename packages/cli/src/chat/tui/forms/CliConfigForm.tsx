@@ -1,4 +1,4 @@
-import { Secrets, Settings } from '@texra-ai/harness/host';
+import { emitAppSignal, Secrets, Settings } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
@@ -17,7 +17,6 @@ import {
   resolveGitHubTokenSource,
 } from '@texra/tools/github/githubAuth';
 
-import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { WorkspaceAgentsForm } from './WorkspaceAgentsForm';
 import { ConfigForm } from './ConfigForm';
 import { useAsyncListForm, useAsyncResource } from './_shared/useAsyncListForm';
@@ -35,7 +34,7 @@ import {
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { AppSignals, ProcessRuntime } from '@texra-ai/harness/host';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
@@ -111,7 +110,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const applyUpdate = Effect.fn('applyUpdate')(function* (
     entry: TexraSettingRow,
     value: unknown,
-  ): Effect.fn.Return<void, Error> {
+  ): Effect.fn.Return<void, Error, AppSignals> {
     const result = yield* applyStateSettingUpdate(entry.key, value, {
       host: 'cli',
       stores: roots,
@@ -141,7 +140,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     }
     settings.reload();
     if (entry.onWrite?.invalidatesModelOptions) {
-      bumpCodexPreferenceVersion();
+      yield* emitAppSignal('modelAccessChanged', undefined);
     }
     if (entry.key === APPROVAL_POLICY_CONFIG_KEY) {
       // The value is written: a failed repaint is reported, never rolled back.
