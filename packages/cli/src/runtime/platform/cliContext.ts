@@ -9,16 +9,15 @@ import {
   Config,
   Option,
   Schema,
+  Semaphore,
   type LogLevel,
 } from 'effect';
 
 import { DatabaseOpenFailed } from '@texra-ai/harness';
 import {
   type ConfigProvider,
-  type PerKeyLane,
   type SkillSourceOptions,
   Settings,
-  withPerKeyLane,
 } from '@texra-ai/harness/host';
 import { modelConfig } from '@texra-ai/llm';
 import {
@@ -44,7 +43,7 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
-import { interactiveTerminalFailure } from './terminalRequirements';
+import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settingsView/texraSettings';
 
@@ -94,7 +93,7 @@ export interface CliContext {
   readonly resourcesPath: string;
   /**
    * The one config provider of this process, opened before the platform and
-   * installed as the workspace roots' config by `initCliPlatform`: every
+   * installed as the workspace roots' config by `CliPlatform`: every
    * setting read after startup resolves through this same pair of stores.
    */
   readonly config: ConfigProvider;
@@ -130,7 +129,7 @@ export class CliInvocation extends Context.Service<
 export const provideCliInvocation = (context: CliContext) =>
   Effect.provideService(CliInvocation, {
     context,
-    onPromptLane: withPerKeyLane(new Map<'stdin', PerKeyLane>(), 'stdin'),
+    onPromptLane: Semaphore.makeUnsafe(1).withPermit,
   });
 
 export class CliUsageError extends Schema.TaggedError<CliUsageError>()(
@@ -241,12 +240,17 @@ const decodeCliPackageManifest = Schema.decodeUnknownResult(
 /**
  * The CLI's `package.json`, read once and synchronously: a few hundred bytes
  * off the package root, needed before any runtime exists (`--version`, the
- * process-runtime install, the crash report), so it has no Promise or Effect
+ * process-runtime build, the crash report), so it has no Promise or Effect
  * face to keep in step with.
  */
 function readCliPackageManifest(): CliPackageManifest | undefined {
+  // The bundled `dist/bin` entry reaches the manifest two levels up, this
+  // module run from source (`src/runtime/platform/`) three; the one-level
+  // candidate is for build layouts that place runtime files just below the
+  // package root.
   const candidates = [
     new URL('../../package.json', import.meta.url),
+    new URL('../../../package.json', import.meta.url),
     new URL('../package.json', import.meta.url),
   ];
   for (const candidate of candidates) {
@@ -260,9 +264,6 @@ function readCliPackageManifest(): CliPackageManifest | undefined {
       continue;
     }
     const pkg = decodeCliPackageManifest(text);
-    // Source and bundled `dist/bin` layouts both reach the CLI manifest via
-    // `../../`; keep the fallback for build layouts that place runtime files
-    // one level below the package root.
     if (Result.isSuccess(pkg)) return pkg.success;
   }
   return undefined;
@@ -434,7 +435,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     const storageRoot = init.storageRoot ?? defaultNodeStorageRoot();
     // The project file over the user file, resolved by the same
     // `JsonConfigProvider` that `roots.config` gives the extension and desktop
-    // hosts — and, from `initCliPlatform` on, this host too. This is the
+    // hosts — and, from `CliPlatform` on, this host too. This is the
     // pre-runtime open, which is why it goes through `loadCliStartupConfig`
     // rather than the process runtime.
     const { config, warnings, degradations } = yield* loadCliStartupConfig(

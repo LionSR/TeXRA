@@ -37,11 +37,11 @@ const mocks = vi.hoisted(() => ({
   reportRequestDefect: vi.fn(),
 }));
 
-vi.mock('@cli/runtime/initPlatform', () => ({
+vi.mock('@cli/runtime/platform/initPlatform', () => ({
   setCliHelperModel: mocks.setCliHelperModel,
 }));
 
-vi.mock('@cli/runtime/cliPresentationHost', () => ({
+vi.mock('@cli/runtime/headless/cliPresentationHost', () => ({
   createCliRuntimeHost: mocks.createCliRuntimeHost,
 }));
 
@@ -68,8 +68,8 @@ import {
   type RuntimeCommand,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import type { CliContext } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { CliContext } from '@cli/runtime/platform/cliContext';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import { slashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
@@ -257,6 +257,7 @@ function installSession(
       changes:
         installed === undefined ? Stream.empty : SubscriptionRef.changes(ref),
       watch: () => Stream.empty,
+      read: () => Effect.sync(() => SubscriptionRef.getUnsafe(ref)),
     },
   });
 }

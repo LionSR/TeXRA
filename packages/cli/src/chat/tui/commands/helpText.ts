@@ -5,7 +5,7 @@
 // markdown (bold section headers + list items) so each command stays on
 // its own row.
 
-import { focusChordLabel } from '@cli/runtime/shortcutLabels';
+import { focusChordLabel } from '@cli/runtime/terminal/shortcutLabels';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
 
 import { textInputEditingHelp } from '../input/textInputBindings';

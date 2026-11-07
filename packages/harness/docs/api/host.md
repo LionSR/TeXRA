@@ -347,6 +347,19 @@ class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
 })
 ```
 
+## AgentNotFound
+
+No agent answers to `agent` in the settled catalog, rescanned once:
+the catalog's own answer, which a launch turns into its refusal
+({@link missingAgentRefusal}) and every other reader reads as "not found".
+
+```ts
+class AgentNotFound extends Schema.TaggedError<AgentNotFound>()(
+  'AgentNotFound',
+  { agent: Schema.String, message: Schema.String },
+)
+```
+
 ## AgentRuntimeEmitOptions
 
 ```ts
@@ -2802,14 +2815,14 @@ interface WorkspaceAgents extends WorkspaceAgentsController<AgentEntry> {
   /**
    * The agent a launch runs, over a settled catalog: the entry an explicit
    * `source` pins, else a visible one, else any. A miss reloads once, then
-   * refuses the launch with what the load said.
+   * fails with {@link AgentNotFound}, saying what the load said.
    */
   readonly forLaunch: (
     identifier: string,
     source?: AgentSource | null,
   ) => Effect.Effect<
     AgentEntry,
-    LaunchRefused | AgentCatalogLoadError | StateReadFailed
+    AgentNotFound | AgentCatalogLoadError | StateReadFailed
   >;
 }
 ```

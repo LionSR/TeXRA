@@ -57,7 +57,7 @@ import {
   type RunId,
   type RuntimeCommand,
 } from '@texra-ai/harness/schemas';
-import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
+import { runGrantLabel } from '@ui/copy/delegationApproval';
 
 /** The three ways a card declines, each with its one word. */
 const DECLINE_LABEL = {
@@ -177,7 +177,7 @@ export abstract class BaseRequestPanel<
    *  offers (`offeredGrant`), none when only a person answers it. */
   protected get grant(): RunGrant | null {
     const kind = offeredGrant(this.permission);
-    return kind === null ? null : { label: RUN_GRANT_LABEL[kind] };
+    return kind === null ? null : { label: runGrantLabel(kind) };
   }
 
   /** Kind-specific keys (d, s, r, k …). */

@@ -5,13 +5,13 @@ import {
   agentName as bareAgentName,
 } from '@texra-ai/harness/schemas';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
-import { CliUsageError } from '@cli/runtime/cliContext';
+import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
-import { setCliHelperModel } from '@cli/runtime/initPlatform';
+import { setCliHelperModel } from '@cli/runtime/platform/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
-} from '@cli/runtime/modelAccess';
+} from '@cli/runtime/models/modelAccess';
 
 import {
   patchSessionMeta,

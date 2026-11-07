@@ -32,7 +32,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SessionRequests } from '@agent/runtime/requests';
 import { rootRun } from '@agent/runtime/rootLaunch';
-import { validationModelLayer } from '@cli/runtime/validationModel';
+import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import {
   persistentTestSession,

@@ -28,7 +28,7 @@ import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 
-import { writeNdjsonStdout, writeTextStdout } from './logSinks';
+import { writeNdjsonStdout, writeTextStdout } from '../platform/logSinks';
 import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 
 /** How the attached task is printed. */

@@ -51,6 +51,7 @@ export function reachDesktopService(
       spawnService(dataRoot, process.execPath, [bundle, 'serve'], {
         ELECTRON_RUN_AS_NODE: '1',
       }),
+      Effect.logWarning,
     );
   });
 }

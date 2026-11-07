@@ -4,7 +4,7 @@ import { computed } from '@lit-labs/signals';
 
 import { stripControlCharacters } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
-import { osc } from '@cli/runtime/ansiEscapes';
+import { osc } from '@cli/runtime/terminal/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToPolling } from '@cli/tui/usePollingInterval';
 import {

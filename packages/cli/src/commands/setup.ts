@@ -4,7 +4,7 @@ import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
-} from '../runtime/terminalRequirements';
+} from '../runtime/terminal/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
@@ -12,11 +12,11 @@ import {
   INTERACTIVE_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
 /** The command's program builder; the command's `run` is its only caller. */
 function runSetup(context: CliContext) {
-  // Refused in the builder, before the runtime installs (see
+  // Refused in the builder, before the runtime is built (see
   // `defineCliCommand`).
   const terminalFailure = interactiveTerminalFailure(context);
   if (terminalFailure) {
@@ -49,6 +49,8 @@ export const setupCommand = withUsageSections(
       ...INTERACTIVE_GLOBAL_ARGS,
     },
     setup: (ctx) => rejectHeadlessOnlyFlags(ctx.rawArgs, 'setup'),
+    // The same chat platform as `texra chat`.
+    platform: { startsService: true, presentsStoreMovedAside: true },
     run: runSetup,
   }),
   [

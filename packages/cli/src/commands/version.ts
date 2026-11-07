@@ -5,7 +5,7 @@ import {
   CliOutputFormatSchema,
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
-import { cliEnvValue, readCliVersion } from '../runtime/cliContext';
+import { cliEnvValue, readCliVersion } from '../runtime/platform/cliContext';
 
 import { writeCliResult } from './_helpers/output';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';

@@ -4,9 +4,9 @@ import {
   writeNdjsonStdout,
   writeTextStderr,
   writeTextStdout,
-} from '@cli/runtime/logSinks';
-import { pageStdout } from '@cli/runtime/pager';
-import { CliInvocation } from '@cli/runtime/cliContext';
+} from '@cli/runtime/platform/logSinks';
+import { pageStdout } from '@cli/runtime/terminal/pager';
+import { CliInvocation } from '@cli/runtime/platform/cliContext';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

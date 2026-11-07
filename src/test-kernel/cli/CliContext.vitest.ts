@@ -14,7 +14,7 @@ import {
   buildCliContext,
   type BuildCliContextInit,
   type CliContext,
-} from '@cli/runtime/cliContext';
+} from '@cli/runtime/platform/cliContext';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';

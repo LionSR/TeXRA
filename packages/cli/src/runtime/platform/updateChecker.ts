@@ -19,7 +19,7 @@ import {
 import { CliExitCode } from './exitCodes';
 import { runForegroundCommand } from './foregroundCommand';
 import { askCliQuestion, writeTextStderr } from './logSinks';
-import { createCliStyle } from './style';
+import { createCliStyle } from '../terminal/style';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { HttpClient } from 'effect/http';
 import type { PlatformError } from 'effect/PlatformError';

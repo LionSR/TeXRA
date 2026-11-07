@@ -56,6 +56,17 @@ export function formatResumeCommand(
   return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }
 
+/** Why a run launched to run once (a headless `texra run`) that ended is
+ *  not reopened as a chat: it reads no messages, so a fork, a new task
+ *  holding its conversation, is how it continues. */
+export function oneShotResumeNotice(
+  commandName: string | undefined,
+  runId: RunId,
+): string {
+  const name = commandName || DEFAULT_RESUME_COMMAND_NAME;
+  return `Task ${runId} ran once and takes no messages. See it with \`${name} history show ${runId}\`, or continue it in a new task with \`${name} resume ${runId} --fork\`.`;
+}
+
 /** The task's metered usage: the root run and every descendant. */
 export function collectResumeUsage(
   view: SessionView,

@@ -4,8 +4,8 @@ import { Effect } from 'effect';
 import { withSessionFs } from '@texra-ai/harness/host';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 
-import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
@@ -15,10 +15,9 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
-import { CliInvocation } from '../runtime/cliContext';
 
 const runMemoryList = Effect.fn('runMemoryList')(function* () {
-  const services = yield* initCliPlatform((yield* CliInvocation).context);
+  const services = yield* cliPlatform;
   // Pass the full list to `formatCliMemoryList`; it owns truncation (the
   // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
   // consumers should see every memory, not a capped slice.
@@ -33,7 +32,7 @@ const runMemoryList = Effect.fn('runMemoryList')(function* () {
 });
 
 const runMemoryShow = Effect.fn('runMemoryShow')(function* (inputPath: string) {
-  const services = yield* initCliPlatform((yield* CliInvocation).context);
+  const services = yield* cliPlatform;
   const record = yield* withSessionFs(
     services.roots,
     loadCliMemoryDetail(inputPath),

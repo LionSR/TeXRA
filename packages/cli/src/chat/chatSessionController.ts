@@ -42,16 +42,19 @@ import {
   acceptsFollowUp,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
-import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import { runOutcomeExitCode } from '@cli/runtime/headless/terminalStatus';
+import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
-} from '@cli/runtime/modelAccess';
-import { setCliHelperModel } from '@cli/runtime/initPlatform';
+} from '@cli/runtime/models/modelAccess';
+import { setCliHelperModel } from '@cli/runtime/platform/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import {
+  launchApproval,
+  type CliContext,
+} from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { modelFailureText } from '@ui/copy/modelAccess';
 import { requestErrorText } from '@ui/copy/requestErrors';
@@ -73,6 +76,7 @@ import {
   type RootRunSettled,
   type TuiSession,
 } from './tui/state/sessionRunState';
+import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf } from './tui/state/sessionView';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import {
@@ -580,6 +584,17 @@ export function createChatSessionController(
                 ),
               ),
             ),
+          );
+          return;
+        }
+        // A run launched to run once reads no messages: once it ended, a
+        // chat over it would refuse every one, so it continues as a fork.
+        // One stopped mid-turn still resumes to finish it. Read from the
+        // log: at startup a service window's own view has not filled yet.
+        const stored = (yield* runSession.view.read([id])).runs.get(id);
+        if (stored?.takesFollowUps === false && stored.outcome !== null) {
+          refuseResume(
+            oneShotResumeNotice(init.sessionContext.commandName, id),
           );
           return;
         }

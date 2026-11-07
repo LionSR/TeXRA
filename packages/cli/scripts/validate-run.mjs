@@ -26,7 +26,7 @@ import {
   VALIDATION_FLAG_CONTENT,
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
-} from '../src/runtime/validationSwitch.ts';
+} from '../src/runtime/models/validationSwitch.ts';
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 
 // Every `texra` this script starts resolves `~/.texra` in a temporary home.

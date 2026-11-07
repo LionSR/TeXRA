@@ -4,21 +4,20 @@ import { Effect, type FileSystem, Result } from 'effect';
 import {
   InstalledPlugins,
   PluginRequestError,
-  withProcessServices,
   type PluginEnv,
   type PluginListing,
   type PluginReview,
   type PluginUpdate,
 } from '@texra-ai/harness/host';
 
-import { CliInvocation, CliUsageError } from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { CliInvocation, CliUsageError } from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
   askCliQuestion,
   writeErrorStderr,
   writeTextStderr,
-} from '../runtime/logSinks';
+} from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
@@ -41,7 +40,7 @@ function pluginExitCode(error: unknown): number {
 /**
  * Open the platform for its roots (the global state the record lives in and
  * the global storage the managed plugins live under), then run one plugin
- * operation on the runtime it installed, whose spawner git runs on.
+ * operation, whose spawner git runs on.
  */
 const withPluginEnv = Effect.fn('withPluginEnv')(function* <A, E>(
   operation: (
@@ -52,14 +51,7 @@ const withPluginEnv = Effect.fn('withPluginEnv')(function* <A, E>(
     ChildProcessSpawner | FileSystem.FileSystem | CliInvocation
   >,
 ) {
-  const invocation = yield* CliInvocation;
-  const services = yield* initCliPlatform(invocation.context);
-  return yield* withProcessServices(
-    services.runtime,
-    operation(services.roots).pipe(
-      Effect.provideService(CliInvocation, invocation),
-    ),
-  );
+  return yield* operation((yield* cliPlatform).roots);
 });
 
 const shortCommit = (commit: string | undefined) => commit?.slice(0, 12);

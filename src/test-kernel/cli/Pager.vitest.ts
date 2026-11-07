@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { pageStdout } from '@cli/runtime/pager';
+import { pageStdout } from '@cli/runtime/terminal/pager';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';

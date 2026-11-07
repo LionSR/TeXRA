@@ -21,9 +21,9 @@ import {
   safeTerminalText,
   textDisplayWidth,
   truncateSummaryToWidth,
-} from './terminalText';
-import { getStderrColumns, writeRawStderr } from './logSinks';
-import type { CliContext } from './cliContext';
+} from '../terminal/terminalText';
+import { getStderrColumns, writeRawStderr } from '../platform/logSinks';
+import type { CliContext } from '../platform/cliContext';
 import type { Session } from '@texra-ai/harness';
 
 const CLEAR_LINE = '\r\x1b[2K';

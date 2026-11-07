@@ -15,24 +15,27 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { executeCliWorkflowConfig } from './workflow';
-import { formatResumeCommand } from '../chat/tui/state/resumeHint';
-import { isLinked } from '../runtime/cliService';
-import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
-import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
-import { buildHeadlessRunContext } from '../runtime/runModel';
+import {
+  formatResumeCommand,
+  oneShotResumeNotice,
+} from '../chat/tui/state/resumeHint';
+import { isLinked } from '../runtime/platform/cliService';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { cliPlatform } from '../runtime/platform/initPlatform';
+import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
+import { buildHeadlessRunContext } from '../runtime/models/runModel';
 import { resolveCliRunAgent } from '../runtime/agents';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
-} from '../runtime/workflowOutput';
+} from '../runtime/headless/workflowOutput';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
-} from '../runtime/terminalRequirements';
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+} from '../runtime/terminal/terminalRequirements';
+import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
 function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${cliErrorMessage(error)}`;
@@ -93,7 +96,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   // of: the platform starts it when none runs. A document task resumes
   // headless, in this process; a service this process holds none of is
   // said, since nothing after this would say it.
-  const stores = yield* initCliPlatform({ ...context, startsService: true });
+  const stores = yield* cliPlatform;
   if (!isLinked(stores.service))
     writeTextStderr(`This task runs here: ${stores.service.none}`);
   const runSession = yield* stores.runSession;
@@ -142,6 +145,23 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       return CliExitCode.AgentError;
     }
     return { chat: { initialResume: { id: forkId, config: forkConfig } } };
+  }
+  // A run launched to run once reads no messages, so a chat over it would
+  // refuse every one: once it ended, it continues as a fork. One stopped
+  // mid-turn (no outcome yet) still resumes to finish it, since a fork
+  // needs a finished turn. Read from the log: a service window's own view
+  // fills after it opens.
+  if (!documentTask) {
+    const stored = yield* Effect.result(runSession.view.read([id]));
+    if (Result.isFailure(stored)) {
+      writeTextStderr(loadFailureMessage(id, stored.failure));
+      return CliExitCode.AgentError;
+    }
+    const run = stored.success.runs.get(id);
+    if (run?.takesFollowUps === false && run.outcome !== null) {
+      writeTextStderr(oneShotResumeNotice(context.commandName, id));
+      return CliExitCode.Usage;
+    }
   }
   // A resumed task continues under the approval it was launched with: a
   // requested policy is said not to apply, never dropped silently. A

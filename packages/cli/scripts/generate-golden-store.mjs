@@ -11,7 +11,7 @@
  * bundle `validate-run.mjs` builds), against a temporary HOME and project
  * from `mkdtemp`, set only in each child's environment: no live model, no API
  * key, and never the developer's `~/.texra`. The scripted conversation is
- * `goldenTurn` in `packages/cli/src/runtime/validationModel.ts`, over the agents
+ * `goldenTurn` in `packages/cli/src/runtime/models/validationModel.ts`, over the agents
  * in `src/test-kernel/fixtures/storage/agents/`; this script orders the runs,
  * each in its own process and every one finishes cleanly: interrupted states
  * are the crash suite's (`crashConformance.ts`), which truncates a clean
@@ -116,7 +116,7 @@ import {
   VALIDATION_FLAG_CONTENT,
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
-} from '../src/runtime/validationSwitch.ts';
+} from '../src/runtime/models/validationSwitch.ts';
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 
 // Beside each scenario's own home: nothing this script starts, the build

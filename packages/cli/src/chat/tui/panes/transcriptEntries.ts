@@ -4,8 +4,11 @@ import {
   rowHeadline,
   type TranscriptRowKind,
 } from '@texra-ai/harness/transcript';
-import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
-import { safeTerminalText } from '@cli/runtime/terminalText';
+import {
+  ANSI_ESCAPE_START,
+  ansiEscapeEnd,
+} from '@cli/runtime/terminal/ansiEscapes';
+import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { errorRowText, quotaFallbackNoticeText } from '@ui/copy/modelAccess';
 

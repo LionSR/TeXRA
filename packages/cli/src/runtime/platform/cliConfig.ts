@@ -111,7 +111,7 @@ export function resolveKnownCliModelId(model: string): string | undefined {
 export interface CliStartupConfig {
   /**
    * The one provider of this process: `buildCliContext` resolves the startup
-   * rows through it and `initCliPlatform` installs this same instance as the
+   * rows through it and `CliPlatform` installs this same instance as the
    * workspace roots' config, so a value `texra config` writes is the value the
    * next run reads.
    */
@@ -129,7 +129,7 @@ export interface CliStartupConfig {
 /**
  * Agent and model for one command: its own `texra.chat` / `texra.run` section
  * over the top-level `texra.agent` / `texra.model` rows, both resolved through
- * the setting slots the caller holds — the ones `initCliPlatform` handed back,
+ * the setting slots the caller holds — the ones `CliPlatform` handed back,
  * so the value read here is the value `texra config` writes.
  */
 export function cliCommandDefaults(
@@ -250,8 +250,8 @@ function configFileWarnings(
 
 /**
  * The CLI config provider's pre-runtime open, already provided with the file
- * services it needs: `buildCliContext` yields it before `initCliPlatform` (and
- * with it `installCliProcessRuntime`) exists, and `contextFromArgs` is the one
+ * services it needs: `buildCliContext` yields it before the command's runtime
+ * exists, and `contextFromArgs` is the one
  * place the whole pre-runtime program is run.
  */
 export function loadCliStartupConfig(

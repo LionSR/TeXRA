@@ -16,7 +16,7 @@ import {
   type CliWorkspaceAgentsRecord,
 } from '@cli/runtime/workspaceAgents';
 
-import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
+import { setWorkspaceCliChatAgent } from '@cli/runtime/platform/cliConfig';
 import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import type { SelectItem } from '@cli/tui/ui/Select';

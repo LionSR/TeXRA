@@ -4,8 +4,11 @@ import {
   APPROVAL_POLICIES,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { CliUsageError, type CliGlobalArgs } from '@cli/runtime/cliContext';
-import { documentsNegatedBooleanForm } from '@cli/runtime/completionCommandTree';
+import {
+  CliUsageError,
+  type CliGlobalArgs,
+} from '@cli/runtime/platform/cliContext';
+import { documentsNegatedBooleanForm } from '@cli/runtime/completion/completionCommandTree';
 import {
   CLI_OUTPUT_FORMATS,
   type CliOutputFormat,

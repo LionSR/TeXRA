@@ -3,11 +3,6 @@ import * as path from 'node:path';
 
 import { beforeEach, expect, vi } from 'vitest';
 
-// Shared mock registrations must evaluate before anything that loads
-// the mocked modules — keep these imports immediately after the vitest
-// import.
-import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
-
 import { layer } from '@effect/vitest';
 import { Effect, Context, Schema } from 'effect';
 import {
@@ -19,12 +14,19 @@ import {
   documentsOutputFact,
 } from '@texra/shared/plugins/documents';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
-import { provideCliInvocation, type CliContext } from '@cli/runtime/cliContext';
+import {
+  provideCliInvocation,
+  type CliContext,
+} from '@cli/runtime/platform/cliContext';
+import {
+  CliPlatform,
+  type CliPlatformServices,
+} from '@cli/runtime/platform/initPlatform';
 import type {
   CliExecuteOptions,
   CliConfigExecuteResult,
-} from '@cli/runtime/executeCli';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+} from '@cli/runtime/headless/executeCli';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -59,7 +61,7 @@ vi.mock('@common/storage/storageLayout', async (importActual) => ({
   ),
 }));
 
-vi.mock('@cli/runtime/runModel', () => ({
+vi.mock('@cli/runtime/models/runModel', () => ({
   buildHeadlessRunContext: vi.fn((context: CliContext) => ({
     ...context,
     quietLogs: true,
@@ -82,13 +84,13 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   resolveCliRunAgent: mocks.resolveCliRunAgent,
 }));
 
-vi.mock('@cli/runtime/executeCli', () => ({
+vi.mock('@cli/runtime/headless/executeCli', () => ({
   // A pass-through, so the mocked seam has the real module's Effect-returning
   // shape and every stub below returns the program the command yields.
   executeCliConfig: (...args: unknown[]) => mocks.executeCliConfig(...args),
 }));
 
-vi.mock('@cli/runtime/workflowInputs', () => ({
+vi.mock('@cli/runtime/headless/workflowInputs', () => ({
   // A pass-through: the real helper yields `run(inputs)` in-fiber, so the stub
   // hands the command back that same Effect instead of detaching it.
   withExpandedRunInputs: (...args: unknown[]) =>
@@ -122,8 +124,8 @@ let pendingRunStarts: { runId: RunId; rounds: readonly RoundOutput[] }[] = [];
 
 /**
  * The workflow command's program over the shared happy-path inputs, on the
- * test's session: the CLI init hands its caller the platform's stores, and
- * the commands under test read `secrets`/`globalState` off what it returns.
+ * test's session: its platform hands the command the host's stores, and
+ * the commands under test read `secrets`/`globalState` off them.
  */
 function workflowProgram(
   init: Partial<WorkflowRunInit> = {},
@@ -138,13 +140,12 @@ function workflowProgram(
   return Effect.gen(function* () {
     const session = yield* TestSession;
     const handle = yield* sessionHandleOf(session);
-    cliInitPlatformMock.initCliPlatform.mockReturnValue(
-      Effect.succeed({
-        ...installedHost().platform,
-        session: Effect.succeed(session),
-        runtime: yield* SessionGraph.runtime,
-      }),
-    );
+    // cast: the command reads only these members of its platform.
+    const platform = {
+      ...installedHost().platform,
+      session: Effect.succeed(session),
+      runtime: yield* SessionGraph.runtime,
+    } as unknown as CliPlatformServices;
     yield* Effect.forEach(
       starts,
       ({ runId, rounds }) => seedStartedRun(handle, runId, rounds),
@@ -157,7 +158,10 @@ function workflowProgram(
       instruction: '',
       options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
       ...init,
-    }).pipe(provideCliInvocation(context));
+    }).pipe(
+      provideCliInvocation(context),
+      Effect.provideService(CliPlatform, Effect.succeed(platform)),
+    );
   });
 }
 

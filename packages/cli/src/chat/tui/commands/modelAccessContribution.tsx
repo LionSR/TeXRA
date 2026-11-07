@@ -12,12 +12,12 @@ import {
   type ProcessServices,
   type SettingsStores,
 } from '@texra-ai/harness/host';
-import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
+import type { CliModelAccessSelection } from '@cli/runtime/models/modelAccessRoute';
 import {
   type CliLogoutTarget,
   type LoginFormValue,
   parseChatLoginSlashArgs,
-} from '@cli/runtime/loginOptions';
+} from '@cli/runtime/models/loginOptions';
 
 import {
   AccountAccessForm,

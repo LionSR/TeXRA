@@ -216,7 +216,7 @@ export function askCliQuestion(
  * The host diagnostic sink of this process until a platform installs its own.
  * The harness's console fallback sends DEBUG and INFO to stdout, and
  * the process runtime logs while its layers build (`UsageLogService started
- * …`) — before `initCliPlatform` runs its own `setLogSink`, and for `clone`
+ * …`) — before `CliPlatform` runs its own `setLogSink`, and for `clone`
  * and `install-github-action` before a platform that never comes up. Under
  * `--output-format ndjson` that line is the first thing on stdout and the
  * stream stops being parseable. This renders the same line `consoleLogSink`

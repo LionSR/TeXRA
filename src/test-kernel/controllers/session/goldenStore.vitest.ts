@@ -59,13 +59,13 @@ import { AgentCatalog, ValidationModel } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import { validationModelLayer } from '@cli/runtime/validationModel';
+import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import {
   VALIDATION_FLAG,
   VALIDATION_FLAG_CONTENT,
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
-} from '@cli/runtime/validationSwitch';
+} from '@cli/runtime/models/validationSwitch';
 import { databaseLayer } from '@controllers/session/Database';
 import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
 import { rowReader } from '@controllers/session/rowReader';

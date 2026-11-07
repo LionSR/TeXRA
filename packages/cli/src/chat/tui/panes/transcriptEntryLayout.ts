@@ -1,7 +1,7 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
 // budgeting, static scrollback, and print-once full output.
 
-import { textDisplayWidth } from '@cli/runtime/terminalText';
+import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   COLOR_BORDER,

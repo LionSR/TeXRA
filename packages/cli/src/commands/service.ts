@@ -3,7 +3,7 @@ import { Deferred, Effect, Exit } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
-import { holdSignals } from '@cli/runtime/processSignals';
+import { holdSignals } from '@cli/runtime/platform/processSignals';
 import { stopService } from '@texra/controllers/server/client';
 import { servicePaths } from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/handlers';
@@ -15,15 +15,16 @@ import {
   CliInvocation,
   CliUsageError,
   type CliContext,
-} from '../runtime/cliContext';
+} from '../runtime/platform/cliContext';
 import {
   cliServiceProjects,
   isLinked,
   linkCliService,
   probeCliService,
-} from '../runtime/cliService';
-import { CliExitCode } from '../runtime/exitCodes';
-import { writeTextStderr } from '../runtime/logSinks';
+} from '../runtime/platform/cliService';
+import { cliProcessLayer } from '../runtime/platform/cliProcessRuntime';
+import { CliExitCode } from '../runtime/platform/exitCodes';
+import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
@@ -143,7 +144,7 @@ export const serveCommand = defineCliCommand({
     },
   },
   catchExitCode: CliExitCode.AgentError,
-  install: 'service',
+  layer: cliProcessLayer,
   run: (context, ctx) =>
     runServe(context, parseIdleSeconds(ctx.args['idle-timeout'])),
 });
@@ -205,7 +206,7 @@ const stopRunningService = Effect.gen(function* () {
 const statusCommand = defineCliCommand({
   meta: { name: 'status', description: 'Show whether the TeXRA service runs' },
   args: { ...GLOBAL_ARGS },
-  install: 'service',
+  layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: () =>
     probeCliService.pipe(
@@ -221,7 +222,7 @@ const stopCommand = defineCliCommand({
       'Stop the TeXRA service; its running tasks stop and can be resumed',
   },
   args: { ...GLOBAL_ARGS },
-  install: 'service',
+  layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: () =>
     stopRunningService.pipe(
@@ -239,7 +240,7 @@ const stopCommand = defineCliCommand({
 const restartCommand = defineCliCommand({
   meta: { name: 'restart', description: 'Stop the TeXRA service and start it' },
   args: { ...GLOBAL_ARGS },
-  install: 'service',
+  layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('service.run')(function* (context) {
     yield* stopRunningService;

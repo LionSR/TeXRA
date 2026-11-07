@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import {
   selectCliRunnableModel,
   type CliModelAccess,
-} from '@cli/runtime/modelAccess';
+} from '@cli/runtime/models/modelAccess';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';

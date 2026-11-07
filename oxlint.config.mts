@@ -190,10 +190,11 @@ const THEN: PropertyBan[] = [
 const PROCESS_INPUT: PropertyBan[] = ['argv', 'env', 'cwd'].map((property) => ({
   object: 'process',
   property,
-  message: 'Read process input through runtime/cliContext.ts.',
+  message: 'Read process input through runtime/platform/cliContext.ts.',
 }));
 
-const WRITE_THROUGH_SINKS = 'Write output through runtime/logSinks.ts.';
+const WRITE_THROUGH_SINKS =
+  'Write output through runtime/platform/logSinks.ts.';
 const OUTPUT: PropertyBan[] = [
   ...['log', 'error', 'warn'].map((property) => ({
     object: 'console',
@@ -263,7 +264,7 @@ const LLM_PROTOCOLS = [
 
 /** CLI files that read process input; the rest go through cliContext.ts. */
 const CLI_READERS = [
-  'packages/cli/src/runtime/cliContext.ts',
+  'packages/cli/src/runtime/platform/cliContext.ts',
   'packages/cli/src/chat/tui/runChatTui.tsx',
 ];
 
@@ -271,7 +272,7 @@ const CLI_READERS = [
 const CLI_WRITERS = [
   'packages/cli/src/bin/texra.ts',
   'packages/cli/src/bin/texraServe.ts',
-  'packages/cli/src/runtime/logSinks.ts',
+  'packages/cli/src/runtime/platform/logSinks.ts',
   'packages/cli/src/init/runInitWizard.tsx',
   'packages/cli/src/config/runConfigTui.tsx',
   'packages/cli/src/chat/tui/runChatTui.tsx',
