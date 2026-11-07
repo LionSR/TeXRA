@@ -588,6 +588,19 @@
           "signature": "const rootStandingNow = () => runViewOf(currentView(), rootRunId.get());"
         }
       ]
+    },
+    {
+      "id": "DESKTOP-headless-through-config",
+      "candidate": "TEXRA_DESKTOP_HEADLESS as one DesktopPresentation value read through Config at the composition root and passed to the window factory, the attention module and the fatal-error reporter",
+      "why": "The flag is the desktop's offscreen automation mode, not test plumbing: it is read once, at module scope, in its one owner (desktopPresentation.ts), and every reader branches on that one fact. fatalStartupError.ts reads it from bootstrap's handlers before the composition root or any Effect runtime exists, so a value threaded from that root cannot reach it, and threading it into the window factory and attention module adds a parameter to each without removing a decision. Found in round 5 (lens 2, finding 2); refused by package G when it removed the E2E data-root switch beside it.",
+      "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-round-5-tests/2-code-for-tests.md#2-the-desktops-e2e-switches-make-9-of-11-playwright-specs-run-the-apps-fallback-path-and-six-modules-read-a-headless-flag",
+      "symbols": [
+        {
+          "file": "packages/desktop/src/main/desktopPresentation.ts",
+          "symbol": "DESKTOP_HEADLESS",
+          "signature": "export const DESKTOP_HEADLESS = process.env.TEXRA_DESKTOP_HEADLESS === '1';"
+        }
+      ]
     }
   ]
 }

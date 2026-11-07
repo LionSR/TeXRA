@@ -97,16 +97,6 @@ export const serviceStatus = (binary: string, home: string): ServiceStatus =>
     cli(binary, home, ['service', 'status', '--output-format', 'json']),
   ) as ServiceStatus;
 
-/** Whether process `pid` still runs. */
-export function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** What runs a newer build's tasks on its scripted model: the switches,
  *  and the flag file the model checks, written into `dir`. A held call's
  *  release file goes beside it. */

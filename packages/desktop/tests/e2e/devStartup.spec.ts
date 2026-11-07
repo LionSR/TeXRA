@@ -2,23 +2,27 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { expect, test } from '@playwright/test';
 import { createServer } from 'vite';
 
 import {
-  closeTexraApp,
+  box,
   chooseDesktopTheme,
+  closeTexraApp,
   dismissOnboarding,
-  launchTexraApp,
+  expect,
+  test,
   type LaunchedApp,
 } from './electronApp.js';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 
-test('renders the dev app from a cold cache and restores the editor after reload', async () => {
+test('renders the dev app from a cold cache and restores the editor after reload', async ({
+  profile,
+  launch,
+}) => {
   const testInfo = test.info();
   const temporary = mkdtempSync(join(tmpdir(), 'texra-dev-startup-'));
   writeFileSync(
-    join(temporary, 'sample.tex'),
+    join(profile.workspaceRoot, 'sample.tex'),
     'A dev editor document.\n' +
       Array.from({ length: 599 }, (_, index) => `% Line ${index + 2}`).join(
         '\n',
@@ -35,16 +39,11 @@ test('renders the dev app from a cold cache and restores the editor after reload
     const address = server.httpServer?.address();
     if (!address || typeof address === 'string')
       throw new Error('The Vite development server did not open a port.');
-    launched = await launchTexraApp({
-      workspaceRoot: temporary,
-      env: {
-        ELECTRON_RENDERER_URL: `http://127.0.0.1:${address.port}`,
-        NODE_ENV: 'development',
-      },
+    launched = await launch({
+      ELECTRON_RENDERER_URL: `http://127.0.0.1:${address.port}`,
+      NODE_ENV: 'development',
     });
     const { page } = launched;
-    const errors: string[] = [];
-    page.on('pageerror', (error) => errors.push(error.message));
     await dismissOnboarding(page);
     await expect(page.locator('.shell-sidebar')).toBeVisible();
     await expect(page.locator('session-composer')).toBeVisible();
@@ -102,9 +101,9 @@ test('renders the dev app from a cold cache and restores the editor after reload
       await expect
         .poll(() =>
           page.evaluate(() => {
-            const source = getComputedStyle(
-              document.querySelector('.monaco-editor')!,
-            );
+            const monaco = document.querySelector('.monaco-editor');
+            if (!monaco) return false;
+            const source = getComputedStyle(monaco);
             return (
               source.backgroundColor ===
                 getComputedStyle(document.body).backgroundColor &&
@@ -128,8 +127,8 @@ test('renders the dev app from a cold cache and restores the editor after reload
       await expect(description).toContainText('indentation');
       await expect(palette.locator('.workbench-hover')).toBeHidden();
       await expect(description).toHaveCount(1);
-      const paletteBounds = (await palette.boundingBox())!;
-      const descriptionBounds = (await description.boundingBox())!;
+      const paletteBounds = await box(palette);
+      const descriptionBounds = await box(description);
       expect(descriptionBounds.x).toBeGreaterThanOrEqual(paletteBounds.x);
       expect(descriptionBounds.x + descriptionBounds.width).toBeLessThanOrEqual(
         paletteBounds.x + paletteBounds.width,
@@ -169,19 +168,20 @@ test('renders the dev app from a cold cache and restores the editor after reload
         '.context-view.monaco-menu-container .monaco-menu',
       );
       await expect(menu).toBeVisible();
-      const menuColors = await menu.evaluate((element) => ({
-        background: getComputedStyle(element.closest('.context-view')!)
-          .backgroundColor,
-        foreground: getComputedStyle(element.querySelector('.action-label')!)
-          .color,
-        outerRadius: Number.parseFloat(
-          getComputedStyle(element.closest('.context-view')!)
-            .borderTopLeftRadius,
-        ),
-        innerBorder: getComputedStyle(element).borderTopWidth,
-        outerClipping: getComputedStyle(element.closest('.context-view')!)
-          .overflow,
-      }));
+      const menuColors = await menu.evaluate((element) => {
+        const view = element.closest('.context-view');
+        const label = element.querySelector('.action-label');
+        if (!view || !label) throw new Error('The context menu is incomplete.');
+        return {
+          background: getComputedStyle(view).backgroundColor,
+          foreground: getComputedStyle(label).color,
+          outerRadius: Number.parseFloat(
+            getComputedStyle(view).borderTopLeftRadius,
+          ),
+          innerBorder: getComputedStyle(element).borderTopWidth,
+          outerClipping: getComputedStyle(view).overflow,
+        };
+      });
       expect(menuColors.background).not.toBe('rgba(0, 0, 0, 0)');
       expect(menuColors.background).not.toBe(menuColors.foreground);
       expect(menuColors.outerRadius).toBeGreaterThan(0);
@@ -245,13 +245,10 @@ test('renders the dev app from a cold cache and restores the editor after reload
       });
     }
     await diff.evaluate((preview) => preview.remove());
-    expect(errors, 'Uncaught development renderer errors').toEqual([]);
   } finally {
-    try {
-      if (launched) await closeTexraApp(launched);
-    } finally {
-      await server.close();
-      cleanupDirectory(temporary);
-    }
+    // The renderer is the dev server's client: it goes first.
+    if (launched) await closeTexraApp(launched);
+    await server.close();
+    cleanupDirectory(temporary);
   }
 });

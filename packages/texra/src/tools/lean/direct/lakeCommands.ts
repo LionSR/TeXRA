@@ -45,7 +45,6 @@ interface LakeCommandResult {
 
 interface LakeCommandOptions {
   workspaceRoot: string;
-  lakeCommand: string;
   args: readonly string[];
 }
 
@@ -81,7 +80,7 @@ function executeLake(
   // `executeCommand` scopes the child inside this call, and that scope's
   // release terminates it and awaits its exit, so the lane is handed to the
   // next waiter only after the process is gone.
-  return executeCommand([options.lakeCommand, ...options.args], {
+  return executeCommand(['lake', ...options.args], {
     cwd: options.workspaceRoot,
     settings: undefined,
     timeout: LAKE_RUN_TIMEOUT_MS,
@@ -105,7 +104,7 @@ function executeLake(
       stderr: capOutput(
         result.stderr ||
           (result.exitCode !== 0 && !result.stdout
-            ? `lake exited with code ${result.exitCode}: ${[options.lakeCommand, ...options.args].join(' ')}`
+            ? `lake exited with code ${result.exitCode}: lake ${options.args.join(' ')}`
             : ''),
       ),
     })),

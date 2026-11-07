@@ -47,22 +47,13 @@ Deno.test('a missing or invalid bearer is rejected; the install id is never read
   }
 });
 
-// index.ts serves on import, so `Deno.serve` is captured.
 Deno.test('a GoTrue outage answers 503, not a sign-in failure', async () => {
   const restore = fakeGoTrue(() =>
     Response.json({ message: 'upstream unavailable' }, { status: 503 }),
   );
-  const realServe = Deno.serve;
-  let serve: (req: Request) => Response | Promise<Response> = () => {
-    throw new Error('index.ts did not serve');
-  };
-  // cast: index.ts passes one handler and never reads the server back.
-  Deno.serve = ((handler: typeof serve) => {
-    serve = handler;
-  }) as unknown as typeof Deno.serve;
   try {
-    await import('./index.ts');
-    const response = await serve(
+    const { handleRequest } = await import('./index.ts');
+    const response = await handleRequest(
       new Request(`${PROJECT_URL}/log-usage`, {
         method: 'POST',
         headers: { Authorization: 'Bearer a.user.jwt' },
@@ -71,7 +62,6 @@ Deno.test('a GoTrue outage answers 503, not a sign-in failure', async () => {
     );
     strictEqual(response.status, 503);
   } finally {
-    Deno.serve = realServe;
     restore();
   }
 });
