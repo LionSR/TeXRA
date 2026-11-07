@@ -23,12 +23,12 @@ import { applyRunRows, type RunState } from '@shared/session/runState';
 import type { RunRows } from '@shared/session/runRowsShape';
 import { recordsOf } from '@shared/session/runFacts';
 import {
-  addTurnUsage,
+  addUsage,
   type CommitOrdinal,
-  EMPTY_RUN_USAGE_TOTALS,
+  NO_USAGE,
   qualifyAggregateId,
   isTaskConfig,
-  sumRunUsageTotals,
+  sumUsageStats,
   RunWorkspaceFilesSchema,
   type RunEnd,
   type RunResult,
@@ -206,7 +206,7 @@ const runEndOf = Effect.fn('runEndOf')(function* (
         ),
         (prior) =>
           applyRunRows(
-            prior && { ...prior, usage: EMPTY_RUN_USAGE_TOTALS },
+            prior && { ...prior, usage: NO_USAGE },
             live.filter((row) => row.seq >= from),
           ),
       ),
@@ -219,7 +219,7 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   const turns = Result.isSuccess(folded) ? folded.success?.usage : undefined;
   const withLabel = ({ label }: RunRows) =>
     Result.isSuccess(folded) && during(label?.commit ?? -1) && label?.usage
-      ? addTurnUsage(turns ?? EMPTY_RUN_USAGE_TOTALS, label.usage)
+      ? addUsage(turns ?? NO_USAGE, label.usage)
       : turns;
   const own = withLabel(held);
   // A document task's revisions are its children's runs, which hold
@@ -251,7 +251,7 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   const usage =
     children === null
       ? own
-      : sumRunUsageTotals(
+      : sumUsageStats(
           [own, ...children.map((child) => child?.usage)].filter(
             (u) => u !== undefined,
           ),

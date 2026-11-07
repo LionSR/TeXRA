@@ -416,7 +416,7 @@ outcome yet, so its `result` waits until the request is answered (see
 lists what it waits for.
 
 Accounting is `usage`, present once a round recorded any: one totals record
-covering the run and its subagents, whose `usage.totalCost` is the run's cost
+covering the run and its subagents, whose `usage.cost` is the run's cost
 and the only cost this surface states. The harness computes no diffs: a
 recipe's plugin records any it computes in its own value, and otherwise the
 embedding contract leaves diffing to the embedder, which already owns the

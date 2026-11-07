@@ -250,11 +250,11 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             ).length;
             // Every validation answer is one output token: the turns' and
             // the label's.
-            expect(usage?.totalOutputTokens).toBe(responses + 1);
+            expect(usage?.outputTokens).toBe(responses + 1);
             const view = sdk.view.current().runs.get(run.runId)?.usage;
-            expect(view?.outputTokens).toBe(usage?.totalOutputTokens);
-            expect(view?.inputTokens).toBe(usage?.totalInputTokens);
-            expect(view?.cost).toBeCloseTo(usage?.totalCost ?? -1, 12);
+            expect(view?.outputTokens).toBe(usage?.outputTokens);
+            expect(view?.inputTokens).toBe(usage?.inputTokens);
+            expect(view?.cost).toBeCloseTo(usage?.cost ?? -1, 12);
           }),
       );
     });

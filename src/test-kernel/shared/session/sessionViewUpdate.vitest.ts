@@ -412,10 +412,10 @@ describe('applyRunRows', () => {
       'tool',
     ]);
     expect(state?.pendingResponse).toBeNull();
-    expect(state?.usage.totalInputTokens).toBe(10);
-    expect(state?.usage.totalCachedInputTokens).toBe(4);
+    expect(state?.usage.inputTokens).toBe(10);
+    expect(state?.usage.cachedInputTokens).toBe(4);
     // The turn's stamped price: a settlement adds nothing to it.
-    expect(state?.usage.totalCost).toBe(0.25);
+    expect(state?.usage.cost).toBe(0.25);
     // Incremental and cold folds are the same computation.
     const half = stateOf(applyRunRows(null, TURN_ROWS.slice(0, 6)));
     expect(stateOf(applyRunRows(half, TURN_ROWS.slice(6)))).toEqual(state);
