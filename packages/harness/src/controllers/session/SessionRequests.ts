@@ -118,7 +118,6 @@ const requireRunAction = (
     : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
 };
 
-/** Admit on current sequence rows: the run exists and is open. */
 /** The run's stored aggregate state; `undefined` while it has no rows. */
 const storedState = (
   deps: RequestDeps,
@@ -135,6 +134,7 @@ const noLongerOpen = (deps: RequestDeps, runId: RunId) =>
     reason: `The ${runNoun(deps.view, runId)} is no longer open.`,
   });
 
+/** Admit on current sequence rows: the run exists and is open. */
 const admit = (
   deps: RequestDeps,
   req: RuntimeCommand,
