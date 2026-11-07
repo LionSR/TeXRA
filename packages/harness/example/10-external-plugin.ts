@@ -58,7 +58,7 @@ const notesOf = (platform: typeof withPlugin.platform, runId: RunId) =>
     const session = yield* (yield* Sessions).open(platform.roots, {
       persistent: true,
     });
-    const exported = yield* session.records(runId).readTrace();
+    const exported = yield* session.records(runId).readTrace;
     if (exported.status !== 'ok')
       throw new Error(`no trace for ${runId}: ${exported.status}`);
     return {
@@ -84,7 +84,7 @@ const runId = await Effect.runPromise(
     });
     const end = yield* run.result;
     const returned = scriptReturnsOf(
-      yield* session.records(run.runId).readConversation(),
+      yield* session.records(run.runId).readConversation,
     );
     if (
       end.outcome !== 'completed' ||
@@ -122,7 +122,7 @@ await Effect.runPromise(
       `[10] without it: ${note.plugin}/${note.kind} v${note.version} at commit ${note.commit} of ${note.aggregateId}, value ${JSON.stringify(note.value)}: ${note.unavailable}`,
     );
     const refused = yield* Effect.flip(session.resume(runId));
-    const listed = (yield* session.listRuns()).find(({ id }) => id === runId);
+    const listed = (yield* session.listRuns).find(({ id }) => id === runId);
     if (
       refused._tag !== 'ResumeRefused' ||
       refused.reason.kind !== 'pluginUnavailable' ||

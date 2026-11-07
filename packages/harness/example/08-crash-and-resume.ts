@@ -176,7 +176,7 @@ const resumeProgram = Effect.gen(function* () {
   const children = [...session.view.current().runs.values()].filter(
     (run) => run.parentId === runId,
   );
-  const conversation = yield* session.records(runId).readConversation();
+  const conversation = yield* session.records(runId).readConversation;
   const results = scriptReturnsOf(conversation);
   const returned = results.at(-1) as {
     verdicts: string[];

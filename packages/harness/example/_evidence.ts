@@ -46,7 +46,7 @@ const clip = (text: string, limit = 4000) =>
 /** The tool calls a run's trace records, each with how it ended. */
 const callsOf = (session: LocalSession, runId: RunId) =>
   Effect.gen(function* () {
-    const exported = yield* session.records(runId).readTrace();
+    const exported = yield* session.records(runId).readTrace;
     if (exported.status !== 'ok') return [];
     const ends = new Map<string, { status: string; result?: unknown }>();
     for (const event of exported.trace.events)
@@ -90,14 +90,14 @@ export const writeEvidence = (
 ) =>
   Effect.gen(function* () {
     const records = session.records(runId);
-    const conversation = yield* records.readConversation();
+    const conversation = yield* records.readConversation;
     const runs = [...session.view.current().runs.values()];
     const children: Record<string, readonly ExportNode[]> = {};
     for (const run of runs)
       if (run.id !== runId)
-        children[run.id] = yield* session.records(run.id).readConversation();
+        children[run.id] = yield* session.records(run.id).readConversation;
     const scripts = scriptsOf(conversation);
-    const end = yield* records.readRunEnd();
+    const end = yield* records.readRunEnd;
     yield* Effect.promise(async () => {
       await mkdir(join(dir, 'scripts'), { recursive: true });
       await mkdir(join(dir, 'outputs'), { recursive: true });
@@ -129,7 +129,7 @@ export const writeEvidence = (
         `${end?.output.response ?? ''}\n`,
       );
     });
-    const config = yield* records.readConfig();
+    const config = yield* records.readConfig;
     yield* Effect.promise(() =>
       writeFile(join(dir, 'config.json'), json(config)),
     );

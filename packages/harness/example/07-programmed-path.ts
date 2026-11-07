@@ -164,7 +164,7 @@ const program = Effect.gen(function* () {
 
   // 1. The run named a file agent, and the model was told and offered
   // exactly what the inline persona gets.
-  const config = yield* session.records(run.runId).readConfig();
+  const config = yield* session.records(run.runId).readConfig;
   const fromFile = shape(requests[1]);
   if (config?.agent !== PERSONA.name || fromFile !== shape(requests[0]))
     throw new Error(`file persona differs from inline: ${fromFile}`);
@@ -179,7 +179,7 @@ const program = Effect.gen(function* () {
 
   // 2-4. What the script returned, read back from the stored conversation.
   // The script's return is its result node's structured `value`.
-  const conversation = yield* session.records(run.runId).readConversation();
+  const conversation = yield* session.records(run.runId).readConversation;
   const returned = scriptReturnsOf(conversation).at(-1) as {
     titles: string[];
     verdicts: string[];
