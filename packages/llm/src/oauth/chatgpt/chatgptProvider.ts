@@ -327,7 +327,6 @@ const CHATGPT_POLICY: SubscriptionOAuthPolicy<ChatgptSession> = {
     params: { resource: CHATGPT_RESOURCE },
   },
   notSignedInMessage: 'Not signed in with ChatGPT. Run sign-in first.',
-  sessionChangedMessage: 'ChatGPT session changed while refreshing. Try again.',
   authorize: {
     url: CHATGPT_AUTHORIZE_URL,
     scope: CHATGPT_SCOPE,

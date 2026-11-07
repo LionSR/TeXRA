@@ -21,8 +21,7 @@ protocol (`bindModel`) and running subscription OAuth sign-in flows.
   [`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
   ([`xaiCoordinator`](#xaicoordinator),
   [`xaiLoginWithLoopback`](#xailoginwithloopback),
-  [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows, plus
-  [`SharedAttempt`](#sharedattempt) for coalescing concurrent refreshes.
+  [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows.
 
 ## Binding
 
@@ -231,30 +230,6 @@ interface SessionToken {
   readonly current: Effect.Effect<string, ModelError>;
   readonly rejected: (token: string) => Effect.Effect<void, ModelError>;
 }
-```
-
-## SharedAttempt
-
-Single-flight for an Effect program: concurrent callers of {@link run}
-share one attempt of the work, and each caller's interruption abandons only
-its own wait.
-
-The work runs on a detached fiber, never on the first caller's. Were it run
-on the caller's fiber, stopping that caller would interrupt the attempt
-every joiner is waiting on, and an interrupt landing mid-work (after a
-provider rotated a single-use refresh token, before it was stored) would
-drop the result nobody else can recreate. A detached attempt with no caller
-left still completes, and no caller's interrupt can end it, so the work
-must carry its own deadline: a stalled attempt holds the slot, and every
-caller joining it, until the work gives up by itself.
-
-The check, the claim and the fork run under one uninterruptible mask and
-share one synchronous segment, so a second caller can never mint a second
-attempt and an interrupt can never land between claiming the slot and
-starting the fiber that finishes it.
-
-```ts
-class SharedAttempt<A, E>
 ```
 
 ## SubscriptionAuthorizeRequest

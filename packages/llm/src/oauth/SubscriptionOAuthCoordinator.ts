@@ -3,21 +3,22 @@
  *
  * Pure state machine over injected secret storage. Provider
  * differences (authorize URL, claim extraction) live in the
- * {@link SubscriptionOAuthPolicy}; this class owns single-flight refresh,
- * generation supersede, and serialized storage writes.
+ * {@link SubscriptionOAuthPolicy}; this class owns one lock around every
+ * read-then-write of the stored session: a refresh, a sign-in's store and a
+ * sign-out's delete take turns, so concurrent callers that find a session
+ * expiring share the refresh the first of them made, and a sign-in or a
+ * sign-out waits for an exchange in flight instead of racing it.
  *
  * Every method is an Effect program the caller yields or runs at its own
  * edge. A program fails with {@link SubscriptionOAuthError} or with the
  * secret store's own {@link SecretsFailed}.
  */
 // Third-party imports
-import { Clock, Effect, Exit, Result, Schema } from 'effect';
+import { Clock, Effect, Exit, Result, Schema, Semaphore } from 'effect';
 
 // Local imports
-import { SharedAttempt } from './sharedAttempt.js';
 import { toErrorMessage } from './support.js';
 
-import { SerializedWrites } from './authProgram.js';
 import {
   exchangeAuthorizationCode,
   refreshOAuthTokens,
@@ -39,8 +40,6 @@ import type {
   SubscriptionTokenResponse,
 } from './subscriptionCoordinator.js';
 import type { HttpClient } from 'effect/http';
-
-type MachineFailure = SubscriptionOAuthError | SecretsFailed;
 
 /** Refresh this long before expiry (the Codex CLI's and Zed's buffer). */
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
@@ -71,8 +70,8 @@ export class SubscriptionOAuthCoordinator<
 > implements SubscriptionCoordinator<S> {
   /**
    * One coordinator per credential store for this provider. Refresh tokens
-   * may rotate on use, so callers sharing a store must share the same refresh
-   * attempt and write queue. Replacing the store starts an independent one.
+   * may rotate on use, so callers sharing a store must share one lock.
+   * Replacing the store starts an independent one.
    */
   static forProvider<S extends SubscriptionSession>(
     policy: SubscriptionOAuthPolicy<S>,
@@ -93,9 +92,8 @@ export class SubscriptionOAuthCoordinator<
 
   private readonly secrets: CredentialStore;
   private readonly policy: SubscriptionOAuthPolicy<S>;
-  private readonly refreshes = new SharedAttempt<S, MachineFailure>();
-  private readonly sessionMutations = new SerializedWrites();
-  private sessionGeneration = 0;
+  /** Held across every read-then-write of the stored session. */
+  private readonly lock = Semaphore.makeUnsafe(1);
 
   private constructor(
     secrets: CredentialStore,
@@ -203,74 +201,30 @@ export class SubscriptionOAuthCoordinator<
         );
   }
 
-  private readonly stableSession = Effect.fn(
-    'SubscriptionOAuthCoordinator.stableSession',
-  )(function* (this: SubscriptionOAuthCoordinator<S>) {
-    for (;;) {
-      const generation = this.sessionGeneration;
-      // A mutation after the barrier bumps the generation: re-loop.
-      yield* this.sessionMutations.awaitIdle();
-      const session = yield* this.loadSession();
-      if (generation === this.sessionGeneration) {
-        return { generation, session };
-      }
-    }
-  });
-
-  /** Passed to `SerializedWrites.run` so it shares the queueing segment. */
-  private readonly supersedeInFlightRefresh = (): void => {
-    this.sessionGeneration += 1;
-    this.refreshes.clear();
-  };
-
-  /**
-   * After a refresh is superseded (a concurrent login or sign-out), the
-   * stored session from a stable snapshot: a replacement or a still-fresh
-   * one is returned; none fails `expired` (sign-out won); the pre-refresh
-   * one, still expiring, fails `transient` rather than hand back a stale
-   * token as if the refresh completed.
-   */
-  private readonly sessionAfterSupersede = Effect.fn(
-    'SubscriptionOAuthCoordinator.sessionAfterSupersede',
-  )(function* (this: SubscriptionOAuthCoordinator<S>, previous: S) {
-    const { session } = yield* this.stableSession();
-    if (!session) {
-      return yield* new SubscriptionOAuthError({
-        message: this.policy.sessionChangedMessage,
-        kind: 'expired',
-      });
-    }
-    const replaced =
-      session.accessToken !== previous.accessToken ||
-      session.refreshToken !== previous.refreshToken;
-    if (
-      replaced ||
-      !this.isExpiringSoon(session, yield* Clock.currentTimeMillis)
-    ) {
-      return session;
-    }
-    return yield* new SubscriptionOAuthError({
-      message: this.policy.sessionChangedMessage,
-      kind: 'transient',
-    });
-  });
-
   /** End the stored (readable) session at the provider, then delete it either
-   *  way, superseding any refresh; a failed end is reported after. */
+   *  way; a failed end is reported after. Under the lock, after any refresh in
+   *  flight, so the token ended is the one a refresh rotated to, not the one
+   *  it replaced. */
   readonly signOut = Effect.fn('SubscriptionOAuthCoordinator.signOut')(
     function* (this: SubscriptionOAuthCoordinator<S>) {
       const { endSession } = this.policy;
-      const ended = yield* Effect.exit(
-        this.loadSession().pipe(
-          Effect.catchTag('SubscriptionOAuthError', () => Effect.succeed(null)),
-          Effect.flatMap((session) =>
-            session && endSession ? endSession(session) : Effect.void,
-          ),
-        ),
-      );
-      yield* this.sessionMutations.run(
-        this.secrets.delete(this.policy.secretKey),
-        this.supersedeInFlightRefresh,
+      const ended = yield* this.lock.withPermit(
+        Effect.gen({ self: this }, function* () {
+          const ended = yield* Effect.exit(
+            this.loadSession().pipe(
+              Effect.catchTag('SubscriptionOAuthError', () =>
+                Effect.succeed(null),
+              ),
+              Effect.flatMap((session) =>
+                session && endSession ? endSession(session) : Effect.void,
+              ),
+            ),
+          );
+          yield* Effect.uninterruptible(
+            this.secrets.delete(this.policy.secretKey),
+          );
+          return ended;
+        }),
       );
       if (Exit.isFailure(ended)) return yield* Effect.failCause(ended.cause);
     },
@@ -278,8 +232,8 @@ export class SubscriptionOAuthCoordinator<
 
   /**
    * Persist tokens from a successful device-code (or other) grant: the
-   * session built from them becomes the stored one, superseding any refresh
-   * in flight.
+   * session built from them becomes the stored one, after any refresh in
+   * flight.
    */
   readonly storeTokens = Effect.fn('SubscriptionOAuthCoordinator.storeTokens')(
     function* (
@@ -288,10 +242,7 @@ export class SubscriptionOAuthCoordinator<
       clientId?: string,
     ) {
       const session = yield* this.buildSession(tokens, undefined, clientId);
-      yield* this.sessionMutations.run(
-        this.store(session),
-        this.supersedeInFlightRefresh,
-      );
+      yield* this.lock.withPermit(Effect.uninterruptible(this.store(session)));
       return session;
     },
   );
@@ -336,65 +287,55 @@ export class SubscriptionOAuthCoordinator<
     return yield* this.storeTokens(tokens, clientId);
   });
 
+  /**
+   * The stored session, refreshed when expiring soon or when it still holds
+   * `rejected`. Under the lock, so a caller that waited for another's refresh
+   * finds the refreshed session and refreshes nothing. The exchange and the
+   * store are one uninterruptible step: a provider that rotates a single-use
+   * refresh token on the exchange must see the new one stored, whoever stops
+   * waiting; the token request carries its own deadline.
+   */
   private readonly freshSession = Effect.fn(
     'SubscriptionOAuthCoordinator.getFreshSession',
   )(function* (this: SubscriptionOAuthCoordinator<S>, rejected?: string) {
-    const { generation, session } = yield* this.stableSession();
-    if (!session) {
-      return yield* new SubscriptionOAuthError({
-        message: this.policy.notSignedInMessage,
-        kind: 'expired',
-      });
-    }
-    if (
-      session.accessToken !== rejected &&
-      !this.isExpiringSoon(session, yield* Clock.currentTimeMillis)
-    )
-      return session;
-    // Single-flight refresh: concurrent callers share one attempt, which runs
-    // detached (`SharedAttempt`), so an interrupted caller abandons only
-    // its own wait and a rotated refresh token is still stored.
-    return yield* this.refreshes.run(() =>
-      this.performRefresh(session, generation),
+    return yield* this.lock.withPermit(
+      Effect.gen({ self: this }, function* () {
+        const session = yield* this.loadSession();
+        if (!session) {
+          return yield* new SubscriptionOAuthError({
+            message: this.policy.notSignedInMessage,
+            kind: 'expired',
+          });
+        }
+        if (
+          session.accessToken !== rejected &&
+          !this.isExpiringSoon(session, yield* Clock.currentTimeMillis)
+        )
+          return session;
+        return yield* Effect.uninterruptible(this.refresh(session));
+      }),
     );
   });
 
-  private readonly performRefresh = Effect.fn(
-    'SubscriptionOAuthCoordinator.performRefresh',
-  )(function* (
-    this: SubscriptionOAuthCoordinator<S>,
-    previous: S,
-    generation: number,
-  ) {
-    const tokens = yield* refreshOAuthTokens(
-      this.policy.tokenEndpoint,
-      previous.refreshToken,
-      previous.clientId ?? this.policy.tokenEndpoint.clientId,
-    ).pipe(
-      Effect.mapError(grantFailure),
-      // Fatal: clear the session unless a login or a refresh replaced it.
-      Effect.tapError((error) =>
-        error instanceof SubscriptionOAuthError && error.kind === 'fatal'
-          ? this.sessionMutations.run(
-              Effect.flatMap(this.loadSession(), (stored) =>
-                stored?.refreshToken !== previous.refreshToken ||
-                generation !== this.sessionGeneration
-                  ? Effect.void
-                  : this.secrets.delete(this.policy.secretKey),
-              ),
-            )
-          : Effect.void,
-      ),
-    );
-    const session = yield* this.buildSession(tokens, previous);
-    yield* this.sessionMutations.run(
-      Effect.suspend(() =>
-        generation === this.sessionGeneration
-          ? this.store(session)
-          : Effect.void,
-      ),
-    );
-    if (generation === this.sessionGeneration) return session;
-    return yield* this.sessionAfterSupersede(previous);
-  });
+  /** Exchange `previous`'s refresh token and store the session it buys; a
+   *  fatal refusal deletes the stored one, which the lock holds unchanged. */
+  private readonly refresh = Effect.fn('SubscriptionOAuthCoordinator.refresh')(
+    function* (this: SubscriptionOAuthCoordinator<S>, previous: S) {
+      const tokens = yield* refreshOAuthTokens(
+        this.policy.tokenEndpoint,
+        previous.refreshToken,
+        previous.clientId ?? this.policy.tokenEndpoint.clientId,
+      ).pipe(
+        Effect.mapError(grantFailure),
+        Effect.tapError((error) =>
+          error.kind === 'fatal'
+            ? this.secrets.delete(this.policy.secretKey)
+            : Effect.void,
+        ),
+      );
+      const session = yield* this.buildSession(tokens, previous);
+      yield* this.store(session);
+      return session;
+    },
+  );
 }
