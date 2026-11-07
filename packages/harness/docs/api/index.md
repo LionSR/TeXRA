@@ -35,12 +35,13 @@ listed below.
 - [`@texra-ai/harness/transcript`](./transcript): browser-safe transcript row
   projections and `RemoteSessionView` for UI renderers.
 - [`@texra-ai/harness/plugins`](./plugins): built-in plugins (`harnessBuiltins`)
-  and what a tool or plugin is written with (`definePlugin`, `ToolContext`).
+  and what a tool or plugin is written with (`defineTool`, `definePlugin`,
+  `ToolContext`, `Settings`, `WorkspaceFs`).
 - [`@texra-ai/harness/node`](./node): `nodePlatform(options)` and Node.js
   filesystem, SQLite, and process building blocks.
 - [`@texra-ai/harness/host`](./host): what a full application host (TeXRA's
   editor, desktop and terminal apps) composes beyond this entry:
-  `processLayer`, the agent catalog, settings, stores and secrets.
+  `processLayer`, the agent catalog, and the config and state stores.
 
 ## AgentEvent
 
@@ -120,43 +121,6 @@ class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()(
 )
 ```
 
-## DefinedTool
-
-A defined tool: plain data plus a `call` that validates and normalizes
-failures. An anonymous object type so the SDK's `.d.ts` inlines it.
-
-```ts
-type DefinedTool<T, R = never, Name extends string = string> = Omit<
-  ITool<Error, R>,
-  'call' | 'guard' | 'definition'
-> & {
-  readonly definition: ToolDefinition & { readonly name: Name };
-  call(
-    rawInput: unknown,
-  ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly guard?: ToolGuard<T>;
-};
-```
-
-## defineTool
-
-Define a tool: validate the model's input against `schema`, run `execute`,
-and turn ordinary failures into `{ status: 'error' }` feedback.
-Interruption, run history refusals and database write failures propagate.
-
-A tool whose `execute` succeeds with a `ToolResult` carrying a `value`
-hands a script that value in place of `{ output, summary }`. Declare its
-TypeScript type in `scriptReturns`, which is what a script is told the
-call resolves to. Nothing derives one from the other: a tool that returns
-a `value` without `scriptReturns` is declared to scripts as resolving to
-`ToolOutput`, so change the two together.
-
-```ts
-function defineTool<T, R = never, const Name extends string = string>(
-  def: DefineToolOptions<T, R> & { readonly name: Name },
-): DefinedTool<T, R, Name>
-```
-
 ## HeldRun
 
 What this process holds of one run ({@link LocalSession.held}): a launch
@@ -193,98 +157,6 @@ answer that crossed a process boundary.
 
 ```ts
 const isOutcomeOf: <K extends RuntimeCommand["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "failed" | "cancelled" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "failed" | "cancelled" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
-```
-
-## ITool
-
-Contract for tool implementations.
-`defineTool` provides the canonical implementation with schema validation.
-A tool fails with an `Error` (usually a `ToolError`) and the model reads its
-message as the call's error; a throw is a defect, which `defineTool` turns
-into a failed call and logs as a crash unless it is a `ToolError`.
-
-```ts
-interface ITool<E = Error, R = never> {
-  readonly definition: ToolDefinition;
-  /** The host capability (named by the plugin that serves it,
-   *  `HostCapabilities`) the session's host must serve for this tool to be
-   *  offered, read live each step: a window that attaches mid-run brings it. */
-  readonly hostCapability?: string;
-  /** Launches agents' tasks (a plugin's block): its step lists the agents
-   *  with one. */
-  readonly launchesTasks?: true;
-  /**
-   * Where its calls run beside their siblings (omitted: `'barrier'`).
-   * Declared on the tool, not the YAML-overridable definition, so an agent
-   * config cannot move an arbitrary tool out of order.
-   *
-   * - `'parallel'`: side-effect-free AND approval-free, so calls of one
-   *   response (or one script) run concurrently within the parallel window,
-   *   and identical ones collapse onto one (`partitionDuplicateCalls`). A
-   *   read-only tool that prompts for approval is not parallel: it needs an
-   *   approval round-trip first, so it stays a barrier.
-   * - `'barrier'`: waits for every call issued before it and holds back
-   *   every call after it until it settles.
-   * - `'own'`: in a script, its calls neither wait for the calls issued
-   *   before them nor block the ones after, and take no place in the
-   *   parallel window: the tool bounds how many of its own calls run at
-   *   once (a call that waits on a child run). A later barrier still waits
-   *   for it; a response's call of it is a barrier.
-   */
-  readonly lane?: DispatchFacts['lane'];
-  /**
-   * The tool is also a global function of a script, taking its `positional`
-   * field as the first argument and the rest as the second:
-   * `agent(prompt, opts)` for `tools.agent({ prompt, ...opts })`.
-   * `withScript`: a function of scripts alone (`self()`), offered whenever
-   * the script tool is and never sent to the model as a tool of its own.
-   */
-  readonly scriptGlobal?: {
-    readonly positional: string;
-    readonly withScript?: true;
-  };
-  /**
-   * Whether a call recorded as started, with no result, may run again on
-   * resume without asking: `'safe'` only for a read-only or idempotent tool,
-   * whose second run changes nothing the first did not. Omitted is
-   * `'unsafe'`. Independent of `lane`, which is about concurrency.
-   * The response row saves the declaration with each call, and a resume
-   * re-runs a call only when that saved word and the current one both say
-   * `'safe'` (`toolUseDispatch.ts`).
-   */
-  readonly replay?: 'safe' | 'unsafe';
-  /**
-   * Whether a call needs a person's approval, and who asks. `true` (implied
-   * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
-   * body's own request (an edit's review, a plan, a delegation proposal, a
-   * question, a plugin's request), which answers what the call's hooks
-   * said. A run that cannot present a prompt is not offered such a tool
-   * (`asksApproval`).
-   */
-  readonly requiresApproval?: true | 'inBody';
-  /** Its card opens before the call runs; a fast tool's opens and closes
-   *  with its settlement. */
-  readonly slow?: boolean;
-  /** The loop-side guard this tool declares; see {@link ToolGuard}. */
-  readonly guard?: ToolGuard<never>;
-  /**
-   * A description rendered from the other tools the run declares and the
-   * modules its scripts may import, in place of `definition.description`:
-   * rendered at the step that freezes the run's system text and kept as
-   * that step recorded it until a compaction opens the freeze again
-   * (`step.ts`), so a catalog change mid-run leaves its text, and the cached
-   * prefix through it, as it was. The tool that has one is the script tool,
-   * which reaches nothing but the run's other tools and its own agent: a
-   * child is offered it, and its script-only functions, whatever its parent
-   * was.
-   */
-  readonly describe?: (
-    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
-    /** The specifiers of the modules the step's scripts may import. */
-    modules: readonly string[],
-  ) => string;
-  call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
-}
 ```
 
 ## LaunchError
@@ -605,37 +477,37 @@ process did not answer.
 ```ts
 interface RunRecords {
   /** Its `run.start` is still listed. */
-  readonly exists: () => Effect.Effect<boolean, Error>;
+  readonly exists: Effect.Effect<boolean, Error>;
   /** Its saved setup; null for a run that saved none (not an agent's). */
-  readonly readConfig: () => Effect.Effect<AgentConfig | null, Error>;
+  readonly readConfig: Effect.Effect<AgentConfig | null, Error>;
   /** The report its agent wrote, or null. */
-  readonly readReport: () => Effect.Effect<string | null, Error>;
+  readonly readReport: Effect.Effect<string | null, Error>;
   /** Its terminal fact (outcome, error, output, usage), or null while it
    *  has not ended. */
-  readonly readRunEnd: () => Effect.Effect<RunEnd | null, Error>;
+  readonly readRunEnd: Effect.Effect<RunEnd | null, Error>;
   /** Its result as delivered: the terminal fact with the output its
    *  delivery reported, or a background command's own record. */
-  readonly readResult: () => Effect.Effect<RunResult | null, Error>;
+  readonly readResult: Effect.Effect<RunResult | null, Error>;
   /** The workspace files its settled calls edited that are still there,
    *  under its working directory, by path. */
-  readonly readWorkspaceFiles: () => Effect.Effect<
+  readonly readWorkspaceFiles: Effect.Effect<
     readonly RunWorkspaceFile[],
     Error
   >;
   /** The skills its latest step listed. */
-  readonly readSkills: () => Effect.Effect<readonly string[], Error>;
+  readonly readSkills: Effect.Effect<readonly string[], Error>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
-  readonly readResumable: () => Effect.Effect<boolean, Error>;
+  readonly readResumable: Effect.Effect<boolean, Error>;
   /** Why a resume of it here is refused before its agent is checked
    *  (`finished`, `earlierBuild`, `unusableCheckpoint` or
    *  `pluginUnavailable`), or null when it may go ahead; a fact that could
    *  not be read right now fails. */
-  readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
+  readonly readRejection: Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
-  readonly readConversation: () => Effect.Effect<readonly ExportNode[], Error>;
+  readonly readConversation: Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
-  readonly readTrace: () => Effect.Effect<AssembleTraceResult, Error>;
+  readonly readTrace: Effect.Effect<AssembleTraceResult, Error>;
 }
 ```
 
@@ -684,10 +556,7 @@ interface Session {
   readonly records: (runId: RunId) => RunRecords;
   /** The runs a person started (not child runs), newest first, each with
    *  its saved setup. */
-  readonly listRuns: () => Effect.Effect<
-    readonly AgentRunListingEntry[],
-    Error
-  >;
+  readonly listRuns: Effect.Effect<readonly AgentRunListingEntry[], Error>;
   /**
    * Delete one run, or every stored run (`'all'`), each as a `run.delete`
    * request would. A run this session is running is skipped and reported
@@ -846,12 +715,6 @@ interface StreamChunkEvent {
   readonly id: string;
   readonly text: string;
 }
-```
-
-## ToolResult
-
-```ts
-type ToolResult = typeof ToolResultSchema.Type;
 ```
 
 ## ToolsRefused
