@@ -416,25 +416,22 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
         findCliModelAccessEntry(runnableEntries, candidate) != null,
     );
 
-    if (decision && !decision.unavailable) {
+    if (decision && decision._tag !== 'Unavailable') {
       const selectedModel =
         findCliModelAccessEntry(runnableEntries, decision.model)?.model.value ??
         decision.model;
-      if (!decision.fallbackFrom || decision.fallbackFrom.mode === 'silent') {
+      if (decision._tag === 'Chosen') {
         return { model: selectedModel } satisfies CliRunnableModelResolution;
       }
 
-      const fallbackLoadError = entryErrorByModel.get(
-        decision.fallbackFrom.model,
-      );
+      const fallbackLoadError = entryErrorByModel.get(decision.from.model);
       if (fallbackLoadError) return yield* Effect.fail(fallbackLoadError);
 
+      // The access list knows why the model cannot run, which the decision's
+      // own notice does not say.
       const unavailableMessage = formatUnavailableModelMessage(
-        decision.fallbackFrom.model,
-        findCliModelAccessEntry(
-          modelsWithHiddenEntry,
-          decision.fallbackFrom.model,
-        ),
+        decision.from.model,
+        findCliModelAccessEntry(modelsWithHiddenEntry, decision.from.model),
         availableIds,
         options,
       );

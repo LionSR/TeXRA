@@ -92,6 +92,10 @@ export class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()
   override readonly message = storeFailureMessage(this.cause);
 }
 
+/** The strings a blob read returns, by digest: total over the digests it
+ *  was asked for, and a defect for any other. */
+export type StoredBlobs = (digest: string) => string;
+
 /**
  * What opening a store moved aside, whole (never read again): a store written
  * before 1.0, or a file SQLite reports damaged or not a database. Null when
@@ -231,7 +235,7 @@ export class Database extends Context.Service<
     /** The strings under `digests`: media bytes a history names by address. */
     readonly readBlobs: (
       digests: readonly string[],
-    ) => Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
+    ) => Effect.Effect<StoredBlobs, DatabaseReadFailed>;
     /** The latest listing row of each type on one open run, its requests
      *  and follow-ups left out: its private records beside its status. */
     readonly readRunRecords: (id: AggregateId) => EventsRead;

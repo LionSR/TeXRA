@@ -323,6 +323,17 @@ export const SessionViewSchema = Schema.Struct({
 });
 export type SessionView = typeof SessionViewSchema.Type;
 
+/** The run under `id`, which the view holds: an id in `order` or a run's
+ *  `childIds` names a run of `runs`, so a miss is a broken view and throws. */
+export function requireRun(
+  view: Pick<SessionView, 'runs'>,
+  id: RunId,
+): RunView {
+  const run = view.runs.get(id);
+  if (run === undefined) throw new Error(`The session view holds no run ${id}`);
+  return run;
+}
+
 /** What wants this window: the requests it can answer (the badge), and since
  *  `previous` (none without it) the new ones and the runs that ended. */
 export interface Attention<Request> {

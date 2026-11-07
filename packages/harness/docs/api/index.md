@@ -703,6 +703,15 @@ type StartInput = typeof StartRequestSchema.Type & {
 };
 ```
 
+## StoredBlobs
+
+The strings a blob read returns, by digest: total over the digests it
+was asked for, and a defect for any other.
+
+```ts
+type StoredBlobs = (digest: string) => string;
+```
+
 ## StreamChunkEvent
 
 Chunk appended to an open stream. Transient: `runEventDraft` returns null

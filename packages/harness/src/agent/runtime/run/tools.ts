@@ -143,7 +143,17 @@ export const replayable = Effect.fn('toolUse.replayable')(function* (
   if (schema === undefined) return Predicate.isObject(input);
   return yield* Schema.decodeUnknownEffect(schema)(input).pipe(
     Effect.as(true),
-    Effect.catchTag('SchemaError', () => Effect.succeed(false)),
+    // Arguments the tool's schema no longer accepts: the schema changed
+    // since the call was recorded, which the warning makes visible.
+    Effect.catchTag('SchemaError', (error) =>
+      Effect.sync(() => {
+        logger.warn(
+          `The stored arguments of ${fact.toolName} no longer match its schema; the call is asked about instead of re-run.`,
+          { data: error.message },
+        );
+        return false;
+      }),
+    ),
     // A schema whose own check threw: the arguments are not known valid.
     Effect.catchDefect((defect) =>
       Effect.sync(() => {

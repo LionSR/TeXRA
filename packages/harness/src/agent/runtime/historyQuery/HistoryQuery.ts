@@ -159,8 +159,9 @@ function modelWrites(
           output: cutText(text),
           usage: p.usage,
         }),
-        // A response's dispatch facts follow its local calls in order.
-        ...p.calls.map((call, index) => issue(call, args[index] ?? '')),
+        // The payload's schema binds each dispatch fact to its local call,
+        // one to one and in order, so the pairs are exact.
+        ...Arr.zip(p.calls, args).map(([call, input]) => issue(call, input)),
       ];
     }
     case 'handed-down':

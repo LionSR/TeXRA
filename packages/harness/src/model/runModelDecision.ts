@@ -1,28 +1,21 @@
-import { Predicate } from 'effect';
-
-/** What happens when a candidate's model cannot run: refuse, run the next
- *  one with a notice, or run it silently. */
-export type RunModelFallbackMode = 'reject' | 'notice' | 'silent';
+import { Data, Predicate } from 'effect';
 
 /** Where a run's model may come from, highest precedence first, and what
- *  happens when that candidate cannot run: a model a person named, or a
- *  credential chose, is refused; a configured or remembered one falls back
- *  with a notice; a default falls back silently. The one table of both. */
+ *  happens when that candidate cannot run: a model a person named is
+ *  refused; a configured or remembered one falls back with a notice; a
+ *  default falls back silently. The one table of both. */
 const RUN_MODEL_REASONS = {
   'explicit-override': { rank: 0, fallback: 'reject' },
   environment: { rank: 1, fallback: 'reject' },
   'agent-config': { rank: 2, fallback: 'notice' },
   'command-config': { rank: 3, fallback: 'notice' },
-  'workspace-config': { rank: 4, fallback: 'notice' },
-  'user-config': { rank: 5, fallback: 'notice' },
-  history: { rank: 6, fallback: 'notice' },
-  'parent-run': { rank: 7, fallback: 'notice' },
-  credential: { rank: 8, fallback: 'reject' },
-  'builtin-default': { rank: 9, fallback: 'silent' },
-  'access-list-default': { rank: 10, fallback: 'silent' },
+  history: { rank: 4, fallback: 'notice' },
+  'parent-run': { rank: 5, fallback: 'notice' },
+  'builtin-default': { rank: 6, fallback: 'silent' },
+  'access-list-default': { rank: 7, fallback: 'silent' },
 } as const satisfies Record<
   string,
-  { readonly rank: number; readonly fallback: RunModelFallbackMode }
+  { readonly rank: number; readonly fallback: 'reject' | 'notice' | 'silent' }
 >;
 
 export type RunModelDecisionReason = keyof typeof RUN_MODEL_REASONS;
@@ -36,17 +29,33 @@ type NormalizedRunModelCandidate = RunModelCandidate & {
   readonly model: string;
 };
 
-/** The model a run takes, why, and the candidate it fell back from. */
-export interface RunModelDecision {
-  readonly model: string;
-  readonly reason: RunModelDecisionReason;
-  readonly unavailable?: true;
-  readonly fallbackFrom?: {
+/**
+ * The model a run takes and why. `Fallback` runs another model than the one
+ * its candidate named and carries the sentence that tells the person;
+ * `Unavailable` names the candidate that cannot run and has nothing to fall
+ * back to. A caller matches every case.
+ */
+export type RunModelDecision = Data.TaggedEnum<{
+  Chosen: {
     readonly model: string;
     readonly reason: RunModelDecisionReason;
-    readonly mode: RunModelFallbackMode;
   };
-}
+  Fallback: {
+    readonly model: string;
+    readonly reason: RunModelDecisionReason;
+    readonly from: {
+      readonly model: string;
+      readonly reason: RunModelDecisionReason;
+    };
+    readonly notice: string;
+  };
+  Unavailable: {
+    readonly model: string;
+    readonly reason: RunModelDecisionReason;
+  };
+}>;
+
+const { Chosen, Fallback, Unavailable } = Data.taggedEnum<RunModelDecision>();
 
 function normalizeCandidate(
   candidate: RunModelCandidate,
@@ -77,22 +86,24 @@ export function decideRunModel(
     (candidate) => candidate.reason !== 'access-list-default',
   );
   if (!primary) {
-    return fallback ? { model: fallback.model, reason: fallback.reason } : null;
+    return fallback
+      ? Chosen({ model: fallback.model, reason: fallback.reason })
+      : null;
   }
   if (isRunnable(primary.model)) {
-    return { model: primary.model, reason: primary.reason };
+    return Chosen({ model: primary.model, reason: primary.reason });
   }
   const mode = RUN_MODEL_REASONS[primary.reason].fallback;
   if (mode === 'reject' || !fallback) {
-    return {
-      model: primary.model,
-      reason: primary.reason,
-      unavailable: true,
-    };
+    return Unavailable({ model: primary.model, reason: primary.reason });
   }
-  return {
+  if (mode === 'silent') {
+    return Chosen({ model: fallback.model, reason: fallback.reason });
+  }
+  return Fallback({
     model: fallback.model,
     reason: fallback.reason,
-    fallbackFrom: { model: primary.model, reason: primary.reason, mode },
-  };
+    from: { model: primary.model, reason: primary.reason },
+    notice: `Model "${primary.model}" is not available. Using "${fallback.model}" instead.`,
+  });
 }

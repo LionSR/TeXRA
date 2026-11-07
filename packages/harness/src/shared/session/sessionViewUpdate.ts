@@ -20,7 +20,7 @@
  * costs the chunk, never the row's text.
  */
 
-import { Equal, type Types } from 'effect';
+import { Equal, type Types, absurd } from 'effect';
 import {
   aggregateTarget,
   qualifyAggregateId,
@@ -70,7 +70,12 @@ import {
 } from './transcriptState';
 
 import { runActions } from './runActions';
-import { emptySessionView, isInterrupted, rollupOf } from './sessionView';
+import {
+  emptySessionView,
+  isInterrupted,
+  requireRun,
+  rollupOf,
+} from './sessionView';
 import type { SharedRunRows } from './runRowsShape';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
@@ -437,7 +442,7 @@ function withAggregates(u: Update, run: RunView): RunView {
     holder === 'here' &&
     view.requests.some((r) => r.runId === run.id && blocksCaller(r.payload));
   const unreadable = u.state.unreadable.get(run.id);
-  const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
+  const children = run.childIds.map((id) => requireRun(view, id));
   const treeUsage = sumUsageStats([
     run.usage,
     ...children.map((child) => child.treeUsage),
@@ -772,6 +777,17 @@ function applyStanding(
   };
 }
 
+/** The rows that change a session-level field; every other row changes
+ *  only its run. */
+type SessionFactRow = Extract<
+  DisplayRow,
+  { type: 'run.start' | 'approval.policy' | 'plugin.fact' }
+>;
+const changesSessionFacts = (event: DisplayRow): event is SessionFactRow =>
+  event.type === 'run.start' ||
+  event.type === 'approval.policy' ||
+  event.type === 'plugin.fact';
+
 /** The session-level fields an event changes, applied before the run's own
  *  change so its derived fields see them. */
 function applySessionFacts(
@@ -779,6 +795,7 @@ function applySessionFacts(
   runId: RunId | null,
   event: DisplayRow,
 ): void {
+  if (!changesSessionFacts(event)) return;
   const { view } = u;
   switch (event.type) {
     case 'run.start':
@@ -810,7 +827,7 @@ function applySessionFacts(
       return;
     }
     default:
-      return;
+      absurd(event);
   }
 }
 
@@ -1054,9 +1071,7 @@ function removeRun(u: Update, runId: RunId): boolean {
   // A child whose parent is gone is top-level: no dangling edge, no
   // ancestors.
   for (const childId of run.childIds) {
-    const child = view.runs.get(childId);
-    if (!child) continue;
-    setRun(u, { ...child, parentId: null });
+    setRun(u, { ...requireRun(view, childId), parentId: null });
     view.order = insertOrdered(view, view.order, childId);
     refreshAncestors(u, childId);
   }

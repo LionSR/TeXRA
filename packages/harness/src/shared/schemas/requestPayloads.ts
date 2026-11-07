@@ -86,17 +86,14 @@ const StoredToolEditContentSchema = ToolEditContentSchema.mapFields(
 export const readToolEditContent = (
   readBlobs: (
     digests: readonly string[],
-  ) => Effect.Effect<ReadonlyMap<string, string>, Error>,
+  ) => Effect.Effect<(digest: string) => string, Error>,
   address: ToolEditRequest['content'],
 ): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
-  Effect.map(Effect.orDie(readBlobs([address])), (held) => {
-    const text = held.get(address);
-    if (text === undefined)
-      throw new Error(`The store holds no tool edit proposal at ${address}`);
-    return Schema.decodeUnknownSync(
+  Effect.map(Effect.orDie(readBlobs([address])), (held) =>
+    Schema.decodeUnknownSync(
       Schema.fromJsonString(StoredToolEditContentSchema),
-    )(text);
-  });
+    )(held(address)),
+  );
 
 export const BashRequestSchema = RequestBaseSchema.mapFields(
   Struct.assign({

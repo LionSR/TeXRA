@@ -30,4 +30,22 @@ layer(SessionGraph.hosted)('delegation model availability', (it) => {
         );
       }).pipe(withEnv({})),
   );
+
+  // The parent's model is not runnable here, so the child takes the first
+  // available model; the decision carries the notice the launch shows.
+  it.effect("tells when the parent run's model falls back", () =>
+    Effect.gen(function* () {
+      const host = yield* FakeHost;
+      yield* host.secrets.set(apiKeySecretName('openai'), 'sk-key');
+      const selected = yield* selectAvailableDelegationModel({
+        parentModel: 'anthropic/claude-sonnet-5-5',
+        settings: host.roots,
+      });
+
+      expect(selected._tag).toBe('Fallback');
+      expect(selected._tag === 'Fallback' && selected.notice).toContain(
+        'Model "anthropic/claude-sonnet-5-5" is not available',
+      );
+    }).pipe(withEnv({})),
+  );
 });
