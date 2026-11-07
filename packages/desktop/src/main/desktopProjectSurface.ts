@@ -23,7 +23,6 @@ import {
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
-import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type {
   DesktopProject,
   DesktopProjectRegistry,
@@ -52,11 +51,10 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     readonly runtime: ProcessRuntime;
     readonly projects: DesktopProjectRegistry;
     readonly bindings: ProjectBindings;
-    readonly onboarding: WindowOnboarding;
     readonly promptController: DesktopPromptController;
     readonly resourcesPath: string;
   }): Effect.fn.Return<ProjectSurface, never, Scope.Scope> {
-    const { host, runtime, projects, bindings, onboarding } = options;
+    const { host, runtime, projects, bindings } = options;
     const windowScope = yield* Scope.Scope;
     let attached: DesktopProject | undefined;
     let surfaceScope: Scope.Closeable | undefined;
@@ -172,10 +170,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           },
         ),
         refreshCredentialStatus: Effect.suspend(() =>
-          Effect.andThen(
-            bindings.eachSnapshot((snapshot) => snapshot.refreshHostBanners),
-            onboarding.refresh,
-          ),
+          bindings.eachSnapshot((snapshot) => snapshot.refreshHostBanners),
         ),
         // Selection is the surface's: a settings jump asks the shown
         // project's surface to select the run, and reports a run the view no

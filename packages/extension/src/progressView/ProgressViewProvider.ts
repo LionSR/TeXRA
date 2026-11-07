@@ -3,16 +3,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import {
-  Context,
-  Effect,
-  Exit,
-  FileSystem,
-  Queue,
-  Schema,
-  Scope,
-  Stream,
-} from 'effect';
+import { Effect, Exit, FileSystem, Queue, Schema, Scope, Stream } from 'effect';
 
 import {
   withProcessServices,
@@ -35,12 +26,7 @@ import {
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
-import {
-  followFirstRunDone,
-  getFirstRunDone,
-  OnboardingFunnelRefresher,
-  setOnboardingDeclined,
-} from '@texra/controllers/onboarding/onboardingFunnel';
+import { setOnboardingDeclined } from '@texra/controllers/onboarding/onboardingFunnel';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
@@ -54,10 +40,7 @@ import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import {
-  HostSnapshotReadFailed,
-  type HostSnapshotSource,
-} from '@texra/controllers/session/hostSnapshotSource';
+import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
   openGuiWindow,
   type GuiSession,
@@ -67,7 +50,6 @@ import type {
   SessionBridge,
 } from '@texra/controllers/session/SessionBridge';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
-import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from './checkCoreDependencies';
 import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
@@ -78,8 +60,6 @@ import type {
   ProcessRuntime,
   ProcessServices,
   StateStore,
-  StateReadFailed,
-  StateWriteFailed,
 } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ProgressViewProvider';
@@ -125,22 +105,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private sidebarPort: Port | undefined;
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
+  /** Whether a usable credential exists, as each check answers: the setup
+   *  pill follows the answer the "Connect a model" card reads. */
+  public readonly credentialUsable: Stream.Stream<boolean>;
   /** The window's launcher (`HostRunActions.runValidated`). */
   public readonly runValidated: HostRunActions['runValidated'];
   /** Where this window's runs run: the service's session, or this one. */
   private readonly runSession: Session;
-  /** The last credential answer the API-key banner's producer read. */
-  private credentialUsable = true;
-
-  /**
-   * A credential changed: re-read the credential through the API-key
-   * banner's producer, which repaints the setup pill, then the funnel that
-   * reads it.
-   */
-  public readonly refreshApiKeyStatus = Effect.suspend(() =>
-    this.snapshot.refreshHostBanners.pipe(
-      Effect.andThen(this.refreshOnboardingFunnel()),
-    ),
+  /** A credential may have changed: check it again, with the host's other
+   *  banners. The funnel, the banner and the setup pill follow the answer. */
+  public readonly refreshApiKeyStatus = Effect.suspend(
+    () => this.snapshot.refreshHostBanners,
   );
 
   private readonly attention = new RequestAttention({
@@ -153,19 +128,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     chime: () => this.chime(),
   });
 
-  /**
-   * This host's half of the shared funnel loop: its credential sources, its user-scoped flag store, and the
-   * two things it does with a recomputed funnel — paint it into the host
-   * snapshot, and on entering State 1 select the setup agent on the launcher.
-   * It never auto-starts setup; the user launches it from the setup card.
-   */
-  private readonly onboardingFunnel: OnboardingFunnelRefresher;
   private readonly draftRequests = new HostDraftRequests();
 
   private readonly globalState: StateStore;
   private readonly runtime: ProcessRuntime;
   private readonly roots: WorkspaceRoots;
-  private readonly paintSetupPill: (credentialUsable: boolean) => void;
   constructor(
     context: vscode.ExtensionContext,
     globalState: StateStore,
@@ -176,9 +143,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     /** Where this window's runs run: the service's session, or this
      *  process's own with the handle that owns it. */
     windowSession: GuiSession,
-    /** The setup pill: painted from the same credential answer the funnel
-     *  reads, so the pill and the "Connect a model" card agree. */
-    paintSetupPill: (credentialUsable: boolean) => void,
     /** The settings view at a target. The settings view is built after
      *  this one, so this waits for it. */
     openSettings: (
@@ -188,34 +152,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.globalState = globalState;
     this.runtime = runtime;
     this.roots = roots;
-    this.paintSetupPill = paintSetupPill;
     this.contentProvider = new BundledViewContentProvider(
       context,
       'ProgressView',
       'progressView',
     );
-    this.onboardingFunnel = new OnboardingFunnelRefresher({
-      // The API-key banner's producer reads the one credential answer: every
-      // credential change re-reads it (`refreshApiKeyStatus`) before this
-      // refresher runs.
-      hasCredential: () => Effect.sync(() => this.credentialUsable),
-      flags: globalState,
-      apply: Effect.fn('apply')({ self: this }, function* (transition) {
-        yield* this.snapshot.setOnboarding(transition.state);
-        if (!transition.selectSetupAgent) return;
-        // Resolve the registry key so the dropdown matches by value.
-        const catalog = Context.get(
-          yield* this.runtime.contextEffect,
-          AgentCatalog,
-        );
-        const entry = catalog.get('setup');
-        this.bridge.surfaceAction({
-          kind: 'launch',
-          patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
-        });
-      }),
-    });
-
     const runSession = windowSession.session;
     this.runSession = runSession;
     const storageRoot = context.storageUri ?? context.globalStorageUri;
@@ -276,71 +217,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           roots,
           project: projectDisplayOf(roots.storage, roots.workspace),
           snapshot: {
-            fileOptions: () =>
-              workspaceFileOptions(roots.workspace).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new HostSnapshotReadFailed({
-                      member: 'fileOptions',
-                      message: 'The workspace file lists could not be read.',
-                      cause,
-                    }),
-                ),
-              ),
+            fileOptions: () => workspaceFileOptions(roots.workspace),
             workspaceRoots: () =>
               vscode.workspace.workspaceFolders?.map((folder) => ({
                 label: folder.name,
                 value: folder.uri.fsPath,
               })) ?? [],
-            gettingStartedBanner: true,
-            // Already an Effect program: the typed port lets the banner read it
-            // directly instead of settling it on the runtime first.
-            // The banner says a credential stopped working, so it is raised only
-            // once a task has finished; before that the card is the one prompt.
-            apiKeyBanner: () =>
-              Effect.all(
-                [
-                  hasUsableSetupCredential(this.roots).pipe(
-                    withLogChannel('Setup Credentials'),
-                  ),
-                  getFirstRunDone(globalState),
-                ],
-                { concurrency: 2 },
-              ).pipe(
-                Effect.tap(([usable]) =>
-                  Effect.sync(() => {
-                    this.credentialUsable = usable;
-                    this.paintSetupPill(usable);
-                  }),
-                ),
-                Effect.map(([usable, firstRunDone]) => ({
-                  visible: !usable && firstRunDone,
-                })),
-                Effect.mapError(
-                  (cause) =>
-                    new HostSnapshotReadFailed({
-                      member: 'apiKeyBanner',
-                      message:
-                        'The provider credential status could not be read.',
-                      cause,
-                    }),
-                ),
-              ),
-            // Already an Effect program, and one that answers a failed probe as a
-            // missing tool rather than failing, so the banner reads it directly.
+            shows: { apiKeyBanner: true, gettingStarted: true },
+            // A failed probe reads as a missing tool, so the read never fails.
             dependencyBanner: () =>
               checkCoreDependencies().pipe(
                 Effect.map((missingTools) => ({
                   visible: missingTools.length > 0,
                   missingTools: [...missingTools],
                 })),
-              ),
-            onError: (error) =>
-              this.runtime.runFork(
-                Effect.logError('Host snapshot refresh failed').pipe(
-                  Effect.annotateLogs({ data: error }),
-                  withLogChannel(CHANNEL),
-                ),
               ),
           },
           // The tool-edit preview: staged copies of the original and proposed
@@ -388,14 +278,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               launcher: () => this.runValidated,
               popOutToEditor: () => this.popOutToEditor(),
               showInSidebar: () => this.showInSidebar(),
-              refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
-              refreshApiKeyStatus: this.refreshApiKeyStatus,
             }),
         });
       }).pipe(Scope.provide(this.scope)),
     );
     this.bridge = gui.bridge;
     this.snapshot = gui.snapshot;
+    this.credentialUsable = gui.snapshot.credentialUsable;
     this.runValidated = gui.runValidated;
     this.runtime.runSync(
       Effect.forkIn(this.attention.follow(runSession), this.scope),
@@ -411,22 +300,29 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       yield* Effect.addFinalizer(() =>
         withProcessServices(this.runtime, this.dispose()),
       );
-      yield* this.snapshot.refresh;
-      yield* this.refreshOnboardingFunnel();
-      // Started after the refresh above, so that refresh owns the first
-      // transition and its setup-agent selection; the follower's own first
-      // refresh covers a write that landed between.
+      // Entering State 1 selects the setup agent on the launcher; a
+      // snapshot already in State 1 leaves a user who switched agents alone.
+      // It never starts setup: the user launches it from the setup card.
+      const catalog = yield* AgentCatalog;
       yield* Effect.forkIn(
-        followFirstRunDone(
-          this.refreshOnboardingFunnel().pipe(
-            Effect.ignore({
-              log: 'Warn',
-              message: 'Refreshing the onboarding state',
+        this.snapshot.changes.pipe(
+          Stream.map((snapshot) => snapshot.onboarding),
+          Stream.changes,
+          Stream.filter((state) => state === 'setup'),
+          Stream.runForEach(() =>
+            Effect.sync(() => {
+              // Resolve the registry key so the dropdown matches by value.
+              const entry = catalog.get('setup');
+              this.bridge.surfaceAction({
+                kind: 'launch',
+                patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
+              });
             }),
           ),
-        ).pipe(withLogChannel(CHANNEL)),
+        ),
         this.scope,
       );
+      yield* this.snapshot.refresh;
       yield* Effect.logDebug('ProgressViewProvider initialized').pipe(
         withLogChannel(CHANNEL),
       );
@@ -468,9 +364,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           () => {
             this.runtime.runSync(
               Effect.forkIn(
-                this.snapshot
-                  .refreshWorkspaceRoots()
-                  .pipe(Effect.andThen(this.snapshot.refreshFiles)),
+                this.snapshot.refreshWorkspaceRoots.pipe(
+                  Effect.andThen(this.snapshot.refreshFiles),
+                ),
                 this.scope,
               ),
             );
@@ -535,14 +431,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this.runtime,
       this.snapshot.showAgentConfigBanner(agentName),
     );
-  }
-
-  /** Recompute the user-scoped funnel; the shared refresher owns the loop. */
-  public refreshOnboardingFunnel(): Effect.Effect<
-    void,
-    StateReadFailed | StateWriteFailed
-  > {
-    return this.onboardingFunnel.run();
   }
 
   // --- Ports ---
@@ -730,7 +618,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     'ProgressViewProvider.showConnectModel',
   )({ self: this }, function* () {
     yield* setOnboardingDeclined(this.globalState, false);
-    yield* this.refreshApiKeyStatus;
     yield* this.showLauncher();
   });
 

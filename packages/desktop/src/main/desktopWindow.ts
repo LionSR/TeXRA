@@ -141,14 +141,12 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // `surface`, `bindings` and `navigation` are declared below and read only
   // inside lazy callbacks; the order cannot flip, since the surface takes the
   // onboarding this call returns.
-  const { onboarding, refreshFunnel } = yield* openWindowOnboarding({
-    host,
+  const onboarding = yield* openWindowOnboarding({
     runtime,
     projects,
     settings: () => surface.settings(),
     activeRun: () => bindings.active(),
   });
-  yield* refreshFunnel;
 
   const shellActions = createDesktopShellActions(
     { postToRenderer: host.post },
@@ -179,7 +177,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     runtime,
     projects,
     bindings,
-    onboarding,
     promptController,
     resourcesPath: options.resourcesPath,
   });
@@ -223,8 +220,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const reconcileLane = yield* Semaphore.make(1);
   /** Follow the registry: bind a project that opened, release one that
    *  closed, and move the window's project-bound surfaces (settings, title)
-   *  and the onboarding funnel, whose credential check reads the shown
-   *  project's config, to the project it now shows. */
+   *  to the project it now shows. */
   const followProjects = (state: DesktopProjectsState) =>
     reconcileLane.withPermits(1)(
       Effect.gen(function* () {
@@ -236,7 +232,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
         }
         yield* surface.attach();
         postProjects();
-        if (switched) yield* refreshFunnel;
       }),
     );
   /** A document reload destroys its request correlations (an open prompt

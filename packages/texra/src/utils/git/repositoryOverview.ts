@@ -44,17 +44,11 @@ interface GitReadOptions {
    * configured identity rather than one resolved from ambient state.
    */
   settings: SettingsStores | undefined;
-  /**
-   * Hook for surfacing unexpected git failures (logging, telemetry). Probe
-   * failures are never reported — a non-git workspace or a branch with no
-   * upstream is steady state, not an error.
-   */
-  onError?: (error: unknown) => void;
 }
 
 /**
  * Run one git read, returning stdout (`''` when empty) or `undefined` on
- * failure. Failures go to `options.onError`.
+ * failure, which is logged at `warn`.
  */
 const readGit = Effect.fn('repositoryOverview.readGit')(function* (
   workspace: string,
@@ -68,10 +62,8 @@ const readGit = Effect.fn('repositoryOverview.readGit')(function* (
     maxBuffer: MAX_BUFFER_BYTES,
   });
   if (result.success) return result.stdout;
-  options.onError?.(
-    new Error(
-      result.stderr || `git ${args[0] ?? 'command'} exited unsuccessfully`,
-    ),
+  yield* Effect.logWarning(
+    result.stderr || `git ${args[0] ?? 'command'} exited unsuccessfully`,
   );
   return undefined;
 });

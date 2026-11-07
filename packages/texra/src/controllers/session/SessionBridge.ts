@@ -32,12 +32,10 @@ import {
   Effect,
   Exit,
   Fiber,
-  Predicate,
   Result,
   Schema,
   Scope,
   Stream,
-  SubscriptionRef,
 } from 'effect';
 
 import {
@@ -79,7 +77,7 @@ interface SessionBridgeOptions {
   readonly session: Session;
   /** The host snapshot every port frames, which the host's producers
    *  write. */
-  readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
+  readonly host: Stream.Stream<HostSnapshot>;
   readonly onPortClosed: (port: string) => void;
   /** The host's capabilities, performed on the surface's behalf, as
    *  one program per request that takes the process services from the fiber
@@ -268,8 +266,7 @@ export class SessionBridge {
           ),
           // What the host renders but does not own, as its producers write
           // it: its own message beside the frames.
-          SubscriptionRef.changes(this.options.host).pipe(
-            Stream.filter(Predicate.isNotNull),
+          this.options.host.pipe(
             Stream.map((host): DownMessage => ({
               kind: 'host',
               session: this.key,
