@@ -69,6 +69,6 @@ describe('traceFrame replays the document through the one fold', () => {
   it('reports no durable outcome when the document carries no run.end', () => {
     // No terminal fact: an exported trace with no producer folds as an
     // interrupted run, never as a finished one.
-    expect(foldTrace(traceDocument(runStart()))?.durableOutcome).toBeNull();
+    expect(foldTrace(traceDocument(runStart()))?.outcome).toBeNull();
   });
 });

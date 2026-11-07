@@ -39,7 +39,7 @@ export function unseenRuns(
     const seen = surface.seen.get(run.id);
     if (
       run.parentId === null &&
-      run.durableOutcome !== null &&
+      run.outcome !== null &&
       seen !== undefined &&
       seen < run.lastTimestamp
     )

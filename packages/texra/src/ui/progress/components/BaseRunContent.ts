@@ -10,7 +10,7 @@ import { property } from 'lit/decorators.js';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
+import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
@@ -96,8 +96,8 @@ export abstract class BaseRunContent extends LitElement {
   protected renderEndedLine(run: RunView): TemplateResult {
     const request = (kind: 'resume') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
-    let explanation = `${runStatusLabel(run.statusKey)}.`;
-    if (run.live)
+    let explanation = `${runStatus(run).word}.`;
+    if (run.holder === 'here')
       explanation = `This ${run.parentId === null ? 'task' : 'agent'} takes no messages.`;
     else if (run.actions.includes('resume'))
       explanation += ' Resume to continue.';
@@ -105,7 +105,7 @@ export abstract class BaseRunContent extends LitElement {
       explanation += ' Fork to continue with this conversation’s history.';
     return html`<div class="conversation-ended">
       <span role="status" aria-atomic="true"
-        >${runNoticeText(run.statusNotice) ?? explanation}</span
+        >${runNoticeText(run) ?? explanation}</span
       >
       ${
         // The task's one Resume (an interrupted task, a workflow from its

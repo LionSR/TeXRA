@@ -15,7 +15,7 @@ import { acceptsFollowUp, resolveBypass } from '@texra-ai/harness/schemas';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import type { IconName } from '@ui/wa/iconNames';
-import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
+import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { designTokens, commonViewStyles } from '@ui/styles';
@@ -65,15 +65,6 @@ const RENAME_TASK = 'renameTask';
 /** The menu value of Fork, and the prefix of a fork's link. */
 const FORK_TASK = 'forkTask';
 const OPEN_FORK = 'openFork:';
-
-/** The status dot's hue per tone (the session view spells the tone). */
-const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
-  running: 'is-running',
-  success: 'is-completed',
-  danger: 'is-failed',
-  warning: 'is-starting',
-  neutral: 'is-ready',
-};
 
 /**
  * `<run-header>`: the one header row of a selected run. The
@@ -359,17 +350,15 @@ export class RunHeader extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const run = this.run;
     if (!run) return nothing;
+    const status = runStatus(run);
     const canContinue =
-      run.group !== 'running' &&
-      run.group !== 'waiting' &&
+      status.section !== 'running' &&
+      status.section !== 'waiting' &&
       acceptsFollowUp(run);
-    const statusLabel = canContinue ? 'Ready' : runStatusLabel(run.statusKey);
+    const statusLabel = canContinue ? 'Ready' : status.word;
     // The header offers exactly what the session view's `actions` licenses.
     const canStop = run.actions.includes('stop');
-    const idle =
-      run.status === 'waiting' &&
-      run.group === 'running' &&
-      run.approval === 'none';
+    const idle = status.key === 'waiting' && run.approval === 'none';
     const canGrant = run.actions.includes('grant');
     const passLabel = progressBadgeLabel(run, this.plannedPasses);
 
@@ -384,14 +373,14 @@ export class RunHeader extends LitElement {
           aria-label=${statusLabel}
           class=${classMap({
             'status-indicator': true,
-            [TONE_INDICATOR_CLASS[canContinue ? 'neutral' : run.tone]]: true,
+            [`tone-${canContinue ? 'neutral' : status.tone}`]: true,
           })}
         ></span>
         <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
           ${
             canContinue
-              ? `${runStatusLabel(run.statusKey)}. Send a message to continue.`
-              : (runNoticeText(run.statusNotice) ?? statusLabel)
+              ? `${status.word}. Send a message to continue.`
+              : (runNoticeText(run) ?? statusLabel)
           }
         </wa-tooltip>
         <span class="status-label" aria-hidden="true">${statusLabel}</span>

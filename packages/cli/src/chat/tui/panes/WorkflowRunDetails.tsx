@@ -6,15 +6,10 @@
 
 import { Box, Text } from 'ink';
 
+import { formatCompactDuration } from '@texra-ai/harness/transcript';
 import {
-  taskGroupDisplayStatus,
-  formatCompactDuration,
-} from '@texra-ai/harness/transcript';
-import {
-  RUN_PHASE,
   fileLocationDisplayPath,
   type FileLocation,
-  type RunOutcome,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@texra-ai/harness/schemas';
@@ -50,7 +45,6 @@ type WorkflowRunFacts = {
    *  anywhere — so a group it never closed paints as that outcome instead of
    *  running forever. `undefined` paints each group as the transcript
    *  recorded it. */
-  readonly runDurableOutcome?: RunOutcome;
   readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
   readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
   readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
@@ -87,8 +81,8 @@ function taskGroupLine(
 }
 
 function lifecyclePriority(status: TaskGroupStatus): number {
-  if (status === RUN_PHASE.FAILED) return 0;
-  if (status === RUN_PHASE.RUNNING) return 1;
+  if (status === 'failed') return 0;
+  if (status === 'running') return 1;
   return 3;
 }
 
@@ -101,10 +95,6 @@ function workflowRunDetailGroups(
   if (!facts) return [];
 
   const groups: WorkflowRunDetailGroup[] = [];
-  // One reading of every group's status, so the marker, the label and the
-  // ordering priority cannot disagree about an unclosed group.
-  const displayStatus = (group: TaskGroup): TaskGroupStatus =>
-    taskGroupDisplayStatus(group, facts.runDurableOutcome);
   const rounds = new Set<number>();
   for (const group of facts.taskGroups) {
     groups.push({
@@ -113,10 +103,10 @@ function workflowRunDetailGroups(
         taskGroupLine(
           group,
           group.name || (group.kind === 'run' ? 'Workflow' : group.id),
-          displayStatus(group),
+          group.status,
         ),
       ],
-      priority: lifecyclePriority(displayStatus(group)) + 1,
+      priority: lifecyclePriority(group.status) + 1,
     });
   }
   for (const [round] of [

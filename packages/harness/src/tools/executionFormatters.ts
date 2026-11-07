@@ -9,7 +9,11 @@
  */
 
 import { type RunId, type RunIdentity } from '@shared/schemas';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+import {
+  isInterrupted,
+  type RunView,
+  type SessionView,
+} from '@shared/session/sessionView';
 
 /**
  * The display category of a run: an agent run is a conversation (`agent`)
@@ -53,14 +57,21 @@ export function childRunViews(view: SessionView, runId: RunId): RunView[] {
  * difference.
  */
 export function formatRunStatus(run: RunView): string {
+  const word = run.outcome ?? run.position;
   const notice = describeRunNotice(run);
-  return notice === null ? run.status : `${run.status}: ${notice}`;
+  return notice === null ? word : `${word}: ${notice}`;
 }
 
 /** The fold's notice on `run` (`RunView.statusNotice`) as the model reads
  *  it; null when there is none. Hosts word it through the app's copy. */
 export function describeRunNotice(run: RunView): string | null {
   const notice = run.statusNotice;
+  if (
+    notice?.kind !== 'damaged' &&
+    notice?.kind !== 'earlierBuild' &&
+    isInterrupted(run)
+  )
+    return 'the process running it stopped before it finished; resume it to continue';
   switch (notice?.kind) {
     case undefined:
       return null;
@@ -68,8 +79,6 @@ export function describeRunNotice(run: RunView): string | null {
       return 'part of its saved history is damaged, so it cannot be opened or resumed';
     case 'earlierBuild':
       return 'an earlier build wrote it, and this build cannot open it';
-    case 'interrupted':
-      return 'the process running it stopped before it finished; resume it to continue';
     case 'lost':
       return notice.message;
   }

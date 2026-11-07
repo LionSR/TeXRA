@@ -19,9 +19,8 @@ import {
   qualifyAggregateId,
   isTranscriptEvent,
   type AggregateId,
-  RUN_PHASE,
   type RunId,
-  type RunPhase,
+  type RunOutcome,
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -101,7 +100,7 @@ export const holdTestRun = (
     yield* SubscriptionRef.changes(
       Context.get(session, SessionViewAccess).ref,
     ).pipe(
-      Stream.takeUntil((view) => view.runs.get(runId)?.runsHere === true),
+      Stream.takeUntil((view) => view.runs.get(runId)?.holder === 'here'),
       Stream.runDrain,
     );
   });
@@ -150,9 +149,9 @@ export function createTestRunTrace(runId: RunId) {
   return {
     trace,
     /** The phase the run reached; the reducer closes its open rows on it. */
-    settlePhase: (phase: RunPhase) => {
-      if (phase === RUN_PHASE.RUNNING) apply({ type: 'run.activate' });
-      else if (phase === RUN_PHASE.WAITING) {
+    settlePhase: (phase: RunOutcome | 'running' | 'waiting') => {
+      if (phase === 'running') apply({ type: 'run.activate' });
+      else if (phase === 'waiting') {
         apply({ type: 'run.position', payload: { at: 'waiting' } });
       } else apply({ type: 'run.end', outcome: phase });
     },

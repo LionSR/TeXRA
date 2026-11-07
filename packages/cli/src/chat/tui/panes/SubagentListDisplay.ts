@@ -11,13 +11,13 @@ import {
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunTone } from '@ui/copy/runStatus';
 
 // Local imports - TUI state
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
-/** The session view owns status meaning; terminal colors express only its tone. */
-export const CHILD_TONE_COLOR: Readonly<Record<RunView['tone'], string>> =
+/** The app's copy owns status meaning; terminal colors express only its tone. */
+export const CHILD_TONE_COLOR: Readonly<Record<RunTone, string>> =
   Object.freeze({
     running: COLOR_HINT,
     warning: COLOR_WARNING,

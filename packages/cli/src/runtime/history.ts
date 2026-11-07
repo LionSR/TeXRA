@@ -6,7 +6,6 @@ import {
   toErrorMessage,
   isRunId,
   isTaskConfig,
-  RUN_OUTCOME,
   type RunId,
   type RunOutcome,
   serializeFilteredConfig,
@@ -21,12 +20,15 @@ import {
   type RunGeneratedFile,
 } from '@texra-ai/harness/host';
 import { absentReason } from '@texra-ai/harness/node';
-import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import {
+  runStatus,
+  runStatusLabel,
+  type RunStatusKey,
+} from '@ui/copy/runStatus';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
@@ -56,59 +58,17 @@ function mergeHistoryFiles(
   return [...files.values()].toSorted((a, b) => a.path.localeCompare(b.path));
 }
 
-/** A persisted run's status in `texra history`'s NDJSON and tab output. */
-const HISTORY_RUN_STATUS = {
-  RESUMABLE: 'resumable',
-  COMPLETED: RUN_OUTCOME.COMPLETED,
-  CANCELLED: RUN_OUTCOME.CANCELLED,
-  FAILED: RUN_OUTCOME.FAILED,
-  UNKNOWN: 'unknown',
-} as const;
-
-type HistoryRunStatus =
-  (typeof HISTORY_RUN_STATUS)[keyof typeof HISTORY_RUN_STATUS];
-
-/** What a run's history standing is decided from: the view's facts
- *  and `records(id).readResumable()`'s answer. */
-interface CliRunFacts {
-  readonly resumable: boolean;
-  /** The run's durable outcome; null or absent while none has landed. */
-  readonly outcome?: RunOutcome | null;
-}
-
-/** A run's CLI history standing: the frozen `status` and the `resumable`
- *  boolean beside it. */
-interface CliRunStanding {
-  readonly status: HistoryRunStatus;
-  readonly resumable: boolean;
-}
-
-/**
- * The history standing of a run. `status` is a frozen contract (texra-action
- * reads the NDJSON stream): resumability promotes only an interrupted or
- * outcome-less run to `resumable`, so a failed run that can continue still
- * reports `failed` beside `resumable: true`. An outcome-less run that cannot
- * continue reports `unknown`.
- */
-function cliRunStanding(facts: CliRunFacts): CliRunStanding {
-  const outcome = facts.outcome ?? undefined;
-  const status =
-    facts.resumable &&
-    (outcome === undefined || outcome === RUN_OUTCOME.CANCELLED)
-      ? HISTORY_RUN_STATUS.RESUMABLE
-      : (outcome ?? HISTORY_RUN_STATUS.UNKNOWN);
-  return { status, resumable: facts.resumable };
-}
-
 export interface CliHistoryEntry {
   readonly id: RunId;
   readonly timestamp: string;
   readonly agent: string;
   readonly model: string;
-  readonly status: HistoryRunStatus;
+  /** The run's durable outcome (its `run.end`); null while none has
+   *  landed, as for a run its process left interrupted. */
+  readonly outcome: RunOutcome | null;
   /** `records(id).readResumable()`'s answer, the one `texra resume` acts on.
    *  Ownership and loadability are decided when the run is opened.
-   *  Independent of the frozen `status`: a failed run can be resumable. */
+   *  Independent of `outcome`: a failed run can be resumable. */
   readonly resumable: boolean;
   /** The listing's cause when the run cannot resume in this build (its rows
    *  are unreadable, or an earlier build's); resume surfaces show it. */
@@ -122,12 +82,15 @@ export interface CliHistoryEntry {
 
 interface CliHistoryDetails {
   readonly id: RunId;
-  readonly status: HistoryRunStatus;
-  /** The run's launch facts as the session view holds them. */
-  readonly run: Pick<
-    RunView,
-    'launchedAt' | 'parentId' | 'description' | 'statusKey'
-  > | null;
+  readonly outcome: RunOutcome | null;
+  readonly resumable: boolean;
+  /** The run's launch facts as the session view holds them, and how its
+   *  status reads (`@ui/copy/runStatus`). */
+  readonly run:
+    | (Pick<RunView, 'launchedAt' | 'parentId' | 'description'> & {
+        readonly statusKey: RunStatusKey;
+      })
+    | null;
   readonly config: AgentConfig | null;
   readonly result: RunResult | null;
   readonly report: string | null;
@@ -249,14 +212,8 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     }
     // The model the run is on, as the view derives it for the listing too.
     const currentModel = config ? (run?.model ?? undefined) : undefined;
-    // The same rule the listing applies, from the same facts: `status` is a
-    // frozen contract, so `history show` must not answer it differently from
-    // `history list` for the run in the row the caller just read.
     // A run with no config is corrupt: there is nothing to resume it under.
-    const standing = cliRunStanding({
-      resumable: config !== null && checkpointPresent,
-      outcome: run?.durableOutcome,
-    });
+    const resumable = config !== null && checkpointPresent;
     const conversationPreview = createConversationPreview(conversation);
     const fullConversation = options.includeFullConversation
       ? createConversationTranscript(conversation)
@@ -272,13 +229,14 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
 
     return {
       id,
-      status: standing.status,
+      outcome: run?.outcome ?? null,
+      resumable,
       run: run
         ? {
             launchedAt: run.launchedAt,
             parentId: run.parentId,
             description: run.description,
-            statusKey: run.statusKey,
+            statusKey: runStatus(run).key,
           }
         : null,
       config,
@@ -402,7 +360,7 @@ export function formatCliHistoryText(
         entry.id,
         entry.timestamp,
         formatCliHistoryAgentLabel(entry),
-        entry.status,
+        historyStanding(entry),
         formatCliHistorySubject(entry, '-'),
       ].join('\t'),
     )
@@ -428,19 +386,13 @@ export function formatInvalidExportFormatText(raw: string): string {
   return `Invalid export format: ${JSON.stringify(raw)} (use html or md)`;
 }
 
-/**
- * The one rename the NDJSON history records keep: a terminal outcome is
- * spelled as `CliRunStatus` ('completed' | 'interrupted' | 'error'), the
- * word the CLI contract promises; every other status passes through.
- */
-function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
-  if (
-    status === HISTORY_RUN_STATUS.RESUMABLE ||
-    status === HISTORY_RUN_STATUS.UNKNOWN
-  ) {
-    return status;
-  }
-  return runOutcomeToCliRunStatus(status);
+/** How a listed run stands in `texra history`'s text: its outcome, else
+ *  none, and whether `texra resume` continues it. */
+export function historyStanding(
+  entry: Pick<CliHistoryEntry, 'outcome' | 'resumable'>,
+): string {
+  const outcome = entry.outcome ?? 'no outcome';
+  return entry.resumable ? `${outcome} (resumable)` : outcome;
 }
 
 export function cliHistoryNdjsonRecords(
@@ -450,17 +402,17 @@ export function cliHistoryNdjsonRecords(
   return entries.map((entry) => ({
     kind: 'history-entry',
     ts,
-    entry: { ...entry, status: toNdjsonHistoryStatus(entry.status) },
+    entry,
   }));
 }
 
-/** `history show`'s NDJSON record, with the frozen-boundary status projection. */
+/** `history show`'s NDJSON record. */
 export function cliHistoryDetailNdjsonRecord(
   details: CliHistoryDetails,
 ): CliNdjsonRecord {
   return {
     kind: 'history-detail',
-    detail: { ...details, status: toNdjsonHistoryStatus(details.status) },
+    detail: details,
   };
 }
 
@@ -471,9 +423,9 @@ export function formatCliHistoryDetailsText(
   const model = details.currentModel ?? config?.model;
   const team = teamIdOf(config);
   const cliOutputFile = config?.cli?.outputFile?.trim();
-  // Worded as every host words it; `details.status` is the NDJSON contract's.
+  // Worded as every host words it.
   const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
-    details.status === HISTORY_RUN_STATUS.RESUMABLE ? ' (resumable)' : ''
+    details.resumable ? ' (resumable)' : ''
   }`;
   const lines = [
     `Run: ${details.id}`,
@@ -525,10 +477,6 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const { status, resumable } = cliRunStanding({
-    resumable: entry.resumable,
-    outcome: entry.outcome,
-  });
   return {
     id: entry.id,
     timestamp: entry.timestamp,
@@ -536,8 +484,8 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     // The model the run is on, as the listing derives it from the run's
     // snapshots; the record keeps the model it was launched with.
     model: entry.model ?? config.model,
-    status,
-    resumable,
+    outcome: entry.outcome,
+    resumable: entry.resumable,
     ...(entry.resumeBlocked !== undefined && {
       resumeBlocked: entry.resumeBlocked,
     }),

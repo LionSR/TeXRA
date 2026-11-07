@@ -54,7 +54,7 @@ export class RequestAttention {
       // A failed or stopped task is no chime.
       if (
         finished.some(
-          (run) => isDocumentTaskRun(run) && run.durableOutcome === 'completed',
+          (run) => isDocumentTaskRun(run) && run.outcome === 'completed',
         )
       )
         this.surface.chime();

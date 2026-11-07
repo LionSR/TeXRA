@@ -11,11 +11,11 @@ import { Effect, type Fiber, Schedule, type Scope, Stream } from 'effect';
 import {
   type SessionView,
   type RunView,
-  RUN_PHASE,
   type RunId,
-  type RunPhase,
+  type RunOutcome,
+  type RunPosition,
 } from '@texra-ai/harness/schemas';
-import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
+import { formatLoopPositionLabel, runStatus } from '@ui/copy/runStatus';
 
 import {
   safeTerminalText,
@@ -94,7 +94,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private rootRunId: RunId | undefined;
   private wantedRunId: RunId | undefined;
   /** The last root phase the renderer painted; a repeat is not a change. */
-  private paintedPhase: RunPhase | undefined;
+  private paintedPhase: RunPosition | RunOutcome | undefined;
   private heartbeat: Fiber.Fiber<number> | undefined;
   /** Open prompts holding the line ({@link suspend}). */
   private suspended = 0;
@@ -187,7 +187,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private get rootRunTerminal(): boolean {
-    return this.root()?.durableOutcome != null;
+    return this.root()?.outcome != null;
   }
 
   private applyView(view: SessionView): void {
@@ -199,9 +199,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!root) return;
     const wasTerminal =
       (previous && this.rootRunId
-        ? previous.runs.get(this.rootRunId)?.durableOutcome
+        ? previous.runs.get(this.rootRunId)?.outcome
         : null) != null;
-    const phase = root.status;
+    const phase = root.outcome ?? root.position;
     const phaseChanged = phase !== 'ready' && phase !== this.paintedPhase;
     if (phaseChanged) this.paintedPhase = phase;
     // A terminal root freezes the line: the final status is its last paint.
@@ -214,7 +214,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!root || this.rootRunTerminal) return [];
     return root.childIds.flatMap((childId) => {
       const child = this.view?.runs.get(childId);
-      return child?.live ? [child] : [];
+      return child?.holder === 'here' ? [child] : [];
     });
   }
 
@@ -314,11 +314,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 /** The session view's label (G4, one table) for every state but a running run,
  *  whose live task is its description once the AI one-liner has arrived. */
 function livePhaseText(root: RunView): string | undefined {
-  if (root.status === 'ready') return undefined;
-  if (root.status === RUN_PHASE.RUNNING) {
-    return root.description || runStatusLabel(root.statusKey);
+  if (root.outcome === null && root.position === 'ready') return undefined;
+  if (root.outcome === null && root.position === 'running') {
+    return root.description || runStatus(root).word;
   }
-  return runStatusLabel(root.statusKey);
+  return runStatus(root).word;
 }
 
 function formatInputLabel(files: readonly string[]): string | undefined {
@@ -335,7 +335,7 @@ function formatActiveChildren(
 ): string | undefined {
   const agents = children.filter((child) => child.identity.kind === 'agent');
   const first =
-    agents.find((child) => child.status === RUN_PHASE.RUNNING) ?? agents[0];
+    agents.find((child) => child.position === 'running') ?? agents[0];
   if (!first) return undefined;
   const label = pluralize(agents.length, 'agent');
   const suffix = agents.length > 1 ? ` +${agents.length - 1}` : '';

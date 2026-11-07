@@ -37,7 +37,6 @@ import {
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
-import { isInFlightPhase } from '@shared/runs/runStatus';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
@@ -103,7 +102,12 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     settled: (view: SessionView) => boolean,
   ) {
     const phases = (view: SessionView): string =>
-      runIds.map((id) => view.runs.get(id)?.status ?? '').join(',');
+      runIds
+        .map((id) => {
+          const run = view.runs.get(id);
+          return run === undefined ? '' : (run.outcome ?? run.position);
+        })
+        .join(',');
     const sent = (view: SessionView): readonly string[] =>
       (view.queuedFollowUps.get(context.runId) ?? []).map((f) => f.followUpId);
     const started = phases(initial);
@@ -383,9 +387,7 @@ const waitOver = (
 ): boolean => {
   if (runs.get(runId) === undefined) return true;
   const run = view.runs.get(runId);
-  return (
-    run !== undefined && run.status !== 'ready' && !isInFlightPhase(run.status)
-  );
+  return run !== undefined && run.outcome !== null;
 };
 
 /** Wait for runs to end, with timeout. */
@@ -441,7 +443,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     lines.push(
       '',
       'Script:',
-      JSON.stringify(scriptCallsView(calls, run.live), null, 2),
+      JSON.stringify(scriptCallsView(calls, run.holder === 'here'), null, 2),
     );
   }
 

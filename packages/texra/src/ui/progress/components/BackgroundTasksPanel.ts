@@ -44,8 +44,7 @@ import {
 } from '@texra/shared/plugins/externalInquiry';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
-import type { IconName } from '@ui/wa/iconNames';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
@@ -55,15 +54,6 @@ import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
 /** The card's key in `Surface.groups` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';
-
-/** Shape cue per tone (the session view spells the tone, the host the glyph). */
-const TONE_ICONS: Record<RunView['tone'], IconName> = {
-  running: 'circle',
-  success: 'circle-check',
-  danger: 'circle-xmark',
-  warning: 'circle-dot',
-  neutral: 'circle',
-};
 
 @customElement('background-tasks-panel')
 export class BackgroundTasksPanel extends LitElement {
@@ -375,26 +365,25 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private renderChildRow(child: RunView, depth: number): TemplateResult {
-    const pendingApproval = child.approval === 'own';
-    const glyph = pendingApproval ? 'circle-dot' : TONE_ICONS[child.tone];
+    const status = runStatus(child);
     const latest = child.latestLine ?? child.description ?? '';
-    const label = `Open ${child.label}: ${runStatusLabel(child.statusKey)}`;
+    const label = `Open ${child.label}: ${status.word}`;
     return html`
       <button
         type="button"
         role="listitem"
         class=${classMap({
           'task-row': true,
-          [`tone-${pendingApproval ? 'warning' : child.tone}`]: true,
+          [`tone-${status.tone}`]: true,
         })}
         style=${`padding-inline-start: calc(var(--wa-space-xs) + ${depth} * var(--wa-space-m))`}
         aria-label=${label}
         @click=${() => this.navigateToRun(child.id)}
       >
-        ${waIcon(glyph, { className: 'task-icon' })}
+        ${waIcon(status.glyph, { className: 'task-icon' })}
         <span class="task-name">${child.label}</span>
         ${latest ? html`<span class="task-latest">${latest}</span>` : nothing}
-        ${renderClock(child, pendingApproval, this._ticker.now)}
+        ${renderClock(child, child.approval === 'own', this._ticker.now)}
         ${waIcon('chevron-right', { className: 'task-chevron' })}
       </button>
     `;

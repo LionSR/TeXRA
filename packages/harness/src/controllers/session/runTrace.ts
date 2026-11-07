@@ -26,7 +26,7 @@ import {
   type TranscriptSubscription,
   TRACE_ROW_TYPES,
 } from '@shared/schemas';
-import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
+import { boundsLifecycle, recordsOf } from '@shared/session/runFacts';
 import { closesRunWindow } from '@shared/session/runRowReads';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type {
@@ -213,16 +213,6 @@ const STORED_TRACE: ReadonlySet<string> = new Set(TRACE_ROW_TYPES);
 /** The columns the store adds to a trace event's row. */
 const ENVELOPE = ['aggregateId', 'seq', 'commit', 'origin', 'at'] as const;
 
-/** The `seq` the lifecycle `rows` end in starts after: its activation, or
- *  for a lifecycle that ended, the one before that end. */
-function lifecycleStart(rows: readonly SessionEvent[], runId: RunId): number {
-  const last = lastLifecycleRow(rows, runId);
-  if (last === undefined) return -1;
-  if (runEndFromEvents([last], runId) === null) return last.seq;
-  const before = rows.filter((row) => row.seq < last.seq);
-  return lastLifecycleRow(before, runId)?.seq ?? -1;
-}
-
 /**
  * A run's trace read back from its session's view inputs, for every reader
  * of `Run.events`: the rows of the reader's activation, then each as it
@@ -293,9 +283,7 @@ export function replayTrace<E>(
       if (row.seq <= seq) return [];
       seq = row.seq;
       // Its end, the next activation, or the run's removal ends the read.
-      ended ||=
-        row.type === 'run.removed' ||
-        lastLifecycleRow([row], runId) !== undefined;
+      ended ||= row.type === 'run.removed' || boundsLifecycle(row, runId);
       if (!STORED_TRACE.has(row.type)) return [];
       // cast: a stored trace row is its trace event plus the envelope the store and `runEventDraft` add.
       const event = Struct.omit(row, ENVELOPE) as AgentEvent;
@@ -336,12 +324,17 @@ export function replayTrace<E>(
       // The whole history: read from the reader's activation on.
       const read = history;
       history = null;
-      seq = lifecycleStart(
-        read
-          .filter(own)
-          .flatMap(({ event }) => (event.commit <= activation ? [event] : [])),
-        runId,
-      );
+      // The lifecycle the reader's activation is in starts at its
+      // `run.activate`, whether or not it has ended since.
+      seq =
+        recordsOf(
+          read
+            .filter(own)
+            .flatMap(({ event }) =>
+              event.commit <= activation ? [event] : [],
+            ),
+          runId,
+        ).activation?.seq ?? -1;
       return read.flatMap(readInput);
     };
     const over = Effect.exit(result).pipe(

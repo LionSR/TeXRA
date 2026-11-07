@@ -1,15 +1,16 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Deferred, Effect } from 'effect';
 
-import {
-  RUN_PHASE,
-  type RunPhase,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { isWorking, type RunId } from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 
 import { registerCliStateResetHook, sessionViewFailure } from './cliState';
-import { runPhaseOf, runViewOf, sessionView } from './sessionView';
+import {
+  runPhaseOf,
+  runViewOf,
+  sessionView,
+  type RunPhase,
+} from './sessionView';
 
 /**
  * The claimed root run's end, as the slot holds it: the program that
@@ -66,7 +67,7 @@ export const runStopFacts = computed((): ChatTuiRunStopFacts => {
     runPending: chatTuiRunPending(claim),
     runId: claim.runId,
     status: runPhaseOf(run),
-    working: run?.working === true,
+    working: run != null && isWorking(run),
   };
 });
 
@@ -201,14 +202,14 @@ export class TuiSession {
    *  a model switch reaches. */
   runLive(): boolean {
     const run = runViewOf(sessionView().get(), this.runId);
-    return run !== undefined && run.live;
+    return run !== undefined && run.holder === 'here';
   }
 
   /** Model selection is open with no pending run, or at a tool-use wait. */
   canSelectModel(): boolean {
     return (
       chatTuiCanStartRootRun(this) ||
-      (this.status() === RUN_PHASE.WAITING && this.runLive())
+      (this.status() === 'waiting' && this.runLive())
     );
   }
 
