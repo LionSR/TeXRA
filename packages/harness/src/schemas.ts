@@ -175,9 +175,12 @@ export {
 // answered with, and a run's start as data.
 export {
   Cancelled,
+  Conflict,
   OutcomeSchema,
   Rejected,
   RequestErrorSchema,
+  RunActive,
+  Unavailable,
   RuntimeRequestSchema,
   StartRequestSchema,
   type RequestError,
@@ -192,6 +195,7 @@ export {
 export { getModelLabel } from '@shared/model/modelLabel';
 // Error messages.
 export {
+  causeChain,
   ensureError,
   extractErrorMessage,
   formatError,
@@ -234,6 +238,11 @@ export {
 // escapes.
 export {
   countLines,
+  formatCompactDuration,
+  formatCompactTokenCount,
+  formatCostUsd,
+  formatResultCount,
+  pluralize,
   previewLabel,
   splitContentLines,
   stripControlCharacters,

@@ -12,11 +12,14 @@
 // not a root-confined view that would refuse them.
 
 import { basename, dirname, join } from 'node:path';
-import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  normalizeFilePath,
+  toErrorMessage,
+  Rejected,
+} from '@texra-ai/harness/schemas';
 
 import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
-import { Rejected } from '@texra-ai/harness';
 import {
   isPathWithin,
   OFFICE_EXTENSIONS,

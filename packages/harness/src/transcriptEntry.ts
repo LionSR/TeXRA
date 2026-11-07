@@ -114,6 +114,7 @@ export { toolDisplayKind, type ToolDisplayKind } from '@shared/tools/toolKind';
 export {
   buildMcpToolName,
   isMcpToolName,
+  mcpServerOfToolName,
   normalizeToolName,
 } from '@shared/tools/toolDisplayName';
 // The limits a running tool's countdown shows, the same ones the tool
@@ -148,13 +149,3 @@ export type {
   CompactionActivityBlock,
   CompactionActivityStatus,
 } from '@shared/runs/compactionActivityProjection';
-// How the rows word what they count: a compact duration, a token count, a
-// USD cost, and a count with its noun (or the noun alone). A host's own
-// status line uses the same wording.
-export {
-  formatCompactDuration,
-  formatCompactTokenCount,
-  formatCostUsd,
-  formatResultCount,
-  pluralize,
-} from '@utils/text/stringUtils';

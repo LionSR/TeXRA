@@ -12,8 +12,9 @@ import {
   descendantRuns,
   type RunView,
   type SessionView,
+  formatCostUsd,
 } from '@texra-ai/harness/schemas';
-import { scriptStages, formatCostUsd } from '@texra-ai/harness/transcript';
+import { scriptStages } from '@texra-ai/harness/transcript';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { runStatus } from '@ui/copy/runStatus';
 import { scriptCallLine } from '@ui/copy/scriptStage';

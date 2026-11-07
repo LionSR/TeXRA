@@ -6,7 +6,11 @@
  * listing folded here, and a watch is the service's feed, read back as the
  * fold inputs it carries.
  */
-import { JsonValueSchema, type RunId } from '@texra-ai/harness/schemas';
+import {
+  JsonValueSchema,
+  type RunId,
+  Rejected,
+} from '@texra-ai/harness/schemas';
 import {
   Cause,
   Effect,
@@ -27,7 +31,6 @@ import {
 
 import {
   LaunchRefused,
-  Rejected,
   RunFailure,
   ToolsRefused,
   type ITool,

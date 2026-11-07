@@ -9,8 +9,6 @@
  * conclusion is a one-line table edit.
  */
 
-import { formatResultCount } from '@texra-ai/harness/transcript';
-
 import {
   authorOf,
   formatCommentEvent,
@@ -33,6 +31,7 @@ import type {
   GhReview,
   GhReviewComment,
 } from './prTypes';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 
 const MAX_BODY = 500;
 // A single linter run can emit hundreds; show the first N + overflow hint.

@@ -8,9 +8,10 @@ import {
   providerDisplayName,
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
-import { Rejected, type Session, Unavailable } from '@texra-ai/harness';
+import { type Session } from '@texra-ai/harness';
 import { Secrets } from '@texra-ai/harness/host';
 import type { ProcessServices } from '@texra-ai/harness/host';
+import { Rejected, Unavailable } from '@texra-ai/harness/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
   isRequestRefusal,

@@ -32,8 +32,12 @@ import { gt as semverGt, lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
-import { isOutcomeOf, Rejected } from '@texra-ai/harness';
-import { ensureError, type RuntimeRequest } from '@texra-ai/harness/schemas';
+import { isOutcomeOf } from '@texra-ai/harness';
+import {
+  ensureError,
+  type RuntimeRequest,
+  Rejected,
+} from '@texra-ai/harness/schemas';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,

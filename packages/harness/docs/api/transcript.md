@@ -289,52 +289,6 @@ interface FileListRow extends TranscriptRowBase {
 }
 ```
 
-## formatCompactDuration
-
-Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).
-
-Backed by `pretty-ms` with whole-second flooring,
-but renders zero / negative / sub-second durations as `0s` (used by elapsed
-displays that start from zero, e.g. goal timings and server uptime).
-
-```ts
-function formatCompactDuration(durationMs: number): string
-```
-
-## formatCompactTokenCount
-
-Format token counts for compact usage displays.
-
-Token displays intentionally stay raw until they exceed 4096, the common
-small-context threshold where an abbreviated number starts buying space. Once
-k-format rounding would print `1000k`, switch to `M` instead.
-
-```ts
-function formatCompactTokenCount(tokens: number): string
-```
-
-## formatCostUsd
-
-Format a USD cost value as a display string with three decimal places.
-e.g. `0.012` → `'$0.012'`
-
-```ts
-function formatCostUsd(cost: number): string
-```
-
-## formatResultCount
-
-Format a result count with proper pluralization.
-Example: formatResultCount(3, 'result') returns "3 results"
-
-```ts
-function formatResultCount(
-  count: number,
-  singular: string,
-  plural?: string,
-): string
-```
-
 ## isMcpToolName
 
 True for an MCP tool call: the harness's `mcp__<server>__<tool>` or an
@@ -367,6 +321,15 @@ interface LogRow extends TranscriptRowBase {
 }
 ```
 
+## mcpServerOfToolName
+
+The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
+`undefined` for any other tool name.
+
+```ts
+function mcpServerOfToolName(name: string): string | undefined
+```
+
 ## normalizeToolName
 
 Canonical lookup key for a tool name: namespaces stripped, lowercased.
@@ -385,18 +348,6 @@ Serialization format {@link stringifyPayload} chose for a value.
 
 ```ts
 type PayloadLanguage = 'yaml' | 'plaintext';
-```
-
-## pluralize
-
-Return the singular or plural form of `singular` based on `count`.
-
-```ts
-function pluralize(
-  count: number,
-  singular: string,
-  plural?: string,
-): string
 ```
 
 ## ProgressStatusRow

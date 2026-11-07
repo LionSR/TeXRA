@@ -314,6 +314,14 @@ const inheritedEnv: (keep?: "openai" | "anthropic" | "google" | "xai" | "deepsee
 const INPUT_HISTORY_LIMIT: 1000
 ```
 
+## isNotADirectoryError
+
+Check if an error represents "a parent path component is a file, not a directory".
+
+```ts
+function isNotADirectoryError(err: unknown): boolean
+```
+
 ## JsonConfigProvider
 
 Store-backed {@link ConfigProvider}. Keys are relative to the catalog's

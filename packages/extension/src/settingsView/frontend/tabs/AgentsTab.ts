@@ -23,8 +23,8 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type AgentScanIssue,
+  pluralize,
 } from '@texra-ai/harness/schemas';
-import { pluralize } from '@texra-ai/harness/transcript';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';

@@ -26,10 +26,13 @@ import {
 import {
   LaunchRefused,
   type LocalSession,
-  Rejected,
   type RunRecords,
 } from '@texra-ai/harness';
-import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  type RunId,
+  toErrorMessage,
+  Rejected,
+} from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 

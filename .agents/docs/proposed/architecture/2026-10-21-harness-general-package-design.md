@@ -190,14 +190,15 @@ export of them waits for a named external consumer, as the durable doc rules
 
 ### Public surface
 
-The root entry has about 30 names: `Sessions`, `Session`, `Run`, `StartInput`,
-`ResumeInput`, `OpenOptions`, `SessionHost`, `ApprovalHandler`,
-`PendingRequest`, `RequestDecision`, `RuntimeRequest`, `Outcome`, `SessionView`,
-`RunView`, `RunEndResult`, `AgentEvent`, `RunId`, `WorkspaceRoots`,
-`AgentPlatform`, `AgentDefinition`, `Plugin` and `defineTool`, plus the errors
-(`RunFailure`, `ResumeRefused`, `PluginsRefused`,
-`AgentNotFound`, `ToolsRefused`, `LaunchError`, `RequestError`,
-`SessionOpenError`).
+The root entry holds what only an embedder needs, about 30 names:
+`Sessions`, `Session`, `Run`, `StartInput`, `ResumeInput`, `OpenOptions`,
+`SessionHost`, `ApprovalHandler`, `Outcome`, `AgentEvent`, `WorkspaceRoots`,
+`AgentPlatform` and `defineTool`, plus the session's errors (`RunFailure`,
+`ResumeRefused`, `PluginsRefused`, `LaunchRefused`, `ToolsRefused`,
+`LaunchError`, `SessionOpenError`). A name lives on one entry: the request
+vocabulary and the view types (`RuntimeRequest`, `RequestDecision`,
+`PendingRequest`, `RunId`, the request errors) on `./schemas`, which a
+browser surface can import, and `Plugin` on `./plugins` (round 3, Q6).
 
 `Run` gains `text: Stream<string>`, `followUp`, `stop`, `decide` and
 `transcript`, all thin methods over the existing request unions.

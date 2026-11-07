@@ -100,6 +100,7 @@ export {
 export {
   absentReason,
   entryTypeIn,
+  isNotADirectoryError,
   pathExists,
 } from '@utils/files/fsEntryExists';
 // The harness's log path as Effect diagnostics (its logger over the installed

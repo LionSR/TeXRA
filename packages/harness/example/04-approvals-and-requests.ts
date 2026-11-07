@@ -12,12 +12,13 @@
  *    after which its `result` is the `cancelled` end it stored.
  */
 import { Effect, Layer, Schema, Stream } from 'effect';
-import { defineTool, Sessions, type PendingRequest } from '@texra-ai/harness';
+import { defineTool, Sessions } from '@texra-ai/harness';
 import {
   definePlugin,
   executed,
   harnessBuiltins,
 } from '@texra-ai/harness/plugins';
+import type { PendingRequest } from '@texra-ai/harness/schemas';
 
 import { makeExampleWorkspace } from './_support.ts';
 

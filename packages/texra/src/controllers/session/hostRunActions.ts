@@ -1,15 +1,11 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 
 import {
-  Cancelled,
-  Rejected,
   type LaunchError,
-  type RequestError,
   type Run,
   type RunFailure,
   type Session,
   type StartInput,
-  Unavailable,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
@@ -34,6 +30,10 @@ import {
   runActionRefusal,
   type RunAction,
   type RunId,
+  Cancelled,
+  Rejected,
+  Unavailable,
+  type RequestError,
 } from '@texra-ai/harness/schemas';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';

@@ -28,7 +28,6 @@ export {
   formatConversationMessage,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
-export type { RunWorkspaceFile } from '@shared/schemas';
 export type { AssembleTraceResult } from '@transcript/traceAssembler';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
@@ -194,7 +193,6 @@ export {
 export { readMcpConfig } from '@tools/mcp/mcpConfig';
 export { mcpConfigPathOf } from '@common/plugins/mcpServers';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
-export { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 // The skills a session's roots discover (the settings inventory, the enabled
 // ones a person activates) with their issues, and a host's skill sources and
 // source options.
@@ -231,13 +229,10 @@ export {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
-// Failures as hosts and plugins read them: the agent error, predicates, cause
-// chain, and a failure's message with its classification (`toErrorMessage`
-// is in `./schemas`).
+// Failures as hosts and plugins read them: the agent error, a predicate, and
+// a failure's message with its classification.
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
-export { causeChain } from '@utils/errors/errorMessage';
 export { isModuleNotFoundError } from '@common/errors/errorPredicates';
-export { isNotADirectoryError } from '@utils/files/fsEntryExists';
 export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 // Platform path containment, segments, POSIX form, case-free extension check.
 export {

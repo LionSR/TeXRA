@@ -15,7 +15,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import { Rejected, type Session, type WorkspaceRoots } from '@texra-ai/harness';
+import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   pathToLocationIn,
   Settings,
@@ -25,6 +25,7 @@ import {
   type WorkspaceFs,
 } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
+import { Rejected } from '@texra-ai/harness/schemas';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import {
   latexdiffPackMessage,

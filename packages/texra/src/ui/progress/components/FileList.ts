@@ -5,6 +5,7 @@ import {
   normalizeFilePath,
   fileLocationDisplayPath,
   type RunId,
+  pluralize,
 } from '@texra-ai/harness/schemas';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -17,7 +18,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import { pluralize } from '@texra-ai/harness/transcript';
 import {
   type CompileFailure,
   compileFailuresOf,

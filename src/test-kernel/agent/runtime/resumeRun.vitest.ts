@@ -29,7 +29,7 @@ import {
   type Model,
   type TurnEvent,
 } from '@texra-ai/llm';
-import { Conflict, type LocalSession, Sessions } from '@texra-ai/harness';
+import { type LocalSession, Sessions } from '@texra-ai/harness';
 import { ValidationModel } from '@texra-ai/harness/host';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
@@ -53,6 +53,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
 import type { RunId } from '@texra-ai/harness/schemas';
+import { Conflict } from '@texra-ai/harness/schemas';
 
 /** A resume in `session`. */
 const resume = (

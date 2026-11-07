@@ -1,4 +1,3 @@
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Cause, Effect, Result, Schema, Scope, Struct } from 'effect';
 
 import { defineTool, type ToolResult } from '@texra-ai/harness';
@@ -11,7 +10,7 @@ import {
   nullishWithDefault,
   ToolError,
 } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, formatResultCount } from '@texra-ai/harness/schemas';
 import {
   countBySeverity,
   formatCounts,
