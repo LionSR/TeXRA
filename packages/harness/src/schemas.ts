@@ -346,6 +346,7 @@ export {
   qualifyAggregateId,
   recipeBlockOf,
   referencedAggregates,
+  replayInputs,
   type RequestDecision,
   RequestShowErrorPayloadSchema,
   type RetryRequest,

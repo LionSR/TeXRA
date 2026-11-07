@@ -1671,6 +1671,26 @@ class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
 })
 ```
 
+## replayInputs
+
+A cold read as the view's inputs, in the reader's order: the debug
+policy; the local snapshot, before the rows it describes (a run applied
+before it reads as held by nothing, and the transcript rows an unheld run
+finishes stay finished once it is known held); the listing; the
+subscription set; the subscribed aggregates' rows; and the marker. The live
+reader and an exported trace both answer a subscribe with it.
+
+```ts
+function replayInputs(read: {
+  readonly debug: boolean;
+  readonly local: LocalRuntimeState;
+  readonly listing: readonly DisplaySessionEvent[];
+  readonly subscriptions: readonly TranscriptSubscription[];
+  readonly aggregateRows: readonly DisplaySessionEvent[];
+  readonly existence: ExistenceReconciliation;
+}): SessionViewInput[]
+```
+
 ## requestAnswerability
 
 ```ts

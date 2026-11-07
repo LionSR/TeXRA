@@ -10,6 +10,7 @@ import {
   qualifyAggregateId,
   listingTypeOf,
   referencedAggregates,
+  replayInputs,
   runIdentityDisplayName,
   type DisplaySessionEvent,
   type TraceDocument,
@@ -72,10 +73,10 @@ export function traceHost(trace: TraceDocument): HostSnapshot {
  * counters and the transcript are all the session view's own reading at position k, with
  * no separate rule per tier.
  *
- * Sending the listing facts on both reads mirrors the live reader
- * (`sessionInputs.ts`): the session view updater (`sessionViewUpdate.ts`) skips a
- * listing fact older than one already applied per (aggregate, listing type), so
- * the second delivery of a row changes nothing.
+ * The listing facts go out on both reads, as from the live reader: the
+ * session view skips a listing fact older than one already applied per
+ * (aggregate, listing type), so the second delivery of a row changes
+ * nothing.
  */
 export function traceFrame(
   trace: TraceDocument,
@@ -100,32 +101,18 @@ export function traceFrame(
     session,
     generation: subscribe.generation,
     cursor: events.at(-1)?.commit ?? 0,
-    // The reader's order: the policy, the local snapshot, the listing, the
-    // transcript set, the aggregates, the marker.
-    inputs: [
-      { _tag: 'debug', enabled: subscribe.debug },
-      { _tag: 'local', local: { runsHere: [] } },
-      ...listing.map((event) => ({
-        _tag: 'event' as const,
-        read: 'listing' as const,
-        event,
-      })),
-      { _tag: 'subscriptions', set: [...subscribe.aggregates] },
-      ...(named
-        ? events.map((event) => ({
-            _tag: 'event' as const,
-            read: 'aggregate' as const,
-            event,
-          }))
-        : []),
-      {
-        _tag: 'replay.complete',
-        existence: {
-          checkedAggregateIds,
-          present: checkedAggregateIds,
-          unreadable: [],
-        },
+    inputs: replayInputs({
+      debug: subscribe.debug,
+      // Nothing of an exported trace runs here.
+      local: { runsHere: [] },
+      listing,
+      subscriptions: subscribe.aggregates,
+      aggregateRows: named ? events : [],
+      existence: {
+        checkedAggregateIds,
+        present: checkedAggregateIds,
+        unreadable: [],
       },
-    ],
+    }),
   };
 }

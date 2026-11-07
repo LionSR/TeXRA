@@ -13,8 +13,10 @@ import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import {
   referencedAggregates,
+  replayInputs,
   isDisplaySessionEvent,
   type AggregateId,
+  type DisplaySessionEvent,
   type ExistenceReconciliation,
   type SessionViewInput,
   type TextChunk,
@@ -90,28 +92,13 @@ export const sessionInputsLayer = Layer.effect(
             );
             for (const event of listing)
               for (const id of referencedAggregates(event)) checked.add(id);
-            const replay: SessionViewInput[] = [
-              {
-                _tag: 'debug',
-                enabled: debug,
-              },
-              ...listing.map((event) => ({
-                _tag: 'event' as const,
-                read: 'listing' as const,
-                event,
-              })),
-            ];
-            replay.push({
-              _tag: 'subscriptions',
-              set: [...effectiveAggregates],
-            });
+            const aggregateRows: DisplaySessionEvent[] = [];
             for (const aggregate of effectiveAggregates) {
-              const rows = yield* requiredRead(
-                log.readDisplayAggregate(aggregate.id, aggregate.fromSeq),
+              aggregateRows.push(
+                ...(yield* requiredRead(
+                  log.readDisplayAggregate(aggregate.id, aggregate.fromSeq),
+                )),
               );
-              for (const event of rows) {
-                replay.push({ _tag: 'event', read: 'aggregate', event });
-              }
             }
             const replayState = yield* requiredRead(
               log.readInputBatch(
@@ -120,15 +107,14 @@ export const sessionInputsLayer = Layer.effect(
                 [...checked],
               ),
             );
-            const replayExistence = reconcileExistence(replayState);
-            // The local snapshot goes before the rows it describes: a run
-            // folded before it reads as held by nothing, and the transcript
-            // rows an unheld run settles stay settled once it is known held.
             const initialLocal = yield* SubscriptionRef.get(local.ref);
-            replay.splice(1, 0, { _tag: 'local', local: initialLocal });
-            replay.push({
-              _tag: 'replay.complete',
-              existence: replayExistence,
+            const replay = replayInputs({
+              debug,
+              local: initialLocal,
+              listing,
+              subscriptions: effectiveAggregates,
+              aggregateRows,
+              existence: reconcileExistence(replayState),
             });
             // Every level replays on subscribe; changes during the cold read
             // are therefore covered by the first finite tail read.

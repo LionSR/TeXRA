@@ -8,7 +8,11 @@ import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
 import { AggregateIdSchema } from './identifiers';
-import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
+import {
+  CommitOrdinalSchema,
+  DisplaySessionEventSchema,
+  type DisplaySessionEvent,
+} from './sessionEvent';
 
 /**
  * The read that delivered a durable row: the cold listing, one
@@ -118,3 +122,37 @@ export const SessionViewInputSchema = Schema.Union([
   }),
 ]);
 export type SessionViewInput = typeof SessionViewInputSchema.Type;
+
+/**
+ * A cold read as the view's inputs, in the reader's order: the debug
+ * policy; the local snapshot, before the rows it describes (a run applied
+ * before it reads as held by nothing, and the transcript rows an unheld run
+ * finishes stay finished once it is known held); the listing; the
+ * subscription set; the subscribed aggregates' rows; and the marker. The live
+ * reader and an exported trace both answer a subscribe with it.
+ */
+export function replayInputs(read: {
+  readonly debug: boolean;
+  readonly local: LocalRuntimeState;
+  readonly listing: readonly DisplaySessionEvent[];
+  readonly subscriptions: readonly TranscriptSubscription[];
+  readonly aggregateRows: readonly DisplaySessionEvent[];
+  readonly existence: ExistenceReconciliation;
+}): SessionViewInput[] {
+  return [
+    { _tag: 'debug', enabled: read.debug },
+    { _tag: 'local', local: read.local },
+    ...read.listing.map((event) => ({
+      _tag: 'event' as const,
+      read: 'listing' as const,
+      event,
+    })),
+    { _tag: 'subscriptions', set: [...read.subscriptions] },
+    ...read.aggregateRows.map((event) => ({
+      _tag: 'event' as const,
+      read: 'aggregate' as const,
+      event,
+    })),
+    { _tag: 'replay.complete', existence: read.existence },
+  ];
+}
