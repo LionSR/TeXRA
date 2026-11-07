@@ -46,7 +46,7 @@ depends on, and the deletion list is a consequence, not a goal:
 | R5  | Every child is a run that ends; awaited: the call's `tool.result`; background: one message  | `Effect.forkChild` + `Fiber.join`, or `FiberMap.run` + one row        | `agent/runtime/childRunLoop.ts`, `child.turn`, `child.park`, 10 of 12 delivery paths, `executions wait`'s prefix scan               |
 | R6  | The view carries three facts; words, groups and offers are one app function                 | one pure fold                                                         | `RUN_PHASE`, `substate`, `group`, `statusKey`, nine derived fields, four row→phase tables                                           |
 | R7  | A question to a person is a row of the run, opened and decided through its cell             | `RunCell.append` + the cell's row stream                              | `AskOptions.open`, five `request.decided` writers, three tail waiters, `enqueue`, `approvePendingUnderBypass`                       |
-| R8  | A session is one scoped layer; one tail; the writer applies what it wrote                   | `Layer.scoped` + `PubSub` + `Queue.sliding`                           | `SessionStoreParts`, seven piped layers, `folded`/`settlement`, `PublisherJob`, `SessionHostInteractions`                           |
+| R8  | A session is one scoped layer; one tail; the writer applies what it wrote                   | `Layer.effect` + `PubSub` + `Queue.sliding`                           | `SessionStoreParts`, seven piped layers, `folded`/`settlement`, `PublisherJob`, `SessionHostInteractions`                           |
 | R9  | Only a turn is row-driven; the `failed` row stores llm's verdict; health is a `Latch`       | `Effect.retry`, `Latch` + `Semaphore(1)`, `ScopedRef`, `Semaphore(1)` | `InvocationDriver`, `agent/runtime/run/modelCall.ts`, `ProviderErrorClassification`, 250 lines of `ModelRetryGate`, `SharedAttempt` |
 | R10 | Hosts bind verbs to one action body; a client holds a `Session`, not pieces of one          | `FiberHandle`, `SessionHost.approve`, `Stream.takeWhile`              | the CLI's run claim, four approval loops, `CliRunReads`, four exit-code writers, the progress drainer                               |
 
@@ -492,7 +492,7 @@ and a `Proxy` overlay, over an interface whose every member is optional
 re-provided or read 18 times in fibers that already hold them (E5); the
 owner's decision 1 named `runs`, one tag.
 
-**Design.** One `Layer.scoped(SessionServices)` that acquires store, view,
+**Design.** One `Layer.effect(SessionServices)` that acquires store, view,
 interactions, runs, consumers in order and lets the scope release in reverse;
 no bag, no `cohort` (the sweep reads the view), no `holds`. One root tag
 (`SessionRoots` with the two rooted filesystems as fields), one view tag.
@@ -670,6 +670,11 @@ PRs; R10's two become its third and fourth, and the digest, `RcMap` and
 the signals go first, since the one `Session` is served over them.
 
 ## Order
+
+Status on 2026-11-07, and the order of every root still open together with
+the findings of a second survey outside the core:
+[red flags round 2 and the order](./2026-11-07-red-flags-round-2-and-order.md).
+The list below is the order the roots were planned in.
 
 Each root depends on the ones above it in this list; a slice is a deletion
 whose callers are known, never a fix, and no "one owner" consolidation PR
