@@ -5,7 +5,7 @@
  */
 import path from 'node:path';
 
-import { Effect, type Fiber, Schedule, type Scope, Stream } from 'effect';
+import { Effect, FiberHandle, Schedule, type Scope, Stream } from 'effect';
 
 import {
   type SessionView,
@@ -96,7 +96,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   /** Where the root stood when the renderer last painted; a repeat is not
    *  a change. */
   private painted: RunStanding | undefined;
-  private heartbeat: Fiber.Fiber<number> | undefined;
+  /** The heartbeat's one fiber, in the scope that follows the view. */
+  private heartbeat: FiberHandle.FiberHandle<number> | undefined;
   /** Open prompts holding the line ({@link suspend}). */
   private suspended = 0;
 
@@ -123,31 +124,30 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         Effect.andThen(
           Effect.forkScoped(
             Effect.scoped(
-              Stream.runForEach(
-                session.view.changes,
-                Effect.fnUntraced({ self: this }, function* (view) {
-                  this.applyView(view);
-                  if (this.rootRunTerminal || !this.rootRunId) {
-                    this.stopHeartbeat();
-                  } else if (
-                    this.ansi &&
-                    !this.heartbeat &&
-                    this.suspended === 0
-                  ) {
-                    // A start waits a full interval. This stream's scope
-                    // interrupts and joins the heartbeat when it ends.
-                    this.heartbeat = yield* Effect.sync(() =>
-                      this.render(true),
-                    ).pipe(
-                      Effect.schedule(
-                        Schedule.spaced(this.heartbeatIntervalMs),
-                      ),
-                      Effect.forkScoped({ startImmediately: true }),
-                    );
-                  }
-                }),
-              ),
-            ).pipe(Effect.ensuring(Effect.sync(() => this.stopHeartbeat()))),
+              Effect.gen({ self: this }, function* () {
+                // This stream's scope interrupts and joins the heartbeat
+                // when it ends.
+                const heartbeat = yield* FiberHandle.make<number>();
+                this.heartbeat = heartbeat;
+                const beat = Effect.sync(() => this.render(true)).pipe(
+                  Effect.schedule(Schedule.spaced(this.heartbeatIntervalMs)),
+                );
+                yield* Stream.runForEach(
+                  session.view.changes,
+                  Effect.fnUntraced({ self: this }, function* (view) {
+                    this.applyView(view);
+                    if (this.rootRunTerminal || !this.rootRunId) {
+                      yield* FiberHandle.clear(heartbeat);
+                    } else if (this.ansi && this.suspended === 0) {
+                      // A start waits a full interval.
+                      yield* FiberHandle.run(heartbeat, beat, {
+                        onlyIfMissing: true,
+                      });
+                    }
+                  }),
+                );
+              }),
+            ),
             { startImmediately: true },
           ),
         ),
@@ -241,9 +241,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.lastRenderAt = now;
   }
 
+  /** Stop the heartbeat now: the line it ticks is no longer live. */
   private stopHeartbeat(): void {
-    this.heartbeat?.interruptUnsafe();
-    this.heartbeat = undefined;
+    if (this.heartbeat) Effect.runSync(FiberHandle.clear(this.heartbeat));
   }
 
   /** The status line, and the same line without its elapsed clock. */

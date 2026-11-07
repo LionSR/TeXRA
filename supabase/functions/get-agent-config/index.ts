@@ -7,15 +7,11 @@
  * - POST /get-agent-config - Fetch agent YAML config by name
  */
 
-import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
+import { AuthUnavailable, authenticateJwt } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 // The service-role client bypasses bucket policies for storage operations.
-import {
-  adminClient,
-  SUPABASE_ANON_KEY,
-  SUPABASE_URL,
-} from '../_shared/edgeClients.ts';
-import { errorResponse, jsonResponse } from '../_shared/responses.ts';
+import { adminClient } from '../_shared/edgeClients.ts';
+import { bearerToken, errorResponse, jsonResponse } from '../_shared/http.ts';
 
 // =============================================================================
 // Request Handler
@@ -29,12 +25,6 @@ Deno.serve(async (req: Request) => {
   // Only accept POST
   if (req.method !== 'POST') {
     return errorResponse(req, 'Method not allowed', 405);
-  }
-
-  // Check environment
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !adminClient) {
-    console.error('[GET_AGENT_CONFIG] Missing required environment variables');
-    return errorResponse(req, 'Server configuration error', 500);
   }
 
   try {
@@ -90,6 +80,10 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse(req, { config: yamlContent }, 200);
   } catch (err) {
+    if (err instanceof AuthUnavailable) {
+      console.warn('[GET_AGENT_CONFIG]', err.message);
+      return errorResponse(req, 'Authentication is unavailable', 503);
+    }
     console.error('[GET_AGENT_CONFIG] Error:', err);
     return errorResponse(req, 'Internal server error', 500);
   }

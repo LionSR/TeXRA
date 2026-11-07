@@ -10,5 +10,6 @@
 import { serveLogUsage } from '../_shared/logUsage.ts';
 import { storeForUser } from './legacyStore.ts';
 import { resolveJwtOwner } from './usageOwner.ts';
+import { UsageBatchSchema } from './usageValidation.ts';
 
-serveLogUsage(resolveJwtOwner, storeForUser);
+serveLogUsage(UsageBatchSchema, resolveJwtOwner, storeForUser);

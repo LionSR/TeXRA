@@ -1,15 +1,18 @@
 # Desktop Signing CI
 
 The desktop installer jobs can sign release artifacts when the repository
-secrets are configured. Local packaging commands still work without these
-secrets and produce unsigned artifacts for development.
+secrets are configured. Local packaging (`electron-builder.yml`) works without
+these secrets and produces unsigned artifacts for development.
+`packages/desktop/electron-builder.signed.config.mjs` always signs: the
+installer job's `Verify signing secrets` step chooses it only when a platform's
+secrets are complete, and run without a signing identity or the Azure settings
+it fails rather than building unsigned.
 
 ## macOS
 
-The macOS installer job signs and notarizes with
-`packages/desktop/electron-builder.signed.config.mjs` when it finds both a
-Developer ID certificate and an App Store Connect API key. Both the app and the
-DMG are notarized and stapled; the zip carries the stapled app.
+The macOS installer job signs and notarizes with the signed config when it
+finds both a Developer ID certificate and an App Store Connect API key. Both
+the app and the DMG are notarized and stapled; the zip carries the stapled app.
 
 Required certificate secrets:
 

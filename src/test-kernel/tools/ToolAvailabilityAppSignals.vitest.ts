@@ -84,8 +84,13 @@ const named = (
   }));
 
 /** The process's availability service over `plugins`, as a composition root
- *  builds it. */
-const availabilityService = (plugins: readonly Plugin[]) =>
+ *  builds it. By default no plugin layer is up: each probe runs on the
+ *  process services. */
+const availabilityService = (
+  plugins: readonly Plugin[],
+  processServices: (typeof ToolCatalog.Service)['processServices'] = () =>
+    Effect.succeed(Option.none()),
+) =>
   Effect.gen(function* () {
     const { toolAvailabilityLayer } = yield* Effect.promise(
       () => import('@tools/toolAvailability'),
@@ -95,10 +100,7 @@ const availabilityService = (plugins: readonly Plugin[]) =>
         Layer.provide(
           Layer.merge(
             Layer.succeed(ToolRegistry)(toolTable(plugins)),
-            // No plugin layer is up: each probe runs on the process services.
-            Layer.mock(ToolCatalog, {
-              processServices: () => Effect.succeed(Option.none()),
-            }),
+            Layer.mock(ToolCatalog, { processServices }),
           ),
         ),
       ),
@@ -153,6 +155,33 @@ describe('tool availability service', () => {
 
         yield* probedAll;
         expect(probedRoots.toSorted()).toEqual(['/a', '/b', undefined]);
+      }).pipe(Effect.provide(probeServices)),
+  );
+
+  it.effect(
+    'reports a plugin whose layer failed to start as unknown, and probes the others',
+    () =>
+      Effect.gen(function* () {
+        const available = (id: string): Plugin => ({
+          id,
+          tools: named(id),
+          availability: { check: () => Effect.succeed({ available: true }) },
+        });
+        const availability = yield* availabilityService(
+          [available('first'), available('broken'), available('last')],
+          (id) =>
+            id === 'broken'
+              ? Effect.die(new Error('the layer failed to start'))
+              : Effect.succeed(Option.none()),
+        );
+
+        const results = yield* availability.refresh(probeInputs);
+
+        expect(results.map(({ id, status }) => [id, status])).toEqual([
+          ['first', 'available'],
+          ['broken', 'unknown'],
+          ['last', 'available'],
+        ]);
       }).pipe(Effect.provide(probeServices)),
   );
 });

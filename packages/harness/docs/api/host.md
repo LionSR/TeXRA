@@ -2513,9 +2513,8 @@ class ToolAvailability extends Context.Service<
      * Probe every plugin for `inputs`' workspace and publish the results:
      * the round after the one in flight for that root reads `inputs` (or
      * newer ones another caller asked with), and every caller asking while
-     * it waits shares it. Tools recently found missing are looked up again,
-     * so one installed since shows up. Each plugin's probe has its own
-     * deadline and reports a failure as `unknown`, so this never fails.
+     * it waits shares it. Each plugin's probe has its own deadline and
+     * reports a failure as `unknown`, so this never fails.
      */
     readonly refresh: (
       inputs: ToolProbeInputs,
@@ -2649,6 +2648,23 @@ class UsageLog extends Context.Service<
 
 ```ts
 type UsageLogEntry = typeof UsageLogEntrySchema.Type;
+```
+
+## UsageLogEntrySchema
+
+One entry of the usage log's wire, a body of the `log-usage-v2` edge
+function. The sender checks each entry against it before queueing, so
+nothing goes out that the edge would reject. Field names are the wire's,
+not `NormalizedUsage`'s.
+
+The edge decodes the same entry (`supabase/functions/log-usage-v2/usageBatch.ts`)
+and the two must match: everything this schema accepts, that one accepts.
+There the counts are non-negative ints, `listCost` a non-negative finite
+number, `timestamp` a UTC ISO 8601 date-time and every string non-empty,
+`provider` and `usageRoute` included.
+
+```ts
+const UsageLogEntrySchema: Struct<{ readonly timestamp: String; readonly model: String; readonly provider: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly agentName: optional<String>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly streamId: optional<String>; readonly inputTokens: Int; readonly outputTokens: Int; readonly listCost: Finite; readonly responseTimeMs: optional<Int>; readonly cachedInputTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly extensionVersion: optional<String>; readonly editorType: optional<String>; }>
 ```
 
 ## ValidationModel

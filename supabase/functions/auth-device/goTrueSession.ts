@@ -1,6 +1,7 @@
-/** Shared native GoTrue session minting for edge functions. */
+/** Native GoTrue session minting for the device flow's `/token`. */
 
-import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import type { Session } from '@supabase/supabase-js';
+import { adminClient, anonClient } from '../_shared/edgeClients.ts';
 
 /**
  * Mint a native GoTrue session for an existing user. Generates an admin
@@ -13,12 +14,8 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
  * handed back.
  */
 export async function mintGoTrueSession(
-  adminClient: SupabaseClient<any>,
-  authClient: SupabaseClient<any>,
   email: string,
   expectedUserId: string,
-  // Log tag of the calling flow, so a mismatch stays greppable per flow.
-  logPrefix: string,
 ): Promise<Session | null> {
   // Supabase admin.generateLink returns link/OTP material for custom delivery.
   // Consume the hash immediately server-side; GoTrue mailer behavior depends on
@@ -29,24 +26,24 @@ export async function mintGoTrueSession(
   const tokenHash = linkData?.properties?.hashed_token;
   if (linkError || !tokenHash) {
     console.error(
-      `${logPrefix} generateLink failed:`,
+      '[DEVICE] generateLink failed:',
       linkError?.message ?? 'no hashed_token',
     );
     return null;
   }
 
-  const { data, error } = await authClient.auth.verifyOtp({
+  const { data, error } = await anonClient.auth.verifyOtp({
     type: 'magiclink',
     token_hash: tokenHash,
   });
 
   if (error || !data.session) {
-    console.error(`${logPrefix} verifyOtp failed:`, error?.message);
+    console.error('[DEVICE] verifyOtp failed:', error?.message);
     return null;
   }
   if (data.session.user.id !== expectedUserId) {
     console.error(
-      `${logPrefix} session user mismatch: resolved ${expectedUserId}, minted ${data.session.user.id}`,
+      `[DEVICE] session user mismatch: resolved ${expectedUserId}, minted ${data.session.user.id}`,
     );
     return null;
   }

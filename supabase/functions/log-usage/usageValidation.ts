@@ -52,7 +52,7 @@ const optionalFields = {
   reasoningTokens: NonnegativeInt,
   usageRoute: UsageRouteSchema,
   /** LEGACY: relay wire tolerance. Released clients still post this field and
-   *  `index.ts` still writes the `used_relay` column from it. Retirement is
+   *  `legacyStore.ts` still writes the `used_relay` column from it. Retirement is
    *  owned by #10921: after 2026-11, and only once the ops drain (#10920) has
    *  completed. */
   usedRelay: Schema.Boolean,
@@ -91,7 +91,7 @@ const UsageLogEntryOutputSchema = Schema.Struct({
 });
 
 /** One usage row: nulls dropped, and the legacy `viaChatGptSubscription`
- *  flag folded into `usageRoute`. */
+ *  flag converted into `usageRoute`. */
 export const UsageLogEntrySchema = UsageLogEntryInputSchema.pipe(
   Schema.decodeTo(UsageLogEntryOutputSchema, {
     decode: SchemaGetter.transform(({ viaChatGptSubscription, ...entry }) => {

@@ -9,9 +9,12 @@
  * navigation, which browsers honor where they drop the server redirect) and
  * keeps a real-click "Open in <editor>" button as the fallback.
  *
- * PKCE flow: the only thing GoTrue puts on this page is a one-time ?code= in the
- * query string (or ?error= on failure). No access/refresh token ever reaches
- * the bridge; the editor exchanges the code using a verifier it never shared.
+ * PKCE flow: GoTrue puts a one-time ?code= in the query string (or ?error= on
+ * failure), and the editor exchanges the code using a verifier it never
+ * shared. The page hands the query on to the editor's deep link; only when
+ * the query is empty does it hand over the URL fragment instead, which is
+ * where an implicit-flow response would carry its tokens (no TeXRA client
+ * requests that flow).
  *
  * The editor scheme, extension id, and application nonce ride as PATH segments
  * (/auth-bridge/<ext>/<id>/<nonce>) so redirect_to carries no '?' that an OAuth

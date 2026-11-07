@@ -171,6 +171,7 @@ function boundModel(
 ): BoundModel {
   return {
     modelId: GPT54,
+    catalogEntry: MODEL_CONFIGS[GPT54],
     config: MODEL_CONFIGS[GPT54],
     backend: 'openai',
     declinedRoutes: [],

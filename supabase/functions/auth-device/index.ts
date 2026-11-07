@@ -28,21 +28,18 @@
  * in the Supabase Auth URL configuration (e.g. https://remote.texra.ai/functions/v1/auth-device/verify).
  */
 
-import { type Context as HonoContext, Hono } from '@hono/hono';
+import { type Context, Hono } from '@hono/hono';
 import { parseApprovalDecision } from './approvalRequest.ts';
-import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
+import { randomBase64Url, sha256Hex } from './crypto.ts';
+import { mintGoTrueSession, sessionResponseBody } from './goTrueSession.ts';
+import { AuthUnavailable, authenticateJwt } from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
-import { randomBase64Url, sha256Hex } from '../_shared/crypto.ts';
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../_shared/edgeClients.ts';
 import {
-  requireSupabaseClients,
-  type SupabaseClientVariables,
-} from '../_shared/edgeMiddleware.ts';
-import {
-  mintGoTrueSession,
-  sessionResponseBody,
-} from '../_shared/goTrueSession.ts';
-import { errorResponse, jsonResponse } from '../_shared/responses.ts';
+  adminClient,
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+} from '../_shared/edgeClients.ts';
+import { bearerToken, errorResponse, jsonResponse } from '../_shared/http.ts';
 
 // =============================================================================
 // Constants
@@ -70,15 +67,24 @@ const USER_CODE_LENGTH = 8;
 const DEVICE_CODE_BYTES = 32;
 const USER_CODE_INSERT_ATTEMPTS = 4;
 
+/**
+ * The verification page's SDK: the UMD build in the npm tarball of the
+ * version `deno.json` pins, one file with no imports, so its integrity hash
+ * covers every line the page runs. A version bump recomputes the hash from
+ * that file (`openssl dgst -sha384 -binary | openssl base64 -A`).
+ */
+const PAGE_SDK_URL =
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.115.0/dist/umd/supabase.js';
+const PAGE_SDK_INTEGRITY =
+  'sha384-CLZeq1dk8+Uzrs7TVvBUdlFoV5F0DMqgRoeHa8g5wJcuPe5SkVfEvdxB0ZuzlnBQ';
+
 // =============================================================================
 // Hono App
 // =============================================================================
 
 // The edge runtime hands over paths including the function slug
 // (/auth-device/code).
-const app = new Hono<{ Variables: SupabaseClientVariables }>().basePath(
-  '/auth-device',
-);
+const app = new Hono().basePath('/auth-device');
 
 // CORS middleware. The verification page is served from this same origin, so
 // same-origin browser fetches (which may carry a *.supabase.co Origin not in
@@ -94,13 +100,9 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-app.use('*', requireSupabaseClients);
-
 // =============================================================================
 // Helpers
 // =============================================================================
-
-type Context = HonoContext<{ Variables: SupabaseClientVariables }>;
 
 function randomUserCode(): string {
   const bytes = new Uint8Array(USER_CODE_LENGTH * 2);
@@ -140,10 +142,8 @@ function verificationUri(c: Context): string {
 // POST /code - Start a device authorization (anonymous).
 app.post('/code', async (c) => {
   try {
-    const supabase = c.get('supabase');
-
     // Opportunistic cleanup keeps the table from accumulating abandoned rows.
-    await supabase
+    await adminClient
       .from('device_auth_requests')
       .delete()
       .lt('expires_at', new Date().toISOString());
@@ -155,7 +155,7 @@ app.post('/code', async (c) => {
     let userCode: string | null = null;
     for (let attempt = 0; attempt < USER_CODE_INSERT_ATTEMPTS; attempt += 1) {
       const candidate = randomUserCode();
-      const { error } = await supabase.from('device_auth_requests').insert({
+      const { error } = await adminClient.from('device_auth_requests').insert({
         device_code_hash: deviceCodeHash,
         user_code: candidate,
         status: 'pending',
@@ -192,7 +192,7 @@ app.post('/code', async (c) => {
         device_code: deviceCode,
         user_code: displayCode,
         verification_uri: verifyUri,
-        verification_uri_complete: `${verifyUri}?device_code=${encodeURIComponent(
+        verification_uri_complete: `${verifyUri}?user_code=${encodeURIComponent(
           displayCode,
         )}`,
         expires_in: DEVICE_CODE_TTL_SECONDS,
@@ -237,8 +237,7 @@ app.post('/approve', async (c) => {
       );
     }
 
-    const { data, error } = await c
-      .get('supabase')
+    const { data, error } = await adminClient
       .from('device_auth_requests')
       .update({
         status: approve ? 'approved' : 'denied',
@@ -272,6 +271,14 @@ app.post('/approve', async (c) => {
       200,
     );
   } catch (error) {
+    if (error instanceof AuthUnavailable) {
+      console.warn('[DEVICE]', error.message);
+      return errorResponse(
+        c.req.raw,
+        'Sign-in could not be checked right now. Try again in a moment.',
+        503,
+      );
+    }
     console.error('[DEVICE] approve error:', error);
     return errorResponse(c.req.raw, 'Internal server error', 500);
   }
@@ -287,9 +294,8 @@ app.post('/token', async (c) => {
       return errorResponse(c.req.raw, 'invalid_grant', 400);
     }
 
-    const supabase = c.get('supabase');
     const deviceCodeHash = await sha256Hex(deviceCode);
-    const { data: row, error } = await supabase
+    const { data: row, error } = await adminClient
       .from('device_auth_requests')
       .select(
         'id, status, expires_at, last_polled_at, poll_interval_seconds, user_id',
@@ -306,7 +312,7 @@ app.post('/token', async (c) => {
     }
 
     const deleteRow = () =>
-      supabase.from('device_auth_requests').delete().eq('id', row.id);
+      adminClient.from('device_auth_requests').delete().eq('id', row.id);
 
     const now = Date.now();
     if (new Date(row.expires_at).getTime() <= now) {
@@ -325,7 +331,7 @@ app.post('/token', async (c) => {
         : 0;
       const minGapMs = row.poll_interval_seconds * 1000 - POLL_TOLERANCE_MS;
       const tooFast = now - lastPolled < minGapMs;
-      await supabase
+      await adminClient
         .from('device_auth_requests')
         .update({
           last_polled_at: new Date(now).toISOString(),
@@ -348,18 +354,31 @@ app.post('/token', async (c) => {
     // any concurrent poll sees no claimed row and gets invalid_grant, so a
     // single approval can never mint two sessions.
     const { data: userData, error: userError } =
-      await supabase.auth.admin.getUserById(row.user_id);
+      await adminClient.auth.admin.getUserById(row.user_id);
+    // GoTrue answering "no such user" is as final as an account without an
+    // email (the session is minted by email); any other failure is retried.
+    if (userError && userError.status !== 404) {
+      console.error('[DEVICE] approved user lookup failed:', userError.message);
+      return errorResponse(c.req.raw, 'Failed to create session', 500);
+    }
     const email = userData?.user?.email;
-    if (userError || !email) {
+    if (!email) {
       console.error(
-        '[DEVICE] approved user lookup failed:',
+        `[DEVICE] approved user ${row.user_id} cannot sign in:`,
         userError?.message ?? 'no email',
       );
       await deleteRow();
-      return errorResponse(c.req.raw, 'Failed to create session', 500);
+      return jsonResponse(
+        c.req.raw,
+        {
+          error: 'access_denied',
+          error_description: 'The approving account has no email address.',
+        },
+        400,
+      );
     }
 
-    const { data: claimed, error: claimError } = await supabase
+    const { data: claimed, error: claimError } = await adminClient
       .from('device_auth_requests')
       .delete()
       .eq('id', row.id)
@@ -374,13 +393,7 @@ app.post('/token', async (c) => {
       return errorResponse(c.req.raw, 'invalid_grant', 400);
     }
 
-    const session = await mintGoTrueSession(
-      supabase,
-      c.get('authClient'),
-      email,
-      row.user_id,
-      '[DEVICE]',
-    );
+    const session = await mintGoTrueSession(email, row.user_id);
     if (!session) {
       // The claim is already burned — device codes are strictly single-use,
       // so a mint failure here ends the flow and the user re-runs login.
@@ -397,9 +410,6 @@ app.post('/token', async (c) => {
 
 // GET /verify - Browser verification page.
 app.get('/verify', (c) => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return errorResponse(c.req.raw, 'Server configuration error', 500);
-  }
   const scriptNonce = randomBase64Url(16);
   return new Response(
     verifyPageHtml(SUPABASE_URL, SUPABASE_ANON_KEY, scriptNonce),
@@ -411,11 +421,12 @@ app.get('/verify', (c) => {
         // The page handles OAuth tokens in the URL fragment; keep it un-cached.
         'Cache-Control': 'no-store',
         'Referrer-Policy': 'no-referrer',
-        // Defense-in-depth: only the nonced inline module plus esm.sh may run
-        // scripts, and network calls are limited to GoTrue and this function.
+        // Only nonced scripts run: the inline module and the pinned SDK,
+        // which the browser also checks against its integrity hash. Network
+        // calls are limited to GoTrue and this function.
         'Content-Security-Policy': [
           "default-src 'none'",
-          `script-src 'nonce-${scriptNonce}' https://esm.sh`,
+          `script-src 'nonce-${scriptNonce}'`,
           `connect-src 'self' ${new URL(SUPABASE_URL).origin}`,
           "style-src 'unsafe-inline'",
           "base-uri 'none'",
@@ -442,11 +453,11 @@ function verifyPageHtml(
   scriptNonce: string,
 ): string {
   // Static page: sign in with the normal Supabase OAuth web flow (redirecting
-  // back here, keeping ?device_code= through the round trip), then approve or
+  // back here, keeping ?user_code= through the round trip), then approve or
   // deny the code with the signed-in user's JWT. Supabase owns ?code= for the
-  // OAuth PKCE callback, so the device user code must use a distinct query
-  // key. Despite the name, ?device_code= carries the short DISPLAY code the
-  // user enters (XXXX-XXXX), never the high-entropy device-code secret.
+  // OAuth PKCE callback, so the short display code the user enters
+  // (XXXX-XXXX) rides as ?user_code=; the device-code secret never reaches
+  // the page.
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -479,19 +490,23 @@ function verifyPageHtml(
   <button id="deny">Deny</button>
 </div>
 <p id="status"></p>
+<script src="${PAGE_SDK_URL}" integrity="${PAGE_SDK_INTEGRITY}" crossorigin="anonymous" nonce="${scriptNonce}"></script>
 <script type="module" nonce="${scriptNonce}">
-  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-  const supabase = createClient(${JSON.stringify(projectUrl)}, ${JSON.stringify(
-    anonKey,
-  )});
-  const codeInput = document.getElementById('code');
   const statusEl = document.getElementById('status');
+  if (!window.supabase) {
+    statusEl.textContent = 'The sign-in library did not load. Reload the page to try again.';
+    statusEl.className = 'error';
+    throw new Error('The pinned supabase-js build did not load');
+  }
+  const supabase = window.supabase.createClient(${JSON.stringify(
+    projectUrl,
+  )}, ${JSON.stringify(anonKey)});
+  const codeInput = document.getElementById('code');
   const signedOut = document.getElementById('signed-out');
   const signedIn = document.getElementById('signed-in');
 
   const params = new URLSearchParams(window.location.search);
-  if (params.get('device_code')) codeInput.value = params.get('device_code');
+  if (params.get('user_code')) codeInput.value = params.get('user_code');
 
   function setStatus(message, kind) {
     statusEl.textContent = message;
@@ -523,7 +538,7 @@ function verifyPageHtml(
       const code = requireCode();
       if (!code) return;
       const redirectTo = window.location.origin + window.location.pathname +
-        '?device_code=' + encodeURIComponent(code);
+        '?user_code=' + encodeURIComponent(code);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: button.dataset.provider,
         options: { redirectTo },

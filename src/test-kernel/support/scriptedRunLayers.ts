@@ -147,12 +147,14 @@ export function testBinding(
   model: Model,
   { supportsVision = false, ...overrides }: TestBinding = {},
 ): BoundModel {
+  const config = buildTestModelConfig({
+    contextWindow: 200_000,
+    capabilities: { supportsVision },
+  });
   return {
     modelId: 'test-model',
-    config: buildTestModelConfig({
-      contextWindow: 200_000,
-      capabilities: { supportsVision },
-    }),
+    catalogEntry: config,
+    config,
     backend: 'deepseek',
     declinedRoutes: [],
     model,
