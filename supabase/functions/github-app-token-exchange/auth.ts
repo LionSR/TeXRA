@@ -6,6 +6,9 @@ const GITHUB_OIDC_JWKS = createRemoteJWKSet(
   new URL(`${GITHUB_OIDC_ISSUER}/.well-known/jwks`),
 );
 
+/** The OIDC token's claims do not authorize this repository's workflow. */
+export class TokenRejected extends Error {}
+
 export interface GitHubActionsClaims {
   repository: string;
   repositoryId: string;
@@ -17,7 +20,7 @@ export interface GitHubActionsClaims {
 function requiredStringClaim(payload: JWTPayload, name: string): string {
   const value = payload[name];
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`GitHub OIDC token is missing the ${name} claim`);
+    throw new TokenRejected(`GitHub OIDC token is missing the ${name} claim`);
   }
   return value;
 }
@@ -51,7 +54,9 @@ export function parseRepositoryClaim(repository: string): {
     parts.length !== 2 ||
     parts.some((part) => part.length === 0 || part === '.' || part === '..')
   ) {
-    throw new Error('GitHub OIDC token has an invalid repository claim');
+    throw new TokenRejected(
+      'GitHub OIDC token has an invalid repository claim',
+    );
   }
   return { owner: parts[0], repo: parts[1] };
 }
@@ -68,17 +73,21 @@ export function validateWorkflowIdentity(
   },
 ): string {
   if (claims.repositoryId !== String(repository.id)) {
-    throw new Error(
+    throw new TokenRejected(
       'GitHub OIDC repository identity does not match GitHub API',
     );
   }
   if (claims.repositoryOwnerId !== String(repository.ownerId)) {
-    throw new Error('GitHub OIDC owner identity does not match GitHub API');
+    throw new TokenRejected(
+      'GitHub OIDC owner identity does not match GitHub API',
+    );
   }
 
   const workflowPrefix = `${claims.repository}/.github/workflows/`;
   if (!claims.workflowRef.startsWith(workflowPrefix)) {
-    throw new Error('GitHub OIDC workflow does not belong to the repository');
+    throw new TokenRejected(
+      'GitHub OIDC workflow does not belong to the repository',
+    );
   }
 
   const workflowAndRef = claims.workflowRef.slice(claims.repository.length + 1);
@@ -89,7 +98,9 @@ export function validateWorkflowIdentity(
     !workflowPath.startsWith('.github/workflows/') ||
     workflowPath.includes('@')
   ) {
-    throw new Error('GitHub OIDC token has an invalid workflow_ref claim');
+    throw new TokenRejected(
+      'GitHub OIDC token has an invalid workflow_ref claim',
+    );
   }
   return workflowPath;
 }

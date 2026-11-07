@@ -59,19 +59,20 @@ const terminalTitleState = computed((): SessionTitleState => {
 });
 
 interface TerminalTitleController {
+  /** Show the idle title and stop following the TUI's state. */
   readonly suspend: () => void;
+  /** Follow the TUI's state again. */
   readonly resume: () => void;
-  readonly dispose: () => void;
 }
 
 /** Keep the terminal title synchronized with existing TUI state. */
 export function installTerminalTitleUpdates(
   cwd: string,
 ): TerminalTitleController {
-  let disposed = false;
-  let suspended = false;
   let lastTitle: string | undefined;
   let stopSharedTick: (() => void) | undefined;
+  /** The title's subscription to the TUI's state, while it follows it. */
+  let unsubscribe: (() => void) | undefined;
   const stopRunningAnimation = (): void => {
     stopSharedTick?.();
     stopSharedTick = undefined;
@@ -95,7 +96,6 @@ export function installTerminalTitleUpdates(
     );
   };
   const synchronize = (): void => {
-    if (suspended) return;
     const state = terminalTitleState.get();
     if (state === 'running') {
       startRunningAnimation();
@@ -104,32 +104,19 @@ export function installTerminalTitleUpdates(
     stopRunningAnimation();
     updateTitle(terminalTitleText(cwd, state));
   };
-  const restoreIdleTitle = (): void => {
-    stopRunningAnimation();
-    updateTitle(terminalTitleText(cwd));
+  const resume = (): void => {
+    unsubscribe ??= subscribeToSignalChanges([terminalTitleState], synchronize);
+    synchronize();
   };
-  const unsubscribe = subscribeToSignalChanges(
-    [terminalTitleState],
-    synchronize,
-  );
-  synchronize();
+  resume();
 
   return {
     suspend: () => {
-      if (disposed) return;
-      suspended = true;
-      restoreIdleTitle();
+      unsubscribe?.();
+      unsubscribe = undefined;
+      stopRunningAnimation();
+      updateTitle(terminalTitleText(cwd));
     },
-    resume: () => {
-      if (disposed) return;
-      suspended = false;
-      synchronize();
-    },
-    dispose: () => {
-      if (disposed) return;
-      disposed = true;
-      unsubscribe();
-      restoreIdleTitle();
-    },
+    resume,
   };
 }

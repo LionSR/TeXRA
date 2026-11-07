@@ -30,9 +30,24 @@ All notable changes to this project will be documented in this file.
   `AgentProposalRequest`, `PlanApprovalRequest`, `UserQuestionRequest`),
   their schemas follow, and `ProgressPermissionKind` is `RequestKind`. A
   host's command into the runtime is a command, not a request:
-  `RuntimeRequest` is `RuntimeCommand` and `HostRequestFailure` is
-  `HostCommandFailure`; `session.request` keeps its name. The stored
-  `request.*` rows and their `kind` values are unchanged.
+  `RuntimeRequest` is `RuntimeCommand`; `session.request` keeps its name.
+  The stored `request.*` rows and their `kind` values are unchanged.
+- **SDK: `session.request` fails with the runtime's own errors.**
+  `RequestErrorSchema` is `RunActive`, `Unavailable`, `Cancelled`,
+  `Rejected` and `Conflict`. `Invalid` and `Internal`, which only a bridge
+  between processes raised, are gone, and so are `HostRequestFailure`,
+  `RequestRefusal` and `isRequestRefusal`.
+- **SDK: a launch's approval is one value.** `session.start`'s `approval`
+  (`StartInput`, `StartRequestSchema`) is `'autoApprove'`, `'never'` or
+  `'ask'` (`LaunchApproval`, `LaunchApprovalSchema`), replacing
+  `{ policy?, delegated? }`: Auto-approve for that run, or a policy it is
+  narrowed to; absent, the run follows the project's policy.
+  `launchPolicy(project, approval)` (`./schemas`) is the rule that gives the
+  policy a launch runs under, and `stricterPolicy` leaves `./schemas`.
+- **SDK: `onAppSignal` takes no `subscribed` deferred.** A caller that must
+  know the subscription is live before it reads the state a signal
+  announces subscribes in its own scope first, with `AppSignals`'
+  `subscribe`.
 - **The CLI and the SDK packages need Node.js 22.22.2 or 24.15.** The
   terminal client, `@texra-ai/harness` and `@texra-ai/llm` support Node.js
   22.22.2 or later in 22.x, or 24.15 or later; `texra doctor` reports an
@@ -289,12 +304,17 @@ All notable changes to this project will be documented in this file.
   classification (`ProviderError`). Conversations saved by an earlier build
   show as written by that build and cannot be resumed by this one.
 - **SDK: a refused launch is its caller's to show.** `session.start` and
-  `session.resume` no longer show the unknown-model instruction or the
-  missing-agent notice through the session's host, at once or to a host
-  that attaches later: the failure carries it as `AgentError.notice`
-  (`LaunchNoticeSchema` in `./schemas`), `launchNoticeOf` (`./host`) reads
-  it through the `RunFailure`, and `presentRunFailure` shows it in place of
-  the generic error. `attachErrorPresentationClaimed` and
+  `session.resume` fail with `LaunchRefused` for an input they will not
+  run: an unknown agent or model, a persona or configuration its schema
+  rejects, or a run id already in use. They no longer show the
+  unknown-model instruction or the missing-agent notice through the
+  session's host, at once or to a host that attaches later: `LaunchRefused`
+  carries it as `notice` (`LaunchNoticeSchema` in `./schemas`), and
+  `presentRunFailure` (`./host`) shows it in place of the generic error.
+  `LaunchError` is `LaunchRefused | ToolsRefused`; a refused launch is not a
+  `RunFailure`, which now means only a run that failed on its own, so an
+  embedder that caught `RunFailure` for a refusal catches `LaunchRefused`.
+  `AgentNotFound`, `attachErrorPresentationClaimed` and
   `hasErrorPresentationClaimed` are gone.
 - **SDK: a tool edit's proposal is the request's, not the session's.**
   `ToolEditPermission.content` names the proposal (`ToolEditContent`) by its
@@ -314,8 +334,8 @@ All notable changes to this project will be documented in this file.
   recorded on it fails to bind. The stand-in that kept it out of every
   bundle now applies to the CLI's alone.
 - **SDK: the harness adds no directories of its own to a command's PATH.**
-  An app names them as `AgentPlatform.commandDirs` (or `processLayer`'s
-  `commandDirs`), served as `CommandDirs`; `withExtendedPath` and
+  An app provides them as `CommandDirs` (`@texra-ai/harness/node`), a
+  `Context.Reference` that defaults to none; `withExtendedPath` and
   `whichOnExtendedPath` take them as an argument, and `makeMachineGitEnv` is
   an Effect. `findCommand` and `probeTool` leave `@texra-ai/harness/node`.
 - **SDK: script stages and model availability carry keys, not words.**
@@ -498,17 +518,19 @@ All notable changes to this project will be documented in this file.
 - **SDK: `harnessBuiltins` is the list itself.** `harnessBuiltins.all` is
   now `harnessBuiltins`, and `harnessBuiltins.minimal` is gone: for files
   and the shell alone, keep the plugin whose `id` is `file-ops`.
-- **SDK: a recipe's result is its `structured` value; `output.documents` is
-  gone.** Every run's output is `{ response, files, structured? }`: a
-  recipe's return value is `structured`, which the plugin owning its block
-  reads (`AgentBlock.result`: the value's schema, its delivery body and the
-  files it changed). A document task's documents, diffs included, are that
-  value, and their diffs are computed when the task proposes, for every
-  launch. `texra run --output-format json` still reports a document task's documents as
-  `output.documents`. A subagent delivery names its kind by the block key
-  (`kind="task"`, was `kind="document-task"`). Runs written by an earlier
-  build are listed as such and are not resumed. An older window is refused
-  by a newer service and asked to update.
+- **SDK: a recipe run reports what its plugin recorded; `output.documents`
+  is gone.** Every run's output is `{ response, files, structured? }`. The
+  plugin owning a task's block reads a completed recipe run from the run's
+  latest row of its own kind (`AgentBlock.result`: `fact`, naming the
+  plugin, the row kind and its schema, the delivery body, and the files
+  the run changed); the recipe's return value is not read. A document
+  task's documents, diffs included, are its documents row, and their diffs
+  are computed when the task proposes, for every launch.
+  `texra run --output-format json` still reports a document task's
+  documents as `output.documents`. A subagent delivery names its kind by
+  the block key (`kind="task"`, was `kind="document-task"`). Runs written
+  by an earlier build are listed as such and are not resumed. An older
+  window is refused by a newer service and asked to update.
 - **Only a document task's proposed revision carries diffs.** Earlier
   revisions' files no longer have a `diff=` attribute in a subagent
   delivery or an entry in `texra run --output-format json`'s `documents.diffs`; the
@@ -527,7 +549,10 @@ All notable changes to this project will be documented in this file.
   longer reads an agent file's `task:` block: a plugin owns a block of its
   own (`Plugin.agentBlock`, an `AgentBlock` with its key and schema, read
   with `agentBlockOf` from `@texra-ai/harness/plugins`), and an agent
-  carrying one is a task, which that plugin launches on its recipe.
+  carrying one is a task, which that plugin launches on its recipe. A
+  block names the files it binds (`AgentBlock.files`, relative to its
+  agent file): a customized copy of the agent carries them, and the file's
+  digest covers them.
   A session view's `documentTask` is `recipe` (a run opened on a plugin's
   recipe), and `AgentCatalogServices` now includes `ToolRegistry`, whose
   plugins' blocks a catalog scan admits; a file holding a block no listed
@@ -1144,14 +1169,17 @@ All notable changes to this project will be documented in this file.
   loads a module with `await import(specifier)`:
   `const { revise, from } = await import('builtIn:documents')` gives
   `revise(agentName, args)`, which runs that agent's document task as
-  `document_task` would and resolves to its result, and `from(result, args)`,
-  which takes a finished task's revised files as the next task's inputs, so
-  `revise('correct', from(polished))` corrects what a polish produced. A module can import
-  another with an ordinary `import` line; a script, being a function body,
-  uses `import()`. A resumed script loads the modules its run recorded,
-  never a newer copy shipped since. SDK: a plugin ships modules as
-  `Plugin.scriptModules` (module source by name, imported as
-  `builtIn:<name>`).
+  `document_task` would and resolves to its result
+  (`{ response, changes, runId, outcome, cost }`, where `changes` lists
+  every revision's files in order: `path` the workspace file,
+  `absolutePath` the revised copy), and `from(result, args)`, which takes
+  a finished task's revised files as the next task's inputs, so
+  `revise('correct', from(polished))` corrects what a polish produced. A
+  module can import another with an ordinary `import` line; a script,
+  being a function body, uses `import()`. A resumed script loads the
+  modules its run recorded, never a newer copy shipped since. SDK: a
+  plugin ships modules as `Plugin.scriptModules` (module source by name,
+  imported as `builtIn:<name>`).
 - **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
   default; CLI `/config`) gives chat agents the `script` tool and their own
   tools alone, with every other tool called from inside a script. A run
@@ -1646,6 +1674,32 @@ All notable changes to this project will be documented in this file.
   without it.** A task that names a file in `task.files` that is missing or
   unreadable is listed as an issue on the Agents page and in `texra agents`,
   naming the file, instead of running with that template left out.
+- **LaTeX replacements apply the longer rule first.** The replacement rules
+  ran in the order they happened to be written, so a short rule could
+  rewrite part of a longer one before it ran: 318 of the 2,535 built-in
+  rules never produced their output (`$a\;+\;b$` came out as `$a + b$`
+  instead of `$a+b$`). Every rule, built in or your own, now runs longest
+  match first, so replaced text can differ from what earlier builds wrote.
+- **A background command's saved output ends with its last lines.** Past
+  its 200,000-character cap, the output TeXRA shows for the command and an
+  agent reads at `/executions/{id}/output` stopped at the cap. It now keeps
+  each stream's first 1,000 characters and, when the command ends, a note
+  of how many characters were left out and each stream's last 12,000
+  characters, as the agent's result already did.
+- **A prompt a plugin hook asks for offers no task-wide approval.** When a
+  plugin's hook asks you to approve a file edit or an agent proposal, the
+  approval card no longer offers "Approve all edits in this task" or
+  "Approve all agent work in this task", as a hook-asked shell command
+  already did not. In the CLI, a card's `a` row reads "approve edits for
+  this task" or "approve commands for this task" (it said "… for
+  session"), since the grant lasts for the task.
+- **A customized task keeps the files it binds.** Customizing a bundled
+  agent whose task reads files beside its own (paper2poster's and
+  paper2slide's templates) copied only the agent file, so the copy ran
+  without its templates, and only the run's list of loaded files showed
+  them missing. The copy now carries those files beside itself, keeping
+  one already there as it is, and a bundled template that changes raises
+  the "newer built-in" notice as a changed agent file does.
 - **The VS Code extension no longer reports another extension's error as
   its own.** VS Code runs every extension in one process, and TeXRA showed
   "The extension host encountered an unrecoverable error" for a failure in
@@ -2933,11 +2987,13 @@ All notable changes to this project will be documented in this file.
   preference shortcuts `/api chatgpt`, `/api grok`, `/api kimi-code` and
   `/api glm-code` are gone with it: set which subscription serves a
   provider's models from the `/login` form or `/config`. `/login chatgpt` and
-  `/login grok` still sign in. `/yolo` and `/goal`
-  fold into `/approval`, which also gains per-session **Auto-approve
-  commands** and **Auto-approve edits** toggles (the same grant as answering
-  a prompt with "approve for session"). `/tools` lives under `/config` →
-  Tools.
+  `/login grok` still sign in. `/yolo` folds into `/approval`
+  (`/approval yolo`), which sets the chat's approval policy and lists the
+  task's grants to turn them off; a grant is given on an approval card
+  (`a`: "approve commands for this task" and the like). `/goal` is gone:
+  press `r` on a plan's approval card to run the plan as a goal, or `a` to
+  have the goal approve edits and agent work too. `/tools` lives under
+  `/config` → Tools.
 - **`texra history show` names the saved checkpoint `checkpointPresent`** —
   the `--json` / `--ndjson` field was `hasFlowRecord`, and the text output
   prints `Checkpoint: present` instead of `Flow record: present`. The
@@ -2969,8 +3025,10 @@ All notable changes to this project will be documented in this file.
   output under `output`: `output.category`, and `output.outputs`,
   `output.compileFailures` and `output.diffs` for a workflow run, or
   `output.response` and `output.files` for a tool-use run. `executionId` and
-  `streamId` are replaced by `runId`, and `totalCostUsd` by `usage.totalCost`,
-  beside the run's other token totals in `usage`. `outcome`, `workingDirectory`,
+  `streamId` are replaced by `runId`, and `totalCostUsd` by `usage.cost`,
+  beside the run's token counts in `usage` (`inputTokens`, `outputTokens`,
+  and `cachedInputTokens`, `cacheWriteTokens`, `reasoningTokens` and the
+  like when the provider reports them). `outcome`, `workingDirectory`,
   `runDirectory`, `copiedOutput` and `copiedOutputs` are unchanged. A
   workflow run's `output.diffs` lists the text diff of each output against its
   original, written under `diffs/` in the run directory.

@@ -86,7 +86,7 @@ prompt: |
   1. Use lean_inspect to see the exact goal state
   2. Identify the goal structure: equational? ordering? arithmetic? set membership? decidable?
   3. Recommend tactics from Mathlib's tactic library:
-     - **Closing tactics**: `simp`, `omega`, `decide`, `norm_num`, `ring`, `linarith`, `positivity`, `field_simp`, `norm_cast`, `push_cast`, `Abel`, `group`
+     - **Closing tactics**: `simp`, `omega`, `decide`, `norm_num`, `ring`, `linarith`, `positivity`, `field_simp`, `norm_cast`, `push_cast`, `abel`, `group`
      - **Rewriting**: `rw`, `simp only`, `conv`, `ring_nf`, `push_neg`
      - **Case analysis**: `rcases`, `obtain`, `match`, `by_cases`, `by_contra`
      - **Construction**: `exact`, `refine`, `use`, `constructor`, `ext`, `funext`

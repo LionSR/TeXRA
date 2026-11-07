@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkEmailDomain } from '../../../supabase/functions/_shared/emailPolicy';
+import { checkEmailDomain } from '../../../supabase/functions/before-user-created/emailPolicy';
 
 describe('checkEmailDomain', () => {
   it.each([
