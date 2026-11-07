@@ -89,7 +89,7 @@ import {
   settleCards,
 } from './rowReader';
 import { isBusy, isDamaged, retryBusy } from './storeAside';
-import { openStore, reclaimFreePages } from './storeSchema';
+import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
 export const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
@@ -204,7 +204,7 @@ export const databaseLayer = (
       const identity = yield* ProcessIdentity;
       const path =
         mode === 'ephemeral'
-          ? ':memory:'
+          ? IN_MEMORY_STORE
           : join(roots.storage, SESSION_DATABASE_FILE);
       const openFailed = (cause: unknown): DatabaseOpenFailed =>
         new DatabaseOpenFailed({ path, cause });
@@ -212,7 +212,7 @@ export const databaseLayer = (
       const exclusive = mode === 'persistent' || mode === 'existing';
       const filename =
         mode === 'ephemeral'
-          ? ':memory:'
+          ? IN_MEMORY_STORE
           : yield* localDatabasePath(
               roots.storage,
               SESSION_DATABASE_FILE,
@@ -236,7 +236,6 @@ export const databaseLayer = (
           disableWAL: true,
           busyTimeout,
         }),
-        mode === 'ephemeral' ? mode : 'persistent',
         path,
         filename,
       ).pipe(
