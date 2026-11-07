@@ -13,7 +13,6 @@ import {
   agentMatchesIdentifier,
   agentName,
   WorkspaceAgentsSelectionSchema,
-  INHERITED_WORKSPACE_AGENTS,
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -243,27 +242,40 @@ export class WorkspaceAgentsController<
     );
   }
 
-  private setSelection(
-    selection: WorkspaceAgentsSelection,
-  ): Effect.Effect<void, StateWriteFailed> {
-    return serializeWorkspaceWrite(
-      this.deps.repoState,
-      this.writeSelection(selection),
-    );
-  }
-
   /**
-   * Store that this workspace runs team `teamId`. Only the reference is
-   * stored and the team's members re-resolve on every read, so a member
-   * missing today activates once it appears. A team the workspace has none of
-   * is refused.
+   * Store the selection this workspace runs, in the selection's write lane.
+   * A team is stored by reference, so its members re-resolve on every read
+   * and a member missing today activates once it appears; a team the
+   * workspace has none of is rejected. A custom list records its choices,
+   * and `all` shows the hidden custom agents again.
    */
-  setTeam(teamId: string) {
-    return Effect.andThen(
-      this.requireTeam(teamId),
-      this.setSelection({ kind: 'team', teamId }),
-    );
-  }
+  readonly select = Effect.fn('WorkspaceAgentsController.select')(
+    { self: this },
+    function* (selection: WorkspaceAgentsSelection) {
+      const { repoState } = this.deps;
+      if (selection.kind === 'team') yield* this.requireTeam(selection.teamId);
+      yield* serializeWorkspaceWrite(
+        repoState,
+        Effect.gen({ self: this }, function* () {
+          if (selection.kind === 'custom') {
+            yield* recordCustomChoices(
+              repoState,
+              this.deps.getAgents(),
+              selection.agentKeys,
+            );
+          }
+          if (selection.kind === 'all') {
+            yield* repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, []);
+          }
+          yield* this.writeSelection(
+            selection.kind === 'custom'
+              ? { kind: 'custom', agentKeys: [...new Set(selection.agentKeys)] }
+              : selection,
+          );
+        }),
+      );
+    },
+  );
 
   /** Fails for a team the workspace has none of. */
   private requireTeam(teamId: string) {
@@ -275,44 +287,9 @@ export class WorkspaceAgentsController<
     );
   }
 
-  /** Exactly the agents `agentKeys` names, in that order. */
-  setEnabledAgentKeys(
-    agentKeys: readonly string[],
-  ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
-    return serializeWorkspaceWrite(
-      this.deps.repoState,
-      Effect.gen({ self: this }, function* () {
-        yield* recordCustomChoices(
-          this.deps.repoState,
-          this.deps.getAgents(),
-          agentKeys,
-        );
-        yield* this.writeSelection({
-          kind: 'custom',
-          agentKeys: [...new Set(agentKeys)],
-        });
-      }),
-    );
-  }
-
   /** A custom agent the user deleted: its hidden choice goes with it. */
   forgetDeletedAgent(name: string): Effect.Effect<void, StateWriteFailed> {
     return forgetHiddenAgent(this.deps.repoState, name);
-  }
-
-  /** Every agent, the hidden custom ones included. */
-  setAll(): Effect.Effect<void, StateWriteFailed> {
-    return serializeWorkspaceWrite(
-      this.deps.repoState,
-      Effect.andThen(
-        this.deps.repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, []),
-        this.writeSelection({ kind: 'all' }),
-      ),
-    );
-  }
-
-  setInherited(): Effect.Effect<void, StateWriteFailed> {
-    return this.setSelection(INHERITED_WORKSPACE_AGENTS);
   }
 
   setAgentEnabled(input: {
@@ -378,16 +355,13 @@ export class WorkspaceAgentsController<
     );
   }
 
-  /** The team an inheriting workspace runs; a team the workspace has none of
-   *  is refused. The app decides which teams may be a default. */
-  setDefaultTeam(teamId: string) {
-    return Effect.andThen(
-      this.requireTeam(teamId),
-      this.deps.globalState.update(DEFAULT_TEAM, teamId),
-    );
-  }
-
-  clearDefaultTeam(): Effect.Effect<void, StateWriteFailed> {
-    return this.deps.globalState.update(DEFAULT_TEAM, undefined);
+  /** The team an inheriting workspace runs, or none for `undefined`; a team
+   *  the workspace has none of is rejected. The app decides which teams may
+   *  be a default. */
+  setDefaultTeam(teamId: string | undefined) {
+    const write = this.deps.globalState.update(DEFAULT_TEAM, teamId);
+    return teamId === undefined
+      ? write
+      : Effect.andThen(this.requireTeam(teamId), write);
   }
 }

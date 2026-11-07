@@ -47,7 +47,7 @@ export function serializeWorkspaceWrite<A, E>(
 /**
  * Read the canonical workspace selection. The reader is deliberately pure. It
  * used to repair the stored value in place, but the read-modify-write
- * mutations (`setEnabledAgentKeys`, `setAgentEnabled`, `removeTeamPreset`)
+ * mutations (`select`, `setAgentEnabled`, `removeTeamPreset`)
  * read the selection while already holding the write mutex, so a repair
  * issued from here either races that mutation or, if serialized behind it,
  * overwrites the selection the mutation just committed. The mutations own

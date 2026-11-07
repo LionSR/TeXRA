@@ -54,7 +54,7 @@ describe('WorkspaceAgentsController', () => {
         });
 
         const failure = yield* Effect.flip(
-          workspaceAgents.setEnabledAgentKeys([]),
+          workspaceAgents.select({ kind: 'custom', agentKeys: [] }),
         );
         expect(failure._tag).toBe('StateReadFailed');
         expect(
@@ -68,7 +68,7 @@ describe('WorkspaceAgentsController', () => {
       const workspaceState = new FakeStateStore();
       const first = controller(workspaceState);
       const second = controller(workspaceState);
-      yield* first.setAll();
+      yield* first.select({ kind: 'all' });
 
       yield* Effect.all(
         [

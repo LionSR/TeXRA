@@ -150,7 +150,7 @@ export const applyTeam = Effect.fn('applyTeam')(function* <
     query,
   );
   if (!preset) return { status: 'unknown' as const };
-  yield* workspace.workspaceAgents.setTeam(preset.id);
+  yield* workspace.workspaceAgents.select({ kind: 'team', teamId: preset.id });
   return {
     status: 'applied' as const,
     plan: planTeamRun(preset, {

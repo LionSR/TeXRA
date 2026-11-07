@@ -6,7 +6,10 @@ import {
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
-import { agentKeyOf } from '@texra-ai/harness/schemas';
+import {
+  agentKeyOf,
+  type WorkspaceAgentsSelection,
+} from '@texra-ai/harness/schemas';
 
 import { workspaceTeams } from '@texra/shared/agentTeams';
 import { findTeamPreset } from '@texra/shared/teamPlan';
@@ -120,22 +123,25 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
         findTeamPreset(teams, query),
       );
 
-    if (keyword(agents) === 'inherit') yield* workspaceAgents.setInherited();
-    else if (keyword(agents) === 'all') yield* workspaceAgents.setAll();
-    else if (agents !== undefined && keyword(agents)?.startsWith('team:')) {
-      const query = agents.slice('team:'.length).trim();
-      if (query === '') return yield* failUsage('--agents team: needs a team.');
-      const team = yield* teamNamed(query);
-      if (!team) return yield* failUsage(`Unknown agent team: ${query}`);
+    if (agents !== undefined) {
+      const kind = keyword(agents);
+      let selection: WorkspaceAgentsSelection;
+      if (kind === 'inherit' || kind === 'all') selection = { kind };
+      else if (kind?.startsWith('team:')) {
+        const query = agents.slice('team:'.length).trim();
+        if (query === '')
+          return yield* failUsage('--agents team: needs a team.');
+        const team = yield* teamNamed(query);
+        if (!team) return yield* failUsage(`Unknown agent team: ${query}`);
+        selection = { kind: 'team', teamId: team.id };
+      } else selection = { kind: 'custom', agentKeys: parseAgentKeys(agents) };
       yield* workspaceAgents
-        .setTeam(team.id)
+        .select(selection)
         .pipe(Effect.mapError(asTeamUsageError));
-    } else if (agents !== undefined) {
-      yield* workspaceAgents.setEnabledAgentKeys(parseAgentKeys(agents));
     }
 
     if (keyword(defaultTeam) === 'none')
-      yield* workspaceAgents.clearDefaultTeam();
+      yield* workspaceAgents.setDefaultTeam(undefined);
     else if (defaultTeam !== undefined) {
       const team = yield* teamNamed(defaultTeam);
       if (!team) return yield* failUsage(`Unknown agent team: ${defaultTeam}`);
