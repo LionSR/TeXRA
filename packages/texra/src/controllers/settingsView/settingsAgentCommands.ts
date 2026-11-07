@@ -86,7 +86,7 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
       path.join(
         resourcesRoot,
         'templates',
-        AGENT_TEMPLATE_FILES[input.task ? 'workflowSingle' : 'toolUse'],
+        AGENT_TEMPLATE_FILES[input.task ? 'documentTask' : 'chat'],
       ),
     );
     yield* fs.writeFileString(

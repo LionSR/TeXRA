@@ -1,11 +1,11 @@
 // Third-party imports
 import { parseDocument } from 'yaml';
 
-type AgentTemplateKind = 'toolUse' | 'workflowSingle';
+type AgentTemplateKind = 'chat' | 'documentTask';
 
 export const AGENT_TEMPLATE_FILES: Record<AgentTemplateKind, string> = {
-  toolUse: 'agentTemplate-toolUse.yaml',
-  workflowSingle: 'agentTemplate-workflowSingle.yaml',
+  chat: 'agentTemplate-chat.yaml',
+  documentTask: 'agentTemplate-documentTask.yaml',
 };
 
 /**

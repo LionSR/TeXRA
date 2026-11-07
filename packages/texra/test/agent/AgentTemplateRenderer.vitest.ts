@@ -18,7 +18,7 @@ describe('agentFileFromTemplate', () => {
       path.join(
         process.cwd(),
         'packages/extension/resources/templates',
-        AGENT_TEMPLATE_FILES.workflowSingle,
+        AGENT_TEMPLATE_FILES.documentTask,
       ),
       'utf8',
     );
