@@ -29,14 +29,6 @@ import {
   type AgentConfig,
   Rejected,
 } from '@texra-ai/harness/schemas';
-import { openLatexdiffs } from '@commands/latex/latexdiffCommands';
-import { handleCompare } from '@commands/latex/compareCommands';
-import { findCommitInHistory } from '@commands/git/gitCommands';
-import { openFile } from '@commands/files/openFileCommands';
-import {
-  createFileSelectionPickers,
-  getCurrentFile,
-} from '@commands/files/fileSelectionCommands';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
@@ -45,10 +37,10 @@ import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { openBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
-import { announce } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
@@ -65,7 +57,7 @@ import type {
   HostCommand,
 } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import { HostFailed, type NoticeLevel } from '@texra/hosts/uiHosts';
 
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
@@ -89,6 +81,12 @@ import {
   type HostCommandFailure,
   type RequestRefusal,
 } from '@texra/controllers/session/hostCallFailure';
+
+// Local file imports
+import { handleCompare } from './compareFiles';
+import { createFileSelectionPickers, getCurrentFile } from './fileSelection';
+import { findCommitInHistory } from './findCommit';
+import { openFile } from './openFile';
 
 const CHANNEL = 'ExtensionHostRequests';
 
@@ -121,9 +119,9 @@ interface ExtensionHostRequestsOptions {
    *  run in a toast when it cannot (the run actions' `revealProgress`). */
   readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
   /** The window's launcher (`HostRunActions.runValidated`), which the setup
-   *  assistant's run starts through; bound once the window has opened, so
-   *  read as that run starts. */
-  launcher(): HostRunActions['runValidated'];
+   *  assistant's run starts through; it is there once the window has opened,
+   *  so the run waits for it. */
+  readonly launcher: Effect.Effect<HostRunActions['runValidated']>;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
@@ -138,13 +136,12 @@ function runHandler<A, E, R>(
   handler: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, HostFailed | RequestRefusal, R> {
   const log = (failure: unknown) =>
-    Effect.logError(
-      `Command ${command} failed: ${toErrorMessage(failure)}`,
-    ).pipe(withLogChannel(CHANNEL));
+    Effect.logError(`Command ${command} failed: ${toErrorMessage(failure)}`);
   return handler.pipe(
     Effect.mapError((cause) => hostFailure(command, cause)),
     Effect.tapError(log),
     Effect.tapDefect(log),
+    withLogChannel(CHANNEL),
   );
 }
 
@@ -266,12 +263,9 @@ export const createExtensionHostRequests = Effect.fn(
           });
         } else {
           yield* Effect.forkDetach(
-            announce(
-              CHANNEL,
-              vscodeUi.showInfoMessage(
-                `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
-              ),
-              undefined,
+            vscodeUi.notify(
+              'info',
+              `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
             ),
           );
         }
@@ -292,12 +286,9 @@ export const createExtensionHostRequests = Effect.fn(
           } satisfies HostOutcome;
         }
         yield* Effect.forkDetach(
-          announce(
-            CHANNEL,
-            vscodeUi.showInfoMessage(
-              `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
-            ),
-            undefined,
+          vscodeUi.notify(
+            'info',
+            `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
           ),
         );
       }
@@ -335,13 +326,19 @@ export const createExtensionHostRequests = Effect.fn(
     // `null`, as it does for a cancel.
     pickFiles: (fileType) => multipleFilePickers[fileType](),
     latexdiff: {
-      // The viewer a diff schedules opens in the view's scope, so a close
-      // of the view cancels a delayed open.
-      openDiffs: (diffPaths) =>
-        runHandler(
-          'openLatexdiffs',
-          inViewScope(openLatexdiffs(roots, diffPaths)),
-        ),
+      // The diffs' PDF viewer opens in the view's scope, so a close of the
+      // view cancels an open still waiting.
+      openDiffs: ([first, ...rest]) =>
+        first === undefined
+          ? Effect.void
+          : runHandler(
+              'openLatexdiffs',
+              inViewScope(
+                openBuilt(roots, [at(first), ...rest.map(at)], {
+                  preserveFocus: true,
+                }),
+              ),
+            ),
       withProgress: (title, task) =>
         withVSCodeProgress(
           {
@@ -373,19 +370,18 @@ export const createExtensionHostRequests = Effect.fn(
     openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
       signInChatGpt: Effect.gen(function* () {
-        yield* signInWithSubscription(roots, CHANNEL, 'chatgpt');
+        yield* signInWithSubscription(roots, 'chatgpt');
         yield* refreshAfterCredentialChange;
-      }),
+      }).pipe(withLogChannel(CHANNEL)),
       // The snapshot follows the flags it reads.
       skip: setOnboardingDeclined(globalState, true),
-      // The launcher is read as the run starts.
-      runSetup: Effect.suspend(() =>
+      runSetup: Effect.flatMap(options.launcher, (launcher) =>
         runHandler(
           'runSetupAssistant',
           launchSetupAssistant(
             roots,
             runSession,
-            options.launcher(),
+            launcher,
             options.showConnectModel(),
             options.showProgressView(),
           ),
@@ -439,9 +435,8 @@ export const createExtensionHostRequests = Effect.fn(
     own,
     window: options.window,
     // The host's members read `this`, so they cross the boundary bound.
-    showInfoMessage: (message: string) => vscodeUi.showInfoMessage(message),
-    showWarningMessage: (message: string) =>
-      vscodeUi.showWarningMessage(message),
+    notify: (level: NoticeLevel, message: string) =>
+      vscodeUi.notify(level, message),
     runs: {
       revealProgress: options.revealProgress,
       openFinalOutput: previewFinalOutput,
@@ -454,7 +449,7 @@ export const createExtensionHostRequests = Effect.fn(
           handleCompare(at(base), at(edited), title, diffRefresh),
         ),
       confirmAccept: (message: string) =>
-        vscodeUi.confirm(message, { confirmLabel: 'Replace file' }),
+        vscodeUi.confirm({ message, action: 'Replace file' }),
       openDirectory: revealFileInOS,
     },
     export: {

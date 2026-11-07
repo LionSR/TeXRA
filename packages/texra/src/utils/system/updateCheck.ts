@@ -84,13 +84,9 @@ export interface UpdateCheckFetchResult {
 
 interface DailyUpdateCheckOptions<R> {
   currentVersion: string;
-  host: 'cli' | 'desktop';
-  /** Desktop announces each release only once. */
-  notifyOnce?: boolean;
+  host: UpdateCheckHost;
   fetchLatest: Effect.Effect<UpdateCheckFetchResult, Error, R>;
   notify: (latest: string) => Effect.Effect<void, Error>;
-  /** Whether failure to persist the throttle stamp rejects the check. */
-  stampFailure?: 'throw' | 'ignore';
 }
 
 /** Consult the source, notify, then persist the successful check in that order. */
@@ -98,11 +94,12 @@ export const runDailyUpdateCheck = Effect.fn('updateCheck.runDailyUpdateCheck')(
   function* <R>({
     currentVersion,
     host,
-    notifyOnce = false,
     fetchLatest,
     notify,
-    stampFailure = 'throw',
   }: DailyUpdateCheckOptions<R>) {
+    // The desktop's notice is a dialog, announced once per release; the
+    // CLI asks at each daily check whether to update now.
+    const notifyOnce = host === 'desktop';
     const records = yield* UpdateCheckRecords;
     const previous = yield* records.read(host);
     const nowMs = yield* Clock.currentTimeMillis;
@@ -134,8 +131,11 @@ export const runDailyUpdateCheck = Effect.fn('updateCheck.runDailyUpdateCheck')(
     }
     if (refreshed) {
       const stamp = records.recordChecked(host, nowMs);
-      // A stamp that is not saved re-checks on every launch: said, not hidden.
-      yield* stampFailure === 'ignore'
+      // A stamp that is not saved re-checks on every launch: said, not
+      // hidden. The CLI's check runs before a command, which a stamp it
+      // cannot save must not fail; the desktop reports it as a background
+      // error.
+      yield* host === 'cli'
         ? Effect.ignore(stamp, {
             log: 'Warn',
             message: 'The update check time was not saved',

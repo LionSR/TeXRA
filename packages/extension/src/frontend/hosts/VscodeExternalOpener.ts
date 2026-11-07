@@ -42,7 +42,7 @@ export class VscodeExternalOpener implements ExternalOpener {
 }
 
 /** A page of the TeXRA guide on texra.ai, in the default browser: what
- *  `texra.openDoc` and every docs button in this host open. */
+ *  every docs button in this host opens. */
 export function openGuidePage(page: string): Effect.Effect<void, HostFailed> {
   return new VscodeExternalOpener().openExternal(texraGuideUrl(page));
 }

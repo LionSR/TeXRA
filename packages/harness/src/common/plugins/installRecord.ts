@@ -8,10 +8,10 @@ import { Effect, Option, Result, Schema } from 'effect';
 
 // Local imports - shared contracts
 import { InstalledPluginSchema, type InstalledPlugin } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - plugin reading
 import type { SettingsStores } from '@shared/config/settings';
+import type { StateKey } from '@shared/state/stateSettings';
 import { PluginError, PluginRequestError } from './pluginManifest';
 
 /**
@@ -23,26 +23,33 @@ export type PluginEnv = Pick<SettingsStores, 'globalState'> & {
   readonly globalStorage: string;
 };
 
-const InstalledPluginsSchema = Schema.Array(InstalledPluginSchema);
+/** The install record's key; its value is every installed plugin. */
+export const INSTALLED_PLUGINS_KEY = {
+  key: 'plugins.installed',
+  slot: 'globalState',
+  schema: Schema.Array(InstalledPluginSchema),
+} as const satisfies StateKey<readonly InstalledPlugin[]>;
 
 /** The record as its schema reads it: absent is empty, anything that does
  *  not validate refuses, so a change never writes over it and loses it. */
 function storedRecord(stored: unknown) {
   if (stored === undefined)
     return Result.succeed<readonly InstalledPlugin[]>([]);
-  const parsed = Schema.decodeUnknownResult(InstalledPluginsSchema)(stored);
+  const parsed = Schema.decodeUnknownResult(INSTALLED_PLUGINS_KEY.schema)(
+    stored,
+  );
   return Result.isSuccess(parsed)
     ? Result.succeed(parsed.success)
     : Result.fail(
         new PluginError({
-          message: `The installed plugin record (${GlobalStateKey.INSTALLED_PLUGINS}) is unreadable: ${parsed.failure.message}`,
+          message: `The installed plugin record (${INSTALLED_PLUGINS_KEY.key}) is unreadable: ${parsed.failure.message}`,
         }),
       );
 }
 
 /** The install record, as one read. */
 export function readInstalled(stores: Pick<SettingsStores, 'globalState'>) {
-  return stores.globalState.get(GlobalStateKey.INSTALLED_PLUGINS).pipe(
+  return stores.globalState.get(INSTALLED_PLUGINS_KEY.key).pipe(
     Effect.mapError((error) => new PluginError({ message: error.message })),
     Effect.flatMap((stored) => Effect.fromResult(storedRecord(stored))),
   );
@@ -64,7 +71,7 @@ export function modifyInstalled<A>(
 ) {
   let answer: Option.Option<A> = Option.none();
   return stores.globalState
-    .modify(GlobalStateKey.INSTALLED_PLUGINS, (stored) =>
+    .modify(INSTALLED_PLUGINS_KEY.key, (stored) =>
       Result.flatMap(storedRecord(stored), (current) =>
         Result.map(change(current), ([next, value]) => {
           answer = Option.some(value);

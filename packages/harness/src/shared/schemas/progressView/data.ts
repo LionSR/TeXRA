@@ -66,7 +66,7 @@ export const ToolCardSchema = Schema.Struct({
       Schema.Struct({
         kind: Schema.Literal('status'),
         label: Schema.String,
-        status: Schema.String,
+        status: ToolCallStatusSchema,
       }),
       Schema.Struct({
         kind: Schema.Literal('identifier'),
@@ -100,7 +100,7 @@ export type ToolCard = typeof ToolCardSchema.Type;
  * output that does not parse as it came.
  */
 export const McpToolOutputSchema = Schema.Struct({
-  status: Schema.optional(Schema.NullOr(Schema.String)),
+  status: Schema.optional(Schema.NullOr(ToolCallStatusSchema)),
   structuredContent: Schema.optional(Schema.NullOr(Schema.Unknown)),
   contentBlocks: Schema.optional(
     Schema.NullOr(Schema.Array(Schema.Record(Schema.String, Schema.Unknown))),

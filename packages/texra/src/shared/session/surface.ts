@@ -173,6 +173,9 @@ export interface RunSurface {
   readonly groups: ReadonlyMap<string, boolean>;
   /** For a top-level run, the `lastTimestamp` this surface last showed. */
   readonly seen: number | undefined;
+  /** The error the runtime answered this surface's last request on the run
+   *  with, until the next request on it. Never persisted. */
+  readonly rejected: SurfaceRejection | undefined;
 }
 
 /** What the surface keeps for `runId`, a fresh empty record when it keeps
@@ -187,6 +190,7 @@ export function runSurface(
       expanded: undefined,
       groups: new Map(),
       seen: undefined,
+      rejected: undefined,
     }
   );
 }
@@ -227,16 +231,14 @@ export interface Surface {
     readonly cursor: CommitOrdinal;
   } | null;
   /** Per run: its draft, its expansion, its task groups, when it was last
-   *  shown. Text drafts persist; images do not. */
+   *  shown, its last rejection. Text drafts persist; images and rejections
+   *  do not. */
   readonly runs: ReadonlyMap<RunId, RunSurface>;
   /** Foreground polish operations, keyed by stream id or `launch`. Never persisted. */
   readonly polishing: ReadonlySet<string>;
   /** Streams awaiting follow-up admission, and `launch` while the
    *  launcher's task awaits its own. Never persisted. */
   readonly sending: ReadonlySet<RunId | 'launch'>;
-  /** The error the runtime answered this surface's last request on a stream
-   *  with, until the next request on that stream. Never persisted. */
-  readonly rejected: ReadonlyMap<RunId, SurfaceRejection>;
   readonly launch: LaunchSurface;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
@@ -317,12 +319,12 @@ export function loadSurface(
           expanded: run.expanded,
           groups: new Map(run.groups),
           seen: run.seen,
+          rejected: undefined,
         },
       ]),
     ),
     polishing: new Set(),
     sending: new Set(),
-    rejected: new Map(),
     launch: persisted.launch,
     inquiryDrafts: new Map(persisted.inquiryDrafts),
     drawerOpen: persisted.drawerOpen,
@@ -403,10 +405,9 @@ export function pruneSurface(
     // The view has passed the commit that held the run: it was deleted.
     surface = { ...current, arriving: null };
   }
-  // The two run-keyed records: an id is never reused, so a run's entry
-  // can never become valid again once it leaves the view.
+  // An id is never reused, so a run's entry can never become valid again
+  // once it leaves the view.
   const runs = retain(surface.runs, view);
-  const rejected = retain(surface.rejected, view);
   const { shown } = surface;
   let next: Shown = shown;
   if (shown._tag === 'Proposal') {
@@ -423,9 +424,8 @@ export function pruneSurface(
     const selected = select(shownRun(surface));
     if (selected !== shownRun(surface)) next = shownOf(selected);
   }
-  if (next === shown && runs === surface.runs && rejected === surface.rejected)
-    return surface;
-  return { ...surface, runs, rejected, shown: next };
+  if (next === shown && runs === surface.runs) return surface;
+  return { ...surface, runs, shown: next };
 }
 
 /**

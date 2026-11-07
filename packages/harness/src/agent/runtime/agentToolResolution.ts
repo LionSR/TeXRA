@@ -46,7 +46,6 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import { mcpPluginId } from '@common/plugins/mcpServers';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import {
   sameIdentity,
@@ -62,6 +61,7 @@ import {
 } from '@tools/catalogEntries';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
+import { SCRIPT_ONLY_SETTING } from '@shared/state/stateSettings';
 
 /** Whether `tool` may ask a person, so a run nobody can ask withholds it. */
 export const asksApproval = <E, R>(
@@ -119,7 +119,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   if (input.injectTools) {
     for (const { injectedWhen } of table.entries.values()) {
       for (const [name, setting] of Object.entries(injectedWhen ?? {})) {
-        if (setting === true || (yield* Settings.get<boolean>(roots, setting)))
+        if (setting === true || (yield* Settings.get(roots, setting)))
           injected.push(name);
       }
     }
@@ -282,7 +282,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   // Which tools the requests send (`OfferedTool.sent`), recorded per tool.
   const scriptAlone =
     [...resolvedNames].some(isScript) &&
-    (yield* Settings.get<boolean>(roots, GlobalStateKey.SCRIPT_ONLY));
+    (yield* Settings.get(roots, SCRIPT_ONLY_SETTING));
   // Dispatch answers only the names the model was offered.
   const offeredTools = new Map<string, ITool<Error, PluginToolServices>>();
   const offered: OfferedTool[] = [];

@@ -8,7 +8,7 @@ import {
   type SettingsStores,
   type SkillLoadIssue,
 } from '@texra-ai/harness/host';
-import { AGENT_SKILLS_CONFIG_KEY } from '@texra-ai/harness/schemas';
+import { AGENT_SKILLS_ENABLED_SETTING } from '@texra-ai/harness/schemas';
 
 /**
  * The notice a skill listing leads with while `texra.skills.enabled` is off:
@@ -21,11 +21,11 @@ export function readCliSkillsOffNotice(
   enableWith: string,
 ) {
   return Effect.map(
-    Settings.get<boolean>(stores, AGENT_SKILLS_CONFIG_KEY),
+    Settings.get(stores, AGENT_SKILLS_ENABLED_SETTING),
     (enabled) =>
       enabled
         ? undefined
-        : `Skills are off (${AGENT_SKILLS_CONFIG_KEY}); ${enableWith} turns them on for agents.`,
+        : `Skills are off (${AGENT_SKILLS_ENABLED_SETTING.key}); ${enableWith} turns them on for agents.`,
   );
 }
 

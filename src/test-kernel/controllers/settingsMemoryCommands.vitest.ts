@@ -25,7 +25,7 @@ function createMemoryPage(options: { confirmResponses: readonly boolean[] }) {
             posted.push(built);
           }),
         ),
-      prompt: createFakeUIHosts(options).prompt,
+      dialogs: createFakeUIHosts(options).dialogs,
       openPath: () => Effect.void,
       revealPath: () => Effect.void,
     },

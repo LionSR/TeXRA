@@ -14,6 +14,7 @@ import {
   createRunStorageLocation,
   pathToLocationIn,
   Settings,
+  withLogChannel,
 } from '@texra-ai/harness/host';
 
 import { Effect, FileSystem } from 'effect';
@@ -23,8 +24,6 @@ import {
   revisionLayout,
   stripRevisionDir,
 } from '@texra/shared/constants/revisionLayout';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
 import {
   type CompileFailure,
   isGenericOutputStem,
@@ -39,6 +38,10 @@ import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import {
+  DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
+  DOCUMENTS_COMPILE_TIMEOUT_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */
@@ -47,8 +50,6 @@ interface CompileCheckContext {
   logger: AgentTrace;
   runId: RunId;
 }
-
-const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.documentsCompileTimeoutMs.min;
 
 /** A round's check: the outputs that failed and the PDFs of those that
  *  built, or why it checked nothing, which is never zero failures. A check
@@ -72,19 +73,6 @@ const skipped = (reason: string, unverified = false): CompileCheckResult => ({
   reason,
   unverified,
 });
-
-/** The compile check's timeout setting, floored at the config-range minimum. */
-export const compileCheckTimeoutMs = Effect.fn('compileCheckTimeoutMs')(
-  function* (roots: WorkspaceRoots) {
-    return Math.max(
-      MIN_TIMEOUT_MS,
-      yield* Settings.get<number>(
-        roots,
-        DocumentsStateKey.DOCUMENTS_COMPILE_TIMEOUT_MS,
-      ),
-    );
-  },
-);
 
 /**
  * Return a human-readable display name for an output file in compile messages.
@@ -139,10 +127,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     outputs: readonly OutputFileInfo[],
   ) {
     if (
-      !(yield* Settings.get<boolean>(
-        ctx.roots,
-        DocumentsStateKey.DOCUMENTS_COMPILE_AFTER_OUTPUT,
-      ))
+      !(yield* Settings.get(ctx.roots, DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING))
     ) {
       return skipped('auto-compile is off');
     }
@@ -155,7 +140,10 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     if (texOutputs.length === 0)
       return skipped('the revision wrote no .tex output');
 
-    const timeoutMs = yield* compileCheckTimeoutMs(ctx.roots);
+    const timeoutMs = yield* Settings.get(
+      ctx.roots,
+      DOCUMENTS_COMPILE_TIMEOUT_SETTING,
+    );
     const failures: CompileFailure[] = [];
     const artifacts: RunStorageFileLocation[] = [];
 
@@ -325,11 +313,11 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
     // On the timeout the command's scope kills the child, so we don't orphan
     // hanging latexmk/pdflatex runs.
     return yield* compileLatex2Pdf(outputFile.location, ctx.roots, {
-      channel: ctx.runId,
       outputDirectory: buildDir,
       timeout: opts.timeoutMs,
       extraInputDirs,
     }).pipe(
+      withLogChannel(ctx.runId),
       Effect.map((result): CompileAttempt => ({ kind: 'compiled', result })),
       Effect.catchTag('ToolMissing', () =>
         Effect.succeed<CompileAttempt>({ kind: 'no-compiler' }),

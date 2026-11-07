@@ -7,12 +7,16 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
+import {
+  GIT_AUTHOR_EMAIL_SETTING,
+  GIT_AUTHOR_NAME_SETTING,
+  GIT_MARK_COMMITS_SETTING,
+  type SettingRow,
+} from '@texra-ai/harness/schemas';
 import type { CredentialOrigin } from '@texra-ai/llm';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { type PRSubscriptionEntry } from '@texra/shared/settingsView/settingsViewMessages';
 import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
@@ -35,20 +39,12 @@ import {
 import { settingSignal } from '../settingsState';
 
 /** The identity agent commits use while a field is blank: its row's default. */
-function defaultIdentity(key: WorkspaceStateKey): string {
-  const entry = TEXRA_SETTINGS.settingsViewByKey(key);
-  if (!entry) {
-    throw new Error(`No settings-view catalog row for setting "${key}"`);
-  }
-  return String(Schema.decodeUnknownSync(entry.schema)(undefined));
+function defaultIdentity(row: SettingRow<string>): string {
+  return Schema.decodeUnknownSync(row.schema)(undefined);
 }
 
-const DEFAULT_GIT_AUTHOR_NAME = defaultIdentity(
-  WorkspaceStateKey.GIT_AUTHOR_NAME,
-);
-const DEFAULT_GIT_AUTHOR_EMAIL = defaultIdentity(
-  WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-);
+const DEFAULT_GIT_AUTHOR_NAME = defaultIdentity(GIT_AUTHOR_NAME_SETTING);
+const DEFAULT_GIT_AUTHOR_EMAIL = defaultIdentity(GIT_AUTHOR_EMAIL_SETTING);
 
 @customElement('git-tab')
 export class GitTab extends SignalWatcher(LitElement) {
@@ -183,13 +179,13 @@ export class GitTab extends SignalWatcher(LitElement) {
 
   private handleIdentityInputChange(
     event: Event,
-    key: WorkspaceStateKey,
+    row: SettingRow<string>,
   ): void {
     // An emptied field resets to the default identity its placeholder shows;
     // `null` clears the key (the catalog rejects a blank name or email).
     const value =
       event.target instanceof WaInput ? event.target.value?.trim() : undefined;
-    postStateSetting(key, value || null);
+    postStateSetting(row.key, value || null);
   }
 
   private handleSetGitHubToken(): void {
@@ -386,11 +382,11 @@ export class GitTab extends SignalWatcher(LitElement) {
               'Keep agent-authored commits distinguishable from your personal Git identity.',
             icon: 'circle-dot',
           })}
-          ${renderStateSettingToggleRow(WorkspaceStateKey.GIT_MARK_COMMITS, {
+          ${renderStateSettingToggleRow(GIT_MARK_COMMITS_SETTING, {
             disabled: this.toggleDisabled,
           })}
           ${
-            settingSignal<boolean>(WorkspaceStateKey.GIT_MARK_COMMITS).get()
+            settingSignal(GIT_MARK_COMMITS_SETTING).get()
               ? html`
                   <div class="identity-fields">
                     <div class="input-row">
@@ -401,14 +397,12 @@ export class GitTab extends SignalWatcher(LitElement) {
                         name="git-author-name"
                         autocomplete="name"
                         spellcheck="false"
-                        .value=${settingSignal<string>(
-                          WorkspaceStateKey.GIT_AUTHOR_NAME,
-                        ).get()}
+                        .value=${settingSignal(GIT_AUTHOR_NAME_SETTING).get()}
                         placeholder=${DEFAULT_GIT_AUTHOR_NAME}
                         @change=${(event: Event) =>
                           this.handleIdentityInputChange(
                             event,
-                            WorkspaceStateKey.GIT_AUTHOR_NAME,
+                            GIT_AUTHOR_NAME_SETTING,
                           )}
                       ></wa-input>
                     </div>
@@ -424,14 +418,12 @@ export class GitTab extends SignalWatcher(LitElement) {
                         autocapitalize="off"
                         spellcheck="false"
                         dir="ltr"
-                        .value=${settingSignal<string>(
-                          WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-                        ).get()}
+                        .value=${settingSignal(GIT_AUTHOR_EMAIL_SETTING).get()}
                         placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
                         @change=${(event: Event) =>
                           this.handleIdentityInputChange(
                             event,
-                            WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+                            GIT_AUTHOR_EMAIL_SETTING,
                           )}
                       ></wa-input>
                     </div>

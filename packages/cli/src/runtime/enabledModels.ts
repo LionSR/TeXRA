@@ -1,6 +1,6 @@
 /**
  * CLI projection of the enabled-models catalog. The selection itself
- * (`GlobalStateKey.MODEL_SELECTION`) is owned by the harness —
+ * (`MODEL_SELECTION_KEY.key`) is owned by the harness —
  * `getEnabledModels` reads it, `setModelEnabled` writes it and enforces the
  * "at least one enabled" and "never enable a retired model" invariants for
  * every host. This module only resolves CLI argument spellings and shapes the
@@ -24,8 +24,9 @@ import {
   StateWriteFailed,
   type StateReadFailed,
   type StateStore,
+  MODEL_SELECTION_KEY,
 } from '@texra-ai/harness/host';
-import { getModelLabel, GlobalStateKey } from '@texra-ai/harness/schemas';
+import { getModelLabel } from '@texra-ai/harness/schemas';
 
 import { resolveKnownCliModelId } from './cliConfig';
 
@@ -98,7 +99,7 @@ export function setCliModelEnabled(
       const message = `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`;
       return Effect.fail(
         new StateWriteFailed({
-          key: GlobalStateKey.MODEL_SELECTION,
+          key: MODEL_SELECTION_KEY.key,
           message,
           cause: new Error(message),
         }),

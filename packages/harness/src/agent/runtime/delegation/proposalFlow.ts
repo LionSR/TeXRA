@@ -55,10 +55,10 @@ export const requireAgent = Effect.fn('requireAgent')(function* (
   const catalog = yield* AgentCatalog;
   const pinned = isTrustedScript(run.config) ? catalog.get(name) : undefined;
   if (pinned) return pinned;
-  const agents = yield* catalog.visible(
-    stores,
-    run.config.delegationAgentScope ?? undefined,
-  );
+  const scope = run.config.delegationAgentScope;
+  const agents = scope
+    ? catalog.pinned(scope)
+    : yield* catalog.workspaceAgents(stores).visible();
   const agent = findAgentByIdentifier(agents, name);
   if (agent) return agent;
   return yield* Effect.fail(
@@ -295,12 +295,13 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     changes && result.agent && result.agent !== proposal.agent
       ? result.agent
       : undefined;
+  const catalog = yield* AgentCatalog;
+  const scope = parent.run.config.delegationAgentScope;
   const resolvedAgentOverride = agentOverride
     ? findAgentByIdentifier(
-        yield* (yield* AgentCatalog).visible(
-          parent.env.roots,
-          parent.run.config.delegationAgentScope ?? undefined,
-        ),
+        scope
+          ? catalog.pinned(scope)
+          : yield* catalog.workspaceAgents(parent.env.roots).visible(),
         agentOverride,
       )
     : undefined;

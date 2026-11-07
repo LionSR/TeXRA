@@ -6,7 +6,7 @@
  * receives it with the events frame (`sessionFrames.ts`), and the design
  * harness passes literals. A schema because it crosses the bridge.
  */
-import { Schema, Struct } from 'effect';
+import { Schema } from 'effect';
 import {
   getBasename,
   ApprovalPolicySchema,
@@ -18,8 +18,6 @@ import {
 } from '@texra/shared/pickerOptions';
 
 import { DocumentAgentOptionSchema } from '@texra/shared/plugins/documents';
-
-const visible = { visible: Schema.Boolean };
 
 /** Open workspace folder offered as a run working directory. */
 const WorkspaceRootOptionDataSchema = Schema.Struct({
@@ -45,10 +43,6 @@ const MissingToolSchema = Schema.Struct({
   usedFor: Schema.String,
 });
 export type MissingTool = typeof MissingToolSchema.Type;
-
-const DependencyBannerDataSchema = Schema.Struct({
-  missingTools: Schema.optional(Schema.NullOr(Schema.Array(MissingToolSchema))),
-});
 
 const FileOptionsSchema = Schema.Struct({
   baseFile: Schema.Array(Schema.String),
@@ -108,13 +102,15 @@ export const HostSnapshotSchema = Schema.Struct({
   recording: Schema.NullOr(
     Schema.Struct({ session: Schema.String, target: Schema.String }),
   ),
-  /** The New-task state's notices; host-owned visibility. */
+  /** The New-task state's notices, each shown while it is set. */
   banners: Schema.Struct({
     /** A credential that worked (a task has finished) stopped working;
      *  before a first task the "Connect a model" card is the prompt. */
-    apiKey: Schema.Struct(visible),
-    agentConfig: AgentConfigBannerDataSchema.mapFields(Struct.assign(visible)),
-    dependency: DependencyBannerDataSchema.mapFields(Struct.assign(visible)),
+    apiKey: Schema.Boolean,
+    /** An agent's definition did not load. */
+    agentConfig: Schema.NullOr(AgentConfigBannerDataSchema),
+    /** The tools TeXRA needs that this machine lacks; never empty. */
+    dependency: Schema.NullOr(Schema.Array(MissingToolSchema)),
     gettingStarted: Schema.Boolean,
     /** Why the background service this window's tasks run in is out of
      *  reach (it went away and the window is reaching it again, or a newer
@@ -138,9 +134,9 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     isGitRepo: false,
     recording: null,
     banners: {
-      apiKey: { visible: false },
-      agentConfig: { visible: false },
-      dependency: { visible: false },
+      apiKey: false,
+      agentConfig: null,
+      dependency: null,
       gettingStarted: false,
       serviceOffline: null,
     },

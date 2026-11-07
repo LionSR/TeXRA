@@ -38,21 +38,6 @@ export class SetupCommandFailed extends Schema.TaggedError<SetupCommandFailed>()
 ) {}
 
 /**
- * The one failure of {@link SetupExtensionAdapter.install}: the host refused
- * the install. There is no second reason, because a host without an
- * extension surface leaves `extensions` undefined rather than raising —
- * the caller already reports that absence itself.
- */
-export class SetupExtensionInstallFailed extends Schema.TaggedError<SetupExtensionInstallFailed>()(
-  'SetupExtensionInstallFailed',
-  {
-    message: Schema.String,
-    extensionId: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {}
-
-/**
  * Per-command surface. The member is an `Effect`: a host fault reaches the
  * setup tool as {@link SetupCommandFailed} rather than as `unknown`, and
  * interrupting the fiber abandons the wait instead of holding an
@@ -65,24 +50,10 @@ interface SetupCommandAdapter {
   ): Effect.Effect<unknown, SetupCommandFailed>;
 }
 
-/**
- * Extension host surface. `isInstalled` stays synchronous — it is a registry
- * read, not a host call — while `install` is an `Effect` carrying
- * {@link SetupExtensionInstallFailed}.
- */
-interface SetupExtensionAdapter {
-  isInstalled(extensionId: string): boolean;
-  install(
-    extensionId: string,
-  ): Effect.Effect<void, SetupExtensionInstallFailed>;
-}
-
 /** Host-varying setup capabilities. */
 export interface SetupPlatformShape {
   /** VS Code-only command invocation. */
   commands?: SetupCommandAdapter;
-  /** VS Code extension inspection and installation. */
-  extensions?: SetupExtensionAdapter;
   /**
    * VS Code integrated-terminal execution: the surface the setup agent uses
    * for commands the captured-stdio `bash` tool cannot handle (`sudo`

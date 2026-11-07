@@ -12,7 +12,8 @@ import {
 } from '@texra-ai/llm';
 import {
   type DeclinableUsageRoute,
-  GlobalStateKey,
+  GLM_CODING_PLAN_SETTING,
+  KIMI_CODE_PREFER_SETTING,
 } from '@texra-ai/harness/schemas';
 import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
@@ -47,8 +48,8 @@ const boundEndpoint = (
 layer(
   FakeHost.layer({
     globalState: {
-      [GlobalStateKey.GLM_CODING_PLAN]: true,
-      [GlobalStateKey.KIMI_CODE_PREFER]: false,
+      [GLM_CODING_PLAN_SETTING.key]: true,
+      [KIMI_CODE_PREFER_SETTING.key]: false,
     },
     secrets: { [apiKeySecretName('glm')]: 'glm-key' },
   }),
@@ -112,7 +113,7 @@ layer(
     () =>
       Effect.gen(function* () {
         yield* installedHost().roots.globalState.update(
-          GlobalStateKey.GLM_CODING_PLAN,
+          GLM_CODING_PLAN_SETTING.key,
           true,
         );
 
@@ -126,7 +127,7 @@ layer(
         // a concurrent run still routes through the plan.
         expect(
           yield* installedHost().roots.globalState.get(
-            GlobalStateKey.GLM_CODING_PLAN,
+            GLM_CODING_PLAN_SETTING.key,
           ),
         ).toBe(true);
       }),

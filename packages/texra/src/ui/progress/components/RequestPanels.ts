@@ -63,17 +63,9 @@ const cardTag = (permission: RequestPayload): CardTag | undefined =>
 /** Marks every rendered card so keyboard routing can find it. */
 const CARD_MARKER = 'data-request-panel';
 
-/**
- * Stable identity key for a pending request. Retry is keyed by `runId`
- * instead of `requestId`: one pending retry per run, a new one replaces it.
- */
-function requestKey(permission: RequestPayload): string {
-  const id =
-    permission.kind === 'retry'
-      ? permission.data.runId
-      : permission.data.requestId;
-  return `${permission.kind}:${id}`;
-}
+/** A pending request's identity: its id, a retry's as any other's. */
+const requestKey = (permission: RequestPayload): string =>
+  permission.data.requestId;
 
 /** A select and its listbox options: their keys (typeahead, arrows)
  *  pick an option, never a card shortcut. */

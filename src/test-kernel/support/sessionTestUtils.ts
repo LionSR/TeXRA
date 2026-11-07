@@ -24,12 +24,10 @@ import {
   type SessionRowDraft,
 } from '@shared/schemas';
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';
-import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-} from '@shared/approvalPolicy';
+import { type ApprovalPolicy } from '@shared/approvalPolicy';
 import { generateRunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
 
 /**
  * Commit rows on the session's log, in the caller's fiber: a batch the
@@ -156,5 +154,5 @@ export function setTestApprovalPolicy(
   policy: ApprovalPolicy,
   { config }: Pick<WorkspaceRoots, 'config'> = testWorkspaceRoots(),
 ): void {
-  Effect.runSync(config.update(APPROVAL_POLICY_CONFIG_KEY, policy, 'local'));
+  Effect.runSync(config.update(APPROVAL_POLICY_SETTING.key, policy, 'local'));
 }

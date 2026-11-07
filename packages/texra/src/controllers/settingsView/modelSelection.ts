@@ -15,8 +15,8 @@ import {
   StateWriteFailed,
   type ModelOption,
   type Secrets,
+  REASONING_LEVELS_KEY,
 } from '@texra-ai/harness/host';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   MODEL_SOURCE_ORDER,
   type ModelSelectionItem,
@@ -65,7 +65,7 @@ export function setReasoningLevel(
   // entry goes back to storage; reads that need the effort go through
   // `reasoningEffortOverrides`.
   return globalState
-    .modify(GlobalStateKey.REASONING_LEVELS, (stored) => {
+    .modify(REASONING_LEVELS_KEY.key, (stored) => {
       const overrides: Record<string, unknown> = {
         ...(Predicate.isObject(stored) && stored),
       };

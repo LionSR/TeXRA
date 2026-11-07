@@ -32,9 +32,10 @@ import {
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { openBuilt } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
   INSTRUCTION_ACTION,
   instructionActions,
@@ -99,7 +100,9 @@ function handleRequestShowError(
   // (the extension host tearing down) are reported there rather than
   // becoming an unhandled rejection. A docs page is offered as a button.
   return vscodeUi
-    .error(modelFailureText(failure), { items: docsPage ? ['View Docs'] : [] })
+    .ask('error', modelFailureText(failure), {
+      items: docsPage ? ['View Docs'] : [],
+    })
     .pipe(
       Effect.flatMap((choice) =>
         choice && docsPage
@@ -198,7 +201,7 @@ export const revealProgressView = Effect.fn('revealProgressView')(function* (
   // The toast is the delivered surface when the view cannot be made
   // visible: a successful handoff means the run was presented even if the
   // user dismisses it without retrying the reveal.
-  const selection = yield* vscodeUi.info(launchNotice(config), {
+  const selection = yield* vscodeUi.ask('info', launchNotice(config), {
     modal: false,
     detail:
       'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
@@ -222,7 +225,8 @@ export const revealProgressView = Effect.fn('revealProgressView')(function* (
  * before this host attaches.
  */
 export function createAgentPresentationHost(
-  progressViewProvider: ProgressViewProvider,
+  /** The window's host snapshot, which shows the missing-agent banner. */
+  snapshot: Pick<HostSnapshotSource, 'showAgentConfigBanner'>,
   globalState: StateStore,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
@@ -239,14 +243,17 @@ export function createAgentPresentationHost(
     openFile: (payload) =>
       withProcessServices(
         runtime,
-        openBuildDisplayIfTex(roots, payload.location, {
+        openBuilt(roots, [payload.location], {
           preserveFocus: payload.preserveFocus,
         }).pipe(Effect.provideService(Scope.Scope, scope)),
-      ).pipe(Effect.asVoid),
+      ),
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, roots, runtime, payload),
     agentNotFound: (payload) =>
-      progressViewProvider.showAgentConfigBanner(payload.agentName),
+      withProcessServices(
+        runtime,
+        snapshot.showAgentConfigBanner(payload.agentName),
+      ),
     requestShowError: handleRequestShowError,
   };
   return {

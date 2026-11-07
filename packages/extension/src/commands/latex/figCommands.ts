@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/host';
+import { pathToLocationIn } from '@texra-ai/harness/host';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { quickPick } from '@frontend/ui/dialogs';
@@ -36,7 +36,7 @@ export function handleCompileTikzFigures(
     Effect.fnUntraced(function* ({ relativePath: filePath }) {
       yield* Effect.logDebug(
         `Processing LaTeX file for TikZ compilation: ${filePath}`,
-      ).pipe(withLogChannel(CHANNEL));
+      );
 
       // The notification lives for exactly as long as the body below, which
       // is a step of this program rather than a nested settle.
@@ -59,10 +59,7 @@ export function handleCompileTikzFigures(
           );
 
           if (compiledFiles.length === 0) {
-            yield* showLoggedInfoMessage(
-              CHANNEL,
-              'No TikZ figures found to compile',
-            );
+            yield* showLoggedInfoMessage('No TikZ figures found to compile');
             return;
           }
 
@@ -80,15 +77,10 @@ export function handleCompileTikzFigures(
           });
 
           if (selected) {
-            yield* safeExecuteCommand(
-              'vscode.open',
-              [selected.resourceUri],
-              CHANNEL,
-            );
+            yield* safeExecuteCommand('vscode.open', [selected.resourceUri]);
           }
 
           yield* showLoggedInfoMessage(
-            CHANNEL,
             `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
           );
         }),

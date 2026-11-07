@@ -24,25 +24,30 @@ import {
   type StorageFs,
   type WorkspaceFs,
 } from '@texra-ai/harness/host';
-import type { RunId } from '@texra-ai/harness/schemas';
-import { Rejected } from '@texra-ai/harness/schemas';
+import {
+  Rejected,
+  type RunId,
+  type SettingRow,
+} from '@texra-ai/harness/schemas';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
-import type { MessageHost } from '@texra/hosts/uiHosts';
+import type { Dialogs, NoticeLevel } from '@texra/hosts/uiHosts';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
-import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 
 // Local file imports
 import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import { latexdiffPairs } from './diffOperations';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  LATEXDIFF_BETWEEN_ROUNDS_SETTING,
+  LATEXDIFF_MATH_MARKUP_SETTING,
+} from '@texra/shared/settingsView/documentsSettings';
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
 type LatexdiffCommitAction = Extract<
@@ -80,24 +85,15 @@ export function latexdiffVerbs(parts: {
   readonly roots: WorkspaceRoots;
   /** The window's session: its view holds the runs' recorded documents. */
   readonly session: Session;
-  readonly messages: Pick<
-    MessageHost,
-    'showInfoMessage' | 'showWarningMessage'
-  >;
+  readonly notify: Dialogs['notify'];
 }) {
-  const { host, roots, session, messages } = parts;
+  const { host, roots, session } = parts;
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
 
   /** A notice the request does not wait on: a VS Code toast answers only
    *  when it is dismissed. */
-  const notify = (notice: Effect.Effect<void, HostCommandFailure>) =>
-    Effect.forkDetach(
-      notice.pipe(
-        Effect.catch((cause) =>
-          Effect.logWarning('LaTeX diff notice failed', cause),
-        ),
-      ),
-    );
+  const notify = (level: NoticeLevel, message: string) =>
+    Effect.forkDetach(parts.notify(level, message));
 
   /** A generated diff opens; a failed one is refused with its message. */
   const open = <E extends Error, R>(diff: Effect.Effect<string, E, R>) =>
@@ -145,7 +141,7 @@ export function latexdiffVerbs(parts: {
         action === 'cleanLatexdiffvc',
       ),
     );
-    if (message) yield* notify(messages.showInfoMessage(message));
+    if (message) yield* notify('info', message);
   }, withLogChannel(CHANNEL));
 
   /**
@@ -159,13 +155,11 @@ export function latexdiffVerbs(parts: {
     const rounds = documentRoundsOf(
       session.view.current().runs.get(runId) ?? { facts: {} },
     );
-    const setting = <A>(key: string) =>
-      Settings.get<A>(roots, key).pipe(
+    const setting = <A>(row: SettingRow<A>) =>
+      Settings.get(roots, row).pipe(
         Effect.mapError((cause) => hostFailure('runLatexdiff', cause)),
       );
-    const mathMarkup = yield* setting<LatexdiffMathMarkupValue>(
-      DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-    );
+    const mathMarkup = yield* setting(LATEXDIFF_MATH_MARKUP_SETTING);
     // A round whose recorded diffs all succeeded under the markup set now
     // opens them; a round that recorded none, a failed one, or one made
     // under another markup is diffed again.
@@ -184,7 +178,7 @@ export function latexdiffVerbs(parts: {
     );
     const betweenRounds =
       unrecorded.length > 0 &&
-      (yield* setting<boolean>(DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS));
+      (yield* setting(LATEXDIFF_BETWEEN_ROUNDS_SETTING));
     const pairs = unrecorded.flatMap(({ round, outputs }) =>
       latexdiffPairs(
         outputs,
@@ -196,11 +190,7 @@ export function latexdiffVerbs(parts: {
     );
     const total = recorded.length + pairs.length;
     if (total === 0) {
-      yield* notify(
-        messages.showInfoMessage(
-          'No LaTeX diff operations available for this run.',
-        ),
-      );
+      yield* notify('info', 'No LaTeX diff operations available for this run.');
       return;
     }
 
@@ -249,13 +239,12 @@ export function latexdiffVerbs(parts: {
         reason: 'All LaTeX diff operations failed',
       });
     }
-    yield* notify(
-      diffPaths.length < total
-        ? messages.showWarningMessage(
-            `${diffPaths.length} of ${total} LaTeX diff operations completed successfully`,
-          )
-        : messages.showInfoMessage('All LaTeX diffs completed successfully'),
-    );
+    yield* diffPaths.length < total
+      ? notify(
+          'warning',
+          `${diffPaths.length} of ${total} LaTeX diff operations completed successfully`,
+        )
+      : notify('info', 'All LaTeX diffs completed successfully');
     yield* host.openDiffs(diffPaths);
   }, withLogChannel(CHANNEL));
 

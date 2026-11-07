@@ -235,7 +235,7 @@ function runStreamedTurn(
         case 'turn.started':
           turnStartedMs = clock.currentTimeMillisUnsafe();
           turnCard = logger.openToolCard(
-            buildCodexTurnToolLog({ state: 'running' }),
+            buildCodexTurnToolLog({ state: 'in_progress' }),
           );
           break;
         case 'item.started':

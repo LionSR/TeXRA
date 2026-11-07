@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, Fiber, Result, Schema } from 'effect';
 
-import { Skills, hasExtension } from '@texra-ai/harness/host';
+import { Skills, hasExtension, withLogChannel } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -26,18 +26,10 @@ import {
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
-import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import {
-  latexEditorStatus,
-  vscodeLatexSettingsHandlers,
-} from './handlers/latexSettingsHandlers';
+import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  StorageFs,
-  ProcessRuntime,
-  ProcessServices,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
@@ -75,16 +67,13 @@ const showDocument = (
     catch: ensureError,
   });
 
-export class SettingsViewMessageHandler {
-  private readonly viewName = 'SettingsView';
-  private readonly channel = `${this.viewName}MessageHandler`;
+/** The settings view's log channel, named where its programs start. */
+const CHANNEL = 'SettingsViewMessageHandler';
 
+export class SettingsViewMessageHandler {
   /** Active webview reference, tracked on every dispatch. */
   private activeView: SettingsWebview | undefined;
 
-  private readonly handlerRegistry: SettingsViewInboundHandlerRegistry<
-    ProcessServices | StorageFs
-  >;
   /** The shared settings body: its programs, handlers and repaints. */
   readonly body: Effect.Success<ReturnType<typeof makeSettingsViewBody>>;
 
@@ -99,7 +88,6 @@ export class SettingsViewMessageHandler {
   ) {
     this.body = runtime.runSync(
       makeSettingsViewBody({
-        installsExtensions: true,
         roots,
         resourcesPath: path.join(context.extensionPath, 'resources'),
         skillDisplay: Skills.display(roots),
@@ -109,17 +97,14 @@ export class SettingsViewMessageHandler {
             this.withActiveWebview((webview) =>
               Effect.flatMap(message, (built) => postToWebview(webview, built)),
             ),
-          notify: vscodeUi,
-          prompt: vscodeUi,
+          dialogs: vscodeUi,
           externalOpener: new VscodeExternalOpener(),
           // Markdown opens in preview mode, the read-only rendered view.
           openPath: (filePath) =>
             hasExtension(filePath, '.md')
-              ? safeExecuteCommand(
-                  'markdown.showPreview',
-                  [vscode.Uri.file(filePath)],
-                  this.viewName,
-                ).pipe(Effect.asVoid)
+              ? safeExecuteCommand('markdown.showPreview', [
+                  vscode.Uri.file(filePath),
+                ]).pipe(Effect.asVoid)
               : showDocument(() => vscode.workspace.openTextDocument(filePath)),
           revealPath: (filePath) =>
             executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
@@ -146,9 +131,7 @@ export class SettingsViewMessageHandler {
           // the host snapshot; the funnel follows the banner.
           refreshCredentialStatus: progressView.refreshApiKeyStatus,
           signInSubscription: (providerId) =>
-            Effect.asVoid(
-              signInWithSubscription(roots, this.channel, providerId),
-            ),
+            Effect.asVoid(signInWithSubscription(roots, providerId)),
           revealRun: (runId) => progressView.revealRun(runId),
           runLabel: (runId) => progressView.runLabel(runId),
           runInTerminal: (name, command) =>
@@ -157,18 +140,16 @@ export class SettingsViewMessageHandler {
               terminal.show();
               terminal.sendText(command);
             }),
-          latexEditorStatus,
+          editor: vscodeEditorIntegration,
           requiresOpenWorkspace: () => !roots.workspace,
         },
       }),
     );
-    this.handlerRegistry = {
-      ...this.body.handlers,
-      ...vscodeLatexSettingsHandlers(this.body),
-    };
 
     // One fiber owns every page follower: disposing interrupts them all.
-    const following = runtime.runFork(this.body.follow);
+    const following = runtime.runFork(
+      this.body.follow.pipe(withLogChannel(CHANNEL)),
+    );
     context.subscriptions.push({
       dispose: () => runtime.runFork(Fiber.interrupt(following)),
     });
@@ -207,7 +188,7 @@ export class SettingsViewMessageHandler {
         SettingsViewInboundMessageSchema,
       )(message);
       if (Result.isSuccess(parsed)) {
-        return this.body.handleMessage(parsed.success, this.handlerRegistry);
+        return this.body.handleMessage(parsed.success);
       }
       // The webview's `postMessage` is untyped per command, so a malformed
       // request is a frontend bug the user just triggered with a click:
@@ -220,10 +201,9 @@ export class SettingsViewMessageHandler {
           ? message.command
           : 'unknown';
       return showLoggedErrorMessage(
-        this.channel,
         `Settings could not handle the '${command}' request`,
         parsed.failure.message,
       ).pipe(Effect.asVoid);
-    });
+    }).pipe(withLogChannel(CHANNEL));
   }
 }

@@ -7,7 +7,6 @@ import * as CommandLine from 'effect/process/CommandLine';
 import { withLogChannel } from '@logger/effectLog';
 import type { ExecResult } from '@shared/schemas';
 import { Settings, type SettingsStores } from '@shared/config/settings';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
@@ -17,6 +16,11 @@ import type {
   ChildProcessSpawner,
 } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
+import {
+  GIT_AUTHOR_EMAIL_SETTING,
+  GIT_AUTHOR_NAME_SETTING,
+  GIT_MARK_COMMITS_SETTING,
+} from '@shared/state/stateSettings';
 
 const CHANNEL = 'execUtils';
 
@@ -80,22 +84,11 @@ const gitAuthorEnv = Effect.fn('gitAuthorEnv')(function* (
   settings: SettingsStores | undefined,
 ) {
   if (!settings) return {};
-  if (
-    !(yield* Settings.get<boolean>(
-      settings,
-      WorkspaceStateKey.GIT_MARK_COMMITS,
-    ))
-  ) {
+  if (!(yield* Settings.get(settings, GIT_MARK_COMMITS_SETTING))) {
     return {};
   }
-  const name = yield* Settings.get<string>(
-    settings,
-    WorkspaceStateKey.GIT_AUTHOR_NAME,
-  );
-  const email = yield* Settings.get<string>(
-    settings,
-    WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-  );
+  const name = yield* Settings.get(settings, GIT_AUTHOR_NAME_SETTING);
+  const email = yield* Settings.get(settings, GIT_AUTHOR_EMAIL_SETTING);
   return {
     GIT_AUTHOR_NAME: name,
     GIT_AUTHOR_EMAIL: email,
@@ -151,7 +144,6 @@ function resultFromProcessOutput(
 }
 
 export interface ExecuteCommandBaseOptions {
-  readonly channel?: string;
   readonly env?: Record<string, string>;
   /** Milliseconds; undefined or `<= 0` sets no deadline. */
   readonly timeout?: number;
@@ -444,7 +436,7 @@ const runSpawned = Effect.fnUntraced(function* (
 
 /**
  * Execute an external command in `cwd` with the workspace env, over the
- * process's `ChildProcessSpawner`.
+ * process's `ChildProcessSpawner`. Its lines take the caller's log channel.
  *
  * Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
  * timeout (`timedOut`) and a max-buffer trip (2,
@@ -464,13 +456,10 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   command: string | string[],
   options: ExecuteCommandBaseOptions,
 ): Effect.fn.Return<ExecResult, never, ChildProcessSpawner> {
-  const channel = options.channel ?? CHANNEL;
   const logError = (message: string) =>
     options.quiet
       ? Effect.void
-      : Effect.logError(`Error executing command: ${message}`).pipe(
-          withLogChannel(channel),
-        );
+      : Effect.logError(`Error executing command: ${message}`);
   const { cwd } = options;
   if (!cwd) {
     yield* logError('No workspace path found');
@@ -491,9 +480,7 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
     options.env,
   );
   if (!options.quiet) {
-    yield* Effect.logDebug(`Running command: ${displayCommand(command)}`).pipe(
-      withLogChannel(channel),
-    );
+    yield* Effect.logDebug(`Running command: ${displayCommand(command)}`);
   }
 
   const { outcome, result } = yield* Effect.scoped(
@@ -502,9 +489,7 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   if (outcome._tag === 'SpawnFailed') {
     yield* logError(result.stderr);
   } else if (!options.quiet && result.stderr) {
-    yield* Effect.logDebug(`Command stderr: ${result.stderr}`).pipe(
-      withLogChannel(channel),
-    );
+    yield* Effect.logDebug(`Command stderr: ${result.stderr}`);
   }
   return result;
 });

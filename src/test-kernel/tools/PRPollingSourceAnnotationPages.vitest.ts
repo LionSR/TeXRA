@@ -15,6 +15,7 @@ import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
 import { fetchAnnotations } from '@texra/tools/github/checkRunsClient';
+import { GitHubMalformedBodyError } from '@texra/tools/github/githubClient';
 import type { GhCheckAnnotation } from '@texra/tools/github/prTypes';
 
 const mocks = vi.hoisted(() => ({
@@ -104,7 +105,12 @@ describe('check-run annotation pagination', () => {
           Effect.succeed({ status: 200, data: fullWarningPage() }),
         )
         .mockReturnValueOnce(
-          Effect.succeed({ status: 200, data: { message: 'not a list' } }),
+          Effect.fail(
+            new GitHubMalformedBodyError({
+              message: 'GitHub returned a malformed body for page 2',
+              cause: new Error('Expected an array'),
+            }),
+          ),
         );
 
       const annotations = yield* fetchAnnotations(

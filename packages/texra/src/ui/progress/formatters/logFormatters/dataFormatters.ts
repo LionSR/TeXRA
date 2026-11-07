@@ -1,10 +1,6 @@
 /**
  * Data-style formatter for file lists.
  * Uses Lit templates for declarative DOM construction.
- *
- * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
- * indentation will render with unwanted spaces in the output. Always use single-line
- * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Side-effect imports - register WA components

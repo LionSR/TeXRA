@@ -39,9 +39,9 @@ import { SessionRoots } from '@platform/rootedFs';
 import {
   AgentConfigSchema,
   PersonaSchema,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type RunId,
 } from '@shared/schemas';
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
 import { generateRunId } from '@shared/schemas';
 import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -173,7 +173,9 @@ export function testBinding(
     background: false,
     serviceTier: null,
     routes: routePolicies(['test-route'], 'test-model'),
-    automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+    automaticRetries: Schema.decodeUnknownSync(
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.schema,
+    )(undefined),
     textOnly: false,
     ...overrides,
   };

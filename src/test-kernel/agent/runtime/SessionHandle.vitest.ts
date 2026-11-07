@@ -8,7 +8,7 @@ import { expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_SETTING,
   generateRunId,
 } from '@texra-ai/harness/schemas';
 import {
@@ -46,7 +46,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           const service = yield* JsonStore.open(file, { follow });
           const windowB = yield* JsonStore.open(file);
           // The file holds the key as stored, under the catalog's namespace.
-          const STORED_POLICY_KEY = `${TEXRA_SETTINGS.catalog.namespace}.${APPROVAL_POLICY_CONFIG_KEY}`;
+          const STORED_POLICY_KEY = `${TEXRA_SETTINGS.catalog.namespace}.${APPROVAL_POLICY_SETTING.key}`;
           const config = new JsonConfigProvider({
             workspace: yield* JsonStore.open(`${file}.workspace`, { follow }),
             global: yield* JsonStore.open(`${file}.global`, { follow }),

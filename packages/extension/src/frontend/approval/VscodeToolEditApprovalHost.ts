@@ -18,8 +18,8 @@ import {
   type DiffSession,
 } from '@frontend/approval/VscodeDiffViewHost';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { openBuilt } from '@frontend/latex/openBuild';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   fromHost,
   hostFailure,
@@ -41,8 +41,7 @@ const CHANNEL = 'ToolEditApproval';
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost = new VscodeDiffViewHost();
   readonly openBuildDisplay: BuildDisplayFn = (location, options) =>
-    openBuildDisplayIfTex(this.roots, location, options).pipe(
-      Effect.asVoid,
+    openBuilt(this.roots, [location], options).pipe(
       Effect.provideService(Scope.Scope, this.scope),
     );
 
@@ -97,7 +96,9 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   reportError(message: string): void {
     // Fire-and-forget, as the voided promise was: the report is logged and
     // shown on its own fiber, and the caller does not wait for the toast.
-    this.runtime.runFork(showLoggedMessage(CHANNEL, message));
+    this.runtime.runFork(
+      showLoggedMessage(message).pipe(withLogChannel(CHANNEL)),
+    );
   }
 
   /** A warning, logged and shown on its own fiber, as a report is. */
@@ -105,9 +106,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     this.runtime.runFork(
       Effect.logWarning(message).pipe(
         withLogChannel(CHANNEL),
-        Effect.andThen(
-          announce(CHANNEL, vscodeUi.showWarningMessage(message), undefined),
-        ),
+        Effect.andThen(vscodeUi.notify('warning', message)),
       ),
     );
   };

@@ -65,7 +65,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_STATE_SETTING: 'updateStateSetting',
   SET_SKILL_ENABLED: 'setSkillEnabled',
   // Tool dashboard commands
-  INSTALL_TOOL_EXTENSION: 'installToolExtension',
+  INSTALL_EXTENSION: 'installExtension',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
   TOGGLE_TOOL: 'toggleTool',
   RUN_TOOL_COMMAND: 'runToolCommand',
@@ -85,7 +85,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   OPEN_PR_SUBSCRIPTION_STREAM: 'openPRSubscriptionStream',
   // LaTeX settings commands
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
-  INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
   RUN_INSTALL_COMMAND: 'runInstallCommand',
   // Outbound (host → webview), each a member of the validated outbound union.
   // What the host knows for the view, as one record patched field by field.

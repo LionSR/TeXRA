@@ -11,7 +11,7 @@ import { afterEach, vi } from 'vitest';
 // Local imports
 
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_SETTING,
   type RunId,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
@@ -133,7 +133,7 @@ const perTest = Layer.provideMerge(
   TestSession.layer(undefined, { host: {} }),
   FakeHost.layer({
     workspacePath: '/workspace',
-    config: { [APPROVAL_POLICY_CONFIG_KEY]: 'yolo' },
+    config: { [APPROVAL_POLICY_SETTING.key]: 'yolo' },
   }),
 );
 

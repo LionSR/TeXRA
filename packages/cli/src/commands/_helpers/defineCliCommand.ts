@@ -158,6 +158,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
             options.install === 'noPlatform'
               ? {
                   ...NO_PLATFORM_INSTALL,
+                  resourcesPath: context.resourcesPath,
                   minimumLogLevel: context.minimumLogLevel,
                 }
               : {

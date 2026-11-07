@@ -1,10 +1,6 @@
 /**
  * Lit template utilities for progress view formatters.
  * These functions create reusable Lit templates from normalized data.
- *
- * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
- * indentation will render with unwanted spaces in the output. Always use single-line
- * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Third-party imports
@@ -15,7 +11,6 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
 
-import { copyWithFeedback } from '@texra/shared/utils/clipboard';
 import { highlightSpans } from '@ui/highlighting/highlightCode';
 import type { IconName } from '@ui/wa/iconNames';
 
@@ -24,6 +19,9 @@ import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatBytes } from '@ui/copy/format';
+
+// Side-effect import - register the <copy-button> element drawn below
+import '@ui/progress/components/CopyButton';
 
 // Local imports - formatter helpers
 import {
@@ -88,112 +86,36 @@ export function wrapInPre(text: string, className = ''): TemplateResult {
   return html`<pre class=${ifDefined(className || undefined)}>${content}</pre>`;
 }
 
-/**
- * Stop an Enter/Space keydown on a control slotted into a `<wa-details>`
- * summary from also toggling the details panel.
- *
- * `<wa-details>`'s own `handleSummaryClick` excludes interactive descendants
- * (`<a>`, `<button>`, form-associated custom elements like `<wa-button>`)
- * from triggering its toggle, but its `handleSummaryKeyDown` has no such
- * check — every Enter/Space keydown that bubbles up to the `<summary>` calls
- * `preventDefault()` and toggles, regardless of where it originated. Left
- * unhandled, that ancestor `preventDefault()` also suppresses the focused
- * control's own native keyboard activation (a button's Enter/Space normally
- * synthesizes a `click`), so the control silently stops responding to the
- * keyboard entirely — it only toggles the panel.
- *
- * Calling `stopPropagation()` here, on a listener bound directly to the
- * control, runs before the event can reach `<summary>` and prevents both the
- * unwanted toggle and the swallowed activation. It intentionally does not
- * call `preventDefault()`, so the control's own native click synthesis for
- * Enter/Space (and the click event that produces) is unaffected and still
- * bubbles normally to any delegated click handler further up the tree.
- */
-function stopSummaryToggleKeydown(event: Event): void {
-  if (!(event instanceof KeyboardEvent)) return;
-  if (event.key !== 'Enter' && event.key !== ' ') return;
-  event.stopPropagation();
-}
-
-/**
- * Copy a copy-button's payload from a direct `@click` binding.
- *
- * `stopPropagation()` keeps the click from reaching the enclosing
- * `<wa-details>` summary — and any delegated transcript handler above it — so
- * copying never toggles the disclosure panel. A button built without content
- * is inert and does not even stop the click.
- */
-async function copyFromClick(
-  event: Event,
-  content: string | undefined,
-  successClass?: string,
-): Promise<void> {
-  if (content == null) return;
-  // A click inside a slotted custom button can still activate the native
-  // summary's default action even when its event no longer bubbles.
-  event.preventDefault();
-  event.stopPropagation();
-  const button = event.currentTarget;
-  if (!(button instanceof HTMLElement)) return;
-  await copyWithFeedback(button, content, { successClass });
-}
-
-/** Build a copy button for banner content. */
+/** The labeled Copy button of a message header. */
 export function buildCopyButton(
   title: string,
-  options: { content?: string; labeled?: boolean } = {},
+  content: string,
 ): TemplateResult {
-  const { content, labeled = false } = options;
   // prettier-ignore
-  return html`<wa-button class="${labeled ? 'action-button message-copy' : 'action-icon-button'} banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} @click=${(event: Event) => copyFromClick(event, content)} @keydown=${stopSummaryToggleKeydown}>${labeled ? html`<span class="copy-label">Copy</span><span class="copied-label">Copied</span>` : waIcon('copy')}</wa-button>`;
+  return html`<copy-button .text=${content} .label=${title} .look=${'labeled'}></copy-button>`;
 }
 
-/**
- * Sentinel value for {@link DetailsSummaryOptions.iconName} that renders an
- * inline `<wa-spinner>` instead of a `<wa-icon>`. Used for in-progress states.
- */
-export const SPINNER_ICON_NAME = '__spinner__';
-
-/**
- * Map a status string to the failed / in-progress / else icon tri-state for the
- * one `kind: 'status'` tool section, which the codex-turn, codex-patch and MCP
- * rows all converge on. It therefore has to recognize both producer
- * vocabularies: the Codex turn state's `'running'` (`CodexTurnState` in
- * `packages/texra/src/tools/agentCli/codexShared.ts`) and
- * `McpToolOutputSchema.status`'s `'in_progress'`.
- */
-export function triStateStatusIcon(
-  status: string,
-): IconName | typeof SPINNER_ICON_NAME {
-  if (status === 'failed') return 'circle-exclamation';
-  if (status === 'running' || status === 'in_progress') {
-    return SPINNER_ICON_NAME;
-  }
-  return 'check';
-}
-
-/**
- * Render a `<wa-icon>`, or a `<wa-spinner>` when the sentinel
- * {@link SPINNER_ICON_NAME} is passed.
- */
+/** A `<wa-icon>`, or a `<wa-spinner>` in its place while `running`. */
 function renderIconOrSpinner(
-  iconName: IconName | typeof SPINNER_ICON_NAME,
+  running: boolean,
+  iconName: IconName,
   className?: string,
 ): TemplateResult {
-  if (iconName === SPINNER_ICON_NAME) {
+  if (running) {
     // prettier-ignore
     return html`<wa-spinner class=${ifDefined(className)} ${stopSpinnerMotion()}></wa-spinner>`;
   }
   return waIcon(iconName, { className });
 }
 
-/** Build a neutral filled badge with a leading icon (or spinner). */
+/** Build a neutral filled badge with a leading icon, a spinner while `running`. */
 export function buildStatusBadge(
-  iconName: IconName | typeof SPINNER_ICON_NAME,
+  iconName: IconName,
   label: string,
+  running = false,
 ): TemplateResult {
   return renderStatusBadge({
-    icon: renderIconOrSpinner(iconName),
+    icon: renderIconOrSpinner(running, iconName),
     label,
     appearance: 'badge',
   });
@@ -201,14 +123,16 @@ export function buildStatusBadge(
 
 /** Options for building a details summary header. */
 interface DetailsSummaryOptions {
-  /** wa-icon name (codicon-style aliases supported), or {@link SPINNER_ICON_NAME}. */
-  iconName: IconName | typeof SPINNER_ICON_NAME;
+  /** wa-icon name (codicon-style aliases supported). */
+  iconName: IconName;
+  /** Show a spinner in place of the icon. */
+  running?: boolean;
   label: string;
   labelClass?: string;
   timestamp?: { display: string; tooltip: string };
   copyButton?: {
     title: string;
-    content?: string;
+    content: string;
   };
   /** Extra Lit template content rendered after the label (e.g. a live timer). */
   extraContent?: TemplateResult;
@@ -224,19 +148,23 @@ export function buildDetailsSummary(
 ): TemplateResult {
   const {
     iconName,
+    running = false,
     label,
     labelClass = 'label',
     timestamp,
     copyButton,
     extraContent,
   } = options;
-  const iconTemplate = renderIconOrSpinner(iconName, 'icon');
+  const iconTemplate = renderIconOrSpinner(running, iconName, 'icon');
   // prettier-ignore
   const timestampTemplate = timestamp
     ? html` <span class="timestamp" title=${timestamp.tooltip}><bdi dir="ltr">${timestamp.display}</bdi></span>`
     : nothing;
   const copyTemplate = copyButton
-    ? buildCopyButton(copyButton.title, copyButton)
+    ? html`<copy-button
+        .text=${copyButton.content}
+        .label=${copyButton.title}
+      ></copy-button>`
     : nothing;
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
@@ -299,100 +227,24 @@ const LANGUAGE_LABELS: Record<string, string> = {
   plaintext: 'Text',
 };
 
-/** Build a code block with optional syntax highlighting, language badge, and copy button. */
+/** Build a code block with syntax highlighting, a language badge and a copy button. */
 export function buildCodeBlock(
   text: string,
-  options: {
-    language?: string;
-    className?: string;
-    showLanguage?: boolean;
-    showCopy?: boolean;
-  } = {},
+  language: string,
+  className = '',
 ): TemplateResult {
-  const {
-    language = 'plaintext',
-    className = '',
-    showLanguage = false,
-    showCopy = false,
-  } = options;
-
   const preClasses = { hljs: true, [className]: Boolean(className) };
   // `null` means unsupported or failed: render the code as plain text.
   const highlighted =
-    !language || language === 'plaintext'
-      ? null
-      : highlightSpans(text, language);
-  const showHeader = showLanguage || showCopy;
-
-  // IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates cause
-  // unwanted spaces in rendered output. Use single-line templates with prettier-ignore.
-  // Build modular template parts to keep individual lines readable.
+    language === 'plaintext' ? null : highlightSpans(text, language);
   // prettier-ignore
-  const languageBadge = showLanguage ? html`<span class="code-block-language">${LANGUAGE_LABELS[language] ?? (language || 'Text')}</span>` : nothing;
+  const languageBadge = html`<span class="code-block-language">${LANGUAGE_LABELS[language] ?? language}</span>`;
   // prettier-ignore
-  const copyButton = showCopy ? html`<wa-button class="code-block-copy" appearance="plain" variant="neutral" size="s" type="button" title="Copy code" aria-label="Copy code" @click=${(event: Event) => copyFromClick(event, text, 'copied')}>${waIcon('copy')}</wa-button>` : nothing;
+  const copyButton = html`<copy-button .text=${text} .label=${'Copy code'} .look=${'code'}></copy-button>`;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)} dir="ltr"><code>${highlighted === null ? text : unsafeHTML(highlighted)}</code></pre>`;
   // prettier-ignore
-  const headerTemplate = showHeader ? html`<div class="code-block-header">${languageBadge}${copyButton}</div>` : nothing;
-  // prettier-ignore
-  return html`<div class="code-block" data-language=${language}>${headerTemplate}${codeTemplate}</div>`;
-}
-
-// ============================================================================
-// File Links with Line Numbers
-// ============================================================================
-
-/** Build a file link with optional line number for VS Code navigation. */
-export function buildFileLinkWithLines(
-  filePath: string,
-  options: { startLine?: number; endLine?: number } = {},
-): TemplateResult | typeof nothing {
-  if (!filePath) return nothing;
-
-  const { startLine, endLine } = options;
-  let displayText = getBasename(filePath) || filePath;
-  if (startLine) {
-    displayText +=
-      endLine && endLine !== startLine
-        ? `:${startLine}-${endLine}`
-        : `:${startLine}`;
-  }
-
-  return buildFileLinkSpan(
-    filePath,
-    html`${waIcon('file')} <bdi dir="auto">${displayText}</bdi>`,
-    {
-      startLine,
-    },
-  );
-}
-
-// ============================================================================
-// Memory Path Display (non-clickable, virtual paths)
-// ============================================================================
-
-/** Build a memory path display with database icon. Memory paths are virtual (/memories/...) and not directly openable in the editor. */
-export function buildMemoryPathDisplay(
-  memoryPath: string,
-): TemplateResult | typeof nothing {
-  if (!memoryPath) return nothing;
-  const fileName = getBasename(memoryPath) || memoryPath;
-  // prettier-ignore
-  return html`<span class="memory-path">${waIcon('database')} <bdi dir="auto">${fileName}</bdi> <span class="file-source">(<bdi dir="auto">${memoryPath}</bdi>)</span></span>`;
-}
-
-// ============================================================================
-// Executions Path Display (non-clickable, virtual paths)
-// ============================================================================
-
-/** Build an executions path display with history icon. Run paths are virtual (/executions/...) and not directly openable in the editor. */
-export function buildExecutionsPathDisplay(
-  execPath: string,
-): TemplateResult | typeof nothing {
-  if (!execPath) return nothing;
-  // prettier-ignore
-  return html`<span class="memory-path">${waIcon('clock-rotate-left')} <bdi dir="auto">${execPath}</bdi></span>`;
+  return html`<div class="code-block" data-language=${language}><div class="code-block-header">${languageBadge}${copyButton}</div>${codeTemplate}</div>`;
 }
 
 // ============================================================================

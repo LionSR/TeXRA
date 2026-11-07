@@ -5,8 +5,6 @@
  * remove these annotations from output. Both recognize the same macro shape;
  * this layer adds severity/confidence validation and source line/column
  * positions for editor decorations, which the stripper doesn't need.
- *
- * No `vscode` import — usable from agent core too.
  */
 
 import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
@@ -66,6 +64,10 @@ export function parseCriticismAnnotations(
     const [message, severityText, confidenceText] = call.args;
     const severity = parseIntegerOrNaN(severityText.trim());
     const confidence = parseIntegerOrNaN(confidenceText.trim());
+    // Severity 0 (verified correct) to 5 and confidence 1 to 5: the scale
+    // stated beside the macro in `packages/extension/resources/agents/criticize.tex`,
+    // which the tasks that write these annotations bind. A call outside it
+    // is not decorated.
     if (
       Number.isFinite(severity) &&
       Number.isFinite(confidence) &&

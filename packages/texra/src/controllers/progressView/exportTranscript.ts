@@ -13,7 +13,7 @@ import { Effect } from 'effect';
 // Local imports - export presentation
 import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { HostFailed, MessageHost } from '@texra/hosts/uiHosts';
+import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from './transcriptExportFailure';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { writeTranscript } from './ChatExportController';
@@ -60,8 +60,7 @@ export interface TranscriptExportHost {
 
 type TranscriptExportPorts = Parameters<typeof writeTranscript>[2] &
   TranscriptExportHost & {
-    showInfo: MessageHost['showInfoMessage'];
-    showWarning: MessageHost['showWarningMessage'];
+    notify: Dialogs['notify'];
   };
 
 /** Ask for a format, write the export, and open it using the host's viewer. */
@@ -85,7 +84,8 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
       result.absolutePath,
       result.format === 'html' ? 'external' : 'text',
     );
-    yield* ports.showInfo(
+    yield* ports.notify(
+      'info',
       `Transcript exported: ${path.basename(result.storagePath)}`,
     );
     return;
@@ -95,7 +95,10 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
       .basename(result.storagePath)
       .replace(/\.tex$/, '.pdf');
     yield* ports.openPath(result.pdfPath, 'pdf');
-    yield* ports.showInfo(`Transcript exported and compiled: ${pdfFilename}`);
+    yield* ports.notify(
+      'info',
+      `Transcript exported and compiled: ${pdfFilename}`,
+    );
     return;
   }
   if (result.logTail) {
@@ -109,7 +112,8 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
     );
   }
   yield* ports.openPath(result.absolutePath, 'text');
-  yield* ports.showWarning(
+  yield* ports.notify(
+    'warning',
     'LaTeX compilation failed. The .tex source file has been opened instead.',
   );
 });

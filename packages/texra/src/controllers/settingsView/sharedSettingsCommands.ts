@@ -6,12 +6,10 @@
  * own way: how a message reaches its view, how it asks and tells the user,
  * how it opens a file or picks a folder, and how its launchers reload.
  *
- * A host spreads the body's `handlers` into its
- * `SettingsViewInboundHandlerRegistry`, keeps its own entries for the
- * commands only it answers (its account sign-in, installing a VS Code
- * extension or writing VS Code's settings), and runs every message it has
- * parsed at its own edge through the body's `handleMessage`. The binding
- * table is `settingsHostBindings.ts`.
+ * The body answers every command; a host runs each message it has parsed at
+ * its own edge through the body's `handleMessage`, and what only some hosts
+ * can do (an editor's extensions and settings) is a binding the host fills
+ * or leaves out. The binding table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect, PubSub, Stream } from 'effect';
 import { apiKeyEntry } from '@texra-ai/llm';
@@ -25,13 +23,14 @@ import {
   withSessionFs,
 } from '@texra-ai/harness/host';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_SETTING,
   SUBSCRIPTION_AUTH_PROVIDERS,
+  DISABLED_SKILLS_SETTING,
+  DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
 import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
-import { UnsupportedCommandError } from '@texra/controllers/settingsView/settingsViewDispatch';
 import {
   subscriptionAuthStatus,
   subscriptionProvider,
@@ -83,8 +82,6 @@ type SettingsArms = SettingsViewInboundHandlerRegistry<
 >;
 
 interface SettingsViewBodyPorts {
-  /** The host installs an editor extension a plugin card names. */
-  readonly installsExtensions: boolean;
   readonly roots: WorkspaceRoots;
   /** The packaged resources root; the agent templates live under it. */
   readonly resourcesPath: string;
@@ -119,12 +116,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     const usage = new SubscriptionUsageService({ stores: roots });
     const memoryPage = settingsMemoryCommands({ bindings, present });
     const gitPage = settingsGitCommands({ bindings, present });
-    const toolsPage = settingsToolCommands({
-      roots,
-      bindings,
-      present,
-      installsExtensions: ports.installsExtensions,
-    });
+    const toolsPage = settingsToolCommands({ roots, bindings, present });
     const pluginsPage = settingsPluginCommands({ roots, bindings, present });
     const agents = settingsAgentCommands({
       roots,
@@ -249,7 +241,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         requiresOpenWorkspace: bindings.requiresOpenWorkspace,
       });
       if (result.kind === 'ignored') return;
-      const label = result.entry.title ?? result.entry.key;
+      const label = result.entry.title;
       if (result.kind === 'rejected') {
         yield* report(`Invalid value for “${label}”`, result.error);
       } else if (result.kind === 'failed') {
@@ -268,7 +260,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* changed('usage');
       }
-      if (key === APPROVAL_POLICY_CONFIG_KEY) {
+      if (key === APPROVAL_POLICY_SETTING.key) {
         yield* bindings.refreshCatalogs();
         yield* emitAppSignal('approvalPolicyChanged', undefined);
       }
@@ -277,18 +269,32 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     // One read-modify-write at a time per list: two switches handled at once
     // would each read the list without the other's item.
     const skillListLanes = new Map<string, PerKeyLane>();
-    const setSkillEnabled = (key: string, item: string, enabled: boolean) =>
-      Effect.flatMap(Settings.get<readonly string[]>(roots, key), (disabled) =>
-        updateStateSetting(
-          key,
-          enabled
-            ? disabled.filter((candidate) => candidate !== item)
-            : [...new Set([...disabled, item])],
+    const setSkillEnabled = (
+      key: (
+        | typeof DISABLED_SKILLS_SETTING
+        | typeof DISABLED_SKILL_SOURCES_SETTING
+      )['key'],
+      item: string,
+      enabled: boolean,
+    ) =>
+      Effect.flatMap(
+        Settings.get(
+          roots,
+          key === DISABLED_SKILLS_SETTING.key
+            ? DISABLED_SKILLS_SETTING
+            : DISABLED_SKILL_SOURCES_SETTING,
         ),
+        (disabled: readonly string[]) =>
+          updateStateSetting(
+            key,
+            enabled
+              ? disabled.filter((candidate) => candidate !== item)
+              : [...new Set([...disabled, item])],
+          ),
       ).pipe(withPerKeyLane(skillListLanes, key));
 
     const profileKeys = new SettingsProfileKeyController({
-      prompt: bindings.prompt,
+      dialogs: bindings.dialogs,
       stores: roots,
     });
     // A failed key write is reported, and the profile and the Models page
@@ -359,7 +365,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       ...gitPage.handlers,
       ...toolsPage.handlers,
       ...pluginsPage.handlers,
-    } satisfies Partial<SettingsArms>;
+    } satisfies SettingsArms;
 
     // ── The boundary every settings program finishes on ──
 
@@ -369,10 +375,10 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       withSessionFs(roots, work).pipe(
         Effect.catchCause((cause) => {
           if (Cause.hasInterruptsOnly(cause)) return Effect.void;
-          const error = Cause.squash(cause);
-          return error instanceof UnsupportedCommandError
-            ? notice(error.reason)
-            : report('The settings view could not complete that action', error);
+          return report(
+            'The settings view could not complete that action',
+            Cause.squash(cause),
+          );
         }),
       );
 
@@ -399,20 +405,16 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       );
 
     return {
-      handlers,
       /** Finish the program one message the host already parsed selects. */
       handleMessage(
         message: SettingsViewInboundMessage,
-        registry: SettingsArms,
       ): Effect.Effect<void, never, ProcessServices> {
         return settle(
-          settingsViewProgram(message, registry).pipe(Effect.asVoid),
+          settingsViewProgram(message, handlers).pipe(Effect.asVoid),
         );
       },
-      /** Say an input changed; the host's own arms use it (the LaTeX page's
-       *  status, the view revealed). */
+      /** Say an input changed; the host says the view was revealed. */
       changed,
-      reported,
       signInSubscription,
       /**
        * Follow, until interrupted, every page's inputs and what feeds them:

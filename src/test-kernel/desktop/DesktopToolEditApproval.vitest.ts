@@ -81,10 +81,9 @@ const review = Effect.gen(function* () {
             }),
           openBuildDisplay: () => Effect.void,
           openDiff: () => Effect.void,
-          showErrorMessage: () => Effect.void,
-          showWarningMessage: (message) =>
+          notify: (level, message) =>
             Effect.sync(() => {
-              warnings.push(message);
+              if (level === 'warning') warnings.push(message);
             }),
           closeDiff: () => Effect.void,
         },

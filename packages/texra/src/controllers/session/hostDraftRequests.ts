@@ -58,8 +58,8 @@ interface Take {
  *  The take runs in one fiber of the process's scope; `recording` is what
  *  every open project shows of it. */
 export class HostDraftRequests {
-  /** The recorder in the caller's (the process's) scope: closing it stops a
-   *  take still running. */
+  /** The recorder in the caller's scope: closing it interrupts a take
+   *  still running and waits for sox to exit. */
   static readonly make = Effect.gen(function* () {
     return new HostDraftRequests(
       yield* SubscriptionRef.make<Recording | null>(null),
@@ -149,11 +149,6 @@ export class HostDraftRequests {
       return FiberHandle.clear(this.takes);
     });
   }
-
-  /** Host shutdown: interrupt the current take and wait for sox to exit. */
-  readonly shutdown: Effect.Effect<void> = Effect.suspend(() =>
-    FiberHandle.clear(this.takes),
-  );
 
   private readonly start = Effect.fn('HostDraftRequests.start')(function* (
     this: HostDraftRequests,

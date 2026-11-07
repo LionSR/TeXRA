@@ -1,5 +1,3 @@
-export const COPY_RESET_DELAY_MS = 2000;
-
 export function appendClipboardImageChips(
   text: string,
   fileNames: readonly string[],
@@ -8,76 +6,4 @@ export function appendClipboardImageChips(
   const boundary =
     text && !text.endsWith(' ') && !text.endsWith('\n') ? ' ' : '';
   return `${text}${boundary}${fileNames.map((name) => `[${name}]`).join(' ')}`;
-}
-
-/**
- * Copy text to clipboard with LF-normalized line endings.
- */
-export async function copyTextToClipboard(text: string): Promise<boolean> {
-  if (!text) {
-    return false;
-  }
-
-  const normalizedText = text.replaceAll('\r\n', '\n');
-  try {
-    await navigator.clipboard.writeText(normalizedText);
-    return true;
-  } catch {
-    // Clipboard writes are a browser permission/capability boundary and reject
-    // when access is denied or unavailable. Only that browser call is caught;
-    // false suppresses success feedback without masking text-processing errors.
-    return false;
-  }
-}
-
-interface CopyFeedbackOptions {
-  successClass?: string;
-}
-
-/**
- * Copy text to clipboard and show feedback on a button element.
- * Auto-resets button state after the configured delay.
- */
-export async function copyWithFeedback(
-  button: HTMLElement,
-  text: string,
-  options: CopyFeedbackOptions = {},
-): Promise<void> {
-  if (!text.trim()) {
-    return;
-  }
-
-  const defaultTitle =
-    button.dataset.defaultTitle ?? button.getAttribute('title') ?? 'Copy text';
-  const successTitle = button.dataset.successTitle ?? 'Copied!';
-  const successClass = options.successClass ?? 'copy-success';
-
-  function setButtonState(title: string, showSuccess: boolean): void {
-    button.classList.toggle(successClass, showSuccess);
-    button.setAttribute('title', title);
-    button.setAttribute('aria-label', title);
-  }
-
-  if (button.dataset.copyResetTimeoutId) {
-    window.clearTimeout(Number(button.dataset.copyResetTimeoutId));
-    delete button.dataset.copyResetTimeoutId;
-  }
-
-  setButtonState(defaultTitle, false);
-
-  const copied = await copyTextToClipboard(text);
-  if (!copied) {
-    return;
-  }
-
-  setButtonState(successTitle, true);
-
-  const timeoutId = window.setTimeout(() => {
-    setButtonState(defaultTitle, false);
-    delete button.dataset.copyResetTimeoutId;
-  }, COPY_RESET_DELAY_MS);
-
-  button.dataset.copyResetTimeoutId = String(timeoutId);
-  button.dataset.defaultTitle = defaultTitle;
-  button.dataset.successTitle = successTitle;
 }

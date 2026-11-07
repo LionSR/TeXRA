@@ -17,7 +17,6 @@ import {
   isCodexModel,
   type AgentCliEffort,
 } from '@texra/shared/agentCliSettings';
-import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
   agentCliReasoning,
   resolveAgentCliModel,
@@ -30,6 +29,10 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Type-only imports
 import type { ModelReasoningEffort } from '@openai/codex-sdk';
+import {
+  CODEX_MODEL_SETTING,
+  CODEX_REASONING_EFFORT_SETTING,
+} from '@texra/shared/settingsView/integrationSettings';
 
 const CHANNEL = 'codexConfig';
 
@@ -85,10 +88,10 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
   ToolError | StateReadFailed,
   ChildProcessSpawner
 > {
-  const modelString = yield* Settings.get<string>(stores, CodexStateKey.MODEL);
-  const userEffort = yield* Settings.get<AgentCliEffort>(
+  const modelString = yield* Settings.get(stores, CODEX_MODEL_SETTING);
+  const userEffort = yield* Settings.get(
     stores,
-    CodexStateKey.REASONING_EFFORT,
+    CODEX_REASONING_EFFORT_SETTING,
   );
   const selection = yield* resolveAgentCliModel(() =>
     selectAgentCliModel(modelString, CODEX_MODEL_RULE),

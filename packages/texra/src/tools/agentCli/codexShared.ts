@@ -173,12 +173,10 @@ export function buildCodexThreadToolLog(event: ThreadStartedEvent): ToolUseLog {
   };
 }
 
-type CodexTurnState = 'running' | 'completed' | 'failed';
-
 /** Human-readable label for a Codex turn state. */
-function codexTurnSummary(state: CodexTurnState): string {
+function codexTurnSummary(state: ToolCallStatus): string {
   switch (state) {
-    case 'running':
+    case 'in_progress':
       return 'Running';
     case 'failed':
       return 'Failed';
@@ -192,7 +190,7 @@ export function buildCodexTurnToolLog({
   wallTimeMs,
   error,
 }: {
-  state: CodexTurnState;
+  state: ToolCallStatus;
   wallTimeMs?: number;
   error?: string;
 }): ToolUseLog {
@@ -225,6 +223,6 @@ export function buildCodexTurnToolLog({
     // chrome; the error message is attached when the caller has one (turn.failed
     // / stream error) but omitted for abort or an early stream end.
     ...(state === 'failed' && error && { error }),
-    status: codexCardStatus(state === 'running', state === 'failed'),
+    status: state,
   };
 }

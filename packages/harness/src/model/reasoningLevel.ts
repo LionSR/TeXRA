@@ -16,7 +16,7 @@ import {
 } from '@texra-ai/llm';
 import { Settings, type StateStore } from '@shared/config/settings';
 import { ModelBackendSchema, type ModelBackend } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { StateKey } from '@shared/state/stateSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /**
@@ -29,15 +29,21 @@ import { ensureError } from '@utils/errors/errorMessage';
  * than quietly disappearing. Reads only; the write path keeps the stored
  * record verbatim so an unreadable entry is never dropped from storage.
  */
+/**
+ * The user's saved reasoning effort per model reference. Its entries stay
+ * unparsed in the record so a write keeps every entry, readable or not.
+ */
+export const REASONING_LEVELS_KEY = {
+  key: 'reasoningLevels',
+  slot: 'globalState',
+  schema: Schema.Record(Schema.String, Schema.Unknown).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+} as const satisfies StateKey<Readonly<Record<string, unknown>>>;
+
 export const reasoningEffortOverrides = Effect.fn('reasoningEffortOverrides')(
   function* (state: StateStore) {
-    const stored = yield* Settings.state(
-      state,
-      GlobalStateKey.REASONING_LEVELS,
-      Schema.Record(Schema.String, Schema.Unknown).pipe(
-        Schema.withDecodingDefault(Effect.succeed({})),
-      ),
-    );
+    const stored = yield* Settings.state(state, REASONING_LEVELS_KEY);
     const overrides: Record<string, ReasoningEffort> = {};
     for (const [model, value] of Object.entries(stored)) {
       const parsed = Schema.decodeUnknownResult(ReasoningEffortSchema)(value);

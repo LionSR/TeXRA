@@ -27,10 +27,10 @@ export type LatexRecommendedSetting = {
 );
 
 /**
- * The VS Code settings the LaTeX page recommends, keyed by the
- * `LatexSettingsStatus` field that reports each one, in display order. The
- * extension's settings handler writes and inspects them; the LaTeX tab
- * renders them.
+ * The VS Code settings the LaTeX page recommends, keyed as
+ * `LatexSettingsStatus.editor.recommended` reports each one, in display
+ * order. The extension's editor integration writes and inspects them; the
+ * LaTeX tab renders them.
  */
 export const LATEX_RECOMMENDED_SETTINGS = {
   outDir: {
@@ -51,7 +51,7 @@ export const LATEX_RECOMMENDED_SETTINGS = {
   },
 } as const satisfies Readonly<Record<string, LatexRecommendedSetting>>;
 
-/** A `LatexSettingsStatus` field that reports one recommended setting. */
+/** The key of one recommended setting. */
 export type LatexRecommendedSettingField =
   keyof typeof LATEX_RECOMMENDED_SETTINGS;
 
@@ -327,6 +327,24 @@ const LATEX_TOOLS = [
     doctor: { row: 'none' },
     probe: 'required',
     core: true,
+  },
+  {
+    // `latexdiff-vc` and the Overleaf clone run it; a missing git is
+    // reported where they run it, not probed.
+    name: 'git',
+    label: 'Git',
+    install: {
+      brew: 'git',
+      apt: 'git',
+      scoop: 'git',
+      url: {
+        darwin: 'https://git-scm.com/downloads',
+        linux: 'https://git-scm.com/downloads',
+        win32: 'https://git-scm.com/downloads',
+      },
+    },
+    doctor: { row: 'none' },
+    probe: 'none',
   },
   {
     name: 'gm',

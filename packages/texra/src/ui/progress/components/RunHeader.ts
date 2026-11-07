@@ -245,9 +245,7 @@ export class RunHeader extends LitElement {
   /** The title is a field while the user renames the run. */
   @state() private renaming = false;
 
-  private readonly copyDiagnostics = new CopyButtonController(this, {
-    successTitle: 'Copied!',
-  });
+  private readonly copyDiagnostics = new CopyButtonController(this);
 
   /** Send what a run action names (see `RunMenuAction.arm`). */
   private dispatchAction(action: RunMenuAction, run: RunView): void {
@@ -432,7 +430,7 @@ export class RunHeader extends LitElement {
     const actions = (
       run.identity.kind === 'agent' ? runMenuActions(run) : NEUTRAL_RUN_ACTIONS
     ).filter((action) => run.actions.includes(action.action));
-    const copied = this.copyDiagnostics.state.copied;
+    const { copied } = this.copyDiagnostics;
     const canDelete = run.actions.includes('delete');
     const canRename = run.actions.includes('rename');
     const canFork = run.actions.includes('fork');

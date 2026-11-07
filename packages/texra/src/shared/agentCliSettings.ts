@@ -1,4 +1,5 @@
 import { Effect, Schema } from 'effect';
+import type { SettingChoiceCopy } from '@texra-ai/harness/schemas';
 import {
   MODEL_CONFIGS,
   type ModelConfig,
@@ -36,7 +37,9 @@ function pickerModels(eligible: (config: ModelConfig) => boolean) {
   );
   return {
     schema: Schema.Literals(configs.map((config) => config.ref)),
-    labels: configs.map((config) => config.label),
+    choices: Object.fromEntries(
+      configs.map((config) => [config.ref, { label: config.label }]),
+    ),
   };
 }
 
@@ -75,21 +78,27 @@ export type AgentCliEffort = typeof AgentCliEffortSchema.Type;
 const AGENT_CLI_EFFORT_DEFAULT: AgentCliEffort = ReasoningEffort.MEDIUM;
 
 /** Value facts of the settings rows: the schema with its default, and the picker labels. */
-export const CLAUDE_AGENT_MODEL_SETTING = {
+export const CLAUDE_AGENT_MODEL_VALUES = {
   schema: ClaudeAgentModelSchema.pipe(
     Schema.withDecodingDefault(Effect.succeed(CLAUDE_AGENT_DEFAULT_MODEL)),
   ),
-  enumLabels: claudeCodeModels.labels,
+  choices: claudeCodeModels.choices,
 };
-export const CODEX_MODEL_SETTING = {
+export const CODEX_MODEL_VALUES = {
   schema: CodexModelSchema.pipe(
     Schema.withDecodingDefault(Effect.succeed(CODEX_DEFAULT_MODEL)),
   ),
-  enumLabels: codexModels.labels,
+  choices: codexModels.choices,
 };
-export const AGENT_CLI_EFFORT_SETTING = {
+export const AGENT_CLI_EFFORT_VALUES = {
   schema: AgentCliEffortSchema.pipe(
     Schema.withDecodingDefault(Effect.succeed(AGENT_CLI_EFFORT_DEFAULT)),
   ),
-  enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
+  choices: {
+    [ReasoningEffort.LOW]: { label: 'Low' },
+    [ReasoningEffort.MEDIUM]: { label: 'Medium' },
+    [ReasoningEffort.HIGH]: { label: 'High' },
+    [ReasoningEffort.XHIGH]: { label: 'Extra high' },
+    [ReasoningEffort.MAX]: { label: 'Maximum' },
+  } satisfies Record<AgentCliEffort, SettingChoiceCopy>,
 };

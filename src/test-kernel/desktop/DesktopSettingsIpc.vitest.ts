@@ -1,7 +1,7 @@
 import { layer } from '@effect/vitest';
 import { Effect, Result, Schema } from 'effect';
 import { expect, vi } from 'vitest';
-import { APPROVAL_POLICY_CONFIG_KEY } from '@texra-ai/harness/schemas';
+import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeConfig, FakeStateStore } from '@test/support/FakePlatform';
@@ -33,12 +33,10 @@ const noOpEffect = (): Effect.Effect<void> => Effect.void;
 function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
   return {
     post: noOpEffect,
-    notify: { showInfoMessage: noOpEffect, showErrorMessage: noOpEffect },
-    prompt: {
+    dialogs: {
+      notify: noOpEffect,
       input: () => Effect.succeed(undefined),
       confirm: () => Effect.succeed(true),
-      info: () => Effect.succeed(undefined),
-      warning: () => Effect.succeed(undefined),
     },
     externalOpener: { openExternal: noOpEffect },
     openPath: noOpEffect,
@@ -50,11 +48,6 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
     runInTerminal: noOpEffect,
-    latexEditorStatus: () => ({
-      outDir: true,
-      autoRevealExclude: true,
-      latexWorkshopInstalled: false,
-    }),
   };
 }
 
@@ -132,18 +125,18 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           expect(
             settings.handleMessage({
               command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-              key: APPROVAL_POLICY_CONFIG_KEY,
+              key: APPROVAL_POLICY_SETTING.key,
               value: 'yolo',
             }),
           ).toBe(true);
           yield* Effect.promise(flushAsyncWork);
 
-          expect(config.get(APPROVAL_POLICY_CONFIG_KEY)).toBe('yolo');
+          expect(config.get(APPROVAL_POLICY_SETTING.key)).toBe('yolo');
           // Security-adjacent scope pin: a per-workspace approval bypass must
           // never be written to the global config target (see issue #7085),
           // nor to the project file a cloned repository controls.
           expect(update).toHaveBeenCalledWith(
-            APPROVAL_POLICY_CONFIG_KEY,
+            APPROVAL_POLICY_SETTING.key,
             'yolo',
             'local',
           );

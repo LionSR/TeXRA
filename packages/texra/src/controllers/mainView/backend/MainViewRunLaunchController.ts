@@ -55,20 +55,16 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
   // does not know launches as a chat, whose own resolution shows the
   // agent-config banner. A failed load refuses the launch: the catalog may
   // still serve the agent, which would then run as a chat without its task.
-  const catalog = yield* AgentCatalog;
-  const resolved = team
-    ? { entry: null }
-    : yield* catalog.forLaunch(roots, agent).pipe(
-        Effect.map((entry) => ({ entry })),
+  const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
+  const entry = team
+    ? null
+    : yield* workspaceAgents.forLaunch(agent).pipe(
         Effect.catchTags({
-          LaunchRefused: () => Effect.succeed({ entry: null }),
+          LaunchRefused: () => Effect.succeed(null),
           AgentCatalogLoadError: (failed) =>
-            Effect.succeed({ failed: failed.message }),
+            Effect.fail(new Rejected({ reason: failed.message })),
         }),
       );
-  if ('failed' in resolved)
-    return yield* new Rejected({ reason: resolved.failed });
-  const { entry } = resolved;
   // The form lists the workspace's visible agents (`agentOptionsData`) and
   // reads the mode from the one its selection names, so a launch runs only
   // one of them. The catalog also finds an agent hidden since it was chosen
@@ -76,7 +72,7 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
   // shows no agent and no mode for it, so its launch is refused.
   if (
     entry !== null &&
-    !(yield* catalog.visible(roots)).some(
+    !(yield* workspaceAgents.visible()).some(
       (shown) => agentKeyOf(shown) === agentKeyOf(entry),
     )
   )
@@ -164,8 +160,8 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
     roots: LaunchRoots,
   ): Effect.fn.Return<AgentConfig, Rejected | StateReadFailed, AgentCatalog> {
     if (launch.launchTarget !== 'team') {
-      // AgentConfigSchema defaults agent/model; reject missing UI selections
-      // before schema parsing so the user sees the real form problem.
+      // The form sends an empty agent or model while nothing is selected;
+      // say so in the form's words rather than as a schema issue.
       if (!launch.agent || !launch.model)
         return yield* new Rejected({
           reason: 'Choose an agent and a model first.',

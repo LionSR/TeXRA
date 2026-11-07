@@ -1094,10 +1094,10 @@ interface Plugin {
   readonly toggle?: 'on' | 'off';
   /** Tools of this plugin offered to every agent with tools, declared or not,
    *  while the plugin is on and a boolean catalog setting is on: tool name to
-   *  setting key, or `true` for no setting but the plugin's own switch. An
+   *  setting row, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
    *  run (a task's recipe) and a text-only persona get none. */
-  readonly injectedWhen?: Readonly<Record<string, string | true>>;
+  readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>;
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
   /** Process-lifetime services, up while the plugin is switched on or a step

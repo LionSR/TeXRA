@@ -7,26 +7,21 @@
  * sections into Lit templates, and picks the two presentation details the
  * model deliberately leaves to a host: the highlight language behind the
  * `file`/`shell` hints, and the glyph on a badge.
- *
- * IMPORTANT: Lit templates preserve whitespace literally. Always use
- * single-line templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 import { absurd } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 
+import { getBasename } from '@texra-ai/harness/schemas';
 import {
   buildToolUseSection,
   wrapInPre,
   buildFileLinkSpan,
-  buildFileLinkWithLines,
   buildEditDiffSection,
-  buildMemoryPathDisplay,
-  buildExecutionsPathDisplay,
   buildStatusBadge,
-  triStateStatusIcon,
 } from '@ui/progress/formatters/htmlBuilders';
 import { getLanguageFromPath } from '@ui/progress/formatters/constants';
+import { TOOL_STATUS_WORD } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildToolSection } from './helpers';
@@ -67,26 +62,35 @@ function renderDetailList(label: string, items: unknown): TemplateResult {
   return buildToolUseSection(label, html`<ul class="detail-list">${items}</ul>`);
 }
 
-function renderFileSection(section: ToolFileSection): TemplateResult {
+/**
+ * The path of a file section. A workspace file is a link to the file (and
+ * its line range); a memory or run path is virtual, so it is shown, not
+ * linked.
+ */
+function renderFilePath(section: ToolFileSection): TemplateResult {
   switch (section.namespace) {
     case 'memory':
-      return buildToolUseSection(
-        section.label,
-        buildMemoryPathDisplay(section.path),
-      );
+      // prettier-ignore
+      return html`<span class="memory-path">${waIcon('database')} <bdi dir="auto">${getBasename(section.path) || section.path}</bdi> <span class="file-source">(<bdi dir="auto">${section.path}</bdi>)</span></span>`;
     case 'run':
-      return buildToolUseSection(
-        section.label,
-        buildExecutionsPathDisplay(section.path),
+      // prettier-ignore
+      return html`<span class="memory-path">${waIcon('clock-rotate-left')} <bdi dir="auto">${section.path}</bdi></span>`;
+    case 'workspace': {
+      const { startLine, endLine } = section;
+      let range = '';
+      if (startLine) {
+        range =
+          endLine && endLine !== startLine
+            ? `:${startLine}-${endLine}`
+            : `:${startLine}`;
+      }
+      const name = getBasename(section.path) || section.path;
+      return buildFileLinkSpan(
+        section.path,
+        html`${waIcon('file')} <bdi dir="auto">${name}${range}</bdi>`,
+        { startLine },
       );
-    case 'workspace':
-      return buildToolUseSection(
-        section.label,
-        buildFileLinkWithLines(section.path, {
-          startLine: section.startLine,
-          endLine: section.endLine,
-        }),
-      );
+    }
     default:
       return absurd(section.namespace);
   }
@@ -148,7 +152,7 @@ function renderToolSection(
       return buildToolUseSection(section.label, html`<code class="run-id" dir="ltr">${section.value}</code>${note}`);
     }
     case 'file':
-      return renderFileSection(section);
+      return buildToolUseSection(section.label, renderFilePath(section));
     case 'fileGroups':
       return renderFileGroupsSection(section);
     case 'fileList':
@@ -164,7 +168,11 @@ function renderToolSection(
     case 'status':
       return buildToolUseSection(
         section.label,
-        buildStatusBadge(triStateStatusIcon(section.status), section.status),
+        buildStatusBadge(
+          section.status === 'failed' ? 'circle-exclamation' : 'check',
+          TOOL_STATUS_WORD[section.status],
+          section.status === 'in_progress',
+        ),
       );
     default:
       return absurd(section);

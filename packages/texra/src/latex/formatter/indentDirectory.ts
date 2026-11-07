@@ -8,7 +8,7 @@ import {
   entryTypeIn,
 } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { EXCLUDED_DIRS } from '@texra/shared/constants/latexTiming';
+import { EXCLUDED_DIRS } from '@texra/shared/constants/excludedDirs';
 
 import type { ToolMissing } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';

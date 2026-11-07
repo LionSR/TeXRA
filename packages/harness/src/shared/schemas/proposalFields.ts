@@ -1,28 +1,22 @@
-import { Effect, Schema, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
 
-import { AgentSourceSchema, InlinePersonaSchema } from './agent';
+import { AgentConfigSchema } from './agentConfig';
 import { NullableFileFieldsSchema } from './fileFields';
 import { JsonValueSchema } from './jsonValue';
 
 export const BaseProposalFieldsSchema = Schema.Struct({
+  // The agent's resolved source and inline persona, its memories and its
+  // working directory, as the run they propose will record them.
+  ...Struct.pick(AgentConfigSchema.fields, [
+    'agentSource',
+    'persona',
+    'memories',
+    'workingDirectory',
+  ]),
+  // Named in full by every proposal: no launch default applies.
   agent: Schema.String,
-  /**
-   * Resolved source of `agent`, captured when the delegation is validated so
-   * launch pins the exact `(source, name)` entry rather than re-resolving an
-   * ambiguous bare name. Mirrors `agentSource` on the agent config payload.
-   */
-  agentSource: Schema.optional(Schema.NullOr(AgentSourceSchema)),
-  /** An agent the call defines (`agentSource` inline): what it is told and
-   *  the tools it asks for, shown to whoever approves it. */
-  persona: Schema.optional(Schema.NullOr(InlinePersonaSchema)),
   model: Schema.String,
   instruction: Schema.String,
-  /** Memory file paths (display paths like /memories/foo.md) attached to this delegation. */
-  memories: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  /** Working directory override (e.g. a git worktree path). */
-  workingDirectory: Schema.optional(Schema.NullOr(Schema.String)),
   /**
    * The script whose `agent` calls one request approves together: its
    * title, its source, and the calls it had issued when it asked. The

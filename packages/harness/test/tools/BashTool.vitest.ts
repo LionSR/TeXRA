@@ -11,7 +11,7 @@ import { afterEach, vi } from 'vitest';
 // Local imports
 
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_SETTING,
   qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
@@ -91,7 +91,7 @@ async function parkRunWaiting(
 // Unit tests exercise the tool directly — no approval host is wired.
 const BASH_PLATFORM_OPTIONS = {
   workspacePath: '/workspace',
-  config: { [APPROVAL_POLICY_CONFIG_KEY]: 'yolo' },
+  config: { [APPROVAL_POLICY_SETTING.key]: 'yolo' },
 } as const;
 
 /** The run id a background launch reports in its output. */

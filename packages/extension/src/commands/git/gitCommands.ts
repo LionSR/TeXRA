@@ -10,7 +10,6 @@ import {
   type RootedFileSystem,
   WorkspaceFs,
 } from '@texra-ai/harness/host';
-import { executeCommand } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -28,10 +27,12 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import { findCommand } from '@texra/utils/system/binaryResolver';
-import { COMMIT_HASH_PATTERN } from '@texra/utils/git/commitHashPattern';
-import { COMMIT_LABEL_FORMAT } from '@texra/utils/git/commitLogFormat';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import {
+  installAdvice,
+  LATEX_TOOL_ENTRIES,
+} from '@texra/shared/constants/latexToolchain';
+import { osPlatformOf } from '@texra/shared/osPlatform';
+import { hasPackageManager } from '@texra/utils/system/toolChecks';
 import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 const CHANNEL = 'gitCommands';
@@ -49,50 +50,6 @@ const openUrl = (url: string) =>
       ),
     );
 
-export const findCommitInHistory = Effect.fn('findCommitInHistory')(function* (
-  roots: WorkspaceRoots,
-  commitHash: string,
-) {
-  if (typeof commitHash !== 'string') {
-    return null;
-  }
-
-  const sanitizedCommit = commitHash.trim();
-  if (!COMMIT_HASH_PATTERN.test(sanitizedCommit)) {
-    return null;
-  }
-
-  const workspacePath = roots.workspace;
-  if (!workspacePath) {
-    return null;
-  }
-
-  const gitOptions = {
-    cwd: workspacePath,
-    settings: roots,
-    quiet: true,
-  };
-  const verifyResult = yield* executeCommand(
-    ['git', 'rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
-    gitOptions,
-  );
-
-  if (!verifyResult.success) {
-    return null;
-  }
-
-  const labelResult = yield* executeCommand(
-    ['git', 'show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
-    gitOptions,
-  );
-
-  if (!labelResult.success) {
-    return sanitizedCommit;
-  }
-
-  return labelResult.stdout;
-});
-
 const promptInput = Effect.fn('promptInput')(function* (
   title: string,
   prompt: string,
@@ -108,60 +65,33 @@ const promptInput = Effect.fn('promptInput')(function* (
   if (!trimmed) {
     // Show cancellation message only if user dismissed with empty string (not Escape)
     if (val !== undefined) {
-      yield* Effect.forkDetach(
-        announce(
-          CHANNEL,
-          vscodeUi.showWarningMessage('Clone cancelled.'),
-          undefined,
-        ),
-      );
+      yield* Effect.forkDetach(vscodeUi.notify('warning', 'Clone cancelled.'));
     }
     return null;
   }
   return trimmed;
 });
 
-/**
- * Platform-specific package-manager install options surfaced when `git` is
- * missing from PATH. Each option pairs the package-manager binary (used to
- * probe whether the PM is installed) with the full install command.
- */
-const GIT_INSTALL_OPTIONS: Partial<
-  Record<NodeJS.Platform, { tool: string; command: string }>
-> = {
-  darwin: { tool: 'brew', command: 'brew install git' },
-  win32: { tool: 'winget', command: 'winget install --id Git.Git -e' },
-  linux: { tool: 'apt-get', command: 'sudo apt-get install git' },
-};
-
-const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
-
 const promptGitMissing = Effect.fnUntraced(function* () {
-  const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
-  // A PATH lookup, not a spawn: the manager only has to be installed for
-  // its install command to be worth offering.
+  const platform = osPlatformOf(process.platform);
+  const advice = installAdvice('Git', ['git'], platform);
+  const downloadUrl = LATEX_TOOL_ENTRIES.git.install.url?.[platform];
+  // The command is worth offering only where its package manager is
+  // installed.
   const command =
-    option && (yield* findCommand(option.tool)) !== null
-      ? option.command
+    advice.command && hasPackageManager(advice.command.packageManager)
+      ? advice.command.command
       : null;
+  const message = `Git not found in PATH.\n\n${advice.guide}`;
 
-  let message: string;
-  if (command) {
-    message = `Git not found in PATH. Install it with:\n  ${command}`;
-  } else if (option) {
-    message = `Git not found in PATH. Install ${option.tool} and run "${option.command}", or download git from ${GIT_DOWNLOAD_URL}.`;
-  } else {
-    message = `Git not found in PATH. See ${GIT_DOWNLOAD_URL} to install it.`;
-  }
-
-  const actions = command
-    ? (['Copy Command', 'Run in Terminal', 'Open git-scm.com'] as const)
-    : (['Open git-scm.com'] as const);
+  const actions = [
+    ...(command ? (['Copy Command', 'Run in Terminal'] as const) : []),
+    ...(downloadUrl ? (['Open git-scm.com'] as const) : []),
+  ];
 
   yield* Effect.logError(message).pipe(withLogChannel(CHANNEL));
   const selected = yield* announce(
-    CHANNEL,
-    vscodeUi.error(message, { items: actions }),
+    vscodeUi.ask('error', message, { items: actions }),
     undefined,
   );
   if (selected === 'Copy Command' && command) {
@@ -179,8 +109,8 @@ const promptGitMissing = Effect.fnUntraced(function* () {
     const terminal = vscode.window.createTerminal('Install Git');
     terminal.show();
     terminal.sendText(command);
-  } else if (selected === 'Open git-scm.com') {
-    yield* openUrl(GIT_DOWNLOAD_URL);
+  } else if (selected === 'Open git-scm.com' && downloadUrl) {
+    yield* openUrl(downloadUrl);
   }
 });
 
@@ -209,8 +139,7 @@ function buildOverleafClonePorts(
         withLogChannel(CHANNEL),
         Effect.andThen(
           announce(
-            CHANNEL,
-            vscodeUi.error(message, {
+            vscodeUi.ask('error', message, {
               items: spec.tokenHint ? ['How to get a token'] : [],
             }),
             undefined,
@@ -233,18 +162,12 @@ function buildOverleafClonePorts(
         withLogChannel(CHANNEL),
         Effect.andThen(
           Effect.forkDetach(
-            announce(
-              CHANNEL,
-              vscodeUi.showErrorMessage('Cannot read workspace folder.'),
-              undefined,
-            ),
+            vscodeUi.notify('error', 'Cannot read workspace folder.'),
           ),
         ),
       ),
     showWorkspaceNotEmpty: () =>
-      showLoggedMessage(CHANNEL, 'Workspace folder must be empty.').pipe(
-        Effect.asVoid,
-      ),
+      showLoggedMessage('Workspace folder must be empty.').pipe(Effect.asVoid),
 
     runClone: (clone, workspacePath) =>
       withVSCodeProgress(
@@ -256,19 +179,14 @@ function buildOverleafClonePorts(
       ),
     showCloneSucceeded: (label) =>
       Effect.forkDetach(
-        announce(
-          CHANNEL,
-          vscodeUi.showInfoMessage(`${label} project cloned.`),
-          undefined,
-        ),
+        vscodeUi.notify('info', `${label} project cloned.`),
       ).pipe(Effect.asVoid),
     showAuthFailure: Effect.fn('gitCommands.showAuthFailure')(function* (r) {
       const detail = r.isOverleaf
         ? 'Your git token may be invalid or expired.'
         : 'Check your credentials.';
       const selected = yield* announce(
-        CHANNEL,
-        vscodeUi.error(`Clone failed: authentication error. ${detail}`, {
+        vscodeUi.ask('error', `Clone failed: authentication error. ${detail}`, {
           items: r.isOverleaf
             ? ['Get New Token', 'How to get a token']
             : ['Retry'],
@@ -282,9 +200,7 @@ function buildOverleafClonePorts(
       }
     }),
     showCloneFailed: (message) =>
-      Effect.forkDetach(
-        announce(CHANNEL, vscodeUi.showErrorMessage(message), undefined),
-      ).pipe(Effect.asVoid),
+      Effect.forkDetach(vscodeUi.notify('error', message)).pipe(Effect.asVoid),
     logCloneError: (message) =>
       Effect.logError(`Clone failed: ${message}`).pipe(withLogChannel(CHANNEL)),
   };
@@ -300,7 +216,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
 
     const remote = parseLatexGitUrl(input);
     if (!remote) {
-      yield* showLoggedMessage(CHANNEL, 'Invalid project URL or ID.');
+      yield* showLoggedMessage('Invalid project URL or ID.');
       return;
     }
 
@@ -310,7 +226,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
     const workspaceFs = yield* WorkspaceFs;
     const workspacePath = workspaceFs.root;
     if (!workspacePath) {
-      yield* showLoggedMessage(CHANNEL, 'Open a workspace folder first.');
+      yield* showLoggedMessage('Open a workspace folder first.');
       return;
     }
     yield* runOverleafClone(
@@ -324,4 +240,5 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
       ),
     );
   },
+  withLogChannel(CHANNEL),
 );

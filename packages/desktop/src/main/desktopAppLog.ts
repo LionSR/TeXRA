@@ -57,7 +57,8 @@ export function getDesktopLogDirectory(): string {
   }
 }
 
-function getDesktopLogFilePath(): string {
+/** Where the desktop log is on disk (the snapshot carries it redacted). */
+export function getDesktopLogFilePath(): string {
   return logFilePath ?? join(getDesktopLogDirectory(), LOG_FILE_NAME);
 }
 
@@ -125,7 +126,7 @@ function installConsoleMirror(): void {
 }
 
 /** Console levels as the names Effect's structured entry uses. */
-const ENTRY_LEVEL: Record<ConsoleLevel, string> = {
+const ENTRY_LEVEL: Record<ConsoleLevel, LogEntry['level']> = {
   debug: 'DEBUG',
   error: 'ERROR',
   info: 'INFO',

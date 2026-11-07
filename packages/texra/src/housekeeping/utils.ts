@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 // Third-party imports
-import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
+import { Clock, Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports
 import { absentReason, relativeToRoot } from '@texra-ai/harness/node';
@@ -62,12 +62,14 @@ export const filesystemFor = Effect.fn('housekeeping.filesystemFor')(function* (
 });
 
 /**
- * Produce an ISO-8601 timestamp stripped of separators, suitable for use in
- * a file or folder name (e.g. `20260422T003541`). Second-level granularity.
+ * The fiber clock's time as an ISO-8601 timestamp stripped of separators,
+ * for a file or folder name (e.g. `20260422T003541`). Second-level
+ * granularity.
  */
-export function generateTimestamp(): string {
-  return new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
-}
+export const fileNameTimestamp: Effect.Effect<string> = Effect.map(
+  Clock.currentTimeMillis,
+  (ms) => new Date(ms).toISOString().replaceAll(/[-:]/g, '').split('.')[0],
+);
 
 /**
  * The workspace-relative files named `pattern` + `extension` under

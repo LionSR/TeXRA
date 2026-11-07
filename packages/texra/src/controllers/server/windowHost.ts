@@ -25,7 +25,7 @@ import type {
   HostAnswer,
   HostCall,
   HostCapability,
-  HostFrame,
+  HostAttachFrame,
 } from './hostCalls';
 
 const CHANNEL = 'WindowHost';
@@ -36,7 +36,7 @@ export interface WindowClient {
   readonly 'host.attach': (input: {
     readonly workspace: string;
     readonly capabilities: readonly HostCapability[];
-  }) => Stream.Stream<HostFrame, Error>;
+  }) => Stream.Stream<HostAttachFrame, Error>;
   readonly 'host.answer': (input: {
     readonly id: string;
     readonly answer: HostAnswer;

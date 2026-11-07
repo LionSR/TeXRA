@@ -3,100 +3,55 @@ import { Effect } from 'effect';
 
 // Local imports - hosts
 import type {
-  HostFailed,
+  ConfirmQuestion,
+  Dialogs,
   ExternalOpener,
-  PromptConfirmOptions,
-  PromptHost,
-  PromptInputOptions,
-  PromptMessageOptions,
+  HostFailed,
+  InputField,
+  NoticeLevel,
 } from '@texra/hosts/uiHosts';
 
-type PromptEventKind = 'info' | 'warning';
-
-interface PromptMessageEvent {
-  kind: PromptEventKind;
-  message: string;
-  options?: PromptMessageOptions;
-}
-
-interface PromptConfirmEvent {
-  message: string;
-  options?: PromptConfirmOptions;
-}
-
-interface PromptInputEvent {
-  options: PromptInputOptions;
-}
-
 interface FakeUIHostsOptions {
-  promptResponses?: readonly string[];
   confirmResponses?: readonly boolean[];
   inputResponses?: readonly (string | undefined)[];
 }
 
-class FakePromptHost implements PromptHost {
-  readonly messages: PromptMessageEvent[] = [];
+/** Records what it was asked and answers from the queued responses: a
+ *  confirmation with none left is `false`, an input `undefined`. */
+class FakeDialogs implements Dialogs {
+  readonly notices: { level: NoticeLevel; message: string }[] = [];
 
-  readonly confirms: PromptConfirmEvent[] = [];
+  readonly confirms: ConfirmQuestion[] = [];
 
-  readonly inputs: PromptInputEvent[] = [];
-
-  private readonly promptResponses: string[];
+  readonly inputs: InputField[] = [];
 
   private readonly confirmResponses: boolean[];
 
   private readonly inputResponses: (string | undefined)[];
 
-  constructor(
-    options: Pick<
-      FakeUIHostsOptions,
-      'promptResponses' | 'confirmResponses' | 'inputResponses'
-    > = {},
-  ) {
-    this.promptResponses = [...(options.promptResponses ?? [])];
+  constructor(options: FakeUIHostsOptions = {}) {
     this.confirmResponses = [...(options.confirmResponses ?? [])];
     this.inputResponses = [...(options.inputResponses ?? [])];
   }
 
-  info<T extends string = string>(
-    message: string,
-    options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined> {
-    return Effect.sync(() => this.recordMessage('info', message, options));
-  }
-
-  warning<T extends string = string>(
-    message: string,
-    options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined> {
-    return Effect.sync(() => this.recordMessage('warning', message, options));
-  }
-
-  confirm(
-    message: string,
-    options?: PromptConfirmOptions,
-  ): Effect.Effect<boolean> {
+  notify(level: NoticeLevel, message: string): Effect.Effect<void> {
     return Effect.sync(() => {
-      this.confirms.push({ message, options });
+      this.notices.push({ level, message });
+    });
+  }
+
+  confirm(question: ConfirmQuestion): Effect.Effect<boolean> {
+    return Effect.sync(() => {
+      this.confirms.push(question);
       return this.confirmResponses.shift() ?? false;
     });
   }
 
-  input(options: PromptInputOptions): Effect.Effect<string | undefined> {
+  input(field: InputField): Effect.Effect<string | undefined> {
     return Effect.sync(() => {
-      this.inputs.push({ options });
+      this.inputs.push(field);
       return this.inputResponses.shift();
     });
-  }
-
-  private recordMessage<T extends string>(
-    kind: PromptEventKind,
-    message: string,
-    options?: PromptMessageOptions<T>,
-  ): T | undefined {
-    this.messages.push({ kind, message, options });
-    // cast: a suite queues the answers its own prompts offer as choices.
-    return this.promptResponses.shift() as T | undefined;
   }
 }
 
@@ -116,7 +71,7 @@ class FakeExternalOpener implements ExternalOpener {
  * can assemble and pass them as a single bundle.
  */
 interface FakeUIHosts {
-  readonly prompt: FakePromptHost;
+  readonly dialogs: FakeDialogs;
   readonly externalOpener: FakeExternalOpener;
 }
 
@@ -124,7 +79,7 @@ export function createFakeUIHosts(
   options: FakeUIHostsOptions = {},
 ): FakeUIHosts {
   return {
-    prompt: new FakePromptHost(options),
+    dialogs: new FakeDialogs(options),
     externalOpener: new FakeExternalOpener(),
   };
 }
