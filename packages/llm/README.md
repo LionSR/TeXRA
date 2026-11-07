@@ -137,7 +137,7 @@ The package is split by where its code runs, not by topic.
 | Entry    | What it holds                                                                                                                                                                                                                                         | Runs in      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | `.`      | the turn contract (`Model`, the request, result and event schemas, `completedTurn`), `ModelError`, the provider catalog and API-key lookup over `CredentialStore`, model selection, the route decision and endpoint, the reasoning choice, `turnCost` | browser-safe |
-| `./node` | `bindModel(spec) → Binding`, the ChatGPT and Grok sign-in flows and their `SubscriptionCoordinator`s, `SharedAttempt`                                                                                                                                 | Node         |
+| `./node` | `bindModel(spec) → Binding`, the ChatGPT and Grok sign-in flows and their `SubscriptionCoordinator`s                                                                                                                                                  | Node         |
 
 Every type a public signature names is exported from one of the two entries.
 Each entry's exports, with their TSDoc and declarations, are listed in
