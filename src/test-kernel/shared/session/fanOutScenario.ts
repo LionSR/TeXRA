@@ -304,7 +304,7 @@ export function buildScenario({ proposal = false } = {}) {
         {
           round: 1,
           outputs: [],
-          compileFailures: [],
+          compile: null,
           missingOutputs: [],
           latexdiffs: [],
           reply: null,

@@ -38,9 +38,9 @@ import {
 import type { MessageHost } from '@texra/hosts/uiHosts';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { documentsOf } from '@texra/shared/plugins/documents';
-import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
-import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
+import { documentRoundsOf } from '@texra/shared/plugins/documents';
+import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
+import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 
 // Local file imports
 import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
@@ -154,52 +154,50 @@ export function latexdiffVerbs(parts: {
   /**
    * The latexdiffs of a whole run, opened: first each round's diffs as its
    * `document_diff` recorded them, then for each round with outputs and no
-   * recorded diff (or a failed one), a latexdiff of the pairs it calls for. A run whose every
-   * diff failed is refused.
+   * recorded diff (or a failed one, or one made under another math markup
+   * than the setting's now), a latexdiff of the pairs it calls for. A run
+   * whose every diff failed is refused.
    */
   const run = Effect.fn('latexdiffVerbs.run')(function* (runId: RunId) {
-    const documents = documentsOf(
+    const rounds = documentRoundsOf(
       session.view.current().runs.get(runId) ?? { facts: {} },
     );
-    // A round whose recorded diffs all succeeded opens them; a round that
-    // recorded none, or a failed one, is diffed again.
-    const reusable = (round: number) =>
-      documents.latexdiffs[round]?.every((entry) => entry.status === 'ok') ??
-      false;
-    const recorded = roundIndexedEntries(documents.latexdiffs)
-      .filter(([round]) => reusable(round))
-      .flatMap(([, entries]) => entries);
-    const unrecorded = roundIndexedEntries(documents.files).filter(
-      ([round]) => !reusable(round),
+    const setting = <A>(key: string) =>
+      Settings.get<A>(roots, key).pipe(
+        Effect.mapError((cause) => hostFailure('runLatexdiff', cause)),
+      );
+    const mathMarkup = yield* setting<LatexdiffMathMarkupValue>(
+      DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
+    );
+    // A round whose recorded diffs all succeeded under the markup set now
+    // opens them; a round that recorded none, a failed one, or one made
+    // under another markup is diffed again.
+    const reusable = rounds.map(
+      ({ latexdiffs }) =>
+        latexdiffs.length > 0 &&
+        latexdiffs.every(
+          (entry) => entry.status === 'ok' && entry.mathMarkup === mathMarkup,
+        ),
+    );
+    const recorded = rounds.flatMap((round, i) =>
+      reusable[i] ? round.latexdiffs : [],
+    );
+    const unrecorded = rounds.filter(
+      (round, i) => !reusable[i] && round.outputs.length > 0,
     );
     const betweenRounds =
       unrecorded.length > 0 &&
-      (yield* Settings.get<boolean>(
-        roots,
-        DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-      ).pipe(Effect.mapError((cause) => hostFailure('runLatexdiff', cause))));
-    const pairs = unrecorded.flatMap(([round, outputs]) =>
+      (yield* setting<boolean>(DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS));
+    const pairs = unrecorded.flatMap(({ round, outputs }) =>
       latexdiffPairs(
         outputs,
-        betweenRounds ? (documents.files[round - 1] ?? []) : [],
+        betweenRounds
+          ? (rounds.find((earlier) => earlier.round === round - 1)?.outputs ??
+              [])
+          : [],
       ),
     );
-    // Extraction records every output's lineage; one with no base in it is a
-    // new document, not a failure. An output whose lineage was never recorded
-    // lacks a base the run could have named: it counts as a failed diff.
-    const missingLineage = unrecorded.flatMap(([round, outputs]) =>
-      outputs
-        .filter((info) => info.lineage === null)
-        .map(
-          (info) => `${getSafeDocumentRelativePath(info.source)} (r${round})`,
-        ),
-    );
-    for (const description of missingLineage) {
-      yield* Effect.logWarning(
-        `Diff skipped (${description}): its lineage was never recorded`,
-      );
-    }
-    const total = recorded.length + pairs.length + missingLineage.length;
+    const total = recorded.length + pairs.length;
     if (total === 0) {
       yield* notify(
         messages.showInfoMessage(
@@ -216,8 +214,8 @@ export function latexdiffVerbs(parts: {
         ({ revised, document, base, baseRound, suffix }) => {
           const description =
             baseRound === null
-              ? `${document} (r${revised.round})`
-              : `${document} (r${baseRound}→r${revised.round})`;
+              ? `${document} (${formatRoundLabel(revised.round)})`
+              : `${document} (${formatRoundLabel(baseRound)} → ${formatRoundLabel(revised.round)})`;
           progress.report({
             increment: 100 / pairs.length,
             message: `Running diff for ${description}`,
@@ -227,6 +225,7 @@ export function latexdiffVerbs(parts: {
             // A diff runs in its base file's folder when no folder is open.
             cwd: roots.workspace ?? path.dirname(base.absolutePath),
             suffix,
+            mathMarkup,
           }).pipe(
             Effect.map((diffPath): readonly string[] => [diffPath]),
             Effect.catch((error) =>

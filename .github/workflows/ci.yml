@@ -110,9 +110,10 @@ jobs:
           fi
 
   # The static gate is `npm run gate` (package.json): lint and the
-  # invariants, then typecheck + formatting. CI runs the two groups as
-  # parallel jobs, and a local `npm run gate` reproduces exactly what these
-  # jobs enforce.
+  # invariants, the docs checks, then typecheck + formatting. CI runs the
+  # three groups as parallel jobs (the docs group ungated, see
+  # `guidance-refs`), and a local `npm run gate` reproduces exactly what
+  # these jobs enforce.
   invariants:
     name: invariants (linux)
     needs: changes
@@ -219,24 +220,13 @@ jobs:
           node-version: '22'
           package-manager-cache: false
 
-      - name: Check guidance file references resolve
-        run: node scripts/check-guidance-refs.mjs
-
-      # Same reason this job is ungated: a note that shipped but still sits in
-      # `.agents/docs/proposed/` arrives on the docs side of the split, and an
-      # agent reading it as a live direction gets a confidently wrong answer.
-      - name: Check no proposal declares itself complete
-        run: node scripts/check-proposal-status.mjs
-
-      # The docs-root boundary decides what the texra.ai site publishes. It
-      # runs inside `docs:build` (via `check:content`), but that job is gated
-      # off on code-only PRs and on pushes to main — exactly the paths where a
-      # root-level doc gets added alongside code. An unclassified root doc
-      # could therefore freeze the deploy with CI green. This job is the
-      # ungated one, so it also runs here; the overlap on docs-only PRs is
-      # harmless.
-      - name: Check docs root boundary is classified
-        run: node docs/scripts/check-root-docs.mjs
+      # `gate:docs`: guidance paths resolve; no note in `.agents/docs/proposed/`
+      # declares itself shipped (an agent would read it as a live
+      # direction); every docs-root file is classified (an unclassified one
+      # can freeze the texra.ai deploy, and `docs:build`, which also checks
+      # it, is gated off on code-only PRs and pushes to main).
+      - name: Check guidance, proposals and the docs root
+        run: npm run gate:docs
 
   test:
     # Keep the pre-existing `linux` / `windows` labels rather than the raw
@@ -403,13 +393,9 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
-      # The three bundles only: typecheck is the Linux static-checks job's.
+      # The build the installers ship; type checking is the static-checks job's.
       - name: Build desktop app
-        run: |
-          pnpm --filter @texra/desktop run build:main
-          pnpm --filter @texra/desktop run build:preload
-          pnpm --filter @texra/desktop run build:renderer
-          node packages/extension/scripts/build-serve.mjs
+        run: pnpm run desktop:build
 
       # `electron` is not in pnpm's allowBuilds, so install skips its
       # postinstall and the binary downloads the first time a test resolves

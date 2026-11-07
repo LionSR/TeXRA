@@ -3,16 +3,9 @@ import {
   getBasename,
   normalizeFilePath,
   fileLocationDisplayPath,
-  type FileLocation,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import {
-  LitElement,
-  html,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -26,13 +19,13 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { pluralize } from '@texra-ai/harness/transcript';
 import {
   type CompileFailure,
-  getEffectiveDiffBase,
+  compileFailuresOf,
   outputDiffCounts,
   outputDisplayName,
   formatRoundLabel,
   OUTPUT_DOCUMENTS_TAG,
-  type LatexdiffEntry,
   type OutputFileInfo,
+  type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
@@ -75,7 +68,6 @@ interface FileActionOptions {
   // Unique per (round, file-index); see renderFileActionButton for the id contract.
   readonly idPrefix: string;
   readonly base?: string;
-  readonly prev?: string;
 }
 
 function renderFileActionButton(opts: FileActionOptions): TemplateResult {
@@ -100,7 +92,6 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
       data-command=${opts.command}
       data-file=${opts.file}
       data-base=${ifDefined(opts.base)}
-      data-prev=${ifDefined(opts.prev)}
     >
       ${waIcon(opts.icon)}
     </wa-button>
@@ -127,60 +118,14 @@ export class FileList extends LitElement {
   /** The run whose files these are; every verb names it. */
   @property({ attribute: false }) runId: RunId | null = null;
 
-  @property({ attribute: false }) filesByRound: Record<
-    string,
-    OutputFileInfo[]
-  > = {};
-  @property({ attribute: false }) failuresByRound: Record<
-    string,
-    CompileFailure[]
-  > = {};
-  /** What each round should have written and did not. */
-  @property({ attribute: false }) missingByRound: Record<
-    string,
-    readonly string[]
-  > = {};
-  @property({ attribute: false }) latexdiffsByRound: Record<
-    string,
-    readonly LatexdiffEntry[]
-  > = {};
-  /** Each round's kept reply, opened to check what it should have held. */
-  @property({ attribute: false }) repliesByRound: Record<string, FileLocation> =
-    {};
+  /** The run's rounds, in order, as its documents fact records them. */
+  @property({ attribute: false }) rounds: readonly RoundOutput[] = [];
 
   /** The surface owns the hint's dismissal. */
   @property({ attribute: false }) surface: Surface | null = null;
 
-  // Flattened from failuresByRound to avoid O(rounds) scan per file item in render.
-  private failureByPath = new Map<string, CompileFailure>();
-  private sortedRounds: number[] = [];
-
-  protected override willUpdate(changedProperties: PropertyValues): void {
-    // A round shows when it wrote files, lacks any, was diffed, or kept a
-    // reply that held no documents.
-    this.sortedRounds = [
-      ...new Set(
-        [
-          this.filesByRound,
-          this.missingByRound,
-          this.latexdiffsByRound,
-          this.repliesByRound,
-        ].flatMap((byRound) => Object.keys(byRound).map(Number)),
-      ),
-    ].toSorted((a, b) => a - b);
-    if (changedProperties.has('failuresByRound')) {
-      this.failureByPath = new Map();
-      for (const [roundStr, failures] of Object.entries(this.failuresByRound)) {
-        const round = Number(roundStr);
-        for (const f of failures) {
-          this.failureByPath.set(`${round}:${f.output.absolutePath}`, f);
-        }
-      }
-    }
-  }
-
   override render(): TemplateResult | typeof nothing {
-    if (this.sortedRounds.length === 0) {
+    if (this.rounds.length === 0) {
       return nothing;
     }
 
@@ -193,13 +138,13 @@ export class FileList extends LitElement {
           @keydown=${this.handleFileKey}
         >
           ${repeat(
-            this.sortedRounds,
-            (round) => round,
+            this.rounds,
+            (round) => round.round,
             (round) => this.renderRound(round),
           )}
         </div>
         ${
-          this.failureByPath.size > 0
+          this.rounds.some((round) => compileFailuresOf(round).length > 0)
             ? html`
                 <div class="compile-actions">
                   <wa-button
@@ -246,17 +191,29 @@ export class FileList extends LitElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'dismissStorageHint' }));
   };
 
-  private renderRound(round: number): TemplateResult {
-    const files = this.filesByRound[round] ?? [];
-    const missing = this.missingByRound[round] ?? [];
-    const reply = this.repliesByRound[round];
-    const latexdiffs = this.latexdiffsByRound[round] ?? [];
+  private renderRound(record: RoundOutput): TemplateResult {
+    const {
+      round,
+      outputs: files,
+      missingOutputs: missing,
+      reply,
+      latexdiffs,
+    } = record;
+    const failures = compileFailuresOf(record);
     const rows = html`
       <ul class="file-round-list">
         ${repeat(
           files,
           (file) => `${round}-${file.location.absolutePath}`,
-          (file, index) => this.renderFileItem(file, round, index),
+          (file, index) =>
+            this.renderFileItem(
+              file,
+              round,
+              index,
+              failures.find(
+                (f) => f.output.absolutePath === file.location.absolutePath,
+              ),
+            ),
         )}
         ${files.length === 0 ? html`<li class="file-item">${waIcon('triangle-exclamation')} Wrote no documents</li>` : nothing}
         ${missing.map((name) => html`<li class="file-item">${waIcon('triangle-exclamation')} Missing: <bdi dir="auto">${name}</bdi></li>`)}
@@ -283,7 +240,7 @@ export class FileList extends LitElement {
 
     // A per-round disclosure only earns its chrome when there are multiple
     // rounds to tell apart; a single round renders its files directly.
-    if (this.sortedRounds.length === 1) {
+    if (this.rounds.length === 1) {
       return rows;
     }
 
@@ -302,6 +259,7 @@ export class FileList extends LitElement {
     file: OutputFileInfo,
     round: number,
     fileIndex: number,
+    failure: CompileFailure | undefined,
   ): TemplateResult {
     // Unique within this shadow root: round + the file's index in that round.
     const idPrefix = `file-action-r${round}-f${fileIndex}`;
@@ -309,34 +267,21 @@ export class FileList extends LitElement {
     const location = file.location;
     const { dir, basename } = parsePath(outputDisplayName(file));
     const tooltipPath = fileLocationDisplayPath(location);
-    const effectiveBase =
-      getEffectiveDiffBase(file.lineage)?.absolutePath ?? '';
-    const diffBase = file.lineage?.diffBase?.absolutePath;
+    const base = file.lineage?.base.absolutePath ?? '';
 
     const filePath = location.absolutePath;
-    // Compare against the live workspace document (lineage.original) so the
-    // diff opens the user's real, editable file rather than the immutable
-    // run-storage snapshot. Fall back to the snapshot base when the output IS
-    // the workspace file (true in-place overwrite) — diffing it against
-    // itself would show nothing.
-    const workspaceOriginal = file.lineage?.original?.absolutePath;
-    const compareBase =
-      workspaceOriginal && workspaceOriginal !== filePath
-        ? workspaceOriginal
-        : effectiveBase;
-    const failure = this.failureByPath.get(`${round}:${filePath}`);
+    // Compare against the live workspace document so the diff opens the
+    // user's real, editable file rather than the immutable run-storage
+    // snapshot. Fall back to the snapshot base when the output IS the
+    // workspace file (true in-place overwrite) — diffing it against itself
+    // would show nothing.
+    const document = file.lineage?.document?.absolutePath;
+    const compareBase = document && document !== filePath ? document : base;
     const diffStats = this.renderDiffStats(file);
     const baseActions = this.renderBaseActions(
       filePath,
-      effectiveBase,
+      base,
       compareBase,
-      tooltipPath,
-      idPrefix,
-    );
-    const previousAction = this.renderPreviousAction(
-      filePath,
-      effectiveBase,
-      diffBase,
       tooltipPath,
       idPrefix,
     );
@@ -380,7 +325,7 @@ export class FileList extends LitElement {
                 })
               : nothing
           }
-          ${baseActions} ${previousAction}
+          ${baseActions}
         </div>
       </li>
     `;
@@ -522,27 +467,5 @@ export class FileList extends LitElement {
         idPrefix,
       })}
     `;
-  }
-
-  private renderPreviousAction(
-    filePath: string,
-    basePath: string,
-    previousPath: string | undefined,
-    displayPath: string,
-    idPrefix: string,
-  ): TemplateResult | typeof nothing {
-    if (!previousPath || previousPath === basePath) return nothing;
-
-    return renderFileActionButton({
-      icon: 'plus',
-      label: `Compare ${displayPath} with previous round`,
-      title: 'Compare with previous round in a side-by-side diff',
-      className: 'prev-btn',
-      command: 'comparePrevious',
-      file: filePath,
-      base: basePath,
-      prev: previousPath,
-      idPrefix,
-    });
   }
 }

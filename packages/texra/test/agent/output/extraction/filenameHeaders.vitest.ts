@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractFilenameHeaderDocuments } from '@texra/agent/output/extraction/filenameHeaders';
+import {
+  expectedDocuments,
+  extractFilenameHeaderDocuments,
+} from '@texra/agent/output/extraction/filenameHeaders';
 
 /**
  * Regression coverage for issue #6937: `sawSoleOutputChunkLabel` must be
@@ -9,17 +12,16 @@ import { extractFilenameHeaderDocuments } from '@texra/agent/output/extraction/f
  * unrelated fence be misread as a continuation of the sole coalesced output
  * and silently merged into it.
  *
- * All scenarios below use the single-output-file wiring
- * (`synthesisName === coalesceRepeatedName`) that `XmlOutputManager` uses for
- * agents like ocr / paper2slide that declare exactly one output file — see
- * `packages/texra/src/agent/output/XmlOutputManager.ts` around the `soleExpectedFile` wiring.
+ * All scenarios below expect what a task that declares exactly one output
+ * file (ocr / paper2slide) expects: that file, as the sole name.
  */
 function extract(content: string) {
   return extractFilenameHeaderDocuments(content, {
     roundDir: '/round',
-    labelFiles: ['output.tex'],
-    synthesisName: 'output.tex',
-    coalesceRepeatedName: 'output.tex',
+    expected: expectedDocuments({
+      inputFiles: [],
+      outputFiles: ['output.tex'],
+    }),
   });
 }
 

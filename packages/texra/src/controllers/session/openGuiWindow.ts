@@ -76,7 +76,7 @@ import {
   type WindowClient,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
-import { documentsOf } from '@texra/shared/plugins/documents';
+import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { texraGuideUrl } from '@ui/copy/guide';
 import {
   latexdiffVerbs,
@@ -349,9 +349,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     showWarning: host.showWarningMessage,
   });
   const workflowFileActions = new ProgressWorkflowFileActionsController({
-    outputFiles: (runId) => {
+    rounds: (runId) => {
       const run = session.view.current().runs.get(runId);
-      return run === undefined ? {} : documentsOf(run).files;
+      return run === undefined ? [] : documentRoundsOf(run);
     },
     storageRoot: roots.storage,
     workspace: roots.workspace,

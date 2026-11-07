@@ -20,21 +20,28 @@ function createDeps(
   overrides: Partial<ProgressWorkflowFileActionsControllerDeps['host']>,
 ): ProgressWorkflowFileActionsControllerDeps {
   return {
-    outputFiles: () => ({
-      0: [
-        {
-          source: 'edited.tex',
-          location: {
-            kind: 'workspace',
-            absolutePath: EDITED,
-            relativePath: 'edited.tex',
+    rounds: () => [
+      {
+        round: 0,
+        outputs: [
+          {
+            source: 'edited.tex',
+            location: {
+              kind: 'workspace',
+              absolutePath: EDITED,
+              relativePath: 'edited.tex',
+            },
+            round: 0,
+            lineage: null,
+            diff: null,
           },
-          round: 0,
-          lineage: null,
-          diff: null,
-        },
-      ],
-    }),
+        ],
+        compile: null,
+        missingOutputs: [],
+        latexdiffs: [],
+        reply: null,
+      },
+    ],
     host: {
       openDiff: () => Effect.void,
       confirmAccept: () => Effect.succeed(true),

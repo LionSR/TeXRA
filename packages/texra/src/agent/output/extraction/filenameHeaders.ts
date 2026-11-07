@@ -27,6 +27,35 @@ import {
   stripSurroundingMarkdownFence,
 } from './contentSimilarity';
 
+/**
+ * Which documents a revision's reply may name, as its launch decides: the
+ * declared output files, else the inputs it rewrites in place. Every
+ * recovery tier that names a document from less than a tag reads this.
+ */
+export interface ExpectedDocuments {
+  /** The names a reply's documents may take, a bare label included. */
+  readonly names: readonly string[];
+  /** The one expected name, when there is exactly one: the name a
+   *  document synthesized from an unlabeled reply takes. */
+  readonly sole: string | null;
+  /** Whether the task rewrites its inputs (it declares no outputs). */
+  readonly rewritesInputs: boolean;
+}
+
+/** The documents a launch with these files expects. */
+export function expectedDocuments(config: {
+  readonly inputFiles: readonly string[];
+  readonly outputFiles: readonly string[];
+}): ExpectedDocuments {
+  const rewritesInputs = config.outputFiles.length === 0;
+  const names = rewritesInputs ? config.inputFiles : config.outputFiles;
+  return {
+    names,
+    sole: names.length === 1 ? names[0] : null,
+    rewritesInputs,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // latexHeuristics
 // ---------------------------------------------------------------------------
@@ -294,30 +323,17 @@ function shouldParseHeaderInsideNonLatexFence(
  */
 export function extractFilenameHeaderDocuments(
   outputContent: string,
-  options: {
-    roundDir: string;
-    /** Names a bare label may resolve to (declared outputs, else inputs). */
-    labelFiles: readonly string[];
-    /**
-     * The name for a document synthesized from an unlabeled LaTeX prefix.
-     * Null when the agent may write more than one file, which disables
-     * prefix synthesis (there is no way to pick the right name).
-     */
-    synthesisName: string | null;
-    /**
-     * When an agent declares one generated output, models often repeat that
-     * same output label for chunks of one artifact. Coalesce only that exact
-     * target; multi-file and in-place edits still keep duplicate names unique.
-     */
-    coalesceRepeatedName?: string | null;
-  },
+  { roundDir, expected }: { roundDir: string; expected: ExpectedDocuments },
 ): NamedDocument[] | null {
-  const {
-    roundDir,
-    labelFiles,
-    synthesisName,
-    coalesceRepeatedName = null,
-  } = options;
+  // A bare label may name only an expected file. A document synthesized
+  // from an unlabeled LaTeX prefix takes the sole expected name; with
+  // several there is no way to pick the right one.
+  const labelFiles = expected.names;
+  const synthesisName = expected.sole;
+  // A task that declares one generated output often sees the model repeat
+  // that output's label for chunks of one artifact: coalesce only that
+  // target; multi-file and in-place edits keep duplicate names unique.
+  const coalesceRepeatedName = expected.rewritesInputs ? null : expected.sole;
   const documents: NamedDocument[] = [];
   const reservedFinalPaths = new Set<string>();
   let currentName: string | null = null;

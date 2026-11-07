@@ -44,7 +44,7 @@ import { packDestination } from '@texra/tools/documents/runOutputs';
 import type { FileOpResult } from '@texra/shared/session/hostRequest';
 import {
   DOCUMENT_TASK_BLOCK,
-  documentsOf,
+  documentRoundsOf,
 } from '@texra/shared/plugins/documents';
 import type { MessageHost, HostFailed } from '@texra/hosts/uiHosts';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
@@ -289,9 +289,9 @@ export const createHostRunActions = Effect.fn(
       Effect.flatMap((run) => Effect.asVoid(run.result)),
     );
 
-  const documentsOfRun = (runId: RunId) => {
+  const roundsOfRun = (runId: RunId) => {
     const run = runView(runId);
-    return run === undefined ? undefined : documentsOf(run);
+    return run === undefined ? [] : documentRoundsOf(run);
   };
 
   /** The saved config of a document task's run. `files` holds on every
@@ -486,7 +486,7 @@ export const createHostRunActions = Effect.fn(
       const plan = yield* planCompileFixer({
         runId,
         runConfig: config,
-        documents: documentsOfRun(runId),
+        rounds: roundsOfRun(runId),
         modelOptions,
         workspaceRoot: roots.workspace,
       }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
