@@ -58,7 +58,6 @@ import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
   TOOL_CALL_STATUS,
-  USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
   toJsonValue,
   type JsonValue,
@@ -139,8 +138,11 @@ import {
   formatCliSessionStatus,
   taskCostStatus,
 } from '../src/chat/tui/sessionStatus';
-import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
-import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
+import { chatScrollback } from '../src/chat/tui/panes/staticTranscriptRing';
+import {
+  EMPTY_DRAFT,
+  expandText,
+} from '../src/chat/tui/input/draftAttachments';
 import {
   announceForegroundApprovals,
   createTuiHostInteractions,
@@ -555,10 +557,10 @@ function seedRun(
     readonly parentRunId?: RunId;
     /** The agent name for a default (agent) identity; a run id names nothing. */
     readonly agent?: string;
-    readonly userFollowUpSupport?: Extract<
+    readonly takesFollowUps?: Extract<
       SessionEventDraft,
       { type: 'run.start' }
-    >['userFollowUpSupport'];
+    >['takesFollowUps'];
   } = {},
 ): void {
   if (harnessRuns.has(runId)) return;
@@ -572,8 +574,7 @@ function seedRun(
     type: 'run.start',
     aggregateId: qualifyAggregateId('run', runId),
     identity,
-    userFollowUpSupport:
-      options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    takesFollowUps: options.takesFollowUps ?? true,
     parent:
       options.parentRunId === undefined
         ? null
@@ -1338,7 +1339,7 @@ function seedRunningScript(): void {
   seedRun(scriptRunId, {
     identity: { kind: 'script', title: 'live-script-validation' },
     parentRunId: HARNESS_RUN_ID,
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    takesFollowUps: false,
   });
   seedPhase(scriptRunId, 'running');
   for (const agentRunId of [
@@ -1348,7 +1349,7 @@ function seedRunningScript(): void {
     seedRun(agentRunId, {
       identity: { kind: 'agent', agent: 'correct' },
       parentRunId: scriptRunId,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      takesFollowUps: false,
     });
     seedPhase(agentRunId, 'running');
   }
@@ -1359,7 +1360,7 @@ function seedRunningProcessChild(): void {
   seedRun(childRunId, {
     identity: { kind: 'process', tool: 'bash' },
     parentRunId: HARNESS_RUN_ID,
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    takesFollowUps: false,
   });
   seedDescription(childRunId, 'sleep 30');
   seedPhase(childRunId, 'running');
@@ -1719,10 +1720,9 @@ function resetHarnessForClear(): void {
   // until a new turn mints a run.
   resetCliState(meta);
   // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
-  // outside Ink, then notify the erase epoch so the transcript rebuilds
-  // after the reset state commits and repaints the session header.
+  // outside Ink, then print the scrollback again from a new origin.
   clearTerminalScrollback();
-  notifyStaticTranscriptErased();
+  scrollback.restart();
 }
 
 function handleHarnessSlashCommand(line: string): boolean {
@@ -1858,7 +1858,8 @@ if (canInterrupt) {
 }
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
-const viewportController = createTuiViewportController(inkRef);
+const scrollback = chatScrollback(harnessRuntime, inkRef);
+const harnessDraft = harnessRuntime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
 
 function handleHarnessCtrlC(): void {
   if (canInterrupt) {
@@ -1874,8 +1875,9 @@ function renderHarnessApp(): React.JSX.Element {
       stores={HARNESS_PLATFORM_SERVICES}
       runtime={harnessRuntime}
       session={harnessRunSession}
-      onSubmit={handleHarnessSubmit}
-      onStaticTranscriptChange={viewportController.repaintTranscript}
+      draft={harnessDraft}
+      onSubmit={(draft) => handleHarnessSubmit(expandText(draft).trim())}
+      scrollback={scrollback}
       onCtrlC={handleHarnessCtrlC}
     />
   );
@@ -1902,7 +1904,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     log.emit(id, 10_000_000, {
       type: 'run.start',
       identity: { kind: 'agent', agent },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      takesFollowUps: true,
       // The creation commit the database stamps, not a guess: `Log.parent`
       // refuses a parent that never started.
       parent: parentId === null ? null : log.parent(parentId),
@@ -1994,7 +1996,7 @@ if (SHOW_TERMINAL_RESUME_REPAINT) {
     // remounts <Static> and repaints with replace semantics.
     await setTimeout(0);
     await ink.waitUntilRenderFlush();
-    viewportController.repaintAfterTerminalResume();
+    scrollback.restart();
     await setTimeout(0);
     await ink.waitUntilRenderFlush();
   })().catch((error) => {

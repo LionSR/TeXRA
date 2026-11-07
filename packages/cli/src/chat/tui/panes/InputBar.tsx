@@ -4,10 +4,9 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
-  useState,
 } from 'react';
 import { Box, Text, useInput, useWindowSize, type Key } from 'ink';
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, SubscriptionRef } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
@@ -19,11 +18,16 @@ import { POINTER } from '@cli/tui/ui/glyphs';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { textInputCappedRowCount } from '../input/textInputDisplay';
 import {
-  DraftAttachmentStore,
+  EMPTY_DRAFT,
+  expandText,
+  expandTextForHistory,
   shouldCollapsePaste,
-  type PastedImageEntry,
+  withPastedImage,
+  withPastedText,
+  withText,
+  type Draft,
 } from '../input/draftAttachments';
-import { ImagePasteQueue } from '../input/imagePasteQueue';
+import { useImagePastes } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
 import {
   appendSlashCommandEcho,
@@ -39,14 +43,13 @@ import {
   type SlashPickIntent,
 } from '../commands/slashRegistry';
 import {
-  draftRestoreRequest,
   inputBarContentRows,
   reverseSearchOpen as reverseSearchOpenSignal,
   setTransientNotice,
   slashPaletteOpen,
-  takeDraftRestoreRequests,
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import { useSubscriptionRef } from '../state/useSubscriptionRef';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { CursorEdit } from '../input/textInputEditing';
@@ -62,15 +65,12 @@ interface InputBarProps {
   /** The chat session's roots: the Ctrl-V image probe writes under this
    *  project's own storage, never under whichever root a later call reads. */
   readonly roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>;
-  /** Forwarded to BaseTextInput; called only on real (non-paste) Enter, or
-   *  on Shift-Tab with `holdUntil: 'turn'`. `mediaFiles` carries absolute
-   *  paths of any pasted-image attachments. */
-  readonly onSubmit: (
-    value: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
-    holdUntil?: 'turn',
-  ) => void;
+  /** The chat's draft: what the input shows, its chips' content and the
+   *  activated skills. A message the session does not take comes back here. */
+  readonly draft: SubscriptionRef.SubscriptionRef<Draft>;
+  /** Called with the submitted draft only on real (non-paste) Enter, or on
+   *  Shift-Tab with `holdUntil: 'turn'`. */
+  readonly onSubmit: (draft: Draft, holdUntil?: 'turn') => void;
   /** Disable the input while an approval modal is owning the screen. */
   readonly disabled?: boolean;
   /** Inline reason shown when the disabled input remains visible. */
@@ -122,50 +122,55 @@ const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, holdsKeystroke, onSubmit, roots, runtime } = props;
+  const draftRef = props.draft;
   const keyboardActive = props.keyboardActive ?? true;
-  const [value, setValueState] = useState('');
+  const value = useSubscriptionRef(runtime, draftRef).text;
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const { columns } = useWindowSize();
-  const draftValueRef = useRef(value);
+  // Reads and writes go to the ref at once, so a keystroke chunk handled
+  // before the next render sees the one before it.
+  const readDraft = useCallback(
+    () => SubscriptionRef.getUnsafe(draftRef),
+    [draftRef],
+  );
+  const writeDraft = useCallback(
+    (next: Draft) => runtime.runSync(SubscriptionRef.set(draftRef, next)),
+    [draftRef, runtime],
+  );
   // ↑/↓ history browsing (shell-style). `index` walks the persisted entries,
   // `savedDraft` restores whatever was typed before browsing began, and
   // `applied` detects edits to a recalled entry, which end the browse.
   const historyBrowseRef = useRef<
     { index: number; savedDraft: string; applied: string } | undefined
   >(undefined);
-  // Collapsed pastes (and, in the image slice, pasted images) live here keyed
-  // by chip id and are expanded back into the submitted text at handleSubmit.
-  // Ref-held so the store survives re-renders and never triggers one itself.
-  // An emptied draft holds no chip, so it drops them, whichever path emptied
-  // it (a submit, or the input's own Ctrl-C discard).
-  const attachmentsRef = useRef(new DraftAttachmentStore());
-  const setValue = useCallback((next: string) => {
-    draftValueRef.current = next;
-    if (next === '') attachmentsRef.current.clear();
-    if (next !== historyBrowseRef.current?.applied) {
-      historyBrowseRef.current = undefined;
-    }
-    setValueState(next);
-  }, []);
+  const setValue = useCallback(
+    (next: string) => {
+      if (next !== historyBrowseRef.current?.applied) {
+        historyBrowseRef.current = undefined;
+      }
+      writeDraft(withText(readDraft(), next));
+    },
+    [readDraft, writeDraft],
+  );
   const historyRef = useRef(history);
   historyRef.current = history;
-  const browseHistory = useCallback((direction: -1 | 1) => {
-    const entries = historyRef.current;
-    const browse = historyBrowseRef.current;
-    if (!entries || (!browse && direction === 1)) return;
-    const index = (browse?.index ?? entries.length()) + direction;
-    if (index < 0) return;
-    const savedDraft = browse?.savedDraft ?? draftValueRef.current;
-    // Walking ↓ past the newest entry restores the pre-browse draft.
-    const entry = entries.at(index);
-    historyBrowseRef.current =
-      entry === undefined ? undefined : { index, savedDraft, applied: entry };
-    draftValueRef.current = entry ?? savedDraft;
-    setValueState(entry ?? savedDraft);
-  }, []);
-  const imagePasteQueueRef = useRef<ImagePasteQueue | null>(null);
-  imagePasteQueueRef.current ??= new ImagePasteQueue();
-  const imagePasteQueue = imagePasteQueueRef.current;
+  const browseHistory = useCallback(
+    (direction: -1 | 1) => {
+      const entries = historyRef.current;
+      const browse = historyBrowseRef.current;
+      if (!entries || (!browse && direction === 1)) return;
+      const index = (browse?.index ?? entries.length()) + direction;
+      if (index < 0) return;
+      const savedDraft = browse?.savedDraft ?? readDraft().text;
+      // Walking ↓ past the newest entry restores the pre-browse draft.
+      const entry = entries.at(index);
+      historyBrowseRef.current =
+        entry === undefined ? undefined : { index, savedDraft, applied: entry };
+      writeDraft(withText(readDraft(), entry ?? savedDraft));
+    },
+    [readDraft, writeDraft],
+  );
+  const imagePasteQueue = useImagePastes(runtime);
 
   const clearDraft = useCallback(() => {
     imagePasteQueue.discardPending();
@@ -176,8 +181,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     return { value: '', cursor: 0 };
   }, [clearDraft]);
   const appendInput = useCallback(
-    (input: string): void => setValue(`${draftValueRef.current}${input}`),
-    [setValue],
+    (input: string): void => setValue(`${readDraft().text}${input}`),
+    [readDraft, setValue],
   );
   useImperativeHandle(props.controlRef, () => ({ appendInput }), [appendInput]);
   const replaceSlashTriggerInput = useCallback(
@@ -200,77 +205,42 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     [holdsKeystroke],
   );
   const replaceDraft = useCallback(
-    (next: string) => {
-      setValue(next);
-      attachmentsRef.current.clear();
-    },
-    [setValue],
+    (next: string) =>
+      writeDraft({ ...EMPTY_DRAFT, text: next, skills: readDraft().skills }),
+    [readDraft, writeDraft],
   );
-  // A refused follow-up hands its text back: the draft is the user's until
-  // the session admits it. Image chips are rebuilt from the entries carried by
-  // that restore request; anything typed since the send is kept and the
-  // restored text is appended below it.
-  const draftRestores = useSignal(draftRestoreRequest);
-  useEffect(() => {
-    if (draftRestores.length === 0) return;
-    const requests = takeDraftRestoreRequests();
-    const store = attachmentsRef.current;
-    let next = draftValueRef.current;
-    for (const request of requests) {
-      // The submitted text still carries its `[Image #N]` tokens (only pasted
-      // text is expanded at submit). Match by the original chip id so an
-      // orphaned token cannot steal another attachment; duplicate references
-      // reuse the same newly-created chip.
-      const imagesById = new Map(
-        request.images.map((image) => [image.id, image] as const),
-      );
-      const restoredChips = new Map<number, string>();
-      const restored = request.text.replaceAll(
-        /\[Image #(\d+)\]/g,
-        (token, idText: string) => {
-          const id = Number(idText);
-          const existing = restoredChips.get(id);
-          if (existing) return existing;
-          const image = imagesById.get(id);
-          if (!image) return token;
-          const chip = store.addPastedImage({
-            path: image.path,
-            mediaType: image.mediaType,
-            displayName: image.displayName,
-          });
-          restoredChips.set(id, chip);
-          return chip;
-        },
-      );
-      next = next.length > 0 ? `${next}\n${restored}` : restored;
-    }
-    setValue(next);
-  }, [draftRestores, setValue]);
-  const transformPaste = useCallback((text: string): string => {
-    if (!shouldCollapsePaste(text)) return text;
-    return attachmentsRef.current.addPastedText(text);
-  }, []);
+  const transformPaste = useCallback(
+    (text: string): string => {
+      if (!shouldCollapsePaste(text)) return text;
+      const pasted = withPastedText(readDraft(), text);
+      writeDraft(pasted.draft);
+      return pasted.chip;
+    },
+    [readDraft, writeDraft],
+  );
   const onImagePaste = useMemo(
     () => ({
-      runtime,
+      pastes: imagePasteQueue,
       probe: () =>
         Effect.map(attachClipboardImage(roots), (result): string | null => {
           if (!result.ok) {
             setTransientNotice(result.reason);
             return null;
           }
-          return attachmentsRef.current.addPastedImage({
+          const pasted = withPastedImage(readDraft(), {
             path: result.path,
             mediaType: result.mediaType,
             displayName: result.displayName,
           });
+          writeDraft(pasted.draft);
+          return pasted.chip;
         }),
       onError: (error: unknown) =>
         setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`, {
           ttlMs: Number.POSITIVE_INFINITY,
         }),
     }),
-    [roots, runtime],
+    [imagePasteQueue, readDraft, roots, writeDraft],
   );
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
@@ -289,17 +259,12 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
 
   const handleSubmit = useCallback(
     (submitted: string, holdUntil?: 'turn') => {
-      const store = attachmentsRef.current;
-      // Expand `[Pasted text #N …]` chips back to their full content, and
-      // collect any pasted-image attachments still referenced in the draft.
-      const trimmed = store.expandText(submitted).trim();
-      if (trimmed.length === 0) {
+      const message = withText(readDraft(), submitted);
+      if (expandText(message).trim().length === 0) {
         clearDraft();
         return;
       }
-      const images = store.resolveImages(submitted);
-      const mediaFiles = images.map((image) => image.path);
-      const historyText = store.expandTextForHistory(submitted).trim();
+      const historyText = expandTextForHistory(message).trim();
       clearDraft();
       // Persisting history is best-effort — a disk failure (read-only fs,
       // ENOSPC) must not block the submit. Surface the failure through the
@@ -319,14 +284,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           ),
         );
       }
-      onSubmit(
-        trimmed,
-        mediaFiles.length > 0 ? mediaFiles : undefined,
-        images.length > 0 ? images : undefined,
-        holdUntil,
-      );
+      onSubmit(message, holdUntil);
     },
-    [clearDraft, onSubmit],
+    [clearDraft, onSubmit, readDraft, runtime],
   );
 
   const acceptSlashCommand = useCallback(
@@ -338,7 +298,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     ): void => {
       if (cmd.formComponent) {
         const commandLine = slashSubmitText(
-          draftValueRef.current,
+          readDraft().text,
           cmd.name,
           remainder,
           typedName,
@@ -354,12 +314,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       if (intent === 'submit') {
         imagePasteQueue.runWhenIdle(() => {
           handleSubmit(
-            slashSubmitText(
-              draftValueRef.current,
-              cmd.name,
-              remainder,
-              typedName,
-            ),
+            slashSubmitText(readDraft().text, cmd.name, remainder, typedName),
           );
         });
         return;
@@ -368,7 +323,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         `/${cmd.name}${remainder ? ` ${remainder.trimStart()}` : ' '}`,
       );
     },
-    [clearDraft, handleSubmit, imagePasteQueue, replaceDraft],
+    [clearDraft, handleSubmit, imagePasteQueue, readDraft, replaceDraft],
   );
 
   const handleInputChunkSubmit = useCallback(
@@ -508,8 +463,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
               onHistoryDown={
                 paletteOwnsArrows ? undefined : () => browseHistory(1)
               }
-              imagePasteQueue={imagePasteQueue}
-              readLatestValue={() => draftValueRef.current}
+              readLatestValue={() => readDraft().text}
               prepareInputChunk={
                 showPalette ? replaceSlashTriggerInput : undefined
               }

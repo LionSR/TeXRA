@@ -14,19 +14,13 @@
  * the key a run of that project would use, and reads and writes the flags
  * below through its `AppState` store.
  *
- * The derivation is the planner below; the in-session loop around it — probe,
- * plan, publish, clear a stale skip, serialized against itself — is
- * `OnboardingFunnelRefresher`, which the webview hosts own one of each.
+ * The derivation is {@link deriveOnboardingFunnelState}; each window's host
+ * snapshot (`hostSnapshotSource.ts`) holds its inputs and follows them.
  */
 
-import { Effect, Schema, type Scope, Semaphore, Stream } from 'effect';
+import { Effect, Schema, type Scope, Stream } from 'effect';
 
-import {
-  AppState,
-  Settings,
-  StateReadFailed,
-  withLogChannel,
-} from '@texra-ai/harness/host';
+import { Settings, withLogChannel } from '@texra-ai/harness/host';
 import { agentName, type SessionView } from '@texra-ai/harness/schemas';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
@@ -111,19 +105,19 @@ export const recordFirstCompletedRun = Effect.fn('recordFirstCompletedRun')(
   },
 );
 
-/**
- * Run `refresh` as subscribed and whenever `firstRunDone` may have been
- * written, by this process or another sharing the store. The flag is written
- * by {@link recordFirstCompletedRun} in whichever process held the run, not
- * at a run's end, so a host follows the flag rather than its own launches; a
- * setup chat that waits after delegating has done its first run too.
- */
-export const followFirstRunDone = (
-  refresh: Effect.Effect<void>,
-): Effect.Effect<void, never, AppState> =>
-  Stream.unwrap(
-    Effect.map(AppState, (state) => state.changes([FIRST_RUN_DONE_KEY])),
-  ).pipe(Stream.runForEach(() => refresh));
+/** The flags {@link readOnboardingFlags} reads, for a follower of their
+ *  changes (`AppStateStore.changes`): another process may write them. */
+export const ONBOARDING_FLAG_KEYS: readonly string[] = Object.freeze([
+  DECLINED_KEY,
+  FIRST_RUN_DONE_KEY,
+]);
+
+/** The user's two onboarding flags. */
+export const readOnboardingFlags = (state: StateStore) =>
+  Effect.all({
+    declined: Settings.state(state, DECLINED_KEY, OnboardingFlagSchema),
+    firstRunDone: getFirstRunDone(state),
+  });
 
 interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */
@@ -134,7 +128,12 @@ interface OnboardingFunnelInputs {
   firstRunDone: boolean;
 }
 
-function deriveOnboardingFunnelState(
+/**
+ * The funnel state from its three inputs. Entering State 1 shows the setup
+ * card; it never starts the setup conversation, whose environment probe may
+ * install tools, so the user starts it from the card.
+ */
+export function deriveOnboardingFunnelState(
   inputs: OnboardingFunnelInputs,
 ): OnboardingFunnelState {
   if (inputs.firstRunDone) return 'done';
@@ -143,146 +142,4 @@ function deriveOnboardingFunnelState(
   // gets the normal product until a credential appears (which re-enters the
   // funnel at State 1 because configuring a credential clears the flag).
   return inputs.declined ? 'done' : 'needs-credential';
-}
-
-/** What a host should do after recomputing the funnel. */
-interface OnboardingFunnelTransition {
-  /** The newly derived funnel state (push to the webview). */
-  state: OnboardingFunnelState;
-  /** Select the setup agent in the launcher (entering State 1). */
-  selectSetupAgent: boolean;
-  /** Configuring a credential clears a previous skip. */
-  clearDeclined: boolean;
-}
-
-/**
- * Pure transition planner for hosts that recompute the funnel in-session
- * (webview ready, credential-changed events, skip). `previous` is the state
- * from the host's last computation, or `undefined` on the first one.
- *
- * Entering State 1 only *selects* the setup agent and shows the setup card; it
- * never auto-starts the setup conversation. The setup agent runs an
- * environment probe that may install tools, so launching it is an explicit,
- * consented action — the user clicks "Run setup assistant" on the setup card
- * (or invokes the command) to start it. There is deliberately no auto-kickoff.
- */
-function planOnboardingFunnelTransition(
-  previous: OnboardingFunnelState | undefined,
-  inputs: OnboardingFunnelInputs,
-): OnboardingFunnelTransition {
-  const state = deriveOnboardingFunnelState(inputs);
-  return {
-    state,
-    // Entering State 1 (from ready, State 0, or a declined "done") selects
-    // the setup agent; a refresh already in State 1 must not stomp a user
-    // who deliberately switched agents mid-session.
-    selectSetupAgent: state === 'setup' && previous !== 'setup',
-    clearDeclined: inputs.declined && inputs.hasCredential,
-  };
-}
-
-/** What one host contributes to a funnel refresh. */
-interface OnboardingFunnelHost {
-  /**
-   * This host's usable-credential check (a subscription or any provider API
-   * key), as a program the refresh yields. A check that cannot be answered
-   * fails: it is not the fact "no credential", and reading it as one would
-   * blank a user who has keys back down to the first-run welcome card.
-   */
-  readonly hasCredential: () => Effect.Effect<boolean, Error>;
-  /** The user-scoped flag store: the flags half of onboarding is a fact about the user; the credential is the shown project's. */
-  readonly flags: StateStore;
-  /**
-   * Paint the derived state and take the arms this host answers. The
-   * extension selects the setup agent on its launcher; the desktop discards
-   * that case. The refresh waits for the host publication before another
-   * refresh can observe the transition.
-   */
-  readonly apply: (
-    transition: OnboardingFunnelTransition,
-  ) => Effect.Effect<void>;
-}
-
-/**
- * The in-session funnel loop, owned once beside its planner: probe the host's
- * credentials, plan the transition against the state this refresher last
- * derived, hand it to the host, and clear a stale skip.
- *
- * Refreshes are serialized because the probe awaits and the previous state is
- * shared: without a lane the last caller to finish could publish a state
- * planned from a stale previous one. One permit — a refresh holds it while it
- * runs, callers that arrive meanwhile wait in order and are collapsed into the
- * single rerun they asked for, and each returns once that rerun has landed.
- * The latch and the program it reruns are one pair, so a caller's `run` can
- * only ever be answered by this refresh; the request is latched when the
- * program starts, not when it is built, so an unrun `run` leaves no rerun owed
- * to nobody.
- */
-export class OnboardingFunnelRefresher {
-  private readonly lane = Semaphore.makeUnsafe(1);
-  private rerunRequested = false;
-  private current: OnboardingFunnelState | undefined;
-
-  private readonly host: OnboardingFunnelHost;
-  constructor(host: OnboardingFunnelHost) {
-    this.host = host;
-  }
-
-  /** The state this refresher last derived, `undefined` before the first
-   *  refresh. Session-scoped by design. */
-  get state(): OnboardingFunnelState | undefined {
-    return this.current;
-  }
-
-  private readonly refresh = Effect.fn('OnboardingFunnelRefresher.refresh')(
-    function* (this: OnboardingFunnelRefresher) {
-      // An unanswered check fails the refresh before anything is applied:
-      // the funnel keeps the state it last derived, the caller's boundary
-      // reports why (on the first refresh there is no state to keep), and
-      // the next refresh asks again.
-      const hasCredential = yield* this.host.hasCredential().pipe(
-        Effect.mapError(
-          (failure) =>
-            new StateReadFailed({
-              key: 'onboarding.credential',
-              message: `The onboarding credential check failed: ${failure.message}`,
-              cause: failure,
-            }),
-        ),
-      );
-      const transition = planOnboardingFunnelTransition(this.current, {
-        hasCredential,
-        declined: yield* Settings.state(
-          this.host.flags,
-          DECLINED_KEY,
-          OnboardingFlagSchema,
-        ),
-        firstRunDone: yield* getFirstRunDone(this.host.flags),
-      });
-      yield* this.host.apply(transition);
-      this.current = transition.state;
-      if (transition.clearDeclined) {
-        yield* setOnboardingDeclined(this.host.flags, false);
-      }
-    },
-  );
-
-  private readonly drain = Effect.fn('OnboardingFunnelRefresher.run')(
-    function* (this: OnboardingFunnelRefresher) {
-      while (this.rerunRequested) {
-        this.rerunRequested = false;
-        yield* this.refresh();
-      }
-    },
-  );
-
-  /** Ask for a refresh. It fails when the credential probe or a flag read
-   *  cannot be answered, or the write that clears a stale skip fails; the
-   *  host publication cannot fail. */
-  run(): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
-    return Effect.suspend(() => {
-      this.rerunRequested = true;
-      return this.lane.withPermit(this.drain());
-    });
-  }
 }

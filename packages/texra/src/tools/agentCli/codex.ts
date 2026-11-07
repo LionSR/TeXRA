@@ -15,7 +15,14 @@
  */
 
 // Third-party imports
-import { Effect, type FileSystem, Result, Schema, Stream } from 'effect';
+import {
+  Effect,
+  type FileSystem,
+  Result,
+  Schema,
+  type Scope,
+  Stream,
+} from 'effect';
 
 // Local imports
 import {
@@ -307,14 +314,14 @@ function buildCodexTurn(params: {
   logger: AgentTrace;
   runId: RunId;
   prompt: string;
-  /** The claim on the thread this turn continues, released as it ends. */
-  release: (() => void) | undefined;
+  /** The claim on the thread this turn continues, closed as it ends. */
+  claim: Scope.Closeable | undefined;
 }): ProcessTurn {
   const { thread, logger, runId, prompt } = params;
   return buildAgentCliTurn({
     logger,
     stageLabel: 'Codex session',
-    release: params.release,
+    claim: params.claim,
     runProviderTurn: runStreamedTurn(thread, prompt, logger),
     getUsage: codexTurnUsage,
     formatDelivery: (turn, wallTimeMs) =>
@@ -403,7 +410,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
     store: CodexThreads,
     resumeId: input.thread_id ?? undefined,
     threadLabel: 'Codex thread',
-    launch: (release) => launchCodexSession(input, sandboxMode, release),
+    launch: (claim) => launchCodexSession(input, sandboxMode, claim),
   });
 });
 
@@ -437,7 +444,7 @@ export const CodexTool = defineTool({
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,
   sandboxMode: SandboxMode,
-  release: (() => void) | undefined,
+  claim: Scope.Closeable | undefined,
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
@@ -465,7 +472,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
         logger,
         runId,
         prompt: input.prompt,
-        release,
+        claim,
       }),
     summaryLabel: 'Codex',
     launchedLine: `Codex agent launched (model: ${run.ref}, effort: ${run.effort ?? 'none'}, sandbox: ${sandboxMode}).${run.note ? ` ${run.note}` : ''}`,

@@ -36,7 +36,6 @@ import {
   RUN_OUTCOME,
   type RunId,
   type SubagentProgressUpdate,
-  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { SessionLog } from '@shared/session/runHistory';
@@ -105,10 +104,8 @@ const enterRun = Effect.fn('enterRun')(function* (
       : yield* registrationRows(runId, config, {
           ...options.registration,
           // A child takes a message as its resume; a one-shot root none.
-          userFollowUpSupport:
-            stopAfterCycle && options.registration.parentRunId === undefined
-              ? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED
-              : USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+          takesFollowUps:
+            !stopAfterCycle || options.registration.parentRunId !== undefined,
         });
   if (registered !== null && registered.start === null)
     return yield* new AgentError({

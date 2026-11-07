@@ -78,7 +78,7 @@ import {
 import { hostCapabilitiesOf, liveToolGates } from '../requests';
 import { blobRows, contextAt, stored } from '../run/requestContext';
 import { appendRow, SCRIPT_TOOL_NAME } from './rows';
-import { stepHooks, type StepHook } from './hooks';
+import { stepHooks, type StepHooks } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 
 /** The project's side of the tool catalog ({@link SessionTools}): its
@@ -96,7 +96,7 @@ export interface StepTools extends ResolvedTools {
   readonly stepRoots: readonly StepRoot[];
   /** The command hooks of the installed plugins it accepted, by plugin id:
    *  its calls, and the prompts and stops under it, run these. */
-  readonly hooks: readonly StepHook[];
+  readonly hooks: StepHooks;
   /** The modules its scripts may import, source by specifier. */
   readonly modules: { readonly [specifier: string]: string };
 }
@@ -197,18 +197,17 @@ function describedAtFreeze<T extends ResolvedTools>(
  * step's pin, and resolve what it offers.
  * `recorded` holds a resumed activation's first step to it, and
  * `recordedHooks` a resumed dispatch to the hooks its calls were offered
- * under; `holding` says the hold outlives this step (a park's). Its base
- * text and activated skills are the recorded ones, or until the opening
- * commits, the opening's. The rows are what the loop appends before a
- * request: the new offered set, when it differs from `state`'s. */
+ * under; `holding` says the hold outlives this step (a wait's). Its
+ * activated skills are the recorded ones, or until the opening commits,
+ * the opening's. A change to what it offers is reported here, where
+ * {@link stepFor} records it.
+ */
 const openStep = Effect.fn('Step.open')(function* (
   run: AgentRunShape,
   state: RunState,
   recorded: readonly OfferedTool[] | null,
   holding: boolean,
-  isChild: boolean,
-  openingSystem: string | undefined,
-  recordedHooks: readonly string[] | null = null,
+  recordedHooks: readonly string[] | null,
 ) {
   const roots = yield* SessionRoots;
   const scope = yield* Scope.fork(run.scope);
@@ -295,8 +294,7 @@ const openStep = Effect.fn('Step.open')(function* (
       : (recordedSkills?.flatMap((name) => byName.get(name) ?? []) ??
         catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS));
     const activated = names.flatMap((name) => byName.get(name) ?? []);
-    const hooks = stepHooks(pinned.installed, recordedHooks);
-    for (const note of hooks.notes) run.logger.warn(note);
+    const hooks = stepHooks(run, pinned.installed, recordedHooks);
     const modules = tools.registry.has(SCRIPT_TOOL_NAME) ? imported : {};
     return {
       tools: {
@@ -308,10 +306,9 @@ const openStep = Effect.fn('Step.open')(function* (
             ? []
             : [{ absolutePath: directory, label: `Skill ${name}` }],
         ),
-        hooks: hooks.hooks,
+        hooks,
         modules,
       },
-      hooks: hooks.identities,
       warnings: [
         ...pinned.warnings,
         ...resolved.warnings,
@@ -329,7 +326,8 @@ const openStep = Effect.fn('Step.open')(function* (
       ),
     };
   }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
-  const { tools, listed } = step;
+  const { listed } = step;
+  const tools: StepTools = step.tools;
   const previous = yield* SynchronizedRef.getAndSet(run.steps, {
     tools,
     scope,
@@ -338,38 +336,10 @@ const openStep = Effect.fn('Step.open')(function* (
     holding,
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
-  // The model-dependent text follows the step's model and settings.
-  const model = yield* ScopedRef.get(run.model);
-  const delegation = yield* readDelegationTargets(
-    step.tools,
-    roots,
-    run.config.delegationAgentScope ?? undefined,
-  );
-  const context = {
-    ...stepInstructions(step.contributing, listed, {
-      offered: step.tools.definitions.map(({ name }) => name),
-      isChild,
-      isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
-      config: roots.config,
-    }),
-    ...(delegation && { delegation }),
-  };
-  const base =
-    state.input.system === undefined
-      ? openingSystem
-      : stored(state, state.input.system, Schema.String);
-  const { system, update } = contextAt(state, base, context);
-  const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
+  const toolsChanged = !sameSet(state.offeredTools, tools.offered);
   const skills = listed.map(({ name }) => name);
   const skillsChanged =
     skills.join('\0') !== state.offeredWith.skills.join('\0');
-  const modules = Record.map(step.tools.modules, sha256);
-  const changed =
-    toolsChanged ||
-    skillsChanged ||
-    stableStringify(modules) !== stableStringify(state.offeredWith.modules) ||
-    state.offeredContext !== sha256(context) ||
-    step.hooks.join('\0') !== state.offeredWith.hooks.join('\0');
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
   const withheldChanged =
@@ -388,6 +358,93 @@ const openStep = Effect.fn('Step.open')(function* (
   }
   return {
     tools,
+    listed,
+    contributing: step.contributing,
+    skills,
+    changed: toolsChanged || skillsChanged,
+  };
+});
+
+/**
+ * The tools a dispatch runs its calls against: the step that offered them;
+ * for a response a resume found pending, a step pinned for the dispatch and
+ * held to the record, tools and hooks, which records nothing. A call to a
+ * tool whose identity changed or that left since it was offered is stale:
+ * its result is `tool_unavailable`, like a name the run was never offered,
+ * and the step names the tool.
+ */
+export const dispatchTools = Effect.fn('Step.dispatch')(function* (
+  run: AgentRunShape,
+  state: RunState,
+) {
+  const open = yield* SynchronizedRef.get(run.steps);
+  if (open !== null) return open.tools;
+  const step = yield* openStep(
+    run,
+    state,
+    state.offeredTools,
+    false,
+    state.offeredWith.hooks,
+  );
+  return step.tools;
+});
+
+/**
+ * The step a request, or a wait (`waits`), opens: its tools, its system
+ * text, and the rows that record its offered set when it differs from
+ * `state`'s, which the loop appends before the request (or the wait's
+ * decision). A wait's step is recorded like a request's, so a waiting run
+ * holds only what its plugins offer now. The first request a resumed
+ * activation opens is held to the record, and so is every wait before it,
+ * which leaves the hold unspent. Its base text is the recorded one, or
+ * until the opening commits, `openingSystem`.
+ */
+export const stepFor = Effect.fn('Step.for')(function* (
+  run: AgentRunShape,
+  state: RunState,
+  waits: boolean,
+  openingSystem?: string,
+) {
+  const open = yield* SynchronizedRef.get(run.steps);
+  const held = open === null || open.holding;
+  const step = yield* openStep(
+    run,
+    state,
+    held ? state.offeredTools : null,
+    held && waits,
+    null,
+  );
+  const { tools, skills } = step;
+  const roots = yield* SessionRoots;
+  // The model-dependent text follows the step's model and settings.
+  const model = yield* ScopedRef.get(run.model);
+  const delegation = yield* readDelegationTargets(
+    tools,
+    roots,
+    run.config.delegationAgentScope ?? undefined,
+  );
+  const context = {
+    ...stepInstructions(step.contributing, step.listed, {
+      offered: tools.definitions.map(({ name }) => name),
+      isChild: run.entry.parent !== null,
+      isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
+      config: roots.config,
+    }),
+    ...(delegation && { delegation }),
+  };
+  const base =
+    state.input.system === undefined
+      ? openingSystem
+      : stored(state, state.input.system, Schema.String);
+  const { system, update } = contextAt(state, base, context);
+  const modules = Record.map(tools.modules, sha256);
+  const changed =
+    step.changed ||
+    stableStringify(modules) !== stableStringify(state.offeredWith.modules) ||
+    state.offeredContext !== sha256(context) ||
+    tools.hooks.identities.join('\0') !== state.offeredWith.hooks.join('\0');
+  return {
+    tools,
     system,
     // The content the set names is stored before the row that names it.
     rows: changed
@@ -397,18 +454,18 @@ const openStep = Effect.fn('Step.open')(function* (
             ...(base === undefined ? [] : [base]),
             ...(system === undefined ? [] : [system]),
             context,
-            ...toolDefinitionsFor(step.tools.definitions),
-            ...Object.values(step.tools.modules),
+            ...toolDefinitionsFor(tools.definitions),
+            ...Object.values(tools.modules),
           ]),
           {
             type: 'tools.offered',
             aggregateId: qualifyAggregateId('run', run.runId),
             payload: {
-              tools: step.tools.offered,
+              tools: tools.offered,
               skills,
               system: system === undefined ? null : sha256(system),
               context: sha256(context),
-              hooks: step.hooks,
+              hooks: tools.hooks.identities,
               modules,
             },
           } satisfies RunHistoryDraft,
@@ -418,42 +475,6 @@ const openStep = Effect.fn('Step.open')(function* (
         ]
       : [],
   };
-});
-
-/**
- * The step the loop's next action runs under. A request opens a new step,
- * whose rows record its offered set when it changed. A dispatch runs the
- * calls against the step that offered them; for a response a resume found
- * pending, against a step pinned for the dispatch and held to the record,
- * which records nothing. A call to a tool whose identity changed or that
- * left since it was offered is stale: its result is `tool_unavailable`,
- * like a name the run was never offered, and the step names the tool. A
- * wait opens a step too, recorded like a request's, so a waiting run holds
- * only what its plugins offer now. The
- * first request or dispatch step a resumed activation opens is held to the
- * record, and so is every wait before it, which leaves the hold unspent.
- */
-export const stepFor = Effect.fn('Step.for')(function* (
-  run: AgentRunShape,
-  state: RunState,
-  kind: 'request' | 'dispatch' | 'park',
-  isChild: boolean,
-  openingSystem?: string,
-) {
-  const open = yield* SynchronizedRef.get(run.steps);
-  if (open !== null && kind === 'dispatch')
-    return { tools: open.tools, system: undefined, rows: [] };
-  const held = open === null || open.holding;
-  const step = yield* openStep(
-    run,
-    state,
-    held ? state.offeredTools : null,
-    held && kind === 'park',
-    isChild,
-    openingSystem,
-    held && kind === 'dispatch' ? state.offeredWith.hooks : null,
-  );
-  return kind === 'dispatch' ? { ...step, rows: [] } : step;
 });
 
 /** What `run`'s current step offers: the tools a background script it

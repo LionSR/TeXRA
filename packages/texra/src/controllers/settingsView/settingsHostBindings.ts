@@ -3,7 +3,7 @@
  * (`sharedSettingsCommands.ts`): everything the host performs its own way,
  * and nothing it decides.
  */
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, PubSub } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/host';
 import { formatError } from '@texra-ai/harness/schemas';
@@ -15,7 +15,12 @@ import type {
 } from '@texra/hosts/uiHosts';
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
-import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
+import type {
+  SettingsHostPage,
+  SettingsHostState,
+  SettingsViewOutboundMessage,
+} from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -60,10 +65,51 @@ export interface SettingsHostBindings {
   readonly requiresOpenWorkspace?: () => boolean;
 }
 
+/**
+ * What a settings page's data is read from. A mutation says which input it
+ * changed, never which page shows it; each page names the inputs it
+ * follows. `view` is the view (re)opening, which every page follows.
+ */
+export type SettingsInput =
+  | 'view'
+  | 'settings'
+  | 'credentials'
+  | 'subscriptions'
+  | 'usage'
+  | 'agents'
+  | 'github'
+  | 'memory'
+  | 'plugins'
+  | 'latex';
+
+/** One page of the view: the message it builds, rebuilt as its inputs
+ *  change. */
+export interface SettingsPage<R> {
+  readonly follows: readonly SettingsInput[];
+  readonly build: Effect.Effect<SettingsViewOutboundMessage, Error, R>;
+}
+
+/** A page whose data is one field of the host state. */
+export const hostStatePage = <K extends SettingsHostPage, R>(
+  page: K,
+  follows: readonly SettingsInput[],
+  build: Effect.Effect<SettingsHostState[K], Error, R>,
+): SettingsPage<R> => ({
+  follows,
+  build: Effect.map(build, (value) => ({
+    command: SETTINGS_VIEW_COMMANDS.UPDATE_HOST_STATE,
+    // cast: a computed key widens to an index signature; `page` names
+    // exactly this one field.
+    patch: { [page]: value } as Partial<SettingsHostState>,
+  })),
+});
+
 /** How the settings body tells the user and repaints, as its page modules
  *  use it. */
 export interface SettingsPresentation {
   readonly post: SettingsHostBindings['post'];
+  /** Say an input changed; the pages that follow it rebuild. */
+  changed(input: SettingsInput): Effect.Effect<void>;
   /** An informational notice the program does not wait on. */
   notice(message: string): Effect.Effect<void>;
   /** An error notice the program does not wait on; logged as well. */
@@ -81,6 +127,7 @@ export interface SettingsPresentation {
  *  holds the program that raised it, and a refused notice is logged. */
 export function settingsPresentation(
   bindings: SettingsHostBindings,
+  inputs: PubSub.PubSub<SettingsInput>,
 ): SettingsPresentation {
   const shown = (notice: Effect.Effect<void, NotificationFailed>) =>
     Effect.forkDetach(
@@ -101,6 +148,7 @@ export function settingsPresentation(
     alert(formatError(prefix, cause));
   return {
     post: bindings.post,
+    changed: (input) => Effect.asVoid(PubSub.publish(inputs, input)),
     notice: (message) => shown(bindings.notify.showInfoMessage(message)),
     alert,
     report,

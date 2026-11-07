@@ -32,7 +32,7 @@ const withStartedSession = <A, E>(
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', runId),
         identity: { kind: 'agent', agent: 'worker' },
-        userFollowUpSupport: 'unsupported',
+        takesFollowUps: false,
         parent: null,
         provenance: null,
       },
@@ -78,63 +78,56 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           ),
       );
 
-      it.effect(
-        'hides all private records at deletion while their rows await collection',
-        () =>
-          withStartedSession((session) =>
-            Effect.gen(function* () {
-              const records = getRunRecords(runId);
-              yield* seedRunRecord(
-                session,
-                runId,
-                Schema.decodeUnknownSync(AgentConfigSchema)({
-                  agent: 'worker',
-                }),
-              );
-              yield* seedReport(session, runId, 'retained report bytes');
-              yield* Context.get(session, SessionLog).transact([
-                {
-                  type: 'process.exit',
-                  aggregateId: qualifyAggregateId('run', runId),
-                  code: 0,
-                  timedOut: false,
-                },
-                {
-                  type: 'run.end',
-                  aggregateId: qualifyAggregateId('run', runId),
-                  outcome: 'completed',
-                  output: { response: 'done', files: [] },
-                },
-              ]);
-              expect(yield* records.readReport()).toBe('retained report bytes');
-              // The result is the terminal fact with the process's exit.
-              expect(yield* records.readResult()).toEqual({
+      it.effect('hides all private records at deletion', () =>
+        withStartedSession((session) =>
+          Effect.gen(function* () {
+            const records = getRunRecords(runId);
+            yield* seedRunRecord(
+              session,
+              runId,
+              Schema.decodeUnknownSync(AgentConfigSchema)({
+                agent: 'worker',
+              }),
+            );
+            yield* seedReport(session, runId, 'retained report bytes');
+            yield* Context.get(session, SessionLog).transact([
+              {
+                type: 'process.exit',
+                aggregateId: qualifyAggregateId('run', runId),
+                code: 0,
+                timedOut: false,
+              },
+              {
+                type: 'run.end',
+                aggregateId: qualifyAggregateId('run', runId),
                 outcome: 'completed',
                 output: { response: 'done', files: [] },
-                exit: { code: 0, timedOut: false },
-              });
-              yield* Context.get(session, SessionLog).transact([
-                {
-                  type: 'run.removed',
-                  aggregateId: qualifyAggregateId('run', runId),
-                },
-              ]);
-              expect(
-                yield* Effect.all([
-                  records.exists(),
-                  records.readRunRecord(),
-                  records.readReport(),
-                  records.readWorkspaceFiles(),
-                  records.readResult(),
-                ]),
-              ).toEqual([false, null, null, [], null]);
-              const retained = yield* Context.get(session, SessionLog).runRows(
-                qualifyAggregateId('run', runId),
-                'input',
-              );
-              expect(retained.removed).not.toBeNull();
-            }),
-          ),
+              },
+            ]);
+            expect(yield* records.readReport()).toBe('retained report bytes');
+            // The result is the terminal fact with the process's exit.
+            expect(yield* records.readResult()).toEqual({
+              outcome: 'completed',
+              output: { response: 'done', files: [] },
+              exit: { code: 0, timedOut: false },
+            });
+            yield* Context.get(session, SessionLog).transact([
+              {
+                type: 'run.removed',
+                aggregateId: qualifyAggregateId('run', runId),
+              },
+            ]);
+            expect(
+              yield* Effect.all([
+                records.exists(),
+                records.readRunRecord(),
+                records.readReport(),
+                records.readWorkspaceFiles(),
+                records.readResult(),
+              ]),
+            ).toEqual([false, null, null, [], null]);
+          }),
+        ),
       );
     });
   },

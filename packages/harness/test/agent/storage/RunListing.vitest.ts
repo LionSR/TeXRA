@@ -43,7 +43,7 @@ const startRun = (session: Session, id: RunId, identity: RunIdentity) =>
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', id),
       identity,
-      userFollowUpSupport: 'unsupported',
+      takesFollowUps: false,
       parent: null,
       provenance: null,
     },

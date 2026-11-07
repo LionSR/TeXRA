@@ -9,13 +9,14 @@ import {
   type LatexSettingsStatus,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import {
-  DEPENDENCY_INSTALL_COMMANDS,
   HOMEBREW_INSTALL_COMMAND,
-  IMAGE_LATEX_TOOLS,
+  installAdvice,
+  LATEX_DEPENDENCIES,
   normalizePlatform,
+  OS_PLATFORMS,
   PROBED_LATEX_TOOLS,
   SCOOP_INSTALL_COMMAND,
-  SUPPORTED_LATEX_COMPILERS,
+  type LatexDependency,
 } from '@texra/shared/constants/latexToolchain';
 import {
   detectPackageManager,
@@ -36,8 +37,11 @@ export type LatexEditorStatus = Pick<
 const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
   HOMEBREW_INSTALL_COMMAND,
   SCOOP_INSTALL_COMMAND,
-  ...Object.values(DEPENDENCY_INSTALL_COMMANDS).flatMap((platforms) =>
-    Object.values(platforms).flatMap((cmds) => cmds.map((cmd) => cmd.command)),
+  ...Object.values(LATEX_DEPENDENCIES).flatMap(({ label, installs }) =>
+    OS_PLATFORMS.flatMap((platform) => {
+      const { command } = installAdvice(label, installs, platform);
+      return command ? [command.command] : [];
+    }),
   ),
 ]);
 
@@ -81,18 +85,16 @@ export function detectLatexSettingsStatus(
       },
       { concurrency: 'unbounded' },
     );
+    // cast: the entries are keyed by every dependency, one each.
+    const installed = Object.fromEntries(
+      Object.entries(LATEX_DEPENDENCIES).map(([id, { needs }]) => [
+        id,
+        needs.every((group) => group.some((tool) => installedTools.has(tool))),
+      ]),
+    ) as Record<LatexDependency, boolean>;
     return {
       ...editor,
-      texDistributionInstalled: SUPPORTED_LATEX_COMPILERS.some((compiler) =>
-        installedTools.has(compiler),
-      ),
-      latexdiffInstalled: installedTools.has('latexdiff'),
-      latexindentInstalled:
-        installedTools.has('latexindent') && installedTools.has('perl'),
-      texcountInstalled: installedTools.has('texcount'),
-      imageProcessingInstalled:
-        installedTools.has('gs') &&
-        IMAGE_LATEX_TOOLS.some((tool) => installedTools.has(tool)),
+      installed,
       platform,
       ...toolPaths,
       graphicsmagickPath: gm ?? magick,

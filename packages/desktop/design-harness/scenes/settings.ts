@@ -89,9 +89,8 @@ function settingsAt(tab: SettingsTarget): TemplateResult {
     window.postMessage({ command: SETTINGS_VIEW_COMMANDS.SET_TAB, tab }, '*');
     window.postMessage(
       {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
-        rows: ROWS,
-        mcpWarnings: [],
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_HOST_STATE,
+        patch: { plugins: { rows: ROWS, mcpWarnings: [] } },
       },
       '*',
     );

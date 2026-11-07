@@ -11,11 +11,9 @@
  * LSP requests).
  */
 
-import { Context, type Effect } from 'effect';
+import { Context, type Effect, type Scope } from 'effect';
 
-import type { RunId } from '@texra-ai/harness/schemas';
-
-import type { LeanServerInfo } from './leanServerRegistry';
+import type { LeanServerInfo } from './leanServerInfo';
 import type {
   LeanFileCommand,
   LeanFileCommandFailed,
@@ -23,7 +21,6 @@ import type {
   LeanProjectCommand,
   LeanUnavailable,
   FetchDiagnosticsResult,
-  LeanDiagnostic,
   LspHover,
   LspResult,
   PlainGoal,
@@ -33,8 +30,7 @@ import type {
 /**
  * The Effect-typed port: adapters compose their
  * host or LSP primitives into these programs, and the one run of each program
- * is composed directly by the native tool dispatcher. Run ownership is passed
- * explicitly at invocation; adapters never recover it from ambient state. The adapters' failure
+ * is composed directly by the native tool dispatcher. The adapters' failure
  * channels are disjoint (the VS Code bridge fails with its editor, command
  * and extension tags, the direct pool with its own) and every consumer converts
  * a failure into a `ToolError`, so the port declares `Error` rather than a
@@ -42,75 +38,46 @@ import type {
  * fail with the tags in `./leanTypes` (`LeanUnavailable`, `LeanFileUnreadable`,
  * `LeanFileCommandFailed`), which each adapter maps to.
  *
+ * Every call requires the `Scope` the resources it starts stay held in: the
+ * calling tool provides its run's scope, so a server the direct pool starts
+ * for a run stays up until the run ends; outside a run, the call's own.
+ *
  * Every file parameter is an absolute path: the calling tool resolves the
  * model's input against the run's working directory (`leanFilePath` in
  * `LspTools.ts`) before invoking the port, so an adapter never re-resolves.
  */
 export interface LeanLanguageServicesShape {
-  /**
-   * The servers this adapter currently holds, for the Tools dashboard. The
-   * adapter owns the roster (`createLeanServerRoster`): the VS Code bridge
-   * records one virtual entry per Lean 4 client it reaches, the direct pool
-   * one per `lake env lean --server` it spawns, and both tables die with the
-   * process runtime that built the adapter. Synchronous because both are a
-   * read of an in-memory map.
-   */
-  listServers(): readonly LeanServerInfo[];
+  /** The servers this adapter holds now, for the Tools dashboard. */
+  readonly listServers: Effect.Effect<readonly LeanServerInfo[]>;
   executeFileCommand(
     command: LeanFileCommand,
     filePath: string,
-    runId?: RunId,
-  ): Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable>;
+  ): Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable, Scope.Scope>;
   getGoalState(
     filePath: string,
     line: number,
     column: number,
-    runId?: RunId,
-  ): Effect.Effect<LspResult<PlainGoal>>;
+  ): Effect.Effect<LspResult<PlainGoal>, never, Scope.Scope>;
   getTermGoal(
     filePath: string,
     line: number,
     column: number,
-    runId?: RunId,
-  ): Effect.Effect<LspResult<PlainTermGoal>>;
+  ): Effect.Effect<LspResult<PlainTermGoal>, never, Scope.Scope>;
   getHoverInfo(
     filePath: string,
     line: number,
     column: number,
-    runId?: RunId,
-  ): Effect.Effect<LspResult<LspHover>>;
+  ): Effect.Effect<LspResult<LspHover>, never, Scope.Scope>;
   fetchDiagnosticsForFile(
     file: string,
-    runId?: RunId,
   ): Effect.Effect<
     FetchDiagnosticsResult,
-    LeanUnavailable | LeanFileUnreadable
+    LeanUnavailable | LeanFileUnreadable,
+    Scope.Scope
   >;
-  /**
-   * Move the host editor cursor to the first error in `diagnostics`, when the
-   * host has an editor to move (VS Code). A host capability, not a query:
-   * CLI/desktop adapters omit it, and `lean_diagnostics` skips it when absent,
-   * rather than pretending navigation happened. The tool result always carries
-   * the diagnostic list, so the model can act on it with or without this.
-   */
-  navigateToFirstError?(
-    filePath: string,
-    diagnostics: LeanDiagnostic[],
-  ): Effect.Effect<void>;
   executeProjectCommand(
     command: LeanProjectCommand,
-    runId?: RunId,
-  ): Effect.Effect<void, Error>;
-  /**
-   * Stop the per-worktree servers attributed to an agent run that ended.
-   * A host capability like {@link navigateToFirstError}: the direct
-   * CLI/desktop adapter implements it so a finished run does not leave its
-   * worktree's server idling until the idle timeout; the VS Code bridge
-   * omits it because the Lean 4 extension owns that server's lifetime.
-   * Servers still leased by an in-flight request (e.g. a shared worktree's
-   * other run) are marked for disposal when their final lease ends.
-   */
-  stopSessionsForRun?(runId: RunId): Effect.Effect<void>;
+  ): Effect.Effect<void, Error, Scope.Scope>;
 }
 
 /**

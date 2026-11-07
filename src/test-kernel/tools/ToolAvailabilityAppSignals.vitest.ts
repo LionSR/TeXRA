@@ -67,7 +67,7 @@ const probeServices = Layer.mergeAll(
   secretsLayer,
   AppSignals.layer,
   // The mocked plugins declare no Lean plugin, so nothing here reads the port.
-  Layer.mock(LeanLanguageServices, { listServers: () => [] }),
+  Layer.mock(LeanLanguageServices, { listServers: Effect.succeed([]) }),
   testHttpClientLayer,
   nodeSpawnerLayer,
   NodeFileSystem.layer,

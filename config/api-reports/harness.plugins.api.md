@@ -18,7 +18,7 @@ Exports: 126
 - `buildFileAttachment` — `const buildFileAttachment: (args_0: BuildFileAttachmentOptions) => Effect<{ readonly [x: string]: unknown; readonly base64Data?: string | undefined; readonly bytes?: Uint8Array<ArrayBuffer> | undefined; readonly description?: string | undefined; readonly digest?: string | undefined; readonly mimeType: string; readonly path: string; }, ToolError, FileSystem | ToolContext>`
 - `BuildFileAttachmentOptions` — `interface BuildFileAttachmentOptions { filePath: string; description?: string; mimeType?: string; resolved?: ToolPathResolution; }`
 - `buildTemplatePassthrough` — `function buildTemplatePassthrough: () => Readonly<Record<string, string>>`
-- `CALL_FIELDS` — `const CALL_FIELDS: { background: optional<NullOr<Boolean>>; id: optional<NullOr<String>>; label: optional<NullOr<String>>; memories: decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>; timeoutMs: optional<NullOr<Int>>; working_directory: decodeTo<optional<String>, optional<NullOr<String>>, never, never>; }`
+- `CALL_FIELDS` — `const CALL_FIELDS: Readonly<{ background: optional<NullOr<Boolean>>; id: optional<NullOr<String>>; label: optional<NullOr<String>>; memories: decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>; timeoutMs: optional<NullOr<Int>>; working_directory: decodeTo<optional<String>, optional<NullOr<String>>, never, never>; }>`
 - `callerRun` — `const callerRun: Effect<ToolRun | undefined, never, ToolContext>`
 - `CallRequests` — `interface CallRequests { readonly nextId: (kind: PermissionPayload['kind']) => string; readonly open: <P extends PermissionPayload>(payload: P, blobs?: readonly DraftBlob[]) => Effect.Effect<{ readonly payload: Extract<PermissionPayload, { kind: P['kind']; }>; readonly decision: DecisionOf<P['kind']>; }, DatabaseAggregateClosed | CellError>; }`
 - `CellError` — `type CellError = RunHistoryRefused | DatabaseWriteFailed | DatabaseReadFailed; ≡ CellError`
@@ -73,7 +73,7 @@ Exports: 126
 - `PluginToolServices` — `type PluginToolServices = RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope; ≡ PluginToolServices`
 - `ProcessChildLaunch` — `interface ProcessChildLaunch { readonly identity: Extract<RunIdentity, { kind: 'agent' | 'process'; }>; readonly config: RunRecord; readonly description: string; readonly turn: (ctx: { readonly logger: AgentTrace; readonly runId: RunId; }) => ProcessTurn; }`
 - `ProcessPluginLayer` — `interface ProcessPluginLayer<ROut = never> { readonly layer: Layer.Layer<ROut, never, PluginLayerServices>; readonly drain?: Effect.Effect<void, never, ROut>; }`
-- `ProcessReport` — `interface ProcessReport { readonly report: string; readonly failure?: string; readonly exit?: ProcessExit; }`
+- `ProcessReport` — `interface ProcessReport { readonly report: string; readonly exit?: ProcessExit; readonly failure?: string; }`
 - `ProcessTurn` — `interface ProcessTurn { readonly stageLabel: string; readonly run: Effect.Effect<ProcessReport, Error, PlatformServices>; readonly reportError: (error: Error) => string; }`
 - `PromptSection` — `type PromptSection = (ctx: { readonly offered: readonly string[]; readonly isChild: boolean; readonly isAnthropic: boolean; readonly config: ConfigProvider; }) => string; ≡ PromptSection`
 - `randomizedExponentialBackoff` — `function randomizedExponentialBackoff: (base: Input) => Schedule<Duration, unknown, never, never>`

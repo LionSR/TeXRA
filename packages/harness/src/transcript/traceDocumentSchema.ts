@@ -15,7 +15,7 @@ import {
  * reconstructed on the way in.
  *
  * The export authors four facts rather than copying them (`assembleTrace`):
- * no owner, no parent, no checkpoint and no follow-up support, because an
+ * no owner, no parent, no checkpoint and no follow-ups taken, because an
  * exported file has no producer, no siblings and no writable host.
  */
 export const TraceDocumentSchema = Schema.Struct({

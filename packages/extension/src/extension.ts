@@ -475,11 +475,15 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     runtime,
     roots,
     windowSession,
-    (usable) => (usable ? setupPill.hide() : setupPill.show()),
     (target) =>
       Effect.flatMap(Deferred.await(settingsView), (view) =>
         view.showSettingsView(target),
       ),
+  );
+  yield* Effect.forkScoped(
+    Stream.runForEach(progressViewProvider.credentialUsable, (usable) =>
+      Effect.sync(() => (usable ? setupPill.hide() : setupPill.show())),
+    ),
   );
   yield* Effect.andThen(
     progressViewProvider.initialize(),

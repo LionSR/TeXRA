@@ -5,7 +5,15 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import { Cause, Effect, Exit, FiberHandle, Scope, Stream } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  FiberHandle,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
 import {
@@ -74,8 +82,8 @@ import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
-import { followCliCredentialChanges } from './hosts/cliProviderKeys';
-import { createTuiViewportController } from './render/tuiViewportController';
+import { chatScrollback } from './panes/staticTranscriptRing';
+import { EMPTY_DRAFT } from './input/draftAttachments';
 import {
   rootRunId,
   selectedRunId as selectedRunIdSignal,
@@ -92,7 +100,6 @@ import {
   runPhaseOf,
   runViewOf,
 } from './state/sessionView';
-import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
   appendLocalErrorTranscript,
@@ -104,7 +111,7 @@ import { openCliSlashCommandForm } from './commands/slashForms';
 import {
   checkModelConnection,
   connectChatModel,
-  holdUntilConnected,
+  makeModelConnection,
   modelConnectionNeeded,
 } from './modelConnection';
 import { installTerminalTitleUpdates } from './terminalTitle';
@@ -439,7 +446,6 @@ export async function runChat(
   onChatClose(announceForegroundApprovals());
   runtime.runSync(
     Effect.gen(function* () {
-      yield* Effect.forkIn(followCliCredentialChanges, chatScope);
       // Keys another TeXRA window or the service saves reach this chat too.
       yield* Effect.forkIn(
         FileSecrets.watch(secretsDirectory(context.storageRoot), (key) =>
@@ -502,6 +508,8 @@ export async function runChat(
   // Chat-session controller: owns run start/resume/stop orchestration.
   // The Ink layer never directly mutates session run-state fields, every
   // state transition flows through one of the controller's narrow commands.
+  const draft = runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
+  const modelConnection = makeModelConnection();
   const chatController: ChatSessionController = createChatSessionController({
     session,
     runSession,
@@ -514,7 +522,12 @@ export async function runChat(
     stores: services,
     runtime,
     approvalPolicy: () => chatPolicy,
+    draft,
+    modelConnection,
   });
+
+  const inkRef: { current?: InkInstance } = {};
+  const scrollback = chatScrollback(runtime, inkRef);
 
   const resetSessionForClear = (): boolean => {
     const currentRunId = session.runId ?? selectedRunIdSignal.get();
@@ -536,14 +549,10 @@ export async function runChat(
     chatController.clearPendingSkills();
     session.clearRunState();
     resetCliState(meta);
+    // The erase happens outside Ink, so the scrollback prints again from a
+    // new origin even when the history it rebuilds is empty.
     clearTerminalScrollback();
-    // The erase above happened outside Ink, so everything the static
-    // transcript printed is gone from the terminal, even when the state
-    // rebuild is a no-op (empty history) that would skip the repaint-epoch
-    // bump. The erase epoch forces a rebuild after the reset state commits,
-    // so the remounted `<Static>` repaints the header without ever carrying
-    // the cleared rows.
-    notifyStaticTranscriptErased();
+    scrollback.restart();
     return true;
   };
 
@@ -559,7 +568,7 @@ export async function runChat(
           recovery: CHAT_STARTUP_MODEL_RECOVERY,
           firstRunSetupAgent: startup.firstRunSetupAgent,
         },
-        (held) => chatController.submit(held.line, held),
+        modelConnection,
       ),
     stores: services,
     runtime,
@@ -611,21 +620,17 @@ export async function runChat(
     },
   });
 
-  const inkRef: { current?: InkInstance } = {};
-  const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
       stores={services}
       runtime={runtime}
       session={runSession}
-      onSubmit={(line, mediaFiles, images, holdUntil) => {
-        if (holdUntilConnected({ line, mediaFiles, images })) return;
-        runtime.runFork(
-          chatController.submit(line, { mediaFiles, images, holdUntil }),
-        );
+      draft={draft}
+      onSubmit={(message, holdUntil) => {
+        runtime.runFork(chatController.submit(message, holdUntil));
       }}
       commandName={context.commandName}
-      onStaticTranscriptChange={viewportController.repaintTranscript}
+      scrollback={scrollback}
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
       history={inputHistory}
@@ -692,7 +697,7 @@ export async function runChat(
           ),
       ),
     ),
-    repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
+    repaintAfterTerminalResume: scrollback.restart,
     interruptActive: (reason) => chatController.stop(reason),
   });
   // Transfer signal ownership from the platform handler and arm this session's

@@ -132,33 +132,36 @@ function heldRuns(runs: Runs['Service']): LocalSession['held'] {
 }
 
 /**
- * Delete what `target` names among the runs the store lists, each through
- * the registry's inactive-run step and its claim, as of the commit that
- * listed it: a run that changed since is refused rather than deleted.
+ * Delete what `target` names among the runs the store lists, each by its
+ * `run.delete` request: a run held here is left as is, and the removal's
+ * transaction refuses one whose start changed since its admission.
  */
 const deleteRuns =
   (session: Context.Context<SessionServices>): LocalSession['deleteRuns'] =>
   (target) =>
     Effect.gen(function* () {
-      // The listing as the cold view folds it: each run it still holds, at
-      // the commit of its `run.start`.
+      // The listing as the cold view folds it: each run it still holds.
       const { runs } = yield* Context.get(session, SessionViewAccess).read([]);
-      const listed = [...runs.values()].flatMap((run) =>
-        target === 'all' || run.id === target
-          ? [{ runId: run.id, commit: run.createdAt }]
-          : [],
+      const listed = [...runs.keys()].filter(
+        (runId) => target === 'all' || runId === target,
       );
       const deleted: RunId[] = [];
       const active: RunId[] = [];
       const failed: { runId: RunId; error: RequestError }[] = [];
-      for (const { runId, commit } of listed) {
+      for (const runId of listed) {
         const removal = yield* Effect.result(
           Context.get(session, SessionRequests)
-            .removeRun(runId, commit)
+            .request({ kind: 'run.delete', runId })
             .pipe(Effect.provide(session)),
         );
         if (removal._tag === 'Success') deleted.push(runId);
-        else if (removal.failure._tag === 'RunActive') active.push(runId);
+        // Held here: the registry refuses it, or, while it is live, its
+        // actions offer no delete.
+        else if (
+          removal.failure._tag === 'RunActive' ||
+          removal.failure._tag === 'Rejected'
+        )
+          active.push(runId);
         else failed.push({ runId, error: removal.failure });
       }
       return { listed: listed.length, deleted, active, failed };

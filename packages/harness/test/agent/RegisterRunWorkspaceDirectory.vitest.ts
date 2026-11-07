@@ -20,7 +20,7 @@ const baseConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
 const runId = Schema.decodeUnknownSync(RunIdSchema)('abc123');
 const options = {
   identity: { kind: 'agent', agent: 'chat' },
-  userFollowUpSupport: 'nativeInteractive',
+  takesFollowUps: true,
 } as const;
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(

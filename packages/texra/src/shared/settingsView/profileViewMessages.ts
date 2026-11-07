@@ -1,11 +1,9 @@
 /**
  * Schema definitions for ProfileView messages.
  *
- * Outbound: Backend → Frontend (UPDATE_PROFILE)
+ * Outbound: Backend → Frontend (the `profile` page of the host state)
  */
 import { Effect, Schema } from 'effect';
-
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 // ============================================================
 // Data schemas
@@ -47,8 +45,7 @@ export type ProviderKeyStatus = typeof ProviderKeyStatusSchema.Type;
 // Outbound message schemas (backend → frontend)
 // ============================================================
 
-export const UpdateProfileMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE),
+/** The provider keys the profile lists. */
+export const ProfilePageSchema = Schema.Struct({
   providerKeyStatuses: Schema.Array(ProviderKeyStatusSchema),
 });
-export type UpdateProfileMessage = typeof UpdateProfileMessageSchema.Type;

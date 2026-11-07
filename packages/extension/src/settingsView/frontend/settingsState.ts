@@ -1,13 +1,12 @@
 /**
  * Module-level reactive state for the Settings view.
  *
- * Each signal is an independent, flat piece of state, so the outbound handlers
- * import and set the ones they need directly rather than going through a
- * get/set context.
+ * What the host sends lands in one record ({@link hostState}), one field per
+ * page, and in one signal per catalog setting ({@link settingSignal}).
  *
  * SettingsApp has no persistence/restore path: every signal here is written
- * only by the `settingsViewHandlers` registry (see `messageDispatcher.ts`)
- * in response to backend SETTINGS_VIEW_COMMANDS messages — the
+ * only by `applyOutboundMessage` (see `messageDispatcher.ts`) in response to
+ * backend SETTINGS_VIEW_COMMANDS messages — the
  * backend configuration is the actual source of truth, this file is a pure
  * receiver. The one exception is the page shown, which the user's navigation
  * also selects, through the same `selectSettingsPage`.
@@ -24,29 +23,13 @@
 
 import { Schema } from 'effect';
 
-import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuth';
-import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import {
-  DEFAULT_LATEX_SETTINGS_STATUS,
-  type AgentSelectionItem,
-  type ModelSelectionItem,
-  type PRSubscriptionEntry,
-  type SettingsTeamPreset,
-  type SettingsViewOutboundMessage,
-} from '@texra/shared/settingsView/settingsViewMessages';
-import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
+import type { SettingsHostState } from '@texra/shared/settingsView/settingsViewMessages';
 import type {
   SettingsSectionName,
   SettingsTabPanelName,
 } from '@texra/shared/settingsView/settingsTarget';
 import { createTrackedSignalRegistry } from '@texra/shared/signals';
-import type {
-  AgentScanIssue,
-  MemoryViewItem,
-  SkillDisplayIssue,
-  SkillDisplayItem,
-} from '@texra-ai/harness/schemas';
 import type { Signal } from '@lit-labs/signals';
 
 // ---------------------------------------------------------------------------
@@ -142,46 +125,13 @@ export function selectSettingsPage(
 }
 
 // ---------------------------------------------------------------------------
-// Memory state
+// What the host knows for the view
 // ---------------------------------------------------------------------------
-export const memoryItems = trackedSignal<readonly MemoryViewItem[]>(() => []);
+/** The host's pages as last sent; a page absent here has not arrived yet,
+ *  which its tab renders as loading, never as empty. */
+export const hostState = trackedSignal<Partial<SettingsHostState>>(() => ({}));
 
-// ---------------------------------------------------------------------------
-// Profile state
-// ---------------------------------------------------------------------------
-/** Null until the host's first profile message: an unknown key state, never
- *  rendered as "not set". */
-export const providerKeyStatuses = trackedSignal<
-  readonly ProviderKeyStatus[] | null
->(() => null);
-// ---------------------------------------------------------------------------
-// Model selection state
-// ---------------------------------------------------------------------------
-export const modelSelectionItems = trackedSignal<readonly ModelSelectionItem[]>(
-  () => [],
-);
-
-// ---------------------------------------------------------------------------
-// Agent selection state
-// ---------------------------------------------------------------------------
-export const agentSelectionItems = trackedSignal<readonly AgentSelectionItem[]>(
-  () => [],
-);
-export const customAgentDir = trackedSignal(() => '');
-export const customAgentDirIsDefault = trackedSignal(() => true);
-export const customAgentScanIssues = trackedSignal<readonly AgentScanIssue[]>(
-  () => [],
-);
-
-// ---------------------------------------------------------------------------
-// Agent teams state
-// ---------------------------------------------------------------------------
-export const teamPresets = trackedSignal<readonly SettingsTeamPreset[]>(
-  () => [],
-);
-export const orchestratorAgents = trackedSignal<readonly string[]>(() => []);
-/** Team the workspace agents resolve to; null when they run no team. */
-export const activePresetId = trackedSignal<string | null>(() => null);
+export type PluginsPageData = SettingsHostState['plugins'];
 
 /**
  * Each catalog snapshot's acknowledgement generation, keyed by snapshot name
@@ -193,52 +143,6 @@ export const activePresetId = trackedSignal<string | null>(() => null);
 export const settingsSnapshotRevisions = trackedSignal<
   Readonly<Partial<Record<string, number>>>
 >(() => ({}));
-
-// ---------------------------------------------------------------------------
-// Skills state
-// ---------------------------------------------------------------------------
-export const skillsList = trackedSignal<readonly SkillDisplayItem[]>(() => []);
-export const skillLoadIssues = trackedSignal<readonly SkillDisplayIssue[]>(
-  () => [],
-);
-
-// ---------------------------------------------------------------------------
-// Plugins page state: null until the first rows arrive
-// ---------------------------------------------------------------------------
-export type PluginsPageData = Omit<
-  Extract<SettingsViewOutboundMessage, { command: 'updatePlugins' }>,
-  'command'
->;
-export const pluginsPage = trackedSignal<PluginsPageData | null>(() => null);
-
-// ---------------------------------------------------------------------------
-// Git author settings state
-// ---------------------------------------------------------------------------
-export const gitSettingsLoaded = trackedSignal(() => false);
-export const githubTokenStatus = trackedSignal<'secret' | 'env' | 'none'>(
-  () => 'none',
-);
-/**
- * Sign-in status per subscription provider, addressed by the same provider id
- * the payload carries. A provider missing from the record has not reported
- * yet; the section renders its signed-out row until it does.
- */
-export const subscriptionAuth = trackedSignal<SubscriptionAuthStatuses>(
-  () => ({}),
-);
-export const subscriptionUsage =
-  trackedSignal<SubscriptionUsageSnapshots | null>(() => null);
-export const prSubscriptions = trackedSignal<readonly PRSubscriptionEntry[]>(
-  () => [],
-);
-
-// ---------------------------------------------------------------------------
-// LaTeX settings state
-// ---------------------------------------------------------------------------
-export const latexSettingsStatus = trackedSignal(() => ({
-  ...DEFAULT_LATEX_SETTINGS_STATUS,
-}));
-export const latexSettingsLoaded = trackedSignal(() => false);
 
 // ---------------------------------------------------------------------------
 // Reset — module-level state is shared across remounts in the same JS context

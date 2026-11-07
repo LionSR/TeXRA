@@ -5,7 +5,6 @@
 import { Effect } from 'effect';
 
 import { Secrets } from '@texra-ai/harness/host';
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import {
   listGitHubSubscriptionEntries,
@@ -20,33 +19,39 @@ import {
   resolveGitHubTokenSource,
 } from '@texra/tools/github/githubAuth';
 
-import type {
-  SettingsHostBindings,
-  SettingsPresentation,
+import {
+  hostStatePage,
+  type SettingsHostBindings,
+  type SettingsPresentation,
 } from './settingsHostBindings';
 
-/** The Git page: its arms and its opening data. */
+/** The Git page: its arms and its pages. */
 export function settingsGitCommands(ports: {
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
 }) {
   const { bindings } = ports;
-  const { notice, alert, reported } = ports.present;
-  const postGitHubTokenStatus = bindings.post(
-    Effect.map(Effect.flatMap(Secrets, resolveGitHubTokenSource), (status) => ({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
-      status,
-    })),
-  );
-  const postGitHubSubscriptions = bindings.post(
-    Effect.map(
-      listGitHubSubscriptionEntries(bindings.runLabel),
-      (subscriptions) => ({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-        subscriptions,
-      }),
+  const { notice, alert, reported, changed } = ports.present;
+  const pages = [
+    hostStatePage(
+      'githubToken',
+      ['github'],
+      Effect.map(
+        Effect.flatMap(Secrets, resolveGitHubTokenSource),
+        (status) => ({
+          status,
+        }),
+      ),
     ),
-  );
+    hostStatePage(
+      'prSubscriptions',
+      ['github'],
+      Effect.map(
+        listGitHubSubscriptionEntries(bindings.runLabel),
+        (subscriptions) => ({ subscriptions }),
+      ),
+    ),
+  ];
 
   const handlers = {
     setGitHubToken: Effect.fn('settingsGitCommands.setGitHubToken')(
@@ -65,7 +70,7 @@ export function settingsGitCommands(ports: {
             kind: 'github',
           }).pipe(
             Effect.andThen(notice(GITHUB_TOKEN_SAVED_MESSAGE)),
-            Effect.andThen(postGitHubTokenStatus),
+            Effect.andThen(changed('github')),
           ),
         );
       },
@@ -77,14 +82,14 @@ export function settingsGitCommands(ports: {
           secrets.delete(GITHUB_TOKEN_STORAGE_KEY),
         ).pipe(
           Effect.andThen(notice(GITHUB_TOKEN_REMOVED_MESSAGE)),
-          Effect.andThen(postGitHubTokenStatus),
+          Effect.andThen(changed('github')),
         ),
       ),
     unsubscribePR: ({ key }) =>
       Effect.flatMap(unsubscribeGitHubKey(key), (removed) =>
         removed === 0
           ? notice(`No active subscription for ${key}.`)
-          : postGitHubSubscriptions,
+          : changed('github'),
       ),
     // Jump from a subscription to the run that owns it; a run deleted since
     // has nothing to show, so say so instead of leaving the click inert.
@@ -101,9 +106,5 @@ export function settingsGitCommands(ports: {
           })[result],
       ),
   } satisfies Partial<SettingsViewInboundHandlerRegistry>;
-  return {
-    handlers,
-    postTokenStatus: postGitHubTokenStatus,
-    postSubscriptions: postGitHubSubscriptions,
-  };
+  return { handlers, pages };
 }

@@ -118,7 +118,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // top-level `parentCard`.
   // v3: the parent call says whether it awaits the child (`awaited`); an
   // earlier build's child end would deliver to a call that reads it.
-  'run.start': { version: 3, listing: 'lifecycle' },
+  // v4: whether the run takes a message is a boolean (`takesFollowUps`),
+  // not `userFollowUpSupport`; an earlier build's row names neither.
+  'run.start': { version: 4, listing: 'lifecycle' },
   'run.activate': { ...V1, listing: 'own' },
   // v2: a recipe's script names its block and options; `toolConfig` is gone
   // (an earlier build's v1 row refuses its run as written by that build,

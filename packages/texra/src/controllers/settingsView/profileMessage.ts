@@ -2,23 +2,21 @@ import { Secrets, Settings } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 import { API_KEY_PROVIDER_IDS, loadApiKeyStatusMap } from '@texra-ai/llm';
 import { providerEndpointKey } from '@texra-ai/harness/schemas';
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import type { UpdateProfileMessage } from '@texra/shared/settingsView/profileViewMessages';
+import type { SettingsHostState } from '@texra/shared/settingsView/settingsViewMessages';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
- * Assemble the canonical `UPDATE_PROFILE` message for either host: every
+ * The profile page for either host: every
  * canonical provider id with its key status, read from the process
  * `Secrets`, and its native controls, read from the three setting slots.
  */
-export const buildProfileMessage = Effect.fn('buildProfileMessage')(function* (
+export const buildProfilePage = Effect.fn('buildProfilePage')(function* (
   stores: SettingsStores,
-): Effect.fn.Return<UpdateProfileMessage, Error, Secrets> {
+): Effect.fn.Return<SettingsHostState['profile'], Error, Secrets> {
   const secretStatuses = yield* loadApiKeyStatusMap(yield* Secrets);
   return {
-    command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
     providerKeyStatuses: yield* Effect.forEach(
       API_KEY_PROVIDER_IDS,
       Effect.fnUntraced(function* (provider) {

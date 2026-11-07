@@ -199,22 +199,22 @@ function decodeXaiJwtClaims(token: string): XaiJwtClaims {
  * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT,
  * so the shared coordinator runs it as is.
  */
-const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
+const XAI_POLICY = Object.freeze<SubscriptionOAuthPolicy<XaiSession>>({
   secretKey: XAI_SESSION_SECRET_KEY,
   sessionSchema: XaiSessionSchema,
-  tokenEndpoint: {
+  tokenEndpoint: Object.freeze({
     tokenUrl: XAI_TOKEN_URL,
     clientId: XAI_CLIENT_ID,
     tokenResponseSchema: XaiTokenResponseSchema,
-  },
+  }),
   notSignedInMessage: 'Not signed in with Grok. Run sign-in first.',
   // xAI pins one redirect port, so the bind's port is ignored.
-  authorize: {
+  authorize: Object.freeze({
     url: XAI_AUTHORIZE_URL,
     scope: XAI_SCOPE,
     redirectUri: xaiRedirectUri,
-    params: { plan: XAI_PLAN, referrer: XAI_REFERRER },
-  },
+    params: Object.freeze({ plan: XAI_PLAN, referrer: XAI_REFERRER }),
+  }),
   buildSession(tokens, refreshToken, nowMs, previous) {
     // Refresh keys off the *access* token. Prefer access JWT exp over
     // id_token.exp (which can outlive the access token). Each token is
@@ -233,7 +233,7 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
       email: idClaims.email ?? accessClaims.email ?? previous?.email,
     };
   },
-};
+});
 
 /**
  * The coordinator for the caller's secret store: one coordinator per store

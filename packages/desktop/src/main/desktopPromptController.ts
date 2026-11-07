@@ -7,16 +7,16 @@ import {
   DesktopSettlePromptMessageSchema,
   type DesktopShowPromptMessage,
 } from '../shared/desktopPromptMessages.js';
-import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
+import {
+  parsedRoute,
+  type DesktopCommandRoutes,
+  type DesktopRenderer,
+} from './desktopIpcTypes.js';
 
 interface DesktopPromptInput {
   title: string;
   prompt: string;
   password?: boolean;
-}
-
-interface DesktopPromptRenderer {
-  postToRenderer(message: unknown): boolean;
 }
 
 type PromptResolver = (value: string | undefined) => void;
@@ -37,8 +37,8 @@ export class DesktopPromptController {
     ),
   };
 
-  private readonly renderer: DesktopPromptRenderer;
-  constructor(renderer: DesktopPromptRenderer) {
+  private readonly renderer: DesktopRenderer;
+  constructor(renderer: DesktopRenderer) {
     this.renderer = renderer;
   }
 
@@ -46,20 +46,20 @@ export class DesktopPromptController {
    * Ask the renderer, and settle with what it answers. The request is
    * registered when the program runs, and its entry leaves `pending` when the
    * answer arrives or when the asking fiber is interrupted, so an abandoned
-   * prompt no longer waits for `dispose()` to clear it.
+   * prompt no longer waits for `dispose()` to clear it. A window that closes
+   * first disposes this controller, which answers every prompt still open.
    */
   request(input: DesktopPromptInput): Effect.Effect<string | undefined> {
     return Effect.callback<string | undefined>((resume) => {
       const requestId = randomUUID();
       this.pending.set(requestId, (value) => resume(Effect.succeed(value)));
-      const delivered = this.renderer.postToRenderer({
+      this.renderer.postToRenderer({
         command: DESKTOP_PROMPT_COMMANDS.SHOW,
         requestId,
         title: input.title,
         prompt: input.prompt,
         password: input.password ?? false,
       } satisfies DesktopShowPromptMessage);
-      if (!delivered) this.settle(requestId, undefined);
       return Effect.sync(() => {
         this.pending.delete(requestId);
       });

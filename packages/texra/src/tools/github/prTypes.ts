@@ -96,6 +96,9 @@ const GhCheckAnnotationSchema = Schema.Struct({
   message: Schema.String,
 });
 export type GhCheckAnnotation = typeof GhCheckAnnotationSchema.Type;
+export const GhCheckAnnotationArraySchema = Schema.Array(
+  GhCheckAnnotationSchema,
+);
 
 /**
  * Permissive PR/issue `state`: a novel GitHub value must coerce to a known

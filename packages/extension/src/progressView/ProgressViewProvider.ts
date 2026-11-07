@@ -3,16 +3,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import {
-  Context,
-  Effect,
-  Exit,
-  FileSystem,
-  Queue,
-  Schema,
-  Scope,
-  Stream,
-} from 'effect';
+import { Effect, Exit, FileSystem, Queue, Schema, Scope, Stream } from 'effect';
 
 import {
   withProcessServices,
@@ -35,12 +26,7 @@ import {
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
-import {
-  followFirstRunDone,
-  getFirstRunDone,
-  OnboardingFunnelRefresher,
-  setOnboardingDeclined,
-} from '@texra/controllers/onboarding/onboardingFunnel';
+import { setOnboardingDeclined } from '@texra/controllers/onboarding/onboardingFunnel';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
@@ -54,10 +40,7 @@ import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import {
-  HostSnapshotReadFailed,
-  type HostSnapshotSource,
-} from '@texra/controllers/session/hostSnapshotSource';
+import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
   openGuiWindow,
   type GuiSession,
@@ -67,7 +50,6 @@ import type {
   SessionBridge,
 } from '@texra/controllers/session/SessionBridge';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
-import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from './checkCoreDependencies';
 import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
@@ -78,8 +60,6 @@ import type {
   ProcessRuntime,
   ProcessServices,
   StateStore,
-  StateReadFailed,
-  StateWriteFailed,
 } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ProgressViewProvider';
@@ -102,11 +82,19 @@ class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>(
   },
 ) {}
 
-/** One transport port: a VS Code webview attached to the bridge. */
-interface Port {
+/** One surface: a VS Code webview attached to the bridge as a port. */
+interface Surface<View extends vscode.WebviewView | vscode.WebviewPanel> {
+  readonly view: View;
   readonly attached: AttachedPort;
-  /** The webview's listeners and its page render, closed with the port. */
+  /** The port's lifetime: its listeners, its page render and its entry in
+   *  the provider's surfaces end when this closes. */
   readonly scope: Scope.Closeable;
+}
+
+/** The two surfaces by placement, each present while attached. */
+interface Surfaces {
+  sidebar?: Surface<vscode.WebviewView>;
+  editor?: Surface<vscode.WebviewPanel>;
 }
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
@@ -120,32 +108,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly scope = Scope.makeUnsafe();
   private readonly contentProvider: BundledViewContentProvider;
 
-  /** The sidebar's `WebviewView` while VS Code holds one resolved. */
-  private sidebarView: vscode.WebviewView | undefined;
-  private sidebarPort: Port | undefined;
-  /** The popped-out tab and its port, attached and released together. */
-  private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
+  /** The sidebar while VS Code holds one resolved, and the popped-out tab;
+   *  an entry leaves when its surface's scope closes. */
+  private readonly surfaces: Surfaces = {};
+  /** Whether a usable credential exists, as each check answers: the setup
+   *  pill follows the answer the "Connect a model" card reads. */
+  public readonly credentialUsable: Stream.Stream<boolean>;
   /** The window's launcher (`HostRunActions.runValidated`). */
   public readonly runValidated: HostRunActions['runValidated'];
   /** Where this window's runs run: the service's session, or this one. */
   private readonly runSession: Session;
-  /** The last credential answer the API-key banner's producer read. */
-  private credentialUsable = true;
-
-  /**
-   * A credential changed: re-read the credential through the API-key
-   * banner's producer, which repaints the setup pill, then the funnel that
-   * reads it.
-   */
-  public readonly refreshApiKeyStatus = Effect.suspend(() =>
-    this.snapshot.refreshHostBanners.pipe(
-      Effect.andThen(this.refreshOnboardingFunnel()),
-    ),
+  /** A credential may have changed: check it again, with the host's other
+   *  banners. The funnel, the banner and the setup pill follow the answer. */
+  public readonly refreshApiKeyStatus = Effect.suspend(
+    () => this.snapshot.refreshHostBanners,
   );
 
   private readonly attention = new RequestAttention({
-    sidebar: () => this.sidebarView,
-    panel: () => this.editor?.panel,
+    sidebar: () => this.surfaces.sidebar?.view,
+    panel: () => this.surfaces.editor?.view,
     isViewVisible: () => this.isViewVisible(),
     showInSidebar: () => this.showInSidebar(),
     showSessions: (runId) =>
@@ -153,19 +134,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     chime: () => this.chime(),
   });
 
-  /**
-   * This host's half of the shared funnel loop: its credential sources, its user-scoped flag store, and the
-   * two things it does with a recomputed funnel — paint it into the host
-   * snapshot, and on entering State 1 select the setup agent on the launcher.
-   * It never auto-starts setup; the user launches it from the setup card.
-   */
-  private readonly onboardingFunnel: OnboardingFunnelRefresher;
-  private readonly draftRequests = new HostDraftRequests();
+  private readonly draftRequests: HostDraftRequests;
 
   private readonly globalState: StateStore;
   private readonly runtime: ProcessRuntime;
   private readonly roots: WorkspaceRoots;
-  private readonly paintSetupPill: (credentialUsable: boolean) => void;
   constructor(
     context: vscode.ExtensionContext,
     globalState: StateStore,
@@ -176,9 +149,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     /** Where this window's runs run: the service's session, or this
      *  process's own with the handle that owns it. */
     windowSession: GuiSession,
-    /** The setup pill: painted from the same credential answer the funnel
-     *  reads, so the pill and the "Connect a model" card agree. */
-    paintSetupPill: (credentialUsable: boolean) => void,
     /** The settings view at a target. The settings view is built after
      *  this one, so this waits for it. */
     openSettings: (
@@ -188,34 +158,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.globalState = globalState;
     this.runtime = runtime;
     this.roots = roots;
-    this.paintSetupPill = paintSetupPill;
+    this.draftRequests = runtime.runSync(
+      HostDraftRequests.make.pipe(Scope.provide(this.scope)),
+    );
     this.contentProvider = new BundledViewContentProvider(
       context,
       'ProgressView',
       'progressView',
     );
-    this.onboardingFunnel = new OnboardingFunnelRefresher({
-      // The API-key banner's producer reads the one credential answer: every
-      // credential change re-reads it (`refreshApiKeyStatus`) before this
-      // refresher runs.
-      hasCredential: () => Effect.sync(() => this.credentialUsable),
-      flags: globalState,
-      apply: Effect.fn('apply')({ self: this }, function* (transition) {
-        yield* this.snapshot.setOnboarding(transition.state);
-        if (!transition.selectSetupAgent) return;
-        // Resolve the registry key so the dropdown matches by value.
-        const catalog = Context.get(
-          yield* this.runtime.contextEffect,
-          AgentCatalog,
-        );
-        const entry = catalog.get('setup');
-        this.bridge.surfaceAction({
-          kind: 'launch',
-          patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
-        });
-      }),
-    });
-
     const runSession = windowSession.session;
     this.runSession = runSession;
     const storageRoot = context.storageUri ?? context.globalStorageUri;
@@ -276,71 +226,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           roots,
           project: projectDisplayOf(roots.storage, roots.workspace),
           snapshot: {
-            fileOptions: () =>
-              workspaceFileOptions(roots.workspace).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new HostSnapshotReadFailed({
-                      member: 'fileOptions',
-                      message: 'The workspace file lists could not be read.',
-                      cause,
-                    }),
-                ),
-              ),
+            fileOptions: () => workspaceFileOptions(roots.workspace),
             workspaceRoots: () =>
               vscode.workspace.workspaceFolders?.map((folder) => ({
                 label: folder.name,
                 value: folder.uri.fsPath,
               })) ?? [],
-            gettingStartedBanner: true,
-            // Already an Effect program: the typed port lets the banner read it
-            // directly instead of settling it on the runtime first.
-            // The banner says a credential stopped working, so it is raised only
-            // once a task has finished; before that the card is the one prompt.
-            apiKeyBanner: () =>
-              Effect.all(
-                [
-                  hasUsableSetupCredential(this.roots).pipe(
-                    withLogChannel('Setup Credentials'),
-                  ),
-                  getFirstRunDone(globalState),
-                ],
-                { concurrency: 2 },
-              ).pipe(
-                Effect.tap(([usable]) =>
-                  Effect.sync(() => {
-                    this.credentialUsable = usable;
-                    this.paintSetupPill(usable);
-                  }),
-                ),
-                Effect.map(([usable, firstRunDone]) => ({
-                  visible: !usable && firstRunDone,
-                })),
-                Effect.mapError(
-                  (cause) =>
-                    new HostSnapshotReadFailed({
-                      member: 'apiKeyBanner',
-                      message:
-                        'The provider credential status could not be read.',
-                      cause,
-                    }),
-                ),
-              ),
-            // Already an Effect program, and one that answers a failed probe as a
-            // missing tool rather than failing, so the banner reads it directly.
+            shows: { apiKeyBanner: true, gettingStarted: true },
+            // A failed probe reads as a missing tool, so the read never fails.
             dependencyBanner: () =>
               checkCoreDependencies().pipe(
                 Effect.map((missingTools) => ({
                   visible: missingTools.length > 0,
                   missingTools: [...missingTools],
                 })),
-              ),
-            onError: (error) =>
-              this.runtime.runFork(
-                Effect.logError('Host snapshot refresh failed').pipe(
-                  Effect.annotateLogs({ data: error }),
-                  withLogChannel(CHANNEL),
-                ),
               ),
           },
           // The tool-edit preview: staged copies of the original and proposed
@@ -388,14 +287,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               launcher: () => this.runValidated,
               popOutToEditor: () => this.popOutToEditor(),
               showInSidebar: () => this.showInSidebar(),
-              refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
-              refreshApiKeyStatus: this.refreshApiKeyStatus,
             }),
         });
       }).pipe(Scope.provide(this.scope)),
     );
     this.bridge = gui.bridge;
     this.snapshot = gui.snapshot;
+    this.credentialUsable = gui.snapshot.credentialUsable;
     this.runValidated = gui.runValidated;
     this.runtime.runSync(
       Effect.forkIn(this.attention.follow(runSession), this.scope),
@@ -411,22 +309,29 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       yield* Effect.addFinalizer(() =>
         withProcessServices(this.runtime, this.dispose()),
       );
-      yield* this.snapshot.refresh;
-      yield* this.refreshOnboardingFunnel();
-      // Started after the refresh above, so that refresh owns the first
-      // transition and its setup-agent selection; the follower's own first
-      // refresh covers a write that landed between.
+      // Entering State 1 selects the setup agent on the launcher; a
+      // snapshot already in State 1 leaves a user who switched agents alone.
+      // It never starts setup: the user launches it from the setup card.
+      const catalog = yield* AgentCatalog;
       yield* Effect.forkIn(
-        followFirstRunDone(
-          this.refreshOnboardingFunnel().pipe(
-            Effect.ignore({
-              log: 'Warn',
-              message: 'Refreshing the onboarding state',
+        this.snapshot.changes.pipe(
+          Stream.map((snapshot) => snapshot.onboarding),
+          Stream.changes,
+          Stream.filter((state) => state === 'setup'),
+          Stream.runForEach(() =>
+            Effect.sync(() => {
+              // Resolve the registry key so the dropdown matches by value.
+              const entry = catalog.get('setup');
+              this.bridge.surfaceAction({
+                kind: 'launch',
+                patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
+              });
             }),
           ),
-        ).pipe(withLogChannel(CHANNEL)),
+        ),
         this.scope,
       );
+      yield* this.snapshot.refresh;
       yield* Effect.logDebug('ProgressViewProvider initialized').pipe(
         withLogChannel(CHANNEL),
       );
@@ -468,9 +373,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           () => {
             this.runtime.runSync(
               Effect.forkIn(
-                this.snapshot
-                  .refreshWorkspaceRoots()
-                  .pipe(Effect.andThen(this.snapshot.refreshFiles)),
+                this.snapshot.refreshWorkspaceRoots.pipe(
+                  Effect.andThen(this.snapshot.refreshFiles),
+                ),
                 this.scope,
               ),
             );
@@ -537,14 +442,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  /** Recompute the user-scoped funnel; the shared refresher owns the loop. */
-  public refreshOnboardingFunnel(): Effect.Effect<
-    void,
-    StateReadFailed | StateWriteFailed
-  > {
-    return this.onboardingFunnel.run();
-  }
-
   // --- Ports ---
 
   /** The sidebar slot: VS Code resolves it once per document. */
@@ -554,28 +451,21 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       enableCommandUris: true,
       localResourceRoots: this.contentProvider.localResourceRoots,
     };
-    this.closeSidebarPort();
-    this.sidebarView = webviewView;
     this.attention.paint(webviewView);
     // The slot is VS Code's own synchronous entry: it hands back a resolved
     // view, so the attachment settles here.
-    this.sidebarPort = this.runtime.runSync(
-      this.attach('sidebar', webviewView, () => {
-        this.sidebarPort = undefined;
-        this.sidebarView = undefined;
-      }),
-    );
+    this.runtime.runSync(this.attach('sidebar', webviewView));
   }
 
-  /** Attach `view` as a port; when VS Code disposes the view, the port
-   *  closes and `onDisposed` runs. */
+  /** Attach `view` as the `id` surface, replacing one attached there; when
+   *  VS Code disposes the view, its scope closes. */
   private readonly attach = Effect.fn('ProgressViewProvider.attach')(
     { self: this },
     function* (
-      id: 'sidebar' | 'editor',
+      id: keyof Surfaces,
       view: vscode.WebviewView | vscode.WebviewPanel,
-      onDisposed: () => void,
-    ): Effect.fn.Return<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
+    ): Effect.fn.Return<void, SurfacePlacementFailed, FileSystem.FileSystem> {
+      this.closeSurface(this.surfaces[id]);
       // The post starts synchronously inside runFork, so sends keep their order.
       const send = (message: DownMessage): void => {
         this.runtime.runFork(
@@ -609,11 +499,23 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             }),
         ),
       );
+      const surface = { view, attached, scope: yield* Scope.make() };
+      // cast: each caller passes the view its placement holds (the sidebar's
+      // `WebviewView`, the tab's `WebviewPanel`).
+      Object.assign(this.surfaces, { [id]: surface } as Surfaces);
+      yield* Scope.addFinalizer(
+        surface.scope,
+        Effect.andThen(
+          Effect.sync(() => {
+            if (this.surfaces[id] === surface) delete this.surfaces[id];
+          }),
+          attached.close,
+        ),
+      );
       // The template is read off this tick (it never fails: a failed render
       // is a logged error page); a port closed before it lands paints nothing,
       // because closing the port interrupts the render. The listeners are
       // registered after the render, so closing removes them first.
-      const port: Port = { attached, scope: yield* Scope.make() };
       yield* Effect.forkIn(
         this.contentProvider
           .getHtmlContent(view.webview, {
@@ -627,34 +529,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               }),
             ),
           ),
-        port.scope,
+        surface.scope,
       );
       for (const listener of [
-        view.onDidDispose(() => {
-          this.closePort(port);
-          onDisposed();
-        }),
+        view.onDidDispose(() => this.closeSurface(surface)),
         view.webview.onDidReceiveMessage((message) => {
           this.runtime.runFork(attached.receive(message));
         }),
       ])
         yield* Scope.addFinalizer(
-          port.scope,
+          surface.scope,
           Effect.sync(() => listener.dispose()),
         );
-      return port;
     },
   );
 
-  private closePort(port: Port | undefined): void {
-    if (!port) return;
-    this.runtime.runFork(Scope.close(port.scope, Exit.void));
-    this.runtime.runFork(port.attached.close);
-  }
-
-  private closeSidebarPort(): void {
-    this.closePort(this.sidebarPort);
-    this.sidebarPort = undefined;
+  private closeSurface(
+    surface: Surface<vscode.WebviewView | vscode.WebviewPanel> | undefined,
+  ): void {
+    if (surface) this.runtime.runFork(Scope.close(surface.scope, Exit.void));
   }
 
   /**
@@ -665,11 +558,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * (`retainContextWhenHidden`), so a hidden sidebar must not outrank the
    * tab on screen. `undefined` when no surface is showing.
    */
-  private visibleSurfacePort(): Port | undefined {
-    const editor = this.editor;
-    if (editor?.panel.active === true) return editor.port;
-    if (this.sidebarView?.visible === true) return this.sidebarPort;
-    if (editor?.panel.visible === true) return editor.port;
+  private visibleSurface(): AttachedPort | undefined {
+    const { sidebar, editor } = this.surfaces;
+    if (editor?.view.active === true) return editor.attached;
+    if (sidebar?.view.visible === true) return sidebar.attached;
+    if (editor?.view.visible === true) return editor.attached;
     return undefined;
   }
 
@@ -679,8 +572,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    *  away from. No port means no renderer to play it. */
   private chime(): void {
     const port =
-      this.visibleSurfacePort() ?? this.sidebarPort ?? this.editor?.port;
-    port?.attached.surfaceAction({ kind: 'chime' });
+      this.visibleSurface() ??
+      this.surfaces.sidebar?.attached ??
+      this.surfaces.editor?.attached;
+    port?.surfaceAction({ kind: 'chime' });
   }
 
   /** `texra.execute` with no configuration (Cmd+Alt+E): the composer's
@@ -690,20 +585,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly submit = Effect.fn('ProgressViewProvider.submit')(
     { self: this },
     function* () {
-      const port = this.visibleSurfacePort();
-      if (port !== undefined && port === this.editor?.port) {
-        port.attached.surfaceAction({ kind: 'submit' });
+      const port = this.visibleSurface();
+      if (port !== undefined && port === this.surfaces.editor?.attached) {
+        port.surfaceAction({ kind: 'submit' });
         return;
       }
       yield* this.showInSidebar();
-      this.sidebarPort?.attached.surfaceAction({ kind: 'submit' });
+      this.surfaces.sidebar?.attached.surfaceAction({ kind: 'submit' });
     },
   );
 
   public isViewVisible(): boolean {
-    return (
-      this.sidebarView?.visible === true || this.editor?.panel.visible === true
-    );
+    const { sidebar, editor } = this.surfaces;
+    return sidebar?.view.visible === true || editor?.view.visible === true;
   }
 
   public showInSidebar(): Effect.Effect<void, SurfacePlacementFailed> {
@@ -730,7 +624,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     'ProgressViewProvider.showConnectModel',
   )({ self: this }, function* () {
     yield* setOnboardingDeclined(this.globalState, false);
-    yield* this.refreshApiKeyStatus;
     yield* this.showLauncher();
   });
 
@@ -746,8 +639,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly showProgressView = Effect.fn(
     'ProgressViewProvider.showProgressView',
   )({ self: this }, function* (options?: { inPlace?: boolean }) {
-    if (this.editor) {
-      this.editor.panel.reveal(vscode.ViewColumn.One);
+    if (this.surfaces.editor) {
+      this.surfaces.editor.view.reveal(vscode.ViewColumn.One);
       return;
     }
     if (!options?.inPlace) yield* this.showInSidebar();
@@ -778,8 +671,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly popOutToEditor = Effect.fn(
     'ProgressViewProvider.popOutToEditor',
   )({ self: this }, function* () {
-    if (this.editor) {
-      this.editor.panel.reveal(vscode.ViewColumn.One);
+    if (this.surfaces.editor) {
+      this.surfaces.editor.view.reveal(vscode.ViewColumn.One);
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -794,10 +687,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       },
     );
     panel.iconPath = new vscode.ThemeIcon('pulse');
-    const port = yield* this.attach('editor', panel, () => {
-      this.editor = undefined;
-    });
-    this.editor = { panel, port };
+    yield* this.attach('editor', panel);
   });
 
   /** Awaits the preview files' removal (the scope's close) and the
@@ -806,10 +696,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly dispose = Effect.fn('ProgressViewProvider.dispose')(
     { self: this },
     function* (): Effect.fn.Return<void, never, ProcessServices> {
-      this.closeSidebarPort();
-      this.closePort(this.editor?.port);
-      this.editor?.panel.dispose();
-      this.editor = undefined;
+      const { sidebar, editor } = this.surfaces;
+      if (sidebar) yield* Scope.close(sidebar.scope, Exit.void);
+      if (editor) {
+        yield* Scope.close(editor.scope, Exit.void);
+        editor.view.dispose();
+      }
       yield* Scope.close(this.scope, Exit.void);
       yield* this.draftRequests.shutdown;
     },

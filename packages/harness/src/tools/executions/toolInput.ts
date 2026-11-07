@@ -131,9 +131,6 @@ const SendActionSchema = Schema.Struct({
   }),
 });
 
-// `path` stays required here as on every arm: the provider-facing schema
-// flattens this union and keeps a field required only if every arm requires
-// it (`flattenTopLevelUnion`), so an optional one would loosen all four.
 const QueryActionSchema = Schema.Struct({
   path: PathFieldSchema,
   action: Schema.Literal('query').annotate({

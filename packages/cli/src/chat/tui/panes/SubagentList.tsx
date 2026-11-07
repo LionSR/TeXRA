@@ -19,7 +19,12 @@ import {
   CHILD_TONE_COLOR,
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
-import { actOnSurface, type SessionListRow } from '../state/cliState';
+import {
+  actOnSurface,
+  childListHighlight,
+  highlightChildListRun,
+  type SessionListRow,
+} from '../state/cliState';
 import {
   pendingApprovalKindsByRun,
   type PendingApprovalKind,
@@ -174,8 +179,6 @@ interface SubagentListProps {
   readonly onCancel?: () => void;
   readonly onFocusRun?: (runId: RunId) => void;
   readonly onKillRun?: (runId: RunId) => void;
-  readonly onSelectionChange?: (value: RunId) => void;
-  readonly selectedValue?: RunId;
   readonly rows: readonly SessionListRow[];
 }
 
@@ -184,6 +187,7 @@ export function SubagentList(
 ): React.JSX.Element | null {
   const rows = props.rows;
   const pendingApprovals = useSignal(pendingApprovalKindsByRun);
+  const highlighted = useSignal(childListHighlight);
   const items = useMemo<SelectItem<SessionListRow>[]>(
     () =>
       rows.map((row) => ({
@@ -201,7 +205,7 @@ export function SubagentList(
     [rows],
   );
   const selectedRow = rows.find(
-    (row) => row.kind === 'run' && row.run.id === props.selectedValue,
+    (row) => row.kind === 'run' && row.run.id === highlighted,
   );
   const nowMs = useLiveNowMsSince(startedAts);
   const { columns } = useWindowSize();
@@ -245,7 +249,7 @@ export function SubagentList(
         onCancel={props.onCancel ?? (() => undefined)}
         wrap={false}
         onHighlightChange={(row) => {
-          if (row.kind === 'run') props.onSelectionChange?.(row.run.id);
+          if (row.kind === 'run') highlightChildListRun(row.run.id);
         }}
         onSelect={(row) => {
           if (row.kind === 'run') props.onFocusRun?.(row.run.id);

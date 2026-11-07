@@ -110,7 +110,7 @@ const OutputPartSchema = Schema.Union([
 ]);
 
 export const ContentSchema = Schema.Array(OutputPartSchema);
-export const EVIDENCE_PROTOCOL = {
+export const EVIDENCE_PROTOCOL = Object.freeze({
   'google-interactions-thought-signature': 'google-interactions',
   'openai-responses-message': 'openai-responses',
   'openai-responses-reasoning': 'openai-responses',
@@ -121,7 +121,7 @@ export const EVIDENCE_PROTOCOL = {
   xai: 'openai-responses',
   'google-interactions': 'google-interactions',
   'openai-responses': 'openai-responses',
-} as const;
+} as const);
 
 /** The schema issues in a turn's content against its origin: foreign
  *  evidence, malformed signed thinking, repeated item or call ids. */

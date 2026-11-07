@@ -7,7 +7,6 @@ import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import {
   ExternalOpenFailed,
   type NotificationFailed,
@@ -34,26 +33,11 @@ export function createDesktopWindowHost(options: {
   window: BrowserWindow;
   runtime: ProcessRuntime;
   spawn: DesktopSpawn;
+  /** The renderer's push channels, installed before anything can post. */
+  bridge: DesktopHostBridge;
 }) {
-  const { window, runtime, spawn } = options;
-
-  // The renderer's push channel, connected once the window's routes exist.
-  // Until then, and once the window or its page is gone, `post` reports that
-  // nothing was delivered so a caller falls back to its external viewer
-  // instead of reporting a success that reached nobody.
-  let renderer: DesktopHostBridge | undefined;
-  const reachable = (bridge: DesktopHostBridge | undefined) =>
-    bridge !== undefined &&
-    !window.isDestroyed() &&
-    !window.webContents.isDestroyed();
-  const post = (message: unknown): boolean => {
-    if (!reachable(renderer)) return false;
-    renderer?.postToRenderer(message);
-    return true;
-  };
-  const postSession = (message: DownMessage): void => {
-    if (reachable(renderer)) renderer?.postSession(message);
-  };
+  const { window, runtime, spawn, bridge } = options;
+  const post = (message: unknown): void => bridge.postToRenderer(message);
 
   const dialogs = createDesktopDialogs(window, {
     openGuide: (docsPage) => openExternalInBackground(texraGuideUrl(docsPage)),
@@ -93,12 +77,7 @@ export function createDesktopWindowHost(options: {
         : Effect.sync(() => reportAsyncError(Cause.squash(cause))),
     );
 
-  const previewOptions = {
-    shell,
-    runtime,
-    // The in-app PDF overlay is preferred when the renderer is available.
-    postToRenderer: post,
-  };
+  const previewOptions = { shell, runtime, postToRenderer: post };
   const previewHost = createDesktopPreviewHost({
     ...previewOptions,
     showErrorMessage,
@@ -106,19 +85,7 @@ export function createDesktopWindowHost(options: {
   // Session requests present errors at their dispatcher. Menu, navigation,
   // and runtime preview callers retain the reporting host above.
   const requestPreviewHost = createDesktopPreviewHost(previewOptions);
-  // Returning `false` when the IPC bridge is not yet wired (startup race) or
-  // the BrowserWindow has been destroyed falls a diff back to the
-  // external-editor flow, so diffs never silently disappear.
-  const diffHost = createDesktopDiffHost({
-    runtime,
-    openPath: previewHost.openPath,
-    postToRenderer: post,
-  });
-  const requestDiffHost = createDesktopDiffHost({
-    runtime,
-    openPath: requestPreviewHost.openPath,
-    postToRenderer: post,
-  });
+  const diffHost = createDesktopDiffHost({ runtime, postToRenderer: post });
 
   /**
    * The shell-facing `openExternal` worded for the ExternalOpener port: the
@@ -199,11 +166,7 @@ export function createDesktopWindowHost(options: {
     window,
     post,
     /** A session-protocol push: the session port's `send`. */
-    postSession,
-    /** Connect the renderer's push channels. */
-    connectRenderer(next: DesktopHostBridge) {
-      renderer = next;
-    },
+    postSession: bridge.postSession,
     dialogs,
     previewHost,
     /** The request-side `openExternal`: its failure is the caller's. */
@@ -295,7 +258,6 @@ export function createDesktopWindowHost(options: {
       const { roots } = project;
       const name = project.display.name;
       const diff = diffHost.inProject(roots);
-      const requestDiff = requestDiffHost.inProject(roots);
       const dialogsOfProject: Omit<
         DesktopAgentRunHost,
         'openBuildDisplay' | 'openDiff'
@@ -331,14 +293,8 @@ export function createDesktopWindowHost(options: {
         toolEditPreview: {
           openPath: requestPreviewHost.openPath,
           openBuildDisplay: requestPreviewHost.openBuildDisplayIn(roots),
-          openDiff: requestDiff.openDiff,
-          closeDiff: requestDiff.closeDiff,
-        },
-        request: {
-          ...dialogsOfProject,
-          openPath: requestPreviewHost.openPath,
-          openBuildDisplay: requestPreviewHost.openBuildDisplayIn(roots),
-          openDiff: requestDiff.openDiff,
+          openDiff: diff.openDiff,
+          closeDiff: diff.closeDiff,
         },
       };
     },

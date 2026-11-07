@@ -239,24 +239,30 @@ rather than per finding:
   `agentChild.standingOf` reads `leftoverChildren.cutShort` now.
 - **`ToolPolicy.oneShot`, ended in PR 3** (§1.6): `noLaterTurn` reads the
   policy and the parent edge off the run.
-- **`reportInterrupted`'s delivery id** carries an `:interrupted` suffix the
-  end's `${runId}:${activation}` does not; the executions tool's `wait`
-  consumes both by prefix. Two id shapes for one lifecycle's deliveries.
-- **`check-guidance-refs.mjs` `NOT_ROWS`**: a two-entry exclusion list for
-  Node's `process` global, since `process.*` is now a row namespace. A list
-  by name is a special case written as data; the checker could instead
-  require a cited row to exist in the vocabulary before reading a token as a
-  citation.
-- **`AgentCliSessionRegistry`** is a `Set<string>` with a `claim` that returns
-  a release: a shallow module kept as a service tag per plugin
-  (`CodexThreads`, `ClaudeAgentSessions`) so the session layer owns its
-  lifetime. A `Context.Reference` on the plugin's session layer would be the
-  same with less.
-- **`USER_FOLLOW_UP_SUPPORT`** is now two values (`unsupported`,
-  `nativeInteractive`) for one boolean fact, carried on `run.start`; the
-  harness enforces it once, in `submitFollowUp` (`acceptsFollowUp` is a view
-  affordance that reads the same field). One fact, one representation would
-  make it a boolean.
+- **`reportInterrupted`'s delivery id, ended in lane 9.** It carried an
+  `:interrupted` suffix the end's `${runId}:${activation}` did not; the
+  executions tool's `wait` consumed both by prefix. A lifecycle delivers
+  once (a stopped end delivers nothing, and the notice goes only to such a
+  run), so both are `deliveryId` now, read by `isDeliveryOf`
+  (`agent/storage/runLifecycle.ts`).
+- **`check-guidance-refs.mjs` `NOT_ROWS`, ended in lane 9.** It was a
+  two-entry exclusion list for Node's `process` global, since `process.*` is
+  now a row namespace. Requiring a row to exist before a token reads as a
+  citation would have ended the check itself (an unknown row would never be
+  reported), so the checker reads the fact instead: a token naming a member
+  of a Node global its namespace shares (`process.env`) names that global,
+  after a declared row is read first (`process.exit` stays the row).
+- **`AgentCliSessionRegistry`, ended in lane 9.** It was a `Set<string>`
+  with a `claim` that returned a release: a shallow class under a service
+  tag per plugin. The tags (`CodexThreads`, `ClaudeAgentSessions`) now serve
+  a `ClaimThread` function (`agentCliSessionStores.ts`); the class is gone.
+  A `Context.Reference` would have made the claims a process singleton (its
+  default is cached on the reference), so the session layer keeps them.
+- **`USER_FOLLOW_UP_SUPPORT`, ended in lane 9.** It was two values
+  (`unsupported`, `nativeInteractive`) for one boolean fact, carried on
+  `run.start`. It is `run.start.takesFollowUps` now (the row at v4, the
+  view's field of the same name); `submitFollowUp` enforces it and
+  `acceptsFollowUp` reads it.
 - **The ten-minute `APPROVAL_HANDLER_TIMEOUT`, ended in the hosts' PR.**
   The answerer waits as long as the handler does; a host's prompt carries
   its own deadline, or none.
@@ -275,21 +281,24 @@ rather than per finding:
   only record. The registry's `stop` is the one writer of that row;
   routing the await's interruption through it would make the child's
   rows say why.
-- **The session's close deadline** bounds the drain of the runs, not the
-  stop rows `stopAll` writes first: a slow publisher delays a close past
-  the five seconds before the timeout starts. One deadline over both
-  would need the stop writes interruptible, which a durable append is not
-  by design.
-- **An agent-CLI plugin switched off mid-turn** releases its session
-  registry (the busy set); switched on again, a second call on the same
-  thread passes the claim. A hold per running turn would keep the
-  registry; recorded, not fixed (§1.2 asks whether the registry stays at
-  all).
-- **`ProcessReport.failure` beside `ProcessReport.exit`**: a failed exit is
-  said twice, as the exit code and as the failure message the end records.
-  One reading (`exit.code !== 0` is the failure, the message its report)
-  would own it; a provider SDK's error result, which has no exit, keeps
-  `failure`.
+- **The session's close deadline, ended in lane 9.** It bounded the drain
+  of the runs, not the stop rows `stopAll` writes first: a slow publisher
+  delayed a close past the five seconds before the timeout started. The
+  deadline now starts before the stop writes (`stopSessionRuns`); the
+  writes stay uninterruptible and run whole, and the wait gets what they
+  left of the budget, so a close takes the longer of the two, not their
+  sum.
+- **An agent-CLI plugin switched off mid-turn, ended in lane 9.** It
+  released its session registry (the busy set); switched on again, a second
+  call on the same thread passed the claim. A claim is a scope the turn
+  closes with its exit now, and while it stands it holds the plugin's
+  session services (`PluginHold`, which had no user), so the claims outlive
+  the switch.
+- **`ProcessReport.failure` beside `ProcessReport.exit`, ended in lane 9.**
+  A failed exit was said twice, as the exit code and as the failure message
+  the end records. `processRun`'s `failureOf` is the one reading now: an
+  exit other than 0 is the failure, its message named from the exit; a
+  provider SDK's error result, which has no exit, keeps `failure`.
 - **`childEndReport`** switches on the child's kind (a background script's
   notice, a subagent's envelope) in one function; two delivery formats, one
   function, where the kind is known at the launch.
@@ -305,11 +314,15 @@ rather than per finding:
   client of the service, whose windows answer prompts through
   `request.decide`), §1.5 (R8's second half), §1.4 (denied-request
   notice). §3's one reading of a grant landed there (PR 14772).
-- Harness, small: one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
-  boolean, the await's interruption through `RunRegistry.stop` (the
-  registry's `stop` already cascades a stop row to every held descendant;
-  what is left is a tool call interrupted for another reason), the close
-  deadline over the stop writes, a hold per agent-CLI turn.
+- Harness, small, taken by lane 9 (each item's §3 entry says how it
+  ended):
+  - one delivery-id shape (ended in lane 9);
+  - `USER_FOLLOW_UP_SUPPORT` as a boolean (ended in lane 9);
+  - the await's interruption through `RunRegistry.stop` (the registry's
+    `stop` already cascades a stop row to every held descendant; what is
+    left is a tool call interrupted for another reason);
+  - the close deadline over the stop writes (ended in lane 9);
+  - a hold per agent-CLI turn (ended in lane 9).
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.
 - The CLI service and its sessions, read after this PR's review rounds:

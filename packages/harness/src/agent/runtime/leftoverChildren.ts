@@ -15,7 +15,7 @@ import { Effect } from 'effect';
 import { Inbox } from '@agent/followUp/Inbox';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { checkpointRefusal } from '@agent/storage/resumability';
-import { endRunRows } from '@agent/storage/runLifecycle';
+import { deliveryId, endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
@@ -49,7 +49,8 @@ const TAG_OF = {
  * interrupted and its outcome is unknown (`why`: what refused its resume;
  * `finished`, it cannot continue by its kind). A child not ended ends
  * failed with the notice as its report, delivered by its end; one that
- * ended (a clean close stopped a task) only sends it.
+ * ended (a clean close stopped a task, whose stopped end delivered
+ * nothing) only sends it, under the same lifecycle's `deliveryId`.
  */
 const reportInterrupted = Effect.fn('reportInterrupted')(function* (
   parent: RunId | null,
@@ -79,7 +80,7 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
   const sent = yield* (yield* Inbox).send(parent, {
     text,
     from: { kind: 'run', runId: child.id },
-    deliveryId: `${child.id}:${facts.activation?.commit ?? 0}:interrupted`,
+    deliveryId: deliveryId(child.id, facts),
   });
   if (sent.kind === 'refused')
     yield* warn(`Child run ${child.id}: its parent took no notice`, {

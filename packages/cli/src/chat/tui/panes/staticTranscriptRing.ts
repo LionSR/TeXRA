@@ -1,17 +1,17 @@
 // The bounded static-scrollback ring behind `StaticConversationTranscript`:
 // what the retained tail contains (session header and finalized entries),
-// what it costs in rows and bytes, and how an incremental tick advances it.
-// Everything here is plain data over the transcript — no React, no Ink —
-// so the component file holds only the component.
+// what it costs in rows and bytes, and how one tick advances it. The record
+// lives in one `SubscriptionRef` per chat; everything here is plain data over
+// the transcript — no React, no Ink — so the component file holds only the
+// component.
+
+import { Effect, SubscriptionRef } from 'effect';
 
 import { getModelLabel } from '@texra-ai/harness/schemas';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 
-import {
-  incrementalStaticTranscriptEntries,
-  orderedStaticTranscriptEntries,
-  type StaticTranscriptScanCursor,
-} from './transcriptEntries';
+import { printableSettledRows } from './transcriptEntries';
 import {
   transcriptEntryLayout,
   transcriptEntryMarginBottomRows,
@@ -32,22 +32,25 @@ export type StaticTranscriptItem =
       readonly entry: TranscriptRow;
     };
 
-export interface StaticTranscriptState {
-  readonly ownerKey: string;
+/** What the terminal's scrollback shows, and where it was printed from. */
+interface Scrollback {
+  /** The known origin the printed items start from. A new origin clears the
+   *  terminal and reprints `items` (the `<Static>` key); everything printed
+   *  under one origin is append-only. */
+  readonly origin: number;
+  /** The scrollback owner the items belong to; undefined before the first
+   *  advance and after a restart, which then rebuilds from the source. */
+  readonly ownerKey: string | undefined;
   readonly items: readonly StaticTranscriptItem[];
   /** Cumulative row/byte estimates for `items`, maintained incrementally. */
   readonly totals: StaticTranscriptTotals;
-  readonly scan: StaticTranscriptScanCursor;
   /** The layout width `totals` were measured under. */
   readonly layoutWidth: number | undefined;
-  /** Incremented whenever items change non-append-only (trim, header insert,
-   *  hard reset, view rebuild) so the `<Static>` identity remounts and
-   *  `onRenderKeyChange` repaints the bounded tail with replace semantics. */
-  readonly repaintEpoch: number;
-  /** The last `staticTranscriptEraseEpoch` the state was rebuilt for. An
-   *  out-of-band terminal erase (`/clear`) forces a rebuild and repaint even
-   *  when the items themselves are unchanged. */
-  readonly eraseRequest: number;
+  /** How many leading source rows are printed or passed over, and the last
+   *  of them: a source whose row there differs is not an extension of what
+   *  was printed, so the next advance prints from a new origin. */
+  readonly printedThrough: number;
+  readonly lastRow: TranscriptRow | undefined;
 }
 
 interface StaticTranscriptRingBudgets {
@@ -101,8 +104,8 @@ export interface ChildHeader {
 export interface StaticScrollbackSource {
   readonly entries: readonly TranscriptRow[] | undefined;
   readonly settledRows: number;
-  /** Whether the run is working: its unsettled tail stays out of the
-   *  scrollback while it is. */
+  /** Whether the run is working: a user prompt still waiting for its live
+   *  continuation stays out of the scrollback while it is. */
   readonly working: boolean;
   /** A child agent whose model the session view has not applied yet: the header
    *  waits. Only an agent identity carries a model (the session view's `run.config`
@@ -110,8 +113,6 @@ export interface StaticScrollbackSource {
   readonly waitingForChildIdentity: boolean;
   /** The child header; undefined paints the session (root) header. */
   readonly child: ChildHeader | undefined;
-  /** No scrollback stream and nothing local: `/clear` emptied the screen. */
-  readonly hardReset: boolean;
 }
 
 function sessionHeaderIdentityLine(
@@ -440,38 +441,6 @@ function retainedStaticTranscriptTail(
   };
 }
 
-/** Rendering-relevant item equality: entries compare by reference (they are
- *  immutable log rows), headers by the values `SessionHeaderBlock` draws —
- *  `identityLine` and `compact` directly, plus the `SessionMeta` fields the
- *  block renders (`version`, and `cwd` in the full header only).
- *  The `SessionMeta` fields are compared individually rather than by object
- *  reference because `patchSessionMeta`/`resetCliState` always spread into a
- *  fresh object, even for content-identical patches. A rebuilt state that
- *  matches item-for-item needs no `<Static>` remount. */
-function staticTranscriptItemsEquivalent(
-  left: readonly StaticTranscriptItem[],
-  right: readonly StaticTranscriptItem[],
-): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((item, index) => {
-    const other = right[index];
-    if (item.kind !== other.kind || item.id !== other.id) return false;
-    if (item.kind === 'header' && other.kind === 'header') {
-      return (
-        item.compact === other.compact &&
-        item.identityLine === other.identityLine &&
-        item.meta.version === other.meta.version &&
-        (item.compact || item.meta.cwd === other.meta.cwd)
-      );
-    }
-    return (
-      item.kind === 'entry' &&
-      other.kind === 'entry' &&
-      item.entry === other.entry
-    );
-  });
-}
-
 function ensureStaticSessionHeader({
   items,
   maxRows,
@@ -519,19 +488,90 @@ function ensureStaticSessionHeader({
   return { items: [header, ...items], totals: totals.totals, inserted: true };
 }
 
-interface BuildStaticTranscriptItemsOptions {
-  readonly source: StaticScrollbackSource;
-  readonly meta: SessionMeta;
-  readonly maxRows?: number;
-  readonly width?: number;
+const EMPTY_SCROLLBACK: Scrollback = Object.freeze({
+  origin: 0,
+  ownerKey: undefined,
+  items: Object.freeze([]),
+  totals: EMPTY_TOTALS,
+  layoutWidth: undefined,
+  printedThrough: 0,
+  lastRow: undefined,
+});
+
+/** Print the scrollback again from a new origin (`/clear` erased the
+ *  terminal, a terminal resume lost it): the next advance rebuilds the
+ *  retained tail from the source, and the new origin repaints it. */
+function restartScrollback(
+  ref: SubscriptionRef.SubscriptionRef<Scrollback>,
+): Effect.Effect<void> {
+  return SubscriptionRef.update(ref, (current) => ({
+    ...EMPTY_SCROLLBACK,
+    origin: current.origin + 1,
+  }));
 }
 
-function buildStaticTranscriptItems(
-  options: BuildStaticTranscriptItemsOptions,
-): RingTail {
-  const { source, meta, maxRows, width } = options;
+/** The chat's scrollback record, and the repaint that clears the terminal and
+ *  reprints it from a new origin (replace semantics: the remounted
+ *  `<Static>`'s output becomes Ink's whole static output). */
+export interface ChatScrollback {
+  readonly ref: SubscriptionRef.SubscriptionRef<Scrollback>;
+  readonly repaint: () => void;
+  readonly restart: () => void;
+  readonly runtime: ProcessRuntime;
+}
+
+interface RepaintTarget {
+  repaint(options: {
+    readonly clearScrollback: boolean;
+    readonly preserveStatic: boolean;
+  }): void;
+}
+
+/** One chat's scrollback over the Ink instance `ink` holds once `render()`
+ *  returns it. */
+export function chatScrollback(
+  runtime: ProcessRuntime,
+  ink: { readonly current?: RepaintTarget },
+): ChatScrollback {
+  const ref = runtime.runSync(SubscriptionRef.make(EMPTY_SCROLLBACK));
+  const restart = (): void => runtime.runSync(restartScrollback(ref));
+  return {
+    ref,
+    runtime,
+    restart,
+    repaint: () => {
+      if (ink.current === undefined) {
+        // A new origin inside Ink's first render(), before it returns the
+        // instance: print from a further origin once it has, so the repaint
+        // runs in a commit that can reach the instance.
+        queueMicrotask(restart);
+        return;
+      }
+      ink.current.repaint({ clearScrollback: true, preserveStatic: false });
+    },
+  };
+}
+
+interface ScrollbackInput {
+  readonly maxRows?: number;
+  readonly meta: SessionMeta;
+  readonly ownerKey: string;
+  readonly source: StaticScrollbackSource;
+  readonly width: number;
+}
+
+/** The retained tail built from the source's start, under `origin`. */
+function buildScrollback(origin: number, input: ScrollbackInput): Scrollback {
+  const { maxRows, meta, ownerKey, source, width } = input;
+  const built = { origin, ownerKey, layoutWidth: width };
   if (source.waitingForChildIdentity) {
-    return { items: [], totals: EMPTY_TOTALS, trimmed: false };
+    return {
+      ...built,
+      items: [],
+      totals: EMPTY_TOTALS,
+      printedThrough: 0,
+      lastRow: undefined,
+    };
   }
   const header = ensureStaticSessionHeader({
     items: [],
@@ -541,230 +581,129 @@ function buildStaticTranscriptItems(
     totals: EMPTY_TOTALS,
     width,
   });
-  const items: StaticTranscriptItem[] = [...header.items];
-  for (const entry of orderedStaticTranscriptEntries(
-    source.entries ?? [],
+  const rows = source.entries ?? [];
+  const printable = printableSettledRows(
+    rows,
+    0,
     source.settledRows,
     source.working,
-  )) {
-    items.push({ id: entry.id, kind: 'entry', entry });
-  }
-
-  return retainedStaticTranscriptTail(items, { width });
-}
-
-function scanStaticTranscriptFromStart(
-  entries: readonly TranscriptRow[] | undefined,
-  settledRows: number,
-  working: boolean,
-): StaticTranscriptScanCursor {
-  return incrementalStaticTranscriptEntries(entries, settledRows, working, {
-    entriesRef: undefined,
-    scannedIndex: 0,
-    lastScannedEntry: undefined,
-    working: false,
-    lastAppendedKey: undefined,
-  }).cursor;
-}
-
-export function buildStaticTranscriptState({
-  eraseRequest,
-  maxRows,
-  meta,
-  ownerKey,
-  repaintEpoch,
-  source,
-  width,
-}: {
-  readonly maxRows?: number;
-  readonly meta: SessionMeta;
-  readonly ownerKey: string;
-  readonly repaintEpoch: number;
-  readonly source: StaticScrollbackSource;
-  readonly width?: number;
-  readonly eraseRequest?: number;
-}): StaticTranscriptState {
-  const built = buildStaticTranscriptItems({
-    source,
-    meta,
-    maxRows,
-    width,
-  });
-  const scan = source.waitingForChildIdentity
-    ? incrementalStaticTranscriptEntries(
-        source.entries,
-        source.settledRows,
-        source.working,
-        undefined,
-      ).cursor
-    : scanStaticTranscriptFromStart(
-        source.entries,
-        source.settledRows,
-        source.working,
-      );
+  );
+  const tail = retainedStaticTranscriptTail(
+    [
+      ...header.items,
+      ...printable.rows.map((entry): StaticTranscriptItem => ({
+        id: entry.id,
+        kind: 'entry',
+        entry,
+      })),
+    ],
+    { width },
+  );
   return {
-    ownerKey,
-    items: built.items,
-    totals: built.totals,
-    scan,
-    layoutWidth: width,
-    repaintEpoch,
-    eraseRequest: eraseRequest ?? 0,
+    ...built,
+    items: tail.items,
+    totals: tail.totals,
+    printedThrough: printable.through,
+    lastRow: rows[printable.through - 1],
   };
 }
 
-export function advanceStaticTranscriptState(
-  current: StaticTranscriptState,
-  {
-    eraseRequest = current.eraseRequest,
-    maxRows,
-    meta,
-    ownerKey,
-    source,
-    width,
-  }: {
-    readonly eraseRequest?: number;
-    readonly maxRows?: number;
-    readonly meta: SessionMeta;
-    readonly ownerKey: string;
-    readonly source: StaticScrollbackSource;
-    readonly width: number;
-  },
-): StaticTranscriptState {
-  const isHardReset = source.hardReset;
-  const entries = source.entries;
-  const settledRows = source.settledRows;
-  const working = source.working;
-  const rebuildState = (repaintEpoch: number): StaticTranscriptState =>
-    buildStaticTranscriptState({
-      eraseRequest,
-      maxRows,
-      meta,
-      ownerKey,
-      repaintEpoch,
-      source,
+/**
+ * The scrollback after one tick of its source: the settled rows past
+ * `printedThrough` appended in the session view's order, the header inserted
+ * once its facts arrive, and the tail trimmed to its budget. Anything that is
+ * not an append (another owner, a source that no longer extends what was
+ * printed, a header above printed rows, a trim) moves to a new origin.
+ * Returns `current` when nothing changed.
+ */
+export function advanceScrollback(
+  current: Scrollback,
+  input: ScrollbackInput,
+): Scrollback {
+  const { maxRows, meta, ownerKey, source, width } = input;
+  if (current.ownerKey === undefined) {
+    return buildScrollback(current.origin, input);
+  }
+  const rows = source.entries ?? [];
+  const extendsPrinted =
+    rows.length >= current.printedThrough &&
+    rows[current.printedThrough - 1] === current.lastRow;
+  if (current.ownerKey !== ownerKey || !extendsPrinted) {
+    return buildScrollback(current.origin + 1, input);
+  }
+  const hasHeader = current.items[0]?.id === SESSION_HEADER_ID;
+  if (!hasHeader && source.waitingForChildIdentity) return current;
+
+  let origin = current.origin;
+  let items = current.items;
+  let totals = current.totals;
+  if (width !== current.layoutWidth) {
+    // A bare width change is repainted by Ink's resize path.
+    const trimmed = trimStaticTranscriptItems(items, {
+      totals: staticTranscriptItemsTotals(items, width),
       width,
     });
-  if (eraseRequest !== current.eraseRequest) {
-    return rebuildState(current.repaintEpoch + 1);
-  }
-
-  if (isHardReset) {
-    const rebuilt = rebuildState(current.repaintEpoch + 1);
-    // A hard reset that rebuilds the current *render inputs* unchanged — the
-    // normal startup path, where the initial useState build already ran with
-    // no runs — must not bump the repaint epoch. The `<Static>` remount
-    // would replay the session header through Ink's append-only static write
-    // while the replace-semantics repaint cannot fire yet (the first effect
-    // cascade still runs inside Ink's initial render(), before the instance
-    // is available to the viewport controller), doubling the header. Only
-    // render inputs are compared: `totals` are deterministic
-    // functions of those fields, and a stale `scan` cursor is recovered by
-    // `incrementalStaticTranscriptEntries` on the next non-empty advance.
-    if (
-      rebuilt.ownerKey === current.ownerKey &&
-      rebuilt.layoutWidth === current.layoutWidth &&
-      staticTranscriptItemsEquivalent(rebuilt.items, current.items)
-    ) {
-      return current;
-    }
-    return rebuilt;
-  }
-
-  if (current.ownerKey !== ownerKey) {
-    return rebuildState(current.repaintEpoch);
-  }
-
-  if (
-    !current.items.some((item) => item.id === SESSION_HEADER_ID) &&
-    source.waitingForChildIdentity
-  ) {
-    return current;
-  }
-
-  // A bare width change is repainted by Ink's resize path.
-  const layoutChanged = width !== current.layoutWidth;
-  let nextItems = current.items;
-  let nextTotals = current.totals;
-  let nextRepaintEpoch = current.repaintEpoch;
-  let changed = layoutChanged;
-
-  if (layoutChanged) {
-    const recomputed = staticTranscriptItemsTotals(nextItems, width);
-    const trimmed = trimStaticTranscriptItems(nextItems, {
-      totals: recomputed,
-      width,
-    });
-    nextItems = trimmed.items;
-    nextTotals = trimmed.totals;
-    if (trimmed.trimmed) {
-      nextRepaintEpoch += 1;
-    }
-  }
-
-  const plan = incrementalStaticTranscriptEntries(
-    entries,
-    settledRows,
-    working,
-    current.scan,
-  );
-  if (plan.rebuild) {
-    return rebuildState(current.repaintEpoch + 1);
+    items = trimmed.items;
+    totals = trimmed.totals;
+    if (trimmed.trimmed) origin += 1;
   }
 
   const header = ensureStaticSessionHeader({
-    items: nextItems,
+    items,
     maxRows,
     meta,
     source,
-    totals: nextTotals,
+    totals,
     width,
   });
   if (header.inserted) {
-    nextItems = header.items;
-    nextTotals = header.totals;
-    nextRepaintEpoch += 1;
-    changed = true;
+    items = header.items;
+    totals = header.totals;
+    origin += 1;
   }
 
-  const totals = new StaticTranscriptTotalsAccumulator(nextTotals);
-  let aboveMarginBottomRows = itemMarginBottomRows(nextItems.at(-1));
-  for (const entry of plan.appended) {
-    const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
-    const metrics = staticTranscriptItemMetrics(item, width);
-    totals.insert(aboveMarginBottomRows, metrics, undefined);
-    aboveMarginBottomRows = metrics.marginBottomRows;
-    nextItems = [...nextItems, item];
-    changed = true;
+  const printable = printableSettledRows(
+    rows,
+    current.printedThrough,
+    source.settledRows,
+    source.working,
+  );
+  if (printable.rows.length > 0) {
+    const accumulator = new StaticTranscriptTotalsAccumulator(totals);
+    let aboveMarginBottomRows = itemMarginBottomRows(items.at(-1));
+    const appended: StaticTranscriptItem[] = [];
+    for (const entry of printable.rows) {
+      const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
+      const metrics = staticTranscriptItemMetrics(item, width);
+      accumulator.insert(aboveMarginBottomRows, metrics, undefined);
+      aboveMarginBottomRows = metrics.marginBottomRows;
+      appended.push(item);
+    }
+    items = [...items, ...appended];
+    totals = accumulator.totals;
   }
-  nextTotals = totals.totals;
 
-  const trimmed = trimStaticTranscriptItems(nextItems, {
-    totals: nextTotals,
-    width,
-  });
+  const trimmed = trimStaticTranscriptItems(items, { totals, width });
   if (trimmed.trimmed) {
-    nextItems = trimmed.items;
-    nextTotals = trimmed.totals;
-    nextRepaintEpoch += 1;
-    changed = true;
+    items = trimmed.items;
+    totals = trimmed.totals;
+    origin += 1;
   }
 
-  const cursor = plan.cursor;
-  const cursorChanged =
-    cursor.entriesRef !== current.scan.entriesRef ||
-    cursor.scannedIndex !== current.scan.scannedIndex ||
-    cursor.lastScannedEntry !== current.scan.lastScannedEntry ||
-    cursor.working !== current.scan.working;
-  if (!changed && !cursorChanged) return current;
-
+  if (
+    items === current.items &&
+    width === current.layoutWidth &&
+    printable.through === current.printedThrough
+  ) {
+    return current;
+  }
   return {
+    origin,
     ownerKey,
-    items: nextItems,
-    totals: nextTotals,
-    scan: cursor,
+    items,
+    totals,
     layoutWidth: width,
-    repaintEpoch: nextRepaintEpoch,
-    eraseRequest,
+    printedThrough: printable.through,
+    lastRow: rows[printable.through - 1],
   };
 }

@@ -86,12 +86,15 @@ export const WireStreamInteractionSchema = WireInteractionSchema.mapFields(
   }),
 );
 /** The statuses of an interaction still running. */
-export const IN_FLIGHT_STATUSES: readonly string[] = ['queued', 'in_progress'];
+export const IN_FLIGHT_STATUSES: readonly string[] = Object.freeze([
+  'queued',
+  'in_progress',
+]);
 /** The statuses of an interaction that produced its output. */
-export const COMPLETED_STATUSES: readonly string[] = [
+export const COMPLETED_STATUSES: readonly string[] = Object.freeze([
   'completed',
   'requires_action',
-];
+]);
 /** One event of a streamed interaction. */
 export const WireEventSchema = Schema.Union([
   Schema.Struct({

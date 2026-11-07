@@ -214,13 +214,11 @@ function presentedPayload(
   absurd(payload);
 }
 
-/** The order requests became presentable: a request that only became
- *  showable now (a staged tool edit) joins behind the modal the
- *  user is already answering rather than displacing it. The stamp is a
- *  monotonic counter, not the map's size: finished entries are pruned, and a
- *  size-based stamp would hand a later request the index of one on screen. */
-const presentedOrder = new Map<string, number>();
-let nextPresentedOrder = 0;
+/** The requests in the order they became presentable (a `Set` keeps first
+ *  insertion order): a request that only became showable now (a staged tool
+ *  edit) joins behind the modal the user is already answering rather than
+ *  displacing it. */
+const presentedOrder = new Set<string>();
 
 /** The entry the modal shows: the first pending request this surface can
  *  render and has not decided, in presentation order under the promoted
@@ -231,22 +229,21 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   const candidates: Array<{
     readonly request: AttentionRequest;
     readonly payload: ApprovalPayload;
-    readonly order: number;
   }> = [];
   for (const request of attentionRequests.get()) {
     if (done.has(request.requestId)) continue;
     const payload = presentedPayload(request, staged);
     if (!payload) continue;
-    let order = presentedOrder.get(request.requestId);
-    if (order === undefined) {
-      order = nextPresentedOrder++;
-      presentedOrder.set(request.requestId, order);
-    }
-    candidates.push({ request, payload, order });
+    presentedOrder.add(request.requestId);
+    candidates.push({ request, payload });
   }
+  const order = new Map([...presentedOrder].map((id, index) => [id, index]));
+  const orderOf = (request: AttentionRequest): number =>
+    order.get(request.requestId) ?? 0;
   candidates.sort(
     (a, b) =>
-      Number(leads(b.request)) - Number(leads(a.request)) || a.order - b.order,
+      Number(leads(b.request)) - Number(leads(a.request)) ||
+      orderOf(a.request) - orderOf(b.request),
   );
   const first = candidates[0];
   if (!first) return undefined;
@@ -380,7 +377,6 @@ function resetApprovalSurface(): void {
   decided.set(new Set());
   promoted.set(undefined);
   presentedOrder.clear();
-  nextPresentedOrder = 0;
 }
 
 registerCliStateResetHook(resetApprovalSurface);

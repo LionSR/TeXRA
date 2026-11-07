@@ -1,7 +1,7 @@
 /**
  * What a run's rows say about it, as `runRows.ts` and `runRowReads.ts` fold
- * them: the position the run state copies, and the `RunRows` every other
- * reader holds.
+ * them: the position the run state copies, the position and pending input
+ * the session view keeps, and the records the other readers hold.
  */
 import type {
   CommitOrdinal,
@@ -11,9 +11,7 @@ import type {
   RequestDecision,
   RunFamily,
   RunOutcome,
-  ScriptCallPayload,
   SessionEvent,
-  ToolResultPayload,
 } from '@shared/schemas';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import type { QueuedFollowUp } from './runRows';
@@ -49,16 +47,8 @@ export type RowOf<T extends SessionEvent['type']> = Extract<
   { type: T }
 >;
 
-/**
- * What these rows say about one run: its position and the input it has not
- * taken. The session view keeps one per run and builds its request and
- * follow-up lists from it. The loop reads its pending input from the rows
- * (`Inbox.read`), so `RunState` carries only the position.
- *
- * The fields after `taken` only `runRowsFrom` sets (the view keeps its
- * own on `RunView`), each from the rows its comment names.
- */
-export type RunRows = RunPosition & {
+/** The input these rows say a run has not taken. */
+export type PendingInput = {
   /** Queued without consumed, in commit order. */
   readonly followUps: readonly QueuedFollowUp[];
   /**
@@ -69,6 +59,22 @@ export type RunRows = RunPosition & {
    * twice.
    */
   readonly taken: ReadonlyMap<string, TakenFollowUp>;
+};
+
+/**
+ * What the shared rows (`runRows.ts`) say about one run: its position and
+ * the input it has not taken. The session view keeps one per run and builds
+ * its request and follow-up lists from it. The loop reads its pending input
+ * from the rows (`Inbox.read`), so `RunState` carries only the position.
+ */
+export type SharedRunRows = RunPosition & PendingInput;
+
+/**
+ * What a run's record rows say about it (`runRowsFrom`), each field from the
+ * rows its comment names: what `SessionLog.facts` serves, and the lifecycle
+ * part of the input read. The session view keeps its own on `RunView`.
+ */
+export type RunRows = {
   /** Its `run.start`, and its parent edge: the start's, until a
    *  `run.detach` severs it. */
   readonly start: RowOf<'run.start'> | null;
@@ -80,8 +86,6 @@ export type RunRows = RunPosition & {
   /** The stop asked of this lifecycle (`run.stop`), null until one is:
    *  why the run stopped, or is stopping. */
   readonly stop: RowOf<'run.stop'> | null;
-  /** Its deletion marker (`run.removed`), once one landed. */
-  readonly removed: RowOf<'run.removed'> | null;
   /** Its input is closed: the latest of `run.activate`, `followup.closed`
    *  and `run.removed` is not an activation. */
   readonly inputClosed: boolean;
@@ -102,25 +106,17 @@ export type RunRows = RunPosition & {
   /** Each plugin row kind's latest row, by `plugin/kind` (`plugin.fact`):
    *  read through its plugin's own reader. */
   readonly facts: Readonly<Record<string, RowOf<'plugin.fact'>>>;
-  /** The rows a read keeps whole, in seq order, each empty unless the read
-   *  selected its kind (`RUN_ROW_READS`): its `run.activate` and `run.end`
-   *  rows, its positions, its calls' results, and the calls its scripts
-   *  issued. */
-  readonly lifecycles: readonly RowOf<'run.activate' | 'run.end'>[];
-  readonly positions: readonly RowOf<'run.position'>[];
-  readonly results: readonly ToolResultPayload[];
-  readonly scriptCalls: readonly ScriptCallPayload[];
 };
 
 /** A consumed follow-up: its row's `disposition` and commit. */
-interface TakenFollowUp {
+export interface TakenFollowUp {
   readonly disposition: FollowUpDisposition;
   readonly commit: CommitOrdinal;
 }
 
 /** What `applyRunRow` makes of one row. */
 export type RunRowVerdict =
-  | { readonly kind: 'applied'; readonly rows: Partial<RunRows> }
+  | { readonly kind: 'applied'; readonly rows: Partial<SharedRunRows> }
   /** The row changes nothing: an id already recorded, or a row that needs
    *  a run this reader holds no rows for. */
   | { readonly kind: 'unchanged' }

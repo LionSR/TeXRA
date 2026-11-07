@@ -39,7 +39,11 @@ import {
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
-import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRowReads';
+import {
+  foldRunRows,
+  RUN_ROW_READS,
+  runRowsFrom,
+} from '@shared/session/runRowReads';
 import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
 import type {
   SessionLogShape,
@@ -69,7 +73,10 @@ export interface SessionStore {
    *  removal is handed to `removed`, and the position it reaches is what a
    *  transaction's settle waits for. */
   readonly deliver: (
-    removed: (runId: RunId) => void,
+    removed: (
+      runId: RunId,
+      marker: Extract<SessionEvent, { type: 'run.removed' }>,
+    ) => void,
   ) => Effect.Effect<void, never, Scope.Scope>;
   /** Drain the publisher inside the close deadline, then shut the doors:
    *  from here on a trace row, a transcript subscription and an interrupted
@@ -79,10 +86,6 @@ export interface SessionStore {
 }
 
 const CHANNEL = 'sessionStore';
-
-/** Whether `row` is a run's deletion marker. */
-const isRemoval = (row: SessionEvent | undefined): boolean =>
-  row?.type === 'run.removed';
 
 /** Log a failure on this channel, with the failure attached as its `data`. */
 const logFailure =
@@ -225,8 +228,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
         database.readAggregate(id, fromSeq, types),
       runRows: (id, read, through) =>
         database
-          .readAggregate(id, 1, RUN_ROW_READS[read], through)
-          .pipe(Effect.map(runRowsFrom)),
+          .readAggregate(id, 1, RUN_ROW_READS[read].kinds, through)
+          .pipe(Effect.map((rows) => foldRunRows(read, rows))),
       blobs: database.readBlobs,
       facts: (runId) =>
         database
@@ -236,7 +239,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       display: (runId) =>
         Effect.map(
           database.readDisplayAggregate(qualifyAggregateId('run', runId), 1),
-          (rows) => (isRemoval(rows.at(-1)) ? [] : rows),
+          (rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows),
         ),
       tail: events.all,
       listing: events.listing,
@@ -258,7 +261,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           Stream.runForEach(
             Effect.fnUntraced(function* (event) {
               const target = aggregateTarget(event.aggregateId);
-              if (target.kind === 'run' && isRemoval(event)) removed(target.id);
+              if (target.kind === 'run' && event.type === 'run.removed')
+                removed(target.id, event);
               yield* trace.committed(event);
               yield* SubscriptionRef.set(delivered, event.commit);
             }),

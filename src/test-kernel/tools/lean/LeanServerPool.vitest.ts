@@ -1,7 +1,7 @@
 /**
- * The `LeanServerPool` service's server lifetimes, under `it.effect`'s
- * `TestClock` where idle eviction and the diagnostics quiet window are the
- * subject. Servers are a fake `lake` script run as a real child process.
+ * The direct Lean pool's server lifetimes, under `it.effect`'s `TestClock`
+ * where the diagnostics waits are the subject. Servers are a fake `lake`
+ * script run as a real child process.
  */
 
 // Node imports
@@ -24,27 +24,14 @@ import {
   NodeFileSystem,
   NodePath,
 } from '@effect/platform-node';
-import {
-  Context,
-  Deferred,
-  Duration,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Schema,
-  Scope,
-} from 'effect';
+import { Context, Deferred, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
-import {
-  LeanServerPool,
-  type LeanServerPoolOptions,
-} from '@texra/tools/lean/direct/leanServerPool';
-import { isLeanServerActive } from '@texra/tools/lean/leanServerRegistry';
+import { directLeanLanguageServices } from '@texra/tools/lean/direct/leanServerPool';
+import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import { isLeanServerActive } from '@texra/tools/lean/leanServerInfo';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -139,8 +126,6 @@ const spawnerLayer = NodeChildProcessSpawner.layer.pipe(
   Layer.provideMerge(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
 );
 
-const NO_RUN: RunId | undefined = undefined;
-
 let tempRoot: string;
 let projectRoot: string;
 let fakeLakePath: string;
@@ -177,22 +162,24 @@ async function countLogged(event: string): Promise<number> {
 const logged = (event: string) => Effect.promise(() => countLogged(event));
 
 /** A pool over the fake lake, disposed by the test scope unless disposed first. */
-const openPool = (options: Partial<LeanServerPoolOptions> = {}) =>
-  Effect.gen(function* () {
-    const scope = yield* Scope.make();
-    yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-    const pool = yield* Layer.build(
-      LeanServerPool.layer({
-        lakeCommand: fakeLakePath,
-        idleTimeToLive: Duration.infinity,
-        ...options,
-      }).pipe(Layer.provide(spawnerLayer)),
-    ).pipe(
-      Scope.provide(scope),
-      Effect.map((context) => Context.get(context, LeanServerPool)),
-    );
-    return { pool, dispose: Scope.close(scope, Exit.void) };
-  });
+const openPool = Effect.gen(function* () {
+  const scope = yield* Scope.make();
+  yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+  const pool = yield* Layer.build(
+    directLeanLanguageServices(fakeLakePath).pipe(Layer.provide(spawnerLayer)),
+  ).pipe(
+    Scope.provide(scope),
+    Effect.map((context) => Context.get(context, LeanLanguageServices)),
+  );
+  return { pool, dispose: Scope.close(scope, Exit.void) };
+});
+
+/** A run's scope, closed by the test scope unless ended first. */
+const openRun = Effect.gen(function* () {
+  const run = yield* Scope.make();
+  yield* Effect.addFinalizer(() => Scope.close(run, Exit.void));
+  return { run, end: Scope.close(run, Exit.void) };
+});
 
 /**
  * Run `effect` to its end, stepping the test clock only once the fake server
@@ -200,12 +187,10 @@ const openPool = (options: Partial<LeanServerPoolOptions> = {}) =>
  * child process starting, which takes seconds under load) and the clock
  * stands still, so the handshake and diagnostics timeouts on it cannot fire;
  * after it, only the diagnostics quiet window is left to pass. A request on
- * an already-open file sends nothing and ends on its own. The clock leaves
- * its epoch first: the server reads a zero diagnostics stamp as none yet.
+ * an already-open file sends nothing and ends on its own.
  */
 const settle = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
-    yield* TestClock.adjust('1 millis');
     const before = yield* logged('diagnostics');
     const done = yield* Deferred.make<void>();
     const fiber = yield* Effect.forkChild(
@@ -227,83 +212,89 @@ const eventually = (assertion: () => void | Promise<void>) =>
 
 const fakeLakeIt = it.effect.skipIf(process.platform === 'win32');
 
-describe('LeanServerPool', () => {
+describe('direct Lean pool', () => {
   fakeLakeIt(
     'does not stop a server while a diagnostics request is in flight',
     () =>
       Effect.gen(function* () {
         vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
-        const { pool, dispose } = yield* openPool({
-          idleTimeToLive: Duration.seconds(1),
-        });
+        const { pool, dispose } = yield* openPool;
         const pending = yield* Effect.forkChild(
-          pool.fetchDiagnosticsForFile(filePath, NO_RUN),
+          Effect.scoped(pool.fetchDiagnosticsForFile(filePath)),
         );
-        yield* eventually(() =>
-          expect(runningServerRoots(pool)).toEqual([projectRoot]),
-        );
+        yield* untilRoots(pool, 'running', [projectRoot]);
 
-        // Well past the idle time, still inside the diagnostics wait: the
-        // lease, not the clock, decides.
+        // Still inside the diagnostics wait: the call's lease keeps it.
         yield* TestClock.adjust('5 seconds');
-        expect(activeServerRoots(pool)).toEqual([projectRoot]);
+        expect(yield* activeServerRoots(pool)).toEqual([projectRoot]);
 
         yield* dispose;
         // A server stopped under the call is a stop, not a missing toolchain.
-        expect(yield* Effect.flip(Fiber.join(pending))).toMatchObject({
-          _tag: 'LeanUnavailable',
-          reason: 'stopped',
-        });
-        expect(activeServerRoots(pool)).toEqual([]);
+        const failure = yield* Effect.flip(Fiber.join(pending));
+        expect(failure._tag).toBe('LeanUnavailable');
+        expect(failure.message).toMatch(/^The Lean server stopped/);
+        expect(yield* activeServerRoots(pool)).toEqual([]);
       }),
   );
 
-  fakeLakeIt('stops a shared server after its final owner and lease end', () =>
+  fakeLakeIt('stops a shared server after its last run and lease end', () =>
     Effect.gen(function* () {
-      const { pool } = yield* openPool();
-      yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
-      expect(activeServerRoots(pool)).toEqual([projectRoot]);
+      const { pool } = yield* openPool;
+      const first = yield* openRun;
+      const second = yield* openRun;
+      yield* settle(
+        pool.fetchDiagnosticsForFile(filePath).pipe(Scope.provide(first.run)),
+      );
+      expect(yield* activeServerRoots(pool)).toEqual([projectRoot]);
       const release = path.join(tempRoot, 'build.release');
       vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_RELEASE', release);
       const build = yield* Effect.forkChild(
-        pool.executeProjectCommand('build', run('e00001')),
+        pool.executeProjectCommand('build').pipe(Scope.provide(first.run)),
       );
       // Running, so its lease is held.
       yield* eventually(async () =>
         expect(await countLogged('command')).toBe(1),
       );
-      yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00002')));
+      yield* settle(
+        pool.fetchDiagnosticsForFile(filePath).pipe(Scope.provide(second.run)),
+      );
 
-      // The reuser joins the original owner. Ending only e00002 keeps the
-      // shared server for e00001; ending the final owner defers the stop
-      // until e00001's already-running build releases its lease.
-      yield* pool.stopSessionsForRun(run('e00002'));
-      expect(activeServerRoots(pool)).toEqual([projectRoot]);
-      yield* pool.stopSessionsForRun(run('e00001'));
-      expect(activeServerRoots(pool)).toEqual([projectRoot]);
+      // Ending one run keeps the shared server for the other; ending the
+      // last leaves it to the build already running, until its lease ends.
+      yield* second.end;
+      expect(yield* activeServerRoots(pool)).toEqual([projectRoot]);
+      yield* first.end;
+      expect(yield* activeServerRoots(pool)).toEqual([projectRoot]);
 
       writeFileSync(release, '');
       yield* Fiber.join(build);
-      expect(activeServerRoots(pool)).toEqual([]);
+      expect(yield* activeServerRoots(pool)).toEqual([]);
     }),
   );
 });
 
-function run(runId: string): RunId {
-  return Schema.decodeSync(RunIdSchema)(runId);
-}
+type Pool = LeanLanguageServices['Service'];
 
-function runningServerRoots(pool: LeanServerPool['Service']): string[] {
-  return pool
-    .listServers()
-    .filter((info) => info.status === 'running')
-    .map((info) => info.workspaceRoot);
-}
+/** Wait, on real time, until the roots with servers in `status` are `roots`. */
+const untilRoots = (pool: Pool, status: string, roots: string[]) =>
+  Effect.gen(function* () {
+    const read = Effect.map(pool.listServers, (list) =>
+      list
+        .filter((info) => info.status === status)
+        .map((info) => info.workspaceRoot),
+    );
+    for (let attempt = 0; attempt < 500; attempt += 1) {
+      const current = yield* read;
+      if (current.join() === roots.join()) return;
+      yield* Effect.promise(() => delay(10));
+    }
+    expect(yield* read).toEqual(roots);
+  });
 
-function activeServerRoots(pool: LeanServerPool['Service']): string[] {
-  return pool
-    .listServers()
-    .filter(isLeanServerActive)
-    .map((info) => info.workspaceRoot)
-    .toSorted((a, b) => a.localeCompare(b));
-}
+const activeServerRoots = (pool: Pool) =>
+  Effect.map(pool.listServers, (list) =>
+    list
+      .filter(isLeanServerActive)
+      .map((info) => info.workspaceRoot)
+      .toSorted((a, b) => a.localeCompare(b)),
+  );

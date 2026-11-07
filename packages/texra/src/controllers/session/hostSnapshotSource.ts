@@ -4,25 +4,37 @@
  * follows a change and on every subscribe, so a surface never asks for a
  * catalog and never holds a stale one. Every producer is a read the host
  * already owns; nothing here is a fact about a run (`SessionView`) or a
- * choice of the user's (`Surface`). The catalogs and the recent commits are
- * host-neutral; the host injects its file lists and the banners only it can
- * answer (a VS Code host knows its API-key status, its missing tools, and
- * how to start a project; the desktop keeps the first two in Settings).
+ * choice of the user's (`Surface`). The catalogs, the recent commits and the
+ * onboarding funnel are host-neutral; the host injects its file lists, its
+ * missing-tool check, and which notices it shows (a VS Code window shows the
+ * lost-credential banner and offers to start a project; the desktop keeps
+ * the first in Settings).
+ *
+ * The source holds one `SubscriptionRef` of its inputs. Each producer reads
+ * and then writes its own fields, so the last write of a field wins and no
+ * producer waits on another; the snapshot is the inputs mapped, so a field
+ * derived from several inputs (the funnel, a banner's visibility) is never
+ * stored.
  */
 import {
-  Cause,
   Effect,
-  Exit,
   type FileSystem,
+  Option,
   type Path,
-  Schema,
+  type Scope,
   Semaphore,
+  Stream,
+  SubscriptionRef,
 } from 'effect';
 import {
   AgentDirectories,
+  AppState,
+  appSignalStream,
   getEnabledModels,
   readModelOptions,
   Settings,
+  withLogChannel,
+  workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
@@ -36,42 +48,34 @@ import type {
 } from '@texra/shared/session/hostSnapshot';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
+import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
+import {
+  deriveOnboardingFunnelState,
+  ONBOARDING_FLAG_KEYS,
+  readOnboardingFlags,
+  setOnboardingDeclined,
+} from '@texra/controllers/onboarding/onboardingFunnel';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
 import type {
   AgentCatalog,
+  AppSignals,
   Secrets,
   SettingsStores,
 } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-type Banners = HostSnapshot['banners'];
+const CHANNEL = 'Host Snapshot';
 
-/**
- * One of the host's own snapshot reads failed. The members below are the
- * reads only a host can answer (its file lists and the two banners it alone
- * knows about), so the failure is the host's and carries it.
- * `member` says which producer kept its last value: every read here is
- * guarded, so a failure never blanks the shell.
- */
-export class HostSnapshotReadFailed extends Schema.TaggedError<HostSnapshotReadFailed>()(
-  'HostSnapshotReadFailed',
-  {
-    member: Schema.Literals([
-      'fileOptions',
-      'apiKeyBanner',
-      'dependencyBanner',
-    ]),
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
+type Banners = HostSnapshot['banners'];
+type DismissibleBanner = 'gettingStarted' | 'dependency';
 
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
   tools: HostSnapshot['tools'];
-  /** The project folder the recent commits are read from; `undefined` for a
-   *  session with no folder open, which is never a repository. */
+  /** The project folder the recent commits are read from and whose `.env`
+   *  the credential check reads; `undefined` for a session with no folder
+   *  open, which is never a repository. */
   root: string | undefined;
   /**
    * The owning session's three setting slots: its workspace-scoped team and
@@ -87,34 +91,56 @@ interface HostSnapshotSourceOptions {
    *  refresh effects that reach it carry the requirement. */
   fileOptions(): Effect.Effect<
     FileOptions,
-    HostSnapshotReadFailed,
+    Error,
     FileSystem.FileSystem | Path.Path
   >;
   /** The launcher's root picker; empty where a session has exactly one. */
-  workspaceRoots?: () => HostSnapshot['workspaceRoots'];
-  /** Hosts that surface these outside Settings answer them; absent means
-   *  never shown. */
-  apiKeyBanner?: () => Effect.Effect<
-    Banners['apiKey'],
-    HostSnapshotReadFailed,
-    Secrets
-  >;
-  dependencyBanner?: () => Effect.Effect<
+  workspaceRoots(): HostSnapshot['workspaceRoots'];
+  /** The tools TeXRA needs that this machine lacks. */
+  dependencyBanner(): Effect.Effect<
     Banners['dependency'],
-    HostSnapshotReadFailed,
+    never,
     ChildProcessSpawner
   >;
-  /** A host that can start a project (a sample, an Overleaf clone, an arXiv
-   *  download) offers it while the folder has no LaTeX files; absent means
-   *  never shown. */
-  gettingStartedBanner?: true;
-  /** Write directly to the bridge's host snapshot, which its runs replay. */
-  publish(snapshot: HostSnapshot): Effect.Effect<void>;
-  onError(error: unknown): void;
+  /** The notices this host shows: the lost-credential banner, and the offer
+   *  to start a project (a sample, an Overleaf clone, an arXiv download)
+   *  while the folder has no LaTeX files. */
+  shows: { readonly apiKeyBanner: boolean; readonly gettingStarted: boolean };
+}
+
+/** What the producers write; the snapshot is {@link snapshotOf} of it. */
+interface Inputs {
+  /** False until the first {@link HostSnapshotSource.refresh} has finished,
+   *  so the shell never paints the empty catalogs. */
+  readonly loaded: boolean;
+  readonly catalogs: Pick<
+    HostSnapshot,
+    'agentOptions' | 'modelOptions' | 'teamOptions'
+  >;
+  readonly workspaceRoots: HostSnapshot['workspaceRoots'];
+  readonly fileOptions: FileOptions;
+  readonly commits: { readonly commits: string[]; readonly isGitRepo: boolean };
+  readonly dependency: Banners['dependency'];
+  readonly recording: HostSnapshot['recording'];
+  readonly agentConfig: Banners['agentConfig'];
+  readonly serviceOffline: string | null;
+  /** A dismissal lasts the session. */
+  readonly dismissed: ReadonlySet<DismissibleBanner>;
+  /** Whether a usable credential exists; undefined until a check answers. */
+  readonly credential: boolean | undefined;
+  /** The user's onboarding flags; undefined until a read answers, which is
+   *  not "never skipped, no run yet". */
+  readonly flags:
+    | { readonly declined: boolean; readonly firstRunDone: boolean }
+    | undefined;
 }
 
 export interface HostSnapshotSource {
-  /** Reassemble every catalog and publish the result. */
+  /** The snapshot as the inputs change, from the first refresh on. */
+  readonly changes: Stream.Stream<HostSnapshot>;
+  /** Whether a usable credential exists, as each check answers. */
+  readonly credentialUsable: Stream.Stream<boolean>;
+  /** Read every input again. */
   readonly refresh: Effect.Effect<
     void,
     never,
@@ -134,14 +160,15 @@ export interface HostSnapshotSource {
     FileSystem.FileSystem | Path.Path
   >;
   readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
-  /** The host's own banners changed (a key stored, a tool installed). */
+  /** The host's own banners changed (a key stored, a tool installed): the
+   *  credential and the missing tools are checked again. */
   readonly refreshHostBanners: Effect.Effect<
     void,
     never,
     ChildProcessSpawner | Secrets
   >;
   /** The workspace folders changed. */
-  refreshWorkspaceRoots(): Effect.Effect<void>;
+  readonly refreshWorkspaceRoots: Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
   setRecording(recording: HostSnapshot['recording']): Effect.Effect<void>;
   /** A launch could not find its agent: the banner's actions edit the
@@ -154,213 +181,299 @@ export interface HostSnapshotSource {
    *  warning no longer describes the launcher. */
   readonly clearAgentConfigBanner: Effect.Effect<void>;
   /** The user dismissed a notice for the rest of this session. */
-  dismissBanner(banner: 'gettingStarted' | 'dependency'): Effect.Effect<void>;
-  setOnboarding(state: HostSnapshot['onboarding']): Effect.Effect<void>;
+  dismissBanner(banner: DismissibleBanner): Effect.Effect<void>;
   /** Why the service link holds no service (`ServiceLink.away`), or null
    *  once it reached it again. */
   setServiceOffline(reason: string | null): Effect.Effect<void>;
 }
 
-/** The project's display record and the catalogs, assembled per session. */
-export function createHostSnapshotSource(
-  options: HostSnapshotSourceOptions,
-): HostSnapshotSource {
-  let catalogs: Pick<
-    HostSnapshot,
-    'agentOptions' | 'modelOptions' | 'teamOptions'
-  > = {
-    agentOptions: [],
-    modelOptions: [],
-    teamOptions: [],
-  };
-  let fileOptions: FileOptions = {
-    baseFile: [],
-    editedFile: [],
-    commit: ['HEAD'],
-  };
-  let hasInputFiles = true;
-  let commits: { commits: string[]; isGitRepo: boolean } = {
-    commits: [],
-    isGitRepo: false,
-  };
-  let apiKey: Banners['apiKey'] = { visible: false };
-  let dependency: Banners['dependency'] = { visible: false };
-  let recording: HostSnapshot['recording'] = null;
-  let agentConfig: Banners['agentConfig'] = { visible: false };
-  let onboarding: HostSnapshot['onboarding'] = 'done';
-  let serviceOffline: string | null = null;
-  // A dismissal lasts the session.
-  const dismissed = new Set<'gettingStarted' | 'dependency'>();
+/** A failed read keeps its fields' last values and says why at `warn`, so
+ *  a single unavailable source never blanks the shell. */
+const keepOnFailure =
+  (what: string) =>
+  <R>(load: Effect.Effect<void, Error, R>): Effect.Effect<void, never, R> =>
+    load.pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`The host snapshot could not read ${what}`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+        ),
+      ),
+    );
 
-  const publish = Effect.suspend(() =>
-    options.publish({
+/**
+ * The project's display record and the catalogs, assembled per session for
+ * the caller's scope: the scope holds the followers of the onboarding flags
+ * and of credential changes.
+ */
+export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
+  function* (
+    options: HostSnapshotSourceOptions,
+  ): Effect.fn.Return<
+    HostSnapshotSource,
+    never,
+    Scope.Scope | AppState | AppSignals | Secrets
+  > {
+    const { stores } = options;
+    const appState = yield* AppState;
+    const inputs = yield* SubscriptionRef.make<Inputs>({
+      loaded: false,
+      catalogs: { agentOptions: [], modelOptions: [], teamOptions: [] },
+      workspaceRoots: options.workspaceRoots(),
+      fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
+      commits: { commits: [], isGitRepo: false },
+      dependency: { visible: false },
+      recording: null,
+      agentConfig: { visible: false },
+      serviceOffline: null,
+      dismissed: new Set(),
+      credential: undefined,
+      flags: undefined,
+    });
+    /** Write `patch` when it changes a field, so an unchanged write
+     *  publishes nothing. */
+    const write = (patch: Partial<Inputs>) =>
+      SubscriptionRef.updateSome(inputs, (current) =>
+        Object.entries(patch).some(
+          ([key, value]) => current[key as keyof Inputs] !== value,
+        )
+          ? Option.some({ ...current, ...patch })
+          : Option.none(),
+      );
+
+    /**
+     * One producer: its read, then its write. Two reads of one producer in
+     * flight (a burst of file-watcher events) run in the order they were
+     * asked for, so the older read never lands last; different producers
+     * never wait on each other.
+     */
+    const producer = Effect.fnUntraced(function* <R>(
+      what: string,
+      load: Effect.Effect<void, Error, R>,
+    ) {
+      const lane = yield* Semaphore.make(1);
+      return keepOnFailure(what)(load).pipe(lane.withPermit);
+    });
+
+    const loadAgents = yield* producer(
+      'the agents',
+      Effect.gen(function* () {
+        const agentOptions = yield* agentOptionsData(stores);
+        yield* SubscriptionRef.update(inputs, (s) => ({
+          ...s,
+          catalogs: { ...s.catalogs, agentOptions },
+        }));
+      }),
+    );
+    const loadTeams = yield* producer(
+      'the teams',
+      Effect.gen(function* () {
+        const teamOptions = loadTeamOptions(
+          yield* createTeamCatalogPorts(stores.repoState),
+        );
+        yield* SubscriptionRef.update(inputs, (s) => ({
+          ...s,
+          catalogs: { ...s.catalogs, teamOptions },
+        }));
+      }),
+    );
+    const loadModels = yield* producer(
+      'the models',
+      Effect.gen(function* () {
+        const models = yield* readModelOptions(
+          stores,
+          yield* getEnabledModels(stores.globalState),
+        );
+        const modelOptions = modelOptionsFrom(models);
+        yield* SubscriptionRef.update(inputs, (s) => ({
+          ...s,
+          catalogs: { ...s.catalogs, modelOptions },
+        }));
+      }),
+    );
+    const loadFiles = yield* producer(
+      'the project files',
+      Effect.flatMap(options.fileOptions(), (fileOptions) =>
+        write({ fileOptions }),
+      ),
+    );
+    const loadCommits = yield* producer(
+      'the recent commits',
+      Effect.gen(function* () {
+        if (options.root === undefined) return;
+        const commits = yield* readRecentCommits(
+          options.root,
+          yield* Settings.get<number>(stores, 'git.numberOfCommitsToShow'),
+          { settings: stores },
+        ).pipe(withLogChannel(CHANNEL));
+        yield* write({ commits });
+      }),
+    );
+    const loadDependencies = yield* producer(
+      'the missing tools',
+      Effect.flatMap(options.dependencyBanner(), (dependency) =>
+        write({ dependency }),
+      ),
+    );
+    // Asked under the project's `.env` over the process's: the key a run of
+    // this project would use.
+    const loadCredential = yield* producer(
+      'the provider credentials',
+      hasUsableSetupCredential(stores).pipe(
+        Effect.provide(workspaceEnvironmentLayer(options.root)),
+        Effect.flatMap((credential) => write({ credential })),
+      ),
+    );
+    const loadFlags = yield* producer(
+      'the onboarding flags',
+      Effect.flatMap(readOnboardingFlags(appState), (flags) =>
+        write({ flags }),
+      ),
+    );
+
+    const catalogs = Effect.all([loadAgents, loadTeams, loadModels], {
+      concurrency: 'unbounded',
+      discard: true,
+    });
+    const hostBanners = Effect.all([loadCredential, loadDependencies], {
+      concurrency: 'unbounded',
+      discard: true,
+    });
+
+    // The flags are user-scoped and may be written by another process; the
+    // credential changes with any stored key or sign-in.
+    yield* appState.changes(ONBOARDING_FLAG_KEYS).pipe(
+      Stream.runForEach(() => loadFlags),
+      Effect.forkScoped,
+    );
+    yield* appSignalStream('credentialChanged').pipe(
+      Stream.runForEach(() => loadCredential),
+      Effect.forkScoped,
+    );
+    // Configuring a credential clears a previous "Skip for now", so a user
+    // who later loses every credential sees the picker again.
+    yield* SubscriptionRef.changes(inputs).pipe(
+      Stream.map((s) => s.flags?.declined === true && s.credential === true),
+      Stream.changes,
+      Stream.filter(Boolean),
+      Stream.runForEach(() =>
+        setOnboardingDeclined(appState, false).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning('Clearing the onboarding skip failed').pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(CHANNEL),
+            ),
+          ),
+        ),
+      ),
+      Effect.forkScoped,
+    );
+
+    const snapshotOf = (s: Inputs): HostSnapshot => ({
       project: options.project,
       tools: options.tools,
       approvalPolicy: Settings.getConfig<ApprovalPolicy>(
-        options.stores.config,
+        stores.config,
         APPROVAL_POLICY_CONFIG_KEY,
       ),
-      ...catalogs,
-      workspaceRoots: options.workspaceRoots?.() ?? [],
-      fileOptions: { ...fileOptions, commit: ['HEAD', ...commits.commits] },
-      isGitRepo: commits.isGitRepo,
-      recording,
+      ...s.catalogs,
+      workspaceRoots: s.workspaceRoots,
+      fileOptions: {
+        ...s.fileOptions,
+        commit: ['HEAD', ...s.commits.commits],
+      },
+      isGitRepo: s.commits.isGitRepo,
+      recording: s.recording,
       banners: {
-        apiKey,
-        agentConfig,
+        // A credential that worked stopped working: raised only once a task
+        // has finished; before that the "Connect a model" card is the prompt.
+        apiKey: {
+          visible:
+            options.shows.apiKeyBanner &&
+            s.credential === false &&
+            s.flags?.firstRunDone === true,
+        },
+        agentConfig: s.agentConfig,
         dependency: {
-          ...dependency,
-          visible: dependency.visible && !dismissed.has('dependency'),
+          ...s.dependency,
+          visible: s.dependency.visible && !s.dismissed.has('dependency'),
         },
         gettingStarted:
-          options.gettingStartedBanner === true &&
-          !hasInputFiles &&
-          !dismissed.has('gettingStarted'),
-        serviceOffline,
+          options.shows.gettingStarted &&
+          s.fileOptions.baseFile.length === 0 &&
+          !s.dismissed.has('gettingStarted'),
+        serviceOffline: s.serviceOffline,
       },
-      onboarding,
-    }),
-  );
+      // An unanswered check or flag read is not "no credential" or "not
+      // done": until both answer, the funnel stays out of the way.
+      onboarding:
+        s.credential === undefined || s.flags === undefined
+          ? 'done'
+          : deriveOnboardingFunnelState({
+              hasCredential: s.credential,
+              ...s.flags,
+            }),
+    });
 
-  // The three catalog loads run concurrently, so each reads its value first
-  // and only then spreads `catalogs`. Spreading before a `yield*` captures
-  // the record as it was when the load started and writes that copy back on
-  // resume, erasing whatever a sibling load stored in between.
-  const loadAgents = Effect.gen(function* () {
-    const agentOptions = yield* agentOptionsData(options.stores);
-    catalogs = { ...catalogs, agentOptions };
-  });
-
-  const loadTeams = Effect.gen(function* () {
-    const teamOptions = loadTeamOptions(
-      yield* createTeamCatalogPorts(options.stores.repoState),
-    );
-    catalogs = { ...catalogs, teamOptions };
-  });
-
-  const loadModels = Effect.gen(function* () {
-    const models = yield* readModelOptions(
-      options.stores,
-      yield* getEnabledModels(options.stores.globalState),
-    );
-    catalogs = { ...catalogs, modelOptions: modelOptionsFrom(models) };
-  });
-
-  const loadFiles = Effect.gen(function* () {
-    fileOptions = yield* options.fileOptions();
-    hasInputFiles = fileOptions.baseFile.length > 0;
-  });
-
-  const loadCommits = Effect.gen(function* () {
-    if (options.root === undefined) return;
-    commits = yield* readRecentCommits(
-      options.root,
-      yield* Settings.get<number>(options.stores, 'git.numberOfCommitsToShow'),
-      { settings: options.stores, onError: options.onError },
-    );
-  });
-
-  const loadHostBanners = Effect.gen(function* () {
-    const [key, tools] = yield* Effect.all(
-      [
-        options.apiKeyBanner
-          ? options.apiKeyBanner()
-          : Effect.succeed(undefined),
-        options.dependencyBanner
-          ? options.dependencyBanner()
-          : Effect.succeed(undefined),
-      ],
-      { concurrency: 'unbounded' },
-    );
-    if (key) apiKey = key;
-    if (tools) dependency = tools;
-  });
-
-  /** One lane for every refresh of this source: the producers write the
-   *  fields above and `publish` reads them, so two refreshes in flight at
-   *  once (a burst of file-watcher events, a catalog reload during a full
-   *  refresh) would let the slower, older read publish last and leave the
-   *  shell showing a state no later event corrects. In lane order the last
-   *  refresh asked for is the last to publish. */
-  const refreshLane = Semaphore.makeUnsafe(1);
-
-  /** Each producer finishes on its own: one that fails is reported and keeps
-   *  its last value, and the snapshot still publishes what the others read,
-   *  so a single unavailable source never leaves the shell blank. */
-  const guarded = <R>(
-    ...loads: Effect.Effect<void, Error, R>[]
-  ): Effect.Effect<void, never, R> =>
-    Effect.gen(function* () {
-      const settled = yield* Effect.forEach(
-        loads,
-        (load) => Effect.exit(load),
-        { concurrency: 'unbounded' },
-      );
-      // An interrupted load is not a failure to report.
-      for (const exit of settled) {
-        if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
-          options.onError(Cause.squash(exit.cause));
-      }
-      yield* publish;
-    }).pipe(refreshLane.withPermit);
-
-  const catalogLoads = [loadAgents, loadTeams, loadModels];
-
-  return {
-    refresh: guarded<
-      | AgentCatalog
-      | Secrets
-      | FileSystem.FileSystem
-      | Path.Path
-      | ChildProcessSpawner
-    >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
-    refreshCatalogs: guarded<AgentCatalog | Secrets>(...catalogLoads),
-    refreshFiles: guarded(loadFiles),
-    refreshCommits: guarded(loadCommits),
-    refreshHostBanners: guarded(loadHostBanners),
-    refreshWorkspaceRoots: () => publish,
-    setRecording: (next) =>
-      Effect.sync(() => {
-        recording = next;
-      }).pipe(Effect.andThen(publish)),
-    showAgentConfigBanner: Effect.fn(
-      'hostSnapshotSource.showAgentConfigBanner',
-    )(function* (agentName) {
-      // An unreadable setting is reported and the banner offers the agent
-      // settings, which always open, instead of a directory it cannot name.
-      const customDirSet = yield* Effect.flatMap(AgentDirectories, (dirs) =>
-        dirs.customConfigured(),
-      ).pipe(
-        Effect.catch((cause) =>
-          Effect.sync(() => {
-            options.onError(cause);
-            return false;
-          }),
+    return {
+      changes: SubscriptionRef.changes(inputs).pipe(
+        Stream.filter((s) => s.loaded),
+        Stream.map(snapshotOf),
+      ),
+      credentialUsable: SubscriptionRef.changes(inputs).pipe(
+        Stream.map((s) => s.credential),
+        Stream.filter((credential) => credential !== undefined),
+        Stream.changes,
+      ),
+      refresh: Effect.all(
+        [catalogs, loadFiles, loadCommits, hostBanners, loadFlags],
+        { concurrency: 'unbounded', discard: true },
+      ).pipe(Effect.andThen(write({ loaded: true }))),
+      refreshCatalogs: catalogs,
+      refreshFiles: loadFiles,
+      refreshCommits: loadCommits,
+      refreshHostBanners: hostBanners,
+      refreshWorkspaceRoots: Effect.suspend(() =>
+        write({ workspaceRoots: options.workspaceRoots() }),
+      ),
+      setRecording: (recording) => write({ recording }),
+      showAgentConfigBanner: Effect.fn(
+        'hostSnapshotSource.showAgentConfigBanner',
+      )(function* (agentName) {
+        // An unreadable setting is reported and the banner offers the agent
+        // settings, which always open, instead of a directory it cannot name.
+        const customDirSet = yield* Effect.flatMap(AgentDirectories, (dirs) =>
+          dirs.customConfigured(),
+        ).pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning(
+              'Whether a custom agent directory is set could not be read',
+            ).pipe(
+              Effect.annotateLogs({ data: cause }),
+              withLogChannel(CHANNEL),
+              Effect.as(false),
+            ),
+          ),
+        );
+        yield* write({
+          agentConfig: { visible: true, agentName, customDirSet },
+        });
+      }),
+      clearAgentConfigBanner: SubscriptionRef.updateSome(inputs, (s) =>
+        s.agentConfig.visible
+          ? Option.some({ ...s, agentConfig: { visible: false } })
+          : Option.none(),
+      ),
+      dismissBanner: (banner) =>
+        SubscriptionRef.updateSome(inputs, (s) =>
+          s.dismissed.has(banner)
+            ? Option.none()
+            : Option.some({
+                ...s,
+                dismissed: new Set([...s.dismissed, banner]),
+              }),
         ),
-      );
-      agentConfig = { visible: true, agentName, customDirSet };
-      yield* publish;
-    }),
-    clearAgentConfigBanner: Effect.suspend(() => {
-      if (!agentConfig.visible) return Effect.void;
-      agentConfig = { visible: false };
-      return publish;
-    }),
-    dismissBanner: (banner) =>
-      Effect.sync(() => {
-        dismissed.add(banner);
-      }).pipe(Effect.andThen(publish)),
-    setOnboarding: (state) =>
-      Effect.suspend(() => {
-        if (state === onboarding) return Effect.void;
-        onboarding = state;
-        return publish;
-      }),
-    setServiceOffline: (reason) =>
-      Effect.suspend(() => {
-        if (reason === serviceOffline) return Effect.void;
-        serviceOffline = reason;
-        return publish;
-      }),
-  };
-}
+      setServiceOffline: (serviceOffline) => write({ serviceOffline }),
+    };
+  },
+);

@@ -28,9 +28,11 @@ search, and mouse-scroll for finalized history, so don't reinvent them.
   (`panes/StaticConversationTranscript.tsx`) so native scrollback / search /
   mouse-scroll keep working. Never render a finalized root turn in the root live
   region, and never reprint root `<Static>` items unless the repaint starts from
-  a known origin — dedupe by the entry's own stable id, not a stream-scoped key
-  (see `buildStaticTranscriptItems` for the rebuild oracle and
-  `advanceStaticTranscriptState` for the incremental path). Focused child streams are separate
+  a known origin — dedupe by the entry's own stable id, not a stream-scoped key.
+  The chat's one `Scrollback` record (`panes/staticTranscriptRing.ts`) prints
+  the session view's `settledRows` prefix in its own order and moves to a new
+  `origin` for anything that is not an append; `ChatScrollback.restart` is the one
+  way to ask for a reprint (`/clear`, a terminal resume). Focused child streams are separate
   viewports that temporarily select the child as the `<Static>` scrollback
   owner; root and child histories must not share append-only Static state.
 

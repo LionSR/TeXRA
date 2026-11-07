@@ -28,10 +28,7 @@ import {
 } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
-import {
-  HostSnapshotReadFailed,
-  type HostSnapshotSource,
-} from '@texra/controllers/session/hostSnapshotSource';
+import { type HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { openGuiWindow } from '@texra/controllers/session/openGuiWindow';
 import type {
   AttachedPort,
@@ -265,19 +262,13 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         runs: project,
         roots: project.roots,
         project: project.display,
+        // The desktop shows the credential in Settings, and starts a project
+        // from its own launcher.
         snapshot: {
-          fileOptions: () =>
-            files.fileOptions().pipe(
-              Effect.mapError(
-                (cause) =>
-                  new HostSnapshotReadFailed({
-                    member: 'fileOptions',
-                    message: 'The project file lists could not be read.',
-                    cause,
-                  }),
-              ),
-            ),
-          onError: host.reportBackgroundError,
+          fileOptions: () => files.fileOptions(),
+          workspaceRoots: () => [],
+          dependencyBanner: () => Effect.succeed({ visible: false }),
+          shows: { apiKeyBanner: false, gettingStarted: false },
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the review pane diffs, for each tool edit the project's
@@ -311,18 +302,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
               ),
           }),
       });
-      // The funnel is host state every open project's snapshot carries. The
-      // first snapshot sets the funnel as it stands now, before its refresh.
-      yield* SubscriptionRef.changes(options.onboarding.funnel).pipe(
-        Stream.runForEach((state) =>
-          state ? snapshot.setOnboarding(state) : Effect.void,
-        ),
-        Effect.forkScoped,
-      );
-      const funnel = yield* SubscriptionRef.get(options.onboarding.funnel);
-      const initialSnapshot = funnel
-        ? snapshot.setOnboarding(funnel).pipe(Effect.andThen(snapshot.refresh))
-        : snapshot.refresh;
       // Registered after the host requests, so a port's release (its map
       // entry, its transcript set, `onPortClosed`) precedes their release, as
       // the extension's `dispose` orders them; awaited, unlike the bridge's.
@@ -335,7 +314,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       ).pipe(Effect.orDie);
       yield* Effect.addFinalizer(() => release);
       const env = workspaceEnvironmentLayer(project.root);
-      yield* Effect.forkScoped(Effect.provide(initialSnapshot, env));
+      yield* Effect.forkScoped(Effect.provide(snapshot.refresh, env));
       return {
         project,
         bridge,

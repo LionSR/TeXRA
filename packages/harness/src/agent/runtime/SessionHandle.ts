@@ -10,7 +10,6 @@
  */
 
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { CommitOrdinal, RunId } from '@shared/schemas';
 import type {
   RequestError,
   OutcomeOf,
@@ -53,10 +52,4 @@ export interface SessionRequestsShape {
   readonly request: <R extends RuntimeRequest>(
     req: R,
   ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError, SessionServices>;
-  /** Internal deletion policies share the same admission and transaction as
-   *  a user's `run.delete`. */
-  readonly removeRun: (
-    runId: RunId,
-    expectedStartCommit: CommitOrdinal,
-  ) => Effect.Effect<void, RequestError, SessionServices>;
 }

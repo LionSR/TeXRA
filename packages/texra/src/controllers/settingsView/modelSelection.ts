@@ -17,11 +17,10 @@ import {
   type Secrets,
 } from '@texra-ai/harness/host';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   MODEL_SOURCE_ORDER,
   type ModelSelectionItem,
-  type UpdateModelSelectionMessage,
+  type ModelSelectionPage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   isExpensiveModel,
@@ -42,19 +41,18 @@ const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
  * process `Secrets` hold the provider credentials behind each option's
  * availability.
  */
-export const buildModelSelectionMessage = Effect.fn(
-  'buildModelSelectionMessage',
-)(function* (
-  stores: SettingsStores,
-): Effect.fn.Return<UpdateModelSelectionMessage, Error, Secrets> {
-  const models = yield* buildSelectionItems(stores);
-  return {
-    command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-    models,
-    // TeXRA's catalog always names one; '' is the select's empty value.
-    helperModel: (yield* getHelperModelName(stores)) ?? '',
-  };
-});
+export const buildModelSelectionPage = Effect.fn('buildModelSelectionPage')(
+  function* (
+    stores: SettingsStores,
+  ): Effect.fn.Return<ModelSelectionPage, Error, Secrets> {
+    const models = yield* buildSelectionItems(stores);
+    return {
+      models,
+      // TeXRA's catalog always names one; '' is the select's empty value.
+      helperModel: (yield* getHelperModelName(stores)) ?? '',
+    };
+  },
+);
 
 /** Save one model's reasoning level, or clear it with a null `level`. */
 export function setReasoningLevel(

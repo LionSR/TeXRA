@@ -102,7 +102,7 @@ const persistCompletedChild = (
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', childRunId),
         identity: { kind: 'agent', agent: 'draft' },
-        userFollowUpSupport: 'unsupported',
+        takesFollowUps: false,
         parent: { id: parentId, call: null },
         provenance: null,
       },

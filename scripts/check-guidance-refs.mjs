@@ -227,9 +227,18 @@ const EVENT_NAMESPACES = new Set(
     .filter((type) => type.includes('.'))
     .map((type) => type.split('.')[0]),
 );
-// Node's `process` global shares its name with the process-run rows
-// (`process.output`, `process.exit`): its members are not citations.
-const NOT_ROWS = new Set(['process.env', 'process.cwd']);
+// A namespace can also be a global of the Node running this check: the
+// process-run rows (`process.output`, `process.exit`) share their name with
+// `process`. A token naming a member that global has (`process.env`,
+// `process.cwd`) names the global, not a row. A declared row is read first,
+// so `process.exit`, both a row and a method, still reads as the row.
+const namesGlobalMember = (candidate) => {
+  const [namespace, member] = candidate.split('.');
+  const global = Object.hasOwn(globalThis, namespace)
+    ? globalThis[namespace]
+    : undefined;
+  return global != null && member in Object(global);
+};
 const EVENT_TYPE_SHAPE = /^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u;
 // A bare filename whose stem is a namespace (`run.ts`, `context.ts`, `flow.md`)
 // has the same shape as a citation, and reporting it as an unknown event type
@@ -241,9 +250,9 @@ const FILE_EXTENSION =
 
 /** Whether a backticked token is read as naming a row of the run vocabulary. */
 function citesEventType(candidate) {
-  if (NOT_ROWS.has(candidate)) return false;
   if (EVENT_TYPES.has(candidate)) return true;
   if (FILE_EXTENSION.test(candidate)) return false;
+  if (namesGlobalMember(candidate)) return false;
   return (
     EVENT_TYPE_SHAPE.test(candidate) &&
     EVENT_NAMESPACES.has(candidate.split('.')[0])

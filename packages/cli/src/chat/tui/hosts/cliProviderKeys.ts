@@ -8,15 +8,13 @@
 // Third-party imports
 import { Effect } from 'effect';
 
-import { type ApiKeyProviderId, apiProviderOfSecretName } from '@texra-ai/llm';
+import { type ApiKeyProviderId } from '@texra-ai/llm';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import {
   ProviderKeyActionFailed,
   SettingsProfileKeyController,
 } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 
-import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
 import type { Secrets, SettingsStores } from '@texra-ai/harness/host';
 
@@ -58,22 +56,3 @@ export const promptForCliProviderApiKey = (
   provider: ApiKeyProviderId,
 ): Effect.Effect<void, Error, Secrets> =>
   viaTui(stores, (controller) => controller.setProviderKey(provider));
-
-/**
- * The chat TUI's `credentialChanged` subscriber, which the chat forks into
- * its scope and interrupts when it closes. The secret store announces every
- * committed write, whoever made it: `/key`, `/config`, the setup agent's
- * `unset_api_key`. A provider key bumps the subscription-preference level the
- * status bar and model pickers read. A key a tool plugin declares (the GitHub
- * token) is re-probed by the shared bootstrap. Other entries (OAuth tokens)
- * are ignored.
- */
-export const followCliCredentialChanges: Effect.Effect<
-  void,
-  never,
-  AppSignals
-> = onAppSignal('credentialChanged', ({ key }) => {
-  if (apiProviderOfSecretName(key) !== undefined) {
-    bumpCodexPreferenceVersion();
-  }
-});

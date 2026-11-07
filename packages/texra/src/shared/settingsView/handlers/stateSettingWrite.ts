@@ -21,8 +21,8 @@ import type {
 } from '@texra/shared/settingsView/settingSurfaces';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
-/** The surfaces that write a setting: a settings view's host, or the CLI. */
-type SettingSurface = 'vscode' | 'desktop' | 'cli';
+/** The surfaces that write a setting: a settings view, or the CLI. */
+type SettingSurface = 'settingsView' | 'cli';
 
 /**
  * The rows a host may write: the settings views (extension, desktop) write
@@ -36,8 +36,7 @@ type WritableEntry<H extends SettingSurface> = H extends 'cli'
 const WRITABLE_ENTRY_BY_KEY: {
   readonly [H in SettingSurface]: (key: string) => WritableEntry<H> | undefined;
 } = {
-  vscode: TEXRA_SETTINGS.settingsViewByKey,
-  desktop: TEXRA_SETTINGS.settingsViewByKey,
+  settingsView: TEXRA_SETTINGS.settingsViewByKey,
   cli: TEXRA_SETTINGS.cliByKey,
 };
 

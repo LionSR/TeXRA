@@ -1,7 +1,7 @@
 /**
  * LaTeX toolchain constants: the recommended LaTeX Workshop settings, the
- * dependency catalog, the per-tool install guides and structured install
- * commands, and the platform normalization helpers they share.
+ * dependency catalog with each tool's install record, the dependencies the
+ * LaTeX tab reports, and the one renderer of install advice.
  */
 
 /** Extension ID for the LaTeX Workshop VS Code extension. */
@@ -53,8 +53,10 @@ export const LATEX_RECOMMENDED_SETTINGS = {
 export type LatexRecommendedSettingField =
   keyof typeof LATEX_RECOMMENDED_SETTINGS;
 
-/** Supported OS platform keys for install guides. */
-export type OSPlatform = 'darwin' | 'win32' | 'linux';
+/** Supported OS platform keys for install advice. */
+export const OS_PLATFORMS = ['darwin', 'win32', 'linux'] as const;
+
+export type OSPlatform = (typeof OS_PLATFORMS)[number];
 
 /** Package managers TeXRA knows how to install dependencies with. */
 export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
@@ -62,210 +64,70 @@ export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
 export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
 
 // ============================================================
-// Install guide builders
+// Install records
 // ============================================================
 
-type Guide = Record<OSPlatform, string>;
-
-/** Tool installable via brew, apt, and a download URL. */
-function brewAptUrl(
-  label: string,
-  brew: string,
-  apt: string,
-  url: string,
-): Guide {
-  return {
-    darwin:
-      `Install ${label}:\n  brew install ${brew}\n\n` +
-      `"brew" requires Homebrew (https://brew.sh).\n` +
-      `Or download directly:\n  ${url}`,
-    linux: `Install ${label}:\n  sudo apt-get install ${apt}`,
-    win32: `Install ${label}:\n  ${url}`,
-  };
+/**
+ * How to install one tool, as data: its package for each package manager,
+ * the other ways in, and notes. {@link installAdvice} renders it for one
+ * platform, both as the guide a reader follows and as the command the LaTeX
+ * tab copies or runs.
+ */
+interface InstallRecord {
+  /** Homebrew formulae, on macOS. */
+  readonly brew?: string;
+  /** apt packages, on Linux. */
+  readonly apt?: string;
+  /** Scoop packages, on Windows. */
+  readonly scoop?: string;
+  /** The TeX package on Windows, through MiKTeX Console or `tlmgr`. */
+  readonly tex?: string;
+  /** A Cargo crate, on every platform. */
+  readonly cargo?: string;
+  /** A download page, per platform. */
+  readonly url?: Partial<Record<OSPlatform, string>>;
+  readonly notes?: Partial<Record<OSPlatform, string>>;
 }
 
-/** Append optional notes per-platform. */
-function withNotes(base: Guide, notes: Partial<Guide>): Guide {
-  return {
-    darwin: base.darwin + (notes.darwin ? `\n\n${notes.darwin}` : ''),
-    linux: base.linux + (notes.linux ? `\n\n${notes.linux}` : ''),
-    win32: base.win32 + (notes.win32 ? `\n\n${notes.win32}` : ''),
-  };
-}
-
-/** TeX Live tool: brew + apt on unix, MiKTeX Console + tlmgr on Windows. */
-function texLiveGuide(
-  tool: string,
-  opts: { brew: string; apt: string; notes?: Partial<Guide> },
-): Guide {
-  const base: Guide = {
+const TEX_DISTRIBUTION_INSTALL: InstallRecord = {
+  brew: 'texlive',
+  apt: 'texlive-full',
+  scoop: 'miktex',
+  url: {
+    darwin: 'https://www.tug.org/mactex/mactex-download.html',
+    win32: 'https://miktex.org/download',
+  },
+  notes: {
     darwin:
-      `Install ${tool}:\n  brew install ${opts.brew}\n\n` +
-      `"brew" requires Homebrew (https://brew.sh).`,
-    linux: `Install ${tool}:\n  sudo apt-get install ${opts.apt}`,
+      'Alternatives:\n' +
+      '  brew install --cask mactex-no-gui   (MacTeX without GUI apps)\n' +
+      '  brew install --cask mactex          (full MacTeX, ~4 GB)\n\n' +
+      'After installing, restart VS Code and verify by running\n' +
+      '"pdflatex --version" in Terminal.',
+    linux:
+      'After installing, restart VS Code and verify by running\n' +
+      '"pdflatex --version" in a terminal.',
     win32:
-      `MiKTeX: Open MiKTeX Console → Packages → search "${tool}" → Install\n\n` +
-      `TeX Live: tlmgr install ${tool}`,
-  };
-  return opts.notes ? withNotes(base, opts.notes) : base;
-}
-
-/** Combine multiple guides into a single multi-section guide. */
-function combineGuides(
-  ...sections: Array<[label: string, guide: Guide]>
-): Guide {
-  // Extract just the install command (first paragraph) from each guide
-  const commandsFor = (platform: OSPlatform): string =>
-    sections
-      .map(
-        ([label, guide]) =>
-          `${label}:\n  ${guide[platform].split('\n\n')[0].split('\n  ')[1]}`,
-      )
-      .join('\n\n');
-  return {
-    // A single Homebrew note for macOS instead of repeating it per-section
-    darwin:
-      commandsFor('darwin') + '\n\n"brew" requires Homebrew (https://brew.sh).',
-    linux: commandsFor('linux'),
-    win32: commandsFor('win32'),
-  };
-}
-
-// ============================================================
-// Per-tool install guides (single source of truth)
-//
-// Consumed by:
-//   - the catalog below (the missing-tool error, `ToolMissing`)
-//   - `LaTeXTab.ts` dependency cards (settings UI)
-// ============================================================
-
-// ── Unique guides (no shared pattern) ──────────────────────
-
-export const PDFLATEX_INSTALL_GUIDE: Guide = {
-  darwin:
-    'Install TeX Live (recommended):\n' +
-    '  brew install texlive\n\n' +
-    '"brew" requires Homebrew (https://brew.sh), a free\n' +
-    'macOS package manager. This is the lean TeX Live\n' +
-    "distribution without MacTeX's GUI apps.\n\n" +
-    'Alternatives:\n' +
-    '  brew install --cask mactex-no-gui   (MacTeX without GUI apps)\n' +
-    '  brew install --cask mactex          (full MacTeX, ~4 GB)\n' +
-    'Or download MacTeX directly from:\n' +
-    '  https://www.tug.org/mactex/mactex-download.html\n\n' +
-    'After installing, restart VS Code and verify by running\n' +
-    '"pdflatex --version" in Terminal.',
-  linux:
-    'Install TeX Live:\n' +
-    '  sudo apt-get install texlive-full\n\n' +
-    'After installing, restart VS Code and verify by running\n' +
-    '"pdflatex --version" in a terminal.',
-  win32:
-    'Install MiKTeX (recommended for Windows):\n' +
-    '  https://miktex.org/download\n' +
-    '  Download the installer, run it, and choose "Install\n' +
-    '  missing packages on the fly" when prompted.\n\n' +
-    'Or TeX Live:\n' +
-    '  https://tug.org/texlive/\n\n' +
-    'After installing, restart VS Code and verify by running\n' +
-    '"pdflatex --version" in Command Prompt.',
+      'MiKTeX: choose "Install missing packages on the fly" when prompted.\n' +
+      'Or TeX Live: https://tug.org/texlive/\n\n' +
+      'After installing, restart VS Code and verify by running\n' +
+      '"pdflatex --version" in Command Prompt.',
+  },
 };
-
-const PERL_INSTALL_GUIDE: Guide = {
-  darwin:
-    'Perl is pre-installed on macOS.\n' +
-    'If missing, reinstall via:\n' +
-    '  brew install perl\n\n' +
-    '"brew" requires Homebrew (https://brew.sh).',
-  linux: 'Install Perl:\n  sudo apt-get install perl',
-  win32:
-    'Install Strawberry Perl (recommended):\n  https://strawberryperl.com/',
-};
-
-const TEXFMT_INSTALL_GUIDE: Guide = {
-  darwin:
-    'Install tex-fmt:\n  brew install tex-fmt\n\n' +
-    '"brew" requires Homebrew (https://brew.sh).\n\n' +
-    'Or via Cargo:\n  cargo install tex-fmt',
-  linux:
-    'Install tex-fmt:\n  apt install tex-fmt\n\n' +
-    'Or via Cargo:\n  cargo install tex-fmt',
-  win32: 'Install tex-fmt via Cargo:\n  cargo install tex-fmt',
-};
-
-// ── Simple brew / apt / URL tools ──────────────────────────
-
-const GHOSTSCRIPT_INSTALL_GUIDE = brewAptUrl(
-  'Ghostscript',
-  'ghostscript',
-  'ghostscript',
-  'https://ghostscript.com/releases/gsdnld.html',
-);
-
-const GRAPHICSMAGICK_INSTALL_GUIDE = brewAptUrl(
-  'GraphicsMagick',
-  'graphicsmagick',
-  'graphicsmagick',
-  'http://www.graphicsmagick.org/download.html',
-);
-
-const IMAGEMAGICK_INSTALL_GUIDE = brewAptUrl(
-  'ImageMagick',
-  'imagemagick',
-  'imagemagick',
-  'https://imagemagick.org/script/download.php',
-);
-
-// ── TeX Live tools (brew + apt + MiKTeX/tlmgr) ────────────
 
 const TEX_EXTRA = 'Part of most TeX Live distributions (texlive-extra-utils).';
 const TEX_DIST = 'Part of most TeX Live distributions.';
 
-export const LATEXDIFF_INSTALL_GUIDE = texLiveGuide('latexdiff', {
+const LATEXDIFF_INSTALL: InstallRecord = {
   brew: 'latexdiff',
   apt: 'latexdiff',
+  tex: 'latexdiff',
   notes: {
     darwin: 'Also included with MacTeX (texlive-extra-utils).',
     linux: TEX_EXTRA,
     win32: TEX_EXTRA,
   },
-});
-
-export const LATEXINDENT_INSTALL_GUIDE = texLiveGuide('latexindent', {
-  brew: 'latexindent',
-  apt: 'texlive-extra-utils',
-  notes: {
-    darwin:
-      'Also included with MacTeX. Requires Perl (pre-installed on macOS).',
-    linux: 'Requires Perl:\n  sudo apt-get install perl',
-    win32:
-      'Also requires Perl (Strawberry Perl recommended):\n  https://strawberryperl.com/',
-  },
-});
-
-export const TEXCOUNT_INSTALL_GUIDE = texLiveGuide('texcount', {
-  brew: 'texcount',
-  apt: 'texlive-extra-utils',
-  notes: {
-    darwin: 'Also included with MacTeX and most TeX Live distributions.',
-    linux: TEX_DIST,
-    win32: TEX_DIST,
-  },
-});
-
-const LATEXMK_INSTALL_GUIDE = texLiveGuide('latexmk', {
-  brew: 'latexmk',
-  apt: 'latexmk',
-  notes: { darwin: 'Also included with MacTeX.' },
-});
-
-// ── Composite guide (image processing bundle) ──────────────
-
-export const IMAGE_PROCESSING_INSTALL_GUIDE = combineGuides(
-  ['Ghostscript', GHOSTSCRIPT_INSTALL_GUIDE],
-  ['GraphicsMagick (recommended)', GRAPHICSMAGICK_INSTALL_GUIDE],
-  ['Or ImageMagick', IMAGEMAGICK_INSTALL_GUIDE],
-);
+};
 
 // ============================================================
 // Dependency catalog
@@ -302,8 +164,8 @@ type ProbeRole = 'required' | 'image' | 'none';
 interface LatexToolEntry {
   /** The binary name, probed as `<name> --version` or on PATH. */
   readonly name: string;
-  /** How to install it on each platform, the text a missing tool reports. */
-  readonly guide: Readonly<Guide>;
+  /** How to install it, rendered by {@link installAdvice}. */
+  readonly install: InstallRecord;
   /** The version arguments, when not `--version` (GraphicsMagick has none). */
   readonly versionArgs?: readonly string[];
   /**
@@ -348,83 +210,122 @@ interface LatexToolEntry {
 const LATEX_TOOLS = [
   {
     name: 'latexmk',
-    guide: LATEXMK_INSTALL_GUIDE,
+    install: {
+      brew: 'latexmk',
+      apt: 'latexmk',
+      tex: 'latexmk',
+      notes: { darwin: 'Also included with MacTeX.' },
+    },
     doctor: { row: 'required', purpose: 'LaTeX build orchestration' },
     probe: 'required',
     drivesCompile: true,
   },
   {
     name: 'pdflatex',
-    guide: PDFLATEX_INSTALL_GUIDE,
+    install: TEX_DISTRIBUTION_INSTALL,
     doctor: { row: 'optional', purpose: 'PDFLaTeX compiler' },
     probe: 'required',
     drivesCompile: true,
   },
   {
     name: 'xelatex',
-    guide: PDFLATEX_INSTALL_GUIDE,
+    install: TEX_DISTRIBUTION_INSTALL,
     doctor: { row: 'optional', purpose: 'XeLaTeX compiler' },
     probe: 'none',
   },
   {
     name: 'lualatex',
-    guide: PDFLATEX_INSTALL_GUIDE,
+    install: TEX_DISTRIBUTION_INSTALL,
     doctor: { row: 'optional', purpose: 'LuaLaTeX compiler' },
     probe: 'none',
   },
   {
     name: 'bibtex',
-    guide: PDFLATEX_INSTALL_GUIDE,
+    install: TEX_DISTRIBUTION_INSTALL,
     doctor: { row: 'optional', purpose: 'BibTeX bibliography processing' },
     probe: 'none',
   },
   {
     name: 'biber',
-    guide: PDFLATEX_INSTALL_GUIDE,
+    install: TEX_DISTRIBUTION_INSTALL,
     doctor: { row: 'optional', purpose: 'Biber bibliography processing' },
     probe: 'none',
   },
   {
     name: 'latexdiff',
-    guide: LATEXDIFF_INSTALL_GUIDE,
+    install: LATEXDIFF_INSTALL,
     doctor: { row: 'optional', purpose: 'LaTeX diff generation' },
     probe: 'required',
   },
   {
     name: 'latexdiff-vc',
-    guide: LATEXDIFF_INSTALL_GUIDE,
+    install: LATEXDIFF_INSTALL,
     doctor: { row: 'none' },
     probe: 'none',
   },
   {
     name: 'latexindent',
-    guide: LATEXINDENT_INSTALL_GUIDE,
+    install: {
+      brew: 'latexindent',
+      apt: 'texlive-extra-utils',
+      tex: 'latexindent',
+      notes: {
+        darwin:
+          'Also included with MacTeX. Requires Perl (pre-installed on macOS).',
+        linux: 'Requires Perl.',
+        win32: 'Also requires Perl (Strawberry Perl recommended).',
+      },
+    },
     doctor: { row: 'optional', purpose: 'LaTeX formatting' },
     probe: 'required',
     core: true,
   },
   {
     name: 'tex-fmt',
-    guide: TEXFMT_INSTALL_GUIDE,
+    install: { brew: 'tex-fmt', apt: 'tex-fmt', cargo: 'tex-fmt' },
     doctor: { row: 'none' },
     probe: 'none',
   },
   {
     name: 'texcount',
-    guide: TEXCOUNT_INSTALL_GUIDE,
+    install: {
+      brew: 'texcount',
+      apt: 'texlive-extra-utils',
+      tex: 'texcount',
+      notes: {
+        darwin: 'Also included with MacTeX and most TeX Live distributions.',
+        linux: TEX_DIST,
+        win32: TEX_DIST,
+      },
+    },
     doctor: { row: 'none' },
     probe: 'required',
   },
   {
     name: 'perl',
-    guide: PERL_INSTALL_GUIDE,
+    install: {
+      apt: 'perl',
+      url: { win32: 'https://strawberryperl.com/' },
+      notes: {
+        darwin:
+          'Perl is pre-installed on macOS. If missing, reinstall via:\n  brew install perl',
+      },
+    },
     doctor: { row: 'none' },
     probe: 'required',
     core: true,
   },
   {
     name: 'gs',
-    guide: GHOSTSCRIPT_INSTALL_GUIDE,
+    install: {
+      brew: 'ghostscript',
+      apt: 'ghostscript',
+      scoop: 'ghostscript',
+      url: {
+        darwin: 'https://ghostscript.com/releases/gsdnld.html',
+        win32: 'https://ghostscript.com/releases/gsdnld.html',
+      },
+    },
     alternates: ['gswin64c', 'gswin32c'],
     doctor: { row: 'none' },
     probe: 'required',
@@ -433,7 +334,21 @@ const LATEX_TOOLS = [
   {
     name: 'gm',
     label: 'GraphicsMagick',
-    guide: GRAPHICSMAGICK_INSTALL_GUIDE,
+    install: {
+      brew: 'graphicsmagick',
+      apt: 'graphicsmagick',
+      scoop: 'graphicsmagick',
+      url: {
+        darwin: 'http://www.graphicsmagick.org/download.html',
+        win32: 'http://www.graphicsmagick.org/download.html',
+      },
+      notes: {
+        darwin: 'ImageMagick (brew install imagemagick) works in its place.',
+        linux:
+          'ImageMagick (sudo apt-get install -y imagemagick) works in its place.',
+        win32: 'ImageMagick works in its place.',
+      },
+    },
     versionArgs: ['version'],
     doctor: { row: 'none' },
     probe: 'image',
@@ -441,7 +356,14 @@ const LATEX_TOOLS = [
   {
     name: 'magick',
     label: 'ImageMagick',
-    guide: IMAGEMAGICK_INSTALL_GUIDE,
+    install: {
+      brew: 'imagemagick',
+      apt: 'imagemagick',
+      url: {
+        darwin: 'https://imagemagick.org/script/download.php',
+        win32: 'https://imagemagick.org/script/download.php',
+      },
+    },
     doctor: { row: 'none' },
     probe: 'image',
   },
@@ -456,13 +378,14 @@ export type LatexToolName = CatalogEntry['name'];
 // cast: the entries are keyed by every catalog name, one each.
 export const LATEX_TOOL_ENTRIES = Object.freeze(
   Object.fromEntries(
-    // Frozen copies through: the entries cross module boundaries, and an
-    // edited guide would change what every later missing tool reports.
+    // Frozen through: the entries cross module boundaries, and an edited
+    // install record would change what every later missing tool reports.
+    // The records are frozen in place, so tools that share one still do.
     LATEX_TOOLS.map((tool: LatexToolEntry) => [
       tool.name,
       Object.freeze({
         ...tool,
-        guide: Object.freeze({ ...tool.guide }),
+        install: freezeInstall(tool.install),
         doctor: Object.freeze({ ...tool.doctor }),
         ...(tool.versionArgs && {
           versionArgs: Object.freeze([...tool.versionArgs]),
@@ -474,6 +397,12 @@ export const LATEX_TOOL_ENTRIES = Object.freeze(
     ]),
   ),
 ) as Readonly<Record<LatexToolName, LatexToolEntry>>;
+
+function freezeInstall(record: InstallRecord): InstallRecord {
+  if (record.url) Object.freeze(record.url);
+  if (record.notes) Object.freeze(record.notes);
+  return Object.freeze(record);
+}
 
 type EntryWith<Role extends ProbeRole> = Extract<CatalogEntry, { probe: Role }>;
 
@@ -605,22 +534,8 @@ export const SUPPORTED_LATEX_COMPILERS: readonly SupportedLatexCompiler[] =
   ).map((tool) => tool.name);
 
 // ============================================================
-// Structured install commands (for Copy / Run in Terminal)
+// Install advice
 // ============================================================
-
-/**
- * A concrete install command for a dependency on a given platform.
- * Used by the LaTeX tab to power "Copy command" and "Run in Terminal" buttons.
- */
-export interface InstallCommand {
-  /** The full shell command (e.g. "brew install ghostscript"). */
-  readonly command: string;
-  /**
-   * The package manager the command targets.
-   * `null` means the command is always available (e.g. a direct download URL).
-   */
-  readonly packageManager: 'brew' | 'apt' | 'scoop' | null;
-}
 
 /** Official Homebrew one-liner install script. */
 export const HOMEBREW_INSTALL_COMMAND =
@@ -631,74 +546,136 @@ export const SCOOP_INSTALL_COMMAND =
   'Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser; irm get.scoop.sh | iex';
 
 /**
- * The `LatexSettingsStatus` fields `DEPENDENCY_INSTALL_COMMANDS` has an entry
- * for. Closed so a typo'd key fails at compile time instead of silently
- * missing the lookup in `DependencyInfo.key` (`keyof LatexSettingsStatus`,
- * a much wider interface that also carries `platform`, detected paths, and
- * `latexWorkshopInstalled`, which installs through a VS Code command instead).
+ * The dependencies the settings view's LaTeX tab reports, each one a field
+ * of `LatexSettingsStatus.installed`. `needs` is what makes it installed:
+ * every group, by any one tool of the group. `installs` is what its install
+ * advice installs.
  */
-type DependencyInstallKey =
-  | 'texDistributionInstalled'
-  | 'latexdiffInstalled'
-  | 'latexindentInstalled'
-  | 'texcountInstalled'
-  | 'imageProcessingInstalled';
+export const LATEX_DEPENDENCIES = {
+  compiler: {
+    label: 'TeX Distribution',
+    needs: [SUPPORTED_LATEX_COMPILERS],
+    installs: ['pdflatex'],
+  },
+  latexdiff: {
+    label: 'latexdiff',
+    needs: [['latexdiff']],
+    installs: ['latexdiff'],
+  },
+  latexindent: {
+    label: 'latexindent',
+    needs: [['latexindent'], ['perl']],
+    installs: ['latexindent', 'perl'],
+  },
+  texcount: {
+    label: 'TeXcount',
+    needs: [['texcount']],
+    installs: ['texcount'],
+  },
+  image: {
+    label: 'Image Processing',
+    needs: [['gs'], IMAGE_LATEX_TOOLS],
+    installs: ['gs', 'gm'],
+  },
+} as const satisfies Readonly<
+  Record<
+    string,
+    {
+      readonly label: string;
+      readonly needs: readonly (readonly ProbedLatexTool[])[];
+      readonly installs: readonly LatexToolName[];
+    }
+  >
+>;
 
-/** One install option for a package manager; the table below is all three. */
-const forManager =
-  (packageManager: InstallCommand['packageManager']) =>
-  (command: string): InstallCommand => ({ command, packageManager });
+/** A dependency the LaTeX tab reports. */
+export type LatexDependency = keyof typeof LATEX_DEPENDENCIES;
 
-const brew = forManager('brew');
-const apt = forManager('apt');
-const scoop = forManager('scoop');
+/** Where `brew install` comes from, said once per guide. */
+const HOMEBREW_NOTE = '"brew" requires Homebrew (https://brew.sh).';
 
-/**
- * Per-dependency install commands keyed by `DependencyInfo.key`.
- *
- * Each platform maps to an **ordered** list of install options, ranked by
- * recommendation priority. The frontend picks the first option whose
- * `packageManager` matches the detected system package manager (or whose
- * `packageManager` is `null`, meaning always available).
- *
- * An empty array means there is no automatable install for that platform.
- */
-export const DEPENDENCY_INSTALL_COMMANDS: Record<
-  DependencyInstallKey,
-  Record<OSPlatform, readonly InstallCommand[]>
-> = {
-  texDistributionInstalled: {
-    darwin: [brew('brew install texlive')],
-    linux: [apt('sudo apt-get install -y texlive-full')],
-    win32: [scoop('scoop install miktex')],
-  },
-  latexdiffInstalled: {
-    darwin: [brew('brew install latexdiff')],
-    linux: [apt('sudo apt-get install -y latexdiff')],
-    win32: [],
-  },
-  latexindentInstalled: {
-    darwin: [brew('brew install latexindent')],
-    linux: [apt('sudo apt-get install -y texlive-extra-utils perl')],
-    win32: [],
-  },
-  texcountInstalled: {
-    darwin: [brew('brew install texcount')],
-    linux: [apt('sudo apt-get install -y texlive-extra-utils')],
-    win32: [],
-  },
-  imageProcessingInstalled: {
-    darwin: [brew('brew install ghostscript graphicsmagick')],
-    linux: [apt('sudo apt-get install -y ghostscript graphicsmagick')],
-    win32: [scoop('scoop install ghostscript graphicsmagick')],
-  },
+/** The package manager each platform's commands use. */
+const PLATFORM_PACKAGE_MANAGER = {
+  darwin: 'brew',
+  linux: 'apt',
+  win32: 'scoop',
+} as const satisfies Record<OSPlatform, SystemPackageManager>;
+
+const MANAGER_INSTALL: Record<SystemPackageManager, string> = {
+  brew: 'brew install',
+  apt: 'sudo apt-get install -y',
+  scoop: 'scoop install',
 };
 
-/** Narrows a `DependencyInfo.key` to whether `DEPENDENCY_INSTALL_COMMANDS` has
- *  an entry for it — most `LatexSettingsStatus` keys (paths, `platform`,
- *  `latexWorkshopInstalled`) do not. */
-export function hasInstallCommands(key: string): key is DependencyInstallKey {
-  return Object.hasOwn(DEPENDENCY_INSTALL_COMMANDS, key);
+/**
+ * A concrete install command for a dependency on a given platform, which the
+ * LaTeX tab copies or runs once its package manager is detected.
+ */
+export interface InstallCommand {
+  /** The full shell command (e.g. "brew install ghostscript"). */
+  readonly command: string;
+  readonly packageManager: SystemPackageManager;
+}
+
+/** What {@link installAdvice} renders for one platform. */
+export interface InstallAdvice {
+  /** The steps to read, the text a missing tool reports. */
+  readonly guide: string;
+  /** One command over every package the platform's manager has for them,
+   *  or null when it has none. */
+  readonly command: InstallCommand | null;
+}
+
+/**
+ * How to install `tools` together on `platform`, titled `label`: one command
+ * over their packages for the platform's package manager, then each tool's
+ * other ways in and notes.
+ */
+export function installAdvice(
+  label: string,
+  tools: readonly LatexToolName[],
+  platform: OSPlatform,
+): InstallAdvice {
+  const manager = PLATFORM_PACKAGE_MANAGER[platform];
+  // Tools that share a record (the TeX distribution's) say it once.
+  const records = [
+    ...new Map(
+      tools.map((tool) => {
+        const entry = LATEX_TOOL_ENTRIES[tool];
+        return [entry.install, entry.label ?? tool] as const;
+      }),
+    ),
+  ];
+  const packages = [
+    ...new Set(
+      records.flatMap(([record]) => record[manager]?.split(' ') ?? []),
+    ),
+  ];
+  const command =
+    packages.length === 0
+      ? null
+      : Object.freeze({
+          command: `${MANAGER_INSTALL[manager]} ${packages.join(' ')}`,
+          packageManager: manager,
+        });
+  const sections = command ? [`Install ${label}:\n  ${command.command}`] : [];
+  if (command?.packageManager === 'brew') sections.push(HOMEBREW_NOTE);
+  for (const [record, name] of records) {
+    if (platform === 'win32' && record.tex) {
+      sections.push(
+        `${name} with MiKTeX: open MiKTeX Console → Packages → search "${record.tex}" → Install\n` +
+          `With TeX Live: tlmgr install ${record.tex}`,
+      );
+    }
+    if (record.cargo) {
+      sections.push(`Or ${name} via Cargo:\n  cargo install ${record.cargo}`);
+    }
+    const url = record.url?.[platform];
+    if (url) sections.push(`Or download ${name}:\n  ${url}`);
+    const notes = record.notes?.[platform];
+    if (notes) sections.push(notes);
+  }
+  return Object.freeze({ guide: sections.join('\n\n'), command });
 }
 
 // ============================================================
@@ -711,12 +688,4 @@ export function hasInstallCommands(key: string): key is DependencyInstallKey {
  */
 export function normalizePlatform(raw: string): OSPlatform {
   return raw === 'darwin' || raw === 'win32' ? raw : 'linux';
-}
-
-/**
- * Select the install guide for the given platform.
- * Falls back to linux if the platform is unrecognized.
- */
-export function getInstallGuide(guide: Guide, platform: string): string {
-  return guide[normalizePlatform(platform)];
 }

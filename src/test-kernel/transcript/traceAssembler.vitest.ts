@@ -10,7 +10,7 @@ import {
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { LOG_LEVELS, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
+import { LOG_LEVELS } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
@@ -104,7 +104,7 @@ layer(
         origin: null,
         parent: null,
         provenance: null,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+        takesFollowUps: false,
       });
       expect(trace.events).toContainEqual(
         expect.objectContaining({ type: 'log', message: 'hello' }),

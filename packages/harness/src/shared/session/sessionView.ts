@@ -29,7 +29,6 @@ import {
   RunIdSchema,
   TaskGroupSchema,
   TokenUsageStatsSchema,
-  UserFollowUpSupportSchema,
   WorktreeInfoSchema,
   type PermissionPayload,
   type RunId,
@@ -129,7 +128,8 @@ export const RunViewSchema = Schema.Struct({
    *  before the first position, after every activation, and for a process
    *  run, which has no loop of its own. */
   turn: Schema.NullOr(Count),
-  followUpSupport: UserFollowUpSupportSchema,
+  /** `run.start.takesFollowUps`. */
+  takesFollowUps: Schema.Boolean,
   /** Latest `context.state`. */
   context: Schema.NullOr(ContextStateDataSchema),
   parentId: Schema.NullOr(RunIdSchema),
@@ -246,16 +246,15 @@ export const isUnreadable = (run: Pick<ReadRunView, 'statusNotice'>): boolean =>
 
 /**
  * Whether a run takes a follow-up at all, the one rule every host reads (it
- * decides whether the composer shows). A run with no follow-up support and a
- * run whose rows this build cannot read take none; a run still going or
- * waiting takes one, as does a stopped native one with saved steps, which
- * a resume continues from its history.
+ * decides whether the composer shows). A run launched taking none
+ * (`takesFollowUps`) and a run whose rows this build cannot read take none;
+ * a run still going or waiting takes one, as does a stopped root agent with
+ * saved steps, which a resume continues from its history.
  */
 export function acceptsFollowUp(run: ReadRunView): boolean {
-  if (run.followUpSupport === 'unsupported' || isUnreadable(run)) return false;
+  if (!run.takesFollowUps || isUnreadable(run)) return false;
   if (run.holder === 'here' && run.position !== 'ready') return true;
   return (
-    run.followUpSupport === 'nativeInteractive' &&
     run.identity.kind === 'agent' &&
     run.parentId === null &&
     !run.recipe &&

@@ -79,7 +79,7 @@ TeXRA's Lean tools are the `lean4` plugin
 (`packages/texra/src/tools/lean/plugin.ts`), and its process layer is
 the Lean language-server pool. By default that is the direct
 `lake env lean --server` pool (`directLeanLanguageServices`,
-`packages/texra/src/tools/lean/direct/directLspAdapter.ts`); a host passes its
+`packages/texra/src/tools/lean/direct/leanServerPool.ts`); a host passes its
 own services in its place through `texraPlugins({ lean })`, as the VS Code
 extension does with its Lean 4 extension bridge:
 
@@ -457,7 +457,7 @@ when it opens.
   not fewer. A store the process builds itself, and the embedder's global
   state under `Sessions.layer`, are seeded (`seedDisabledToolDefaults` in
   `packages/harness/src/tools/toolAvailability.ts`).
-- **`lean: directLeanLanguageServices()`:** The raw loop still runs over any
+- **`lean: directLeanLanguageServices('lake')`:** The raw loop still runs over any
   `LeanLanguageServices` layer; without the direct one, Lean tools reach
   whatever port the embedder passed. The `memory`/`plan` injections do not
   depend on this choice (`packages/harness/src/tools/plugins.ts`).
@@ -490,7 +490,7 @@ following classification makes that distinction.
   (`packages/texra/src/controllers/texraProcessLayer.ts`), which builds the
   agent-directories port, passes the runtime skill sources and seeds the
   first-install tool switches. The `lean4` plugin's direct Lean language-server pool
-  (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; a composition may
+  (`packages/texra/src/tools/lean/direct/leanServerPool.ts`) is shipped-feature parity, not a raw-loop requirement; a composition may
   leave the plugin out. The `memory` and `plan` injections are manifest data
   (`packages/harness/src/tools/plugins.ts`).
 - **`:290-296` — `openNodeWorkspaceRoots(...)`:** Required. The workspace
@@ -545,7 +545,7 @@ than being repeated per host.
    the injections are manifest data; the process runtime is needed only when
    a run later reads the memory setting
    (`packages/harness/src/tools/plugins.ts`;
-   `packages/texra/src/tools/lean/direct/directLspAdapter.ts:47-52`).
+   `packages/texra/src/tools/lean/direct/leanServerPool.ts`).
 2. **The process runtime is once-per-process.** The Lean layer is built with
    it and closed with it; a host passes it in the plugin list it hands
    `processLayer` (`packages/harness/src/effect/processLayer.ts`).

@@ -20,7 +20,7 @@ import {
   truncate as truncateBody,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
-import { prRef } from './githubPaths';
+import { targetPath, type PullTarget } from './subscriptionTarget';
 import {
   formatCheckAnnotationLevelList,
   normalizeCheckAnnotationLevel,
@@ -93,70 +93,57 @@ const annotationBlock = (a: GhCheckAnnotation): string => {
  * GitHub delivers general PR comments over the same `issue_comment` webhook
  * as plain-issue comments (a PR *is* an issue under the REST API). Named
  * `formatPRIssueComment` — not `formatIssueComment` — to stay distinct from
- * `formatIssueEvent.ts`'s same-signature `formatIssueComment`; the two are
- * not interchangeable (wrong one renders `pulls/N` where `issues/N` is
- * expected, or vice versa) and TypeScript can't catch the swap since both
- * take `(slug: string, number: number, c: GhIssueComment): string`.
+ * `formatIssueEvent.ts`'s same-signature `formatIssueComment`; it takes
+ * the pull request's target, so the reference renders as `pulls/N`.
  */
 export function formatPRIssueComment(
-  slug: string,
-  prNumber: number,
+  pr: PullTarget,
   c: GhIssueComment,
 ): string {
-  return formatCommentEvent(prRef(slug, prNumber), c, MAX_BODY);
+  return formatCommentEvent(targetPath(pr), c, MAX_BODY);
 }
 
 export function formatReviewComment(
-  slug: string,
-  prNumber: number,
+  pr: PullTarget,
   c: GhReviewComment,
 ): string {
   return wrap(
     sections(
-      `${reviewCommentPrefix(c)} on ${prRef(slug, prNumber)} by ${authorOf(c.user)} at ${reviewCommentLocation(c)}:`,
+      `${reviewCommentPrefix(c)} on ${targetPath(pr)} by ${authorOf(c.user)} at ${reviewCommentLocation(c)}:`,
       truncate(c.body),
       c.html_url,
     ),
   );
 }
 
-export function formatReview(
-  slug: string,
-  prNumber: number,
-  r: GhReview,
-): string {
+export function formatReview(pr: PullTarget, r: GhReview): string {
   const verb = REVIEW_VERBS[r.state] ?? FALLBACK_REVIEW_VERB;
   return wrap(
     sections(
-      `${authorOf(r.user)} ${verb} ${prRef(slug, prNumber)}.`,
+      `${authorOf(r.user)} ${verb} ${targetPath(pr)}.`,
       r.body && truncate(r.body),
       r.html_url,
     ),
   );
 }
 
-export function formatCheckFailure(
-  slug: string,
-  prNumber: number,
-  run: GhCheckRun,
-): string {
+export function formatCheckFailure(pr: PullTarget, run: GhCheckRun): string {
   return wrap(
     sections(
       'The following CI check failed on the PR. Investigate the failure and determine what action (if any) is needed.',
-      `PR: ${prRef(slug, prNumber)}\n${checkRunBlock(run)}`,
+      `PR: ${targetPath(pr)}\n${checkRunBlock(run)}`,
     ),
   );
 }
 
 export function formatCheckFailureSummary(
-  slug: string,
-  prNumber: number,
+  pr: PullTarget,
   runs: GhCheckRun[],
 ): string {
   return wrap(
     sections(
       `${runs.length} CI checks failed on the PR. Investigate the failures and determine what action (if any) is needed.`,
-      `PR: ${prRef(slug, prNumber)}`,
+      `PR: ${targetPath(pr)}`,
       runs.map(checkRunBlock).join('\n\n'),
     ),
   );
@@ -168,8 +155,7 @@ export function formatCheckFailureSummary(
  * suggestion advisories against specific lines without failing the build.
  */
 export function formatCheckAnnotations(
-  slug: string,
-  prNumber: number,
+  pr: PullTarget,
   run: GhCheckRun,
   annotations: ReadonlyArray<GhCheckAnnotation>,
 ): string {
@@ -182,7 +168,7 @@ export function formatCheckAnnotations(
       : run.html_url;
   return wrap(
     sections(
-      `Check "${run.name}" reported ${total} matching inline annotation(s) on ${prRef(slug, prNumber)}. Each annotation is tagged with its level (${formatCheckAnnotationLevelList(annotations)}); investigate and determine what action (if any) is needed.`,
+      `Check "${run.name}" reported ${total} matching inline annotation(s) on ${targetPath(pr)}. Each annotation is tagged with its level (${formatCheckAnnotationLevelList(annotations)}); investigate and determine what action (if any) is needed.`,
       shown.map(annotationBlock).join('\n\n'),
       overflow,
     ),
@@ -190,19 +176,17 @@ export function formatCheckAnnotations(
 }
 
 export function formatCIPassed(
-  slug: string,
-  prNumber: number,
+  pr: PullTarget,
   sha: string,
   runs: GhCheckRun[],
 ): string {
   return wrap(
-    `All ${runs.length} CI checks passed on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}).`,
+    `All ${runs.length} CI checks passed on ${targetPath(pr)} (head ${sha.slice(0, 7)}).`,
   );
 }
 
 export function formatCIStarted(
-  slug: string,
-  prNumber: number,
+  pr: PullTarget,
   sha: string,
   runs: GhCheckRun[],
   totalCount: number,
@@ -219,32 +203,27 @@ export function formatCIStarted(
 
   return wrap(
     sections(
-      `CI triggered on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}): GitHub reports ${formatResultCount(totalCount, 'check')} registered; this poll observed ${formatResultCount(runs.length, 'check')} across ${formatResultCount(uniqueNames.length, 'distinct check name')}.`,
+      `CI triggered on ${targetPath(pr)} (head ${sha.slice(0, 7)}): GitHub reports ${formatResultCount(totalCount, 'check')} registered; this poll observed ${formatResultCount(runs.length, 'check')} across ${formatResultCount(uniqueNames.length, 'distinct check name')}.`,
       body,
     ),
   );
 }
 
 export function formatCIComplete(
-  slug: string,
-  prNumber: number,
+  pr: PullTarget,
   sha: string,
   runs: GhCheckRun[],
 ): string {
   const passed = runs.filter((r) => isPassingConclusion(r.conclusion)).length;
   const failed = runs.length - passed;
   return wrap(
-    `CI completed on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
+    `CI completed on ${targetPath(pr)} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
   );
 }
 
-export function formatPRClosed(
-  slug: string,
-  prNumber: number,
-  merged: boolean,
-): string {
+export function formatPRClosed(pr: PullTarget, merged: boolean): string {
   return wrap(
-    `${prRef(slug, prNumber)} was ${merged ? 'merged' : 'closed'}. Subscription ended.`,
+    `${targetPath(pr)} was ${merged ? 'merged' : 'closed'}. Subscription ended.`,
   );
 }
 
@@ -256,12 +235,11 @@ export function formatPRClosed(
  * the base branch back in.
  */
 export function formatMergeConflictDetected(
-  slug: string,
-  prNumber: number,
+  pr: PullTarget,
   prevState: string | undefined,
 ): string {
   return wrap(
-    `Merge conflict detected on ${prRef(slug, prNumber)}: GitHub now reports mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
+    `Merge conflict detected on ${targetPath(pr)}: GitHub now reports mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
       `The PR head no longer cleanly merges into its base: rebase or merge the base back in to resolve.`,
   );
 }
@@ -273,26 +251,10 @@ export function formatMergeConflictDetected(
  * on the conflict notification gets a clean "resolved" signal too.
  */
 export function formatMergeConflictResolved(
-  slug: string,
-  prNumber: number,
+  pr: PullTarget,
   newState: string,
 ): string {
   return wrap(
-    `Merge conflict on ${prRef(slug, prNumber)} is resolved: mergeable_state is now "${newState}".`,
+    `Merge conflict on ${targetPath(pr)} is resolved: mergeable_state is now "${newState}".`,
   );
-}
-
-/**
- * Error events delivered into the follow-up queue when the poller hits an
- * unrecoverable condition (auth rejected, repeated failures). Same
- * `<github-webhook-activity>` envelope + sanitize path as every other event
- * so agents can't mistake these for direct user input and so an adversarial
- * GitHub error payload can't inject tag-shaped content unsanitized.
- */
-export function formatSubscriptionError(
-  slug: string,
-  prNumber: number,
-  detail: string,
-): string {
-  return wrap(`PR subscription to ${prRef(slug, prNumber)} halted: ${detail}`);
 }

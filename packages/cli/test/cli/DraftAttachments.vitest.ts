@@ -2,7 +2,12 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { DraftAttachmentStore } from '@cli/chat/tui/input/draftAttachments';
+import {
+  EMPTY_DRAFT,
+  resolveImages,
+  withPastedImage,
+  withText,
+} from '@cli/chat/tui/input/draftAttachments';
 
 const img = (name: string) => ({
   path: `/p/${name}`,
@@ -10,13 +15,12 @@ const img = (name: string) => ({
   displayName: name,
 });
 
-describe('DraftAttachmentStore', () => {
+describe('Draft attachments', () => {
   it('resolves only image chips still present in the draft (orphan gate)', () => {
-    const store = new DraftAttachmentStore();
-    const kept = store.addPastedImage(img('a.png'));
-    store.addPastedImage(img('b.png')); // orphaned — chip removed from draft
-    expect(store.resolveImages(`keep ${kept}`).map((e) => e.path)).toEqual([
-      '/p/a.png',
-    ]);
+    const kept = withPastedImage(EMPTY_DRAFT, img('a.png'));
+    // orphaned — chip removed from draft
+    const orphaned = withPastedImage(kept.draft, img('b.png'));
+    const draft = withText(orphaned.draft, `keep ${kept.chip}`);
+    expect(resolveImages(draft).map((e) => e.path)).toEqual(['/p/a.png']);
   });
 });

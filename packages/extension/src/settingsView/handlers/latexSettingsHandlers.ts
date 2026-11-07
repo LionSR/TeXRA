@@ -12,7 +12,7 @@ import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import type { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
+import type { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import {
   LATEX_RECOMMENDED_SETTINGS,
   LATEX_WORKSHOP_EXT_ID,
@@ -93,8 +93,8 @@ export function latexEditorStatus(): LatexEditorStatus {
  *  failure in its own words and repaints the LaTeX status it changed. */
 export function vscodeLatexSettingsHandlers(
   body: Pick<
-    ReturnType<typeof createSettingsViewBody>,
-    'postLatexStatus' | 'reported'
+    Effect.Success<ReturnType<typeof makeSettingsViewBody>>,
+    'changed' | 'reported'
   >,
 ): Pick<
   SettingsViewInboundHandlerRegistry,
@@ -150,7 +150,7 @@ export function vscodeLatexSettingsHandlers(
             { concurrency: 'unbounded', discard: true },
           );
 
-          yield* body.postLatexStatus;
+          yield* body.changed('latex');
           const verb = reset ? 'reset' : 'applied';
           yield* Effect.forkDetach(
             showLoggedInfoMessage(
@@ -163,7 +163,7 @@ export function vscodeLatexSettingsHandlers(
         }),
       ),
     installLatexWorkshop: () =>
-      installExtension(LATEX_WORKSHOP_EXT_ID, body.postLatexStatus),
+      installExtension(LATEX_WORKSHOP_EXT_ID, body.changed('latex')),
     installToolExtension: (message) =>
       installExtension(message.extensionId, Effect.void),
   };
