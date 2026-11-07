@@ -66,14 +66,26 @@ class GitHubTransientError extends Schema.TaggedError<GitHubTransientError>()(
   },
 ) {}
 
+/** A 200 whose body does not match the shape GitHub documents for the
+ *  resource. GitHub did answer, so it is neither transient nor permanent:
+ *  a poll reads it as nothing new (`pollGet`), a one-shot lookup fails. */
+export class GitHubMalformedBodyError extends Schema.TaggedError<GitHubMalformedBodyError>()(
+  'GitHubMalformedBodyError',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
 type GitHubRequestError =
   | GitHubAuthError
   | GitHubRateLimitError
   | GitHubPermanentError
   | GitHubTransientError;
 
-/** Every way a {@link ghGet} can fail: a classified response, a transport
- *  failure or timeout, or the token store's read. */
+/** Every way a GitHub read can fail once a malformed body has been handled:
+ *  a classified response, a transport failure or timeout, or the token
+ *  store's read. */
 export type GitHubFailure = GitHubRequestError | SecretsFailed;
 
 /**
@@ -151,14 +163,18 @@ function classifyFailure(
 
 /**
  * GET `path`, decoding a 200 body with `schema` (the shape GitHub documents
- * for it); a body that fails it is a transient failure naming the issue. A
- * caller that skips a malformed body itself passes `Schema.Unknown`.
+ * for it); a body that fails it is a `GitHubMalformedBodyError` naming the
+ * path and the issue.
  */
 export const ghGet = Effect.fn('ghGet')(function* <T>(
   path: string,
   schema: Schema.Codec<T, unknown>,
   etag?: string,
-): Effect.fn.Return<ConditionalResponse<T>, GitHubFailure, GitHubServices> {
+): Effect.fn.Return<
+  ConditionalResponse<T>,
+  GitHubFailure | GitHubMalformedBodyError,
+  GitHubServices
+> {
   const secrets = yield* Secrets;
   const token = yield* getGitHubToken(secrets);
   const headers: Record<string, string> = {
@@ -194,7 +210,7 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
     ).pipe(
       Effect.catchTag('SchemaError', (error) =>
         Effect.fail(
-          new GitHubTransientError({
+          new GitHubMalformedBodyError({
             message: `GitHub returned a malformed body for ${path}: ${error.message}`,
             cause: error,
           }),
