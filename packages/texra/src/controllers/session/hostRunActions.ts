@@ -183,7 +183,10 @@ export interface HostRunActions {
   readonly runOutputs: {
     getOutputFiles(runId: RunId): ReturnType<typeof documentsOf>['files'];
   };
-  sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
+  /** Send `text` to the conversation that launched `runId` (the chat that
+   *  called a document task), past any background script it ran under; a
+   *  run nothing launched has no one to send it to. */
+  followUpLauncher(runId: RunId, text: string): Effect.Effect<void>;
 }
 
 export const createHostRunActions = Effect.fn(
@@ -340,10 +343,20 @@ export const createHostRunActions = Effect.fn(
 
   return {
     runOutputs,
-    sendFollowUp(runId, text) {
+    followUpLauncher(runId, text) {
+      // A background script replays its recorded program and reads no new
+      // input, so the note goes to the conversation that started the script.
+      let launcher = runView(runId)?.launchParentId ?? null;
+      for (
+        let parent = launcher === null ? undefined : runView(launcher);
+        parent?.identity.kind === 'script';
+        parent = launcher === null ? undefined : runView(launcher)
+      )
+        launcher = parent.launchParentId;
+      if (launcher === null) return Effect.void;
       const present = (message: string) => ports.showWarning(message);
       const deliver = session
-        .request({ kind: 'followUp.send', runId, text })
+        .request({ kind: 'followUp.send', runId: launcher, text })
         .pipe(
           Effect.flatMap((outcome) => {
             const shown = presentFollowUpResult(outcome);
@@ -354,9 +367,11 @@ export const createHostRunActions = Effect.fn(
           Effect.catchCause((cause) => {
             const message = toErrorMessage(Cause.squash(cause));
             return Effect.logWarning(
-              `Failed to submit follow-up for stream ${runId}: ${message}`,
+              `Failed to send a follow-up to run ${launcher}: ${message}`,
             ).pipe(
-              Effect.annotateLogs({ data: { runId, error: message } }),
+              Effect.annotateLogs({
+                data: { runId: launcher, error: message },
+              }),
               withLogChannel(CHANNEL),
               Effect.andThen(
                 present(`Could not send the follow-up: ${message}`),
@@ -365,8 +380,8 @@ export const createHostRunActions = Effect.fn(
             );
           }),
         );
-      // Detached: a recovery resume can run a whole model turn, so no host
-      // request waits on the outcome.
+      // Detached: the follow-up can wake the launcher for a whole model
+      // turn, so no host request waits on the outcome.
       return Effect.forkDetach(deliver).pipe(Effect.asVoid);
     },
     /**
