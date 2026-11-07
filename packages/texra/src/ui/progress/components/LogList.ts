@@ -3,7 +3,7 @@
  * `<task-group-list>` per recently shown run so a switch back restores
  * scroll and render windows, and it maps the file and label links
  * inside rows to `host-request` arms. Group expansion is the surface's
- * (`Surface.groups`): the list reads the run's map and every toggle is
+ * (`RunSurface.groups`): the list reads the run's map and every toggle is
  * dispatched as a `SurfaceAction`, never kept here.
  */
 import { LRUCache } from 'lru-cache';
@@ -101,7 +101,7 @@ export class LogList extends LitElement {
             .surface=${this.surface}
             .tools=${this.tools}
             .transcript=${run.transcript}
-            .expanded=${this.surface?.groups.get(id)}
+            .expanded=${this.surface?.runs.get(id)?.groups}
             ?terminal=${terminal}
           ></task-group-list>
         `;

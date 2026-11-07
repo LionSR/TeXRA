@@ -29,6 +29,7 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   canSendFollowUp,
   EMPTY_DRAFT,
+  runSurface,
   type Draft,
   type Surface,
 } from '@texra/shared/session/surface';
@@ -273,7 +274,7 @@ export class SessionComposer extends LitElement {
   private get draft(): Draft {
     const run = this.run;
     if (!run) return EMPTY_DRAFT;
-    return this.surface?.drafts.get(run.id) ?? EMPTY_DRAFT;
+    return this.surface ? runSurface(this.surface, run.id).draft : EMPTY_DRAFT;
   }
 
   private get text(): string {
@@ -470,7 +471,7 @@ export class SessionComposer extends LitElement {
             SessionUiEvents.host({ kind: 'openSettings', target }),
           ),
       },
-      this.surface?.editing != null,
+      this.surface?.shown._tag === 'Proposal',
     );
   }
 
@@ -544,7 +545,8 @@ export class SessionComposer extends LitElement {
     // Send and Cmd+Alt+E share `canSendFollowUp`; the launcher needs text.
     const canSend = run ? canSendFollowUp(run, this.draft) : hasText;
     let sendLabel = compact ? 'Send follow-up' : 'Start task';
-    if (!compact && this.surface?.editing != null) sendLabel = 'Approve';
+    if (!compact && this.surface?.shown._tag === 'Proposal')
+      sendLabel = 'Approve';
     const sending = this.surface?.sending.has(run?.id ?? 'launch') ?? false;
 
     return html`

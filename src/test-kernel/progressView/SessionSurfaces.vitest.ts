@@ -58,7 +58,7 @@ beforeEach(() => {
   webviewState = {
     [`surface:${KEY}`]: Schema.decodeUnknownSync(PersistedSurfaceSchema)({
       selected: ROOT,
-      drafts: [[ROOT, 'Saved text']],
+      runs: [[ROOT, { draft: 'Saved text', groups: [] }]],
     }),
   };
   storage = createWebviewStorage({
@@ -144,7 +144,7 @@ describe('session Surface ownership', () => {
         new Rejected({ reason: 'Unavailable' }),
       ),
     );
-    expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
+    expect(surfaces.get(KEY)?.surface$.get().runs.get(ROOT)?.draft).toEqual({
       text: 'New text',
       images: [image],
     });
@@ -158,7 +158,7 @@ describe('session Surface ownership', () => {
     });
     acceptEdited({ ok: true, outcome: { kind: 'done' } });
     await vi.waitFor(() =>
-      expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
+      expect(surfaces.get(KEY)?.surface$.get().runs.get(ROOT)?.draft).toEqual({
         text: 'Later text',
         images: [image],
       }),
@@ -168,7 +168,7 @@ describe('session Surface ownership', () => {
     surfaces.runtimeRequest(KEY, { ...request, text: 'Later text' });
     accept({ ok: true, outcome: { kind: 'done' } });
     await vi.waitFor(() =>
-      expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
+      expect(surfaces.get(KEY)?.surface$.get().runs.get(ROOT)?.draft).toEqual({
         text: '',
         images: [],
       }),

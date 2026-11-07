@@ -48,8 +48,8 @@ export function editedProposal(
   surface: Surface,
   view: SessionView,
 ): { readonly data: AgentProposalPermission; readonly run?: RunView } | null {
-  const { editing } = surface;
-  if (editing === null) return null;
+  const editing = surface.shown;
+  if (editing._tag !== 'Proposal') return null;
   const request = view.requests.find(
     ({ runId, requestId }) =>
       runId === editing.runId && requestId === editing.requestId,

@@ -25,6 +25,9 @@ import {
   PersistedSurfaceSchema,
   pruneSurface,
   reconcileLaunch,
+  runSurface,
+  shownRun,
+  type Draft,
   type Surface,
   type SurfaceAction,
 } from '@texra/shared/session/surface';
@@ -148,7 +151,7 @@ export function createSessionSurfaces(options: {
     const view = entry.view$.get();
     const aggregates = transcriptAggregates(
       view,
-      entry.surface$.get().selected,
+      shownRun(entry.surface$.get()),
     );
     return {
       transcript: aggregates.map((aggregate) => aggregate.id).join('/'),
@@ -227,7 +230,7 @@ export function createSessionSurfaces(options: {
     const surface = entry.surface$.get();
     return origin.runId === null
       ? surface.launch.instruction
-      : (surface.drafts.get(origin.runId)?.text ?? '');
+      : runSurface(surface, origin.runId).draft.text;
   }
 
   function setDraftText(entry: Held, origin: DraftOrigin, text: string): void {
@@ -294,7 +297,7 @@ export function createSessionSurfaces(options: {
           });
           return;
         }
-        const draft = entry.surface$.get().drafts.get(origin.runId);
+        const draft = entry.surface$.get().runs.get(origin.runId)?.draft;
         if (!draft) return;
         act(entry, {
           kind: 'draft',
@@ -372,7 +375,7 @@ export function createSessionSurfaces(options: {
 
   function hostRequestFor(entry: Held, request: HostRequest): void {
     const surface = entry.surface$.get();
-    let runId = surface.selected;
+    let runId = shownRun(surface);
     if (request.kind === 'record' && request.action.kind === 'start') {
       runId = request.action.target === 'launch' ? null : request.action.target;
     }
@@ -425,13 +428,13 @@ export function createSessionSurfaces(options: {
     // no restoration, and a later edit remains independent of this send.
     const submitted =
       request.kind === 'followUp.send'
-        ? entry.surface$.get().drafts.get(request.runId)
+        ? entry.surface$.get().runs.get(request.runId)?.draft
         : undefined;
     // Read before the answer: the view may retire the request, and the
     // form's hold on it, before the response arrives.
     const fromForm =
       request.kind === 'request.decide' &&
-      entry.surface$.get().editing?.requestId === request.requestId;
+      isProposalForm(entry.surface$.get(), request.requestId);
     const answered = (result: Response['result']) =>
       Effect.sync(() =>
         settleRuntimeResponse(entry, request, result, submitted, fromForm),
@@ -453,11 +456,18 @@ export function createSessionSurfaces(options: {
     );
   }
 
+  /** Whether the launch form is open on the proposal `requestId` asks. */
+  function isProposalForm(surface: Surface, requestId: string): boolean {
+    return (
+      surface.shown._tag === 'Proposal' && surface.shown.requestId === requestId
+    );
+  }
+
   function settleRuntimeResponse(
     entry: Held,
     request: RuntimeRequest,
     result: Response['result'],
-    submitted: ReturnType<Surface['drafts']['get']>,
+    submitted: Draft | undefined,
     fromForm: boolean,
   ): void {
     const runId = 'runId' in request ? request.runId : null;
@@ -482,7 +492,7 @@ export function createSessionSurfaces(options: {
     if (request.kind !== 'followUp.send' || !result.ok) return;
     if (
       submitted !== undefined &&
-      entry.surface$.get().drafts.get(request.runId) === submitted
+      entry.surface$.get().runs.get(request.runId)?.draft === submitted
     ) {
       act(entry, {
         kind: 'draft',
@@ -497,10 +507,10 @@ export function createSessionSurfaces(options: {
   function submit(entry: Held): void {
     const surface = entry.surface$.get();
     const view = entry.view$.get();
-    const runId = surface.selected;
+    const runId = shownRun(surface);
     if (runId !== null) {
       const run = view.runs.get(runId);
-      const draft = surface.drafts.get(runId) ?? EMPTY_DRAFT;
+      const { draft } = runSurface(surface, runId);
       // The same decision the composer's Send takes, from the same view
       // fields: a run that ended or that another process owns takes no
       // follow-up, however the send was reached.
@@ -567,8 +577,8 @@ export function createSessionSurfaces(options: {
     // Show Sessions opens the newest session only from the New-task state,
     // and not over a run the window just started that is still on its way.
     else if (
-      entry.surface$.get().selected === null &&
-      entry.surface$.get().pendingSelection === null
+      shownRun(entry.surface$.get()) === null &&
+      entry.surface$.get().arriving === null
     ) {
       act(entry, { kind: 'select', runId: action.runId });
     }
