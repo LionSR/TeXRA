@@ -117,13 +117,13 @@ const PARENT = Schema.decodeUnknownSync(RunIdSchema)('a00000000001');
 const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000008');
 /** The goal script the chat's plan launched, named by the plan call, and
  *  its one round, named by the script's `self()` call. */
-const GOAL = Schema.decodeUnknownSync(RunIdSchema)('644d1e4fe35654071fa5afb7');
-const ROUND = '38638341d36bf19292935f83';
+const GOAL = Schema.decodeUnknownSync(RunIdSchema)('c22000c7d5e126b3617ba3e3');
+const ROUND = '0accd89ce9df2f1109c8359e';
 /** The chat's Codex child, detached by the user's stop. */
 const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
 const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
 /** The agent the script defined (`persona`), named by its `agent()` call. */
-const DEFINED = '58828038326e436881c70921';
+const DEFINED = 'e06bb3ef6fa9b53a7135ae7f';
 /** A headless run, and the fork `texra resume --fork` made of it. */
 const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
@@ -136,7 +136,7 @@ const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
-const REVISIONS = ['14528522ea16213a4126fb3d', '7a442cb2049485ed76de69bc'];
+const REVISIONS = ['5e635e24c44c38717d06c117', 'f67ab3ad610d33f7b85cbf1c'];
 
 const roots: string[] = [];
 afterAll(() => {
@@ -710,7 +710,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
     return { sent, process: SessionGraph.with([], model) };
   };
   /** The chat's last model response. */
-  const RESPONSE = 582;
+  const RESPONSE = 534;
   /** The golden store, with `rewrite` applied, and a session over it. */
   const goldenSession = (rewrite?: string) =>
     Effect.gen(function* () {
