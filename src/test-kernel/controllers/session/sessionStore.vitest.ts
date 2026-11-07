@@ -43,7 +43,6 @@ import {
   validationHost,
 } from '@test/support/storeFaults';
 import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 /** The titles the store holds for `runId`, oldest first. */
 const titlesOf = (storage: string, runId: string) =>
@@ -109,7 +108,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
         'R24: a commit whose view never shows it fails its caller, and the committed rows stand',
         () =>
           Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
+            const { roots } = yield* FakeHost;
             const session = yield* persistentTestSession(roots);
             const runId = generateRunId();
             if (roots.workspace === undefined)
@@ -192,7 +191,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             // Subscribed before the runs start, so it holds every signal
             // they publish.
             const signals = yield* (yield* AppSignals).subscribe;
-            const session = yield* TestSession.open(testWorkspaceRoots(), {
+            const session = yield* TestSession.open(undefined, {
               persistent: true,
             });
             // The validation model's approval script, for a tool that asks

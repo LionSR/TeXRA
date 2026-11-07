@@ -12,13 +12,14 @@ import { endRunRows } from '@agent/storage/runLifecycle';
 
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
-import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
 import {
+  FakeHost,
   SessionGraph,
   sessionHandleOf,
   TestSession,
@@ -33,13 +34,14 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         Effect.gen(function* () {
           // Persistent stores, so each root's rows outlive its session's close
           // and are read back from the root they landed in.
+          const host = yield* FakeHost;
           const rootsA = createFakeWorkspaceRoots({
-            workspacePath: fakePath('papers/a'),
-            storagePath: fakePath('storage/a'),
+            workspacePath: host.path('papers/a'),
+            storagePath: host.path('storage/a'),
           });
           const rootsB = createFakeWorkspaceRoots({
-            workspacePath: fakePath('papers/b'),
-            storagePath: fakePath('storage/b'),
+            workspacePath: host.path('papers/b'),
+            storagePath: host.path('storage/b'),
           });
           const sessions = yield* Sessions;
           const sessionA = yield* Effect.flatMap(

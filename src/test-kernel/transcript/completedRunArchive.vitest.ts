@@ -15,7 +15,6 @@ import {
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog } from '@shared/session/runHistory';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -95,7 +94,7 @@ layer(texraHosted, { excludeTestServices: true })(
 
             // The session over the host's roots, on its persistent store.
             const session = yield* sessionHandleOf(
-              yield* TestSession.open(testWorkspaceRoots(), {
+              yield* TestSession.open((yield* FakeHost).roots, {
                 persistent: true,
                 host: {},
               }),

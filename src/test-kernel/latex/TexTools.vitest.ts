@@ -7,8 +7,6 @@ import { beforeEach, expect, vi } from 'vitest';
 
 import { pathToLocationIn } from '@texra-ai/harness/host';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 import { TEXRA_APP } from '@test/support/texraApp';
@@ -23,12 +21,15 @@ vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
   return { ...actual, runTool: mocks.runTool };
 });
 
-const workspacePath = fakePath('workspace');
-const buildDir = path.join(workspacePath, 'build');
+/** The workspace and build folder of the test's host. */
+const hostDirs = Effect.map(FakeHost, (host) => ({
+  workspacePath: host.path('workspace'),
+  buildDir: host.path('workspace', 'build'),
+}));
 
 /** The engine's exit: 0, writing `pdf` (its bytes) into the build folder
  *  first when given, as a real engine run does. */
-const engineExits = (pdf?: string) =>
+const engineExits = (buildDir: string, pdf?: string) =>
   Effect.sync(() => {
     if (pdf !== undefined) {
       mkdirSync(buildDir, { recursive: true });
@@ -43,19 +44,20 @@ const engineExits = (pdf?: string) =>
     };
   });
 
-/** Compile the workspace's `main.tex` into `build/`, over the installed
+/** Compile the workspace's `main.tex` into `build/`, over the test
  *  host's roots, as a session hands them. */
-const compileMain = () => {
-  const roots = testWorkspaceRoots();
-  return compileLatex2Pdf(
+const compileMain = Effect.gen(function* () {
+  const { roots } = yield* FakeHost;
+  const { workspacePath, buildDir } = yield* hostDirs;
+  return yield* compileLatex2Pdf(
     pathToLocationIn(roots.workspace, path.join(workspacePath, 'main.tex')),
     roots,
     { outputDirectory: buildDir },
   ).pipe(Effect.provide(rootedFsLayer(roots)));
-};
+});
 
 // Exercises the real production code; only the subprocess call is mocked.
-layer(FakeHost.layer({ app: TEXRA_APP, workspacePath }), {
+layer(FakeHost.layer({ app: TEXRA_APP }), {
   buildPerTest: true,
   excludeTestServices: true,
 })('compileLatex2Pdf structured return', (it) => {
@@ -67,9 +69,10 @@ layer(FakeHost.layer({ app: TEXRA_APP, workspacePath }), {
     'returns { ok: true } with the engine PDF path and no logTail on success',
     () =>
       Effect.gen(function* () {
-        mocks.runTool.mockReturnValue(engineExits('%PDF-1.5'));
+        const { workspacePath, buildDir } = yield* hostDirs;
+        mocks.runTool.mockReturnValue(engineExits(buildDir, '%PDF-1.5'));
 
-        const result = yield* compileMain();
+        const result = yield* compileMain;
 
         expect(result).toEqual({
           ok: true,
@@ -100,9 +103,10 @@ layer(FakeHost.layer({ app: TEXRA_APP, workspacePath }), {
   // success there sent callers to open a file that is not there.
   it.effect('reports an exit 0 that wrote no PDF as a failure', () =>
     Effect.gen(function* () {
-      mocks.runTool.mockReturnValue(engineExits());
+      const { buildDir } = yield* hostDirs;
+      mocks.runTool.mockReturnValue(engineExits(buildDir));
 
-      const result = yield* compileMain();
+      const result = yield* compileMain;
 
       expect(result.ok).toBe(false);
       expect(result.ok ? '' : result.logTail).toContain(

@@ -24,14 +24,12 @@ import {
 import { WorkspaceFs } from '@texra-ai/harness/host';
 import { SessionRequests } from '@agent/runtime/requests';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog } from '@shared/session/runHistory';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { fakePath } from '@test/support/FakePlatform';
 import {
   FakeHost,
   SessionGraph,
@@ -44,10 +42,11 @@ import { writeFileTool } from '@tools/WriteTool';
 // Local file imports
 import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';
 
-// A real directory: the edit flow reads the current content through the
-// process filesystem, so the file a case stubs has to exist where the
-// workspace says it does.
-const WORKSPACE_PATH = fakePath('workspace');
+// The case's host, and its workspace: a real directory, since the edit
+// flow reads the current content through the process filesystem, so the
+// file a case stubs has to exist where the workspace says it does.
+let host: Context.Service.Shape<typeof FakeHost>;
+let workspacePath: string;
 
 // A tool edit opens its request on a run, so every case owns a freshly
 // started one, on a session of its own.
@@ -114,7 +113,7 @@ function stubWorkspaceFile(
   filePath: string,
   options: { exists: boolean; content: string },
 ) {
-  const absolutePath = path.join(WORKSPACE_PATH, filePath);
+  const absolutePath = path.join(workspacePath, filePath);
   if (options.exists) {
     mkdirSync(path.dirname(absolutePath), { recursive: true });
     writeFileSync(absolutePath, options.content);
@@ -126,12 +125,16 @@ function stubWorkspaceFile(
   return workspaceWrites;
 }
 
+/** Set the approval policy on the case's host. */
+const approvalPolicy = (policy: Parameters<typeof setTestApprovalPolicy>[0]) =>
+  setTestApprovalPolicy(policy).pipe(Effect.provideService(FakeHost, host));
+
 /** Supply the exact per-call capabilities a dispatched tool receives. */
 function inRun<A, E>(effect: Effect.Effect<A, E, PluginToolServices>) {
   return withStubbedEditFiles(effect).pipe(
     Effect.provide(
       nativeToolTestLayer({
-        workingDirectory: WORKSPACE_PATH,
+        workingDirectory: workspacePath,
         run: { runId, session, toolPolicy: {} },
       }),
     ),
@@ -147,12 +150,13 @@ function inRun<A, E>(effect: Effect.Effect<A, E, PluginToolServices>) {
 const setUp = () =>
   Effect.gen(function* () {
     nextDecision = () => ({ action: 'approve' });
-    yield* Layer.build(FakeHost.layer({ workspacePath: WORKSPACE_PATH }));
+    host = Context.get(yield* Layer.build(FakeHost.layer()), FakeHost);
+    workspacePath = host.path('workspace');
     session = yield* Effect.flatMap(
-      TestSession.open(undefined, { host: {} }),
+      TestSession.open(host.roots, { host: {} }),
       sessionHandleOf,
     );
-    setTestApprovalPolicy('ask', Context.get(session, SessionRoots));
+    yield* approvalPolicy('ask');
     workspaceWrites.mockReset();
     relativeFiles.clear();
     runId = yield* publishTestRunStart(session, generateRunId());
@@ -171,12 +175,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.effect('gates an edit to a dangling symlink as an existing file', () =>
       Effect.gen(function* () {
         yield* setUp();
-        mkdirSync(WORKSPACE_PATH, { recursive: true });
+        mkdirSync(workspacePath, { recursive: true });
         // A dangling symlink names a workspace entry even though stat through
         // the link fails; the read-before-edit gate must not treat it as new.
         symlinkSync(
-          path.join(WORKSPACE_PATH, 'gone.txt'),
-          path.join(WORKSPACE_PATH, 'dangling.txt'),
+          path.join(workspacePath, 'gone.txt'),
+          path.join(workspacePath, 'dangling.txt'),
         );
 
         const result = yield* inRun(
@@ -197,7 +201,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.effect('denies an edit under never, and tells the host', () =>
       Effect.gen(function* () {
         yield* setUp();
-        setTestApprovalPolicy('never', Context.get(session, SessionRoots));
+        yield* approvalPolicy('never');
 
         const write = stubWorkspaceFile('denied.txt', {
           exists: false,

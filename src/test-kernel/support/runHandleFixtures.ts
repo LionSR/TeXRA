@@ -9,10 +9,10 @@ import {
   type AgentRunServices,
 } from '@agent/runtime/runRegistry';
 import type { RunsShape } from '@agent/runtime/runs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { emptySessionView } from '@shared/session/sessionView';
 import type { RunId } from '@shared/schemas';
-import { testWorkspaceRoots } from './testWorkspaceRoots';
 
 /** A registry's launch door over the calling fiber's process services,
  *  standing in for the session context the session layer forks runs from:
@@ -38,37 +38,36 @@ export const testRunFork: Effect.Effect<
 export const testRunInSession = ((effect) =>
   effect) as RunRegistryInit['inSession'];
 
-/** A registry over an empty fold: no run has a view, which is what a
- *  fixture that never publishes a phase-moving row would see. */
-export const testRunRegistry: Effect.Effect<
-  RunRegistry,
-  never,
-  RunServices | Scope.Scope
-> = Effect.zipWith(
-  testRunFork,
-  // The empty fold the registry reads its grants from.
-  SubscriptionRef.make(emptySessionView('test-run-registry')),
-  (fork, emptyView) =>
-    // The registry reads its session's view (empty here) and its own
-    // `run.detach` batches (dropped); nothing else.
-    new RunRegistry({
-      // cast: the registry reads only these members of its view.
-      view: {
-        run: () => undefined,
-        ref: emptyView,
-      } as unknown as RunRegistryInit['view'],
-      // cast: the registry reads only these members of its log.
-      log: {
-        transact: () => Effect.succeed([]),
-      } as unknown as RunRegistryInit['log'],
-      runsHere: () => {},
-      roots: testWorkspaceRoots(),
-      inSession: testRunInSession,
-      fork,
-      programs: testRunPrograms,
-      wake: () => {},
-    }),
-);
+/** A registry over `roots` and an empty fold: no run has a view, which is
+ *  what a fixture that never publishes a phase-moving row would see. */
+export const testRunRegistry = (
+  roots: WorkspaceRoots,
+): Effect.Effect<RunRegistry, never, RunServices | Scope.Scope> =>
+  Effect.zipWith(
+    testRunFork,
+    // The empty fold the registry reads its grants from.
+    SubscriptionRef.make(emptySessionView('test-run-registry')),
+    (fork, emptyView) =>
+      // The registry reads its session's view (empty here) and its own
+      // `run.detach` batches (dropped); nothing else.
+      new RunRegistry({
+        // cast: the registry reads only these members of its view.
+        view: {
+          run: () => undefined,
+          ref: emptyView,
+        } as unknown as RunRegistryInit['view'],
+        // cast: the registry reads only these members of its log.
+        log: {
+          transact: () => Effect.succeed([]),
+        } as unknown as RunRegistryInit['log'],
+        runsHere: () => {},
+        roots,
+        inSession: testRunInSession,
+        fork,
+        programs: testRunPrograms,
+        wake: () => {},
+      }),
+  );
 
 /** The run programs a test registry runs: the production ones, each read
  *  per call so a suite's own mock of its module is the program it reaches. */

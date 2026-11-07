@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 import {
@@ -15,7 +14,6 @@ import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
 
 layer(
   FakeHost.layer({
-    workspacePath: fakePath('workspace'),
     files: {
       '/workspace/chapter/main.tex': 'workspace text',
       '/outside/absolute.tex': 'external text',
@@ -31,9 +29,10 @@ layer(
     'skips a relative entry with no workspace root instead of failing the batch',
     () =>
       Effect.gen(function* () {
+        const host = yield* FakeHost;
         const { xml, skipped } = yield* getXmlFormatFromReadableFiles(
           undefined,
-          ['relative.tex', fakePath('outside/absolute.tex')],
+          ['relative.tex', host.path('outside/absolute.tex')],
         );
 
         expect(xml).toContain('<document name="absolute.tex">');

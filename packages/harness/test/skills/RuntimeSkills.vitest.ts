@@ -15,16 +15,17 @@ import {
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeHost } from '@test/support/testKernel';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { DISABLED_SKILLS_SETTING } from '@texra-ai/harness/schemas';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 
 const tempRoots = useTempDirs();
-/** The run catalog of `workspacePath`, with no installed plugin loading. */
-const runCatalog = (workspacePath: string) => ({
-  roots: { ...testWorkspaceRoots(), workspace: workspacePath },
+/** The run catalog of `workspacePath` over `roots`, with no installed
+ *  plugin loading. */
+const runCatalog = (roots: WorkspaceRoots, workspacePath: string) => ({
+  roots: { ...roots, workspace: workspacePath },
   plugins: { loadable: [], withheld: [] },
 });
 
@@ -58,6 +59,7 @@ layer(FakeHost.layer({ workspacePath: WORKSPACE_ROOT }), {
 })('runtime skills', (it) => {
   it.effect('filters runtime skills disabled by name', () =>
     Effect.gen(function* () {
+      const { roots } = yield* FakeHost;
       const projectRoot = yield* Effect.promise(() => createTempRoot());
       const userRoot = yield* Effect.promise(() => createTempRoot());
       yield* Effect.promise(() =>
@@ -72,12 +74,12 @@ layer(FakeHost.layer({ workspacePath: WORKSPACE_ROOT }), {
           description: 'User skill.',
         }),
       );
-      yield* testWorkspaceRoots().config.update(DISABLED_SKILLS_SETTING.key, [
+      yield* roots.config.update(DISABLED_SKILLS_SETTING.key, [
         'project-skill',
       ]);
 
       const result = yield* loadRuntimeSkillCatalogEffect(
-        runCatalog(WORKSPACE_ROOT),
+        runCatalog(roots, WORKSPACE_ROOT),
       ).pipe(
         Effect.provide(
           testSkillRoots([
@@ -101,6 +103,7 @@ layer(FakeHost.layer({ workspacePath: WORKSPACE_ROOT }), {
     "admits a step's listed or activated skill directory to its calls only",
     () =>
       Effect.gen(function* () {
+        const { roots } = yield* FakeHost;
         const skillsRoot = yield* Effect.promise(createTempRoot);
         const skillPath = yield* Effect.promise(() =>
           writeSkill(
@@ -112,7 +115,7 @@ layer(FakeHost.layer({ workspacePath: WORKSPACE_ROOT }), {
         );
         const projectA = path.resolve(path.sep, 'project-a');
         const { catalog } = yield* loadRuntimeSkillCatalogEffect(
-          runCatalog(projectA),
+          runCatalog(roots, projectA),
         ).pipe(
           Effect.provide(testSkillRoots([{ tier: 'user', path: skillsRoot }])),
           Effect.provide(nodePlatformLayer),
@@ -126,7 +129,7 @@ layer(FakeHost.layer({ workspacePath: WORKSPACE_ROOT }), {
         const resolveFrom = (stepRoots: readonly StepRoot[]) =>
           resolveToolPath(
             {
-              roots: { ...testWorkspaceRoots(), workspace: projectA },
+              roots: { ...roots, workspace: projectA },
               stepRoots,
             },
             skillPath,

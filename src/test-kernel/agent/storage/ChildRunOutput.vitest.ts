@@ -17,7 +17,6 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog } from '@shared/session/runHistory';
 import { publishTestRunStart, seedRows } from '@test/support/sessionTestUtils';
-import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   FakeHost,
@@ -151,13 +150,7 @@ const persistCompletedChild = (
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'resolveChildRunOutput',
   (it) => {
-    it.layer(
-      FakeHost.layer({
-        storagePath: fakePath('storage'),
-        workspacePath: fakePath('workspace'),
-      }),
-      { buildPerTest: true },
-    )((it) => {
+    it.layer(FakeHost.layer(), { buildPerTest: true })((it) => {
       it.effect('rejects output references from an unrelated run tree', () =>
         Effect.gen(function* () {
           const session = yield* processSession;
@@ -178,8 +171,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.effect('rejects paths outside run storage', () =>
         Effect.gen(function* () {
           const session = yield* processSession;
+          const host = yield* FakeHost;
           const error = yield* Effect.flip(
-            resolveChildRunOutput(parentRunId, fakePath('workspace/draft.tex'))
+            resolveChildRunOutput(parentRunId, host.path('workspace/draft.tex'))
               .pipe(Effect.provide(resolveLayer))
               .pipe(Effect.provide(session)),
           );

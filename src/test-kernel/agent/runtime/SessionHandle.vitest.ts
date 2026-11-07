@@ -20,8 +20,8 @@ import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
 import { Approvals } from '@shared/session/runHistory';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
+  FakeHost,
   isolatedTestSession,
   SessionGraph,
   sessionHandleOf,
@@ -53,7 +53,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             catalog: TEXRA_SETTINGS.catalog,
           });
           yield* windowB.set(STORED_POLICY_KEY, 'yolo');
-          const roots = { ...testWorkspaceRoots(), config };
+          const roots = { ...(yield* FakeHost).roots, config };
           const before = yield* Effect.flatMap(
             TestSession.open({
               ...roots,
