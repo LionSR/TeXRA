@@ -523,6 +523,34 @@
       ]
     },
     {
+      "id": "RT-tui-approve-handler",
+      "candidate": "the terminal chat answers its prompts through an approve handler attached to its session (SessionHost.approve), so the modal is on screen exactly while its fiber runs and decided, reopenRequest and the useOwnApiKey host command go",
+      "why": "Every chat is a client of the background service by default, and a service-backed session refuses an approve handler: serviceSession.ts line 636, attach dies with \"approve handlers are not supported on a service-backed session; the service's windows answer prompts\". Every window, the terminal chat included, answers a prompt with request.decide from its view; that one path is the design. A second path, an approval capability in the host-call protocol plus a rule for which attached window answers, is refused, and so is an approve handler on the chat's own-session fallback alone, which would be a second implementation beside request.decide. The ten-minute APPROVAL_HANDLER_TIMEOUT that would have denied a waiting person was deleted in #14772, so no clock argues for the move either. decided, reopenRequest and the useOwnApiKey host command stay because the terminal chat answers with request.decide: decided hides a request between the key press and its request.decided row, reopenRequest shows it again when the decide is refused, and the host command runs the own-key retry (performHost, which the chat's attached host serves and the modal's DecisionSurface carries; the module slot that held it went with S18), whose controller lands the decision itself once the key is in place. Found as F2 (2026-11-05 design red flags, F-hosts.md) and section 1.1 of the PR 1 compromises; refused by the coordinator of the hosts round.",
+      "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/F-hosts.md#f2-approvals-the-harnesss-answer-loop-is-reimplemented-twice-in-the-cli-with-a-client-side-decided-flag",
+      "symbols": [
+        {
+          "file": "packages/texra/src/controllers/server/serviceSession.ts",
+          "symbol": "serviceSession.attach",
+          "signature": "attach: (host) => host.approve === undefined ? attachWindowHost(link, workspace, { emit: host.emit }) : Effect.die( new Error( \"approve handlers are not supported on a service-backed session; the service's windows answer prompts\", ), ),"
+        },
+        {
+          "file": "packages/cli/src/chat/tui/state/approvalQueue.ts",
+          "symbol": "decided",
+          "signature": "const decided = signal<ReadonlySet<string>>(new Set());"
+        },
+        {
+          "file": "packages/cli/src/chat/tui/state/approvalQueue.ts",
+          "symbol": "reopenRequest",
+          "signature": "export function reopenRequest(requestId: string): void {…}"
+        },
+        {
+          "file": "packages/cli/src/chat/tui/state/approvalQueue.ts",
+          "symbol": "DecisionSurface",
+          "signature": "export interface DecisionSurface { readonly requests: SessionRequests; readonly runtime: ProcessRuntime; readonly performHost: (command: HostCommand) => void; }"
+        }
+      ]
+    },
+    {
       "id": "TEST-golden-store-staleness-stamp",
       "candidate": "a check, or a staleness stamp, that fails when src/test-kernel/fixtures/storage/golden-1.0.sql no longer matches what the current CLI would write",
       "why": "The golden store is a conformance fixture: goldenStore.vitest.ts states that every later build must read it as the build that wrote it did, so the rows an earlier build wrote, stale prompt and tool text included, are what it should hold. A row-format change already fails that suite, which forces the regeneration. A staleness stamp would make every prompt or tool-description edit pay a CLI regeneration (building the validation bundle and driving the CLI for minutes) for nothing it protects. New row kinds gain golden rows in the PR that changes the format. Left open by #14823 (round 3, R3-R); refused for the round-4 catalogue at c9ceb23.",
@@ -545,6 +573,19 @@
           "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts",
           "symbol": "SubscriptionUsageAdapter",
           "signature": "interface SubscriptionUsageAdapter { readonly resolveVariant?: () => Effect.Effect<boolean, Error>; readonly fetch: ( variant: boolean | undefined, ) => Effect.Effect< ParsedSubscriptionUsage | null, Error, HttpClient.HttpClient | Secrets >; }"
+        }
+      ]
+    },
+    {
+      "id": "CLI-tui-bell-from-attention",
+      "candidate": "the chat TUI's \"agent finished\" bell reads attentionOf's finished list instead of its own four conditions over the root run's position and outcome",
+      "why": "attentionOf is the attention rule of the extension's chime and the desktop's notifications: a run is news when its outcome lands, whoever stopped it. The terminal's bell is a turn end for the one conversation on screen: a conversation's turn ends at waiting with no outcome (the chat's cue to type), a run that ends after waiting was already announced, and a stop the person pressed in this terminal is not news. Moving either rule into attentionOf would change what the desktop and the extension announce; giving attentionOf a mode for the terminal is an option for one caller. The bell's conditions read the session view and nothing else, which is the design (hosts read the view). Found in round 2 (K-cli.md, finding 11); refused by package A in its TUI lifecycle PR.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/K-cli.md#finding-11-batched-smaller-findings-in-the-same-species",
+      "symbols": [
+        {
+          "file": "packages/cli/src/chat/tui/runChatTui.tsx",
+          "symbol": "rootStandingNow",
+          "signature": "const rootStandingNow = () => runViewOf(currentView(), rootRunId.get());"
         }
       ]
     }
