@@ -142,7 +142,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
           options.onboarding.signInWithChatGpt(),
         ),
         skip: Effect.suspend(() => options.onboarding.skipOnboarding()),
-        runSetup: Effect.suspend(() => options.onboarding.runSetup()),
+        runSetup: (launch) =>
+          Effect.suspend(() => options.onboarding.runSetup(launch)),
         skipSetup: Effect.suspend(() => options.onboarding.skipSetup()),
         // The desktop has no walkthrough of its own: the card's "Open
         // walkthrough" opens the desktop docs.

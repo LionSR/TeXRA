@@ -13,14 +13,16 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
-import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
+import {
+  kickoffDesktopSetup,
+  type WindowSetupLaunch,
+} from '@texra/controllers/onboarding/setupLaunch';
 import {
   hostFailure,
   type RequestRefusal,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness/host';
-import type { DesktopProjectRegistry } from './desktopProjects.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 
 /** The onboarding cards' actions the host request handlers call. */
@@ -29,8 +31,9 @@ export interface WindowOnboarding {
   skipOnboarding(): Effect.Effect<void, StateWriteFailed>;
   /** The setup card's skip: marks the first run done. */
   skipSetup(): Effect.Effect<void, StateWriteFailed>;
-  /** The setup card's Run Setup: launches the setup conversation. */
-  runSetup(): Effect.Effect<void>;
+  /** The setup card's Run Setup: launches the setup conversation through
+   *  the launch path of the project window that asked. */
+  runSetup(launch: WindowSetupLaunch): Effect.Effect<void>;
   signInWithChatGpt(): Effect.Effect<
     void,
     StateWriteFailed | StateReadFailed | HostFailed | RequestRefusal,
@@ -41,15 +44,11 @@ export interface WindowOnboarding {
 export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
   function* (options: {
     readonly runtime: ProcessRuntime;
-    readonly projects: DesktopProjectRegistry;
-    /** The settings surface and the launch path of the shown project, read
-     *  when a card asks, since both are built after this surface. */
+    /** The settings surface, read when a card asks, since it is built after
+     *  this surface. */
     readonly settings: () => DesktopSettingsIpc | undefined;
-    readonly activeRun: () =>
-      | Parameters<typeof kickoffDesktopSetup>[0]['run']
-      | undefined;
   }): Effect.fn.Return<WindowOnboarding, never, Scope.Scope | AppState> {
-    const { runtime, projects } = options;
+    const { runtime } = options;
     const state = yield* AppState;
     // One setup launch at a time: a double-click of "Run Setup" while the
     // first still resolves its model, before its run shows in the session
@@ -60,20 +59,11 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
     return {
       skipOnboarding: () => setOnboardingDeclined(state, true),
       skipSetup: () => setFirstRunDone(state),
-      // The project and its launch path are read when the user clicks.
-      runSetup: () =>
+      runSetup: (launch) =>
         Effect.asVoid(
           FiberHandle.run(
             setupLaunch,
-            Effect.suspend(() =>
-              withProcessServices(
-                runtime,
-                kickoffDesktopSetup({
-                  project: projects.active(),
-                  run: options.activeRun(),
-                }),
-              ),
-            ),
+            withProcessServices(runtime, kickoffDesktopSetup(launch)),
             { onlyIfMissing: true },
           ),
         ),
