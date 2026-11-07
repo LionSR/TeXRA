@@ -24,9 +24,15 @@ describe('the creator agent tool catalog', () => {
         .flatMap((plugin) => plugin.tools ?? [])
         .map((tool) => tool.definition.name),
     );
+    // A bullet names one tool or several, and a long list wraps onto
+    // indented continuation lines.
     const listed = [
-      ...readFileSync(CATALOG, 'utf8').matchAll(/^- `([a-z0-9_]+)`/gm),
-    ].map((match) => match[1]);
+      ...readFileSync(CATALOG, 'utf8').matchAll(
+        /^- ((?:`[a-z0-9_]+`,?\s*)+)/gm,
+      ),
+    ].flatMap((match) =>
+      [...match[1].matchAll(/`([a-z0-9_]+)`/g)].map((m) => m[1]),
+    );
     expect(listed.length).toBeGreaterThan(0);
     expect(listed.filter((name) => !registered.has(name))).toEqual([]);
   });
