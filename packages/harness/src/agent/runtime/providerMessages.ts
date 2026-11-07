@@ -8,7 +8,7 @@
  * the package's own schemas parse them back here, so a turn another build of
  * the package can no longer read is a refusal of that run, never a default.
  */
-import { Effect, Predicate, Result, Schema } from 'effect';
+import { Effect, Predicate, Result, Schema, absurd } from 'effect';
 
 import {
   AssistantMessageSchema,
@@ -329,8 +329,12 @@ export function addressedMessages(messages: readonly AppendedMessage[]): {
             content: entry.content.map(addressed),
           })),
         };
-      default:
+      // These hold no media part.
+      case 'assistant':
+      case 'system':
         return message;
+      default:
+        return absurd(message);
     }
   });
   return { messages: result, blobs: [...blobs.values()] };
@@ -376,8 +380,12 @@ export const providerMessages = <E>(
               content: entry.content.map((part) => resolved(part, texts)),
             })),
           };
-        default:
+        // These hold no media part.
+        case 'assistant':
+        case 'system':
           return message;
+        default:
+          return absurd(message);
       }
     }),
   );
