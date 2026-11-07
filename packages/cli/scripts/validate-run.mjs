@@ -2325,9 +2325,9 @@ async function validateServiceSessionIdle() {
  * A project's `.env` reaches its service tasks and their commands, scoped
  * to the project (audit 2026-10-07 #3): the service is started bare, the
  * project's `.env` sets a variable and a provider key, and a task's
- * command sees the variable but never the key. A key set only in the
- * starting terminal is said not to reach the task. The command's output
- * and the CLI's notice are the artifact.
+ * command sees the variable but never a key: neither the project's nor
+ * the one the starting terminal sends with the task's start. The
+ * command's output is the artifact.
  */
 async function validateServiceProjectEnv() {
   const cwd = makeScratch('texra-cli-service-env-');
@@ -2418,11 +2418,6 @@ prompt: |
     const reported = readFileSync(output, 'utf8');
     const artifactPath = writeArtifact('service-project-env.json', {
       command: reported,
-      notice: started.stderr
-        .split('\n')
-        .filter((line) =>
-          line.includes('not reach tasks in the TeXRA service'),
-        ),
     });
     assert(
       reported === 'from-project-dotenv|withheld',
@@ -2462,12 +2457,6 @@ prompt: |
     assert(
       edited === 'edited-dotenv|withheld',
       `a task started after .env changed should read the new value (got ${edited})`,
-    );
-    assert(
-      /OPENAI_API_KEY[^\n]* from this terminal do(es)? not reach tasks/.test(
-        started.stderr,
-      ),
-      `a key set only in the starting terminal should be said not to reach the task (artifact: ${artifactPath})`,
     );
   } finally {
     run(process.execPath, [binaryPath, 'service', 'stop'], {
