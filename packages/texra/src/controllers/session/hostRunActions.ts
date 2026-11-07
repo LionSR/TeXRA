@@ -24,7 +24,7 @@ import {
   withLogChannel,
   presentFollowUpResult,
   presentRunFailure,
-  type SessionHostInteractions,
+  type Notices,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
 import { Cause, Effect, FileSystem, Scope } from 'effect';
@@ -73,7 +73,7 @@ export interface HostRunActionPorts {
   /** The window's roots: its workspace and its settings stores. */
   readonly roots: WorkspaceRoots;
   /** Where a failure before a run opens is presented. */
-  readonly present: Pick<SessionHostInteractions, 'emit'>;
+  readonly present: Notices;
   /** Bring the host's progress surface into view for a run this window just
    *  started, or name the run in a notice when it cannot; a host whose
    *  surface is always on screen does nothing. */

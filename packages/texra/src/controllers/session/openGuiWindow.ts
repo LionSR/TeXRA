@@ -29,7 +29,7 @@ import {
 } from '@texra-ai/harness';
 import {
   AgentDirectories,
-  SessionHostInteractions,
+  presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
   type ProcessServices,
@@ -304,7 +304,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // it for the same. Its own failures before a run opens, it presents
   // itself.
   const workspace = roots.workspace ?? roots.storage;
-  const present = new SessionHostInteractions(host.window);
+  const present = presenterOn(host.window);
   yield* Effect.forkScoped(
     attachWindowHost(runs.link, workspace, host.window, ports.focused),
   );

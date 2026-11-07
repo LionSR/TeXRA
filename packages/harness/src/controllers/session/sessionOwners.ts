@@ -31,7 +31,6 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 import {
   Interactions,
   presentTerminalResult,
-  SessionHostInteractions,
 } from '@agent/runtime/HostInteractions';
 import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
 import { sessionPermission } from '@agent/runtime/loop/toolGuard';
@@ -180,10 +179,7 @@ export const sessionOwnersLayer = (
       );
       // The presentation host the session was opened with, which answers
       // while no host is attached; disposed after the runs.
-      const interactions = yield* Effect.acquireRelease(
-        Effect.sync(() => new SessionHostInteractions(open.interactions)),
-        (interactions) => interactions.dispose(),
-      );
+      const interactions = yield* Interactions.make(open.interactions);
       // The approvals, with the one reading of the policy over the host.
       const approvals = yield* sessionApprovals.pipe(Effect.provide(project));
       const withPolicy = project.pipe(

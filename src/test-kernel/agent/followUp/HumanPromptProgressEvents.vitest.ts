@@ -7,7 +7,10 @@ import { expect } from 'vitest';
 import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
 import { requestToolEditApproval } from '@texra-ai/harness/plugins';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
-import { Interactions } from '@agent/runtime/HostInteractions';
+import {
+  attachInteractions,
+  Interactions,
+} from '@agent/runtime/HostInteractions';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Approvals } from '@shared/session/runHistory';
@@ -35,9 +38,9 @@ function inToolContext<A, E, R>(
   runId: RunId,
   run: () => Effect.Effect<A, E, R>,
 ) {
-  return Effect.acquireUseRelease(
-    Context.get(session, Interactions).use(interactions),
-    () =>
+  return Effect.scoped(
+    Effect.andThen(
+      attachInteractions(Context.get(session, Interactions), interactions),
       run().pipe(
         Effect.provide(
           nativeToolTestLayer({
@@ -45,7 +48,7 @@ function inToolContext<A, E, R>(
           }),
         ),
       ),
-    (detach) => Effect.sync(detach),
+    ),
   );
 }
 

@@ -16,7 +16,15 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
-import { Context, Effect, Fiber, Schema, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Fiber,
+  Schema,
+  Scope,
+  SubscriptionRef,
+} from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -26,7 +34,10 @@ import {
   describeFollowUpFailure,
   Secrets,
 } from '@texra-ai/harness/host';
-import { Interactions } from '@agent/runtime/HostInteractions';
+import {
+  attachInteractions,
+  Interactions,
+} from '@agent/runtime/HostInteractions';
 import { openRequest, SessionRequests } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
@@ -513,25 +524,28 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 // attached, exactly as `chatSessionController` wires a live chat.
 const harnessRuntimeHost: CliRuntimeHost =
   createCliRuntimeHost(HARNESS_CLI_CONTEXT);
-HARNESS_DISPOSERS.push(
-  Effect.runSync(
-    session().interactions.use(
-      createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-        requests: {
-          request: (req) =>
-            session()
-              .requests.request(req)
-              .pipe(Effect.provide(harnessRuntimeSession)),
-          view: {
-            current: () => SubscriptionRef.getUnsafe(session().view.ref),
-            changes: session().view.changes,
-          },
+const harnessHostScope = Effect.runSync(Scope.make());
+HARNESS_DISPOSERS.push(() =>
+  Effect.runSync(Scope.close(harnessHostScope, Exit.void)),
+);
+Effect.runSync(
+  attachInteractions(
+    session().interactions,
+    createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
+      requests: {
+        request: (req) =>
+          session()
+            .requests.request(req)
+            .pipe(Effect.provide(harnessRuntimeSession)),
+        view: {
+          current: () => SubscriptionRef.getUnsafe(session().view.ref),
+          changes: session().view.changes,
         },
-        settings: HARNESS_PLATFORM_SERVICES,
-        runtime: harnessRuntime,
-      }),
-    ),
-  ),
+      },
+      settings: HARNESS_PLATFORM_SERVICES,
+      runtime: harnessRuntime,
+    }),
+  ).pipe(Scope.provide(harnessHostScope)),
 );
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 

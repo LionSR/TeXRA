@@ -310,8 +310,6 @@ export interface ProcessServicesOptions {
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
-  /** The app's directories on every command's PATH (`CommandDirs`). */
-  readonly commandDirs?: () => readonly string[];
   /** The global application-state layer, acquired in this runtime's scope
    *  (`processLayer` picks the host's and seeds it). */
   readonly appState: Layer.Layer<

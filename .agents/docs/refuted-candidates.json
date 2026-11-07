@@ -313,6 +313,32 @@
           "signature": "export function setExitCode(code: number): void {…}"
         }
       ]
+    },
+    {
+      "id": "SESSION-roots-carry-rooted-fs",
+      "candidate": "WorkspaceFs and StorageFs as fields of one SessionRoots value instead of context tags",
+      "why": "Eleven host boundaries run a program over a project's files with no session (withSessionFs over a WorkspaceRoots or a Pick of it: the settings view, VS Code commands, the CLI memory commands, the clipboard image). As fields of SessionRoots each would build the whole session roots value to hand a LaTeX helper or the memory store one rooted view, and every such program would require the session's roots: two tags deleted, the builder renamed, wider requirements, no element removed. The controllers' WorkspaceRoots tag is the storage key of a session graph, provided as { storage } alone by the read-only and remote views, which hold no roots.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#r8s-second-half-and-m8-what-landed-and-what-was-refused",
+      "symbols": [
+        {
+          "file": "packages/harness/src/platform/rootedFs.ts",
+          "symbol": "withSessionFs",
+          "signature": "export function withSessionFs<A, E, R>( roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>, program: Effect.Effect<A, E, R | WorkspaceFs | StorageFs>, ): Effect.Effect< A, E, Exclude<R, WorkspaceFs | StorageFs> | FileSystem.FileSystem | Path.Path > {…}"
+        }
+      ]
+    },
+    {
+      "id": "PLATFORM-roots-drop-global-slots",
+      "candidate": "WorkspaceRoots without globalStorage and globalState, readers taking GlobalStorageFs and AppState from the process services",
+      "why": "Both are read as data below platform/, where AppState and GlobalStorageFs are defined: Settings resolves a globalState row against the SettingsStores the caller holds (no ambient reader), and the plugin record, trust and managed directories take PluginEnv (globalState, globalStorage) in common/plugins. Dropping the fields moves both services below common/ and makes the globalState slot an ambient requirement of every Settings read: a redesign of the settings contract, not a sweep.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#r8s-second-half-and-m8-what-landed-and-what-was-refused",
+      "symbols": [
+        {
+          "file": "packages/harness/src/common/plugins/installRecord.ts",
+          "symbol": "PluginEnv",
+          "signature": "export type PluginEnv = Pick<SettingsStores, 'globalState'> & { readonly globalStorage: string; };"
+        }
+      ]
     }
   ]
 }

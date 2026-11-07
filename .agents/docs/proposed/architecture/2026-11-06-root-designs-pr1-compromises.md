@@ -62,6 +62,11 @@ Each item: what the note asked, what landed, why, and what ends it.
    `runs` (built-ins would need the table's one cast); `ToolEnv.run`. Why:
    each is a cross-package sweep (13+ files for the rooted filesystems) with
    no structural gain inside the harness; they belong with the hosts' PR.
+   Ended (2026-11-07): `Interactions` is the `SubscriptionRef` and
+   `Queue.sliding` record; the rooted filesystems as fields was refused
+   (`SESSION-roots-carry-rooted-fs`) and the second view tag already was
+   (`SESSION-one-view-service`), both in
+   `.agents/docs/refuted-candidates.json`.
 6. **`ToolPolicy.oneShot` beside `stopAfterCycle`** (two fields for one
    decision, `packages/harness/src/agent/runtime/run/AgentRun.ts`). Every
    child is `stopAfterCycle` now, so a tool can no longer read "no later turn

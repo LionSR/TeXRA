@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { layer } from '@effect/vitest';
 import { Effect, Context } from 'effect';
-import { expect, vi } from 'vitest';
+import { expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
 import {
@@ -17,7 +17,7 @@ import {
   nodeFileServices,
 } from '@texra-ai/harness/node';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
-import { Interactions } from '@agent/runtime/HostInteractions';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
 import { Approvals } from '@shared/session/runHistory';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -82,27 +82,27 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
 
     it.effect('refuses run work once disposal has begun', () =>
       Effect.gen(function* () {
-        const session = yield* isolatedTestSession();
-        let attempted = false;
+        let refusal: string | undefined;
         // The handle's owners unwind after the session's runs: run work
-        // reaching the registry from inside that unwind is already refused.
-        const interactions = Context.get(session, Interactions);
-        vi.spyOn(interactions, 'dispose').mockImplementation(() =>
-          Effect.gen(function* () {
-            attempted = true;
-            const refused = yield* registryOf(Context.get(session, Runs))
-              .start(generateRunId(), {
-                open: Effect.void,
-                run: () => Effect.never,
-              })
-              .pipe(Effect.flip, Effect.orDie);
-            expect(refused.message).toBe(
-              'Cannot register run work after session disposal.',
-            );
-          }),
-        );
+        // reaching the registry from inside that unwind (the attached host's
+        // disposal) is already refused.
+        const session: Context.Context<SessionServices> =
+          yield* isolatedTestSession({
+            dispose: () => {
+              refusal = Effect.runSync(
+                registryOf(Context.get(session, Runs))
+                  .start(generateRunId(), {
+                    open: Effect.void,
+                    run: () => Effect.never,
+                  })
+                  .pipe(Effect.flip, Effect.orDie),
+              ).message;
+            },
+          });
         yield* (yield* Sessions).close(Context.get(session, SessionRoots));
-        expect(attempted).toBe(true);
+        expect(refusal).toBe(
+          'Cannot register run work after session disposal.',
+        );
       }),
     );
   },
