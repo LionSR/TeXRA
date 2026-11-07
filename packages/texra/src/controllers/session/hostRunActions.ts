@@ -487,22 +487,14 @@ export const createHostRunActions = Effect.fn(
         Effect.provide(workspaceEnvironmentLayer(roots.workspace)),
         Effect.provideService(Secrets, secrets),
       );
-      const plan = yield* planCompileFixer({
+      const fixer = yield* planCompileFixer({
         runId,
         runConfig: config,
         rounds: roundsOfRun(runId),
         modelOptions,
         workspaceRoot: roots.workspace,
       }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
-      if (plan.kind === 'warning') {
-        yield* ports.notify('warning', plan.message);
-      } else if (plan.kind === 'info') {
-        yield* ports.notify('info', plan.message);
-      } else {
-        yield* runAgentRequest(plan.config, {
-          helperModel: true,
-        });
-      }
+      yield* runAgentRequest(fixer, { helperModel: true });
     }),
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
       const forked = yield* forkRun(session, runId, at);

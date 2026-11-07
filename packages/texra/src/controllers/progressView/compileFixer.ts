@@ -3,9 +3,10 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, PlatformError, Schema } from 'effect';
+import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports - run facts and filesystem access
+import { Rejected } from '@texra-ai/harness';
 import { decideRunModel, pathToLocationIn } from '@texra-ai/harness/host';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import {
@@ -40,12 +41,8 @@ interface CompileFixerTarget {
   missingLatexdiffArtifact?: string;
 }
 
-type ProgressFollowUpPlan =
-  | { kind: 'warning'; message: string }
-  | { kind: 'info'; message: string }
-  | { kind: 'execute'; config: AgentConfigInput };
-
-/** Resolve editable targets and a latexFixer request from one documents projection.
+/** Resolve editable targets and a latexFixer request from one documents
+ * projection, or `Rejected` with why it cannot run.
  * Model options are read by the caller before it captures the run's current documents.
  * The project root is explicit; only filesystem access comes from Effect context. */
 export const planCompileFixer = Effect.fn('planCompileFixer')(
@@ -60,8 +57,8 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     >[];
     readonly workspaceRoot: string | undefined;
   }): Effect.fn.Return<
-    ProgressFollowUpPlan,
-    PlatformError.PlatformError,
+    AgentConfigInput,
+    Rejected | CompileFixerPlanFailed,
     FileSystem.FileSystem
   > {
     const compileFailures = input.rounds.flatMap(compileFailuresOf);
@@ -71,18 +68,16 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
         ? input.runConfig
         : undefined;
     if (!workflowConfig) {
-      return {
-        kind: 'warning',
-        message:
+      return yield* new Rejected({
+        reason:
           'No document task found for this stream. Cannot run latexFixer.',
-      };
+      });
     }
 
     if (compileFailures.length === 0) {
-      return {
-        kind: 'info',
-        message: 'No compile failures are recorded for this stream.',
-      };
+      return yield* new Rejected({
+        reason: 'No compile failures are recorded for this stream.',
+      });
     }
 
     const decision = decideRunModel(
@@ -99,10 +94,9 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
         ),
     );
     if (!decision || decision.unavailable) {
-      return {
-        kind: 'warning',
-        message: 'No model is available to launch latexFixer.',
-      };
+      return yield* new Rejected({
+        reason: 'No model is available to launch latexFixer.',
+      });
     }
 
     const model = decision.model;
@@ -111,45 +105,39 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
       compileFailures,
       input.rounds,
       input.workspaceRoot,
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new CompileFixerPlanFailed({
+            runId: input.runId,
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      ),
     );
     if (targets.length === 0) {
-      return {
-        kind: 'warning',
-        message:
+      return yield* new Rejected({
+        reason:
           'No editable workspace file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
-      };
+      });
     }
 
-    const editableFiles = targets.map((target) => target.path);
     return {
-      kind: 'execute',
-      config: {
-        ...workflowConfig,
-        agent: 'latexFixer',
-        model,
-        instruction: buildCompileFixerQuestion(
-          compileFailures,
-          targets,
-          input.runId,
-        ),
-        // A chat with latexFixer, not the task's recipe again.
-        script: null,
-        inputFiles: editableFiles,
-        outputFiles: [],
-        editedFile: null,
-      },
+      ...workflowConfig,
+      agent: 'latexFixer',
+      model,
+      instruction: buildCompileFixerQuestion(
+        compileFailures,
+        targets,
+        input.runId,
+      ),
+      // A chat with latexFixer, not the task's recipe again.
+      script: null,
+      inputFiles: targets.map((target) => target.path),
+      outputFiles: [],
+      editedFile: null,
     };
   },
-  (effect, input) =>
-    Effect.mapError(
-      effect,
-      (cause) =>
-        new CompileFixerPlanFailed({
-          runId: input.runId,
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    ),
 );
 
 function buildCompileFixerQuestion(
