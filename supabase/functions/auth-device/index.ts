@@ -70,6 +70,17 @@ const USER_CODE_LENGTH = 8;
 const DEVICE_CODE_BYTES = 32;
 const USER_CODE_INSERT_ATTEMPTS = 4;
 
+/**
+ * The verification page's SDK: the UMD build in the npm tarball of the
+ * version `deno.json` pins, one file with no imports, so its integrity hash
+ * covers every line the page runs. A version bump recomputes the hash from
+ * that file (`openssl dgst -sha384 -binary | openssl base64 -A`).
+ */
+const PAGE_SDK_URL =
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.115.0/dist/umd/supabase.js';
+const PAGE_SDK_INTEGRITY =
+  'sha384-CLZeq1dk8+Uzrs7TVvBUdlFoV5F0DMqgRoeHa8g5wJcuPe5SkVfEvdxB0ZuzlnBQ';
+
 // =============================================================================
 // Hono App
 // =============================================================================
@@ -411,11 +422,12 @@ app.get('/verify', (c) => {
         // The page handles OAuth tokens in the URL fragment; keep it un-cached.
         'Cache-Control': 'no-store',
         'Referrer-Policy': 'no-referrer',
-        // Defense-in-depth: only the nonced inline module plus esm.sh may run
-        // scripts, and network calls are limited to GoTrue and this function.
+        // Only nonced scripts run: the inline module and the pinned SDK,
+        // which the browser also checks against its integrity hash. Network
+        // calls are limited to GoTrue and this function.
         'Content-Security-Policy': [
           "default-src 'none'",
-          `script-src 'nonce-${scriptNonce}' https://esm.sh`,
+          `script-src 'nonce-${scriptNonce}'`,
           `connect-src 'self' ${new URL(SUPABASE_URL).origin}`,
           "style-src 'unsafe-inline'",
           "base-uri 'none'",
@@ -479,14 +491,18 @@ function verifyPageHtml(
   <button id="deny">Deny</button>
 </div>
 <p id="status"></p>
+<script src="${PAGE_SDK_URL}" integrity="${PAGE_SDK_INTEGRITY}" crossorigin="anonymous" nonce="${scriptNonce}"></script>
 <script type="module" nonce="${scriptNonce}">
-  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-  const supabase = createClient(${JSON.stringify(projectUrl)}, ${JSON.stringify(
-    anonKey,
-  )});
-  const codeInput = document.getElementById('code');
   const statusEl = document.getElementById('status');
+  if (!window.supabase) {
+    statusEl.textContent = 'The sign-in library did not load. Reload the page to try again.';
+    statusEl.className = 'error';
+    throw new Error('The pinned supabase-js build did not load');
+  }
+  const supabase = window.supabase.createClient(${JSON.stringify(
+    projectUrl,
+  )}, ${JSON.stringify(anonKey)});
+  const codeInput = document.getElementById('code');
   const signedOut = document.getElementById('signed-out');
   const signedIn = document.getElementById('signed-in');
 
