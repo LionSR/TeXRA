@@ -45,6 +45,7 @@ const packageSession = (session: Context.Context<SessionServices>) =>
     const sessions = yield* makeSessions(
       { ...owner, open: () => Effect.succeed(session) },
       yield* AgentCatalog,
+      () => Effect.succeed([]),
     );
     return yield* sessions.open(testWorkspaceRoots());
   });

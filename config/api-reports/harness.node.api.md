@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 52
+Exports: 51
 
 - `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
@@ -52,7 +52,6 @@ Exports: 52
 - `setLogSink` — `function setLogSink: (next: LogSink | null, options?: { readonly trusted?: boolean | undefined; }) => void`
 - `whichOnExtendedPath` — `function whichOnExtendedPath: (name: string, appDirs: readonly string[]) => null | string`
 - `withExtendedPath` — `function withExtendedPath: <T extends NodeJS.ProcessEnv>(env: T, appDirs: readonly string[]) => T`
-- `WORKSPACE_STORES` — `const WORKSPACE_STORES: ValueFamily<{ readonly root: string; }>`
 - `workspaceRelativePath` — `function workspaceRelativePath: (root: string | undefined, filePath: string) => string`
 - `writeFileAtomic` — `const writeFileAtomic: (target: string, data: Uint8Array<ArrayBufferLike>) => Effect<void, PlatformError, never>`
 - `writeLogLine` — `function writeLogLine: (channel: string, message: string) => void`

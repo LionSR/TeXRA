@@ -42,6 +42,7 @@
 
 // Building the process and opening sessions.
 export { Sessions } from './effect/processLayer.js';
+export type { ProjectView } from './controllers/session/readSessionView.js';
 export type { AgentPlatform } from '@platform/agentPlatform';
 export type { Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';

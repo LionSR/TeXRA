@@ -118,6 +118,7 @@ const packageSession = (session: Context.Context<SessionServices>) =>
       // cast: the owner opens the one session this case holds.
       { open: () => Effect.succeed(session) } as never,
       yield* AgentCatalog,
+      () => Effect.succeed([]),
     );
     return yield* sessions.open(testWorkspaceRoots());
   });

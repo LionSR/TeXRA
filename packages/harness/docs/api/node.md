@@ -751,16 +751,6 @@ function withExtendedPath<T extends NodeJS.ProcessEnv>(
 ): T
 ```
 
-## WORKSPACE_STORES
-
-The global root's record of a workspace store, keyed by its storage
-directory id: the root it serves, so a storage prune can tell a store
-whose root is gone.
-
-```ts
-const WORKSPACE_STORES: ValueFamily<{ readonly root: string }>
-```
-
 ## workspaceRelativePath
 
 The workspace-relative form of `filePath`, symlink-aware. A path outside

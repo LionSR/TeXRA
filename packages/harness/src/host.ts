@@ -23,8 +23,6 @@ export {
   activationView,
   type ActivationViewSource,
 } from './effect/runHandle.js';
-// A project's view read cold from its store, for a multi-project listing.
-export { readSessionView } from '@controllers/session/readSessionView';
 export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
 export {
   formatConversationMessage,

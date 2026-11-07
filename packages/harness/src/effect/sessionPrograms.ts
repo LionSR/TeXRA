@@ -19,6 +19,7 @@ import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 
 // Each runtime value comes from the module that defines it.
 import { type AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
+import type { ProjectView } from '@controllers/session/readSessionView';
 import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { describeResumeRefusal } from '@agent/runtime/resumeRun';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -43,6 +44,8 @@ import {
   type RunId,
   generateRunId,
 } from '@shared/schemas';
+import type { DatabaseReadFailed } from '@shared/session/database';
+import type { SessionView } from '@shared/session/readonlyViews';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -254,6 +257,9 @@ function sessionOf(
 export function makeSessions(
   owner: Context.Service.Shape<typeof SessionOwner>,
   catalog: Catalog,
+  projects: (
+    held: (storage: string) => SessionView | undefined,
+  ) => Effect.Effect<readonly ProjectView[], DatabaseReadFailed>,
 ): Effect.Effect<Context.Service.Shape<typeof Sessions>> {
   return Effect.sync(() => {
     const sessionFor = (
@@ -280,6 +286,21 @@ export function makeSessions(
       close: (roots: WorkspaceRoots) => owner.close(roots.storage),
       closeAll: owner.closeAll,
       list: Effect.map(owner.list, (sessions) => sessions.map(sessionFor)),
+      projects: Effect.flatMap(owner.list, (sessions) => {
+        const held = new Map(
+          sessions.map(
+            (session) =>
+              [
+                Context.get(session, SessionRoots).storage,
+                Context.get(session, SessionViewAccess).ref,
+              ] as const,
+          ),
+        );
+        return projects((storage) => {
+          const ref = held.get(storage);
+          return ref === undefined ? undefined : SubscriptionRef.getUnsafe(ref);
+        });
+      }),
     };
   });
 }

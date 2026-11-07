@@ -601,6 +601,20 @@ class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
 )
 ```
 
+## ProjectView
+
+One project under a storage root, as `Sessions.projects` lists it.
+
+```ts
+interface ProjectView {
+  /** The project's folder. */
+  readonly workspace: string;
+  /** Its storage directory. */
+  readonly storage: string;
+  readonly view: SessionView;
+}
+```
+
 ## Rejected
 
 The runtime refused the request for a worded reason, which is also its
@@ -1001,6 +1015,16 @@ class Sessions extends Context.Service<
      *  deadline. */
     readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
     readonly list: Effect.Effect<readonly LocalSession[]>;
+    /**
+     * Every project under the process's storage root, from the record a
+     * host writes as it opens one: a session this process holds answers
+     * from its live view, any other is read cold from its store. A store
+     * that cannot be read is logged and left out.
+     */
+    readonly projects: Effect.Effect<
+      readonly ProjectView[],
+      DatabaseReadFailed
+    >;
   }
 >()('@texra-ai/harness/Sessions')
 ```
