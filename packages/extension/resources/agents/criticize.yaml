@@ -121,8 +121,6 @@ task:
       </instruction>
       If no specific instruction is given, apply your full critical scrutiny to all mathematical content.
 
-      The output documents should use the selected input filenames in this order: {{ INPUT_FILES | default([], true) | join(', ') }}.
-
       FIRST PHASE - DERIVATION EXPANSION: First, create an expanded version showing all mathematical steps explicitly. This is your working document where you verify every claim.
 
       In the scratchpad below, identify all locations requiring expansion, especially in appendices:
@@ -211,14 +209,6 @@ task:
       - For verified sections: \criticize{Verified: Calculated entropy production $\dot{S} = k_B\int J^2/(D\rho) \dd x$ and obtained positive value as required.}{0}{1}
       - Be specific about what calculation you performed and what result you obtained
       This helps track both problems and verified sections during the expansion phase.
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
     - |
       SECOND PHASE - PRIORITIZED CRITICAL COMMENTARY: Consolidate the commentary around issues that affect the collection's validity.
 
@@ -324,13 +314,3 @@ task:
       \end{itemize}
 
       Prioritize consequential issues over minor ones. Five well-supported critical findings are better than fifty minor comments. An appendix error that invalidates main results has severity 5. Apply severity consistently, identify issues that cascade between documents, and place comments where readers can connect them to the affected claim.
-
-      Ensure that the output documents use the selected input filenames in this order: {{ INPUT_FILES | default([], true) | join(', ') }}.
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>

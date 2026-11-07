@@ -51,13 +51,3 @@ task:
       - Mathematical verification belongs to review-oriented agents; this agent only proofreads.
 
       Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
-
-      Use the following format:
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED LATEX DOCUMENT {{ loop.index }} HERE
-      </document>
-      {% endfor %}
-      </documents>

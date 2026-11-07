@@ -137,15 +137,7 @@ task:
 
       Density: there is no annotation budget. Flag every point a naive physicist would actually stop at. Be harsh and constructive; every flag pairs the stop with a Fix: clause; for jargon, tone, unparseable, and nonsensical flags the fix includes a \rewrite{<substitute text>}.
 
-      Output envelope:
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      ... full self-contained preview LaTeX document for {{ output }} ...
-      </document>
-      {% endfor %}
-      </documents>
+      Output one full self-contained preview LaTeX document per input.
     - |
       Self-audit pass. Re-read your annotated draft honestly.
 
@@ -164,12 +156,4 @@ task:
       (10) Did you modify any prose outside a \criticize{...}{...}{...} body? Revert.
       (11) Did you make any "this is wrong" judgments? Demote to [domain-claim-unsure] or rephrase as [verify-with-author].
 
-      Output the refined self-contained LaTeX document(s) in the same envelope as round 1 (preamble, \criticize and \rewrite macro definitions, title block, annotated body, \end{document}, all inside the per-input <document> tags):
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      ... full self-contained preview LaTeX document for {{ output }}, with refined annotations ...
-      </document>
-      {% endfor %}
-      </documents>
+      Output the refined self-contained LaTeX document(s) in the same envelope as round 1 (preamble, \criticize and \rewrite macro definitions, title block, annotated body, \end{document}, all inside the per-input <document> tags).

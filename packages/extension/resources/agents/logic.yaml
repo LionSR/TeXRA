@@ -217,14 +217,6 @@ task:
       Add the comment command definition in the preamble if not already present:
       \usepackage{xcolor}
       \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\textit{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
     - |
       Review the identified structural issues and plan improvements. Separate direct fixes from major decisions.
 
@@ -287,12 +279,4 @@ task:
 
       If appendix derivations are questionable, add comments in the main text where those results are used, warning about the weak foundation. Be proactive with improvements that don't cross section boundaries, delete substantial content, or require cross-document coordination; leave major reorganization and cross-document changes as issue comments for the human to decide.
 
-      Did later documents receive less attention than earlier ones? Re-read the last document now. Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
+      Did later documents receive less attention than earlier ones? Re-read the last document now.

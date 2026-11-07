@@ -251,14 +251,6 @@ task:
       - [Document 1: original result]
         \criticize{Implemented: Strengthened to full finite-time result (proof in new Appendix~\ref{app:finite}). This enables the generalization in \cref{sec:generalization}.}{4}{4}
       - [Document 2: now uses strengthened result from Document 1]
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
     - |
       SECOND PHASE - IMPLEMENT TRACTABLE IMPROVEMENTS, SUGGEST DIFFICULT ONES: Now categorize the enhancement opportunities across all documents and implement those that are tractable while leaving detailed suggestions for more ambitious improvements.
 
@@ -390,13 +382,3 @@ task:
         [Document 2: now uses stronger result]
         The finite-time bound from the main text now gives...
         \criticize{Enhancement: Using strengthened result from main text \cref{thm:main}. Previous version only had asymptotic bound.}{3}{5}
-
-      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}
-
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">
-      % UPDATED_CONTENT_FOR_{{ output }}
-      </document>
-      {% endfor %}
-      </documents>
