@@ -12,8 +12,8 @@ import {
   type SkillDisplayItem,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
+  pluralize,
 } from '@texra-ai/harness/schemas';
-import { pluralize } from '@texra-ai/harness/transcript';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postMessage } from '@texra/shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';

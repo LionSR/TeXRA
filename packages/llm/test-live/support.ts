@@ -26,7 +26,7 @@ import process from 'node:process';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - the package under test
@@ -185,6 +185,10 @@ interface LiveProtocol {
   readonly continuation: 'supported' | 'unsupported';
 }
 
+/** The scope the suite's bindings live in: the process's, as the
+ *  uploads a live turn makes expire on their own. */
+const SUITE_SCOPE = Scope.makeUnsafe();
+
 /** `spec`'s model on the configuration a run builds, with a short output. */
 function bind(spec: LiveProtocol, apiKey: string): Model {
   const selected = selectModel(spec.model);
@@ -208,13 +212,23 @@ function bind(spec: LiveProtocol, apiKey: string): Model {
   });
   switch (configuration.protocol) {
     case 'anthropic-messages':
-      return anthropicMessagesModel(configuration, { apiKey });
+      return Effect.runSync(
+        Scope.provide(
+          anthropicMessagesModel(configuration, { apiKey }),
+          SUITE_SCOPE,
+        ),
+      );
     case 'google-interactions':
       return googleInteractionsModel(configuration, { apiKey });
     case 'openai-responses':
-      return openaiResponsesModel(configuration, {
-        authentication: { kind: 'api-key', apiKey },
-      });
+      return Effect.runSync(
+        Scope.provide(
+          openaiResponsesModel(configuration, {
+            authentication: { kind: 'api-key', apiKey },
+          }),
+          SUITE_SCOPE,
+        ),
+      );
   }
 }
 

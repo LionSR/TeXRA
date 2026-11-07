@@ -70,6 +70,9 @@ interface SubmitFollowUpOptions extends RunInboxSendOptions {
   /** The message's media, read in the run's send lane once the message is
    *  accepted, so a slow read never lets a later message commit first. */
   readonly attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>;
+  /** The keys the run resumes with if the message wakes it: the sending
+   *  client's (`followUp.send`'s `apiKeys`), never another run's. */
+  readonly apiKeys?: Readonly<Record<string, string>>;
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -145,14 +148,15 @@ export const wakeRun = Effect.fn('wakeRun')(function* (
  *  input could not be read. */
 export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
   runId: RunId,
+  apiKeys: Readonly<Record<string, string>> = {},
 ): Effect.fn.Return<boolean, never, Inbox | Runs | SessionViewAccess> {
   const owed = yield* (yield* Inbox).owesResume(runId);
   if (owed === undefined) return false;
-  // Keyless: the sender may be another client's run, whose keys this run
-  // must never take, and a send does not yet carry the woken run's own.
+  // The wake's own keys, never the fiber's: the sender may be another
+  // client's run, whose keys this run must never take.
   if (owed)
     yield* Effect.forkDetach(
-      wakeRun(runId).pipe(Effect.provideService(LaunchKeys, {})),
+      wakeRun(runId).pipe(Effect.provideService(LaunchKeys, apiKeys)),
     );
   return true;
 });
@@ -175,7 +179,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
-  const { hold, fromParent, attach } = options;
+  const { hold, fromParent, attach, apiKeys } = options;
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   const log = yield* SessionLog;
@@ -230,7 +234,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   // exited meanwhile, and one with a reader here owes nothing. The sender
   // hears the resume start, not the resumed turn end; a wake that could
   // not read the run leaves the row for an explicit resume.
-  yield* wakeIfOwed(runId);
+  yield* wakeIfOwed(runId, apiKeys);
   return { status: live ? 'sent' : 'queued' };
 });
 

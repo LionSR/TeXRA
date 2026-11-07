@@ -3,19 +3,6 @@
 Use this checklist after changes that affect the extension package layout,
 extension manifest, activation flow, or webview asset packaging.
 
-## Electron Bundle Render Smoke
-
-```bash
-npm run smoke:webviews
-```
-
-This command builds the extension webview bundles, renders the launcher,
-progress view, and settings view in Electron, and writes screenshots to
-`artifacts/webview-smoke/`. It verifies that the bundled webview frontends load
-without renderer errors, but it does not verify VS Code command registration,
-activation events, or view-container integration. Use the VS Code checks below
-for those host-level behaviors.
-
 ## Automated Host Check
 
 ```bash
@@ -27,8 +14,9 @@ npm run test:vscode -- --vscode minimum  # engines.vscode
 This launches the built extension in a real VS Code and asserts, from inside the
 extension host, that it activates, that every manifest command is registered, and
 that `showProgressView`, `showAgents` and `openProgressViewInTab` run and open a
-TeXRA webview tab. It runs in CI on push, nightly and dispatch, not on pull
-requests. It makes no model call: it seeds no API key.
+TeXRA webview tab. CI runs it against stable VS Code on every push to `main`,
+on dispatch, and on pull requests that touch the VS Code host; the nightly run
+skips it. It makes no model call: it seeds no API key.
 
 ## Development Host
 
@@ -52,8 +40,8 @@ In the Extension Development Host:
 
 1. Confirm that the TeXRA output channel reports activation without an error.
 2. Run `TeXRA: New Task`.
-3. Run `TeXRA: Show Sessions`.
-4. Run `TeXRA: Show Settings`.
+3. Run `TeXRA: Show Tasks`.
+4. Run `TeXRA: Open Settings`.
 5. Capture screenshots of the launcher, progress view, and settings view.
 
 ## Packaged VSIX

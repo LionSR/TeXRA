@@ -8,10 +8,11 @@ import {
   providerDisplayName,
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
-import { Rejected, type Session, Unavailable } from '@texra-ai/harness';
+import { type Session } from '@texra-ai/harness';
 import { Secrets } from '@texra-ai/harness/host';
 import type { ProcessServices } from '@texra-ai/harness/host';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import { Rejected, Unavailable } from '@texra-ai/harness/schemas';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
   isRequestRefusal,
   type RequestRefusal,
@@ -70,7 +71,7 @@ export class ProgressApiKeyRetryController {
     'ProgressApiKeyRetryController.useOwnApiKey',
   )(function* (
     this: ProgressApiKeyRetryController,
-    request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
+    request: Extract<HostCommand, { kind: 'useOwnApiKey' }>,
   ) {
     const { runId, requestId, credentialSwitch } = request;
     const { provider } = credentialSwitch;

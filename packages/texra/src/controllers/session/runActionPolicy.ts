@@ -7,13 +7,13 @@
 import { Effect } from 'effect';
 
 import {
-  Unavailable,
   type LaunchRefused,
   type Run,
   type RunFailure,
   type Session,
 } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
+import { Unavailable } from '@texra-ai/harness/schemas';
 import {
   isRequestRefusal,
   type RequestRefusal,

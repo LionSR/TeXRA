@@ -29,7 +29,7 @@ import {
 
 import {
   OutcomeSchema,
-  RuntimeRequestSchema,
+  RuntimeCommandSchema,
   RunIdSchema,
   StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
@@ -41,7 +41,7 @@ import {
   type SessionViewInput,
 } from '@texra-ai/harness/transcript';
 import { BridgeErrorSchema } from './bridgeErrors';
-import { HostRequestSchema } from './hostRequest';
+import { HostCommandSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
 import { LaunchPatchSchema } from './surface';
 
@@ -185,24 +185,24 @@ const SurfaceActionMessageSchema = Schema.Struct({
 });
 export type SurfaceActionMessage = typeof SurfaceActionMessageSchema.Type;
 
-const RuntimeRequestMessageSchema = Schema.Struct({
+const RuntimeCommandMessageSchema = Schema.Struct({
   kind: Schema.Literal('runtime.request'),
   session: SessionKeySchema,
   requestId: RequestIdSchema,
-  request: RuntimeRequestSchema,
+  request: RuntimeCommandSchema,
 });
 
-const HostRequestMessageSchema = Schema.Struct({
+const HostCommandMessageSchema = Schema.Struct({
   kind: Schema.Literal('host.request'),
   session: SessionKeySchema,
   requestId: RequestIdSchema,
-  request: HostRequestSchema,
+  request: HostCommandSchema,
 });
 
 export const UpMessageSchema = Schema.Union([
   SubscribeSchema,
-  RuntimeRequestMessageSchema,
-  HostRequestMessageSchema,
+  RuntimeCommandMessageSchema,
+  HostCommandMessageSchema,
 ]);
 export type UpMessage = typeof UpMessageSchema.Type;
 

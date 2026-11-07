@@ -20,7 +20,7 @@ export type DatabaseFixture = Pick<
   Pick<typeof import('@shared/session/sessionEvents'), 'ProcessIdentity'> &
   Pick<
     typeof import('@shared/schemas'),
-    'qualifyAggregateId' | 'SessionEventSchema'
+    'qualifyAggregateId' | 'SessionRowSchema'
   > &
   Pick<
     typeof import('@platform/defaults/workspaceStorage'),

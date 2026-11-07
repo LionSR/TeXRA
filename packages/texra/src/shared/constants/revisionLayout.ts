@@ -13,8 +13,8 @@ import { Result, Schema, SchemaTransformation } from 'effect';
 
 import type { FileLocation } from '@texra-ai/harness/schemas';
 
-/** The fixed basename of every workflow output file (no extension). */
-export const WORKFLOW_OUTPUT_BASENAME = 'output';
+/** The fixed basename of every document task output file (no extension). */
+export const DOCUMENT_OUTPUT_BASENAME = 'output';
 
 /** A revision folder's name, `r` and the zero-based revision in decimal
  *  digits: `r0`, `r12`. Digits only, so a sign, an exponent or a bare `r`
@@ -33,10 +33,7 @@ const revisionDir = (revision: number): string =>
  * Drop the leading revision folder of a runDir-relative path; with
  * `round`, only that revision's. Any other path comes back unchanged.
  */
-export function stripWorkflowRoundDir(
-  relativePath: string,
-  round?: number,
-): string {
+export function stripRevisionDir(relativePath: string, round?: number): string {
   const [head = '', ...rest] = relativePath.split(/[/\\]/);
   if (rest.length === 0) return relativePath;
   const parsed = Schema.decodeUnknownResult(RevisionDirSchema)(head);
@@ -56,7 +53,7 @@ export function revisionLayout(revision: number) {
   return {
     dir,
     /** The revision's reply, whole, beside its outputs. */
-    reply: `${dir}/${WORKFLOW_OUTPUT_BASENAME}.xml`,
+    reply: `${dir}/${DOCUMENT_OUTPUT_BASENAME}.xml`,
     /** The folder latexdiff writes the revision's diffs under. */
     diffDir: `diff/${dir}`,
     /** The compile check's log of the output named `safeName`. */
@@ -77,7 +74,7 @@ export function revisionLayout(revision: number) {
     modelCopy: (location: FileLocation): string | undefined => {
       switch (location.kind) {
         case 'runStorage':
-          return `model/${dir}/run/${stripWorkflowRoundDir(location.relativePath, revision)}`;
+          return `model/${dir}/run/${stripRevisionDir(location.relativePath, revision)}`;
         case 'workspace':
           return `model/${dir}/workspace/${location.relativePath}`;
         case 'external':

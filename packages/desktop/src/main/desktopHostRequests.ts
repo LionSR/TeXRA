@@ -24,7 +24,7 @@ import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostArms,
-  SharedHostRequestBindings,
+  SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import { instructionActions } from '@ui/copy/instructionActions';
 import { modelFailureText } from '@ui/copy/modelAccess';
@@ -96,7 +96,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
     /** This window's half of the shared body's binding table: every verb
      *  mapped onto the window's dialogs, its preview host, its settings
      *  view, and the project's launch path. */
-    const bindings: SharedHostRequestBindings = {
+    const bindings: SharedHostCommandBindings = {
       openPath: (file, line) => host.openPath(file, line),
       pickFiles: (fileType) =>
         options.files

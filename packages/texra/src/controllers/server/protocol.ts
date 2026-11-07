@@ -6,7 +6,7 @@
  * every task it starts.
  *
  * The payloads are the runtime's own wire schemas (the session bridge's
- * `Subscribe` and `EventsFrame`, `RuntimeRequest`, `StartRequestSchema`,
+ * `Subscribe` and `EventsFrame`, `RuntimeCommand`, `StartRequestSchema`,
  * `AgentConfig`), used as
  * they are; a procedure's error is the error class the handler fails with,
  * which the client receives as that class. The procedures:
@@ -18,7 +18,7 @@
  * - `tasks.list`: every task in every project this storage root holds.
  * - `task.watch`: a project's session feed (a stream of `EventsFrame`s)
  *   for one `Subscribe`, the frames the webview bridge already carries.
- * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, a
+ * - `task.request`: one `RuntimeCommand` (send, approve, stop, fork, a
  *   model switch, a pending tool edit's preview, …).
  * - `task.start` / `task.resume`: launch or continue a task in the service,
  *   answered with the run and the activation the window's handle is for;
@@ -49,14 +49,14 @@ import {
   RunWorkspaceFileSchema,
   OutcomeSchema,
   RequestErrorSchema,
-  RuntimeRequestSchema,
+  RuntimeCommandSchema,
   SessionViewSchema,
   StartRequestSchema,
 } from '@texra-ai/harness/schemas';
 import { RUN_STATUS_KEYS } from '@ui/copy/runStatus';
 import {
   CommitOrdinalSchema,
-  DisplaySessionEventSchema,
+  DisplayRowSchema,
 } from '@texra-ai/harness/transcript';
 
 import {
@@ -196,7 +196,7 @@ export const TexraRpcs = RpcGroup.make(
     stream: true,
   }),
   Rpc.make('task.request', {
-    payload: { workspace, request: RuntimeRequestSchema },
+    payload: { workspace, request: RuntimeCommandSchema },
     success: OutcomeSchema,
     error: BridgeErrorSchema,
   }),
@@ -324,7 +324,7 @@ export const TexraRpcs = RpcGroup.make(
         // A `TraceDocument`: the run's display rows, in commit order.
         trace: Schema.Struct({
           runId: RunIdSchema,
-          events: Schema.Array(DisplaySessionEventSchema),
+          events: Schema.Array(DisplayRowSchema),
         }),
         record: RunRecordFieldsSchema,
       }),

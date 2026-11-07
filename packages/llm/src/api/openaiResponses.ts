@@ -2,7 +2,16 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { Effect, Exit, identity, Ref, Schema, Stream, Struct } from 'effect';
+import {
+  Effect,
+  Exit,
+  identity,
+  Ref,
+  Schema,
+  type Scope,
+  Stream,
+  Struct,
+} from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
@@ -53,16 +62,24 @@ import {
 } from './openaiResponsesRequest.js';
 import type { ModelCredential } from '../node.js';
 
-/** Direct Responses operations, with no application model adapter. */
-export function openaiResponsesModel(
+/** Direct Responses operations, with no application model adapter; its
+ *  uploads live in the caller's scope. */
+export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
   config: OpenAIResponsesConfiguration,
   transport: {
     readonly authentication: ModelCredential;
     readonly fetch?: typeof fetch;
   },
-): Model {
+): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   const origin = originOf(config);
-  refuseAmbientHeaders();
+  yield* Effect.try({
+    try: refuseAmbientHeaders,
+    catch: (cause) => cause,
+  }).pipe(
+    Effect.catch((cause) =>
+      cause instanceof ModelError ? Effect.fail(cause) : Effect.die(cause),
+    ),
+  );
   const bearer = bearerOf(transport.authentication);
   const client = openaiClient(
     config.deployment.endpoint,
@@ -73,7 +90,7 @@ export function openaiResponsesModel(
   // backend serves none.
   const uploads =
     transport.authentication.kind === 'api-key'
-      ? filesApiUploads({
+      ? yield* filesApiUploads({
           providerName: 'OpenAI',
           model: origin.requestedModel,
           request: (call) =>
@@ -350,12 +367,7 @@ export function openaiResponsesModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    ...(uploads !== null
-      ? {
-          uploadFile: uploads.uploadFile,
-          releaseUploads: uploads.releaseUploads,
-        }
-      : {}),
+    ...(uploads !== null ? { uploadFile: uploads.uploadFile } : {}),
     ...(background === undefined ? {} : { background }),
   });
-}
+});

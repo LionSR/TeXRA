@@ -41,7 +41,7 @@ export const FileActionSchema = Schema.Literals([
   'merge',
 ]);
 
-export const HostRequestSchema = Schema.Union([
+export const HostCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('openFile'),
     path: Schema.String.check(Schema.isMinLength(1)),
@@ -237,7 +237,7 @@ export const HostRequestSchema = Schema.Union([
     ]),
   }),
 ]);
-export type HostRequest = typeof HostRequestSchema.Type;
+export type HostCommand = typeof HostCommandSchema.Type;
 
 /** What a `pack` or `clean` did, as the host presents it. */
 export type FileOpResult =

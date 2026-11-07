@@ -21,6 +21,7 @@ import {
   web,
   definePlugin,
   type ProcessPluginLayer,
+  type Plugin,
 } from '@texra-ai/harness/plugins';
 
 // Local imports
@@ -112,7 +113,6 @@ import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
 import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import type { WriteFilter } from '@texra-ai/harness/plugins';
-import type { Plugin } from '@texra-ai/harness';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settingsView/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
@@ -160,7 +160,7 @@ export type TexraPlugin = Plugin & {
  *  replacement rules of the call's workspace. */
 const texWriteFilter: WriteFilter = (path, content, config) => {
   if (!isTexFile(path)) return Effect.succeed(content);
-  const replaced = replacementEngine.applyFor(content, 'tex-write', config);
+  const replaced = replacementEngine.applyToTexWrite(content, config);
   return logReplacementDiagnostics(replaced.diagnostics).pipe(
     Effect.as(replaced.text),
   );

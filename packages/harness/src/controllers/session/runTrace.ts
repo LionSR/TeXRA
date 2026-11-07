@@ -19,8 +19,8 @@ import {
   type RunId,
   type RunOutcome,
   type CommitOrdinal,
-  type DisplaySessionEvent,
-  type SessionEvent,
+  type DisplayRow,
+  type SessionRow,
   type SessionViewInput,
   type TextChunk,
   type TranscriptSubscription,
@@ -46,7 +46,7 @@ interface RunTraceSink extends Pick<
   /** Drop the transient text a committed row closes: a stream's final text
    *  or a card's terminal result its own, a phase move that rests or ends
    *  the run, and its removal, every chunk of the run. */
-  readonly committed: (row: SessionEvent) => Effect.Effect<void>;
+  readonly committed: (row: SessionRow) => Effect.Effect<void>;
 }
 
 /** What a trace sink is built over. */
@@ -279,7 +279,7 @@ export function replayTrace<E>(
       return [{ type: 'stream.chunk', id: input.rowId, text: chunk }];
     };
     /** A row of the run as the trace events it stands for. */
-    const eventsOf = (row: DisplaySessionEvent): AgentEvent[] => {
+    const eventsOf = (row: DisplayRow): AgentEvent[] => {
       if (row.seq <= seq) return [];
       seq = row.seq;
       // Its end, the next activation, or the run's removal ends the read.

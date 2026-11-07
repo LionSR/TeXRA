@@ -15,7 +15,7 @@ import {
   sessionFsLayer,
 } from '@texra-ai/harness/host';
 import { runDirUnder } from '@common/storage/storageLayout';
-import { LatexMediaManager, type LatexTrace } from '@latex/LatexMediaManager';
+import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { FakePlatformOptions } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -25,7 +25,7 @@ import { FakeHost } from '@test/support/testKernel';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 import type { RunId } from '@texra-ai/harness/schemas';
 
-const logger: LatexTrace = spiedTrace();
+const logger = spiedTrace();
 
 const extractFiguresConfig: DocumentTaskOptions = {
   autoExtractFigure: true,

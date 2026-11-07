@@ -30,7 +30,7 @@ import {
   createCachedBinaryResolver,
   importForeignSdk,
   resolvePackageDir,
-} from '@texra/tools/support/externalBinaryUtils';
+} from './vendorPackages';
 
 type PlatformInfo = { pkg: string; triple: string };
 

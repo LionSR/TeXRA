@@ -10,8 +10,8 @@ import { Effect, Predicate, Result, SynchronizedRef } from 'effect';
 import {
   qualifyAggregateId,
   type RunId,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
 } from '@shared/schemas';
 import { DatabaseAggregateClosed } from '@shared/session/database';
 import {
@@ -187,7 +187,7 @@ const inconsistent = (runId: RunId, cause: RunHistoryInconsistent) =>
   });
 
 /** Committed history rows applied to `state`, their turns read back first. */
-const applyStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
+const applyStored = (state: RunState | null, rows: readonly SessionRow[]) =>
   Result.flatMap(runHistoryRows(rows), (live) => applyRunRows(state, live));
 
 /** `load`'s answer for a run's applied rows, which a resume shares. */
@@ -225,7 +225,7 @@ const broken = (detail: string) =>
   Effect.die(new Error(`RunCell.append contract: ${detail}`));
 
 /** No registration. */
-const none: Effect.Effect<readonly SessionEventDraft[]> = Effect.succeed([]);
+const none: Effect.Effect<readonly SessionRowDraft[]> = Effect.succeed([]);
 
 /** One checked batch, committed in the job `within` names or in the
  *  session's own (`sessionLog`). */
@@ -234,7 +234,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
   run: RunId,
   state: RunState,
   rows: readonly RunHistoryDraft[],
-  registration: Effect.Effect<readonly SessionEventDraft[]>,
+  registration: Effect.Effect<readonly SessionRowDraft[]>,
   alongside: Alongside<E>,
   within: Append | undefined,
 ) {
@@ -271,7 +271,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
   }
   // Converted before the job: a row this build cannot store is refused
   // with its reason, nothing written.
-  const drafts: WithBlobs<SessionEventDraft>[] = [];
+  const drafts: WithBlobs<SessionRowDraft>[] = [];
   for (const row of rows) {
     const draft = storedDraft(row);
     if (Result.isFailure(draft))
@@ -354,7 +354,7 @@ export function makeRunHistory(
             before === null ? [] : unboundRequests(before),
             'The process that asked exited.',
           );
-          const rows: readonly SessionEventDraft[] = [
+          const rows: readonly SessionRowDraft[] = [
             ...(yield* activation(before)),
             ...cancels,
           ];

@@ -21,7 +21,7 @@ import {
   SESSION_CLOSE_DEADLINE_MS,
 } from '@texra-ai/harness/host';
 import {
-  type RuntimeRequest,
+  type RuntimeCommand,
   qualifyAggregateId,
   type RunId,
   type AgentConfig,
@@ -127,7 +127,7 @@ interface ChatResult {
 }
 
 /** A change of a run's approval grants (`policy.set`). */
-type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
+type PolicyChange = Extract<RuntimeCommand, { kind: 'policy.set' }>['change'];
 
 export interface RunChatInit {
   /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */

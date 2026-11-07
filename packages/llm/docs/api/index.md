@@ -517,12 +517,6 @@ interface Model {
    * and sends bytes. Present only where the binding serves a files endpoint.
    */
   uploadFile?(file: FileUpload): Effect.Effect<void, ModelError>;
-  /**
-   * Delete every file `uploadFile` created, concurrently under one deadline,
-   * and forget them, so no later turn can send an id that no longer resolves.
-   * Never fails: what could not be confirmed deleted is returned.
-   */
-  releaseUploads?(): Effect.Effect<readonly UnreleasedUpload[]>;
   readonly background?: {
     submit(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,
@@ -1284,17 +1278,6 @@ const TurnResultSchema: Struct<{ readonly providerResponseId: NullOr<String>; re
 
 ```ts
 type TurnUsage = typeof TurnUsageSchema.Type;
-```
-
-## UnreleasedUpload
-
-A file a binding uploaded and could not confirm it deleted.
-
-```ts
-interface UnreleasedUpload {
-  readonly fileId: string;
-  readonly reason: string;
-}
 ```
 
 ## wireEffort

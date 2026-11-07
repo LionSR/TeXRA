@@ -10,7 +10,6 @@
  */
 
 // Third-party imports
-import { formatResultCount, pluralize } from '@texra-ai/harness/transcript';
 import {
   Array as Arr,
   Clock,
@@ -45,6 +44,8 @@ import {
   ensureError,
   RunIdSchema,
   FileLocation,
+  formatResultCount,
+  pluralize,
 } from '@texra-ai/harness/schemas';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';

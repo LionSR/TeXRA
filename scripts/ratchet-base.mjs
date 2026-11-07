@@ -61,22 +61,3 @@ export async function withBaseTree(base, use) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
-
-/**
- * Every file the working tree renamed since `base`, as `[from, to]` paths.
- * The `-z` stream is records: a status, then one path, or two for a rename
- * or copy (`R`/`C` plus a score). A rename counts once it is staged.
- */
-export function renamesSince(base) {
-  const fields = git('diff', '--find-renames', '--name-status', '-z', base)
-    .split('\0')
-    .filter(Boolean);
-  const renames = [];
-  for (let i = 0; i < fields.length;) {
-    const status = fields[i];
-    const paths = /^[RC]/.test(status) ? 2 : 1;
-    if (status.startsWith('R')) renames.push([fields[i + 1], fields[i + 2]]);
-    i += 1 + paths;
-  }
-  return renames;
-}

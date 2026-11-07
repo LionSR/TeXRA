@@ -1,5 +1,5 @@
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { IconName } from '@ui/wa/iconNames';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import type { RunView, RunAction } from '@texra-ai/harness/schemas';
@@ -18,7 +18,7 @@ export interface RunMenuAction {
    */
   arm:
     | Extract<
-        HostRequest['kind'],
+        HostCommand['kind'],
         | 'runAgain'
         | 'openRunStorage'
         | 'exportTranscript'

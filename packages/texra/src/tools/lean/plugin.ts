@@ -2,7 +2,6 @@
  *  its icons and its card. */
 
 // Third-party imports
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Clock, Effect, Option } from 'effect';
 
 // Local imports
@@ -10,6 +9,7 @@ import {
   definePlugin,
   type ProcessPluginLayer,
 } from '@texra-ai/harness/plugins';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 import type { TexraPlugin } from '@texra/tools/registry';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import { findCommand } from '@texra/utils/system/binaryResolver';

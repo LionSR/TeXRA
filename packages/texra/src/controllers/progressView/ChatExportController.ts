@@ -8,9 +8,8 @@
 import { Effect } from 'effect';
 
 // Local imports - export data and storage
-import { Rejected } from '@texra-ai/harness';
 import { StorageFs, pathToLocationIn } from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';

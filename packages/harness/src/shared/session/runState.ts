@@ -28,8 +28,8 @@ import {
   type RetryErrorInfo,
   type RunId,
   type TokenUsageStats,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
 } from '@shared/schemas';
 import { closedBy, NO_FACTS, withInput, type RunFacts } from './runFacts';
 import {
@@ -54,7 +54,7 @@ import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
  *  rows a batch commits with them (a tool's card with its `tool.result`, a
  *  child's result with its boundary), which apart would be crash windows. */
 export type RunHistoryDraft = Live<
-  Extract<SessionEventDraft, { type: RunHistoryDraftType }>
+  Extract<SessionRowDraft, { type: RunHistoryDraftType }>
 >;
 type RunHistoryDraftType =
   | 'run.position'
@@ -284,7 +284,7 @@ export const cancelRequestRows = (
   runId: RunId,
   requestIds: readonly string[],
   cause: string,
-): Extract<SessionEventDraft, { type: 'request.decided' }>[] =>
+): Extract<SessionRowDraft, { type: 'request.decided' }>[] =>
   requestIds.map((requestId) => ({
     type: 'request.decided' as const,
     aggregateId: qualifyAggregateId('run', runId),
@@ -517,7 +517,7 @@ export const RUN_STATE_ROW_TYPES: readonly RunStateRowType[] =
 
 /** Whether the run state reads rows of `row`'s kind: its history rows,
  *  not the cards and records a batch commits beside them. */
-export const isRunStateRow = <R extends Pick<SessionEvent, 'type'>>(
+export const isRunStateRow = <R extends Pick<SessionRow, 'type'>>(
   row: R,
 ): row is Extract<R, { type: RunStateRowType }> =>
   Object.hasOwn(ROW_HANDLERS, row.type);

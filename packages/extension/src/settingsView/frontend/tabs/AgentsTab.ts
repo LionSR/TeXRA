@@ -23,8 +23,8 @@ import {
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   DETACH_SUBAGENTS_ON_STOP_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
+  pluralize,
 } from '@texra-ai/harness/schemas';
-import { pluralize } from '@texra-ai/harness/transcript';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';

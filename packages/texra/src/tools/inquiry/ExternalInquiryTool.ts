@@ -15,7 +15,6 @@
  *   - `list` → enumerate threads by status / scope
  */
 
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Cause, Effect, Schema } from 'effect';
 import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness/host';
@@ -28,7 +27,11 @@ import {
   executed,
   ToolError,
 } from '@texra-ai/harness/plugins';
-import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  type RunId,
+  toErrorMessage,
+  formatResultCount,
+} from '@texra-ai/harness/schemas';
 import {
   InquiryThreadStatusSchema,
   INQUIRY_REQUEST,

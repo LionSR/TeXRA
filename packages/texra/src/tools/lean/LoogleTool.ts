@@ -4,8 +4,10 @@
  * Uses the Loogle API at https://loogle.lean-lang.org/
  */
 
-import { formatResultCount } from '@texra-ai/harness/transcript';
-import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
+import {
+  truncateWithEllipsis,
+  formatResultCount,
+} from '@texra-ai/harness/schemas';
 import { Array as Arr, Cause, Effect, Schema } from 'effect';
 import { HttpClientResponse } from 'effect/http';
 

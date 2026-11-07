@@ -42,7 +42,6 @@ import {
 } from '@texra-ai/llm';
 
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
-import type { StreamHandle } from '@agent/trace/AgentTrace';
 import {
   logContextManagementEvent,
   logProviderError,
@@ -238,98 +237,82 @@ export const modelInvokerLayer = (): Layer.Layer<
           roots,
         });
 
-      interface AttemptTrace {
-        readonly thinking: StreamHandle;
-        readonly output: StreamHandle;
-      }
-      /** What one attempt's events leave behind: the completed turn if it
-       *  arrived, and the tail of the output text seen so far. */
-      interface AttemptOutcome {
-        value: TurnResult | null;
-        streamedText: string;
-      }
-      const openTrace = (): AttemptTrace => ({
-        thinking: logger.openRun(MESSAGE_TYPES.THINKING, { deferStart: true }),
-        output: logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
-          deferStart: true,
-        }),
-      });
-
       /**
-       * The bridge from the model's events into the trace and the run history: the
-       * provider's identity becomes an `identified` row as soon as it is seen
-       * (once; a background operation may report it twice), deltas stream
-       * into the run's thinking and output handles, and the completed result
-       * is kept for the response row.
+       * One attempt from its first event to its `response` row. The
+       * provider's identity becomes an `identified` row as soon as it is
+       * seen (once; a background operation may report it twice), deltas
+       * stream into the run's thinking and output handles, and the
+       * completed result is kept. Then the handles close, a failed stream
+       * classifies, an empty one is a malformed output, and a completed
+       * turn is priced and committed as the `response` row before any
+       * local tool runs. `started` is when the request went out.
        */
-      const eventSink =
-        (
-          invocation: InvocationRef,
-          cell: RunCell,
-          trace: AttemptTrace,
-          completed: AttemptOutcome,
-        ) =>
-        (event: TurnEvent) =>
-          Effect.gen(function* () {
-            switch (event.kind) {
-              case 'identified': {
-                const current = yield* cell.current;
-                if (
-                  current.invocation?.current.providerResponseId ===
-                  event.providerResponseId
-                ) {
-                  return;
-                }
-                yield* cell.append([
-                  {
-                    type: 'model.message',
-                    aggregateId,
-                    payload: {
-                      kind: 'identified',
-                      invocation,
-                      providerResponseId: event.providerResponseId,
-                    },
-                  },
-                ]);
-                return;
-              }
-              case 'delta':
-                if (event.part === 'reasoning') {
-                  trace.thinking.append(event.text);
-                } else {
-                  trace.output.append(event.text);
-                  // Kept for the failure path only: a completed turn reports its
-                  // own text, so this tail is read when the stream dies.
-                  completed.streamedText = (
-                    completed.streamedText + event.text
-                  ).slice(-PARTIAL_TEXT_TAIL_MAX);
-                }
-                return;
-              case 'completed':
-                completed.value = event.result;
-                return;
-            }
-          });
-
-      /**
-       * The tail every attempt shares once its events have been consumed: the
-       * trace handles close, a failed stream classifies, an empty one is a
-       * malformed output, and a completed turn is priced and committed as the
-       * `response` row before any local tool runs.
-       */
-      const finishAttempt = Effect.fn('ModelInvoker.finish')(function* (
+      const consume = Effect.fn('ModelInvoker.consume')(function* (
         cell: RunCell,
         invocation: InvocationRef,
         bound: BoundModel,
-        trace: AttemptTrace,
         started: number,
-        streamed: Exit.Exit<void, ModelError | InvokeError>,
-        completed: AttemptOutcome,
+        events: Stream.Stream<TurnEvent, ModelError | InvokeError, SessionLog>,
       ): Effect.fn.Return<
         InvocationResponse,
         ModelError | InvokeError,
-        FileSystem.FileSystem
+        FileSystem.FileSystem | SessionLog
       > {
+        const trace = {
+          thinking: logger.openRun(MESSAGE_TYPES.THINKING, {
+            deferStart: true,
+          }),
+          output: logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
+            deferStart: true,
+          }),
+        };
+        // What the events leave behind: the completed turn if it arrived,
+        // and the tail of the output text seen so far.
+        const completed: {
+          value: TurnResult | null;
+          streamedText: string;
+        } = { value: null, streamedText: '' };
+        const onEvent = Effect.fnUntraced(function* (event: TurnEvent) {
+          switch (event.kind) {
+            case 'identified': {
+              const current = yield* cell.current;
+              if (
+                current.invocation?.current.providerResponseId ===
+                event.providerResponseId
+              ) {
+                return;
+              }
+              yield* cell.append([
+                {
+                  type: 'model.message',
+                  aggregateId,
+                  payload: {
+                    kind: 'identified',
+                    invocation,
+                    providerResponseId: event.providerResponseId,
+                  },
+                },
+              ]);
+              return;
+            }
+            case 'delta':
+              if (event.part === 'reasoning') {
+                trace.thinking.append(event.text);
+              } else {
+                trace.output.append(event.text);
+                // Kept for the failure path only: a completed turn reports
+                // its own text, so this tail is read when the stream dies.
+                completed.streamedText = (
+                  completed.streamedText + event.text
+                ).slice(-PARTIAL_TEXT_TAIL_MAX);
+              }
+              return;
+            case 'completed':
+              completed.value = event.result;
+              return;
+          }
+        });
+        const streamed = yield* Effect.exit(Stream.runForEach(events, onEvent));
         if (Exit.isFailure(streamed)) {
           trace.thinking.finalize(undefined);
           trace.output.finalize();
@@ -477,32 +460,16 @@ export const modelInvokerLayer = (): Layer.Layer<
           attemptRows(run, state, invocation, bound.origin, resolved),
         );
         yield* checkRecordedRequest(run, resolved);
-        const trace = openTrace();
         const started = yield* Clock.currentTimeMillis;
         attemptStarts.set(invocation, started);
-        const completed: AttemptOutcome = { value: null, streamedText: '' };
-        const onEvent = eventSink(invocation, cell, trace, completed);
-        const streamed = yield* Effect.exit(
-          resolved.mode === 'foreground'
-            ? Stream.runForEach(bound.model.streamTurn(resolved), onEvent)
-            : submitAndObserve(
-                run,
-                cell,
-                resolved,
-                invocation,
-                bound,
-                onEvent,
-                completed,
-              ),
-        );
-        return yield* finishAttempt(
+        return yield* consume(
           cell,
           invocation,
           bound,
-          trace,
           started,
-          streamed,
-          completed,
+          resolved.mode === 'foreground'
+            ? bound.model.streamTurn(resolved)
+            : submitAndObserve(run, cell, resolved, invocation, bound),
         );
       });
 
@@ -531,10 +498,11 @@ export const modelInvokerLayer = (): Layer.Layer<
             });
           }
           const resolved = yield* admittedTurn(yield* cell.current, log.blobs);
-          const trace = openTrace();
-          const started = yield* Clock.currentTimeMillis;
-          const completed: AttemptOutcome = { value: null, streamedText: '' };
-          const streamed = yield* Effect.exit(
+          return yield* consume(
+            cell,
+            invocation,
+            bound,
+            yield* Clock.currentTimeMillis,
             observeBackground(
               run,
               cell,
@@ -542,17 +510,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               resolved,
               invocation,
               accepted,
-              eventSink(invocation, cell, trace, completed),
             ),
-          );
-          return yield* finishAttempt(
-            cell,
-            invocation,
-            bound,
-            trace,
-            started,
-            streamed,
-            completed,
           );
         },
       );

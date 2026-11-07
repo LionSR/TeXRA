@@ -204,36 +204,39 @@ export const BbtSearchResultItemSchema = Schema.Struct({
 export type BbtSearchResultItem = typeof BbtSearchResultItemSchema.Type;
 
 /**
- * The `ToolError` for a Better BibTeX request that did not produce a body:
- * the deadline, a 404 (the plugin is not installed), a refused connection,
- * or any other transport failure.
+ * The `ToolError` for a request to the local Zotero server (either endpoint)
+ * that produced no usable response: the deadline, a refused connection or
+ * any other transport failure.
  */
-function bbtRequestError(
+function zoteroRequestFailure(
   error: Error,
   port: number,
   timeout: number,
 ): ToolError {
   if (Cause.isTimeoutError(error)) {
     return new ToolError(
-      `Zotero API request timed out after ${timeout / 1000}s. ` +
+      `Zotero request timed out after ${timeout / 1000}s. ` +
         `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
     );
   }
-  if (HttpClientError.isHttpClientError(error)) {
-    const { reason } = error;
-    if (
-      reason._tag === 'StatusCodeError' &&
-      reason.response.status === StatusCodes.NOT_FOUND
-    ) {
-      return new ToolError(
-        'Better BibTeX plugin is not installed in Zotero. ' +
-          'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
-      );
-    }
-    // No response from a localhost endpoint is always a connection failure.
-    if (isTransportReason(reason)) return zoteroUnreachableError(port);
+  // No response from a localhost endpoint is always a connection failure, so
+  // the guidance is the reachability one checkZoteroRunning gives.
+  if (
+    HttpClientError.isHttpClientError(error) &&
+    isTransportReason(error.reason)
+  ) {
+    return zoteroUnreachableError(port);
   }
-  return new ToolError(`Better BibTeX API error: ${error.message}`);
+  return new ToolError(`Zotero request failed: ${error.message}`);
+}
+
+/** Better BibTeX answers 404 on its path when the plugin is not installed. */
+function isNotFound(error: Error): boolean {
+  return (
+    HttpClientError.isHttpClientError(error) &&
+    error.reason._tag === 'StatusCodeError' &&
+    error.reason.response.status === StatusCodes.NOT_FOUND
+  );
 }
 
 /**
@@ -266,7 +269,16 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
         });
         return yield* response.json;
       }),
-    ).pipe(Effect.mapError((error) => bbtRequestError(error, port, timeout)));
+    ).pipe(
+      Effect.mapError((error) =>
+        isNotFound(error)
+          ? new ToolError(
+              'Better BibTeX plugin is not installed in Zotero. ' +
+                'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
+            )
+          : zoteroRequestFailure(error, port, timeout),
+      ),
+    );
 
     const responseSchema = Schema.Struct({
       jsonrpc: Schema.String,
@@ -305,10 +317,6 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
 // Zotero desktop to be running; no authentication (purely local).
 // ============================================================================
 
-export type ConnectorResult =
-  | { status: 'success' }
-  | { status: 'error'; message: string };
-
 /**
  * Check that Zotero is running by pinging the connector. Fails with a
  * user-friendly ToolError if it is not reachable within the ping deadline.
@@ -325,32 +333,10 @@ export const checkZoteroRunning = Effect.fn('bbtClient.checkZoteroRunning')(
   },
 );
 
-/** The `ConnectorResult` for a request that produced no response. */
-function connectorRequestFailure(error: Error, port: number): ConnectorResult {
-  if (Cause.isTimeoutError(error)) {
-    return {
-      status: 'error',
-      message:
-        `Zotero Connector request timed out after ${ZOTERO_CONNECTOR_TIMEOUT_MS / 1000}s. ` +
-        `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
-    };
-  }
-  // No response from a localhost endpoint is always a connection failure, so
-  // present the same reachability guidance as checkZoteroRunning and
-  // callBetterBibTeX instead of surfacing a raw transport error.
-  if (
-    HttpClientError.isHttpClientError(error) &&
-    isTransportReason(error.reason)
-  ) {
-    return { status: 'error', message: zoteroUnreachableError(port).message };
-  }
-  return { status: 'error', message: error.message };
-}
-
 /**
- * Call a Zotero Connector endpoint. Never *fails*: every outcome the typed
- * channel can carry, the transport's included, is a `ConnectorResult` the
- * tool reports per item. It can still exit interrupted — see below.
+ * Call a Zotero Connector endpoint. Fails with a `ToolError` for a non-OK
+ * status (the body's `error` when it names one) and for a request that got
+ * no response; `zotero_add` reports either per item.
  *
  * The request is **uninterruptible**: `saveItems`/`saveSnapshot` write to the
  * user's library, so aborting one mid-flight would leave Zotero having
@@ -359,9 +345,9 @@ function connectorRequestFailure(error: Error, port: number): ConnectorResult {
  *
  * The interrupt is deferred, not absorbed. When the region ends it is
  * delivered as the continuation of the write's completion, and the
- * `Effect.catch` below recovers `Fail` reasons only (`findError` matches
- * `_tag === 'Fail'`), so this item's `ConnectorResult` is discarded and
- * `addItems`' `Effect.forEach` stops before the next item. The guarantee is
+ * `Effect.result` in `addItem` captures failures only, so this item's
+ * outcome is discarded and `addItems`' `Effect.forEach` stops before the
+ * next item. The guarantee is
  * that cancellation alone does not abandon this write — not that its
  * remote outcome is durably known or its result is reported.
  *
@@ -391,7 +377,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
           response.status === StatusCodes.OK ||
           response.status === StatusCodes.CREATED
         ) {
-          return { status: 'success' } satisfies ConnectorResult;
+          return undefined;
         }
         // Try to extract a machine-readable error message from the response
         // body; it is read under the same deadline as the headers. Keep this
@@ -404,17 +390,20 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
         const error = Predicate.hasProperty(data, 'error')
           ? data.error
           : undefined;
-        return {
-          status: 'error',
-          message: error
-            ? String(error)
-            : `Unexpected response status: ${response.status}`,
-        } satisfies ConnectorResult;
+        return error
+          ? String(error)
+          : `Unexpected response status: ${response.status}`;
       }),
     ).pipe(
       Effect.uninterruptible,
-      Effect.catch((error) =>
-        Effect.succeed(connectorRequestFailure(error, port)),
+      Effect.mapError((error) =>
+        zoteroRequestFailure(error, port, ZOTERO_CONNECTOR_TIMEOUT_MS),
+      ),
+      // Zotero answered, and refused the item.
+      Effect.flatMap((rejected) =>
+        rejected === undefined
+          ? Effect.void
+          : Effect.fail(new ToolError(rejected)),
       ),
     );
   },

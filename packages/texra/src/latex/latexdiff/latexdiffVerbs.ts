@@ -15,7 +15,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import { Rejected, type Session, type WorkspaceRoots } from '@texra-ai/harness';
+import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   pathToLocationIn,
   Settings,
@@ -24,14 +24,18 @@ import {
   type StorageFs,
   type WorkspaceFs,
 } from '@texra-ai/harness/host';
-import type { RunId, SettingRow } from '@texra-ai/harness/schemas';
+import {
+  Rejected,
+  type RunId,
+  type SettingRow,
+} from '@texra-ai/harness/schemas';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
 import type { Dialogs, NoticeLevel } from '@texra/hosts/uiHosts';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 
@@ -39,7 +43,7 @@ import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import { latexdiffPairs } from './diffOperations';
-import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
+import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
@@ -47,14 +51,14 @@ import {
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
 type LatexdiffCommitAction = Extract<
-  Extract<HostRequest, { kind: 'latexdiffs' }>['action'],
+  Extract<HostCommand, { kind: 'latexdiffs' }>['action'],
   'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc'
 >;
 
 /** A host verb, run on the fiber of the window's request dispatch. */
 type LatexdiffVerb<A> = Effect.Effect<
   A,
-  HostRequestFailure,
+  HostCommandFailure,
   ProcessServices | StorageFs | WorkspaceFs
 >;
 

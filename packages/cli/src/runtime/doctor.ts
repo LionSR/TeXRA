@@ -1,10 +1,12 @@
 // Third-party imports
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, FileSystem, PlatformError, Schema } from 'effect';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports
-import { extractErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  extractErrorMessage,
+  formatResultCount,
+} from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { probeLatexToolchain } from '@latex/latexToolchain';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';

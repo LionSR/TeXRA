@@ -56,13 +56,31 @@ export interface StorageInventory {
   }[];
 }
 
+/** The project stores under `storageRoot`: each `workspace-store` record
+ *  a host wrote as it opened a project, keyed by its storage directory's
+ *  name beside the store of no workspace. */
+export const projectStores = Effect.fn('projectStores')(function* (
+  storageRoot: string,
+) {
+  const stores = path.dirname(
+    resolveWorkspaceStoragePath(storageRoot, undefined),
+  );
+  return (yield* (yield* GlobalValues).list(WORKSPACE_STORES)).map(
+    ({ key, value }) => ({
+      workspace: value.root,
+      storage: path.join(stores, key),
+    }),
+  );
+});
+
 /** The orphaned stores and aside copies under `storageRoot`. */
 export const readStorageInventory = Effect.fn('readStorageInventory')(
   function* (storageRoot: string) {
     const fs = yield* FileSystem.FileSystem;
     const records = new Map(
-      (yield* (yield* GlobalValues).list(WORKSPACE_STORES)).map(
-        (row) => [row.key, row.value] as const,
+      (yield* projectStores(storageRoot)).map(
+        ({ workspace, storage }) =>
+          [path.basename(storage), { root: workspace }] as const,
       ),
     );
     const none = resolveWorkspaceStoragePath(storageRoot, undefined);

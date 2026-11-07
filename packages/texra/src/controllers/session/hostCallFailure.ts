@@ -8,8 +8,13 @@
  */
 import { Effect } from 'effect';
 
-import { Cancelled, Conflict, Rejected, Unavailable } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  Cancelled,
+  Conflict,
+  Rejected,
+  Unavailable,
+} from '@texra-ai/harness/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 
 /**
@@ -21,7 +26,7 @@ import { HostFailed } from '@texra/hosts/uiHosts';
  * preview host, its housekeeping); what every host owes this channel is
  * that each is a tag, so a bare `new Error(...)` cannot reach the bridge.
  */
-export interface HostRequestFailure extends Error {
+export interface HostCommandFailure extends Error {
   readonly _tag: string;
 }
 

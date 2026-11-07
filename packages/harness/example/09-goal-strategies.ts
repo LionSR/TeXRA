@@ -23,18 +23,14 @@
  * read the goal's result.
  */
 import { Effect, Layer, Schema, Stream } from 'effect';
-import {
-  defineTool,
-  Sessions,
-  type LocalSession,
-  type PendingRequest,
-} from '@texra-ai/harness';
+import { defineTool, Sessions, type LocalSession } from '@texra-ai/harness';
 import { definePlugin, harnessBuiltins } from '@texra-ai/harness/plugins';
 import {
   GOAL_MAX_COST_SETTING,
   GOAL_STRATEGY_SETTING,
   GoalResultSchema,
   type SessionView,
+  type PendingRequest,
 } from '@texra-ai/harness/schemas';
 
 import { makeExampleWorkspace } from './_support.ts';

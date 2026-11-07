@@ -6,7 +6,7 @@
 import { Effect, type Scope, Stream } from 'effect';
 
 import {
-  type RuntimeRequest,
+  type RuntimeCommand,
   qualifyAggregateId,
   attentionOf,
   type RunView,
@@ -33,7 +33,7 @@ export interface AttachedTaskLevel {
 
 /** What the attached view does to the task, each a request to the service. */
 export interface AttachedTaskActions {
-  readonly request: <R extends RuntimeRequest>(
+  readonly request: <R extends RuntimeCommand>(
     request: R,
   ) => Effect.Effect<OutcomeOf<R['kind']>, Error>;
 }

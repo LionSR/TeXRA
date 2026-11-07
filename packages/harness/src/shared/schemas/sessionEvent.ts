@@ -12,7 +12,7 @@
  * One run owns one aggregate, `('run', runId)`:
  * display rows and the run's private records land on the same aggregate, and
  * whether a row reaches a renderer is a property of its type
- * (`isDisplaySessionEvent`), not of a second aggregate.
+ * (`isDisplayRow`), not of a second aggregate.
  *
  * Layering: this module lives under `packages/harness/src/shared/schemas` so
  * the view update and the transport stay free of `@agent/*`. Nothing checks
@@ -52,7 +52,7 @@ import {
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { HookOutcomePayloadSchema } from './hookOutcome';
 import { WorktreeInfoSchema } from './run';
-import { TranscriptEventSchema } from './traceEvent';
+import { TraceRowFieldsSchema } from './traceEvent';
 
 /** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
  *  1, assigned by the substrate's publisher and by nothing else. */
@@ -314,7 +314,7 @@ const DisplayRowDraftSchema = Schema.Union([
    * carries its coordinates; its five siblings below are run-history-private.
    */
   durable('run.position', { payload: RunPositionPayloadSchema }),
-  ...TranscriptEventSchema.mapMembers(Tuple.map(onRunAggregate)).members,
+  ...TraceRowFieldsSchema.mapMembers(Tuple.map(onRunAggregate)).members,
 ]);
 /** Every display arm: the lifecycle pair (`run.start`, `run.removed`) and
  *  the rows between them. */
@@ -325,7 +325,7 @@ const DisplaySessionEventDraftSchema = Schema.Union([
   ...DisplayRowDraftSchema.members,
 ]);
 /** The run's private records, read by the runtime and never by a renderer
- *  (`isDisplaySessionEvent`). `followup.closed`: its input is closed until a
+ *  (`isDisplayRow`). `followup.closed`: its input is closed until a
  *  claim reopens it or it activates again. */
 const RunRecordEventDraftSchema = Schema.Union([
   durable('run.report', { report: Schema.NullOr(Schema.String) }),
@@ -357,7 +357,7 @@ export const SessionEventDraftSchema = Schema.Union([
 ]);
 /** Every member of a draft union with the envelope columns added. */
 const withEnvelope = Tuple.map(Schema.fieldsAssign(envelope));
-export const DisplaySessionEventSchema = Schema.Union([
+export const DisplayRowSchema = Schema.Union([
   RunStartEventSchema.mapFields(Struct.assign(envelope)),
   RunRemovedEventSchema.mapFields(Struct.assign(envelope)),
   /** As read: `unavailable` says why this process leaves `value` as
@@ -367,13 +367,13 @@ export const DisplaySessionEventSchema = Schema.Union([
   ),
   ...DisplayRowDraftSchema.mapMembers(withEnvelope).members,
 ]);
-export type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
-export const SessionEventSchema = Schema.Union([
-  ...DisplaySessionEventSchema.members,
+export type DisplayRow = typeof DisplayRowSchema.Type;
+export const SessionRowSchema = Schema.Union([
+  ...DisplayRowSchema.members,
   ...RunRecordEventDraftSchema.mapMembers(withEnvelope).members,
   ...RunHistoryEventDraftSchema.mapMembers(withEnvelope).members,
 ]);
-export type SessionEvent = typeof SessionEventSchema.Type;
+export type SessionRow = typeof SessionRowSchema.Type;
 
 /**
  * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
@@ -381,10 +381,10 @@ export type SessionEvent = typeof SessionEventSchema.Type;
  * (`seq`, `commit`, `origin`, `at`) under its permit; no caller passes them.
  * Parsing a draft removes caller-supplied envelope fields before storage.
  */
-export type SessionEventDraft = typeof SessionEventDraftSchema.Type;
+export type SessionRowDraft = typeof SessionEventDraftSchema.Type;
 
 /** Aggregate identities introduced by a fact and its declared lifecycle edges. */
-export function referencedAggregates(event: SessionEvent): AggregateId[] {
+export function referencedAggregates(event: SessionRow): AggregateId[] {
   const ids = [event.aggregateId];
   if (event.type === 'run.start' && event.parent !== null)
     ids.push(qualifyAggregateId('run', event.parent.id));
@@ -411,7 +411,7 @@ interface AggregateEdges {
   readonly closes: boolean;
 }
 
-export function edgesOf(draft: SessionEventDraft): AggregateEdges {
+export function edgesOf(draft: SessionRowDraft): AggregateEdges {
   switch (draft.type) {
     case 'run.start':
       return {
@@ -473,7 +473,7 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
  * thing on a cold read and on a replay: one plugin kind's newest row never
  * suppresses another's.
  */
-export function listingKeyOf(event: SessionEvent): string | null {
+export function listingKeyOf(event: SessionRow): string | null {
   // A run's spend: the listing returns its total at its newest priced row,
   // so one key per run orders every read's turns by commit.
   if (event.type === 'usage') return 'usage';
@@ -492,7 +492,7 @@ export function listingKeyOf(event: SessionEvent): string | null {
  * and a queued follow-up are keys of their own, closed by their pair.
  */
 export function pendingKeyOf(
-  event: SessionEvent,
+  event: SessionRow,
 ): { readonly key: string; readonly open: boolean } | null {
   const open =
     event.type === 'request.opened' || event.type === 'followup.queued';
@@ -510,17 +510,15 @@ export function pendingKeyOf(
 
 /** Every `AgentEvent` arm but the chunk: each is stored as a row of its run. */
 // prettier-ignore
-export const TRACE_ROW_TYPES = Object.freeze(['log', 'process.output', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
+export const TRACE_ROW_TYPES = Object.freeze(['log', 'process.output', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplayRow['type'][]);
 
-export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
+export const DISPLAY_ROW_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.members.map(
     (schema) => schema.fields.type.literal,
   ),
 );
 
 /** A run's private records and the profile-state rows never enter display transport. */
-export function isDisplaySessionEvent(
-  event: SessionEvent,
-): event is DisplaySessionEvent {
-  return DISPLAY_EVENT_TYPES.includes(event.type);
+export function isDisplayRow(event: SessionRow): event is DisplayRow {
+  return DISPLAY_ROW_TYPES.includes(event.type);
 }

@@ -2,12 +2,12 @@
 
 Generated from `packages/harness/src/plugins.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 126
+Exports: 125
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: Schema.Codec<A, unknown>; readonly result?: AgentBlockResult<R>; files?(block: A): readonly string[]; }`
 - `agentBlockOf` — `function agentBlockOf: <A>(entry: Pick<AgentEntry, "blocks">, block: AgentBlock<A, unknown>) => A | undefined`
-- `AgentBlockResult` — `interface AgentBlockResult<R = unknown> { readonly schema: Schema.Codec<R, unknown>; delivery(value: R, runId: RunId): readonly string[]; changes(value: R, roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>): readonly RecipeChange[]; }`
+- `AgentBlockResult` — `interface AgentBlockResult<R = unknown> { readonly fact: { readonly plugin: string; readonly kind: string; readonly schema: Schema.Codec<R, unknown>; }; delivery(value: R, runId: RunId): readonly string[]; changes(value: R, roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>): readonly RecipeChange[]; }`
 - `AgentTrace` — `interface AgentTrace { emit(event: AgentEvent): void; debug(message: string, options?: LogOptions): void; info(message: string, options?: LogOptions): void; warn(message: string, options?: LogOptions): void; error(message: string, options?: LogOptions): void; output(stream: 'stdout' | 'stderr', text: string): void; openStage(label: string, options?: StageOptions): StageHandle; openRun(kind: MessageType, options?: StreamOptions): StreamHandle; openToolCard(log: ToolUseLog): ToolCardHandle; }`
 - `ALWAYS_AVAILABLE` — `const ALWAYS_AVAILABLE: ToolAvailabilityChecks<ToolProbeServices>`
 - `ApprovedEditConflictError` — `class ApprovedEditConflictError { constructor: new (path: string) => ApprovedEditConflictError; static: captureStackTrace: (targetObject: object, constructorOpt?: Function | undefined) => void; prepareStackTrace: (err: Error, stackTraces: CallSite[]) => any; stackTraceLimit: number; instance: cause: unknown; message: string; name: string; stack: string | undefined; summary: string | undefined; ~effect/ErrorReporter/attributes: ReadonlyRecord<string, unknown> | undefined; ~effect/ErrorReporter/ignore: boolean | undefined; ~effect/ErrorReporter/severity: Severity | undefined; ~effect/Runtime/errorExitCode: number | undefined; ~effect/Runtime/errorReported: boolean | undefined }`
@@ -94,7 +94,6 @@ Exports: 126
 - `RunStorageEntry` — `type RunStorageEntry = { readonly kind: 'file'; readonly location: RunStorageFileLocation; } | { readonly kind: 'symlink' | 'directory' | 'unsupported'; readonly absolutePath: string; } | { readonly kind: 'missing'; } | { readonly kind: 'invalid'; readonly reason: string; }; ≡ RunStorageEntry`
 - `scopedClient` — `const scopedClient: Effect<With<HttpClientError, Scope>, never, HttpClient>`
 - `scopedOkClient` — `const scopedOkClient: Effect<With<HttpClientError, Scope>, never, HttpClient>`
-- `senderOf` — `function senderOf: (caller: (string & Brand<"RunId">) | undefined) => FollowUpSenderInput`
 - `SessionPluginLayer` — `type SessionPluginLayer = Layer.Layer<never, never, PluginHold>; ≡ SessionPluginLayer`
 - `StageHandle` — `interface StageHandle { readonly id: string | undefined; end(status?: RunOutcome): void; child(label: string, options?: StageOptions): StageHandle; }`
 - `StageOptions` — `interface StageOptions { readonly kind?: 'run' | 'session'; readonly parent?: StageHandle; }`

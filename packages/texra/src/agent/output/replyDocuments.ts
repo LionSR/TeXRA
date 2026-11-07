@@ -7,7 +7,6 @@
  * reads and writes around them are this module's.
  */
 import * as path from 'node:path';
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 
@@ -18,6 +17,7 @@ import {
   toErrorMessage,
   fileLocationDisplayPath,
   type FileLocation,
+  formatResultCount,
 } from '@texra-ai/harness/schemas';
 
 import replacementEngine, {
@@ -365,11 +365,7 @@ export const ensureCorrectXmlStructure = Effect.fn(
   const originalContent = (yield* fs.readFileString(
     fileLocation.absolutePath,
   )).replaceAll('\r\n', '\n');
-  const replaced = replacementEngine.applyFor(
-    originalContent,
-    'xml-content',
-    config,
-  );
+  const replaced = replacementEngine.applyToXmlContent(originalContent, config);
   yield* logReplacementDiagnostics(replaced.diagnostics);
   let content = replaced.text;
 

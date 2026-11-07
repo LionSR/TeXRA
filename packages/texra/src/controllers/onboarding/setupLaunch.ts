@@ -1,8 +1,11 @@
 import type { ProcessServices } from '@texra-ai/harness/host';
 import { Effect, Schema } from 'effect';
 
-import { Cancelled } from '@texra-ai/harness';
-import { agentName, type AgentConfig } from '@texra-ai/harness/schemas';
+import {
+  agentName,
+  type AgentConfig,
+  Cancelled,
+} from '@texra-ai/harness/schemas';
 import {
   presentRunFailure,
   type Secrets,

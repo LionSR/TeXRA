@@ -1,15 +1,11 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 
 import {
-  Cancelled,
-  Rejected,
   type LaunchError,
-  type RequestError,
   type Run,
   type RunFailure,
   type Session,
   type StartInput,
-  Unavailable,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
@@ -34,6 +30,10 @@ import {
   runActionRefusal,
   type RunAction,
   type RunId,
+  Cancelled,
+  Rejected,
+  Unavailable,
+  type RequestError,
 } from '@texra-ai/harness/schemas';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
@@ -216,13 +216,21 @@ export const createHostRunActions = Effect.fn(
       );
   /** When a run this window started ends, a document task's final output
    *  opens. Presentation reacts to the outcome the run committed; it never
-   *  runs inside the run, so it cannot change that outcome. */
+   *  runs inside the run, so it cannot change that outcome. Its documents
+   *  are read from the store, which holds the run's rows once its end is
+   *  read, whichever process the window's view follows. */
   const whenEnded = (run: Run) =>
     Effect.gen(function* () {
       const result = yield* run.result;
       const config = yield* readConfig(run.runId);
       if (config === undefined || !isTaskConfig(config)) return;
-      const output = yield* selectAutoOpenFinalOutput(roots, config, result);
+      const stored = yield* session.view.read([]);
+      const output = yield* selectAutoOpenFinalOutput(
+        roots,
+        config,
+        result,
+        stored.runs.get(run.runId),
+      );
       if (output) yield* ports.openFinalOutput(output.absolutePath);
     }).pipe(Effect.ignore({ log: 'Warn', message: 'Opening the output' }));
   /**

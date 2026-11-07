@@ -26,9 +26,9 @@ import type {
   OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import {
-  WORKFLOW_OUTPUT_BASENAME,
+  DOCUMENT_OUTPUT_BASENAME,
   revisionLayout,
-} from '@texra/shared/constants/workflowOutput';
+} from '@texra/shared/constants/revisionLayout';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 
 import {
@@ -36,7 +36,6 @@ import {
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
 import { resolveWorkspaceSourceDir } from './compileCheck';
-import { recoverOutputFailure } from './outputOperations';
 import type { OutputDependencies } from './outputFileExtraction';
 import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -136,7 +135,7 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
     // the latexdiff directory holds no output of that name.
     const layout = revisionLayout(currRound);
     yield* fileService.ensureMirroredInRunSubdir(layout.dir, {
-      protectedStem: WORKFLOW_OUTPUT_BASENAME,
+      protectedStem: DOCUMENT_OUTPUT_BASENAME,
     });
     yield* fileService.ensureMirroredInRunSubdir(layout.diffDir);
 
@@ -205,17 +204,13 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
     return { artifacts, entries, notRun: null };
   },
   (effect, { logger }) =>
-    effect.pipe(
-      recoverOutputFailure({
-        logger,
-        level: 'error',
-        label: 'Error during latexdiff processing',
-        recover: (error) =>
-          Effect.succeed(
-            notRun(`the latexdiff pass failed: ${toErrorMessage(error)}`),
-          ),
-      }),
-    ),
+    // A failed pass is an error on the transcript, and the round records
+    // that its diffs did not run.
+    Effect.catch(effect, (error) => {
+      const message = toErrorMessage(error);
+      logger.error(`Error during latexdiff processing: ${message}`);
+      return Effect.succeed(notRun(`the latexdiff pass failed: ${message}`));
+    }),
 );
 
 /**
@@ -331,7 +326,7 @@ const compileDiff = Effect.fn('documents.compileDiff')(function* (
   );
 
   const buildDir = path.join(path.dirname(diffLocation.absolutePath), 'build');
-  // Reuse the workflow compile-check timeout so a hanging diff build
+  // Reuse the compile check's timeout so a hanging diff build
   // is torn down by its scope instead of orphaning latexmk/pdflatex.
   const timeoutMs = yield* Settings.get(
     roots,

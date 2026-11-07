@@ -26,10 +26,13 @@ import {
 import {
   LaunchRefused,
   type LocalSession,
-  Rejected,
   type RunRecords,
 } from '@texra-ai/harness';
-import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  type RunId,
+  toErrorMessage,
+  Rejected,
+} from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 
@@ -247,11 +250,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
       }),
       'service.stop': ({ drain }) => control.stop(drain),
       'tasks.list': Effect.fn('tasks.list')(function* ({ all }) {
-        return yield* listTasks(
-          projects.storageRoot,
-          yield* projects.opened,
-          all,
-        );
+        return yield* listTasks(all);
       }, Effect.orDie),
       'task.watch': ({ workspace, subscribe }) =>
         Stream.unwrap(

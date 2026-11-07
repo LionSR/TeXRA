@@ -1,6 +1,6 @@
 import { absurd, Effect, Result, Schema, SchemaIssue } from 'effect';
 
-import { Rejected, type StartInput } from '@texra-ai/harness';
+import { type StartInput } from '@texra-ai/harness';
 import {
   AgentCatalog,
   type StateReadFailed,
@@ -13,6 +13,7 @@ import {
   agentKeyOf,
   agentName,
   type AgentConfig,
+  Rejected,
 } from '@texra-ai/harness/schemas';
 import {
   formatTeamLaunchBlockedMessage,
@@ -21,7 +22,7 @@ import {
 } from '@texra/shared/teamLaunch';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
@@ -32,7 +33,7 @@ import {
 import type { LaunchPatchSchema } from '@texra/shared/session/surface';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
 
-type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
+type LaunchRequest = Extract<HostCommand, { kind: 'launch' }>;
 
 /** The session's slots a launch reads: its agent selection and storage
  *  root, under which its pasted images live. */

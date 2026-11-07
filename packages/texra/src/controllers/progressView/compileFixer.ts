@@ -6,11 +6,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports - run facts and filesystem access
-import { Rejected } from '@texra-ai/harness';
 import { decideRunModel, pathToLocationIn } from '@texra-ai/harness/host';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
+  Rejected,
   isTaskConfig,
   fileLocationAddressPath,
   isModelOptionAvailable,
@@ -18,8 +18,8 @@ import {
   type AgentConfig,
   type AgentConfigInput,
   type RunId,
+  pluralize,
 } from '@texra-ai/harness/schemas';
-import { pluralize } from '@texra-ai/harness/transcript';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import {
   type CompileFailure,

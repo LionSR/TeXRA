@@ -3,7 +3,7 @@ import {
   FENCED_LATEX_BLOCK_PATTERN_INLINE,
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
 } from './constants';
-import { createPatterns } from './helpers';
+import { createPatterns } from './patterns';
 import type { RegexRuleSet, ReplacementFunction } from './types';
 
 const EQUATION_ENVIRONMENT_PATTERN =

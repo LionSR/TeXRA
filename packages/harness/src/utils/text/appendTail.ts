@@ -23,10 +23,12 @@ export function appendTail(
 // Append `chunk` to `current` and keep at most `maxChars` UTF-16 code units,
 // truncating at the tail (the opposite of appendTail). Once the cap is
 // reached the head is frozen — later chunks are dropped — so this captures
-// the *first* N characters ever seen, not a sliding window. Pairs with
-// appendTail for the bash background tool: a long run's first fatal error
-// (captured here) survives alongside the most recent output (captured by
-// appendTail) even after the combined stream far exceeds either budget.
+// the *first* N characters ever seen, not a sliding window. A cut that would
+// split a surrogate pair stops one short of the cap, which a later call
+// cannot tell from a head that has not reached it: a caller appending chunk
+// by chunk stops once its head is shorter than what it has seen. Pairs with
+// appendTail for bash output: a long run's first fatal error (captured here)
+// survives alongside the most recent output (captured by appendTail).
 
 export function appendHead(
   current: string,

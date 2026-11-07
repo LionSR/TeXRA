@@ -28,7 +28,6 @@ import {
 import {
   DOCUMENT_TASK_BLOCK,
   documentsOutputFact,
-  documentsSummary,
 } from '@texra/shared/plugins/documents';
 import { DOCUMENT_TASK_RESULT } from '@texra/tools/documents/documentResult';
 import {
@@ -124,19 +123,20 @@ const persistCompletedChild = (
         }),
       },
     ]);
-    // How the child ended, and what it declared, is its `run.end` row's.
+    // What the child declared is its documents row; how it ended, its
+    // `run.end` row.
     yield* Context.get(session, SessionLog).transact([
+      {
+        type: 'plugin.fact',
+        aggregateId: qualifyAggregateId('run', childRunId),
+        parent: null,
+        ...documentsOutputFact(workflowRounds(absolutePath)),
+      },
       {
         type: 'run.end',
         aggregateId: qualifyAggregateId('run', childRunId),
         outcome: 'completed',
-        output: {
-          response: '',
-          files: [],
-          structured: documentsSummary(
-            documentsOutputFact(workflowRounds(absolutePath)),
-          ),
-        },
+        output: { response: '', files: [] },
       },
     ]);
     yield* Effect.promise(() =>

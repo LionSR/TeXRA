@@ -6,7 +6,7 @@ import {
   RunIdSchema,
   type TraceDocument,
 } from '@texra-ai/harness/schemas';
-import { DisplaySessionEventSchema } from '@texra-ai/harness/transcript';
+import { DisplayRowSchema } from '@texra-ai/harness/transcript';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
 // Relative import: `packages/trace-viewer` is a separate workspace package
@@ -41,7 +41,7 @@ function traceDocument(
   return {
     runId: RUN_ID,
     events: bodies.map((body, index) =>
-      Schema.decodeUnknownSync(DisplaySessionEventSchema)({
+      Schema.decodeUnknownSync(DisplayRowSchema)({
         aggregateId: AGGREGATE,
         seq: index + 1,
         commit: index + 1,

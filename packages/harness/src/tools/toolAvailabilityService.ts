@@ -37,21 +37,22 @@ export class ToolAvailability extends Context.Service<
     /** Each workspace root's last results; a dashboard follows its changes. */
     readonly results: SubscriptionRef.SubscriptionRef<AvailabilityResults>;
     /**
-     * Probe every plugin for `inputs`' workspace now and publish the
-     * results, joining the probe in flight for that root. Tools recently
-     * found missing are looked up again, so one installed since shows up.
-     * Each plugin's
-     * probe has its own deadline and reports a failure as `unknown`, so this
-     * never fails.
+     * Probe every plugin for `inputs`' workspace and publish the results:
+     * the round after the one in flight for that root reads `inputs` (or
+     * newer ones another caller asked with), and every caller asking while
+     * it waits shares it. Tools recently found missing are looked up again,
+     * so one installed since shows up. Each plugin's probe has its own
+     * deadline and reports a failure as `unknown`, so this never fails.
      */
     readonly refresh: (
       inputs: ToolProbeInputs,
     ) => Effect.Effect<readonly ExternalToolCheckResult[]>;
     /**
      * Keep `roots`' results for the caller's scope and probe them now,
-     * without waiting: a session holds its roots for its life. Only a held
-     * root's results are kept, and a root's are dropped when its last holder
-     * closes, so the map is bounded by the open sessions.
+     * without waiting: a session holds its roots for its life, and a refresh
+     * holds its root while it waits. Only a held root's results are kept, and
+     * a root's are dropped when its last holder closes, so the map is bounded
+     * by the open sessions and the refreshes in flight.
      */
     readonly hold: (
       roots: ToolProbeInputs,

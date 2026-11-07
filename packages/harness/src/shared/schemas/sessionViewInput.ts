@@ -10,8 +10,8 @@ import { RunIdSchema } from './identifiers';
 import { AggregateIdSchema } from './identifiers';
 import {
   CommitOrdinalSchema,
-  DisplaySessionEventSchema,
-  type DisplaySessionEvent,
+  DisplayRowSchema,
+  type DisplayRow,
 } from './sessionEvent';
 
 /**
@@ -20,7 +20,7 @@ import {
  */
 export const EventInputSchema = Schema.TaggedStruct('event', {
   read: Schema.Literals(['listing', 'aggregate', 'all']),
-  event: DisplaySessionEventSchema,
+  event: DisplayRowSchema,
 });
 
 /**
@@ -134,10 +134,13 @@ export type SessionViewInput = typeof SessionViewInputSchema.Type;
 export function replayInputs(read: {
   readonly debug: boolean;
   readonly local: LocalRuntimeState;
-  readonly listing: readonly DisplaySessionEvent[];
+  readonly listing: readonly DisplayRow[];
   readonly subscriptions: readonly TranscriptSubscription[];
-  readonly aggregateRows: readonly DisplaySessionEvent[];
-  readonly existence: ExistenceReconciliation;
+  readonly aggregateRows: readonly DisplayRow[];
+  readonly existence: Extract<
+    SessionViewInput,
+    { _tag: 'replay.complete' }
+  >['existence'];
 }): SessionViewInput[] {
   return [
     { _tag: 'debug', enabled: read.debug },

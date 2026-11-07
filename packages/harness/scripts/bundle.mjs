@@ -1,22 +1,30 @@
 import { build } from 'esbuild';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { codeSandboxWorker } from '../../../scripts/code-sandbox-worker.mjs';
+import { harnessBundleOptions } from '../../../scripts/code-sandbox-worker.mjs';
 
 const packageRoot = new URL('..', import.meta.url);
+const manifest = JSON.parse(
+  await readFile(new URL('package.json', packageRoot), 'utf8'),
+);
+// One bundle per published entry, named as its `import` file and built from
+// the source its declaration comes from.
+const entryPoints = Object.fromEntries(
+  Object.values(manifest.publishConfig.exports)
+    .filter((target) => typeof target !== 'string')
+    .map(({ import: built, types }) => [
+      built.replace(/^\.\/dist\//, '').replace(/\.js$/, ''),
+      types.replace(/^\.\/dist\/types\//, 'src/').replace(/\.d\.ts$/, '.ts'),
+    ]),
+);
 const quickJsWasmSpecifier = '@jitl/quickjs-wasmfile-release-sync/wasm';
+const base = harnessBundleOptions();
 
 await build({
+  ...base,
   absWorkingDir: fileURLToPath(packageRoot),
-  bundle: true,
-  entryPoints: {
-    index: 'src/index.ts',
-    schemas: 'src/schemas.ts',
-    transcript: 'src/transcriptEntry.ts',
-    plugins: 'src/plugins.ts',
-    host: 'src/host.ts',
-    node: 'src/node.ts',
-  },
+  entryPoints,
   format: 'esm',
   logLevel: 'info',
   outdir: 'dist',
@@ -34,11 +42,8 @@ await build({
         );
       },
     },
-    codeSandboxWorker,
+    ...base.plugins,
   ],
-  loader: {
-    '.wasm': 'binary',
-  },
   sourcemap: false,
   splitting: true,
   target: 'es2022',

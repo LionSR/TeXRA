@@ -14,10 +14,11 @@ import {
   type RunToolCall,
 } from '@agent/runtime/RunCall';
 import {
+  BACKGROUND_OUTPUT_HEAD_CHARS,
+  BACKGROUND_OUTPUT_TAIL_CHARS,
   formatBashDelivery,
   formatBashError,
   type BackgroundBashCall,
-  type BashDeliveryStreamExcerpt,
 } from '@agent/runtime/delegation/bashDelivery';
 import {
   launchProcessChild,
@@ -30,6 +31,8 @@ import {
 } from '@shared/toolUse';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settings';
+import { SessionLog } from '@shared/session/runHistory';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 import { executed } from '@tools/core/result';
 import { previewLabel, stripControlCharacters } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
@@ -40,149 +43,73 @@ import { defineTool } from './core/definition';
 import { nullishWithDefault } from './core/inputSchema';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
-/**
- * Small head budget retained alongside the tail, at roughly the foreground
- * head:tail ratio. A long background build's first fatal error tends to sit
- * near the top of the log, well before the tail budget's trailing window;
- * without this, output that outgrows the tail silently drops that error with
- * no way to recover it from the follow-up.
- */
-const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
-const FOREGROUND_OUTPUT_HEAD_CHARS = TOOL_RESULT_TRUNCATION_HEAD_CHARS;
-const FOREGROUND_OUTPUT_TAIL_CHARS = TOOL_RESULT_TRUNCATION_TAIL_CHARS;
 const SHELL_BACKGROUNDING_PATTERN =
   /(?:^|[\s;])nohup\b[^\n;]*(?<![>&])&(?![>&])/;
 const SHELL_BACKGROUNDING_MESSAGE =
   'This command uses shell-level backgrounding (`nohup ... &`) inside a foreground bash tool call. ' +
   'Do not emulate background execution inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
 
-interface BoundedOutputCapture {
-  append(chunk: string): void;
-  text(streamName: 'stdout' | 'stderr'): string | null;
-  /** Retained leading window (up to `headChars`). */
-  readonly head: string;
-  /** Retained trailing window (up to `tailChars`). */
-  readonly tail: string;
-  /** Total characters observed (after whitespace normalization, when enabled). */
-  readonly totalChars: number;
-}
-
 /**
- * @param options.normalizeWhitespace When true (the default, used by the
- *   foreground path) leading whitespace is dropped and trailing whitespace is
- *   deferred so a stream that ends in blank lines is not counted or shown. The
- *   background path passes false and tracks head/tail/total byte-for-byte.
+ * A foreground stream's first and last characters, kept as it arrives so a
+ * long command needs no buffer of its whole output, and the text they show:
+ * the whole stream when the two windows cover it, else both ends around a
+ * note of how much was left out; `null` when nothing but whitespace arrived.
+ * Whitespace at either end of the stream takes no room in either window:
+ * leading whitespace is dropped, and trailing whitespace waits until
+ * something else follows it.
  */
-function createBoundedOutputCapture(
-  headChars: number,
-  tailChars: number,
-  options?: { normalizeWhitespace?: boolean },
-): BoundedOutputCapture {
-  const normalizeWhitespace = options?.normalizeWhitespace ?? true;
+function boundedOutput(streamName: 'stdout' | 'stderr') {
   let head = '';
   let tail = '';
   let totalChars = 0;
-  let hasNonWhitespace = false;
-  let pendingWhitespaceHead = '';
-  let pendingWhitespaceTail = '';
-  let pendingWhitespaceChars = 0;
-
-  const appendText = (text: string): void => {
-    totalChars += text.length;
-    head = appendHead(head, text, headChars);
-    tail = appendTail(tail, text, tailChars);
+  // The whitespace after the last other character, as each window would
+  // take it, and its length.
+  let pendingHead = '';
+  let pendingTail = '';
+  let pendingChars = 0;
+  const add = (headText: string, tailText: string, chars: number): void => {
+    // The head grows only while it holds everything seen: a cut can stop
+    // it one short of its budget (before a split surrogate pair), and a
+    // later chunk appended after that cut would not follow it.
+    if (head.length === totalChars)
+      head = appendHead(head, headText, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
+    totalChars += chars;
+    tail = appendTail(tail, tailText, TOOL_RESULT_TRUNCATION_TAIL_CHARS);
   };
-
-  const appendPendingWhitespace = (text: string): void => {
-    if (!text) return;
-    pendingWhitespaceChars += text.length;
-    pendingWhitespaceHead = appendHead(pendingWhitespaceHead, text, headChars);
-    pendingWhitespaceTail = appendTail(pendingWhitespaceTail, text, tailChars);
-  };
-
-  const commitPendingWhitespace = (): void => {
-    if (pendingWhitespaceChars === 0) return;
-
-    totalChars += pendingWhitespaceChars;
-    head = appendHead(head, pendingWhitespaceHead, headChars);
-    tail = appendTail(tail, pendingWhitespaceTail, tailChars);
-    pendingWhitespaceHead = '';
-    pendingWhitespaceTail = '';
-    pendingWhitespaceChars = 0;
-  };
-
   return {
-    get head(): string {
-      return head;
+    append(chunk: string): void {
+      const text = totalChars === 0 ? chunk.trimStart() : chunk;
+      const content = text.trimEnd();
+      if (content) {
+        if (pendingChars > 0) add(pendingHead, pendingTail, pendingChars);
+        add(content, content, content.length);
+        pendingHead = '';
+        pendingTail = '';
+        pendingChars = 0;
+      }
+      const trailing = text.slice(content.length);
+      pendingChars += trailing.length;
+      pendingHead = appendHead(
+        pendingHead,
+        trailing,
+        TOOL_RESULT_TRUNCATION_HEAD_CHARS,
+      );
+      pendingTail = appendTail(
+        pendingTail,
+        trailing,
+        TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+      );
     },
-    get tail(): string {
+    text(): string | null {
+      if (totalChars === 0) return null;
+      const elidedChars = totalChars - head.length - tail.length;
+      if (elidedChars > 0)
+        return `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]\n\n${tail}`;
+      // The windows overlap: the head, then the part of the tail after it.
+      if (totalChars > tail.length)
+        return head + appendTail('', tail, totalChars - head.length);
       return tail;
     },
-    get totalChars(): number {
-      return totalChars;
-    },
-    append(chunk: string): void {
-      if (!normalizeWhitespace) {
-        if (chunk.length > 0) hasNonWhitespace = true;
-        appendText(chunk);
-        return;
-      }
-
-      let text = chunk;
-      if (!hasNonWhitespace) {
-        text = text.trimStart();
-        if (!text) return;
-        hasNonWhitespace = true;
-      }
-
-      const withoutTrailingWhitespace = text.trimEnd();
-      if (!withoutTrailingWhitespace) {
-        appendPendingWhitespace(text);
-        return;
-      }
-
-      commitPendingWhitespace();
-      appendText(withoutTrailingWhitespace);
-      appendPendingWhitespace(text.slice(withoutTrailingWhitespace.length));
-    },
-    text(streamName: 'stdout' | 'stderr'): string | null {
-      if (!hasNonWhitespace) return null;
-      if (totalChars <= tail.length) return tail || null;
-
-      const elidedChars = Math.max(0, totalChars - head.length - tail.length);
-      const overlapChars = Math.max(0, head.length + tail.length - totalChars);
-      const nonOverlappingTail =
-        overlapChars > 0
-          ? appendTail('', tail, tail.length - overlapChars)
-          : tail;
-      return elidedChars > 0
-        ? `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]\n\n${nonOverlappingTail}`
-        : head + nonOverlappingTail;
-    },
-  };
-}
-
-/**
- * Only surface the head when the tail actually dropped earlier content —
- * otherwise the tail already holds the full stream and a separate head block
- * would just repeat it. When it did, also report how many characters sit in
- * the gap between head and tail, mirroring the foreground
- * `checkToolResultTextLimit` elision note.
- */
-function toDeliveryExcerpt(
-  capture: BoundedOutputCapture,
-): BashDeliveryStreamExcerpt {
-  const truncated = capture.totalChars > capture.tail.length;
-  return {
-    tail: capture.tail,
-    head: truncated ? capture.head : '',
-    elidedChars: truncated
-      ? Math.max(
-          0,
-          capture.totalChars - capture.head.length - capture.tail.length,
-        )
-      : 0,
   };
 }
 
@@ -210,9 +137,10 @@ type BashInput = typeof BashInputSchema.Type;
 
 /**
  * The one turn of a background shell command: it runs the process, records
- * its output on the run's trace, and reports the formatted delivery with
- * the command's exit. Everything else a background child needs (its
- * registration, its end and the parent's delivery) is the process run's.
+ * its output on the run's trace as `process.output` rows, and reports the
+ * delivery projected from those rows with the command's exit. Everything
+ * else a background child needs (its registration, its end and the
+ * parent's delivery) is the process run's.
  */
 function backgroundBashTurn(params: {
   runId: RunId;
@@ -225,36 +153,67 @@ function backgroundBashTurn(params: {
    */
   settings: SettingsStores;
   logger: AgentTrace;
+  /** The session's log, which the turn's output rows are read back from. */
+  log: SessionLogShape;
 }): ProcessTurn {
-  const { runId, call, logger } = params;
+  const { runId, call, logger, log } = params;
   const { command } = call;
-  // Whitespace normalization is off here: a background log is delivered
-  // verbatim, and its head/tail budgets are its own (see the constants above)
-  // rather than the foreground tool-result ones.
-  const captureOptions = { normalizeWhitespace: false };
-  const stdout = createBoundedOutputCapture(
-    BACKGROUND_OUTPUT_HEAD_CHARS,
-    BACKGROUND_OUTPUT_TAIL_CHARS,
-    captureOptions,
-  );
-  const stderr = createBoundedOutputCapture(
-    BACKGROUND_OUTPUT_HEAD_CHARS,
-    BACKGROUND_OUTPUT_TAIL_CHARS,
-    captureOptions,
-  );
-  let recordedChars = 0;
+  // Each stream's output becomes rows as it arrives, up to the cap on both
+  // streams together. Past it, a stream still records its first characters
+  // up to the delivery's head budget, so its head survives the other
+  // stream's volume; the rest it sends is held as a rolling tail (its
+  // `elided` characters are what the tail let go), and the tails become the
+  // log's last rows when the command ends, however it ends.
+  const streams = {
+    stdout: { recorded: 0, elided: 0, tail: '' },
+    stderr: { recorded: 0, elided: 0, tail: '' },
+  };
   let capReached = false;
   const record = (stream: 'stdout' | 'stderr', chunk: string): void => {
-    if (capReached) return;
-    recordedChars += chunk.length;
-    if (recordedChars > BASH_BACKGROUND_LOG_CAP_CHARS) {
-      capReached = true;
-      logger.warn(
-        `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: tail available in follow-up result]`,
-      );
+    const held = streams[stream];
+    if (
+      !capReached &&
+      streams.stdout.recorded + streams.stderr.recorded + chunk.length <=
+        BASH_BACKGROUND_LOG_CAP_CHARS
+    ) {
+      held.recorded += chunk.length;
+      logger.output(stream, chunk);
       return;
     }
-    logger.output(stream, chunk);
+    if (!capReached) {
+      capReached = true;
+      logger.warn(
+        `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: each stream's first ${BACKGROUND_OUTPUT_HEAD_CHARS.toLocaleString()} characters are still recorded, and its last ${BACKGROUND_OUTPUT_TAIL_CHARS.toLocaleString()} when the command ends]`,
+      );
+    }
+    // A stream that has begun its tail records nothing more, so its rows
+    // stay its first characters, then its tail.
+    const head =
+      held.tail === ''
+        ? appendHead(
+            '',
+            chunk,
+            Math.max(0, BACKGROUND_OUTPUT_HEAD_CHARS - held.recorded),
+          )
+        : '';
+    if (head) {
+      held.recorded += head.length;
+      logger.output(stream, head);
+    }
+    const rest = chunk.slice(head.length);
+    if (!rest) return;
+    const tail = appendTail(held.tail, rest, BACKGROUND_OUTPUT_TAIL_CHARS);
+    held.elided += held.tail.length + rest.length - tail.length;
+    held.tail = tail;
+  };
+  const recordTails = (): void => {
+    if (!capReached) return;
+    const { stdout, stderr } = streams;
+    logger.warn(
+      `[${(stdout.elided + stderr.elided).toLocaleString()} characters elided; the last ${(stdout.tail.length + stderr.tail.length).toLocaleString()} follow]`,
+    );
+    if (stdout.tail) logger.output('stdout', stdout.tail);
+    if (stderr.tail) logger.output('stderr', stderr.tail);
   };
 
   const run = Effect.gen(function* () {
@@ -266,28 +225,22 @@ function backgroundBashTurn(params: {
       buffer: false,
       // A stop interrupts this call: its release signals the shell's whole
       // process group, so no backgrounded job or piped child is left.
-      onStdout: (chunk) => {
-        stdout.append(chunk);
-        record('stdout', chunk);
-      },
-      onStderr: (chunk) => {
-        stderr.append(chunk);
-        record('stderr', chunk);
-      },
-    });
+      onStdout: (chunk) => record('stdout', chunk),
+      onStderr: (chunk) => record('stderr', chunk),
+    }).pipe(Effect.ensuring(Effect.sync(recordTails)));
     const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
+    // The output rows were published as the chunks arrived; past the
+    // barrier every one is committed, so the run's rows hold the whole log.
+    yield* log.settled;
+    const rows = yield* log.display(runId);
     // `executeCommand` never fails on a non-zero exit: it answers with the
     // exit code, which the run's end reads as its failure, its output still
     // delivered. A timeout, a signal and a spawn failure answer no 0.
     return {
-      report: formatBashDelivery(
-        runId,
-        call,
-        wallTimeMs,
-        result,
-        toDeliveryExcerpt(stdout),
-        toDeliveryExcerpt(stderr),
-      ),
+      report: formatBashDelivery(runId, call, wallTimeMs, result, {
+        rows,
+        gaps: streams,
+      }),
       exit: {
         code: result.noExitCode === true ? null : result.exitCode,
         timedOut: result.timedOut,
@@ -340,14 +293,8 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   toolCall: ToolContext['Service'],
   cwd?: string,
 ): Effect.fn.Return<ToolResult, Error, Scope.Scope | ChildProcessSpawner> {
-  const stdout = createBoundedOutputCapture(
-    FOREGROUND_OUTPUT_HEAD_CHARS,
-    FOREGROUND_OUTPUT_TAIL_CHARS,
-  );
-  const stderr = createBoundedOutputCapture(
-    FOREGROUND_OUTPUT_HEAD_CHARS,
-    FOREGROUND_OUTPUT_TAIL_CHARS,
-  );
+  const stdout = boundedOutput('stdout');
+  const stderr = boundedOutput('stderr');
   const startedAt = yield* Clock.currentTimeMillis;
   const result = yield* executeCommand(command, {
     cwd,
@@ -370,8 +317,8 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   });
   // Spawn/cancellation diagnostics can come from executeCommand itself
   // rather than either subprocess stream, so retain those as a fallback.
-  const retainedStdout = stdout.text('stdout') ?? result.stdout;
-  const retainedStderr = stderr.text('stderr') ?? result.stderr;
+  const retainedStdout = stdout.text() ?? result.stdout;
+  const retainedStderr = stderr.text() ?? result.stderr;
 
   if (result.timedOut) {
     const parts: string[] = [
@@ -416,6 +363,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
   const { command } = input;
   const preview = previewLabel(command);
   const settings = yield* SessionRoots;
+  const log = yield* SessionLog;
   // The durable record states only what a shell command has: no run mode,
   // no model. The run's name reaches terminals (the task list): no control
   // characters.
@@ -436,6 +384,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
           cwd,
           settings,
           logger,
+          log,
         }),
     },
   );

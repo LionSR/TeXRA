@@ -1,4 +1,4 @@
-import { formatResultCount } from '@texra-ai/harness/transcript';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 import { Schema } from 'effect';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import {

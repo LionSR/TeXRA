@@ -82,7 +82,7 @@ import {
   type RetryRequest,
   type RunOutcome,
   type RunId,
-  type SessionEventDraft,
+  type SessionRowDraft,
   type UserQuestionRequest,
   aggregateTarget,
   type ToolEditContent,
@@ -485,14 +485,14 @@ function publish(...drafts: SeedRow[]): void {
 
 /** The run rows the fixtures seed that a run's state folds. */
 type CellRow = Extract<
-  SessionEventDraft,
+  SessionRowDraft,
   { type: 'run.config' | 'run.position' | 'request.decided' }
 >;
 /** What a fixture seeds: a row no run folds, its cell's rows, its opening. */
 type SeedRow =
   | UnfoldedDraft
   | CellRow
-  | Extract<SessionEventDraft, { type: 'run.activate' }>;
+  | Extract<SessionRowDraft, { type: 'run.activate' }>;
 const isCellRow = (draft: SeedRow): draft is CellRow =>
   draft.type === 'run.config' ||
   draft.type === 'run.position' ||
@@ -502,6 +502,14 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
 // run's transcript tier the way `runChat` does.
 HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 {
+  // The harness's set, held until it disposes.
+  const scope = Scope.makeUnsafe();
+  HARNESS_DISPOSERS.push(() =>
+    harnessRuntime.runFork(Scope.close(scope, Exit.void)),
+  );
+  const interest = harnessRuntime.runSync(
+    session().view.subscribe([]).pipe(Scope.provide(scope)),
+  );
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
     const ids = [...currentView().runs.keys()];
@@ -509,8 +517,7 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
     if (key === subscribed) return;
     subscribed = key;
     harnessRuntime.runFork(
-      session().view.subscribe(
-        'tui-harness',
+      interest.set(
         ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
       ),
     );
@@ -564,13 +571,13 @@ function seedRun(
   runId: RunId,
   options: {
     readonly identity?: NonNullable<
-      Extract<SessionEventDraft, { type: 'run.start' }>['identity']
+      Extract<SessionRowDraft, { type: 'run.start' }>['identity']
     >;
     readonly parentRunId?: RunId;
     /** The agent name for a default (agent) identity; a run id names nothing. */
     readonly agent?: string;
     readonly takesFollowUps?: Extract<
-      SessionEventDraft,
+      SessionRowDraft,
       { type: 'run.start' }
     >['takesFollowUps'];
   } = {},

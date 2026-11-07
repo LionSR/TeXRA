@@ -17,6 +17,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
+  environmentApiKeys,
   requestOnService,
   type ServiceClient,
 } from '@texra/controllers/server/client';
@@ -36,7 +37,6 @@ import {
   linkClient,
   type CliServiceLink,
 } from '../runtime/cliService';
-import { environmentApiKeys } from '@texra/controllers/server/serviceSession';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { getStdoutColumns, writeTextStderr } from '../runtime/logSinks';
@@ -48,7 +48,7 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
-import type { RuntimeRequest } from '@texra-ai/harness/schemas';
+import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 
 /** The text width an attach lays rows out at when stdout is not a terminal,
  *  so a saved transcript does not depend on who saved it. */
@@ -94,7 +94,7 @@ const serviceClient = CliInvocation.use(({ context }) =>
 );
 
 /** One request to the task `id` names, refused as a usage error. */
-function requestTask<R extends RuntimeRequest>(
+function requestTask<R extends RuntimeCommand>(
   id: string,
   request: (runId: RunId) => R,
 ) {

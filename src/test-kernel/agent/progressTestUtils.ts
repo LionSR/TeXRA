@@ -11,7 +11,7 @@ import {
 import { defineTool } from '@texra-ai/harness';
 import {
   type BashRequest,
-  type DisplaySessionEvent,
+  type DisplayRow,
   qualifyAggregateId,
   type RequestDecision,
   type RunId,
@@ -36,7 +36,7 @@ type RecordedProgressEvent = {
 };
 
 /** A request a run opened, as the fold and every surface read it. */
-type OpenedRequest = Extract<DisplaySessionEvent, { type: 'request.opened' }>;
+type OpenedRequest = Extract<DisplayRow, { type: 'request.opened' }>;
 
 type SessionEventReader = Context.Context<SessionLog>;
 
@@ -49,7 +49,7 @@ type SessionEventReader = Context.Context<SessionLog>;
 const readSessionEvents = (
   session: SessionEventReader,
   fromCommit: number,
-): Effect.Effect<DisplaySessionEvent[]> =>
+): Effect.Effect<DisplayRow[]> =>
   Effect.suspend(() => {
     const through = Context.get(session, SessionLog).now();
     if (through <= fromCommit) return Effect.succeed([]);
@@ -76,7 +76,7 @@ const readSessionEvents = (
 export function recordSessionEvents(
   session: SessionEventReader,
   filter: { readonly aggregateId?: string } = {},
-): { readonly read: Effect.Effect<DisplaySessionEvent[]> } {
+): { readonly read: Effect.Effect<DisplayRow[]> } {
   const start = Context.get(session, SessionLog).now();
   return {
     read: Effect.map(readSessionEvents(session, start), (events) =>

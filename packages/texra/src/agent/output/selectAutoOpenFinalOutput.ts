@@ -1,13 +1,13 @@
 import { Effect } from 'effect';
 import { Settings } from '@texra-ai/harness/host';
 import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
+import { finalDocumentOutput } from '@texra/shared/plugins/documentOutputs';
 import {
-  documentsResultOf,
-  finalWorkflowOutput,
-} from '@texra/shared/plugins/documentOutputs';
-import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
+  DOCUMENT_TASK_BLOCK,
+  documentsOf,
+} from '@texra/shared/plugins/documents';
 import type { RunEnd } from '@texra-ai/harness';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { AgentConfig, RunView } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@texra-ai/harness/host';
 import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settingsView/texraSettings';
 
@@ -21,7 +21,7 @@ import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settingsView/texraSetting
  * - Only a `completed` document task (its recipe runs the documents block)
  *   qualifies — failed or cancelled runs may hold partial outputs.
  * - Gated by `texra.agentOutputs.autoOpenFinal` (default true).
- * - Which file counts as final is {@link finalWorkflowOutput}'s call, shared
+ * - Which file counts as final is {@link finalDocumentOutput}'s call, shared
  *   with the CLI's `--output` copy and text result.
  *
  * Returns `undefined` when nothing should open; the host supplies only its own
@@ -29,11 +29,17 @@ import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settingsView/texraSetting
  *
  * `stores` are the setting slots of the session the run belongs to, held as
  * data: the gate answers for that project, not for whichever roots the
- * calling context carries.
+ * calling context carries. `run` is the run as a snapshot read after its end
+ * holds it: its documents are its documents row.
  */
 export const selectAutoOpenFinalOutput = Effect.fn('selectAutoOpenFinalOutput')(
-  function* (stores: SettingsStores, config: AgentConfig, result: RunEnd) {
-    const documents = documentsResultOf(result.output.structured);
+  function* (
+    stores: SettingsStores,
+    config: AgentConfig,
+    result: Pick<RunEnd, 'outcome'>,
+    run: Pick<RunView, 'facts'> | undefined,
+  ) {
+    const documents = run && documentsOf(run);
     if (
       config.script?.kind !== 'recipe' ||
       config.script.block !== DOCUMENT_TASK_BLOCK.key ||
@@ -45,6 +51,6 @@ export const selectAutoOpenFinalOutput = Effect.fn('selectAutoOpenFinalOutput')(
       return undefined;
     }
 
-    return finalWorkflowOutput(documents.outputs);
+    return finalDocumentOutput(documents.outputs);
   },
 );

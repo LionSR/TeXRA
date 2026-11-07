@@ -26,29 +26,6 @@ export function loadAliases(rootDir) {
   );
 }
 
-export function loadAliasEntries(rootDir) {
-  const tsconfig = readTsconfig(resolve(rootDir, 'tsconfig.json'));
-
-  return Object.entries(tsconfig.compilerOptions.paths ?? {}).flatMap(
-    ([key, values]) => {
-      const alias = key.replace('/*', '');
-      const requiresSubpath = key.endsWith('/*');
-
-      return (
-        values
-          // Only use the bare '*' variant for build aliases — the *.ts
-          // and */index.ts variants are for tsc nodenext resolution only.
-          .filter((pathValue) => pathValue.endsWith('/*'))
-          .map((pathValue) => ({
-            alias,
-            requiresSubpath,
-            absolutePath: resolve(rootDir, pathValue.replace('/*', '')),
-          }))
-      );
-    },
-  );
-}
-
 function readTsconfig(tsconfigPath) {
   const { config, error } = ts.parseConfigFileTextToJson(
     tsconfigPath,

@@ -2,7 +2,7 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-import { Effect, Result, absurd, Array as Arr } from 'effect';
+import { Effect, Result, Array as Arr } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import { Settings, withLogChannel } from '@texra-ai/harness/host';
@@ -141,43 +141,31 @@ const replacementEngine = {
   applyAll: applyAllPolicy,
 
   /**
-   * Purpose-specific replacement policy entry point. Call sites request the
-   * exact ordered profile they need instead of composing lower-level rules at
-   * the call site. Both special-purpose profiles have production consumers:
-   * `xml-content` backs XML output normalization and `tex-write` backs
-   * `.tex` file writes. `config` is as for {@link applyAll}.
+   * XML output normalization: the full non-regex pipeline (which already
+   * covers `latex_xml`), then the fenced-LaTeX-block regex. The fenced-block
+   * pass is unconditional here, independent of the `enabledReplacementsRegex`
+   * config that gates {@link applyAll}'s regex pass. `config` is as for
+   * {@link applyAll}.
    */
-  applyFor(
-    text: string,
-    purpose: 'xml-content' | 'tex-write',
-    config: ConfigProvider,
-  ): ReplacementResult {
-    switch (purpose) {
-      case 'xml-content': {
-        // XML output normalization runs the full non-regex pipeline (which
-        // already covers latex_xml) and then the fenced-LaTeX-block regex.
-        // The fenced-block pass is deliberate and unconditional here: it is
-        // part of this purpose's contract, independent of the
-        // `enabledReplacementsRegex` config that gates applyAll's regex pass.
-        const nonRegex = applyNonRegexPolicy(text, config);
-        const fenced = applyReplacements(
-          nonRegex.text,
-          FENCED_LATEX_BLOCK_REPLACEMENTS,
-        );
-        return {
-          text: fenced.text,
-          diagnostics: [...nonRegex.diagnostics, ...fenced.diagnostics],
-        };
-      }
-      case 'tex-write': {
-        // Writing a .tex file runs the full pipeline and then restores the
-        // LaTeX built-in section sign from the KaTeX-only destination.
-        const all = applyAllPolicy(text, config);
-        return { ...all, text: restoreLatexSectionSign(all.text) };
-      }
-      default:
-        return absurd(purpose);
-    }
+  applyToXmlContent(text: string, config: ConfigProvider): ReplacementResult {
+    const nonRegex = applyNonRegexPolicy(text, config);
+    const fenced = applyReplacements(
+      nonRegex.text,
+      FENCED_LATEX_BLOCK_REPLACEMENTS,
+    );
+    return {
+      text: fenced.text,
+      diagnostics: [...nonRegex.diagnostics, ...fenced.diagnostics],
+    };
+  },
+
+  /**
+   * A `.tex` file write: the full pipeline of {@link applyAll}, then the
+   * LaTeX built-in section sign restored from the KaTeX-only destination.
+   */
+  applyToTexWrite(text: string, config: ConfigProvider): ReplacementResult {
+    const all = applyAllPolicy(text, config);
+    return { ...all, text: restoreLatexSectionSign(all.text) };
   },
 };
 
@@ -310,7 +298,7 @@ function getCompiledRegex(pattern: string, flags: string): RegExp {
 /**
  * Apply replacements to text, handling both regex and non-regex patterns.
  */
-export function applyReplacements(
+function applyReplacements(
   text: string,
   replacements: ReplacementRuleSet | ReplacementRuleSet[],
   options?: {

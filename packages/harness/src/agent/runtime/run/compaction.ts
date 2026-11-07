@@ -258,12 +258,12 @@ const land = Effect.fn('compaction.land')(function* (
  * on a fiber in the run's scope, and a later request boundary of the turn,
  * or its end at the latest, lands it as the edit of messages `[0, to)` at
  * the `base` it was computed from. Every other edit of the view (a
- * `/compact`, an overflow, a model switch) settles this first
- * ({@link settle}), so no summary meets a view another edit moved. A history
+ * `/compact`, an overflow, a model switch) lands or cuts this
+ * first (`landPending`), so no summary meets a view another edit moved. A history
  * past the window waits for the summary; a `/compact` or an overflow
  * settles, then summarizes the whole history.
  */
-interface BackgroundCompaction {
+export interface BackgroundCompaction {
   /** At a request boundary, no attempt open; `requests` consume `/compact`s.
    *  Each operation commits through `cell` and answers its state. */
   readonly atBoundary: (
@@ -271,15 +271,14 @@ interface BackgroundCompaction {
     bound: BoundModel,
     requests: readonly RunHistoryDraft[],
   ) => Effect.Effect<RunState, CellError | StateReadFailed>;
-  /** At the end of a turn: wait for the summary being made, and land it. A
+  /** Land the summary being made. At the end of a turn, wait for it: a
    *  summary does not outlive its turn, so an exit while the run is idle
-   *  loses none, and its activity closes before the turn's `waiting`. */
-  readonly finish: (cell: RunCell) => Effect.Effect<RunState, CellError>;
-  /** Before another edit of the view: land a finished summary, cut short
-   *  one still running (`why` says what edit is coming). */
-  readonly settle: (
+   *  loses none, and its activity closes before the turn's `waiting`.
+   *  Before another edit of the view, `cut` it short (naming the edit
+   *  coming), keeping one that finished first. */
+  readonly landPending: (
     cell: RunCell,
-    why: string,
+    cut?: string,
   ) => Effect.Effect<RunState, CellError>;
   /** After a request the window could not hold: compact once per turn and
    *  answer with the state to send again, or null (the turn fails). */
@@ -301,7 +300,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
     } | null = null;
 
     /** Land the pending summary's outcome, and forget it. */
-    const landPending = (
+    const applyOutcome = (
       cell: RunCell,
       exit: Exit.Exit<Summary | null>,
       reason: Reason = 'threshold',
@@ -320,24 +319,21 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       return cell.current;
     };
 
-    const settle = Effect.fn('compaction.settle')(function* (
+    const landPending = Effect.fn('compaction.landPending')(function* (
       cell: RunCell,
-      why: string,
+      cut?: string,
       reason: Reason = 'threshold',
     ) {
       if (pending === null) return yield* cell.current;
       const running = pending.fiber;
-      const finished = running.pollUnsafe();
-      if (finished !== undefined)
-        return yield* landPending(cell, finished, reason);
-      yield* Fiber.interrupt(running);
-      // It may have finished as the interrupt landed: that summary lands.
-      const raced = running.pollUnsafe();
-      if (raced !== undefined && Exit.isSuccess(raced))
-        return yield* landPending(cell, raced, reason);
+      if (cut !== undefined) yield* Fiber.interrupt(running);
+      // A summary that finished before the interrupt landed keeps its exit.
+      const exit = yield* Fiber.await(running);
+      if (cut === undefined || Exit.isSuccess(exit))
+        return yield* applyOutcome(cell, exit, reason);
       pending = null;
       input.logger.warn(
-        `A background compaction was cut short (${why}); nothing it summarized was applied.`,
+        `A background compaction was cut short (${cut}); nothing it summarized was applied.`,
       );
       return yield* cell.current;
     });
@@ -359,7 +355,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
           ? yield* Fiber.await(running)
           : running.pollUnsafe();
         if (finished === undefined) return state;
-        const landed = yield* landPending(cell, finished);
+        const landed = yield* applyOutcome(cell, finished);
         // One that produced no summary leaves the decision to this history.
         if (landed.lastEdit !== state.lastEdit) return landed;
         state = landed;
@@ -373,13 +369,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
           'threshold',
         ).pipe(Effect.forkIn(scope)),
       };
-      return full ? yield* finish(cell) : state;
-    });
-
-    /** Wait for the summary being made, and land it. */
-    const finish = Effect.fn('compaction.finish')(function* (cell: RunCell) {
-      if (pending === null) return yield* cell.current;
-      return yield* landPending(cell, yield* Fiber.await(pending.fiber));
+      return full ? yield* landPending(cell) : state;
     });
 
     /** Compact now, after any summary being made has landed as this edit:
@@ -393,7 +383,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       reason: Exclude<Reason, 'threshold'>,
       answers: readonly RunHistoryDraft[],
     ) {
-      const settled = yield* settle(
+      const settled = yield* landPending(
         cell,
         `${reason === 'request' ? 'a /compact' : 'an overflow'} replaces it`,
         reason === 'overflow' ? 'overflow' : 'threshold',
@@ -422,6 +412,10 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       return compacted.lastEdit === state.lastEdit ? null : compacted;
     });
 
-    return { atBoundary, settle, finish, afterOverflow };
+    return {
+      atBoundary,
+      landPending: (cell, cut) => landPending(cell, cut),
+      afterOverflow,
+    };
   },
 );

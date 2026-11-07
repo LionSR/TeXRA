@@ -29,7 +29,7 @@ import {
 import {
   qualifyAggregateId,
   type RunId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import type { AggregateState, Database } from '@shared/session/database';
 import {
@@ -39,7 +39,7 @@ import {
   type RequestError,
   type OutcomeOf,
   type RunFilesResult,
-  type RuntimeRequest,
+  type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionViewAccess } from '@shared/session/runHistory';
@@ -112,7 +112,7 @@ const removeRunDirectories: (
 );
 
 /** A run's deletion marker. */
-type RemovalMarker = Extract<SessionEvent, { type: 'run.removed' }>;
+type RemovalMarker = Extract<SessionRow, { type: 'run.removed' }>;
 
 /** The session's deletion collector ({@link deletionCollector}). */
 export interface DeletionCollector {
@@ -271,7 +271,7 @@ export const deleteAdmittedRun = (
  */
 export const runFiles = Effect.fn('runFiles')(function* (
   runs: InactiveRunStep,
-  req: Extract<RuntimeRequest, { kind: 'run.files' }>,
+  req: Extract<RuntimeCommand, { kind: 'run.files' }>,
 ): Effect.fn.Return<
   OutcomeOf<'run.files'>,
   RequestError,

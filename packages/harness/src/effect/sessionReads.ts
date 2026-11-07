@@ -109,9 +109,6 @@ export interface RunDeletion {
   }[];
 }
 
-/** The reader ports handed out so far (`subscribe`). */
-let readerPorts = 0;
-
 const heldRun = (run: LiveRun): HeldRun => ({
   runId: run.runId,
   drained: run.drained,
@@ -188,16 +185,10 @@ export function sessionReads(
   /** Reads over this session's services. */
   const read = <A, E>(effect: Effect.Effect<A, E, SessionServices>) =>
     Effect.provide(effect, session);
-  /** One reader port per subscription, so no reader disturbs another's
-   *  set; the port leaves with the caller's scope. */
+  /** One subscription per reader, so no reader disturbs another's set; it
+   *  leaves with the caller's scope. */
   const subscribe = (set: readonly TranscriptSubscription[]) =>
-    Effect.acquireRelease(
-      Effect.suspend(() => {
-        const port = `sdk/reader/${(readerPorts += 1)}`;
-        return Effect.as(view.subscribe(port, set), port);
-      }),
-      (port) => view.subscribe(port, []),
-    ).pipe(Effect.asVoid);
+    Effect.asVoid(view.subscribe(set));
   return {
     storeMovedAside: log.movedAside,
     view: {

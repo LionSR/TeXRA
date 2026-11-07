@@ -1,32 +1,33 @@
 // @ts-check
 import * as esbuild from 'esbuild';
 
-import { buildIdentityDefine } from '../../scripts/build-identity.mjs';
-import { codeSandboxWorker } from '../../scripts/code-sandbox-worker.mjs';
+import { harnessBundleOptions } from '../../scripts/code-sandbox-worker.mjs';
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
+
+const base = harnessBundleOptions();
 
 /**
  * Extension host build configuration
  */
 const extensionConfig = {
+  ...base,
   entryPoints: ['./src/extension.ts'],
-  bundle: true,
   outfile: './dist/extension.js',
   platform: 'node',
-  target: 'node18',
+  // The Node of the Electron that runs VS Code's extension host, at the
+  // `engines.vscode` floor: VS Code 1.125 ships Electron 42, on Node 24.15.
+  target: 'node24.15',
   format: 'cjs',
   sourcemap: production ? false : 'linked',
   minify: production,
-  // sdkErrorUtils relies on SDK error class/prototype names after bundling.
-  keepNames: production,
   tsconfig: './tsconfig.json',
   external: [
     'vscode', // VS Code API - provided at runtime
     'fsevents', // macOS native module
   ],
-  loader: { '.tex': 'text', '.wasm': 'binary' },
+  loader: { ...base.loader, '.tex': 'text' },
   logLevel: 'info',
   // Polyfill import.meta.url for ESM-only dependencies (e.g. @openai/codex-sdk)
   // bundled into CJS. Without this, esbuild replaces import.meta with {} and
@@ -41,11 +42,10 @@ const extensionConfig = {
       `var importMetaUrl = require("url").pathToFileURL(__filename).href;`,
   },
   define: {
-    ...buildIdentityDefine(),
+    ...base.define,
     'process.env.NODE_ENV': production ? '"production"' : '"development"',
     'import.meta.url': 'importMetaUrl',
   },
-  plugins: [codeSandboxWorker],
 };
 
 async function main() {

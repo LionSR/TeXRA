@@ -27,7 +27,7 @@ function childRow(child: RunView) {
  * Headless CLI progress output. Every display row the session commits goes
  * out as one `kind: "progress"` record whose `event` is the row's `type` and
  * whose `payload` is the rest of the row, field names untouched: the CLI
- * contract is a versioned projection of `SessionEvent`, not a second
+ * contract is a versioned projection of `SessionRow`, not a second
  * vocabulary (`contract: 2`, stamped by the NDJSON sink).
  *
  * It reads `view.events(view.head())` directly: every event

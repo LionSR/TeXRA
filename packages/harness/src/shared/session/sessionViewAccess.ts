@@ -5,7 +5,7 @@
  */
 
 import type { RunId, TranscriptSubscription } from '@shared/schemas';
-import type { Context, Effect, Stream, SubscriptionRef } from 'effect';
+import type { Context, Effect, Scope, Stream, SubscriptionRef } from 'effect';
 import type { SessionInputs } from './sessionInputs';
 import type { RunView, SessionView } from './sessionView';
 
@@ -30,10 +30,18 @@ export interface SessionViewAccessShape {
   /** Ordered view inputs for one transport subscription: complete replay,
    *  then events before live text. */
   readonly inputs: Context.Service.Shape<typeof SessionInputs>['read'];
-  /** Replace one port's transcript subscription set; an empty set removes
-   *  the port. The view's set is the union over every port. */
+  /** Subscribe `set`'s transcripts for the caller's scope; the handle
+   *  replaces the set in place. The view's set is the union over every
+   *  subscriber. */
   subscribe(
-    port: string,
     set: readonly TranscriptSubscription[],
-  ): Effect.Effect<void>;
+  ): Effect.Effect<TranscriptInterest, never, Scope.Scope>;
+}
+
+/** One subscriber's transcript set, held for the scope that subscribed it. */
+export interface TranscriptInterest {
+  /** Replace the set. */
+  readonly set: (
+    next: readonly TranscriptSubscription[],
+  ) => Effect.Effect<void>;
 }

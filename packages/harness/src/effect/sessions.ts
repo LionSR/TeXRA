@@ -17,7 +17,7 @@ import type { AgentEvent } from '@shared/session/agentEvent';
 import type {
   AgentRunListingEntry,
   CommitOrdinal,
-  DisplaySessionEvent,
+  DisplayRow,
   SessionViewInput,
   RequestDecision,
   RunEnd,
@@ -31,7 +31,7 @@ import type {
 import type { RequestError } from '@shared/session/runtimeRequest';
 import type {
   OutcomeOf,
-  RuntimeRequest,
+  RuntimeCommand,
   StartRequestSchema,
 } from '@shared/session/runtimeRequest';
 import type {
@@ -151,8 +151,6 @@ export interface Run {
    * before the read reached it arrives whole, as one chunk.
    */
   readonly events: Stream.Stream<AgentEvent, RunFailure>;
-  /** Stop the run, as the user's `run.stop` does. */
-  readonly interrupt: Effect.Effect<void>;
 }
 
 /** One workspace's runs, the view of them, its store's records, and the
@@ -224,12 +222,12 @@ export interface Session {
     input?: ResumeInput,
   ) => Effect.Effect<Run, ResumeRefused | LaunchError | RunFailure>;
   /** Everything else you ask of the session, as one typed request
-   *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
+   *  (`RuntimeCommand` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
    *  Answered exactly once, with the outcome its kind is answered with
    *  (`OutcomeOf`) or a {@link RequestError}. A decision a request's kind
    *  does not take is `Rejected`. */
-  readonly request: <R extends RuntimeRequest>(
+  readonly request: <R extends RuntimeCommand>(
     request: R,
   ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
   /** Attach `host` until the caller's scope closes: it shows notices, and
@@ -274,7 +272,7 @@ export interface LocalSession extends Session {
     readonly events: (
       from: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+    ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
   };
   /** The {@link Run} of `runId`'s activation at `activation`, as `start`
    *  or `resume` handed it out: a host that carries a handle across a

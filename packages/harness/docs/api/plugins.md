@@ -83,15 +83,23 @@ function agentBlockOf<A>(
 
 ## AgentBlockResult
 
-How a recipe's return value (its run's `output.structured`) reads: to the
-launching model, and to a script's summary of the files its calls wrote.
-The harness reads the value only through these.
+How a completed recipe run reads: to the launching model, and to a
+script's summary of the files its calls wrote. What it reports is the
+run's latest row of the plugin's own `fact` kind (`Plugin.factKinds`),
+the one record of it; the recipe's return value is not read. The harness
+reads the row only through these.
 
 ```ts
 interface AgentBlockResult<R = unknown> {
-  /** Checks the value where it is read; a value that fails it is delivered
-   *  as an invalid result naming the issue, never shaped. */
-  readonly schema: Schema.Codec<R, unknown>;
+  /** The plugin's row kind that records what the run did, and the schema
+   *  its value decodes with. A completed run with no such row, or one that
+   *  fails the schema, is delivered as an invalid result naming the issue,
+   *  never shaped. */
+  readonly fact: {
+    readonly plugin: string;
+    readonly kind: string;
+    readonly schema: Schema.Codec<R, unknown>;
+  };
   /** The delivery body inside the harness's own result envelope. */
   delivery(value: R, runId: RunId): readonly string[];
   /** The files the recipe wrote, in the order it wrote them (a document
@@ -1568,15 +1576,6 @@ const scopedClient: Effect<With<HttpClientError, Scope>, never, HttpClient>
 
 ```ts
 const scopedOkClient: Effect<With<HttpClientError, Scope>, never, HttpClient>
-```
-
-## senderOf
-
-The sender a tool call speaks as: its run, or the user when no run
-calls it.
-
-```ts
-function senderOf(caller: RunId | undefined): FollowUpSenderInput
 ```
 
 ## SessionPluginLayer

@@ -1,7 +1,7 @@
 // Node imports
 import * as path from 'node:path';
 import { hasExtension, pathToLocationIn } from '@texra-ai/harness/host';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { RunFileService, type AgentTrace } from '@texra-ai/harness/plugins';
 import { absentReason } from '@texra-ai/harness/node';
 
 // Third-party imports
@@ -35,32 +35,15 @@ const PROJECT_SIBLING_NAMES = new Set([
 /** Maximum concurrent LaTeX compilation operations */
 const LATEX_CONCURRENCY = 4;
 
-/** Options accepted by the logging slice of {@link LatexTrace}. */
-interface LatexLogOptions {
-  readonly data?: unknown;
-}
-
-/**
- * The logging slice `LatexMediaManager` actually calls. Structurally
- * satisfied by `AgentTrace`; declared here so LaTeX processing stays
- * independent of agent execution internals.
- */
-export interface LatexTrace {
-  debug(message: string, options?: LatexLogOptions): void;
-  info(message: string, options?: LatexLogOptions): void;
-  warn(message: string, options?: LatexLogOptions): void;
-  error(message: string, options?: LatexLogOptions): void;
-}
-
 /**
  * Handles LaTeX related media extraction and compilation for agents.
  */
 export class LatexMediaManager {
-  private readonly logger: LatexTrace;
+  private readonly logger: AgentTrace;
   private readonly roots: WorkspaceRoots;
   private readonly fileService: RunFileService;
   constructor(
-    logger: LatexTrace,
+    logger: AgentTrace,
     /**
      * The session's roots: the settings a PDF or TikZ compile reads, and the
      * workspace every extracted or compiled path is located against.

@@ -63,7 +63,7 @@ for (let revision = 0; revision < revisions; revision += 1) {
     critique = critic.response;
   }
 }
-return (await tools.document_propose({})).documents;`;
+await tools.document_propose({});`;
 }
 
 /**

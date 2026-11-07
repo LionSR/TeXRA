@@ -20,7 +20,7 @@ import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { FakeHost } from '@test/support/testKernel';
 import { LaunchSurfaceSchema } from '@texra/shared/session/surface';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
   launchFormOf,
   prepareSurfaceLaunch,
@@ -65,7 +65,7 @@ const ROOTS = {
 
 function launchRequest(
   patch: Record<string, unknown> = {},
-): Extract<HostRequest, { kind: 'launch' }> {
+): Extract<HostCommand, { kind: 'launch' }> {
   return {
     kind: 'launch',
     launch: Schema.decodeUnknownSync(LaunchSurfaceSchema)(patch),

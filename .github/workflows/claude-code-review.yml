@@ -40,25 +40,6 @@ jobs:
         Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*),Bash(git diff:*),Bash(git log:*),mcp__github_inline_comment__create_inline_comment,mcp__github__*
 
     steps:
-      # Consume the trigger label so a later `re-review` re-application fires
-      # a fresh run. Fork PR tokens are read-only; their review jobs already
-      # skip because provider credentials are unavailable.
-      - name: Remove re-review label
-        if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v9
-        with:
-          script: |
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                name: 're-review',
-              });
-            } catch (error) {
-              if (error.status !== 404) throw error;
-            }
-
       - name: Check review provider token
         id: provider-token
         env:
@@ -92,19 +73,33 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # The label step below loads its action from the trusted checkout, so a
+      # `labeled` run checks out even when the review skips.
       - name: Checkout repository under review
-        if: steps.provider-token.outputs.skip != 'true'
+        if: steps.provider-token.outputs.skip != 'true' || github.event.action == 'labeled'
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
+      # The actions and prompts below come from the base branch, never from
+      # the pull request. Checked out second: checking out into the workspace
+      # root first empties it.
       - name: Checkout trusted automation
-        if: steps.provider-token.outputs.skip != 'true'
+        if: steps.provider-token.outputs.skip != 'true' || github.event.action == 'labeled'
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           path: .trusted-actions
           fetch-depth: 1
+
+      # Consume the trigger label so a later `re-review` re-application fires
+      # a fresh run. Fork PR tokens are read-only; their review jobs already
+      # skip because provider credentials are unavailable.
+      - name: Remove re-review label
+        if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: ./.trusted-actions/.github/actions/consume-label
+        with:
+          label: re-review
 
       - name: Run Claude Code Review
         if: steps.provider-token.outputs.skip != 'true'
@@ -128,57 +123,10 @@ jobs:
             Trigger event: ${{ github.event.action }}
           system-prompt-file: .trusted-actions/.github/prompts/claude-code-review-system-prompt.md
 
-      # The action hides the agent's transcript, so a denied tool call is only
-      # a count in the log. Name each one so the allowlist can be fixed instead
-      # of guessed at. The input stays hidden, as the action intends: secret
-      # masking misses unregistered values, so a denial shows only its tool
-      # and, for Bash, the program and its word-shaped subcommand (the prefix
-      # an allowlist pattern like Bash(gh pr:*) matches; for `gh`, whose
-      # groups take a subcommand of their own, one word more, as
-      # Bash(gh pr checks:*) needs), never its arguments.
       - name: Report denied tool calls
         continue-on-error: true
         if: always() && steps.claude-review.outcome != 'skipped'
-        env:
-          EXECUTION_FILE: ${{ runner.temp }}/claude-execution-output.json
-        run: |
-          set -euo pipefail
-          if [ ! -f "$EXECUTION_FILE" ]; then
-            echo "::warning title=No execution log::$EXECUTION_FILE is missing; denied tool calls cannot be reported."
-            exit 0
-          fi
-          # A result without the list is not "no denials": say so.
-          if ! jq -e '[.[]? | select(.type == "result")] | last | .permission_denials | type == "array"' "$EXECUTION_FILE" >/dev/null; then
-            echo "::warning title=No denial list::the execution log's result carries no permission_denials array; denied tool calls cannot be reported."
-            exit 0
-          fi
-          denials=$(jq -c '[.[]? | select(.type == "result")] | last | .permission_denials[]' "$EXECUTION_FILE")
-          if [ -z "$denials" ]; then
-            echo "No denied tool calls."
-            exit 0
-          fi
-          {
-            echo "### Denied tool calls"
-            echo
-          } >> "$GITHUB_STEP_SUMMARY"
-          while IFS= read -r denial; do
-            name=$(jq -r '.tool_name | tostring' <<<"$denial" | tr -cd 'A-Za-z0-9_.-')
-            if [ "$name" = "Bash" ]; then
-              # Program name, then the next word only when it is a bare
-              # lowercase word (a subcommand), never a path, URL or value;
-              # under a `gh` command group (pr, issue, repo, ...) the
-              # subcommand is the word after. `gh api` takes an endpoint
-              # there (`graphql` aside) and `gh browse` an argument: a word
-              # the group list leaves out is never shown.
-              name=$(jq -r '.tool_input.command // "" | tostring' <<<"$denial" | head -n1 |
-                awk '{ p = $1; sub(/.*\//, "", p); gsub(/[^A-Za-z0-9_.-]/, "", p)
-                       s = ($2 ~ /^[a-z][a-z-]*$/) ? " " $2 : ""
-                       if (p == "gh" && s != "" && $3 ~ /^[a-z][a-z-]*$/ && ($2 ~ /^(pr|issue|repo|run|workflow|release|search|label|gist|project)$/ || ($2 == "api" && $3 == "graphql"))) s = s " " $3
-                       printf "Bash(%s%s)", p, s }')
-            fi
-            echo "::warning title=Denied tool call::$name"
-            echo "- \`$name\`" >> "$GITHUB_STEP_SUMMARY"
-          done <<<"$denials"
+        uses: ./.trusted-actions/.github/actions/report-denied-tools
 
       - name: Check for Claude quota errors and post comment
         if: |

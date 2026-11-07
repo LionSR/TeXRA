@@ -10,11 +10,7 @@ import type {
   ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import type {
-  RequestDecision,
-  RunId,
-  SessionEventDraft,
-} from '@shared/schemas';
+import type { RequestDecision, RunId, SessionRowDraft } from '@shared/schemas';
 import type { Effect } from 'effect';
 import type {
   DatabaseAggregateClosed,
@@ -57,7 +53,7 @@ export interface SessionApprovals {
    *  ancestors' rows, never from a view that may lag. */
   activationRows(
     runId: RunId,
-  ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
+  ): Effect.Effect<readonly SessionRowDraft[], DatabaseReadFailed>;
   /**
    * Record a surface's decision on `requestId` with the grant it came
    * with, in one transaction: the grant's rows land whatever the request's

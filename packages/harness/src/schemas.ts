@@ -11,8 +11,8 @@
  *   and pure queries ([`acceptsFollowUp`](#acceptsfollowup),
  *   [`attentionOf`](#attentionof), [`sessionActivity`](#sessionactivity),
  *   [`descendantRuns`](#descendantruns), [`runActionRefusal`](#runactionrefusal)).
- * - **Commands & approvals**: [`RuntimeRequestSchema`](#runtimerequestschema)
- *   ([`RuntimeRequest`](#runtimerequest)), [`RequestDecision`](#requestdecision),
+ * - **Commands & approvals**: [`RuntimeCommandSchema`](#runtimecommandschema)
+ *   ([`RuntimeCommand`](#runtimecommand)), [`RequestDecision`](#requestdecision),
  *   [`OutcomeSchema`](#outcomeschema), [`RequestErrorSchema`](#requesterrorschema),
  *   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
  * - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
@@ -48,7 +48,6 @@ export {
   needsUser,
   requestAnswerability,
   rollupOf,
-  RunViewSchema,
   sessionActivity,
   SessionViewSchema,
   type Attention,
@@ -93,7 +92,7 @@ export type {
   ContextManagementData,
   DeclinableUsageRoute,
   DispatchFacts,
-  DisplaySessionEvent,
+  DisplayRow,
   ErrorLogData,
   ExternalFileLocation,
   FileListEntry,
@@ -131,8 +130,8 @@ export type {
   RunPosition,
   RunStorageFileLocation,
   ScriptDeliverySummary,
-  SessionEvent,
-  SessionEventDraft,
+  SessionRow,
+  SessionRowDraft,
   AgentNotFoundPayload,
   TaskGroup,
   TaskGroupStatus,
@@ -153,7 +152,6 @@ export {
   APPROVAL_POLICIES,
   APPROVAL_POLICY_DEFAULT,
   APPROVAL_POLICY_NO_INPUT_DEFAULT,
-  approvalPolicyDenialMessage,
   ApprovalPolicySchema,
   parseApprovalPolicy,
   type ApprovalPolicy,
@@ -176,13 +174,16 @@ export {
 // answered with, and a run's start as data.
 export {
   Cancelled,
+  Conflict,
   OutcomeSchema,
   Rejected,
   RequestErrorSchema,
-  RuntimeRequestSchema,
+  RunActive,
+  Unavailable,
+  RuntimeCommandSchema,
   StartRequestSchema,
   type RequestError,
-  type RuntimeRequest,
+  type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 // A memory as a memory list shows it.
 export {
@@ -193,6 +194,7 @@ export {
 export { getModelLabel } from '@shared/model/modelLabel';
 // Error messages.
 export {
+  causeChain,
   ensureError,
   extractErrorMessage,
   formatError,
@@ -275,6 +277,11 @@ export {
 // escapes.
 export {
   countLines,
+  formatCompactDuration,
+  formatCompactTokenCount,
+  formatCostUsd,
+  formatResultCount,
+  pluralize,
   previewLabel,
   splitContentLines,
   stripControlCharacters,

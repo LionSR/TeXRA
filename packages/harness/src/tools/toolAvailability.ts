@@ -16,28 +16,35 @@
  * Results are keyed by workspace root: the probes read the workspace (a
  * group may ask whether it is a git repository, or read the workspace's
  * configuration), so on a multi-project host one workspace's results must
- * not answer for another's.
+ * not answer for another's. Each root probes on its own fiber, one round at
+ * a time: a round asked for while one runs waits for it to finish, and a
+ * burst of asks is answered by one round on the newest inputs.
  */
 
 // Third-party imports
 import {
   Cause,
-  Deferred,
+  Context,
   Duration,
   Effect,
-  Fiber,
+  Exit,
+  FileSystem,
   Layer,
   Option,
-  Queue,
+  Predicate,
+  PubSub,
+  RcMap,
   Result,
-  Scope,
-  Semaphore,
+  Stream,
   SubscriptionRef,
 } from 'effect';
+import { HttpClient } from 'effect/http';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { onAppSignal, type AppSignals } from '@platform/appSignals';
+import { subscribeAppSignal, type AppSignals } from '@platform/appSignals';
+import { Secrets } from '@platform/secrets';
 import type { StateStore } from '@shared/config/settings';
 import { storedDisabledTools, type Plugin } from '@tools/plugins';
 import type {
@@ -58,12 +65,12 @@ import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 const CHANNEL = 'toolAvailability';
 
 /**
- * Deadline on one group's complete check, including its label and detail. A probe is
- * shared by every caller of its root, so no caller's interrupt ends a stalled
+ * Deadline on one group's complete check, including its label and detail. A
+ * root's rounds run on its own fiber, so no caller's interrupt ends a stalled
  * child-process lookup, SDK import or secret read: without this bound one
- * hung group would hold its root's probe, and every caller joining it, until
- * the process closed. A group that misses it reports `unknown`, like any
- * other probe failure.
+ * hung group would hold every later round of its root, and every caller
+ * waiting on one, until the root's last holder closed. A group that misses it
+ * reports `unknown`, like any other probe failure.
  */
 const GROUP_PROBE_TIMEOUT_MS = 20_000;
 
@@ -114,22 +121,29 @@ type ProbedToolPlugin = Plugin & {
 
 type ProbeResults = readonly ExternalToolCheckResult[];
 
-/**
- * What the next round of a root's probe reads. A caller arriving while the
- * probe runs replaces the inputs and asks for another round, so the results
- * end on the latest state and a stale probe cannot overwrite a fresh one by
- * finishing last.
- */
-interface ProbeRound {
-  inputs: ToolProbeInputs;
-  again: boolean;
+/** What a root's next round reads, numbered so that whoever asked for it can
+ *  tell which answer covers its ask. */
+interface ProbeRequest {
+  readonly round: number;
+  readonly inputs: ToolProbeInputs;
 }
+
+/** Ask a root for a round over `inputs`, after the one in flight. Returns the
+ *  round's number. */
+const request = (
+  requests: SubscriptionRef.SubscriptionRef<ProbeRequest | undefined>,
+  inputs: ToolProbeInputs,
+) =>
+  SubscriptionRef.modify(requests, (last) => {
+    const round = (last?.round ?? 0) + 1;
+    return [round, { round, inputs }];
+  });
 
 /**
  * The process's {@link ToolAvailability}, built once over the services the
  * probes read: every host's composition root installs it with the process
- * runtime. The layer's scope owns every probe and the credential listener,
- * so closing the runtime interrupts and settles all of them.
+ * runtime. The layer's scope owns every root's probe, so closing the runtime
+ * interrupts all of them.
  */
 export const toolAvailabilityLayer: Layer.Layer<
   ToolAvailability,
@@ -149,23 +163,15 @@ export const toolAvailabilityLayer: Layer.Layer<
         (plugin) => plugin.availability.reprobeOnSecrets ?? [],
       ),
     );
-    const services = yield* Effect.context<ToolProbeServices>();
-    const layerScope = yield* Scope.Scope;
+    // What a round runs on, beside a plugin's own services: exactly the
+    // probe services, never the build's scope or references with them.
+    const services = Context.pick(
+      Secrets,
+      FileSystem.FileSystem,
+      HttpClient.HttpClient,
+      ChildProcessSpawner,
+    )(yield* Effect.context<ToolProbeServices>());
     const results = yield* SubscriptionRef.make<AvailabilityResults>(new Map());
-    // Each root's probe in flight: at most one per root.
-    const lanes = new Map<
-      string | undefined,
-      { readonly round: ProbeRound; readonly fiber: Fiber.Fiber<ProbeResults> }
-    >();
-    // Each held root's holders' inputs, newest last: while any are left the
-    // root's results are kept, and the newest is what a credential change
-    // re-probes (a project reopened with new configuration supersedes the
-    // inputs it was first opened with).
-    const held = new Map<string | undefined, ToolProbeInputs[]>();
-    // Claiming a lane with its fork, and a lane deciding between another
-    // round and leaving the map, each run under this permit: no caller can
-    // join a lane after its last round, or find the lane but no fiber.
-    const claim = yield* Semaphore.make(1);
 
     const probeRound = (inputs: ToolProbeInputs) =>
       Effect.forEach(
@@ -184,125 +190,98 @@ export const toolAvailabilityLayer: Layer.Layer<
         // Every group probes at once and no group's failure cancels a
         // sibling, because each one resolves to a result of its own.
         { concurrency: 'unbounded' },
-      ).pipe(
-        Effect.provideContext(services),
-        // Only a held root's results are kept: one no session holds is
-        // answered, not remembered.
-        Effect.tap((probed) =>
-          SubscriptionRef.update(results, (current) =>
-            held.has(inputs.workspace)
-              ? new Map(current).set(inputs.workspace, probed)
-              : current,
-          ),
-        ),
-      );
-    const probeUntilSettled = (key: string | undefined, round: ProbeRound) =>
-      Effect.gen(function* () {
-        while (true) {
-          const probed = yield* probeRound(round.inputs);
-          const again = yield* claim.withPermit(
-            Effect.sync(() => {
-              if (round.again) {
-                round.again = false;
-                return true;
-              }
-              lanes.delete(key);
-              return false;
+      ).pipe(Effect.provideContext(services));
+
+    // Each root's probe, held by every session open on it and by each
+    // refresh while it waits. The last holder's release ends the root's
+    // round in flight and drops its results, so the published map holds only
+    // the roots something holds.
+    const probes = yield* RcMap.make({
+      lookup: (workspace: string | undefined) =>
+        Effect.gen(function* () {
+          const requests = yield* SubscriptionRef.make<
+            ProbeRequest | undefined
+          >(undefined);
+          const answers = yield* Effect.acquireRelease(
+            PubSub.unbounded<{
+              readonly round: number;
+              readonly probed: Exit.Exit<ProbeResults>;
+            }>({ replay: 1 }),
+            PubSub.shutdown,
+          );
+          // Subscribed before the root's first round reads a secret, so no
+          // write committed after that read goes unanswered.
+          const secretWrites = yield* subscribeAppSignal('credentialChanged');
+          yield* Effect.addFinalizer(() =>
+            SubscriptionRef.update(results, (current) => {
+              const next = new Map(current);
+              next.delete(workspace);
+              return next;
             }),
           );
-          if (!again) return probed;
-        }
-      }).pipe(
-        // However the fiber ends (settled, interrupted, or a defect the
-        // groups did not absorb), its lane leaves the map, so the next
-        // caller starts a fresh probe instead of joining a dead fiber.
-        Effect.ensuring(
-          Effect.sync(() => {
-            if (lanes.get(key)?.round === round) lanes.delete(key);
-          }),
-        ),
-      );
-    // Start probing `inputs`' root, or hand the probe in flight another
-    // round with them. The fiber lives in the layer's scope, out of every
-    // caller's reach, so a caller's interrupt abandons only its own wait.
-    // Uninterruptible, so an interrupt cannot land between the fork and the
-    // lane that records it.
-    const start = (inputs: ToolProbeInputs) =>
-      claim
-        .withPermit(
-          Effect.suspend(() => {
-            const key = inputs.workspace;
-            const running = lanes.get(key);
-            if (running) {
-              running.round.inputs = inputs;
-              running.round.again = true;
-              return Effect.succeed(running.fiber);
-            }
-            const round: ProbeRound = { inputs, again: false };
-            return Effect.forkIn(
-              probeUntilSettled(key, round),
-              layerScope,
-            ).pipe(
-              Effect.tap((fiber) =>
-                Effect.sync(() => lanes.set(key, { round, fiber })),
+          // The round in flight finishes; the newest request waits for it,
+          // replacing any older one still waiting.
+          yield* SubscriptionRef.changes(requests).pipe(
+            Stream.filter(Predicate.isNotUndefined),
+            Stream.buffer({ capacity: 1, strategy: 'sliding' }),
+            Stream.runForEach(({ round, inputs }) =>
+              probeRound(inputs).pipe(
+                Effect.tap((probed) =>
+                  SubscriptionRef.update(results, (current) =>
+                    new Map(current).set(workspace, probed),
+                  ),
+                ),
+                // A round that fails (a plugin layer's start failing under
+                // it) gives its waiters that failure, and the root's next
+                // request still runs.
+                Effect.exit,
+                Effect.flatMap((probed) =>
+                  PubSub.publish(answers, { round, probed }),
+                ),
               ),
-            );
-          }),
-        )
-        .pipe(Effect.uninterruptible);
-
-    // A committed write to a declared secret re-probes every held root with
-    // its newest inputs. The bus delivers to a synchronous listener, so the
-    // listener only enqueues the key; the loop below owns the refreshes.
-    const changes = yield* Queue.unbounded<string>();
-    const subscribed = yield* Deferred.make<void>();
-    yield* Effect.forkScoped(
-      onAppSignal(
-        'credentialChanged',
-        ({ key }) => {
-          if (REPROBE_SECRETS.has(key)) Queue.offerUnsafe(changes, key);
-        },
-        subscribed,
-      ),
-    );
-    yield* Deferred.await(subscribed);
-    yield* Effect.forkScoped(
-      Effect.forever(
-        Effect.andThen(Queue.take(changes), () =>
-          Effect.forEach(
-            [...held.values()].flatMap((holders) => holders.slice(-1)),
-            start,
-            { discard: true },
-          ),
-        ),
-      ),
-    );
+            ),
+            Effect.forkScoped,
+          );
+          // A committed write to a declared secret asks again with the
+          // root's newest inputs.
+          yield* secretWrites.pipe(
+            Stream.filter(({ key }) => REPROBE_SECRETS.has(key)),
+            Stream.runForEach(() =>
+              SubscriptionRef.update(
+                requests,
+                (last) =>
+                  last && { round: last.round + 1, inputs: last.inputs },
+              ),
+            ),
+            Effect.forkScoped,
+          );
+          return { requests, answers };
+        }),
+    });
 
     return {
       results,
-      refresh: (inputs) => Effect.flatMap(start(inputs), Fiber.join),
-      // A session's own probe answers from the miss cache, so opening
-      // sessions back to back does not repeat the lookups.
-      hold: (roots) =>
-        Effect.acquireRelease(
-          Effect.sync(() => {
-            const holders = held.get(roots.workspace) ?? [];
-            holders.push(roots);
-            held.set(roots.workspace, holders);
+      refresh: (inputs) =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const root = yield* RcMap.get(probes, inputs.workspace);
+            const round = yield* request(root.requests, inputs);
+            const answer = yield* Stream.fromPubSub(root.answers).pipe(
+              Stream.filter((answered) => answered.round >= round),
+              Stream.runHead,
+            );
+            // The answers end only when the layer closes, which ends this
+            // wait as it ends every probe.
+            return yield* Option.match(answer, {
+              onNone: () => Effect.interrupt,
+              onSome: ({ probed }) => probed,
+            });
           }),
-          () =>
-            Effect.suspend(() => {
-              const holders = held.get(roots.workspace) ?? [];
-              holders.splice(holders.lastIndexOf(roots), 1);
-              if (holders.length > 0) return Effect.void;
-              held.delete(roots.workspace);
-              return SubscriptionRef.update(results, (current) => {
-                const next = new Map(current);
-                next.delete(roots.workspace);
-                return next;
-              });
-            }),
-        ).pipe(Effect.andThen(start(roots)), Effect.asVoid),
+        ),
+      hold: (roots) =>
+        Effect.flatMap(RcMap.get(probes, roots.workspace), (root) =>
+          Effect.asVoid(request(root.requests, roots)),
+        ),
     };
   }),
 );

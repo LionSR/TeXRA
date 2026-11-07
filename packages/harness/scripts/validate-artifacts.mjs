@@ -4,18 +4,18 @@ import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
+import { walkFiles } from '../../../scripts/walkFiles.mjs';
 import { checkForgottenExports } from './forgotten-exports.mjs';
 import {
   isFile,
   moduleSpecifier,
   reachableDeclarations,
   readDeclaration,
-  walkFiles,
 } from './fsWalk.mjs';
 
 // The built package to check: this package, or the one a build names (the
 // llm build passes its own root). Each is checked against what it publishes:
-// `publishConfig.exports` when the workspace `exports` name sources.
+// `publishConfig.exports`, as the workspace `exports` name sources.
 const packageRoot = path.resolve(
   process.argv[2] ?? fileURLToPath(new URL('..', import.meta.url)),
 );
@@ -30,7 +30,7 @@ const rootTsconfig = JSON.parse(
 
 // The code entries: `./package.json` exports the manifest itself.
 const publishedExports = Object.fromEntries(
-  Object.entries(manifest.publishConfig?.exports ?? manifest.exports).filter(
+  Object.entries(manifest.publishConfig.exports).filter(
     ([, target]) => typeof target !== 'string',
   ),
 );
@@ -49,12 +49,14 @@ for (const [entry, target] of Object.entries(publishedExports)) {
 const shipped = new Set(
   [...entryGraphs.values()].flatMap((graph) => [...graph]),
 );
-const unreachable = (await walkFiles(distRoot)).filter(
+const distFiles = () =>
+  walkFiles(distRoot).map(({ absolutePath }) => absolutePath);
+const unreachable = distFiles().filter(
   (file) => /\.d\.m?ts$/u.test(file) && !shipped.has(file),
 );
 await Promise.all(unreachable.map((file) => rm(file)));
 
-const allFiles = await walkFiles(distRoot);
+const allFiles = distFiles();
 const declarationFiles = allFiles.filter((file) => /\.d\.m?ts$/u.test(file));
 const declarationText = (
   await Promise.all(declarationFiles.map(readDeclaration))

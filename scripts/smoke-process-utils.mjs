@@ -13,7 +13,8 @@ export function hasExited(child) {
   return child.exitCode !== null || child.signalCode !== null;
 }
 
-function waitForExitEvent(child, rejectOnError) {
+/** Wait for actual process exit without treating an error event as exit. */
+export function waitForTermination(child) {
   if (hasExited(child)) {
     return Promise.resolve({
       code: child.exitCode,
@@ -21,42 +22,17 @@ function waitForExitEvent(child, rejectOnError) {
     });
   }
 
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      child.off('exit', onExit);
-      if (onError) child.off('error', onError);
-    };
-    const onExit = (code, signal) => {
-      cleanup();
-      resolve({ code, signal });
-    };
-    const onError = rejectOnError
-      ? (error) => {
-          cleanup();
-          reject(error);
-        }
-      : undefined;
-
+  return new Promise((resolve) => {
+    const onExit = (code, signal) => resolve({ code, signal });
     child.once('exit', onExit);
-    if (onError) child.once('error', onError);
     // Close the check/listener TOCTOU interval: an exit that happened between
     // the first check and listener registration has updated these fields even
     // if its event was missed.
     if (hasExited(child)) {
-      cleanup();
+      child.off('exit', onExit);
       resolve({ code: child.exitCode, signal: child.signalCode });
     }
   });
-}
-
-/** Wait for process exit, rejecting if the child reports a process error. */
-export function waitForExit(child) {
-  return waitForExitEvent(child, true);
-}
-
-/** Wait for actual process exit without treating an error event as exit. */
-export function waitForTermination(child) {
-  return waitForExitEvent(child, false);
 }
 
 async function waitForExitOrTimeout(exitPromise, timeoutMs) {

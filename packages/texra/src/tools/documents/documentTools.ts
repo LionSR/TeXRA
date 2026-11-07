@@ -34,7 +34,6 @@ import replacementEngine, {
 } from '@replacement/engine';
 import {
   documentsOutputFact,
-  documentsSummary,
   documentTaskOptions,
 } from '@texra/shared/plugins/documents';
 import { runCompileCheck } from '@texra/agent/output/compileCheck';
@@ -43,7 +42,7 @@ import { recoverOutputFailure } from '@texra/agent/output/outputOperations';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 import { ensureCorrectXmlStructure } from '@texra/agent/output/replyDocuments';
-import { revisionLayout } from '@texra/shared/constants/workflowOutput';
+import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import {
   keepReply,
   openDocuments,
@@ -284,7 +283,6 @@ export const DocumentExtractTool = defineTool({
     yield* ensureCorrectXmlStructure(location, roots.config, logger).pipe(
       recoverOutputFailure({
         logger,
-        level: 'warn',
         label: 'XML structure',
         recover: () => Effect.void,
       }),
@@ -319,7 +317,6 @@ export const DocumentExtractTool = defineTool({
     ).pipe(
       recoverOutputFailure({
         logger,
-        level: 'warn',
         label: "Keeping the model's outputs",
         recover: () => Effect.void,
       }),
@@ -393,7 +390,6 @@ export const DocumentCompileTool = defineTool({
       // A check that could not run (an unreadable setting) checked nothing.
       recoverOutputFailure({
         logger,
-        level: 'warn',
         label: 'Compile check',
         recover: () =>
           Effect.succeed({
@@ -548,8 +544,8 @@ export const DocumentDiffTool = defineTool({
 export const DocumentProposeTool = defineTool({
   name: 'document_propose',
   description:
-    "End the document task: propose the outputs of its latest revision that wrote any for the user to accept, with their diffs against the documents they started from. Fails, naming the failed outputs, when that revision did not compile and failed compiles are rejected. Resolves to `{ files, documents }`: the proposed files and every revision's documents with the proposed ones' diffs, which the task's run ends with.",
-  scriptReturns: '{ files: string[]; documents: unknown }',
+    "End the document task: propose the outputs of its latest revision that wrote any for the user to accept, with their diffs against the documents they started from. Fails, naming the failed outputs, when that revision did not compile and failed compiles are rejected. Resolves to `{ files }`, the proposed files; the task's documents, diffs included, are what its run reports.",
+  scriptReturns: '{ files: string[] }',
   replay: 'safe',
   schema: Schema.Struct({}),
   execute: Effect.fn('document_propose')(function* () {
@@ -570,7 +566,7 @@ export const DocumentProposeTool = defineTool({
     );
     // The proposed revision's diffs, written beside the outputs: the
     // documents fact records them, and the task's result is read from that
-    // fact. Still `replay: 'safe'`: the `.diff` files are deterministic
+    // fact (`DOCUMENT_TASK_RESULT`). Still `replay: 'safe'`: the `.diff` files are deterministic
     // overwrites under fixed run-relative names from fixed inputs, and the
     // fact commits with this call's result, so a rerun after a crash
     // rewrites the same files and commits the fact once.
@@ -582,7 +578,7 @@ export const DocumentProposeTool = defineTool({
     const fact = documentsOutputFact(docs.rounds, diffs);
     return {
       ...executed(`Proposed: ${files.join(', ')}`, `${files.length} documents`),
-      value: { files, documents: documentsSummary(fact) },
+      value: { files },
       facts: [fact],
     };
   }),

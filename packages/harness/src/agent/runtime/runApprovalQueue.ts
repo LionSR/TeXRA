@@ -26,10 +26,10 @@ import { bypassCovers, qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   Unavailable,
   type RequestError,
-  type RuntimeRequest,
+  type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 import type { SessionApprovals } from '@shared/session/sessionApprovals';
-import type { SessionEventDraft } from '@shared/schemas';
+import type { SessionRowDraft } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import { ancestryRows } from '@shared/session/runRelation';
 import {
@@ -126,7 +126,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
     runs: view.runs,
     policy: policy.set(runId, next),
   };
-  const rows: SessionEventDraft[] = [];
+  const rows: SessionRowDraft[] = [];
   for (const id of reached) {
     const covering = turnedOn.filter(
       (kind) => id === runId || resolveBypass(after, id, kind) !== null,
@@ -213,7 +213,7 @@ export const sessionApprovals: Effect.Effect<
         return Effect.void;
       return log.transact((tx) =>
         Effect.gen(function* () {
-          const all: readonly SessionEventDraft[] = [
+          const all: readonly SessionRowDraft[] = [
             ...rows,
             ...(yield* grantRows(log, view(), runId, edit)),
           ];
@@ -227,7 +227,7 @@ export const sessionApprovals: Effect.Effect<
           const aggregateId = qualifyAggregateId('run', runId);
           const { requests } = yield* log.runRows(aggregateId, 'requests');
           const open = requests[requestId]?.decision === null;
-          const all: readonly SessionEventDraft[] = [
+          const all: readonly SessionRowDraft[] = [
             ...(open
               ? [
                   {
@@ -275,7 +275,7 @@ export const writeRejection =
   (): RequestError =>
     new Unavailable(unavailable);
 
-type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
+type PolicyChange = Extract<RuntimeCommand, { kind: 'policy.set' }>['change'];
 type Answer<A, R> = Effect.Effect<A, RequestError, R>;
 
 /** Whether `change` only narrows a run (a bypass off, a lower limit): open
@@ -332,7 +332,7 @@ export function setPolicy<A, R>(
  * is approved as it opens.
  */
 export const decideUnderGrant = <A, R>(
-  req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
+  req: Extract<RuntimeCommand, { kind: 'request.decide' }>,
   answer: (
     write: Effect.Effect<boolean, RequestError, SessionLog | Approvals>,
   ) => Answer<A, R>,

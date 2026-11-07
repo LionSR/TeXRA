@@ -22,7 +22,7 @@ import {
   APPROVAL_BYPASS_KINDS,
   qualifyAggregateId,
   type RunId,
-  type RuntimeRequest,
+  type RuntimeCommand,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { liveToolGates } from '@agent/runtime/requests';
@@ -105,12 +105,11 @@ function runSessionFake(session: LocalSession): LocalSession {
           }),
           view: Stream.empty,
           events: Stream.empty,
-          interrupt: Effect.void,
         })),
       ),
     // A stop answers `done`; the real session answers every other kind.
     // cast: the generic signature cannot follow that branch on `kind`.
-    request: ((req: RuntimeRequest) =>
+    request: ((req: RuntimeCommand) =>
       req.kind === 'run.stop'
         ? Effect.suspend(
             (): Effect.Effect<OutcomeOf<'run.stop'>, never> =>

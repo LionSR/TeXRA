@@ -22,8 +22,8 @@ import {
   agentKey,
   isPackagedAgentSource,
   toErrorMessage,
+  formatResultCount,
 } from '@texra-ai/harness/schemas';
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { workspaceTeams } from '@texra/shared/agentTeams';
 import { formatUnknownTeamMessage } from '@texra/shared/teamLaunch';
 import { applyTeam } from '@texra/shared/teamPlan';

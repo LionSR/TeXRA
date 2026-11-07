@@ -46,12 +46,7 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
     // wrote, which its block names (`AgentBlock.result.changes`).
     const recipe =
       runEnd?.outcome === RUN_OUTCOME.COMPLETED
-        ? yield* readRecipeResult(
-            config,
-            runEnd.output,
-            reference.runId,
-            yield* SessionRoots,
-          )
+        ? yield* readRecipeResult(config, reference.runId, yield* SessionRoots)
         : undefined;
     if (recipe === undefined) {
       return yield* Effect.fail(

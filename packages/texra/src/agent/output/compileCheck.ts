@@ -21,8 +21,8 @@ import { Effect, FileSystem } from 'effect';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import {
   revisionLayout,
-  stripWorkflowRoundDir,
-} from '@texra/shared/constants/workflowOutput';
+  stripRevisionDir,
+} from '@texra/shared/constants/revisionLayout';
 import {
   type CompileFailure,
   isGenericOutputStem,
@@ -106,16 +106,15 @@ export function resolveWorkspaceSourceDir(
         )
       : undefined;
   const workspaceRelative =
-    runRelative !== undefined &&
-    stripWorkflowRoundDir(runRelative) !== runRelative
-      ? stripWorkflowRoundDir(location.relativePath)
+    runRelative !== undefined && stripRevisionDir(runRelative) !== runRelative
+      ? stripRevisionDir(location.relativePath)
       : location.relativePath;
 
   return path.join(workspaceRoot, path.dirname(workspaceRelative));
 }
 
 /**
- * Compile each .tex output of a round to verify the workflow produced a
+ * Compile each .tex output of a round to verify the document task produced a
  * buildable document. Success is silent; failures write the log tail to
  * the revision's compile log (`revisionLayout(...).compileLog`). Non-root fragments are skipped;
  * a check that compiles nothing says why (`skipped`).
@@ -234,7 +233,7 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
   // Full relative path keeps two outputs sharing a basename distinct
   // (ch1/main.tex vs ch2/main.tex). The revision's own folder is left out,
   // since the log's name already carries the revision.
-  const pathForSafeName = stripWorkflowRoundDir(
+  const pathForSafeName = stripRevisionDir(
     normalizeFilePath(fileLocationDisplayPath(outputFile.location)),
     currentRound,
   );

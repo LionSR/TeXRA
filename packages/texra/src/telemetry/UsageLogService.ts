@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  Cause,
   Clock,
   DateTime,
   Duration,
@@ -11,7 +12,6 @@ import {
   Queue,
   Schedule,
   Schema,
-  Semaphore,
 } from 'effect';
 import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
 
@@ -186,416 +186,87 @@ class UsageBatchUndelivered extends Schema.TaggedError<UsageBatchUndelivered>()(
   { reason: Schema.String },
 ) {}
 
-class UsageLogServiceImpl {
-  private queue: QueuedUsageEntry[] = [];
-  private retryBatch: RetryBatch | null = null;
-  /** Scoped ticker; interrupting it never interrupts an active send. */
-  private flushTimer: Fiber.Fiber<number> | null = null;
-  private triggers: Queue.Queue<void> | null = null;
-  /** One permit: batches leave in order, and the drain joins an active send. */
-  private readonly flushLane = Semaphore.makeUnsafe(1);
-  /** Coalesce triggers before they wait for the lane; while a failed send
-   *  backs off, triggers are absorbed instead of retrying it early. */
-  private backgroundFlushActive = false;
-  private warnedUndelivered = false;
-  private warnedRejected = false;
-  private config: UsageLogConfig = { ...DEFAULT_CONFIG };
-  private extensionVersion: string | undefined;
-  private editorType: string | undefined;
-  private hostTelemetryEnabled: () => boolean = () => true;
-
-  /** The host's own switch (VS Code's telemetry setting) and the user's opt-outs, read live. */
-  private allowed(
-    config: ConfigProvider,
-    env?: Readonly<Record<string, string | undefined>>,
-  ): Effect.Effect<boolean> {
-    return this.hostTelemetryEnabled()
-      ? isTelemetryEnabledBySetting(config, env)
-      : Effect.succeed(false);
-  }
-
-  /** Start this instance's sender and ticker, then register its final drain. */
-  readonly start = Effect.fn('UsageLogService.start')(function* (
-    this: UsageLogServiceImpl,
-    options: UsageLogOptions,
-  ) {
-    this.config = { ...DEFAULT_CONFIG, ...options.config };
-    this.extensionVersion = options.version;
-    this.editorType = options.editorType;
-    this.hostTelemetryEnabled = options.hostTelemetryEnabled ?? (() => true);
-    const triggers = yield* Queue.make<void>({
-      capacity: 1,
-      strategy: 'dropping',
-    });
-    this.triggers = triggers;
-    yield* Effect.forkScoped(
-      Effect.forever(
-        Queue.take(triggers).pipe(Effect.andThen(this.backgroundFlush())),
-      ),
-    );
-    // `Effect.schedule` waits one interval before the first request; the
-    // unref'd sleeps never keep the host process alive.
-    this.flushTimer = yield* Effect.forkScoped(
-      Clock.clockWith((clock) =>
-        Effect.sync(() => this.requestFlush()).pipe(
-          Effect.schedule(
-            Schedule.spaced(Duration.millis(this.config.flushIntervalMs)),
-          ),
-          Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
-        ),
-      ),
-      { startImmediately: true },
-    );
-    // Added after the forks, so it runs before their interruption: finalizers
-    // unwind last-first, and the drain must finish while the sender is still
-    // alive. It carries this build's context, which is where its HTTP client
-    // and app state come from.
-    yield* Effect.addFinalizer(() => this.drainAndStop());
-
-    if (yield* telemetryOptOutEnvVar()) {
-      yield* Effect.logInfo(
-        `Usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')})`,
-      ).pipe(withLogChannel(CHANNEL));
-    }
-
-    yield* Effect.logDebug(
-      `UsageLogService started (batchSize=${this.config.batchSize}, flushIntervalMs=${this.config.flushIntervalMs}, enabled=${this.config.enabled})`,
-    ).pipe(withLogChannel(CHANNEL));
-  });
-
-  /** Queue one entry; `config` is the configuration of the workspace that
-   *  recorded it (the run's session roots), read for consent now and again
-   *  at flush. */
-  readonly log = Effect.fn('UsageLogService.log')(function* (
-    this: UsageLogServiceImpl,
-    entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>,
-    config: ConfigProvider,
-    env?: Readonly<Record<string, string | undefined>>,
-  ) {
-    if (!this.config.enabled) return;
-    if (!(yield* this.allowed(config, env))) return;
-
-    if (this.queue.length >= MAX_QUEUE_SIZE) {
-      yield* Effect.logWarning('Queue full, dropping oldest entry');
-      this.queue.shift();
-    }
-
-    this.queue.push({
-      entry: {
-        ...entry,
-        timestamp: DateTime.formatIso(yield* DateTime.now),
-        extensionVersion: this.extensionVersion,
-        editorType: this.editorType,
-      },
-      config,
-      ...(env !== undefined && { env }),
-    });
-    yield* Effect.logDebug(
-      `Queued usage entry (queue size: ${this.queue.length})`,
-    );
-
-    if (this.queue.length >= this.config.batchSize) {
-      this.requestFlush();
-    }
-  }, withLogChannel(CHANNEL));
-
-  /** Synchronous producer admission; the process-owned sender does the I/O. */
-  private requestFlush(): void {
-    if (!this.config.enabled || !this.triggers || this.backgroundFlushActive)
-      return;
-    this.backgroundFlushActive = true;
-    Queue.offerUnsafe(this.triggers, undefined);
-  }
-
-  /** Send every batch that is due, one after another, under the lane. An
-   *  undelivered batch is kept for the retry and stops the drain. */
-  private readonly drain = Effect.fn('UsageLogService.drain')(function* (
-    this: UsageLogServiceImpl,
-  ) {
-    while (this.retryBatch || this.queue.length > 0) {
-      yield* this.sendNextBatch().pipe(
-        Effect.tapError((error) =>
-          Effect.suspend(() => {
-            const requeued = this.retryBatch?.entries.length ?? 0;
-            const requeuedMessage =
-              requeued > 0 ? `; requeued ${requeued} entries` : '';
-            // The endpoint may reject anonymous batches until it accepts them:
-            // say so once at warn, then keep later failures at debug.
-            const log = this.warnedUndelivered
-              ? Effect.logDebug
-              : Effect.logWarning;
-            this.warnedUndelivered = true;
-            return log(
-              `Failed to send usage batch${requeuedMessage}: ${error.reason}`,
-            ).pipe(withLogChannel(CHANNEL));
-          }),
-        ),
-      );
-    }
-  });
-
-  /**
-   * A flush nobody awaits: the periodic one and the batch-size trigger. An
-   * undelivered batch is retried on an exponential backoff from the flush
-   * interval, capped at {@link MAX_RETRY_DELAY}, without holding the lane
-   * while it waits. The schedule never ends, so only a defect reaches the
-   * end, and it is reported by its owner instead of ending a fiber nobody
-   * observes.
-   */
-  private readonly backgroundFlush = Effect.fn(
-    'UsageLogService.backgroundFlush',
-  )(
-    function* (this: UsageLogServiceImpl) {
-      const backoff = Schedule.exponential(
-        Duration.millis(this.config.flushIntervalMs),
-      ).pipe(
-        Schedule.modifyDelay(({ duration }) =>
-          Effect.succeed(Duration.min(duration, MAX_RETRY_DELAY)),
-        ),
-      );
-      yield* this.flushLane.withPermit(this.drain()).pipe(
-        Effect.retry(backoff),
-        Effect.orDie,
-        // The backoff wait must not keep a host process alive on its own.
-        (flush) =>
-          Clock.clockWith((clock) =>
-            flush.pipe(
-              Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
-            ),
-          ),
-        Effect.ensuring(
-          Effect.sync(() => {
-            this.backgroundFlushActive = false;
-          }),
-        ),
-      );
-    },
-    Effect.catchDefect((defect) =>
-      Effect.logError(`Usage flush failed: ${toErrorMessage(defect)}`).pipe(
-        withLogChannel(CHANNEL),
-      ),
-    ),
-  );
-
-  /** Finish the next batch: sent, discarded, or failed with it kept. */
-  private readonly sendNextBatch = Effect.fn('UsageLogService.sendNextBatch')(
-    function* (this: UsageLogServiceImpl) {
-      let batch = this.retryBatch;
-      if (batch) {
-        this.retryBatch = null;
-      } else {
-        const entries = this.queue;
-        this.queue = [];
-        if (entries.length === 0) return;
-
-        batch = {
-          entries,
-          batchId: randomUUID(),
-        };
+/**
+ * Deliver one batch. Succeeds with the acknowledgement, or with the
+ * endpoint's permanent (non-retryable) rejection for the caller to report;
+ * everything else is {@link UsageBatchUndelivered} with the batch to keep.
+ */
+const sendBatch = Effect.fn('UsageLogService.sendBatch')(function* (
+  batch: RetryBatch,
+  installId: string,
+) {
+  const undelivered = (reason: string) => new UsageBatchUndelivered({ reason });
+  const wire: UsageLogBatch = {
+    batchId: batch.batchId,
+    entries: batch.entries.map(({ entry }) => entry),
+  };
+  const client = yield* HttpClient.HttpClient;
+  // One request is one fiber. The body read sits inside the same timed
+  // effect as the request, because a server that answers headers and then
+  // stalls mid-body would otherwise hang the read indefinitely, wedging
+  // the sender and dispose(). The timeout interrupts the effect, and
+  // `HttpClient.withScope` turns that interruption into an abort on the
+  // underlying fetch.
+  // A non-2xx status is not a failure here: the endpoint answers a
+  // rejection with a body the acknowledgement checks below read.
+  const { status, data } = yield* Effect.gen(function* () {
+    // The random install ID rides a header, lowercase UUIDv4, with no
+    // Authorization: the endpoint keys anonymous usage on it.
+    const request = yield* HttpClientRequest.post(USAGE_LOG_ENDPOINT, {
+      headers: { 'X-TeXRA-Install-Id': installId },
+    }).pipe(HttpClientRequest.bodyJson(wire));
+    const response = yield* HttpClient.withScope(client).execute(request);
+    const data = yield* response.json;
+    return { status: response.status, data };
+  }).pipe(
+    Effect.scoped,
+    Effect.mapError((error) => {
+      if (!HttpClientError.isHttpClientError(error)) {
+        // `bodyJson` fails with `HttpBodyError`, which carries `reason`
+        // and `cause` but no message, so `toErrorMessage` renders it as
+        // the empty string — an undelivered billing batch with a blank
+        // reason. Fall back to the tag so this can never be silent.
+        return undelivered(extractErrorMessage(error) ?? String(error));
       }
-
-      // Re-read each entry's consent here rather than on entry, so a user who
-      // opts out after queueing never has the batch shipped. Applied after
-      // the batch is taken so it also drops rounds
-      // queued before the opt-out instead of leaving the timer to send them,
-      // and read from the workspace each entry was recorded in, since this
-      // flush runs outside any run.
-      const kept = yield* Effect.filter(batch.entries, ({ config, env }) =>
-        this.allowed(config, env),
+      // The wrapper's message names the request that failed; only its
+      // cause names the transport failure (a refused connection, a reset
+      // socket). A billing warning is worth both.
+      const { cause } = error.reason;
+      return undelivered(
+        cause === undefined
+          ? error.message
+          : `${error.message}: ${toErrorMessage(cause)}`,
       );
-      const dropped = batch.entries.length - kept.length;
-      if (dropped > 0) {
-        yield* Effect.logDebug(
-          `Usage logging is disabled; dropped ${dropped} ${dropped === 1 ? 'entry' : 'entries'} without sending`,
-        ).pipe(withLogChannel(CHANNEL));
-      }
-      if (kept.length === 0) return;
-      batch = { ...batch, entries: kept };
-
-      yield* Effect.logDebug(
-        `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
-      ).pipe(withLogChannel(CHANNEL));
-
-      // From here on a failure keeps the batch for the retry.
-      const pending = batch;
-      const keepForRetry = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-        Effect.tapError(effect, () =>
-          Effect.sync(() => {
-            this.retryBatch = pending;
-          }),
-        );
-      // The install ID is created only here, after every opt-out has passed.
-      const installId = yield* readOrCreateInstallId().pipe(
-        Effect.mapError(
-          (error) =>
-            new UsageBatchUndelivered({
-              reason: `install ID unavailable: ${toErrorMessage(error)}`,
-            }),
-        ),
-        keepForRetry,
-      );
-      const response = yield* this.sendBatch(batch, installId).pipe(
-        keepForRetry,
-      );
-      if (!response.success) {
-        yield* this.reportPermanentRejection(batch, response);
-        return;
-      }
-      yield* Effect.logDebug(
-        `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
-      ).pipe(withLogChannel(CHANNEL));
-    },
-  );
-
-  /** The endpoint refused the batch for good (`retryable: false`): drop it,
-   *  naming the cause once at warn and at debug after that. */
-  private reportPermanentRejection(
-    batch: RetryBatch,
-    rejection: Extract<UsageLogResponse, { success: false }>,
-  ): Effect.Effect<void> {
-    const log = this.warnedRejected ? Effect.logDebug : Effect.logWarning;
-    this.warnedRejected = true;
-    const cause = [rejection.errorCode, rejection.error]
-      .filter(Predicate.isNotUndefined)
-      .join(': ');
-    return log(
-      `Usage endpoint rejected batch ${batch.batchId} as not retryable (${cause || 'no reason given'}); dropped ${batch.entries.length} entries`,
-    ).pipe(
-      Effect.annotateLogs({
-        data: {
-          batchId: batch.batchId,
-          entryCount: batch.entries.length,
-          errorCode: rejection.errorCode,
-          error: rejection.error,
-        },
-      }),
-      withLogChannel(CHANNEL),
-    );
-  }
-
-  /**
-   * Deliver one batch. Succeeds with the acknowledgement, or with the
-   * endpoint's permanent (non-retryable) rejection for the caller to report;
-   * everything else is {@link UsageBatchUndelivered} with the batch to keep.
-   */
-  private readonly sendBatch = Effect.fn('UsageLogService.sendBatch')(
-    function* (batch: RetryBatch, installId: string) {
-      const undelivered = (reason: string) =>
-        new UsageBatchUndelivered({ reason });
-      const wire: UsageLogBatch = {
-        batchId: batch.batchId,
-        entries: batch.entries.map(({ entry }) => entry),
-      };
-      const client = yield* HttpClient.HttpClient;
-      // One request is one fiber. The body read sits inside the same timed
-      // effect as the request, because a server that answers headers and then
-      // stalls mid-body would otherwise hang the read indefinitely, wedging
-      // the flush lane and dispose(). The timeout interrupts the effect, and
-      // `HttpClient.withScope` turns that interruption — and a dispose that
-      // interrupts the sender — into an abort on the underlying fetch.
-      // A non-2xx status is not a failure here: the endpoint answers a
-      // rejection with a body the acknowledgement checks below read.
-      const { status, data } = yield* Effect.gen(function* () {
-        // The random install ID rides a header, lowercase UUIDv4, with no
-        // Authorization: the endpoint keys anonymous usage on it.
-        const request = yield* HttpClientRequest.post(USAGE_LOG_ENDPOINT, {
-          headers: { 'X-TeXRA-Install-Id': installId },
-        }).pipe(HttpClientRequest.bodyJson(wire));
-        const response = yield* HttpClient.withScope(client).execute(request);
-        const data = yield* response.json;
-        return { status: response.status, data };
-      }).pipe(
-        Effect.scoped,
-        Effect.mapError((error) => {
-          if (!HttpClientError.isHttpClientError(error)) {
-            // `bodyJson` fails with `HttpBodyError`, which carries `reason`
-            // and `cause` but no message, so `toErrorMessage` renders it as
-            // the empty string — an undelivered billing batch with a blank
-            // reason. Fall back to the tag so this can never be silent.
-            return undelivered(extractErrorMessage(error) ?? String(error));
-          }
-          // The wrapper's message names the request that failed; only its
-          // cause names the transport failure (a refused connection, a reset
-          // socket). A billing warning is worth both.
-          const { cause } = error.reason;
-          return undelivered(
-            cause === undefined
-              ? error.message
-              : `${error.message}: ${toErrorMessage(cause)}`,
-          );
-        }),
-        Effect.timeoutOrElse({
-          duration: Duration.millis(REQUEST_TIMEOUT_MS),
-          orElse: () =>
-            Effect.fail(
-              undelivered(
-                `Usage endpoint did not answer within ${REQUEST_TIMEOUT_MS}ms`,
-              ),
-            ),
-        }),
-      );
-      const response: UsageLogResponse = yield* Schema.decodeUnknownEffect(
-        UsageLogResponseSchema,
-      )(data).pipe(Effect.mapError((error) => undelivered(error.message)));
-      if (!response.success) {
-        if (response.retryable === false) return response;
-        return yield* undelivered(response.error ?? 'Usage batch was rejected');
-      }
-      if (status < 200 || status >= 300) {
-        return yield* undelivered(
-          `Usage endpoint returned HTTP ${status} with a success acknowledgement`,
-        );
-      }
-      if (response.accepted !== wire.entries.length) {
-        return yield* undelivered(
-          `Usage batch acknowledgement accepted ${response.accepted} of ${wire.entries.length} entries`,
-        );
-      }
-      return response;
-    },
-  );
-
-  /**
-   * Stop admitting entries, then send what is already queued. The scope
-   * interrupts the sender after this returns, so the drain runs with it
-   * still alive.
-   */
-  private readonly drainAndStop = Effect.fn('UsageLogService.drainAndStop')(
-    function* (this: UsageLogServiceImpl) {
-      if (this.flushTimer) {
-        yield* Fiber.interrupt(this.flushTimer);
-        this.flushTimer = null;
-      }
-      this.config.enabled = false;
-
-      // An in-flight background flush is waited for without
-      // bound; past the deadline the wait is reported, not abandoned. The
-      // warning is withdrawn the moment the lane is ours.
-      const warning = yield* Effect.forkChild(
-        Effect.sleep(Duration.millis(DISPOSE_WARNING_TIMEOUT_MS)).pipe(
-          Effect.andThen(
-            Effect.logWarning(
-              'Dispose timeout waiting for in-flight flush',
-            ).pipe(withLogChannel(CHANNEL)),
+    }),
+    Effect.timeoutOrElse({
+      duration: Duration.millis(REQUEST_TIMEOUT_MS),
+      orElse: () =>
+        Effect.fail(
+          undelivered(
+            `Usage endpoint did not answer within ${REQUEST_TIMEOUT_MS}ms`,
           ),
         ),
-      );
-      yield* this.flushLane.withPermit(
-        Fiber.interrupt(warning).pipe(
-          Effect.andThen(this.drain()),
-          // Already logged by the drain; nothing is left to retry it.
-          Effect.catchTag('UsageBatchUndelivered', () => Effect.void),
-        ),
-      );
-
-      this.triggers = null;
-      this.backgroundFlushActive = false;
-      yield* Effect.logDebug('UsageLogService drained').pipe(
-        withLogChannel(CHANNEL),
-      );
-    },
+    }),
   );
-}
+  const response: UsageLogResponse = yield* Schema.decodeUnknownEffect(
+    UsageLogResponseSchema,
+  )(data).pipe(Effect.mapError((error) => undelivered(error.message)));
+  if (!response.success) {
+    if (response.retryable === false) return response;
+    return yield* undelivered(response.error ?? 'Usage batch was rejected');
+  }
+  if (status < 200 || status >= 300) {
+    return yield* undelivered(
+      `Usage endpoint returned HTTP ${status} with a success acknowledgement`,
+    );
+  }
+  if (response.accepted !== wire.entries.length) {
+    return yield* undelivered(
+      `Usage batch acknowledgement accepted ${response.accepted} of ${wire.entries.length} entries`,
+    );
+  }
+  return response;
+});
 
 /** What a host stamps on its entries, and the cadence a test overrides. */
 export interface UsageLogOptions {
@@ -612,15 +283,311 @@ export interface UsageLogOptions {
   readonly config?: Partial<UsageLogConfig>;
 }
 
-/** Allocate and drain one queue for this layer's lifetime. */
+/**
+ * Allocate and drain one queue for this layer's lifetime.
+ *
+ * One sender fiber sends the queued entries when a trigger asks (the
+ * batch-size trigger and the periodic one), in order, one batch at a time;
+ * an undelivered batch is retried on an exponential backoff from the flush
+ * interval, capped at {@link MAX_RETRY_DELAY}. The layer's close stops
+ * admitting entries, stops the sender (cutting a backoff short, never a
+ * send), then tries each batch still waiting once.
+ */
 export const usageLogLayer = (
   options: UsageLogOptions,
 ): Layer.Layer<UsageLog, never, HttpClient.HttpClient | AppState> =>
   Layer.effect(
     UsageLog,
     Effect.gen(function* () {
-      const usageLog = new UsageLogServiceImpl();
-      yield* usageLog.start(options);
-      return usageLog;
-    }),
+      const { batchSize, flushIntervalMs, enabled } = {
+        ...DEFAULT_CONFIG,
+        ...options.config,
+      };
+      const { version, editorType } = options;
+      const hostTelemetryEnabled = options.hostTelemetryEnabled ?? (() => true);
+      /** Entries waiting for the next batch; past capacity the oldest goes.
+       *  The close ends it: no entry is admitted after, and those queued
+       *  remain for the final drain. */
+      const queue = yield* Queue.sliding<QueuedUsageEntry, Cause.Done>(
+        MAX_QUEUE_SIZE,
+      );
+      /** A flush asked for; asking again while one waits is the same ask. */
+      const triggers = yield* Queue.dropping<void>(1);
+      let retryBatch: RetryBatch | null = null;
+      let warnedUndelivered = false;
+      let warnedRejected = false;
+
+      /** The host's own switch (VS Code's telemetry setting) and the user's opt-outs, read live. */
+      const allowed = (
+        config: ConfigProvider,
+        env?: Readonly<Record<string, string | undefined>>,
+      ): Effect.Effect<boolean> =>
+        hostTelemetryEnabled()
+          ? isTelemetryEnabledBySetting(config, env)
+          : Effect.succeed(false);
+
+      /** Synchronous producer admission; the sender does the I/O. */
+      const requestFlush = (): void => {
+        if (enabled) Queue.offerUnsafe(triggers, undefined);
+      };
+
+      /** The endpoint refused the batch for good (`retryable: false`): drop it,
+       *  naming the cause once at warn and at debug after that. */
+      const reportPermanentRejection = (
+        batch: RetryBatch,
+        rejection: Extract<UsageLogResponse, { success: false }>,
+      ): Effect.Effect<void> => {
+        const log = warnedRejected ? Effect.logDebug : Effect.logWarning;
+        warnedRejected = true;
+        const cause = [rejection.errorCode, rejection.error]
+          .filter(Predicate.isNotUndefined)
+          .join(': ');
+        return log(
+          `Usage endpoint rejected batch ${batch.batchId} as not retryable (${cause || 'no reason given'}); dropped ${batch.entries.length} entries`,
+        ).pipe(
+          Effect.annotateLogs({
+            data: {
+              batchId: batch.batchId,
+              entryCount: batch.entries.length,
+              errorCode: rejection.errorCode,
+              error: rejection.error,
+            },
+          }),
+          withLogChannel(CHANNEL),
+        );
+      };
+
+      /** Finish the next batch: sent, discarded, or failed with it kept. */
+      const sendNextBatch = Effect.fn('UsageLogService.sendNextBatch')(
+        function* () {
+          let batch = retryBatch;
+          if (batch) {
+            retryBatch = null;
+          } else {
+            const entries = yield* Queue.clear(queue);
+            if (entries.length === 0) return;
+
+            batch = {
+              entries,
+              batchId: randomUUID(),
+            };
+          }
+
+          // Re-read each entry's consent here rather than on entry, so a user who
+          // opts out after queueing never has the batch shipped. Applied after
+          // the batch is taken so it also drops rounds
+          // queued before the opt-out instead of leaving the timer to send them,
+          // and read from the workspace each entry was recorded in, since this
+          // flush runs outside any run.
+          const kept = yield* Effect.filter(batch.entries, ({ config, env }) =>
+            allowed(config, env),
+          );
+          const dropped = batch.entries.length - kept.length;
+          if (dropped > 0) {
+            yield* Effect.logDebug(
+              `Usage logging is disabled; dropped ${dropped} ${dropped === 1 ? 'entry' : 'entries'} without sending`,
+            ).pipe(withLogChannel(CHANNEL));
+          }
+          if (kept.length === 0) return;
+          batch = { ...batch, entries: kept };
+
+          yield* Effect.logDebug(
+            `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
+          ).pipe(withLogChannel(CHANNEL));
+
+          // From here on a failure keeps the batch for the retry.
+          const pending = batch;
+          const keepForRetry = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+            Effect.tapError(effect, () =>
+              Effect.sync(() => {
+                retryBatch = pending;
+              }),
+            );
+          // The install ID is created only here, after every opt-out has passed.
+          const installId = yield* readOrCreateInstallId().pipe(
+            Effect.mapError(
+              (error) =>
+                new UsageBatchUndelivered({
+                  reason: `install ID unavailable: ${toErrorMessage(error)}`,
+                }),
+            ),
+            keepForRetry,
+          );
+          const response = yield* sendBatch(batch, installId).pipe(
+            keepForRetry,
+          );
+          if (!response.success) {
+            yield* reportPermanentRejection(batch, response);
+            return;
+          }
+          yield* Effect.logDebug(
+            `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
+          ).pipe(withLogChannel(CHANNEL));
+        },
+      );
+
+      /** Send every batch that is due, one after another. An undelivered
+       *  batch is kept for the retry and stops the drain. */
+      const drain = Effect.fn('UsageLogService.drain')(function* () {
+        while (retryBatch !== null || (yield* Queue.size(queue)) > 0) {
+          // A batch taken from the queue is sent, discarded or kept before
+          // the close can stop the sender: the request's own timeout still
+          // ends a stalled send.
+          yield* sendNextBatch().pipe(
+            Effect.uninterruptible,
+            Effect.tapError((error) =>
+              Effect.suspend(() => {
+                const requeued = retryBatch?.entries.length ?? 0;
+                const requeuedMessage =
+                  requeued > 0 ? `; requeued ${requeued} entries` : '';
+                // The endpoint may reject anonymous batches until it accepts them:
+                // say so once at warn, then keep later failures at debug.
+                const log = warnedUndelivered
+                  ? Effect.logDebug
+                  : Effect.logWarning;
+                warnedUndelivered = true;
+                return log(
+                  `Failed to send usage batch${requeuedMessage}: ${error.reason}`,
+                ).pipe(withLogChannel(CHANNEL));
+              }),
+            ),
+          );
+        }
+      });
+
+      const backoff = Schedule.exponential(
+        Duration.millis(flushIntervalMs),
+      ).pipe(
+        Schedule.modifyDelay(({ duration }) =>
+          Effect.succeed(Duration.min(duration, MAX_RETRY_DELAY)),
+        ),
+      );
+
+      /**
+       * A flush nobody awaits: the periodic one and the batch-size trigger. An
+       * undelivered batch is retried on the backoff. The schedule never ends,
+       * so only a defect reaches the end, and it is reported by its owner
+       * instead of ending a fiber nobody observes.
+       */
+      const backgroundFlush = Effect.fn('UsageLogService.backgroundFlush')(
+        function* () {
+          yield* drain().pipe(
+            Effect.retry(backoff),
+            Effect.orDie,
+            // The backoff wait must not keep a host process alive on its own.
+            (flush) =>
+              Clock.clockWith((clock) =>
+                flush.pipe(
+                  Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
+                ),
+              ),
+          );
+        },
+        Effect.catchDefect((defect) =>
+          Effect.logError(`Usage flush failed: ${toErrorMessage(defect)}`).pipe(
+            withLogChannel(CHANNEL),
+          ),
+        ),
+      );
+
+      /** Queue one entry; `config` is the configuration of the workspace that
+       *  recorded it (the run's session roots), read for consent now and again
+       *  at flush. */
+      const log = Effect.fn('UsageLogService.log')(function* (
+        entry: Omit<
+          UsageLogEntry,
+          'timestamp' | 'extensionVersion' | 'editorType'
+        >,
+        config: ConfigProvider,
+        env?: Readonly<Record<string, string | undefined>>,
+      ) {
+        if (!enabled) return;
+        if (!(yield* allowed(config, env))) return;
+
+        const full = yield* Queue.isFull(queue);
+        const queued = yield* Queue.offer(queue, {
+          entry: {
+            ...entry,
+            timestamp: DateTime.formatIso(yield* DateTime.now),
+            extensionVersion: version,
+            editorType,
+          },
+          config,
+          ...(env !== undefined && { env }),
+        });
+        // Refused only once the close has ended the queue.
+        if (!queued) return;
+        if (full) yield* Effect.logWarning('Queue full, dropping oldest entry');
+        const size = yield* Queue.size(queue);
+        yield* Effect.logDebug(`Queued usage entry (queue size: ${size})`);
+
+        if (size >= batchSize) requestFlush();
+      }, withLogChannel(CHANNEL));
+
+      /**
+       * Stop admitting entries, stop the sender, then send what is already
+       * queued, each batch once.
+       */
+      const drainAndStop = Effect.fn('UsageLogService.drainAndStop')(function* (
+        sender: Fiber.Fiber<never>,
+      ) {
+        yield* Queue.end(queue);
+
+        // The sender stops at once unless a send is in flight, which it
+        // finishes: waited for without bound, but past the deadline the
+        // wait is reported, not abandoned. The warning is withdrawn the
+        // moment the sender has stopped.
+        const warning = yield* Effect.forkChild(
+          Effect.sleep(Duration.millis(DISPOSE_WARNING_TIMEOUT_MS)).pipe(
+            Effect.andThen(
+              Effect.logWarning(
+                'Dispose timeout waiting for in-flight flush',
+              ).pipe(withLogChannel(CHANNEL)),
+            ),
+          ),
+        );
+        yield* Fiber.interrupt(sender);
+        yield* Fiber.interrupt(warning);
+        yield* drain().pipe(
+          // Already logged by the drain; nothing is left to retry it.
+          Effect.catchTag('UsageBatchUndelivered', () => Effect.void),
+        );
+
+        yield* Effect.logDebug('UsageLogService drained').pipe(
+          withLogChannel(CHANNEL),
+        );
+      });
+
+      const sender = yield* Effect.forkScoped(
+        Effect.forever(
+          Queue.take(triggers).pipe(Effect.andThen(backgroundFlush())),
+        ),
+      );
+      // `Effect.schedule` waits one interval before the first request; the
+      // unref'd sleeps never keep the host process alive. The close leaves
+      // this ticker to the scope: a request it makes then has no sender.
+      yield* Effect.forkScoped(
+        Clock.clockWith((clock) =>
+          Effect.sync(requestFlush).pipe(
+            Effect.schedule(Schedule.spaced(Duration.millis(flushIntervalMs))),
+            Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
+          ),
+        ),
+        { startImmediately: true },
+      );
+      // It carries this build's context, which is where its HTTP client and
+      // app state come from.
+      yield* Effect.addFinalizer(() => drainAndStop(sender));
+
+      if (yield* telemetryOptOutEnvVar()) {
+        yield* Effect.logInfo(
+          `Usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')})`,
+        ).pipe(withLogChannel(CHANNEL));
+      }
+
+      yield* Effect.logDebug(
+        `UsageLogService started (batchSize=${batchSize}, flushIntervalMs=${flushIntervalMs}, enabled=${enabled})`,
+      ).pipe(withLogChannel(CHANNEL));
+      return { log };
+    }).pipe(Effect.withSpan('UsageLogService.start')),
   );

@@ -5,12 +5,11 @@
  * and what a tool card the run's end cut short says.
  */
 import {
-  formatCostUsd,
-  formatResultCount,
   type ScriptCallStatus,
   type ScriptCallView,
   type ScriptStageView,
 } from '@texra-ai/harness/transcript';
+import { formatCostUsd, formatResultCount } from '@texra-ai/harness/schemas';
 
 /** The error a tool card shows when the run's end cut its call short
  *  (`ToolRow.cutByRunEnd`): the call never finished, so nothing records how

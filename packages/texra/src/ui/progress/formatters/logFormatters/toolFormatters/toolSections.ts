@@ -13,7 +13,6 @@ import { absurd } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 
 import { getBasename } from '@texra-ai/harness/schemas';
-import { pluralize } from '@texra-ai/harness/transcript';
 import {
   buildToolUseSection,
   wrapInPre,
@@ -32,6 +31,7 @@ import type {
   ToolFileSection,
   ToolSection,
 } from '@texra-ai/harness/transcript';
+import { pluralize } from '@texra-ai/harness/schemas';
 
 /** Line count past which a text section becomes a fixed-height scroll box. */
 const TEXT_SECTION_SCROLL_LINES = 20;

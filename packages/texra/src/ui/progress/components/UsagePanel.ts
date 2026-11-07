@@ -1,9 +1,5 @@
 // Third-party imports
 import { Number as Num } from 'effect';
-import {
-  formatCompactTokenCount,
-  formatCostUsd,
-} from '@texra-ai/harness/transcript';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { join } from 'lit/directives/join.js';
@@ -19,6 +15,8 @@ import {
   isEmptyUsage,
   type ContextStateData,
   type TokenUsageStats,
+  formatCompactTokenCount,
+  formatCostUsd,
 } from '@texra-ai/harness/schemas';
 import {
   contextGaugeBand,

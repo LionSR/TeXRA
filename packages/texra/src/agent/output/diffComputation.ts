@@ -75,7 +75,7 @@ const computeDiffStats = Effect.fn('documents.computeDiffStats')(
 );
 
 /** The +/- diff stats must be computed against the immutable pre-run
- *  snapshot (in-place workflows overwrite the live file, so the snapshot is
+ *  snapshot (in-place document tasks overwrite the live file, so the snapshot is
  *  the only surviving "before"). But the lineage `document` exposed to the
  *  UI should point at the live workspace document so the "compare" action
  *  diffs — and lets the user edit — their real file rather than the

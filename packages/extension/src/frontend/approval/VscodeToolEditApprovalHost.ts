@@ -34,7 +34,7 @@ import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
+import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -68,7 +68,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
 
   stagePreview(
     request: ToolEditPreviewRequest,
-  ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
+  ): Effect.Effect<ToolEditPreview, HostCommandFailure, FileSystem.FileSystem> {
     return FileSystem.FileSystem.use((fs) =>
       fs.makeDirectory(this.storageDirectory, { recursive: true }),
     ).pipe(
@@ -143,11 +143,11 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  showDiff(): Effect.Effect<void, HostRequestFailure> {
+  showDiff(): Effect.Effect<void, HostCommandFailure> {
     return this.openDiff().pipe(Effect.andThen(this.revealFirstChange()));
   }
 
-  openProposed(): Effect.Effect<void, HostRequestFailure> {
+  openProposed(): Effect.Effect<void, HostCommandFailure> {
     return fromHost('showTextDocument', () =>
       vscode.window.showTextDocument(
         vscode.Uri.file(this.staged.proposedPath),
@@ -158,7 +158,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
 
   readProposedContent(): Effect.Effect<
     string,
-    HostRequestFailure,
+    HostCommandFailure,
     FileSystem.FileSystem
   > {
     return this.diffViewHost.readProposedContent(this.diffSession);
@@ -168,7 +168,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
    *  it outlives the files removed under the diff. If it cannot move, the
    *  diff and its files stay, so the user's text is not lost, and the
    *  failure goes to the caller's report. */
-  dispose(unapplied?: string): Effect.Effect<void, HostRequestFailure> {
+  dispose(unapplied?: string): Effect.Effect<void, HostCommandFailure> {
     const keep =
       unapplied === undefined
         ? Effect.void
@@ -195,7 +195,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     );
   }
 
-  private openDiff(): Effect.Effect<void, HostRequestFailure> {
+  private openDiff(): Effect.Effect<void, HostCommandFailure> {
     return this.diffViewHost.openDiff(
       this.diffSession.original,
       this.diffSession.proposed,

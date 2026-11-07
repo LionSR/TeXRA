@@ -9,8 +9,8 @@ import { providerDisplayName } from '@texra-ai/llm';
 import {
   MODEL_AVAILABILITY_STATUS,
   HELPER_MODEL_SETTING,
+  pluralize,
 } from '@texra-ai/harness/schemas';
-import { pluralize } from '@texra-ai/harness/transcript';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { settingSignal } from '@settingsView/frontend/settingsState';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';

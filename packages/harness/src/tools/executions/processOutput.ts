@@ -13,7 +13,7 @@ import {
   MESSAGE_TYPES,
   ToolError,
   type RunId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
@@ -47,12 +47,12 @@ interface ProcessOutputProjection {
  *
  * The command's output is its `process.output` rows, in commit order,
  * concatenated while their stream stays the same, so chunk-split lines are
- * reconstructed without crossing a stream switch. A plain `log` row (the
+ * reconstructed without crossing a stream switch. A plain `log` row (a
  * truncation notice) flushes any pending fragment and renders standalone;
  * every other row is run bookkeeping, not command output.
  */
 function projectProcessOutput(
-  events: readonly SessionEvent[],
+  events: readonly SessionRow[],
 ): ProcessOutputProjection {
   const lines: string[] = [];
   let chars = 0;

@@ -15,10 +15,10 @@ import {
   type RequestPayload,
   type RequestDecision,
   type PendingRequest,
-  type RuntimeRequest,
+  type RuntimeCommand,
 } from '@texra-ai/harness/schemas';
 
-import type { HostRequest } from './hostRequest';
+import type { HostCommand } from './hostRequest';
 
 /**
  * Surface-only approval action emitted by the run-grant item and `a` key on
@@ -111,8 +111,8 @@ export function declineDecision(
  * so those two kinds are the only ones that name a host case.
  */
 type ApprovalArm =
-  | { readonly runtime: RuntimeRequest }
-  | { readonly host: HostRequest };
+  | { readonly runtime: RuntimeCommand }
+  | { readonly host: HostCommand };
 
 /**
  * The case one decision names: a session-wide approval is the approval with

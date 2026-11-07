@@ -1,3 +1,6 @@
+// Third-party imports
+import { String as Str } from 'effect';
+
 // Local imports - replacement
 import {
   GREEK_LETTERS,
@@ -8,15 +11,26 @@ import {
 import {
   createPatterns,
   generateBackslashFixes,
-  generateEnvironmentBracesFixes,
-  generateEnvironmentLinebreakFixes,
-  generateInvalidSectionEndingFixes,
-  generateLatexToXmlConversions,
-  generateReferenceSpacing,
-  generateSectionSpacingFixes,
-  generateXmlLatexConversions,
-} from '@replacement/helpers';
+  type PatternDict,
+} from '@replacement/patterns';
 import type { NonRegexRuleSet } from '@replacement/types';
+
+/**
+ * Generates patterns for non-breaking spaces in references
+ */
+function generateReferenceSpacing(referenceTypes: string[]): PatternDict {
+  return createPatterns(referenceTypes, (type) => {
+    const entries: [string, string][] = [[`${type} \\ref{`, `${type}~\\ref{`]];
+    if (/^[a-z]/.test(type)) {
+      const capitalizedType = Str.capitalize(type);
+      entries.push(
+        [`${capitalizedType} \\ref{`, `${capitalizedType}~\\ref{`],
+        [`${capitalizedType}\\ref{`, `${capitalizedType}~\\ref{`],
+      );
+    }
+    return entries;
+  });
+}
 
 export const CHARACTER_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
@@ -39,8 +53,13 @@ export const EQUATION_REPLACEMENTS: NonRegexRuleSet = {
     // Examples:
     // \n\n\end{align} -> \n\end{align}
     // \n    \n\end{aligned} -> \n\end{aligned}
-    const linebreakFixesPatterns = generateEnvironmentLinebreakFixes(
+    const linebreakFixesPatterns = createPatterns(
       'align aligned'.split(' '),
+      (env) => [
+        [`\n\n\\end{${env}}`, `\n\\end{${env}}`],
+        [`\n    \n\\end{${env}}`, `\n\\end{${env}}`],
+        [`\n\t\n\\end{${env}}`, `\n\\end{${env}}`],
+      ],
     );
 
     // ===== Reference formatting =====
@@ -115,7 +134,9 @@ export const EQUATION_REPLACEMENTS: NonRegexRuleSet = {
 
     // Environment braces/brackets fixes
     // Examples: {\align} -> {align}
-    const bracesFixes = generateEnvironmentBracesFixes(environments);
+    const bracesFixes = createPatterns(environments, (env) => [
+      [`{\\${env}}`, `{${env}}`],
+    ]);
 
     return {
       ...linebreakFixesPatterns,
@@ -184,7 +205,21 @@ export const FONT_COMMAND_REPLACEMENTS: NonRegexRuleSet = {
 };
 
 export const LATEX_FORBIDDEN_REPLACEMENTS: NonRegexRuleSet = {
-  patterns: generateInvalidSectionEndingFixes(SECTION_TYPES),
+  // These commands (e.g. \end{section}) never appear in valid LaTeX.
+  patterns: createPatterns(SECTION_TYPES, (sectionType) =>
+    [
+      `\\end{${sectionType}}`,
+      `\\end{${sectionType}*}`,
+      `\\end {${sectionType}}`,
+      `\\end {${sectionType}*}`,
+      `\\end{ ${sectionType}}`,
+      `\\end{ ${sectionType}*}`,
+      `\\end{${sectionType} }`,
+      `\\end{${sectionType}* }`,
+      `\\end { ${sectionType} }`,
+      `\\end { ${sectionType}* }`,
+    ].map((ending): [string, string] => [ending, '']),
+  ),
 };
 
 export const GPTNESS_REPLACEMENTS: NonRegexRuleSet = {
@@ -449,13 +484,58 @@ export const LATEX_XML_REPLACEMENTS: NonRegexRuleSet = {
       // <align> -> \begin{align}
       // </tikzpicture> -> \end{tikzpicture}
       // <figure}> -> \begin{figure}
-      ...generateXmlLatexConversions(LATEX_ENVIRONMENTS),
+      ...createPatterns(LATEX_ENVIRONMENTS, (env) => [
+        // XML to LaTeX
+        [`<${env}>`, `\\begin{${env}}`],
+        [`</${env}>`, `\\end{${env}}`],
+        // XML with begin to LaTeX
+        [`<begin{${env}}>`, `\\begin{${env}}`],
+        [`</begin{${env}}>`, `\\end{${env}}`],
+        // XML with end to LaTeX
+        [`<end{${env}}>`, `\\end{${env}}`],
+        [`</end{${env}}>`, `\\end{${env}}`],
+        // XML with braces to LaTeX. Newline-suffixed spellings (`</env}\n`,
+        // `</begin{env}\n`) need no entry of their own: the entries below run
+        // first, rewrite the tag, and leave the trailing newline untouched.
+        [`<${env}}`, `\\begin{${env}}`],
+        [`</${env}}`, `\\end{${env}}`],
+        [`</${env}\n`, `\\end{${env}}\n`],
+        // XML begin tags incorrectly closed with leading slash
+        [`</begin{${env}}`, `\\begin{${env}}`],
+        [`</begin{${env}`, `\\begin{${env}}`],
+        // LaTeX with incorrect XML ending
+        [`\\end{${env}>}`, `\\end{${env}}`],
+        [`\\end{${env}>`, `\\end{${env}}`],
+        // LaTeX with incorrect labels
+        [`\\begin{-${env}}`, `\\begin{${env}}`],
+        [`\\end{-${env}}`, `\\end{${env}}`],
+        // LaTeX with incorrect XML ending
+        [`\\begin${env}`, `\\begin{${env}}`],
+        [`\\end${env}`, `\\end{${env}}`],
+        // LaTeX with duplicated begin/end keywords
+        [`\\begin{begin{${env}}`, `\\begin{${env}}`],
+        [`\\begin{begin{${env}}}`, `\\begin{${env}}`],
+        [`\\begin{\\begin{${env}}`, `\\begin{${env}}`],
+        [`\\begin{\\begin{${env}}}`, `\\begin{${env}}`],
+        [`\\end{end{${env}}`, `\\end{${env}}`],
+        [`\\end{end{${env}}}`, `\\end{${env}}`],
+        [`\\end{\\end{${env}}`, `\\end{${env}}`],
+        [`\\end{\\end{${env}}}`, `\\end{${env}}`],
+      ]),
 
       // ===== LaTeX to XML conversions =====
       // Examples:
       // \begin{scratchpad} -> <scratchpad>
       // \end{scratchpad} -> </scratchpad>
-      ...generateLatexToXmlConversions(pureXmlTags),
+      ...createPatterns(pureXmlTags, (tag) => [
+        [`\\begin{${tag}}`, `<${tag}>`],
+        [`\\end{${tag}}`, `</${tag}>`],
+        // LaTeX with '>' at the end to XML
+        [`\\begin{${tag}>}`, `<${tag}>`],
+        [`\\begin{${tag}>`, `<${tag}>`],
+        [`\\end{${tag}>}`, `</${tag}>`],
+        [`\\end{${tag}>`, `</${tag}>`],
+      ]),
 
       // =================================================================
       // Manual replacements - for cases that need special handling
@@ -464,7 +544,7 @@ export const LATEX_XML_REPLACEMENTS: NonRegexRuleSet = {
       // ===== 1. LATEX TAG ENDING FIXES =====
       // Fix LaTeX tags closed as XML-style end tags with a trailing '>'; the
       // plain `\end{env>}`/`\end{env>` spellings already come from
-      // generateXmlLatexConversions above.
+      // the XML to LaTeX conversions above.
       ...createPatterns(LATEX_ENVIRONMENTS, (env) => [
         [`</end{${env}>`, `\\end{${env}}`],
       ]),
@@ -584,9 +664,11 @@ export const SECTION_REPLACEMENTS: NonRegexRuleSet = {
   // Examples:
   // \end{align}\n\section -> \end{align}\n\n\n\section
   // \end{equation}\n\paragraph -> \end{equation}\n\n\n\paragraph
-  patterns: generateSectionSpacingFixes(
-    ['align', 'equation'],
-    SECTION_TYPES.slice(0, 3),
+  patterns: createPatterns(['align', 'equation'], (env) =>
+    SECTION_TYPES.slice(0, 3).map((sectionType): [string, string] => [
+      `\\end{${env}}\n\\${sectionType}`,
+      `\\end{${env}}\n\n\n\\${sectionType}`,
+    ]),
   ),
 };
 

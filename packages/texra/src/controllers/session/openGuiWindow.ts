@@ -9,23 +9,15 @@
  * and the difference between the hosts is the table.
  *
  * A host answers its own way only the kinds `OWN_REQUEST_LABEL` lists
- * ({@link OwnHostRequest}: its file pickers, its editor's current file, its
+ * ({@link OwnHostCommand}: its file pickers, its editor's current file, its
  * tab pop-out), so its switch stays exhaustive and the compiler still names
  * a kind it forgot.
  */
 import * as path from 'node:path';
 
-import { formatResultCount } from '@texra-ai/harness/transcript';
-
 import { Effect, Exit, Layer, Scope, Stream, SubscriptionRef } from 'effect';
 
-import {
-  Cancelled,
-  Rejected,
-  Unavailable,
-  type Session,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentDirectories,
   presenterOn,
@@ -39,7 +31,7 @@ import { ToolRegistry } from '@texra-ai/harness/plugins';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type {
   FileOpResult,
-  HostRequest,
+  HostCommand,
 } from '@texra/shared/session/hostRequest';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
@@ -91,9 +83,15 @@ import {
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
 import type { RunId } from '@texra-ai/harness/schemas';
+import {
+  formatResultCount,
+  Cancelled,
+  Rejected,
+  Unavailable,
+} from '@texra-ai/harness/schemas';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
-import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
+import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 /** A window's runs: its project's session, wherever its runs run (here,
  *  or in the background service), and the link the window attaches
@@ -112,24 +110,24 @@ const OWN_REQUEST_LABEL = {
   addOpenedFiles: "The editor's open files",
   gettingStarted: 'Starting a project',
   workspaceFile: 'The file editor',
-} as const satisfies Partial<Record<HostRequest['kind'], string>>;
+} as const satisfies Partial<Record<HostCommand['kind'], string>>;
 
 /** The requests a host answers its own way. */
-export type OwnHostRequest = Extract<
-  HostRequest,
+export type OwnHostCommand = Extract<
+  HostCommand,
   { kind: keyof typeof OWN_REQUEST_LABEL }
 >;
 
-type SharedHostRequest = Exclude<HostRequest, OwnHostRequest>;
+type SharedHostCommand = Exclude<HostCommand, OwnHostCommand>;
 
-const isOwnHostRequest = (request: HostRequest): request is OwnHostRequest =>
+const isOwnHostCommand = (request: HostCommand): request is OwnHostCommand =>
   Object.hasOwn(OWN_REQUEST_LABEL, request.kind);
 
 /** The arms a host answers its own way, by kind. A kind a host leaves
  *  out is refused by the shared router, worded once for both hosts. */
 export type OwnHostArms = {
-  readonly [K in OwnHostRequest['kind']]?: (
-    request: Extract<OwnHostRequest, { kind: K }>,
+  readonly [K in OwnHostCommand['kind']]?: (
+    request: Extract<OwnHostCommand, { kind: K }>,
     port: string,
   ) => HostVerb<HostOutcome>;
 };
@@ -138,24 +136,24 @@ export type OwnHostArms = {
  *  its failure is the value the case answers with. */
 type HostVerb<A> = Effect.Effect<
   A,
-  HostRequestFailure,
+  HostCommandFailure,
   ProcessServices | StorageFs | WorkspaceFs
 >;
 
-type LatexdiffsRequest = Extract<HostRequest, { kind: 'latexdiffs' }>;
+type LatexdiffsRequest = Extract<HostCommand, { kind: 'latexdiffs' }>;
 
 /**
  * The verbs behind the shared arms. Every member is a capability the host
  * performs; nothing here decides anything, which is the point: the decision
  * -- the order, the guard, the refusal wording -- is in the one body below.
  */
-export interface SharedHostRequestBindings {
+export interface SharedHostCommandBindings {
   /** Open a file of this session's workspace, at a line when one is named. */
   openPath(file: string, line: number | undefined): HostVerb<void>;
   /** The files the user picked for a launcher field; null when they picked
    *  none. */
   pickFiles(
-    fileType: Extract<HostRequest, { kind: 'pickFiles' }>['fileType'],
+    fileType: Extract<HostCommand, { kind: 'pickFiles' }>['fileType'],
   ): HostVerb<readonly string[] | null>;
   /** How a generated diff opens and a diff run shows its progress. */
   readonly latexdiff: LatexdiffHost;
@@ -170,7 +168,7 @@ export interface SharedHostRequestBindings {
   readonly recheckDependencies: HostVerb<void>;
   readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
-   *  {@link SharedHostRequestBindings.setApiKey}, the same verb the banner
+   *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
    *  takes. */
   readonly onboarding: {
     readonly signInChatGpt: HostVerb<void>;
@@ -192,7 +190,7 @@ interface GuiWindowParts {
 interface GuiWindowHost {
   /** The window's notices. */
   readonly notify: Dialogs['notify'];
-  readonly bindings: SharedHostRequestBindings;
+  readonly bindings: SharedHostCommandBindings;
   readonly own: OwnHostArms;
   /** What the window does for its project's runs, here or in the service. */
   readonly window: WindowHost;
@@ -293,7 +291,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   const bridge = yield* SessionBridge.make({
     session,
     host: snapshot.changes,
-    handleHostRequest: handle,
+    handleHostCommand: handle,
     onPortClosed: draftRequests.closePort,
   }).pipe(Scope.provide(bridgeScope));
   const host = yield* ports.host({ bridge, snapshot });
@@ -400,7 +398,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
    * failure reaches the bridge's view as the value the port carried.
    */
   function shared(
-    request: SharedHostRequest,
+    request: SharedHostCommand,
     port: string,
   ): HostVerb<HostOutcome> {
     /** The Tools sheet's verbs over the launcher's base and edited files. */
@@ -682,7 +680,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   /** An own kind the host binds runs its arm; one it leaves out is
    *  refused, worded here for both hosts. */
   const own = (
-    request: OwnHostRequest,
+    request: OwnHostCommand,
     port: string,
   ): HostVerb<HostOutcome> => {
     const arm = host.own[request.kind];
@@ -694,15 +692,15 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       );
     // cast: the arm bound under `request.kind` takes a request of that kind.
     return (
-      arm as (request: OwnHostRequest, port: string) => HostVerb<HostOutcome>
+      arm as (request: OwnHostCommand, port: string) => HostVerb<HostOutcome>
     )(request, port);
   };
   function handle(
-    request: HostRequest,
+    request: HostCommand,
     port: string,
-  ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
+  ): Effect.Effect<HostOutcome, HostCommandFailure, ProcessServices> {
     return Effect.provide(
-      isOwnHostRequest(request) ? own(request, port) : shared(request, port),
+      isOwnHostCommand(request) ? own(request, port) : shared(request, port),
       requestLayer,
     );
   }
