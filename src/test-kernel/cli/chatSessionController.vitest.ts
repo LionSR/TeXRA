@@ -73,6 +73,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
+import { EMPTY_DRAFT } from '@cli/chat/tui/input/draftAttachments';
 import { rootRunId } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import {
@@ -202,6 +203,8 @@ const makeInit = (overrides: Partial<ChatSessionControllerInit> = {}) =>
       stores: makeFakeSettingsStores().stores,
       runtime,
       approvalPolicy: () => undefined,
+      draft: runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT)),
+      modelConnection: { connected: Effect.void, open: Effect.succeed(false) },
       ...overrides,
     };
   });
@@ -480,8 +483,11 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           );
 
           // The composer's submit path, run the way the composer runs it.
-          yield* ctrl.submit('Do not drop this message.');
-          yield* ctrl.submit('And this one.');
+          yield* ctrl.submit({
+            ...EMPTY_DRAFT,
+            text: 'Do not drop this message.',
+          });
+          yield* ctrl.submit({ ...EMPTY_DRAFT, text: 'And this one.' });
           expect(sent).toEqual([
             'a11111 Do not drop this message.',
             'a11111 And this one.',

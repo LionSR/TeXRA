@@ -28,7 +28,6 @@ import type {
   AgentDelegationScope,
 } from '@texra-ai/harness/host';
 import type { RunView } from '@texra-ai/harness/schemas';
-import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------
 // types
@@ -328,29 +327,6 @@ export function closeForegroundReader(): void {
 export const slashPaletteOpen = signal<boolean>(false);
 export const reverseSearchOpen = signal<boolean>(false);
 
-/** Refused follow-ups handing their submitted drafts back to the InputBar.
- * Requests stay ordered until the InputBar atomically drains the whole batch. */
-interface DraftRestoreRequest {
-  readonly text: string;
-  readonly images: readonly PastedImageEntry[];
-}
-export const draftRestoreRequest = signal<readonly DraftRestoreRequest[]>([]);
-export function requestDraftRestore(
-  text: string,
-  images: readonly PastedImageEntry[] = [],
-): void {
-  draftRestoreRequest.set([
-    ...draftRestoreRequest.get(),
-    { text, images: [...images] },
-  ]);
-}
-
-export function takeDraftRestoreRequests(): readonly DraftRestoreRequest[] {
-  const requests = draftRestoreRequest.get();
-  if (requests.length > 0) draftRestoreRequest.set([]);
-  return requests;
-}
-
 /** Windowed content rows of the chat input's current draft (≥ 1), reported
  * by `InputBar`. The row allocator budgets the input bar from this instead of
  * assuming the single-line height, so a multi-line draft shrinks the
@@ -474,7 +450,6 @@ export function resetCliState(
   FOREGROUND_READER.set(undefined);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
-  draftRestoreRequest.set([]);
   clearTransientNotice();
   for (const resetHook of RESET_HOOKS) resetHook();
 }

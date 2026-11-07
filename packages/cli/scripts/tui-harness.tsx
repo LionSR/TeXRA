@@ -146,6 +146,10 @@ import {
 } from '../src/chat/tui/sessionStatus';
 import { chatScrollback } from '../src/chat/tui/panes/staticTranscriptRing';
 import {
+  EMPTY_DRAFT,
+  expandText,
+} from '../src/chat/tui/input/draftAttachments';
+import {
   announceForegroundApprovals,
   createTuiHostInteractions,
 } from '../src/chat/tui/state/subscribeApprovals';
@@ -1862,6 +1866,7 @@ if (canInterrupt) {
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const scrollback = chatScrollback(harnessRuntime, inkRef);
+const harnessDraft = harnessRuntime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
 
 function handleHarnessCtrlC(): void {
   if (canInterrupt) {
@@ -1877,7 +1882,8 @@ function renderHarnessApp(): React.JSX.Element {
       stores={HARNESS_PLATFORM_SERVICES}
       runtime={harnessRuntime}
       session={harnessRunSession}
-      onSubmit={handleHarnessSubmit}
+      draft={harnessDraft}
+      onSubmit={(draft) => handleHarnessSubmit(expandText(draft).trim())}
       scrollback={scrollback}
       onCtrlC={handleHarnessCtrlC}
     />

@@ -3,7 +3,7 @@
 // Node imports
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 import { useInput, useWindowSize, type Key } from 'ink';
 import {
   Fragment,
@@ -89,7 +89,7 @@ import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness/host';
 import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 import type { InputHistory } from './history/inputHistory';
-import type { PastedImageEntry } from './input/draftAttachments';
+import { EMPTY_DRAFT, type Draft } from './input/draftAttachments';
 
 // Jump-to-waiting: surface the newly focused run's pending approval right
 // away instead of leaving it queued behind other runs' items.
@@ -110,12 +110,9 @@ interface AppProps {
    *  run requests land on it and the work-plan reader renders from it,
    *  threaded from the chat surface that opened it. */
   readonly session: Session;
-  readonly onSubmit: (
-    line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
-    holdUntil?: 'turn',
-  ) => void;
+  /** The chat's draft, which the input bar edits. */
+  readonly draft: SubscriptionRef.SubscriptionRef<Draft>;
+  readonly onSubmit: (draft: Draft, holdUntil?: 'turn') => void;
   readonly commandName?: string;
   /** The chat's scrollback record and its repaint. */
   readonly scrollback: ChatScrollback;
@@ -266,7 +263,7 @@ export function App(props: AppProps): React.JSX.Element {
   const focusSession = (runId: RunId): void => {
     dispatchChildListSelection({ kind: 'focusRun', runId });
     if (resumableRunId(view.runs.get(runId))) {
-      props.onSubmit(`/resume ${runId}`);
+      props.onSubmit({ ...EMPTY_DRAFT, text: `/resume ${runId}` });
     } else {
       focusRunAndPromoteApprovals(runId);
     }
@@ -607,6 +604,7 @@ export function App(props: AppProps): React.JSX.Element {
               roots={props.session.roots}
               controlRef={inputBarRef}
               holdsKeystroke={holdsKeystroke}
+              draft={props.draft}
               onSubmit={props.onSubmit}
               collapseWhenDisabled={!inputBarVisible}
               disabledMessage={inputDisabledMessage}

@@ -7,12 +7,14 @@ import {
   Cause,
   Deferred,
   Effect,
+  Exit,
   Fiber,
   FiberSet,
   Schema,
   Scope,
   Semaphore,
   Stream,
+  SubscriptionRef,
 } from 'effect';
 
 import {
@@ -65,7 +67,6 @@ import {
   focusRun,
   rootRunId,
   patchSessionMeta,
-  requestDraftRestore,
   sessionMeta as sessionMetaSignal,
   setTransientNotice,
 } from './tui/state/cliState';
@@ -87,8 +88,16 @@ import {
 } from './tui/state/transcript';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { SessionRequests } from './tui/state/approvalQueue';
+import {
+  EMPTY_DRAFT,
+  expandText,
+  resolveImages,
+  restoreDraft,
+  withSkill,
+  type Draft,
+} from './tui/input/draftAttachments';
+import type { ModelConnection } from './tui/modelConnection';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
-import type { PastedImageEntry } from './tui/input/draftAttachments';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 // ---------------------------------------------------------------------------
@@ -175,25 +184,16 @@ export interface ChatSessionController {
    * the user stopped it.
    */
   submit(
-    line: string,
-    attachments?: ChatAttachments,
+    draft: Draft,
+    holdUntil?: 'turn',
   ): Effect.Effect<void, Error, ProcessServices>;
   /** Succeeds once every message submitted so far has been sent, or has
    *  started its run. */
   readonly submitted: Effect.Effect<void>;
-  /** Reserve a skill activation for the next submitted message. */
+  /** Activate a skill for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
-  /** Drop every reserved skill activation. */
+  /** Drop every activated skill. */
   clearPendingSkills(): void;
-}
-
-/** What rides along with a submitted line: files and pasted images, and
- *  `holdUntil: 'turn'` for a message the run reads when its current turn
- *  ends rather than at the turn's next model request. */
-interface ChatAttachments {
-  readonly mediaFiles?: readonly string[];
-  readonly images?: readonly PastedImageEntry[];
-  readonly holdUntil?: 'turn';
 }
 
 export interface ChatSessionControllerInit {
@@ -236,44 +236,41 @@ export interface ChatSessionControllerInit {
    *  which each launch carries (`launchApproval`); none follows the
    *  project's. */
   readonly approvalPolicy: () => ApprovalPolicy | undefined;
+  /** The composer's draft: the skills a message takes, and where a message
+   *  the session does not take goes back to. */
+  readonly draft: SubscriptionRef.SubscriptionRef<Draft>;
+  /** Chat messages wait here until a model is connected. */
+  readonly modelConnection: ModelConnection;
 }
 
-/** How a submitted message ends, once: sent (or handed to a fresh run), or
+/** How a submitted message ended: with the session (or a fresh run), or
  *  back in the input, naming why when there is a reason. */
-interface MessageSettlement {
-  readonly sent: () => void;
-  readonly undelivered: (reason?: string) => void;
-}
+type MessageResult =
+  | { readonly kind: 'sent' }
+  | { readonly kind: 'returned'; readonly reason?: string };
+
+const SENT: MessageResult = Object.freeze({ kind: 'sent' });
 
 interface PreparedChatInstruction {
   readonly instruction: string;
   readonly displayInstruction?: string;
-  readonly reservedSkillActivations: readonly SkillActivation[];
 }
 
-function takePendingSkillActivations(
-  pendingSkillActivations: Map<string, string>,
+/** The instruction a message sends: its line, wrapped in the prompts of the
+ *  skills activated for it. */
+function preparedInstruction(
   line: string,
+  skills: readonly SkillActivation[],
 ): PreparedChatInstruction {
-  if (pendingSkillActivations.size === 0) {
-    return { instruction: line, reservedSkillActivations: [] };
-  }
-  const entries = [...pendingSkillActivations.entries()].map(
-    ([name, activationPrompt]) => ({ name, activationPrompt }),
-  );
-  pendingSkillActivations.clear();
-  const activations = entries
-    .map(({ activationPrompt }) => activationPrompt)
-    .join('\n\n');
+  if (skills.length === 0) return { instruction: line };
   return {
     instruction: [
-      activations,
+      skills.map((skill) => skill.activationPrompt).join('\n\n'),
       '<user_request>',
       escapeText(line),
       '</user_request>',
     ].join('\n'),
     displayInstruction: line,
-    reservedSkillActivations: entries,
   };
 }
 
@@ -291,6 +288,8 @@ export function createChatSessionController(
     getSlashCommandContext,
     stores,
     runtime,
+    draft,
+    modelConnection,
   } = init;
   const requests: SessionRequests = runSession;
   // The fold the chat's runs appear in: the service's, or this session's.
@@ -305,8 +304,6 @@ export function createChatSessionController(
       Stream.runHead,
       Effect.asVoid,
     );
-  const pendingSkillActivations = new Map<string, string>();
-  let pendingSkillActivationClearEpoch = 0;
 
   /** A level that shows `runId` continued since `before`, its level when
    *  the message was sent: live here, or already parked or ended again.
@@ -852,7 +849,7 @@ export function createChatSessionController(
   const inOrder = Semaphore.makeUnsafe(1).withPermit;
   // The sends in flight, which a graceful exit waits for.
   const sending = runtime.runSync(
-    FiberSet.make<void>().pipe(Scope.provide(shutdownScope)),
+    FiberSet.make<MessageResult>().pipe(Scope.provide(shutdownScope)),
   );
 
   /**
@@ -868,19 +865,17 @@ export function createChatSessionController(
     target: RunId,
     continuing: boolean,
     prepared: PreparedChatInstruction,
-    { mediaFiles, holdUntil }: ChatAttachments,
-    message: MessageSettlement,
+    mediaFiles: readonly string[],
+    holdUntil: 'turn' | undefined,
   ) {
     const before = runSession.view.current().runs.get(target);
     // The claim of the stopped run, while the chat still holds it.
     const stoppedClaim = chatTuiRunPending(session)
       ? session.runSettled
       : undefined;
-    // The request and the state it settles (the notice, or the restored
-    // draft) are one uninterruptible step: a request that committed is
-    // always followed by its presentation, and a message is never both
-    // queued on the run and lost from the input.
-    yield* Effect.uninterruptible(
+    // The request and its presentation are one uninterruptible step: a
+    // request that committed is always followed by its notice.
+    return yield* Effect.uninterruptible(
       Effect.gen(function* () {
         const outcome = yield* requests
           .request({
@@ -888,7 +883,7 @@ export function createChatSessionController(
             runId: target,
             text: prepared.instruction,
             displayText: prepared.displayInstruction,
-            media: mediaFiles ? [...mediaFiles] : undefined,
+            media: mediaFiles.length > 0 ? [...mediaFiles] : undefined,
             holdUntil,
           })
           .pipe(
@@ -914,12 +909,10 @@ export function createChatSessionController(
         if (outcome.kind !== 'sent') {
           // Teardown mid-send is not a verdict on the message: it goes back
           // to the input without a reason.
-          message.undelivered(
-            outcome.kind === 'interrupted' ? undefined : outcome.reason,
-          );
-          return;
+          return outcome.kind === 'interrupted'
+            ? { kind: 'returned' as const }
+            : { kind: 'returned' as const, reason: outcome.reason };
         }
-        message.sent();
         // The session resumed the stopped conversation: the slot passes to
         // it once the stopped run's claim lets go, so the next message goes
         // to it rather than starting a second root beside it.
@@ -941,52 +934,56 @@ export function createChatSessionController(
         if (presentation.severity !== 'none') {
           appendLocalNotice(presentation.message, target);
         }
+        return SENT;
       }),
     );
   });
 
+  /** A message back in the input, below whatever was typed since. */
+  const returnToInput = (
+    message: Draft,
+    reason?: string,
+  ): Effect.Effect<void> =>
+    SubscriptionRef.update(draft, (current) =>
+      restoreDraft(current, message),
+    ).pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          if (reason !== undefined) {
+            setTransientNotice(
+              `${reason} The message has been restored to the input.`,
+              { ttlMs: Infinity },
+            );
+          }
+        }),
+      ),
+    );
+
   const submitChatMessage = Effect.fn('submitChatMessage')(function* (
+    submitted: Draft,
     line: string,
-    attachments: ChatAttachments = {},
+    holdUntil: 'turn' | undefined,
   ) {
-    const prepared = takePendingSkillActivations(pendingSkillActivations, line);
-    const skillActivationClearEpoch = pendingSkillActivationClearEpoch;
-    const restoreReservedSkillActivations = (): void => {
-      if (skillActivationClearEpoch !== pendingSkillActivationClearEpoch) {
-        return;
-      }
-      for (const reserved of prepared.reservedSkillActivations) {
-        if (!pendingSkillActivations.has(reserved.name)) {
-          pendingSkillActivations.set(reserved.name, reserved.activationPrompt);
-        }
-      }
-    };
-    // Sent, or handed back to the input: a message settles once.
-    let settled = false;
-    const message: MessageSettlement = {
-      sent: () => {
-        settled = true;
-      },
-      undelivered: (reason) => {
-        if (settled) return;
-        settled = true;
-        requestDraftRestore(line, attachments.images);
-        if (reason !== undefined) {
-          setTransientNotice(
-            `${reason} The message has been restored to the input.`,
-            { ttlMs: Infinity },
-          );
-        }
-        restoreReservedSkillActivations();
-      },
-    };
+    // The message takes the skills activated for it.
+    const skills = yield* SubscriptionRef.modify(draft, (current) => [
+      current.skills,
+      { ...current, skills: [] },
+    ]);
+    const message: Draft = { ...submitted, skills };
+    const prepared = preparedInstruction(line, skills);
+    const mediaFiles = resolveImages(message).map((image) => image.path);
     const send = (target: RunId, continuing: boolean) =>
       FiberSet.run(
         sending,
-        sendMessage(target, continuing, prepared, attachments, message),
+        sendMessage(target, continuing, prepared, mediaFiles, holdUntil),
       );
+    const returned = (reason?: string): MessageResult => ({
+      kind: 'returned',
+      ...(reason !== undefined ? { reason } : {}),
+    });
     const route = Effect.gen(function* () {
-      if (session.leaving) return message.undelivered();
+      yield* modelConnection.connected;
+      if (session.leaving) return returned();
       // The focused agent below the root takes the message.
       const focused = runViewOf(currentView(), selectedRunIdSignal.get());
       if (focused !== undefined && focused.parentId !== null)
@@ -995,15 +992,14 @@ export function createChatSessionController(
       if (chatTuiRunPending(session)) {
         const held = session.runId;
         if (held === undefined)
-          return message.undelivered(
-            'The conversation is still being resumed.',
-          );
+          return returned('The conversation is still being resumed.');
         return yield* send(held, true);
       }
       // The conversation's root while it runs without the chat holding it
       // (the session resumed it), or one the user stopped, which the session
       // continues; anything else (none yet, or one that failed) starts a
-      // fresh run, which picks its model again.
+      // fresh run, which picks its model again. A run that does not start
+      // gives back only the skills: its failure is in the transcript.
       const root = runViewOf(currentView(), rootRunId.get());
       if (
         root !== undefined &&
@@ -1011,22 +1007,32 @@ export function createChatSessionController(
         acceptsFollowUp(root)
       )
         return yield* send(root.id, true);
-      message.sent();
       const started = yield* startSession(
         prepared.instruction,
-        attachments.mediaFiles,
+        mediaFiles,
         prepared.displayInstruction,
       );
-      if (!started) restoreReservedSkillActivations();
+      if (!started) yield* returnToInput({ ...EMPTY_DRAFT, skills });
+      return SENT;
     });
-    // A failure or a throw is reported to the transcript; a bare
-    // interruption is the runtime closing, not a failed submission. Either
-    // way an unsent message goes back to the input.
+    // Where the message ended is decided once, here: a failure or a throw is
+    // reported to the transcript and, like the runtime closing, sends the
+    // message back to the input. Waiting for a forked send is
+    // uninterruptible, so a message the session took is never also back in
+    // the input.
     yield* Effect.gen(function* () {
-      const sent = yield* inOrder(route);
-      if (sent) yield* Fiber.join(sent);
+      const routed = yield* inOrder(route);
+      return Fiber.isFiber(routed)
+        ? yield* Effect.uninterruptible(Fiber.join(routed))
+        : routed;
     }).pipe(
-      Effect.ensuring(Effect.sync(() => message.undelivered())),
+      Effect.onExit((exit) =>
+        Exit.isFailure(exit)
+          ? returnToInput(message)
+          : exit.value.kind === 'returned'
+            ? returnToInput(message, exit.value.reason)
+            : Effect.void,
+      ),
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.interrupt
@@ -1038,16 +1044,22 @@ export function createChatSessionController(
   });
 
   const submit = Effect.fn('chatSubmit')(function* (
-    line: string,
-    attachments?: ChatAttachments,
+    submitted: Draft,
+    holdUntil?: 'turn',
   ) {
+    const line = expandText(submitted).trim();
+    if (line.length === 0) return;
     if (yield* handleTuiSlashCommand(line, getSlashCommandContext())) return;
-    yield* submitChatMessage(line, attachments);
+    yield* submitChatMessage(submitted, line, holdUntil);
   });
 
   const activateSkill = (selection: SkillActivation): void => {
-    const wasPending = pendingSkillActivations.has(selection.name);
-    pendingSkillActivations.set(selection.name, selection.activationPrompt);
+    const wasPending = SubscriptionRef.getUnsafe(draft).skills.some(
+      (skill) => skill.name === selection.name,
+    );
+    runtime.runSync(
+      SubscriptionRef.update(draft, (current) => withSkill(current, selection)),
+    );
     appendLocalNotice(
       [
         `Skill ${wasPending ? 'refreshed' : 'activated'}: ${selection.name}.`,
@@ -1066,9 +1078,12 @@ export function createChatSessionController(
       FiberSet.awaitEmpty(sending),
     ),
     activateSkill,
-    clearPendingSkills: () => {
-      pendingSkillActivationClearEpoch += 1;
-      pendingSkillActivations.clear();
-    },
+    clearPendingSkills: () =>
+      runtime.runSync(
+        SubscriptionRef.update(draft, (current) => ({
+          ...current,
+          skills: [],
+        })),
+      ),
   };
 }

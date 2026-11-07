@@ -5,7 +5,15 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import { Cause, Effect, Exit, FiberHandle, Scope, Stream } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  FiberHandle,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
 import {
@@ -77,6 +85,7 @@ import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { followCliCredentialChanges } from './hosts/cliProviderKeys';
 import { chatScrollback } from './panes/staticTranscriptRing';
+import { EMPTY_DRAFT } from './input/draftAttachments';
 import {
   rootRunId,
   selectedRunId as selectedRunIdSignal,
@@ -104,7 +113,7 @@ import { openCliSlashCommandForm } from './commands/slashForms';
 import {
   checkModelConnection,
   connectChatModel,
-  holdUntilConnected,
+  makeModelConnection,
   modelConnectionNeeded,
 } from './modelConnection';
 import { installTerminalTitleUpdates } from './terminalTitle';
@@ -502,6 +511,8 @@ export async function runChat(
   // Chat-session controller: owns run start/resume/stop orchestration.
   // The Ink layer never directly mutates session run-state fields, every
   // state transition flows through one of the controller's narrow commands.
+  const draft = runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
+  const modelConnection = makeModelConnection();
   const chatController: ChatSessionController = createChatSessionController({
     session,
     runSession,
@@ -514,6 +525,8 @@ export async function runChat(
     stores: services,
     runtime,
     approvalPolicy: () => chatPolicy,
+    draft,
+    modelConnection,
   });
 
   const inkRef: { current?: InkInstance } = {};
@@ -558,7 +571,7 @@ export async function runChat(
           recovery: CHAT_STARTUP_MODEL_RECOVERY,
           firstRunSetupAgent: startup.firstRunSetupAgent,
         },
-        (held) => chatController.submit(held.line, held),
+        modelConnection,
       ),
     stores: services,
     runtime,
@@ -615,11 +628,9 @@ export async function runChat(
       stores={services}
       runtime={runtime}
       session={runSession}
-      onSubmit={(line, mediaFiles, images, holdUntil) => {
-        if (holdUntilConnected({ line, mediaFiles, images })) return;
-        runtime.runFork(
-          chatController.submit(line, { mediaFiles, images, holdUntil }),
-        );
+      draft={draft}
+      onSubmit={(message, holdUntil) => {
+        runtime.runFork(chatController.submit(message, holdUntil));
       }}
       commandName={context.commandName}
       scrollback={scrollback}
