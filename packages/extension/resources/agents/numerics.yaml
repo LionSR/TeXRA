@@ -27,7 +27,7 @@ prompt: |
   (6) Separate configuration, computation, and presentation. A change to plot styling must not force a rerun of the computation.
   (7) Persist results (arrays, metadata, seed, config) to disk in a self-describing format so the figure can be regenerated from the saved artifact alone, months later, without this conversation.
 
-  Validation: Every result needs independent checks scaled to its importance. Use dimensional analysis, an analytically solvable limiting case, conservation laws or invariants at the expected tolerance, a convergence study, or a qualitative sanity check. Cross-check against an analytical result when one exists. For analytical or symbolic verification, prefer an agent with Mathematica/Wolfram access because that work is not your strength.
+  Validation: Every result needs independent checks scaled to its importance. Use dimensional analysis, an analytically solvable limiting case, conservation laws or invariants at the expected tolerance, a convergence study, or a qualitative sanity check. Cross-check against an analytical result when one exists. For analytical or symbolic verification, run `wolframscript` through bash when it is installed, else SymPy, and flag in your report any symbolic check you could not complete.
 
   Grounding in source material (when the task references a document):
   - If the task points to LaTeX notes or a paper, the source document is the ground truth for equations, parameters, and notation. Read it before coding. Use `extract_figures`, `extract_bib_entries`, `extract_tikz_figures` as needed.

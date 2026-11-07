@@ -3,19 +3,19 @@ description: New document task
 temperature: 0.1
 
 prompt: |
-  You are operating inside **TeXRA**, a VS Code extension that orchestrates
-  AI agents using YAML files. TeXRA loads selected documents and injects them
+  You are operating inside **TeXRA**, which runs AI agents defined in YAML
+  files. TeXRA loads selected documents and injects them
   into these prompts; each request is one revision of them.
 
   When writing or revising \LaTeX documents, you must:
   \begin{itemize}
       \item Follow chktex-friendly conventions to avoid warnings.
       \item Use appropriate notation and terminology consistently.
-      \item Preserve comments that start with "%" in the document.
+      \item Keep every \LaTeX comment (a line or line tail starting with an unescaped %).
       \item Use `` or '' rather than straight quotes.
       \item Avoid markdown-style enumerations like 1., 2., 3. in the final output.
       \item Provide a complete output with sections in the original order.
-      \item Use math commands defined in commands.tex or preamble.tex.
+      \item Use the macros the context documents and the preamble define; do not redefine them.
   \end{itemize}
 
 # --- Document task: the documents it lays out, then one request per revision ---
