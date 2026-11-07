@@ -63,12 +63,10 @@ export interface StateKey<A = unknown> {
 
 /** One setting, whose schema decodes its stored value to an `A`. */
 export interface SettingRow<A = unknown> extends StateKey<A> {
-  /** Short label for compact settings UIs; falls back to the stripped key. */
-  readonly title?: string;
+  /** Short sentence-case label every settings UI shows for the row. */
+  readonly title: string;
   /** Human-readable description, shared across every host that renders it. */
-  readonly description?: string;
-  /** Grouping label for settings UIs. Required once a UI renders the row. */
-  readonly category?: string;
+  readonly description: string;
   /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
   readonly configTarget?: 'global' | 'workspace' | 'local';
   /**
@@ -119,7 +117,6 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = {
   title: 'Agents at once',
   description:
     "Maximum number of agents one task may run at once in the background; a script's agent() calls also run at most this many at once. 0 (the default) sizes it to this machine's CPU count. Agents beyond the budget wait for a slot to free.",
-  category: 'agents',
 } as const satisfies SettingRow<number>;
 
 /**
@@ -137,7 +134,6 @@ export const GOAL_MAX_COST_SETTING = {
   title: 'Goal spend cap (USD)',
   description:
     'Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key).',
-  category: 'tools',
 } as const satisfies SettingRow<number>;
 
 /**
@@ -154,6 +150,7 @@ export const GOAL_STRATEGY_SETTING = {
     Schema.isPattern(/^builtIn:[A-Za-z0-9_-]+$/),
   ).pipe(Schema.withDecodingDefault(Effect.succeed('builtIn:goal'))),
   configTarget: 'global',
+  title: 'Goal strategy',
   description:
     "The script module a plan run as a goal runs, by its import specifier (`builtIn:<module>`): its `goal(objective, { maxCostUsd })` export decides the rounds, what context each starts from and when to stop, and resolves to the goal's result. Defaults to the goal plugin's own module.",
 } as const satisfies SettingRow<string>;
@@ -174,7 +171,6 @@ export const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING = {
   title: 'Server-side conversation state',
   description:
     "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
-  category: 'model',
 } as const satisfies SettingRow<boolean>;
 
 export const GOOGLE_BACKGROUND_RESPONSES_SETTING = {
@@ -184,6 +180,7 @@ export const GOOGLE_BACKGROUND_RESPONSES_SETTING = {
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
   configTarget: 'global',
+  title: 'Google background responses',
   description:
     'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
 } as const satisfies SettingRow<boolean>;
@@ -198,7 +195,6 @@ export const OPENAI_FAST_TIER_SETTING = {
   title: 'Fast mode',
   description:
     "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect.",
-  category: 'model',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -217,7 +213,6 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = {
   title: 'Compaction threshold',
   description:
     "When the conversation reaches this percentage of the model's context limit, earlier messages are summarized automatically to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
-  category: 'model',
 } as const satisfies SettingRow<number>;
 
 /** The number of automatic retries after the initial model request. */
@@ -230,7 +225,6 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
   title: 'Automatic retries',
   description:
     'Additional automatic retries after the initial model request (0–5). A resumed request keeps the retries it already used.',
-  category: 'model',
 } as const satisfies SettingRow<number>;
 
 export const CHATGPT_PREFER_SUBSCRIPTION_SETTING = {
@@ -239,6 +233,7 @@ export const CHATGPT_PREFER_SUBSCRIPTION_SETTING = {
   schema: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
+  title: 'Prefer the ChatGPT subscription',
   description:
     'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing takes the input window the Codex backend grants each model; use chatgptCodex.contextWindowK to override it.',
 } as const satisfies SettingRow<boolean>;
@@ -263,7 +258,6 @@ export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = {
   title: 'Subscription input token budget (K tokens)',
   description:
     "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it (500 for GPT-6.1 Sol, 272 for the others); a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
-  category: 'model',
 } as const satisfies SettingRow<number | null>;
 
 export const XAI_PREFER_SUBSCRIPTION_SETTING = {
@@ -272,6 +266,7 @@ export const XAI_PREFER_SUBSCRIPTION_SETTING = {
   schema: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
+  title: 'Prefer the Grok subscription',
   description:
     'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
 } as const satisfies SettingRow<boolean>;
@@ -282,6 +277,7 @@ export const MAX_IMAGE_DIMENSION_SETTING = {
   schema: Schema.Int.check(
     Schema.isBetween({ minimum: 100, maximum: 10_000 }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed(2000))),
+  title: 'Maximum image size (px)',
   description:
     'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
 } as const satisfies SettingRow<number>;
@@ -297,6 +293,7 @@ export const GIT_COMMITS_TO_SHOW_SETTING = {
   schema: Schema.Int.check(
     Schema.isBetween({ minimum: 1, maximum: 1000 }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed(20))),
+  title: 'Commits to show',
   description:
     'Number of recent commits to show in the commit selection dropdown',
 } as const satisfies SettingRow<number>;
@@ -305,6 +302,7 @@ export const SOX_PATH_SETTING = {
   key: 'audio.soxPath',
   slot: 'config',
   schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  title: 'SoX path',
   description: 'Path to the SoX executable. Overrides automatic detection.',
 } as const satisfies SettingRow<string>;
 
@@ -320,6 +318,7 @@ export const DEBUG_MODE_SETTING = {
   schema: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
+  title: 'Verbose transcript',
   description:
     "Show the transcript's verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view's own level filter, the desktop log file, the CLI's --verbose/--quiet).",
 } as const satisfies SettingRow<boolean>;
@@ -330,6 +329,7 @@ export const SAVE_MODEL_IO_SETTING = {
   schema: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
+  title: 'Save model requests and responses',
   description:
     'Save what is sent to and received from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
 } as const satisfies SettingRow<boolean>;
@@ -344,7 +344,6 @@ export const AGENT_SKILLS_ENABLED_SETTING = {
   title: 'Enable skills for agents',
   description:
     'Expose enabled built-in and imported skills to agent prompts. Skills are off by default.',
-  category: 'tools',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -363,7 +362,6 @@ export const APPROVAL_POLICY_SETTING = {
   title: 'Approval policy',
   description:
     'Whether agents ask before running shell commands and editing files.',
-  category: 'tools',
   configTarget: 'local',
   enumLabels: ['Block', 'Ask', 'Auto-approve'],
 } as const satisfies SettingRow<typeof ApprovalPolicySchema.Type>;
@@ -376,7 +374,6 @@ export const DISABLED_SKILLS_SETTING = {
   ),
   title: 'Skills',
   description: 'Enable or disable individual skills in this workspace.',
-  category: 'tools',
 } as const satisfies SettingRow<readonly string[]>;
 
 export const DISABLED_SKILL_SOURCES_SETTING = {
@@ -387,7 +384,6 @@ export const DISABLED_SKILL_SOURCES_SETTING = {
   ),
   title: 'Skill sources',
   description: 'Enable or disable skill source groups in this workspace.',
-  category: 'tools',
 } as const satisfies SettingRow<
   readonly (typeof ActiveSkillSourceScopeSchema.Type)[]
 >;
@@ -405,7 +401,6 @@ export const GIT_MARK_COMMITS_SETTING = {
   title: 'Mark agent commits',
   description:
     'Attribute agent-authored git commits to the agent commit author so they are distinguishable from your own commits.',
-  category: 'git',
 } as const satisfies SettingRow<boolean>;
 
 export const GIT_AUTHOR_NAME_SETTING = {
@@ -419,7 +414,6 @@ export const GIT_AUTHOR_NAME_SETTING = {
   title: 'Agent commit author',
   description:
     'Author and committer name used for agent-authored commits when commit marking is enabled.',
-  category: 'git',
 } as const satisfies SettingRow<string>;
 
 export const GIT_AUTHOR_EMAIL_SETTING = {
@@ -433,7 +427,6 @@ export const GIT_AUTHOR_EMAIL_SETTING = {
   title: 'Agent commit email',
   description:
     'Author and committer email used for agent-authored commits when commit marking is enabled.',
-  category: 'git',
 } as const satisfies SettingRow<string>;
 
 export const GIT_WORKTREE_SUPPORT_SETTING = {
@@ -445,7 +438,6 @@ export const GIT_WORKTREE_SUPPORT_SETTING = {
   title: 'Subagent worktrees',
   description:
     'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
-  category: 'git',
 } as const satisfies SettingRow<boolean>;
 
 // --- Agent coordination ---------------------------------------------
@@ -460,7 +452,6 @@ export const ALLOW_ORCHESTRATOR_KILL_SETTING = {
   title: 'Let a task stop its agents',
   description:
     'Allow a task to stop the agents it started once they are no longer needed.',
-  category: 'agents',
 } as const satisfies SettingRow<boolean>;
 
 export const DETACH_SUBAGENTS_ON_STOP_SETTING = {
@@ -471,7 +462,6 @@ export const DETACH_SUBAGENTS_ON_STOP_SETTING = {
   ),
   title: 'Keep agents running',
   description: "Let a task's agents continue when the task is stopped.",
-  category: 'agents',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -484,7 +474,6 @@ export const MEMORY_ENABLED_SETTING = {
   schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   title: 'Enable memory for chat agents',
   description: 'Remember useful details across chat sessions.',
-  category: 'tools',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -503,7 +492,6 @@ export const SCRIPT_ONLY_SETTING = {
   title: 'Script-only tools',
   description:
     'Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Off by default while the comparison against direct tool calls runs.',
-  category: 'agents',
 } as const satisfies SettingRow<boolean>;
 
 /** The OpenAI WebSocket transport (experimental). */
@@ -516,7 +504,6 @@ export const WEBSOCKET_OPENAI_SETTING = {
   title: 'OpenAI WebSocket',
   description:
     'EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default.',
-  category: 'model',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -531,7 +518,6 @@ export const HELPER_MODEL_SETTING = {
   title: 'Helper model',
   description:
     "Model used for auxiliary tasks: instruction polishing, merges, and session descriptions. When unset, a run's helper calls use the run's own model.",
-  category: 'model',
 } as const satisfies SettingRow<string | undefined>;
 
 export const KIMI_CODE_PREFER_SETTING = {
@@ -543,7 +529,6 @@ export const KIMI_CODE_PREFER_SETTING = {
   title: 'Kimi Code subscription',
   description:
     'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-  category: 'model',
 } as const satisfies SettingRow<boolean>;
 
 export const GLM_CODING_PLAN_SETTING = {
@@ -555,7 +540,6 @@ export const GLM_CODING_PLAN_SETTING = {
   title: 'GLM Coding Plan',
   description:
     'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
-  category: 'model',
 } as const satisfies SettingRow<boolean>;
 
 /**
@@ -569,7 +553,6 @@ export const TOOL_PATH_PROTECTION_SETTING = {
   title: 'Restrict tool paths to the working directory',
   description:
     'Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths.',
-  category: 'tools',
 } as const satisfies SettingRow<boolean>;
 
 // ============================================================================
@@ -614,6 +597,10 @@ const HARNESS_SETTINGS = [
   DISABLED_SKILL_SOURCES_SETTING,
   TOOL_PATH_PROTECTION_SETTING,
 ] as const satisfies readonly SettingRow[];
+
+/** The key of each of the harness's rows: what an app's table of where it
+ *  shows them is total over. */
+export type HarnessRowKey = (typeof HARNESS_SETTINGS)[number]['key'];
 
 /** One settings catalog: its rows and the lookups the stores read from them. */
 export interface SettingsCatalog {

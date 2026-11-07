@@ -14,11 +14,15 @@ import { useState } from 'react';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { settingEnumOptions } from '@texra/shared/settingsView/settingRows';
-import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
+import type {
+  SettingCategory,
+  TexraSettingRow,
+} from '@texra/shared/settingsView/settingSurfaces';
 
 import {
   buildConfigCategoryItems,
   configCategoryLabel,
+  isSettingCategory,
 } from './configCategories';
 import { FormFrame } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
@@ -111,10 +115,6 @@ function formatSettingValue(value: unknown): string {
   return String(value);
 }
 
-function settingDisplayName(entry: TexraSettingRow): string {
-  return entry.title ?? entry.key;
-}
-
 function buildConfigListItems(
   entries: readonly TexraSettingRow[],
   readValue: (entry: TexraSettingRow) => unknown,
@@ -126,7 +126,7 @@ function buildConfigListItems(
     const suffix = kind === 'readonly' ? ' · read-only' : '';
     return {
       value: entry.key,
-      label: settingDisplayName(entry),
+      label: entry.title,
       description: `${valueText} · ${entry.slot}${suffix}`,
       disabled: kind === 'readonly',
     };
@@ -175,17 +175,17 @@ interface ConfigFormProps {
 type ConfigFormMode =
   | { readonly kind: 'categories' }
   | { readonly kind: 'linked-form'; readonly name: string }
-  | { readonly kind: 'list'; readonly category: string }
+  | { readonly kind: 'list'; readonly category: SettingCategory }
   | {
       readonly kind: 'enum';
       readonly entry: TexraSettingRow;
-      readonly category: string;
+      readonly category: SettingCategory;
     }
   | {
       readonly kind: 'text';
       readonly entry: TexraSettingRow;
       readonly isNumber: boolean;
-      readonly category: string;
+      readonly category: SettingCategory;
     };
 
 export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
@@ -258,7 +258,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     const current = effective(entry);
     return (
       <ListForm
-        title={`/config · ${settingDisplayName(entry)}`}
+        title={`/config · ${entry.title}`}
         availableRows={props.availableRows}
         items={buildEnumItems(entry)}
         activeValue={typeof current === 'string' ? current : undefined}
@@ -280,7 +280,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     return (
       <TextEntryForm
         key={entry.key}
-        title={`/config · ${settingDisplayName(entry)}`}
+        title={`/config · ${entry.title}`}
         initialValue={current == null ? '' : String(current)}
         placeholder={isNumber ? 'enter a number' : 'enter a value'}
         masked={false}
@@ -327,7 +327,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
             });
             return;
           }
-          setMode({ kind: 'list', category });
+          if (isSettingCategory(category)) setMode({ kind: 'list', category });
         }}
         onCancel={props.onClose}
       />

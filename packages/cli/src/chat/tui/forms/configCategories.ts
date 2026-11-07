@@ -1,9 +1,16 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { String as Str } from 'effect';
+import { Schema } from 'effect';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
+import {
+  SettingCategorySchema,
+  type SettingCategory,
+  type TexraSettingRow,
+} from '@texra/shared/settingsView/settingSurfaces';
 
-const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
+/** Whether a picked value names a settings group, not a linked form. */
+export const isSettingCategory = Schema.is(SettingCategorySchema);
+
+const CONFIG_CATEGORY_LABELS: Readonly<Record<SettingCategory, string>> = {
   git: 'Git and worktrees',
   // The `Agents` row above the categories opens the agent library; these two
   // hold what a task's agents may do and the external coding agents' options.
@@ -14,19 +21,17 @@ const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   latex: 'LaTeX',
   latexdiff: 'Latexdiff',
   tools: 'Tools',
+  privacy: 'Privacy',
 };
 
-export function configCategoryLabel(category: string): string {
-  return (
-    CONFIG_CATEGORY_LABELS[category] ??
-    category.split('-').filter(Boolean).map(Str.capitalize).join(' ')
-  );
+export function configCategoryLabel(category: SettingCategory): string {
+  return CONFIG_CATEGORY_LABELS[category];
 }
 
 export function buildConfigCategoryItems(
   entries: readonly TexraSettingRow[],
 ): Array<SelectItem<string>> {
-  const counts = new Map<string, number>();
+  const counts = new Map<SettingCategory, number>();
   for (const entry of entries) {
     counts.set(entry.category, (counts.get(entry.category) ?? 0) + 1);
   }

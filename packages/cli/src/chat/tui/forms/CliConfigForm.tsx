@@ -115,7 +115,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       host: 'cli',
       stores: roots,
     });
-    const label = entry.title ?? entry.key;
+    const label = entry.title;
     switch (result.kind) {
       case 'applied':
         break;

@@ -25,7 +25,6 @@ const endpointRow = <const Id extends string>(id: Id, displayName: string) =>
     schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
     title: `${displayName} endpoint`,
     description: `Custom base URL for ${displayName} API requests. Leave empty to use the default endpoint.`,
-    category: 'model',
     slot: 'globalState',
   }) as const satisfies SettingRow<string> & { readonly id: Id };
 
@@ -60,7 +59,6 @@ export const MOONSHOT_REGION_SETTING = {
   title: 'Kimi/Moonshot China region',
   description:
     'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
-  category: 'model',
   slot: 'globalState',
 } as const satisfies RegionSettingRow;
 
@@ -73,7 +71,6 @@ export const DASHSCOPE_REGION_SETTING = {
   title: 'Qwen China region (Bailian)',
   description:
     'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
-  category: 'model',
   slot: 'globalState',
 } as const satisfies RegionSettingRow;
 
@@ -86,7 +83,6 @@ export const MINIMAX_REGION_SETTING = {
   title: 'MiniMax China region',
   description:
     'Use the China region endpoint (api.minimax.cn) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
-  category: 'model',
   slot: 'globalState',
 } as const satisfies RegionSettingRow;
 
@@ -99,7 +95,6 @@ export const GLM_REGION_SETTING = {
   title: 'GLM China region',
   description:
     'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
-  category: 'model',
   slot: 'globalState',
 } as const satisfies RegionSettingRow;
 

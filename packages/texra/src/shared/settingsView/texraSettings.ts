@@ -75,6 +75,7 @@ export const CLI_AGENT_SETTING = {
   key: 'agent',
   slot: 'config',
   schema: CliAgentSchema,
+  title: 'Default agent',
   description:
     'Agent `texra chat` starts with when neither `--agent` nor `texra.chat.agent` names one.',
 } as const satisfies SettingRow<string | undefined>;
@@ -83,6 +84,7 @@ export const CLI_MODEL_SETTING = {
   key: 'model',
   slot: 'config',
   schema: CliModelSchema,
+  title: 'Default model',
   description:
     'Model every `texra` command starts with when neither `--model`, `TEXRA_MODEL`, nor a per-command default names one. A model this machine cannot run falls back to an available one with a notice.',
 } as const satisfies SettingRow<string | undefined>;
@@ -94,6 +96,7 @@ export const CLI_CHAT_SETTING = {
   schema: Schema.optional(
     Schema.Struct({ agent: CliAgentSchema, model: CliModelSchema }),
   ),
+  title: 'Chat defaults',
   description:
     'Agent and model `texra chat` starts with, overriding the top-level defaults.',
 } as const satisfies SettingRow<
@@ -105,6 +108,7 @@ export const CLI_RUN_SETTING = {
   key: 'run',
   slot: 'config',
   schema: Schema.optional(Schema.Struct({ model: CliModelSchema })),
+  title: 'Run defaults',
   description:
     'Model `texra run` starts with, overriding the top-level `texra.model`.',
 } as const satisfies SettingRow<{ readonly model?: string } | undefined>;
@@ -113,6 +117,7 @@ export const CLI_OUTPUT_FORMAT_SETTING = {
   key: 'outputFormat',
   slot: 'config',
   schema: CliOutputFormatSchema,
+  title: 'Output format',
   description:
     'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
 } as const satisfies SettingRow<typeof CliOutputFormatSchema.Type>;
@@ -121,6 +126,7 @@ export const AUTO_OPEN_FINAL_SETTING = {
   key: 'agentOutputs.autoOpenFinal',
   slot: 'config',
   schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  title: 'Open the final revision',
   description:
     "When a document task completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
 } as const satisfies SettingRow<boolean>;
@@ -129,6 +135,7 @@ export const BIB_DEFAULT_PATH_SETTING = {
   key: 'bib.defaultPath',
   slot: 'config',
   schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  title: 'Default bibliography file',
   description:
     'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
 } as const satisfies SettingRow<string>;
@@ -141,6 +148,7 @@ export const ZOTERO_PORT_SETTING = {
   schema: Schema.Int.check(
     Schema.isBetween({ minimum: 1, maximum: 65_535 }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed(23119))),
+  title: 'Zotero port',
   description:
     'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
 } as const satisfies SettingRow<number>;
@@ -149,6 +157,7 @@ export const LATEXINDENT_CONFIG_SETTING = {
   key: 'latex.latexindentConfig',
   slot: 'config',
   schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  title: 'latexindent configuration file',
   description: 'Path to latexindent configuration file',
 } as const satisfies SettingRow<string>;
 
@@ -156,6 +165,7 @@ export const TEXFMT_CONFIG_SETTING = {
   key: 'latex.texfmtConfig',
   slot: 'config',
   schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  title: 'tex-fmt configuration file',
   description: 'Path to tex-fmt configuration file',
 } as const satisfies SettingRow<string>;
 
@@ -163,6 +173,7 @@ export const TIKZ_INPUT_DIRECTORY_SETTING = {
   key: 'latex.tikzInputDirectory',
   slot: 'config',
   schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  title: 'TikZ input directory',
   description:
     'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
 } as const satisfies SettingRow<string>;
@@ -171,6 +182,7 @@ export const INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING = {
   key: 'latex.includeWorkspaceInTexinputs',
   slot: 'config',
   schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  title: 'Workspace in TEXINPUTS',
   description:
     'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
 } as const satisfies SettingRow<boolean>;
@@ -181,6 +193,7 @@ export const TIKZ_TEMPLATE_SETTING = {
   schema: Schema.String.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIKZ_TEMPLATE)),
   ),
+  title: 'TikZ template',
   description:
     'Template used for generating standalone documents when extracting and compiling TikZ figures',
 } as const satisfies SettingRow<string>;
@@ -191,6 +204,7 @@ export const ENABLED_REPLACEMENTS_SETTING = {
   schema: Schema.Array(Schema.Literals(NON_REGEX_REPLACEMENT_CATEGORIES)).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENABLED_REPLACEMENTS)),
   ),
+  title: 'Cleanup replacements',
   description: 'Enabled groups of direct LaTeX cleanup replacements.',
 } as const satisfies SettingRow<
   readonly (typeof NON_REGEX_REPLACEMENT_CATEGORIES)[number][]
@@ -204,6 +218,7 @@ export const ENABLED_REGEX_REPLACEMENTS_SETTING = {
       Effect.succeed(DEFAULT_ENABLED_REGEX_REPLACEMENTS),
     ),
   ),
+  title: 'Pattern cleanup replacements',
   description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
 } as const satisfies SettingRow<
   readonly (typeof REGEX_REPLACEMENT_CATEGORIES)[number][]
@@ -215,6 +230,7 @@ export const CUSTOM_REGEX_REPLACEMENTS_SETTING = {
   schema: Schema.Record(Schema.String, Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
+  title: 'Custom pattern replacements',
   description: 'Custom regular-expression replacements.',
 } as const satisfies SettingRow<Readonly<Record<string, string>>>;
 
@@ -224,6 +240,7 @@ export const CUSTOM_REPLACEMENTS_SETTING = {
   schema: Schema.Record(Schema.String, Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
+  title: 'Custom replacements',
   description: 'Custom direct text replacements.',
 } as const satisfies SettingRow<Readonly<Record<string, string>>>;
 
@@ -277,8 +294,8 @@ export const INLINE_CRITICISM_SETTING = {
   surfaces: { settingsView: 'latex' },
 } as const satisfies TexraSettingRow<boolean>;
 
-/** TeXRA's rows, its plugins' last, in catalog order. */
-const TEXRA_SETTING_ROWS: readonly (SettingRow | TexraSettingRow)[] = [
+/** TeXRA's rows no TeXRA UI shows, in catalog order. */
+const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
   CLI_AGENT_SETTING,
   CLI_MODEL_SETTING,
   CLI_CHAT_SETTING,
@@ -296,6 +313,10 @@ const TEXRA_SETTING_ROWS: readonly (SettingRow | TexraSettingRow)[] = [
   ENABLED_REGEX_REPLACEMENTS_SETTING,
   CUSTOM_REGEX_REPLACEMENTS_SETTING,
   CUSTOM_REPLACEMENTS_SETTING,
+];
+
+/** TeXRA's rows a TeXRA UI shows, its plugins' last, in catalog order. */
+const TEXRA_PLACED_ROWS: readonly TexraSettingRow[] = [
   TELEMETRY_ENABLED_SETTING,
   LATEX_FORMATTER_SETTING,
   INLINE_CRITICISM_SETTING,
@@ -314,55 +335,25 @@ const DEFAULT_HELPER_MODEL = 'deepseek/deepseek-flash@none';
 /** The catalog every host's config carries: the harness's rows and TeXRA's. */
 const catalog: SettingsCatalog = settingsCatalog({
   namespace: 'texra',
-  rows: TEXRA_SETTING_ROWS,
+  rows: [...TEXRA_UNSHOWN_ROWS, ...TEXRA_PLACED_ROWS],
   defaults: { [HELPER_MODEL_SETTING.key]: DEFAULT_HELPER_MODEL },
 });
 
-function hasOwnSurfaces(row: SettingRow): row is TexraSettingRow {
-  return 'surfaces' in row;
-}
+/** Each harness row's placement, by key. */
+const HARNESS_PLACEMENTS = new Map(Object.entries(HARNESS_ROW_SURFACES));
 
 /**
- * The rows some TeXRA UI renders, in catalog order: a harness row joined with
- * the placement `HARNESS_ROW_SURFACES` gives its key, or a TeXRA row with its
- * own. A placement for a key no row has, a placed row without display copy,
- * and a row with display copy that nothing shows are defects.
+ * The rows some TeXRA UI renders, in catalog order: each harness row with a
+ * placement, as the catalog holds it (an app default applied), joined with
+ * that placement, then TeXRA's placed rows.
  */
-function placeRows(): readonly TexraSettingRow[] {
-  const unmatched = new Set(Object.keys(HARNESS_ROW_SURFACES));
-  const rows = catalog.rows.flatMap((row): TexraSettingRow[] => {
-    const placement = HARNESS_ROW_SURFACES[row.key];
-    unmatched.delete(row.key);
-    if (placement === undefined) {
-      if (hasOwnSurfaces(row)) return [row];
-      if (row.description !== undefined && row.category !== undefined) {
-        throw new Error(
-          `Setting ${row.key} has display copy but no UI shows it.`,
-        );
-      }
-      return [];
-    }
-    if (row.description === undefined || row.category === undefined) {
-      throw new Error(
-        `Setting ${row.key} is shown but has no description or category.`,
-      );
-    }
-    return [
-      {
-        ...row,
-        description: row.description,
-        category: row.category,
-        ...placement,
-      },
-    ];
-  });
-  if (unmatched.size > 0) {
-    throw new Error(`No setting has the key ${[...unmatched].join(', ')}.`);
-  }
-  return rows;
-}
-
-const placedRows = placeRows();
+const placedRows: readonly TexraSettingRow[] = [
+  ...catalog.rows.flatMap((row): TexraSettingRow[] => {
+    const placement = HARNESS_PLACEMENTS.get(row.key);
+    return placement ? [{ ...row, ...placement }] : [];
+  }),
+  ...TEXRA_PLACED_ROWS,
+];
 const placedByKey = new Map(placedRows.map((row) => [row.key, row]));
 
 function isSettingsViewRow(row: TexraSettingRow): row is SettingsViewRow {
@@ -412,7 +403,7 @@ export const TEXRA_SETTINGS = {
           entry,
           surface: {
             ...rest,
-            label: label ?? entry.title ?? entry.key,
+            label: label ?? entry.title,
             description: description ?? entry.description,
           },
         })),

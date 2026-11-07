@@ -58,22 +58,19 @@ export function postStateSetting(key: string, value: StateSettingValue): void {
 export function catalogEnumChoices(
   row: SettingRow,
 ): readonly SettingEnumChoice[] {
-  return settingEnumChoices(titledRow(row)) ?? [];
+  return settingEnumChoices(placedRow(row)) ?? [];
 }
 
 /**
- * The placed row a control renders, with the title every control labels it
- * with. A row with no settings-view placement, or one with no title, is a
- * defect.
+ * The placed row a control renders, as the catalog holds it. A row with no
+ * settings-view placement is a defect: no snapshot would ever reach it.
  */
-function titledRow(row: SettingRow) {
+function placedRow(row: SettingRow) {
   const entry = TEXRA_SETTINGS.settingsViewByKey(row.key);
-  if (!entry?.title) {
-    throw new Error(
-      `Settings-view catalog row "${row.key}" is missing or has no title`,
-    );
+  if (!entry) {
+    throw new Error(`No settings-view catalog row for setting "${row.key}"`);
   }
-  return { ...entry, title: entry.title };
+  return entry;
 }
 
 /**
@@ -87,7 +84,7 @@ export function renderStateSettingToggleRow(
   row: SettingRow<boolean>,
   options: { readonly disabled?: boolean } = {},
 ): TemplateResult {
-  const entry = titledRow(row);
+  const entry = placedRow(row);
   return renderSettingsToggleRow({
     label: entry.title,
     description: entry.description,
@@ -126,7 +123,7 @@ export function renderStateSettingNumberRow(
   row: SettingRow<number | null>,
   options: StateSettingNumberRowOptions = {},
 ): TemplateResult {
-  const entry = titledRow(row);
+  const entry = placedRow(row);
   return renderSettingsNumberRow({
     label: entry.title,
     description: entry.description,
@@ -147,7 +144,7 @@ export function renderStateSettingNumberRow(
 export function renderStateSettingSelectRow(
   row: SettingRow<string>,
 ): TemplateResult {
-  const entry = titledRow(row);
+  const entry = placedRow(row);
   const id = `settings-select-${row.key.replaceAll('.', '-')}`;
   return html`
     <div class="settings-row">

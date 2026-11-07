@@ -241,7 +241,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         requiresOpenWorkspace: bindings.requiresOpenWorkspace,
       });
       if (result.kind === 'ignored') return;
-      const label = result.entry.title ?? result.entry.key;
+      const label = result.entry.title;
       if (result.kind === 'rejected') {
         yield* report(`Invalid value for “${label}”`, result.error);
       } else if (result.kind === 'failed') {
