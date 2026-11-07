@@ -14,7 +14,7 @@ import {
   agentBlockOf,
   errorResult,
   AGENT_TOOL_NAME,
-  buildTemplatePassthrough,
+  TEMPLATE_INPUT_NAMES,
 } from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import { type ToolResult } from '@texra-ai/harness';
@@ -93,14 +93,12 @@ export const taskFileVars = Effect.fn('documents.taskFileVars')(function* (
   agentPath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  // The fixed variables a task's `files` names must not shadow.
-  const fixed = buildTemplatePassthrough();
   const vars: Record<string, string> = {};
   const entries: FileListEntry[] = [];
   for (const [varName, filePath] of Object.entries(task.files)) {
     if (!filePath) continue;
     for (const generated of [`${varName}_FILE`, `${varName}_CONTENT`])
-      if (generated in fixed)
+      if (TEMPLATE_INPUT_NAMES.includes(generated))
         return yield* Effect.fail(
           new Error(
             `task.files name "${varName}" generates "${generated}", which collides with a fixed template variable. Rename the variable.`,

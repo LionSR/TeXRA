@@ -167,7 +167,7 @@ interface AgentCatalogShape {
 ## AgentCustomization
 
 A change to a custom copy of a bundled agent: `copy` writes a new one
-into the custom directory, stamped with the bundled file's digest
+into the custom directory, with the files its blocks bind beside it, stamped with the bundled file's digest
 (`basedOn`), and is refused when one is there; `overwrite` replaces it;
 `keep` re-stamps the user's copy with the changed bundled version, which
 dismisses its newer-version notice and touches nothing else.
@@ -179,8 +179,8 @@ type AgentCustomization = 'copy' | 'overwrite' | 'keep';
 ## AgentCustomizeRefused
 
 `customize` refused the change: the entry has no file of its own to copy
-(`noFile`), its copy would land outside the custom directory (`escapes`),
-a copy is already there (`exists`, at `path`), or a copy has no newer
+(`noFile`), its copy would land outside the custom directory or a file it
+binds lies outside its own directory (`escapes`), a copy is already there (`exists`, at `path`), or a copy has no newer
 bundled version to keep (`current`).
 
 ```ts
@@ -332,7 +332,8 @@ interface AgentEntry {
   path: string; // absolute path to the definition file
   description?: string;
   tools?: string[]; // tool names, for display
-  /** Digest of the definition file; absent on a plugin agent. */
+  /** Digest of the definition file and the files its blocks bind; absent
+   *  on a plugin agent. */
   digest?: string;
   /** A customized copy's `basedOn`: the bundled file's digest it began from. */
   basedOn?: string;

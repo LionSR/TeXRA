@@ -29,8 +29,7 @@ import { formatUnknownTeamMessage } from '@texra/shared/teamLaunch';
 import { applyTeam } from '@texra/shared/teamPlan';
 import {
   AGENT_TEMPLATE_FILES,
-  DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
-  renderAgentTemplateString,
+  agentFileFromTemplate,
 } from '@texra/agent/templates/agentTemplateRenderer';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
@@ -58,7 +57,7 @@ function validateTemplateAgentName(value: string): string | null {
 }
 
 /**
- * Render a template agent into its file, refusing to overwrite an existing
+ * Write a template agent into its file, refusing to overwrite an existing
  * file. `resourcesRoot` is the packaged `…/resources` directory that holds
  * `templates/<kind>.yaml`.
  */
@@ -92,11 +91,7 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
     );
     yield* fs.writeFileString(
       filePath,
-      renderAgentTemplateString(raw, {
-        AGENT_NAME: baseName,
-        DESCRIPTION: description,
-        TOOLS_YAML: DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
-      }),
+      agentFileFromTemplate(raw, { name: baseName, description }),
     );
     return { ok: true, filePath } as const;
   },

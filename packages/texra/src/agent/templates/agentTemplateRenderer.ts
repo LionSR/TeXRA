@@ -1,6 +1,5 @@
-import nunjucks from 'nunjucks';
-
-import { buildTemplatePassthrough } from '@texra-ai/harness/plugins';
+// Third-party imports
+import { parseDocument } from 'yaml';
 
 type AgentTemplateKind = 'toolUse' | 'workflowSingle';
 
@@ -9,40 +8,22 @@ export const AGENT_TEMPLATE_FILES: Record<AgentTemplateKind, string> = {
   workflowSingle: 'agentTemplate-workflowSingle.yaml',
 };
 
-// No loaders (`[]`, not `null`, which gets nunjucks' default `views/`
-// loader): this environment renders only in-memory template strings, and an
-// `{% include %}` fails as "template not found". Autoescape off: the output
-// is agent YAML, not HTML.
-const env = new nunjucks.Environment([], { autoescape: false });
-
-// Frozen so the shared module-level instance can't be mutated even if a
-// caller forgets to spread it before passing to nunjucks.renderString.
-const PASSTHROUGH = buildTemplatePassthrough();
-
-export const DEFAULT_AGENT_TEMPLATE_TOOLS_YAML = [
-  'bash',
-  'read_file',
-  'write_file',
-  'edit_file',
-  'glob',
-  'grep',
-]
-  .map((tool) => `  - ${tool}`)
-  .join('\n');
-
 /**
- * Render a template string with agent-runtime-token passthrough applied.
- *
- * Callers pass their own render variables on top of the passthrough so tokens
- * like `{{ INSTRUCTION }}` that the generated agent expects at runtime survive
- * this render step. Any caller-provided vars win over the passthrough defaults.
+ * The agent file a bundled template creates: the template, itself a valid
+ * agent file, with its `name` and `description` replaced. The template is
+ * edited as YAML data, never rendered, so its prompt and task templates reach
+ * the run untouched and render once, when the agent runs. Comments and block
+ * scalars are kept as written.
  */
-export function renderAgentTemplateString(
-  templateString: string,
-  vars: Record<string, unknown>,
+export function agentFileFromTemplate(
+  templateYaml: string,
+  fields: { readonly name: string; readonly description: string },
 ): string {
-  return env.renderString(templateString, {
-    ...PASSTHROUGH,
-    ...vars,
-  });
+  const document = parseDocument(templateYaml);
+  // A bundled template that does not parse is a packaging defect.
+  const [error] = document.errors;
+  if (error) throw error;
+  document.set('name', fields.name);
+  document.set('description', fields.description);
+  return document.toString();
 }

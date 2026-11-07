@@ -21,7 +21,7 @@ import {
 } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { AgentSource } from '@shared/schemas';
-import type { ToolRegistry } from '@tools/toolTable';
+import { ToolRegistry, boundFiles } from '@tools/toolTable';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -296,8 +296,8 @@ export function agentSourceRoots(
 
 /**
  * `customize` refused the change: the entry has no file of its own to copy
- * (`noFile`), its copy would land outside the custom directory (`escapes`),
- * a copy is already there (`exists`, at `path`), or a copy has no newer
+ * (`noFile`), its copy would land outside the custom directory or a file it
+ * binds lies outside its own directory (`escapes`), a copy is already there (`exists`, at `path`), or a copy has no newer
  * bundled version to keep (`current`).
  */
 export class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefused>()(
@@ -311,7 +311,7 @@ export class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefu
 
 /**
  * A change to a custom copy of a bundled agent: `copy` writes a new one
- * into the custom directory, stamped with the bundled file's digest
+ * into the custom directory, with the files its blocks bind beside it, stamped with the bundled file's digest
  * (`basedOn`), and is refused when one is there; `overwrite` replaces it;
  * `keep` re-stamps the user's copy with the changed bundled version, which
  * dismisses its newer-version notice and touches nothing else.
@@ -383,13 +383,37 @@ export const customizeCopy = Effect.fn('customizeCopy')(function* (
       reason: 'escapes',
       message: 'Refusing to copy: target escapes the custom agents directory.',
     });
-  const fs = yield* FileSystem.FileSystem;
-  if (change === 'copy' && (yield* fs.exists(target)))
+  // The files the agent's blocks bind are part of it: a copy carries them
+  // from beside the original to beside itself. A `keep` re-stamps only.
+  const { blocks } = yield* ToolRegistry;
+  const fromDir = path.dirname(entry.path);
+  const bound =
+    change === 'keep'
+      ? []
+      : boundFiles(entry.blocks, blocks).map((file) => ({
+          from: path.resolve(fromDir, file),
+          to: path.resolve(path.dirname(target), file),
+        }));
+  const escaping = bound.find(({ from }) => !isStrictlyWithin(fromDir, from));
+  if (escaping)
     return yield* new AgentCustomizeRefused({
-      reason: 'exists',
-      path: target,
-      message: `A custom copy already exists: ${target}`,
+      reason: 'escapes',
+      path: escaping.from,
+      message: `Refusing to copy: ${escaping.from}, a file the agent binds, is outside its directory.`,
     });
+  const fs = yield* FileSystem.FileSystem;
+  if (change === 'copy')
+    for (const to of [target, ...bound.map((file) => file.to)])
+      if (yield* fs.exists(to))
+        return yield* new AgentCustomizeRefused({
+          reason: 'exists',
+          path: to,
+          message: `A custom copy already exists: ${to}`,
+        });
+  for (const { from, to } of bound) {
+    yield* fs.makeDirectory(path.dirname(to), { recursive: true });
+    yield* fs.copyFile(from, to);
+  }
   yield* writeStampedCopy(entry.path, target, base.digest);
   return target;
 });

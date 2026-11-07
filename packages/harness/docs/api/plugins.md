@@ -62,6 +62,10 @@ interface AgentBlock<A = unknown, R = unknown> {
   readonly schema: Schema.Codec<A, unknown>;
   /** How a run of this block's recipe reads to whoever launched it. */
   readonly result?: AgentBlockResult<R>;
+  /** The files the block binds, relative to its agent file: part of the
+   *  agent, so a customized copy carries them and the file's digest covers
+   *  them. */
+  files?(block: A): readonly string[];
 }
 ```
 
@@ -246,20 +250,6 @@ interface BuildFileAttachmentOptions {
    */
   resolved?: ToolPathResolution;
 }
-```
-
-## buildTemplatePassthrough
-
-Render the fixed runtime template variables as literal `{{ TOKEN }}` text.
-
-Agent-creation templates render once when a YAML file is produced, then the
-generated agent renders again at runtime. These tokens must pass through the
-creation render literally so the runtime render can substitute them later.
-A plugin's own variables are not in this fixed list; `throwOnUndefined`
-stays disabled, so a template tolerates their absence.
-
-```ts
-function buildTemplatePassthrough(): Readonly<Record<string, string>>
 ```
 
 ## CALL_FIELDS
@@ -1692,6 +1682,16 @@ type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued' }
   | { status: 'failed'; reason: FollowUpFailureReason };
+```
+
+## TEMPLATE_INPUT_NAMES
+
+The names of the fixed template variables, the keys of
+{@link TemplateInputsSchema}. A plugin that adds variables of its own
+checks them against this list, so none shadows a fixed one.
+
+```ts
+const TEMPLATE_INPUT_NAMES: readonly string[]
 ```
 
 ## TemplateInputs

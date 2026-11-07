@@ -1,10 +1,8 @@
-name: {{ AGENT_NAME }}
-description: '{{ DESCRIPTION | replace("'", "''") }}'
+name: new_document_task
+description: New document task
 temperature: 0.1
 
 prompt: |
-  {{ DESCRIPTION }}
-
   You are operating inside **TeXRA**, a VS Code extension that orchestrates
   AI agents using YAML files. TeXRA loads selected documents and injects them
   into these prompts; each request is one revision, and each revision
@@ -30,12 +28,12 @@ task:
     {{ ALL_INPUTS }}
     </documents>
 
-    {% raw %}{% if INSTRUCTION %}{% endraw %}
+    {% if INSTRUCTION %}
     Instruction to follow:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    {% raw %}{% endif %}{% endraw %}
+    {% endif %}
 
   requests:
     - |
