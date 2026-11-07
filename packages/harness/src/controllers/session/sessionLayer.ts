@@ -290,13 +290,6 @@ const closeSession = (root: string) =>
  *  host's own ports; what every host builds the same way (the process
  *  identity, the global root's database) has a default. */
 export interface ProcessServicesOptions {
-  /** The process-start read the process identity is derived from, once per
-   *  process: absent, this Node process's own (`nodeProcesses.selfIdentity`). */
-  readonly processStart?: Effect.Effect<
-    string | undefined,
-    never,
-    ProcessProbe
-  >;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
   /** The config's catalog: the state stores key rows under its namespace. */
@@ -324,8 +317,9 @@ export interface ProcessServicesOptions {
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
-  /** The dependency probes every tool gate and Tools dashboard read: absent,
-   *  every host's; a test harness passes one that starts no probe. */
+  /** The dependency probes every tool gate and Tools dashboard read. Hosts
+   *  leave it absent; only the repository's test kernel passes one, which
+   *  starts no probe, so a suite does not see what the machine installed. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;
   /** The host's usage layer owns its version-stamped sender and final drain,
    *  so this composition does not reach into telemetry. Absent,
@@ -359,7 +353,6 @@ export interface ProcessServicesOptions {
  *  (one session per storage root), which the public `processLayer` serves
  *  its `Sessions` over. */
 export function ownerProcessLayer({
-  processStart = nodeProcesses.selfIdentity(),
   storageRoot,
   settings,
   plugins,
@@ -378,7 +371,9 @@ export function ownerProcessLayer({
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.unwrap(
-    Effect.map(processStart, (s) => ProcessIdentity.layer(processOwnerId(s))),
+    Effect.map(nodeProcesses.selfIdentity(), (s) =>
+      ProcessIdentity.layer(processOwnerId(s)),
+    ),
   );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
   const globalDatabase = (
