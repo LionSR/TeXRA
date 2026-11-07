@@ -74,7 +74,10 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
 > {
   const usageLog = yield* UsageLog;
   const gate = yield* RouteRetries;
-  const retries = call.retries ?? (yield* call.binding).automaticRetries;
+  // The binding the latest attempt went out on: a renewal names that one,
+  // not a replacement the run may have bound since.
+  let sent = yield* call.binding;
+  const retries = call.retries ?? sent.automaticRetries;
   let resent = 0;
   let renewed = false;
   const attempt = Effect.fn('modelCall.attempt')(function* (bound: BoundModel) {
@@ -93,27 +96,27 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     yield* reportUsage(usageLog, bound, usage, call.attribution, call.settings);
     return { turn, usage };
   });
-  return yield* Effect.flatMap(call.binding, (bound) =>
-    gate.withRoutes(bound.routes, {
+  return yield* Effect.flatMap(call.binding, (bound) => {
+    sent = bound;
+    return gate.withRoutes(bound.routes, {
       baseBackoffMs: RETRY_BACKOFF_MS,
       onWait: (delayMs) =>
         call.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
-    })(attempt(bound)),
-  ).pipe(
+    })(attempt(bound));
+  }).pipe(
     Effect.retry({
       while: (error: CallFailure | Error) =>
         Effect.gen(function* () {
           if (!(error instanceof ModelError)) return false;
-          const bound = yield* call.binding;
           if (
             !renewed &&
             error.kind === 'authentication' &&
-            bound.subscriptionToken !== undefined
+            sent.subscriptionToken !== undefined
           ) {
             // A renewed token's resend pauses and spends a retry, as a
             // turn's does.
             renewed = true;
-            yield* call.renew(bound);
+            yield* call.renew(sent);
           } else if (!error.retryable || resent >= retries) return false;
           resent += 1;
           const delayMs = pauseOf(error);
