@@ -2,10 +2,11 @@
  * The store's projections:
  * the display and listing tables no row stores, each maintained by a pure
  * projector over decoded events. Their upkeep runs the projectors in
- * `Database`'s append transaction, making the writes they return; before a
- * read it rebuilds a projection whose stored version is not this build's and
- * catches up one that is behind (`projection_state`). Projections are never
- * migrated: a new version rebuilds from the rows.
+ * `Database`'s append transaction, making the writes they return; when the
+ * store opens it rebuilds a projection whose stored version is not this
+ * build's and catches up one that is behind (`projection_state`), so every
+ * read finds them current. Projections are never migrated: a new version
+ * rebuilds from the rows.
  *
  * - `listing`: per aggregate and listing key (`listingKeyOf`), the row a cold
  *   listing delivers; an open request and a queued follow-up are keys of
@@ -279,13 +280,6 @@ export function projectionUpkeep<E>(
       ),
     );
   return {
-    /** Whether every projection is current through `top`. */
-    current: (top: number) =>
-      Effect.map(states, (current) =>
-        PROJECTION_NAMES.every((name) =>
-          isCurrent(name, current.get(name), top),
-        ),
-      ),
     /** One catch-up step: a projection another build versioned is emptied
      *  and rebuilt; one behind `top` reads up to 1,000 rows on. Whether
      *  every projection reached `top`. */
@@ -328,19 +322,15 @@ export function projectionUpkeep<E>(
       }
       return all;
     }),
-    /** A batch committed after `before`: a projection current through
-     *  `before` follows it; any other catches up on its owner's next read. */
+    /** A batch just appended: every projection, caught up at open, follows
+     *  it. */
     follow: Effect.fn('projections.follow')(function* (
       events: readonly SessionRow[],
-      before: number,
     ) {
-      const through = events.at(-1)?.commit ?? before;
-      const current = yield* states;
-      const following = PROJECTION_NAMES.filter((name) =>
-        isCurrent(name, current.get(name), before),
-      );
-      yield* project(events, following);
-      for (const name of following) yield* setState(name, through);
+      const through = events.at(-1)?.commit;
+      if (through === undefined) return;
+      yield* project(events, PROJECTION_NAMES);
+      for (const name of PROJECTION_NAMES) yield* setState(name, through);
     }),
   };
 }

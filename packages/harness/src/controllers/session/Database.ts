@@ -95,9 +95,8 @@ export const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
-/** The open transaction's mode, null outside one; `derive` (projection
- *  catch-up) takes the write lock and wakes no reader. */
-const TxMode = Context.Reference<'read' | 'write' | 'derive' | null>(
+/** The open transaction's mode, null outside one. */
+const TxMode = Context.Reference<'read' | 'write' | null>(
   '@texra-ai/harness/session/TxMode',
   { defaultValue: () => null },
 );
@@ -458,10 +457,7 @@ export const databaseLayer = (
       // Every body is database-only. A busy lock (the global store's other
       // writers) runs the body again whole. In a caller's transaction a body
       // is a savepoint.
-      const own = <A, E>(
-        txMode: 'read' | 'write' | 'derive',
-        body: Effect.Effect<A, E>,
-      ) =>
+      const own = <A, E>(txMode: 'read' | 'write', body: Effect.Effect<A, E>) =>
         Effect.flatMap(TxMode, (outer) =>
           outer !== null
             ? withTransaction(body)
@@ -474,7 +470,7 @@ export const databaseLayer = (
               ).pipe(Effect.provideService(TxMode, txMode)),
         );
       const transaction = <A, E, EBody>(
-        mode: 'read' | 'write' | 'derive',
+        mode: 'read' | 'write',
         body: Effect.Effect<A, EBody>,
         failed: (cause: unknown) => E,
       ) => own(mode, body).pipe(mapDatabaseFailure(failed));
@@ -532,35 +528,13 @@ export const databaseLayer = (
         return yield* new DatabaseAggregateClosed({ aggregateId: id });
       });
       const upkeep = projectionUpkeep(exec, reader.read, path);
-      /** A read of the projections, in the same read transaction as the
-       *  check that they are current, so another build's rebuild never hands
-       *  it a half-built one; a stale one catches up, a transaction a step,
-       *  and the read runs again. */
-      const projected = Effect.fn('projected')(function* <A, E>(
-        read: Effect.Effect<A, E>,
-      ) {
-        for (;;) {
-          const result = yield* transaction(
-            'read',
-            Effect.gen(function* () {
-              if (!(yield* upkeep.current(yield* currentCommit))) return null;
-              return { value: yield* read };
-            }),
-            readFailed,
-          );
-          if (result !== null) return result.value;
-          yield* transaction(
-            'derive',
-            Effect.flatMap(currentCommit, upkeep.catchUp),
-            readFailed,
-          ).pipe(Effect.repeat({ until: (done) => done }));
-        }
-      });
+      /** A read of several statements, as one snapshot. */
+      const snapshot = <A, E>(read: Effect.Effect<A, E>) =>
+        transaction('read', read, readFailed);
       const appendRows = Effect.fn('appendRows')(function* (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
       ) {
-        const before = yield* currentCommit;
         const committed = yield* Effect.forEach(prepared, ({ draft, row }) =>
           appendRow(draft, row, at),
         );
@@ -574,7 +548,7 @@ export const databaseLayer = (
         );
         for (const [type, version] of kinds)
           yield* exec(UPSERT_KIND, [type, version]);
-        yield* upkeep.follow(committed, before);
+        yield* upkeep.follow(committed);
         return committed;
       });
       const appendRow = Effect.fn('appendRow')(function* (
@@ -719,6 +693,14 @@ export const databaseLayer = (
           at,
         };
       });
+      // Every projection is caught up here, before the first read: from then
+      // on this process is the store's one writer (the global store holds no
+      // event rows), and each append keeps them current (`follow`).
+      yield* transaction(
+        'write',
+        Effect.flatMap(currentCommit, upkeep.catchUp),
+        openFailed,
+      ).pipe(Effect.repeat({ until: (done) => done }));
       return {
         observedCommit,
         movedAside,
@@ -728,7 +710,7 @@ export const databaseLayer = (
           // Pages are separate snapshots: a deletion marker seen stays in view.
           const tombstones = new Map<number, SessionRow>();
           return Stream.paginate(fromCommit, (from) =>
-            projected(
+            snapshot(
               Effect.gen(function* () {
                 const top = yield* currentCommit;
                 const end = yield* top - from > DISPLAY_PAGE_ROWS
@@ -758,10 +740,10 @@ export const databaseLayer = (
             ),
           );
         },
-        readListing: () => projected(decodedRows(READ_LISTING, [])),
+        readListing: () => query(decodedRows(READ_LISTING, [])),
         readBlobs: (digests) => query(reader.blobs(digests)),
         readRunRecords: (id) =>
-          projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id), true)),
+          query(decodedRows(READ_RUN_RECORDS, aggregateColumns(id), true)),
         ...currentValues({
           exec,
           execOne,
@@ -781,7 +763,7 @@ export const databaseLayer = (
             ),
           ),
         readDisplayAggregate: (id, fromSeq) =>
-          projected(
+          query(
             decodedRows(displayAggregate, [
               DISPLAY_READ_TYPES,
               ...aggregateColumns(id),
@@ -790,7 +772,7 @@ export const databaseLayer = (
           ),
         aggregateState: (ids) => query(readState(ids)),
         readInputBatch: (ids, fromCommit, checkedIds, since) =>
-          projected(
+          snapshot(
             Effect.gen(function* () {
               const cursor = yield* currentCommit;
               const changed =

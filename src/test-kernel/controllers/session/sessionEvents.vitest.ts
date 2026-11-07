@@ -794,6 +794,7 @@ describe('the session event table and its one publisher', () => {
       return Effect.gen(function* () {
         const db = yield* Database;
         const now = yield* Clock.currentTimeMillis;
+        const opened = yield* SubscriptionRef.get(db.level);
         const first = yield* db.appendAll([runStart, olderStart, waiting]);
         const second = yield* db.appendAll([requested]);
 
@@ -811,7 +812,7 @@ describe('the session event table and its one publisher', () => {
           true,
         );
         // One wake per committed batch, independent of its event ordinal.
-        expect(yield* SubscriptionRef.get(db.level)).toBe(2);
+        expect(yield* SubscriptionRef.get(db.level)).toBe(opened + 2);
         expect(yield* db.currentCommit).toBe(4);
         // A run begins with exactly one `run.start` (decision 9): a second
         // creation of a live run is refused, and the sequence it allocated
@@ -821,7 +822,7 @@ describe('the session event table and its one publisher', () => {
         );
         expect((yield* db.appendAll([waiting]))[0]?.seq).toBe(4);
         expect(yield* db.currentCommit).toBe(5);
-        expect(yield* SubscriptionRef.get(db.level)).toBe(3);
+        expect(yield* SubscriptionRef.get(db.level)).toBe(opened + 3);
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
