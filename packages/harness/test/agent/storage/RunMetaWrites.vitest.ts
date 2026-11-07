@@ -25,7 +25,7 @@ const startedSession = Effect.gen(function* () {
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'run metadata updates',
   (it) => {
-    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+    it.layer(FakeHost.layer({ workspaceRoot: '/workspace' }), {
       buildPerTest: true,
     })((it) => {
       it.effect(

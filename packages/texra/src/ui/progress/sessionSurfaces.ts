@@ -4,7 +4,7 @@
  * responses land back on the surface (a follow-up rejected keeps its
  * draft, a picker returns its paths, a polish its text). The sidebar and
  * the editor tab hold one session; the Electron renderer holds one per
- * open paper. A root assigns each session's three records to its shell and
+ * open project. A root assigns each session's three records to its shell and
  * forwards the shell's events here; nothing else reaches the runtime or
  * the host bridge for a session.
  */

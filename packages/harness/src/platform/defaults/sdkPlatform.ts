@@ -18,7 +18,7 @@ import {
   settingsCatalog,
   type SettingsCatalog,
 } from '@shared/state/stateSettings';
-import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
+import { canonicalizeWorkspaceRoot } from '@utils/system/nodeWorkspace';
 
 import type { AgentPlatform } from '../agentPlatform';
 
@@ -69,7 +69,7 @@ const unpersistedSecrets: PlatformSecrets = {
 export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   // Canonical once, here: the storage directory and `roots.workspace` both
   // key on the physical root, as every other host's do.
-  const workspaceDir = canonicalizeWorkspacePath(
+  const workspaceRoot = canonicalizeWorkspaceRoot(
     options.workspaceDir ?? process.cwd(),
   );
   return {
@@ -80,9 +80,9 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       builtIn: () => Effect.succeed(''),
     },
     roots: {
-      workspace: workspaceDir,
+      workspace: workspaceRoot,
       storageRoot: options.storageDir,
-      storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
+      storage: resolveWorkspaceStoragePath(options.storageDir, workspaceRoot),
       globalStorage: resolveGlobalStoragePath(options.storageDir),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.

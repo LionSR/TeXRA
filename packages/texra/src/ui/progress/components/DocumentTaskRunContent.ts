@@ -22,8 +22,8 @@ import { conversationContentStyles } from './ConversationContent.styles';
 import './BackgroundTasksPanel';
 import './FileList';
 
-@customElement('workflow-run-content')
-export class WorkflowRunContent extends BaseRunContent {
+@customElement('document-task-run-content')
+export class DocumentTaskRunContent extends BaseRunContent {
   static override styles = conversationContentStyles;
 
   override render(): TemplateResult | typeof nothing {
@@ -75,6 +75,6 @@ export class WorkflowRunContent extends BaseRunContent {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'workflow-run-content': WorkflowRunContent;
+    'document-task-run-content': DocumentTaskRunContent;
   }
 }

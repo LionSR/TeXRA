@@ -48,7 +48,7 @@ import { setupCommand } from './setup';
 import { skillsCommand } from './skills';
 import { tasksCommand } from './tasks';
 import { versionCommand } from './version';
-import { headlessRunCommand } from './workflow';
+import { headlessRunCommand } from './run';
 
 /** The argv `runCli` dispatches, for the default route (citty resolves
  *  `default` with no arguments). */

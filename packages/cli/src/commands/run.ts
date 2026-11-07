@@ -7,7 +7,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import type { CliWorkflowRunResult } from '@cli/schemas/cliOutput';
+import type { CliDocumentTaskResult } from '@cli/schemas/cliOutput';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import {
   DOCUMENT_TASK_OPTIONS,
@@ -66,19 +66,19 @@ import {
   toolUseResultText,
 } from '../runtime/headless/terminalStatus';
 import {
-  hasMixedStdinWorkflowInputSpecs,
+  hasMixedStdinDocumentTaskInputSpecs,
   withExpandedRunInputs,
-  WORKFLOW_INPUT_REQUIRED_MESSAGE,
-} from '../runtime/headless/workflowInputs';
+  DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE,
+} from '../runtime/headless/documentTaskInputs';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
-  formatWorkflowTextResult,
+  formatDocumentTaskTextResult,
   inputDerivedOutputFiles,
-  resolveWorkflowOutput,
-  resumeWorkflowOutputDirectory,
-  resumeWorkflowOutputFile,
-} from '../runtime/headless/workflowOutput';
+  resolveDocumentTaskOutput,
+  resumeDocumentTaskOutputDirectory,
+  resumeDocumentTaskOutputFile,
+} from '../runtime/headless/documentTaskOutput';
 import type { Sessions } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
@@ -155,7 +155,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // `mkdir -p` their destination before `withExpandedRunInputs` would report
   // it. Refuse first so an invalid command leaves nothing on disk.
   if (init.inputFiles.length === 0) {
-    return yield* failUsage(WORKFLOW_INPUT_REQUIRED_MESSAGE);
+    return yield* failUsage(DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE);
   }
   if (init.output && task.outputs.filter(Boolean).length > 1) {
     return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
@@ -177,7 +177,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           }),
       );
     if (
-      hasMixedStdinWorkflowInputSpecs(
+      hasMixedStdinDocumentTaskInputSpecs(
         classifyInputFiles(literalInputs).inputFiles,
       )
     ) {
@@ -244,7 +244,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         ...documentTaskPatch(launch, agent, init.options),
       };
 
-      return yield* executeCliWorkflowConfig(config, runContext, {
+      return yield* executeCliRun(config, runContext, {
         services,
         recoveryInputIsDurable: stdinInputPath === undefined,
       });
@@ -268,13 +268,13 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   const option = Rec.keys(DOCUMENT_TASK_OPTIONS).find(
     (key) => init.options[key],
   );
-  const workflowOnlyFlag =
+  const documentTaskOnlyFlag =
     (init.output && '--output') ||
     (init.outputDir && '--output-dir') ||
     (option && `--${option}`);
-  if (workflowOnlyFlag) {
+  if (documentTaskOnlyFlag) {
     return yield* failUsage(
-      `${workflowOnlyFlag} is only available for document tasks; "${init.agent}" has no task.`,
+      `${documentTaskOnlyFlag} is only available for document tasks; "${init.agent}" has no task.`,
     );
   }
   if (!instruction) {
@@ -334,129 +334,125 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
  * an exit code. Shared by `texra run` (fresh runs) and `texra resume`
  * (workflow continuation under the persisted run id).
  */
-export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
-  function* (
-    config: AgentConfigPayload,
-    runContext: CliContext,
-    options: {
-      readonly services: CliExecuteOptions['services'];
-      /** False when invocation-owned temporary inputs will not survive exit. */
-      readonly recoveryInputIsDurable: boolean;
-      readonly runId?: RunId;
-    },
-  ): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
-    const session = yield* options.services.session;
-    const fileSystem = yield* FileSystem.FileSystem;
-    let workflowResult: CliWorkflowRunResult | undefined;
-    let workflowOutputError: unknown;
-    // The persisted `cli` block is the single representation of where this run
-    // writes; never take the destinations a second time as call options.
-    const output = resumeWorkflowOutputFile(config);
-    const outputDir = resumeWorkflowOutputDirectory(config);
-    const recoveryProcessCwd = tryReadCliCwd();
-    const run = yield* executeCliConfig(config, runContext, {
-      services: options.services,
-      runId: options.runId,
-      onInterruptedRunFinalized: options.recoveryInputIsDurable
-        ? (runId) =>
-            writeTextStderrAndWait(
-              formatInterruptedResumeHint(
-                runContext,
-                runId,
-                'workflow',
-                config.workingDirectory || runContext.cwd,
-                recoveryProcessCwd,
-              ),
-            )
-        : undefined,
-      // The run's output is published after its end commits, gated on that
-      // committed outcome (`resolveWorkflowOutput` copies only a completed
-      // run's): output that cannot be written fails this command, never the
-      // recorded run. Inside the finalization a shutdown waits for.
-      afterRun: Effect.fn('workflow.afterRun')(function* (ended) {
-        // The defaults the run executed, as its recorded configuration
-        // states them (the launch resolves an empty output list to the
-        // agent's declared ones); the input-derived
-        // `cli.expectedOutputFiles` stand in when the agent declares none.
-        // A configuration that does not read leaves the copy undone: that
-        // fails the command when a completed run's copy was asked for, and
-        // only warns otherwise.
-        const recorded = yield* Effect.result(
-          session.records(ended.runId).readConfig,
-        );
-        if (Result.isFailure(recorded)) {
-          const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;
-          if ((output || outputDir) && ended.outcome === RUN_OUTCOME.COMPLETED)
-            workflowOutputError = new Error(message, {
-              cause: recorded.failure,
-            });
-          else writeTextStderr(`[warn] ${message}`);
-        }
-        const copied = Result.isSuccess(recorded);
-        const declaredOutputFiles = copied
-          ? (recorded.success?.outputFiles ?? []).filter(Boolean)
-          : [];
-        const expectedOutputFiles = declaredOutputFiles.length
-          ? declaredOutputFiles
-          : (config.cli?.expectedOutputFiles ?? undefined);
-        // The task's documents are its documents row, read from the
-        // store, which holds every row the run committed once its end is.
-        const outputResult = yield* Effect.result(
-          session.view.read([]).pipe(
-            Effect.mapError(
-              (cause) =>
-                new Error(
-                  `The documents of task ${ended.runId} could not be read: ${toErrorMessage(cause)}`,
-                  { cause },
-                ),
+export const executeCliRun = Effect.fn('executeCliRun')(function* (
+  config: AgentConfigPayload,
+  runContext: CliContext,
+  options: {
+    readonly services: CliExecuteOptions['services'];
+    /** False when invocation-owned temporary inputs will not survive exit. */
+    readonly recoveryInputIsDurable: boolean;
+    readonly runId?: RunId;
+  },
+): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
+  const session = yield* options.services.session;
+  const fileSystem = yield* FileSystem.FileSystem;
+  let documentTaskResult: CliDocumentTaskResult | undefined;
+  let documentTaskOutputError: unknown;
+  // The persisted `cli` block is the single representation of where this run
+  // writes; never take the destinations a second time as call options.
+  const output = resumeDocumentTaskOutputFile(config);
+  const outputDir = resumeDocumentTaskOutputDirectory(config);
+  const recoveryProcessCwd = tryReadCliCwd();
+  const run = yield* executeCliConfig(config, runContext, {
+    services: options.services,
+    runId: options.runId,
+    onInterruptedRunFinalized: options.recoveryInputIsDurable
+      ? (runId) =>
+          writeTextStderrAndWait(
+            formatInterruptedResumeHint(
+              runContext,
+              runId,
+              'workflow',
+              config.workingDirectory || runContext.cwd,
+              recoveryProcessCwd,
             ),
-            Effect.flatMap((stored) => {
-              const run = stored.runs.get(ended.runId);
-              return resolveWorkflowOutput(
-                copied ? output : undefined,
-                copied ? outputDir : undefined,
-                ended,
-                run && documentsOf(run),
-                runContext,
-                { expectedOutputFiles, storageRoot: session.roots.storage },
-              );
-            }),
-            Effect.provideService(FileSystem.FileSystem, fileSystem),
+          )
+      : undefined,
+    // The run's output is published after its end commits, gated on that
+    // committed outcome (`resolveDocumentTaskOutput` copies only a completed
+    // run's): output that cannot be written fails this command, never the
+    // recorded run. Inside the finalization a shutdown waits for.
+    afterRun: Effect.fn('workflow.afterRun')(function* (ended) {
+      // The defaults the run executed, as its recorded configuration
+      // states them (the launch resolves an empty output list to the
+      // agent's declared ones); the input-derived
+      // `cli.expectedOutputFiles` stand in when the agent declares none.
+      // A configuration that does not read leaves the copy undone: that
+      // fails the command when a completed run's copy was asked for, and
+      // only warns otherwise.
+      const recorded = yield* Effect.result(
+        session.records(ended.runId).readConfig,
+      );
+      if (Result.isFailure(recorded)) {
+        const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;
+        if ((output || outputDir) && ended.outcome === RUN_OUTCOME.COMPLETED)
+          documentTaskOutputError = new Error(message, {
+            cause: recorded.failure,
+          });
+        else writeTextStderr(`[warn] ${message}`);
+      }
+      const copied = Result.isSuccess(recorded);
+      const declaredOutputFiles = copied
+        ? (recorded.success?.outputFiles ?? []).filter(Boolean)
+        : [];
+      const expectedOutputFiles = declaredOutputFiles.length
+        ? declaredOutputFiles
+        : (config.cli?.expectedOutputFiles ?? undefined);
+      // The task's documents are its documents row, read from the
+      // store, which holds every row the run committed once its end is.
+      const outputResult = yield* Effect.result(
+        session.view.read([]).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Error(
+                `The documents of task ${ended.runId} could not be read: ${toErrorMessage(cause)}`,
+                { cause },
+              ),
           ),
-        );
-        if (Result.isFailure(outputResult)) {
-          workflowOutputError ??= outputResult.failure;
-        } else {
-          workflowResult = outputResult.success;
-        }
-      }),
-    });
-    if (!run.ok) return run.exitCode;
-
-    const { result } = run;
-    if (workflowOutputError !== undefined) {
-      writeErrorStderr(workflowOutputError);
-      return result.outcome === RUN_OUTCOME.CANCELLED
-        ? CliExitCode.Interrupted
-        : CliExitCode.AgentError;
-    }
-    if (!workflowResult) {
-      return yield* Effect.die(
-        new Error(
-          'Document task output was not finalized before the run ended.',
+          Effect.flatMap((stored) => {
+            const run = stored.runs.get(ended.runId);
+            return resolveDocumentTaskOutput(
+              copied ? output : undefined,
+              copied ? outputDir : undefined,
+              ended,
+              run && documentsOf(run),
+              runContext,
+              { expectedOutputFiles, storageRoot: session.roots.storage },
+            );
+          }),
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
         ),
       );
-    }
+      if (Result.isFailure(outputResult)) {
+        documentTaskOutputError ??= outputResult.failure;
+      } else {
+        documentTaskResult = outputResult.success;
+      }
+    }),
+  });
+  if (!run.ok) return run.exitCode;
 
-    yield* emitCliResult({
-      json: workflowResult,
-      ndjson: { kind: 'result', result: workflowResult },
-      text: formatWorkflowTextResult(workflowResult),
-    });
+  const { result } = run;
+  if (documentTaskOutputError !== undefined) {
+    writeErrorStderr(documentTaskOutputError);
+    return result.outcome === RUN_OUTCOME.CANCELLED
+      ? CliExitCode.Interrupted
+      : CliExitCode.AgentError;
+  }
+  if (!documentTaskResult) {
+    return yield* Effect.die(
+      new Error('Document task output was not finalized before the run ended.'),
+    );
+  }
 
-    return runOutcomeExitCode(result.outcome);
-  },
-);
+  yield* emitCliResult({
+    json: documentTaskResult,
+    ndjson: { kind: 'result', result: documentTaskResult },
+    text: formatDocumentTaskTextResult(documentTaskResult),
+  });
+
+  return runOutcomeExitCode(result.outcome);
+});
 
 export const headlessRunCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run an agent headlessly' },

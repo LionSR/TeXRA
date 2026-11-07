@@ -52,7 +52,7 @@ describe('latexdiff shadow output', () => {
           FakeHost.layer(
             {
               app: TEXRA_APP,
-              workspacePath: sourceDir,
+              workspaceRoot: sourceDir,
               storagePath: resolveWorkspaceStoragePath(storageRoot, sourceDir),
               globalStoragePath: resolveGlobalStoragePath(storageRoot),
             },

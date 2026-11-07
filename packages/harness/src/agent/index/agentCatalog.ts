@@ -59,7 +59,7 @@ export class AgentCatalogLoadError extends Schema.TaggedError<AgentCatalogLoadEr
  * The two state slots a workspace's agent list resolves against: the
  * repository's selection and the cross-workspace defaults. Every read is
  * answered for the workspace whose slots the caller hands over, so a process
- * holding several sessions never answers one paper's question with another's
+ * holding several sessions never answers one project's question with another's
  * agent list.
  */
 export type WorkspaceAgentsStores = Pick<

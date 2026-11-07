@@ -68,7 +68,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
   try {
     const launched = await launchTexraApp({
       userDataPath: dataRoot,
-      workspacePath: work,
+      workspaceRoot: work,
       env: { HOME: home },
     });
     let artifact: Record<string, unknown>;
@@ -325,7 +325,7 @@ test('a tool edit the app changed keeps its changes when another window answers 
   try {
     const launched = await launchTexraApp({
       userDataPath: dataRoot,
-      workspacePath: work,
+      workspaceRoot: work,
       env: { HOME: home },
     });
     try {

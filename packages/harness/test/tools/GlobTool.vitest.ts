@@ -43,23 +43,23 @@ const globWithFailedStat = (
 
 function withGlobWorkspace(
   run: (
-    workspacePath: string,
+    workspaceRoot: string,
   ) => Effect.Effect<void, unknown, PluginToolServices | FakeHost>,
 ) {
-  return withTempDirEffect('texra-glob-tool-', (workspacePath) =>
+  return withTempDirEffect('texra-glob-tool-', (workspaceRoot) =>
     Effect.gen(function* () {
       yield* Effect.promise(async () => {
         await writeFile(
-          path.join(workspacePath, 'vanished.tex'),
+          path.join(workspaceRoot, 'vanished.tex'),
           'vanished.tex',
         );
         // An ignored `dist/` an external search must not be matched against.
-        await writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n');
+        await writeFile(path.join(workspaceRoot, '.gitignore'), 'dist/\n');
       });
-      yield* run(workspacePath).pipe(Effect.provide(nativeToolTestLayer()));
+      yield* run(workspaceRoot).pipe(Effect.provide(nativeToolTestLayer()));
     }).pipe(
       Effect.ensuring(Effect.sync(() => vi.restoreAllMocks())),
-      Effect.provide(FakeHost.layer({ workspacePath })),
+      Effect.provide(FakeHost.layer({ workspaceRoot })),
     ),
   );
 }
@@ -71,10 +71,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       'omits a match whose metadata lookup fails with $tag',
       ({ fileName, tag }) =>
         Effect.gen(function* () {
-          yield* withGlobWorkspace((workspacePath) =>
+          yield* withGlobWorkspace((workspaceRoot) =>
             Effect.gen(function* () {
               const result = yield* globWithFailedStat(
-                path.join(workspacePath, fileName),
+                path.join(workspaceRoot, fileName),
                 tag,
                 { pattern: fileName },
               );

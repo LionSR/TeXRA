@@ -132,13 +132,13 @@ const latexInputEnv = Effect.fn('texTools.latexInputEnv')(function* (
 function buildLatexSearchParts(input: {
   documentDir: string;
   extraInputDirs?: readonly string[];
-  workspacePath?: string | null;
+  workspaceRoot?: string | null;
   tikzInputDirectory?: string | null;
 }): { texInputParts: string[]; bibSearchParts: string[] } {
-  const { documentDir, extraInputDirs, workspacePath, tikzInputDirectory } =
+  const { documentDir, extraInputDirs, workspaceRoot, tikzInputDirectory } =
     input;
   const sourceDirs = [documentDir, ...(extraInputDirs ?? [])];
-  const workspaceParts = workspacePath ? [workspacePath] : [];
+  const workspaceParts = workspaceRoot ? [workspaceRoot] : [];
   const tikzParts = tikzInputDirectory?.trim() ? [tikzInputDirectory] : [];
   return {
     texInputParts: [...sourceDirs, '.', ...workspaceParts, ...tikzParts],
@@ -196,7 +196,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     extraInputDirs = [],
   } = options;
   const fs = yield* FileSystem.FileSystem;
-  const workspacePath = (yield* WorkspaceFs).root;
+  const workspaceRoot = (yield* WorkspaceFs).root;
   const latexFile = latexLocation.absolutePath;
   const outDir = outputDirectory ?? path.dirname(latexFile);
   // Both engine outputs are named after the source with the source's own
@@ -230,7 +230,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir,
       extraInputDirs,
-      workspacePath: includeWorkspace ? workspacePath : null,
+      workspaceRoot: includeWorkspace ? workspaceRoot : null,
       tikzInputDirectory,
     });
 
@@ -243,7 +243,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
 
     // The compiler's cwd is the workspace root: a session with no folder open
     // has nowhere to run it.
-    if (workspacePath === undefined) {
+    if (workspaceRoot === undefined) {
       return yield* new LatexCompilerNotRun({
         cause: new Error('No workspace path found'),
       });
@@ -267,7 +267,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // it, so it keeps the single-process form.
     const runEngine = (tool: 'latexmk' | 'pdflatex', args: string[]) =>
       runTool(tool, args, {
-        cwd: workspacePath,
+        cwd: workspaceRoot,
         // A TeX engine spawns no git command that an identity could mark.
         settings: undefined,
         env,

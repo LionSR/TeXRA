@@ -22,13 +22,13 @@ export const findCommitInHistory = Effect.fn('findCommitInHistory')(function* (
     return null;
   }
 
-  const workspacePath = roots.workspace;
-  if (!workspacePath) {
+  const workspaceRoot = roots.workspace;
+  if (!workspaceRoot) {
     return null;
   }
 
   const gitOptions = {
-    cwd: workspacePath,
+    cwd: workspaceRoot,
     settings: roots,
     quiet: true,
   };

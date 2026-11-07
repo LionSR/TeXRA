@@ -42,7 +42,7 @@
 
 // A session's view across a process boundary: built from the inputs the
 // caller's transport serves.
-export { RemoteSessionView } from '@controllers/session/SessionView';
+export { RemoteSessionView } from '@controllers/session/sessionViewService';
 export type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 export { SessionInputs } from '@shared/session/sessionInputs';
 export {
@@ -139,7 +139,7 @@ export {
   decodeXmlEntities,
   summarizeEmbeddedSubagentFollowups,
 } from '@shared/subagentFollowup';
-// Run lists and task groups: their order, a group's status, and a
+// Run lists and stages: their order, a group's status, and a
 // compaction's status.
 export {
   compareByNewestCreationTime,

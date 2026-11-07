@@ -98,7 +98,7 @@ const roots = new Map<ExternalRootKind, ExternalRoot>();
  *
  * Throws on permission errors (EACCES/EPERM) or any unexpected error so
  * callers can fail closed: a path we cannot verify must never be admitted
- * to the allowlist. `canonicalizeWorkspacePath` is the one tolerant caller.
+ * to the allowlist. `canonicalizeWorkspaceRoot` is the one tolerant caller.
  *
  * Uses the JS `realpathSync`, not `.native`: on Windows the native call
  * rewrites a mapped drive to its UNC target, and the workspace identity built

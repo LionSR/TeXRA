@@ -39,7 +39,11 @@ import type {
 } from '@shared/session/historyTurns';
 import type { Alongside, Append } from '@shared/session/sessionEvents';
 import type { SessionLogShape } from '@shared/session/sessionLog';
-import { runHistoryRows, storedDraft, unpreparedHistory } from './storedTurn';
+import {
+  runHistoryRows,
+  storedDraft,
+  unpreparedHistory,
+} from './providerMessages';
 import type { ModelOrigin } from '@texra-ai/llm';
 
 const isResponse = (row: RunHistoryDraft): boolean =>

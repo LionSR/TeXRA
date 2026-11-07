@@ -47,7 +47,7 @@ export function traceDisplayName(trace: TraceDocument): string {
 
 /**
  * The host snapshot of an exported trace: the run's display name
- * as the paper, no catalogs (a trace launches nothing), no banners. The
+ * as the project, no catalogs (a trace launches nothing), no banners. The
  * shell renders nothing until a host snapshot arrives, and a trace's one
  * frame is the only one it ever gets.
  */

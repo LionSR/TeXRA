@@ -15,7 +15,7 @@ Node.js platform implementation and host building blocks for
   `agentsDir`, `storageDir`, `workspaceDir`, and `settings`.
 - **Workspace roots & paths**:
   [`openNodeWorkspaceRoots`](#opennodeworkspaceroots),
-  [`canonicalizeWorkspacePath`](#canonicalizeworkspacepath),
+  [`canonicalizeWorkspaceRoot`](#canonicalizeworkspacepath),
   [`workspaceRelativePath`](#workspacerelativepath),
   [`resolveGlobalStoragePath`](#resolveglobalstoragepath), and
   [`resolveWorkspaceStoragePath`](#resolveworkspacestoragepath).
@@ -44,7 +44,7 @@ absence and propagates from a caller that recovers only this.
 const absentReason: (error: unknown) => boolean
 ```
 
-## canonicalizeWorkspacePath
+## canonicalizeWorkspaceRoot
 
 Resolve one physical workspace identity for storage and host adapters.
 Missing trailing segments keep their spelling (see `canonicalizePath`). A
@@ -53,7 +53,7 @@ ancestor still opens, keyed by its resolved spelling. Every other failure
 propagates.
 
 ```ts
-function canonicalizeWorkspacePath(workspacePath: string): string
+function canonicalizeWorkspaceRoot(workspaceRoot: string): string
 ```
 
 ## CommandDirs
@@ -490,9 +490,9 @@ What a Node host names to open one workspace folder's roots.
 
 ```ts
 interface NodeWorkspaceRootsInit {
-  /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by
+  /** The canonical workspace root (`canonicalizeWorkspaceRoot`), decided by
    *  the host where it reads it; undefined when no folder is open. */
-  readonly workspacePath: string | undefined;
+  readonly workspaceRoot: string | undefined;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
   /** The workspace, local and global config stores to build the file-backed
@@ -668,7 +668,7 @@ workspace's identity (`no-workspace` for none).
 ```ts
 function resolveWorkspaceStoragePath(
   storageRoot: string,
-  workspacePath: string | undefined,
+  workspaceRoot: string | undefined,
 ): string
 ```
 

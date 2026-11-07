@@ -22,7 +22,7 @@ interface LaunchOptions {
    * remembers). If omitted, a fresh temp directory is created so the app
    * shows a project rather than the empty state at startup.
    */
-  workspacePath?: string;
+  workspaceRoot?: string;
   /**
    * Electron user-data directory. Supplying this lets a test relaunch the
    * desktop app against the same profile so app-scoped stores persist.
@@ -38,7 +38,7 @@ interface LaunchOptions {
 export interface LaunchedApp {
   app: ElectronApplication;
   page: Page;
-  workspacePath: string;
+  workspaceRoot: string;
   userDataPath: string;
   /**
    * True when `launchTexraApp()` allocated a temp workspace itself (caller
@@ -81,12 +81,12 @@ export async function chooseDesktopTheme(
 /** Resolve project storage through the production path function in the fixture bundle. */
 export async function findWorkspaceStoragePath(input: {
   userDataPath: string;
-  workspacePath: string;
+  workspaceRoot: string;
 }): Promise<string> {
   const fixture = await loadDatabaseFixture(input.userDataPath);
   return fixture.resolveWorkspaceStoragePath(
     input.userDataPath,
-    realpathSync(input.workspacePath),
+    realpathSync(input.workspaceRoot),
   );
 }
 
@@ -108,14 +108,14 @@ export async function launchTexraApp(
     );
   }
 
-  const ownsWorkspace = options.workspacePath === undefined;
-  const workspacePath =
-    options.workspacePath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-'));
+  const ownsWorkspace = options.workspaceRoot === undefined;
+  const workspaceRoot =
+    options.workspaceRoot ?? mkdtempSync(join(tmpdir(), 'texra-e2e-'));
   const ownsUserData = options.userDataPath === undefined;
   const userDataPath =
     options.userDataPath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
 
-  await rememberOpenProject(userDataPath, workspacePath);
+  await rememberOpenProject(userDataPath, workspaceRoot);
   const app = await electron.launch({
     args: [MAIN_ENTRY],
     cwd: PACKAGE_ROOT,
@@ -170,7 +170,7 @@ export async function launchTexraApp(
   return {
     app,
     page,
-    workspacePath,
+    workspaceRoot,
     userDataPath,
     ownsWorkspace,
     ownsUserData,
@@ -197,7 +197,7 @@ export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
   }
   // Clean up only auto-allocated directories. Caller-supplied workspace and
   // profile paths may be reused across relaunches and remain caller-owned.
-  if (launched.ownsWorkspace) cleanupDirectory(launched.workspacePath);
+  if (launched.ownsWorkspace) cleanupDirectory(launched.workspaceRoot);
   if (launched.ownsUserData) cleanupDirectory(launched.userDataPath);
 }
 

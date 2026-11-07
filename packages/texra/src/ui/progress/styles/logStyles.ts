@@ -25,7 +25,7 @@ katexStyleSheet.replaceSync(katexStyles);
  */
 export const layoutStyles = css`
   :host,
-  task-group-list {
+  stage-list {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
@@ -34,7 +34,7 @@ export const layoutStyles = css`
     contain: layout style paint;
   }
 
-  task-group-list > .log-container {
+  stage-list > .log-container {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;

@@ -7,7 +7,7 @@ import {
   generateRunId,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
@@ -30,7 +30,7 @@ const options = {
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'run registration and finalization',
   (it) => {
-    it.layer(FakeHost.layer({ workspacePath: '/workspace/root' }), {
+    it.layer(FakeHost.layer({ workspaceRoot: '/workspace/root' }), {
       buildPerTest: true,
     })((it) => {
       it.effect(

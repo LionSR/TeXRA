@@ -57,7 +57,7 @@ export function formatTaskDiagnostics(run: RunView): string {
   return lines.filter(Predicate.isNotNullish).join('\n');
 }
 
-/** A workflow task's pass, one-based from a zero-based round: "Pass 2", or
+/** A document task's pass, one-based from a zero-based round: "Pass 2", or
  *  "Pass 2 of 3" against a planned total. The header chip and the
  *  diagnostics count passes the same way. */
 export function passLabel(round: number, total?: number): string {

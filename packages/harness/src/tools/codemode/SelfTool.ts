@@ -17,7 +17,7 @@ import {
   type RunToolCall,
   type ScriptScope,
 } from '@agent/runtime/RunCall';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runOwnership';
 import { childResult, failedResult } from '@agent/runtime/delegation/AgentTool';
 import {
   agentChildRunId,

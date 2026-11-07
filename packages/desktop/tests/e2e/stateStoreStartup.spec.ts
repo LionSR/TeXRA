@@ -15,11 +15,11 @@ import {
 } from './workspaceStorageFixture.js';
 
 test('desktop main bundle completes its startup state write', async () => {
-  const { workspacePath, userDataPath } = createIsolatedProfile();
+  const { workspaceRoot, userDataPath } = createIsolatedProfile();
   let launched: LaunchedApp | undefined;
 
   try {
-    launched = await launchTexraApp({ workspacePath, userDataPath });
+    launched = await launchTexraApp({ workspaceRoot, userDataPath });
     // Source of truth: initializeElectronPlatform() opens this profile's
     // state store in packages/desktop/src/main/platform/index.ts and seeds
     // the first-install defaults through it before the window exists.
@@ -38,7 +38,7 @@ test('desktop main bundle completes its startup state write', async () => {
     }
   } finally {
     if (launched) await closeTexraApp(launched);
-    cleanupDirectory(workspacePath);
+    cleanupDirectory(workspaceRoot);
     cleanupDirectory(userDataPath);
   }
 });
@@ -47,13 +47,13 @@ test('desktop renderer boots past unreadable saved renderer state', async () => 
   // Two cold launches of one profile: each alone can take most of the
   // default budget.
   test.setTimeout(150_000);
-  const { workspacePath, userDataPath } = createIsolatedProfile();
+  const { workspaceRoot, userDataPath } = createIsolatedProfile();
   let launched: LaunchedApp | undefined;
 
   try {
     // Seed the renderer's own `localStorage` through a first launch of the
     // same profile: the shell's collapsed-rail key is read at module load.
-    launched = await launchTexraApp({ workspacePath, userDataPath });
+    launched = await launchTexraApp({ workspaceRoot, userDataPath });
     await launched.page.evaluate(() => {
       window.localStorage.setItem('shell', '{not json');
     });
@@ -62,7 +62,7 @@ test('desktop renderer boots past unreadable saved renderer state', async () => 
 
     // `launchTexraApp` waits for the renderer's ready marker and a visible
     // window, so a blank window fails the relaunch itself.
-    launched = await launchTexraApp({ workspacePath, userDataPath });
+    launched = await launchTexraApp({ workspaceRoot, userDataPath });
     await expect(launched.page.locator('.shell-frame')).toBeVisible();
     // The artifact: the booted window over the corrupt entry.
     await launched.page.screenshot({
@@ -70,7 +70,7 @@ test('desktop renderer boots past unreadable saved renderer state', async () => 
     });
   } finally {
     if (launched) await closeTexraApp(launched);
-    cleanupDirectory(workspacePath);
+    cleanupDirectory(workspaceRoot);
     cleanupDirectory(userDataPath);
   }
 });

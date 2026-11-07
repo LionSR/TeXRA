@@ -201,7 +201,7 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
   // The project's `texra.db` is owned by the platform's scope; AppState
   // (global) is the runtime's.
   const roots = yield* openNodeWorkspaceRoots({
-    workspacePath: context.cwd,
+    workspaceRoot: context.cwd,
     storageRoot: context.storageRoot,
     config: context.config,
     ...(link !== undefined && {

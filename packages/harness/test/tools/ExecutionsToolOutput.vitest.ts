@@ -137,7 +137,7 @@ const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 const perTest = Layer.provideMerge(
   TestSession.layer(undefined, { host: {} }),
   FakeHost.layer({
-    workspacePath: '/workspace',
+    workspaceRoot: '/workspace',
     config: { [APPROVAL_POLICY_SETTING.key]: 'yolo' },
   }),
 );

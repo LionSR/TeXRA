@@ -65,7 +65,7 @@ describe('LatexMediaManager figure extraction', () => {
       texPath,
       figurePath,
       host: {
-        workspacePath: workspaceDir,
+        workspaceRoot: workspaceDir,
         storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
         globalStoragePath: resolveGlobalStoragePath(storageRoot),
       },

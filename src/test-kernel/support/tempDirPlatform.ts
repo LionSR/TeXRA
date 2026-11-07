@@ -51,7 +51,7 @@ export async function createTempDirPlatform(
   const storageRoot = path.join(tempDir, 'storage');
   return createFakeHost({
     ...(app ? { app } : {}),
-    workspacePath: workspaceDir,
+    workspaceRoot: workspaceDir,
     storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
     globalStoragePath: resolveGlobalStoragePath(storageRoot),
   });

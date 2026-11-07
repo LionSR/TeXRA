@@ -15,7 +15,7 @@ import { expect } from 'vitest';
 
 // Local imports
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
-import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
@@ -143,7 +143,7 @@ const committedResults = (
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool-use dispatch',
   (it) => {
-    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+    it.layer(FakeHost.layer({ workspaceRoot: '/workspace' }), {
       buildPerTest: true,
     })((it) => {
       // Failure modes: a SQL page reaches the guest as display text, losing its
