@@ -166,7 +166,7 @@ layer(
         const step = yield* Effect.gen(function* () {
           const state = yield* Context.get(session, RunHistory).load(runId);
           assert(state !== null);
-          return yield* stepFor(yield* AgentRun, state, 'request', false);
+          return yield* stepFor(yield* AgentRun, state, false);
         }).pipe(
           Effect.provide(runLayer(session, ctx, [tool('kept'), tool('added')])),
           Effect.orDie,
