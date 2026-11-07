@@ -31,25 +31,37 @@ import type { ReasoningChoice } from './models/reasoningChoice.js';
 import type { Model, ModelConfiguration } from './turn.js';
 
 /**
+ * A subscription session's token, which the caller renews: read before
+ * every request, and, when the provider rejects the one sent (a 401 before
+ * its stored expiry), handed back as `rejected` once, after which the
+ * request goes again on the next `current`. A rejected request was not
+ * billed. The Responses protocol alone takes one.
+ */
+export interface SessionToken {
+  readonly current: Effect.Effect<string, ModelError>;
+  readonly rejected: (token: string) => Effect.Effect<void, ModelError>;
+}
+
+/**
  * The credential a binding sends: an API key (or any bearer token the
  * endpoint takes as one), or a ChatGPT plan's access token, which the
- * Responses protocol alone serves, under that plan's request rules.
+ * Responses protocol alone serves, under that plan's request rules. Either
+ * is a fixed string or a {@link SessionToken}.
  */
 export type ModelCredential =
-  | { readonly kind: 'api-key'; readonly apiKey: string }
-  | { readonly kind: 'chatgpt'; readonly accessToken: string };
+  | { readonly kind: 'api-key'; readonly apiKey: string | SessionToken }
+  | { readonly kind: 'chatgpt'; readonly accessToken: string | SessionToken };
 
 /**
  * One model on one decided route, and what the caller asks of it. The
  * protocol is the model's provider's, and the route fixes the config it runs
- * (`routeConfig`), the credential scope stamped on its origin and the plan
- * it bills.
+ * (`routeConfig`), the endpoint it sends to, the credential scope stamped on
+ * its origin and the plan it bills.
  */
 export interface BindSpec {
   /** The llm-zoo entry, before its route's overrides. */
   readonly model: ModelConfig;
   readonly route: CredentialRoute;
-  readonly endpoint: string;
   readonly credential: ModelCredential;
   /** Each option has a default; the booleans default to `false`. */
   readonly options?: {
@@ -106,14 +118,14 @@ const constructed = <A>(make: () => A) =>
           }),
   });
 
-/** The bearer of a non-Responses protocol: only an API key serves one. */
+/** The bearer of a non-Responses protocol: only a fixed API key serves one. */
 const bearer = (credential: ModelCredential, protocol: string) =>
-  credential.kind === 'api-key'
+  credential.kind === 'api-key' && typeof credential.apiKey === 'string'
     ? Effect.succeed(credential.apiKey)
     : Effect.fail(
         new ModelError({
           kind: 'invalid-request',
-          message: `A ChatGPT session token cannot authenticate the ${protocol} protocol.`,
+          message: `A subscription session token cannot authenticate the ${protocol} protocol.`,
         }),
       );
 
@@ -144,12 +156,7 @@ const construct = Effect.fn('llm.construct')(function* (
       );
     }
     case 'openai-responses': {
-      // Named fields only: `ResponseAuthenticationSchema` is a strictObject, so
-      // a field added to the credential must not reach its parse.
-      const authentication =
-        credential.kind === 'api-key'
-          ? credential
-          : { kind: credential.kind, accessToken: credential.accessToken };
+      const authentication = credential;
       if (webSocket) {
         const { openaiResponsesWebSocketModel } = yield* Effect.promise(
           () => import('./api/openaiResponsesWebSocket.js'),

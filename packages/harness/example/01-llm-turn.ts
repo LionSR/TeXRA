@@ -2,8 +2,8 @@
  * Example 01 — Direct model turns with `@texra-ai/llm`.
  *
  * Uses `@texra-ai/llm` and `@texra-ai/llm/node` standalone:
- * 1. Selects a catalog model (`selectModel`), decides its route (`decideModelRoute`),
- *    and resolves its endpoint (`resolveRouteEndpoint`).
+ * 1. Selects a catalog model (`selectModel`) and decides its route and
+ *    endpoint (`decideModelRoute`).
  * 2. Binds the route against an in-process SSE `fetch` (an Anthropic model
  *    takes `anthropic-messages`), prepares a turn (`prepareTurn`), streams
  *    `TurnEvent`s (`streamTurn`), and computes the turn's USD cost (`turnCost`).
@@ -15,7 +15,6 @@ import {
   completedTurn,
   decideModelRoute,
   OWN_KEY_ROUTE_FACTS,
-  resolveRouteEndpoint,
   selectModel,
   turnCost,
 } from '@texra-ai/llm';
@@ -25,12 +24,8 @@ const selected = selectModel('anthropic/claude-sonnet-5');
 if (selected === undefined) throw new Error('The catalog lost the model.');
 const route = decideModelRoute(selected.config, OWN_KEY_ROUTE_FACTS);
 if (route.kind !== 'api-key') throw new Error(`Unexpected route ${route.kind}`);
-const endpoint = resolveRouteEndpoint(selected.config, route, {
-  endpoints: {},
-});
-if (endpoint === undefined) throw new Error('No endpoint for the provider.');
 console.log(
-  `[01] model: ${selected.config.label}, ${route.provider} at ${endpoint}`,
+  `[01] model: ${selected.config.label}, ${route.provider} at ${route.endpoint}`,
 );
 
 const sseEvents = [
@@ -94,7 +89,6 @@ const program = Effect.gen(function* () {
   const okBinding = yield* bindModel({
     model: selected.config,
     route,
-    endpoint,
     credential: { kind: 'api-key', apiKey: 'test-key' },
     options: { fetch: mockSseFetch },
   });
@@ -132,7 +126,6 @@ const program = Effect.gen(function* () {
   const badBinding = yield* bindModel({
     model: selected.config,
     route,
-    endpoint,
     credential: { kind: 'api-key', apiKey: 'not-a-real-key' },
     options: { fetch: unauthorizedFetch },
   });

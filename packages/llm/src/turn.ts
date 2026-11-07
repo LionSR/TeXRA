@@ -90,7 +90,8 @@ const EffortSchema = Schema.NullOr(
   ReasoningEffortLevelSchema.pick(['low', 'medium', 'high', 'xhigh', 'max']),
 );
 const CacheSchema = Schema.Literals(['disabled', '5m']);
-const ThinkingLevelSchema = Schema.Literals([
+/** The thinking levels Google's Interactions request takes. */
+export const ThinkingLevelSchema = Schema.Literals([
   'minimal',
   'low',
   'medium',
@@ -222,22 +223,11 @@ const GooglePreparedSchema = PreparedInputSchema.mapFields(
     continuation: Schema.optional(GoogleContinuationSchema),
   }),
 );
-const HttpTransportSchema = Schema.Struct({ kind: Schema.Literal('http') });
 /** Prepared semantic input; execution never reapplies current defaults. */
 export const ResolvedTurnSchema = Schema.Union([
   Schema.Union([
     GooglePreparedSchema,
-    ResponsesPreparedSchema.mapFields(
-      Struct.assign({
-        transport: Schema.Union([
-          HttpTransportSchema,
-          Schema.Struct({
-            kind: Schema.Literal('websocket'),
-            connectionId: Schema.String.check(Schema.isUUID()),
-          }),
-        ]),
-      }),
-    ),
+    ResponsesPreparedSchema,
     PreparedInputSchema.mapFields(
       Struct.assign({
         protocol: Schema.Literal('anthropic-messages'),
@@ -247,10 +237,7 @@ export const ResolvedTurnSchema = Schema.Union([
   ]),
   Schema.Union([
     ResponsesPreparedSchema.mapFields(
-      Struct.assign({
-        mode: Schema.Literal('background'),
-        transport: HttpTransportSchema,
-      }),
+      Struct.assign({ mode: Schema.Literal('background') }),
     ),
     GooglePreparedSchema.mapFields(
       Struct.assign({ mode: Schema.Literal('background') }),

@@ -372,7 +372,6 @@ const receiptModel = () => {
             system: request.system,
             messages: request.messages,
             tools: request.tools ?? [],
-            transport: { kind: 'http' },
             controls: {
               temperature: 0,
               maxOutputTokens:

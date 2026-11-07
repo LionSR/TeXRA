@@ -11,10 +11,10 @@
 
 ## Entries
 
-| Entry                                  | Environment  | Exports                                                                                                                                                                                                                                 |
-| -------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[`@texra-ai/llm`](./llm/)**          | Browser-safe | `Model`, `TurnRequest`, `ResolvedTurn`, `TurnEvent`, `TurnResult`, `completedTurn`, `ModelError`, `selectModel`, `MODEL_PROVIDER_PLUGINS`, `decideModelRoute`, `resolveRouteEndpoint`, `chooseReasoning`, `turnCost`, `CredentialStore` |
-| **[`@texra-ai/llm/node`](./llm/node)** | Node.js      | `bindModel(spec)`, `BindSpec`, `Binding`, `ModelCredential`, ChatGPT (`codex`) and Grok (`xai`) OAuth sign-in flows and `SubscriptionCoordinator`s, `SharedAttempt`                                                                     |
+| Entry                                  | Environment  | Exports                                                                                                                                                                                                         |
+| -------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`@texra-ai/llm`](./llm/)**          | Browser-safe | `Model`, `TurnRequest`, `ResolvedTurn`, `TurnEvent`, `TurnResult`, `completedTurn`, `ModelError`, `selectModel`, `MODEL_PROVIDER_PLUGINS`, `decideModelRoute`, `chooseReasoning`, `turnCost`, `CredentialStore` |
+| **[`@texra-ai/llm/node`](./llm/node)** | Node.js      | `bindModel(spec)`, `BindSpec`, `Binding`, `ModelCredential`, ChatGPT (`codex`) and Grok (`xai`) OAuth sign-in flows and `SubscriptionCoordinator`s, `SharedAttempt`                                             |
 
 `bindModel` loads its protocol module on demand (`import('./api/<protocol>.js')`), so a process only loads the SDK of the provider it binds, and the published `.d.ts` files never expose vendor SDK types.
 
@@ -28,7 +28,6 @@ import {
   completedTurn,
   decideModelRoute,
   OWN_KEY_ROUTE_FACTS,
-  resolveRouteEndpoint,
   selectModel,
   turnCost,
 } from '@texra-ai/llm';
@@ -40,18 +39,12 @@ if (!selected) throw new Error('Unknown model.');
 const route = decideModelRoute(selected.config, OWN_KEY_ROUTE_FACTS);
 if (route.kind !== 'api-key') throw new Error(`Unexpected route ${route.kind}`);
 
-const endpoint = resolveRouteEndpoint(selected.config, route, {
-  endpoints: {},
-});
-if (!endpoint) throw new Error('No endpoint for the provider.');
-
 const program = Effect.gen(function* () {
   // The provider's protocol, the route's config, credential scope and
   // billing, and every option default from the model and its route.
   const binding = yield* bindModel({
     model: selected.config,
     route,
-    endpoint,
     credential: {
       kind: 'api-key',
       apiKey: process.env.ANTHROPIC_API_KEY ?? '',

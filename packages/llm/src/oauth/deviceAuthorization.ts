@@ -13,7 +13,7 @@
  * honored. Cancellation is fiber interruption from the host's run edge; there
  * is no signal threading here.
  */
-import { Clock, Duration, Effect, Ref, Schedule, Schema } from 'effect';
+import { Duration, Effect, Ref, Schedule, Schema } from 'effect';
 
 import type {
   SubscriptionCoordinator,
@@ -92,40 +92,21 @@ interface DeviceAuthorizationOptions<Token, E, R> {
 export const pollDeviceAuthorization = Effect.fn(
   'deviceAuthorization.pollDeviceAuthorization',
 )(function* <Token, E, R>(options: DeviceAuthorizationOptions<Token, E, R>) {
-  const deadline = (yield* Clock.currentTimeMillis) + options.expiresInMs;
-  const beforeDeadline = Effect.map(
-    Clock.currentTimeMillis,
-    (now) => now < deadline,
-  );
   const timedOut = new DeviceCodeTimedOut({
     message: DEVICE_CODE_TIMED_OUT_MESSAGE,
   });
   const extraDelayMs = yield* Ref.make(0);
-  // The transients since the last pending answer, and the latest of them.
-  const transients = yield* Ref.make<{
-    readonly count: number;
-    readonly last: DeviceAuthorizationTransient | undefined;
-  }>({ count: 0, last: undefined });
+  // Transients since the last pending answer.
+  const transients = yield* Ref.make(0);
   const increment = options.slowDownIncrementMs ?? 0;
 
-  // A poll never starts past the deadline; one in flight at the deadline
-  // completes. A code that expires while the endpoint was failing reports
-  // that failure, not a timeout.
-  const guardedPoll = Effect.gen(function* () {
-    if (!(yield* beforeDeadline)) {
-      const { last } = yield* Ref.get(transients);
-      return yield* last === undefined ? timedOut : Effect.fail(last.error);
-    }
-    return yield* options.poll;
-  });
-
   // The server asks the client to wait the interval before its first poll,
-  // and the schedule spaces every later one.
+  // and the schedule spaces every later one, for as long as the code lives.
   yield* Effect.sleep(Duration.millis(options.intervalMs));
-  const polled = guardedPoll.pipe(
+  const polled = options.poll.pipe(
     Effect.tapError((error) => {
       if (isPending(error)) {
-        return Ref.set(transients, { count: 0, last: undefined }).pipe(
+        return Ref.set(transients, 0).pipe(
           Effect.andThen(
             error.slowDown
               ? Ref.update(extraDelayMs, (ms) => ms + increment)
@@ -134,10 +115,7 @@ export const pollDeviceAuthorization = Effect.fn(
         );
       }
       if (isTransient(error)) {
-        return Ref.update(transients, ({ count }) => ({
-          count: count + 1,
-          last: error,
-        })).pipe(
+        return Ref.update(transients, (count) => count + 1).pipe(
           Effect.andThen(
             Effect.logWarning(
               `Device authorization poll failed (transient): ${error.error.message}`,
@@ -148,43 +126,26 @@ export const pollDeviceAuthorization = Effect.fn(
       return Effect.void;
     }),
     Effect.retry({
-      // Still pending and the code is still alive: wait once more. A
-      // transient also waits once more while the consecutive budget lasts.
-      // The retry stops with the pending or transient failure at the deadline.
-      while: (error) => {
-        if (isPending(error)) return beforeDeadline;
-        if (!isTransient(error)) return false;
-        return Effect.flatMap(Ref.get(transients), ({ count }) =>
-          count < MAX_CONSECUTIVE_TRANSIENTS
-            ? beforeDeadline
-            : Effect.succeed(false),
-        );
-      },
+      // Still pending: wait once more. A transient also waits once more
+      // while the consecutive budget lasts.
+      while: (error) =>
+        isPending(error) ||
+        (isTransient(error) &&
+          Effect.map(
+            Ref.get(transients),
+            (count) => count < MAX_CONSECUTIVE_TRANSIENTS,
+          )),
       schedule: Schedule.spaced(Duration.millis(options.intervalMs)).pipe(
         Schedule.addDelay(() => Ref.get(extraDelayMs)),
+        Schedule.upTo({ duration: Duration.millis(options.expiresInMs) }),
       ),
     }),
   );
-  // What the poll fails with: the poll's own terminal errors, a transient's
-  // carried error, or the code's expiry. A pending at the deadline is a
-  // timeout; a transient, whether its budget ran out or the deadline passed,
-  // is its own carried failure.
-  return yield* Effect.catchIf(
-    Effect.catchIf(polled, isPending, () => Effect.fail(timedOut)),
-    isTransient,
-    (transient) => Effect.fail(transient.error),
-  );
-});
-
-/**
- * Persist the approved token as a session through the coordinator's store
- * program. An interruption already pending is honored before the store
- * starts; once it has started, an interruption waits for it, so the persisted
- * session and the caller's view of it never diverge.
- */
-export const completeDeviceSession = Effect.fn(
-  'deviceAuthorization.completeDeviceSession',
-)(function* <Session, E, R>(complete: () => Effect.Effect<Session, E, R>) {
-  yield* Effect.yieldNow;
-  return yield* Effect.uninterruptible(complete());
+  // The retry ends on its last failure: a pending one when the code's
+  // lifetime ran out is a timeout, a transient one (its budget spent, or the
+  // lifetime over) its own carried failure, a terminal answer itself.
+  return yield* Effect.mapError(polled, (error) => {
+    if (isPending(error)) return timedOut;
+    return isTransient(error) ? error.error : error;
+  });
 });

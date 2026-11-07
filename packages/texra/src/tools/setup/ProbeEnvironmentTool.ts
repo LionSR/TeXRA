@@ -9,7 +9,7 @@ import { Config, Effect, Option, Predicate, Schema } from 'effect';
 import {
   API_KEY_PROVIDER_IDS,
   apiProviderOfSecretName,
-  lookupApiKeyOrigin,
+  apiKey,
 } from '@texra-ai/llm';
 import { defineTool } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
@@ -145,7 +145,8 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
       ),
       Effect.all(
         API_KEY_PROVIDER_IDS.map((provider) =>
-          lookupApiKeyOrigin(secrets, provider).pipe(
+          apiKey(secrets, provider).pipe(
+            Effect.map((key) => key.origin),
             Effect.catchTag('SecretsFailed', () =>
               Effect.succeed('unknown' as const),
             ),

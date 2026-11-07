@@ -8,12 +8,24 @@
 import { ModelError } from '@texra-ai/llm';
 
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
-import type { RouteUnavailable } from '@common/errors/agentErrors';
+import { RouteUnavailable } from '@common/errors/agentErrors';
 import { providerErrorOf } from '@common/errors/sdkError/providerErrorFormat';
 import { type RetryErrorInfo, toRetryErrorInfo } from '@shared/schemas';
 
 /** Why a model call failed: the vendor's verdict, or no route to send it on. */
 export type CallFailure = ModelError | RouteUnavailable;
+
+/**
+ * A call's failure as its route words it: a subscription session that
+ * failed inside a request (its token could not be read or renewed) comes
+ * back through llm as an `authentication` failure caused by the route's
+ * own {@link RouteUnavailable}, which says what to do; any other failure is
+ * itself.
+ */
+export const routeFailureOf = (error: CallFailure): CallFailure =>
+  error instanceof ModelError && error.cause instanceof RouteUnavailable
+    ? error.cause
+    : error;
 
 /**
  * The failure a run records for `error` on a binding of `provider`: its

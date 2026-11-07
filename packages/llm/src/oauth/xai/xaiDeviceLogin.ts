@@ -15,7 +15,6 @@ import { Effect } from 'effect';
 
 // Local imports - oauth
 import {
-  completeDeviceSession,
   pollDeviceAuthorization,
   type DeviceLoginOptions,
 } from '../deviceAuthorization.js';
@@ -60,7 +59,6 @@ export const xaiLoginWithDeviceCode = Effect.fn(
     slowDownIncrementMs: XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC * 1000,
   });
 
-  return yield* completeDeviceSession(() =>
-    options.coordinator.storeTokens(tokens),
-  );
+  // The coordinator's store is uninterruptible once it starts.
+  return yield* options.coordinator.storeTokens(tokens);
 });
