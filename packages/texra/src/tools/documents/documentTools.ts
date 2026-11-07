@@ -208,17 +208,6 @@ export const DocumentContextTool = defineTool({
   }),
 });
 
-/** The directories of the task's bound files (`task.files`, read from
- *  beside its agent file): the compile searches them, so a template's
- *  theme files resolve as they do for the prompt. */
-const taskFileDirs = (docs: Documents): readonly string[] => [
-  ...new Set(
-    Object.values(docs.task.files)
-      .filter((file): file is string => Boolean(file))
-      .map((file) => dirname(boundFile(docs.entry.path, file).path)),
-  ),
-];
-
 /** The prompt and media of `revision`, after the first revision's checks
  *  (`openTask`) when `stageId` is its stage. */
 const revisionContext = Effect.fn('documents.revisionContext')(function* (
@@ -390,14 +379,18 @@ export const DocumentCompileTool = defineTool({
     const docs = yield* documentsOfCall('document_compile');
     const { roots, fileService, logger } = docs.deps;
     const recorded = roundOf(docs.rounds, revision);
+    // The compile searches where the task's bound files live (`task.files`,
+    // read from beside its agent file), so a template's theme files resolve
+    // as they do for the prompt.
+    const inputDirs = [
+      ...new Set(
+        Object.values(docs.task.files)
+          .filter((file): file is string => Boolean(file))
+          .map((file) => dirname(boundFile(docs.entry.path, file).path)),
+      ),
+    ];
     const check = yield* runCompileCheck(
-      {
-        roots,
-        fileService,
-        logger,
-        runId: docs.run.runId,
-        inputDirs: taskFileDirs(docs),
-      },
+      { roots, fileService, logger, runId: docs.run.runId, inputDirs },
       revision,
       recorded?.outputs ?? [],
     ).pipe(
