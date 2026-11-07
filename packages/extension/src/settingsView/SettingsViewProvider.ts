@@ -134,9 +134,9 @@ export class SettingsViewProvider {
             message.command !== SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
           )
             return;
-          // The ready handler has repainted the view; the tab asked for while
-          // it loaded goes after that data, as a reveal of a live panel
-          // orders them.
+          // The ready handler has asked every page for the view; the tab
+          // asked for while it loaded goes now, as a reveal of a live panel
+          // does.
           this.viewReady = true;
           const pending = this.pendingTab;
           this.pendingTab = undefined;

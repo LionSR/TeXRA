@@ -305,8 +305,8 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
 
     const handlers = {
       // The view (re)opened: every page is sent, and this workspace's tools
-      // are probed again, which the Plugins page follows.
-      webviewReady: () => Effect.andThen(changed('view'), toolsPage.refresh),
+      // are probed again (a follower below), which the Plugins page follows.
+      webviewReady: () => changed('view'),
       ...agents.handlers,
       setProviderKey: (message) =>
         keyAction(profileKeys.setProviderKey(message.provider)),
@@ -424,6 +424,12 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         [
           ...pages.map(followPage),
           toolsPage.followToolAvailability,
+          // The re-probe's network checks (Zotero and others) never hold the
+          // view's ready answer, so the host's tab reveal is not kept waiting.
+          Stream.fromPubSub(inputs).pipe(
+            Stream.filter((input) => input === 'view'),
+            Stream.runForEach(() => settle(toolsPage.refresh)),
+          ),
           // A run that binds a GitHub subscription, the setup agent's
           // `apply_team`, and a provider key written by any writer (the setup
           // agent's `unset_api_key`, another window). OAuth tokens and other
