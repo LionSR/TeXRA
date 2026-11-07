@@ -129,7 +129,6 @@ const PREPARED: ResolvedTurn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
   mode: 'foreground',
   messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
   tools: [],
-  transport: { kind: 'http' },
   controls: {
     temperature: null,
     maxOutputTokens: 1024,
