@@ -22,6 +22,7 @@ import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
   type ProcessRuntime,
+  type ProcessServices,
   type GlobalValues,
   withProcessServices,
   StateStores,
@@ -73,7 +74,7 @@ import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {
   settingsTabByCommand,
-  type CommandId,
+  type ExtensionCommandId,
 } from '@texra/shared/commands/catalog';
 import { serviceProjectState } from '@texra/controllers/server/serviceSession';
 import { openProjectSession } from '@texra/controllers/session/openProjectSession';
@@ -240,18 +241,40 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
 });
 
 /**
- * Workspace-bound commands the getting-started walkthrough exposes as buttons.
- * Their links invoke one bridge command so a no-workspace click can explain
- * the prerequisite without firing the real command's `onCommand` completion
- * event.
+ * The commands a window without a single folder registers, since nothing they
+ * do needs a workspace: the walkthrough's credential and sample buttons work
+ * before a folder is open. The full command surface is registered only on the
+ * single-folder path, so these are standalone variants of its rows.
  */
-type WalkthroughCommandNeedingWorkspace =
-  | (typeof EXTENSION_COMMANDS)[
-      | 'CLONE_OVERLEAF_PROJECT'
-      | 'DOWNLOAD_ARXIV_SOURCE'
-      | 'RUN_SETUP_ASSISTANT'
-      | 'SHOW_MAIN_VIEW']
-  | Extract<CommandId, 'texra.showApprovalSettings'>;
+const NO_FOLDER_COMMANDS = {
+  // A first-time user without a LaTeX project can create the sample and land
+  // directly in a working workspace.
+  'texra.createSampleProject': (context) =>
+    createSampleProjectWithoutWorkspace(context.extensionPath),
+  'texra.openGettingStarted': (context) =>
+    openGettingStarted(context.extension.id),
+  'texra.auth.chatgpt.signIn': (_context, roots) =>
+    signInWithSubscription(roots, 'welcomeView', 'chatgpt'),
+  'texra.setApiKey': (_context, roots) => apiSetApiKey(roots),
+} satisfies Partial<
+  Record<
+    ExtensionCommandId,
+    (
+      context: vscode.ExtensionContext,
+      roots: WorkspaceRoots,
+    ) => Effect.Effect<unknown, Error, ProcessServices | Sessions>
+  >
+>;
+
+/**
+ * The commands that need a folder. The getting-started walkthrough's buttons
+ * for them invoke one bridge command, so a no-workspace click can explain the
+ * prerequisite without firing the real command's `onCommand` completion event.
+ */
+type WalkthroughCommandNeedingWorkspace = Exclude<
+  ExtensionCommandId,
+  keyof typeof NO_FOLDER_COMMANDS
+>;
 
 /** Internal command URI used by workspace-bound walkthrough links. */
 const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
@@ -332,32 +355,13 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     // opening a folder reloads the window into that path (welcomeView.ts).
     const { runtime, roots } = yield* initVscodePlatform(context, undefined);
     registerWelcomeView(context, runtime);
-    // The full command surface (including the workspace-backed
-    // `texra.createSampleProject`) is only registered on the single-folder
-    // path below, so the welcome view registers its own standalone variant:
-    // a first-time user without a LaTeX project can create the sample and
-    // land directly in a working workspace.
-    context.subscriptions.push(
-      vscode.commands.registerCommand(
-        EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
-        () =>
-          runtime.runPromise(
-            createSampleProjectWithoutWorkspace(context.extensionPath),
-          ),
-      ),
-      vscode.commands.registerCommand(
-        EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
-        () => runtime.runPromise(openGettingStarted(context.extension.id)),
-      ),
-      vscode.commands.registerCommand('texra.auth.chatgpt.signIn', () =>
-        runtime.runPromise(
-          signInWithSubscription(roots, 'welcomeView', 'chatgpt'),
+    for (const [id, command] of Object.entries(NO_FOLDER_COMMANDS)) {
+      context.subscriptions.push(
+        vscode.commands.registerCommand(id, () =>
+          runtime.runPromise(command(context, roots)),
         ),
-      ),
-      vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        runtime.runPromise(apiSetApiKey(roots)),
-      ),
-    );
+      );
+    }
     registerWalkthroughWorkspaceAction(context, false, runtime);
     return;
   }

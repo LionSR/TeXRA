@@ -39,12 +39,11 @@ import type { ProcessRuntime } from '@texra-ai/harness/host';
  * Duplicate-registration audit (#3787 follow-up):
  * Every command id in `EXTENSION_COMMAND_HANDLERS` has been verified to
  * have no stale `vscode.commands.registerCommand(...)` call on the
- * single-folder path that installs this registry, and every other direct
- * `registerCommand` call site there registers an id NOT tagged
- * `extensionRegistry` in `commandCatalog` (inline comments and the
- * walkthrough action). The no-folder welcome path installs its own
- * standalone variants of a few tagged ids, since this registry is not
- * installed there.
+ * single-folder path that installs this registry; the other direct
+ * `registerCommand` call sites there are the comment threads' commands and
+ * the walkthrough action. The no-folder welcome path installs its own
+ * standalone variants of a few ids, since this registry is not installed
+ * there.
  */
 
 /**

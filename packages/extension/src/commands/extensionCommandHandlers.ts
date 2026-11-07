@@ -9,10 +9,11 @@ import {
   type SettingsTarget,
 } from '@texra/shared/settingsView/settingsTarget';
 import {
-  commandCatalog,
   settingsTabByCommand,
+  type ExtensionCommandId,
   type SettingsTabCommandId,
 } from '@texra/shared/commands/catalog';
+import type { CommentCommandId } from '@frontend/comments/inlineComments';
 import {
   definedHandler,
   type CommandHandler,
@@ -35,21 +36,15 @@ import type { Effect } from 'effect';
  */
 
 /**
- * Catalog ids whose extension registration is driven by the shared
- * `dispatchCommandFromRegistry` handler map below, derived from the
- * `extensionRegistry: true` tag on `commandCatalog` entries
- * (`packages/texra/src/shared/commands/catalog.ts`) rather than a hand-mirrored id list.
- * Adding a new registry-driven command only requires tagging its catalog
- * entry — `EXTENSION_COMMAND_HANDLERS` failing to `satisfy` its `Record<>`
- * constraint below is the compile-time signal that a handler still needs
- * to be authored (real per-command behavior can't be generated).
+ * The catalog ids registered through the shared `dispatchCommandFromRegistry`
+ * handler map below: every extension command but the comment threads' own.
+ * A new catalog row fails `EXTENSION_COMMAND_HANDLERS`'s `satisfies` until its
+ * handler is written.
  */
-type ExtensionRegistryCatalogEntry = Extract<
-  (typeof commandCatalog)[number],
-  { extensionRegistry: true }
+type ExtensionRegistryCatalogCommandId = Exclude<
+  ExtensionCommandId,
+  CommentCommandId
 >;
-
-type ExtensionRegistryCatalogCommandId = ExtensionRegistryCatalogEntry['id'];
 
 /**
  * `texra.openDoc` is intentionally absent from the shared catalog: it does not

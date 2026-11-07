@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
+import type { ExtensionCommandId } from '@texra/shared/commands/catalog';
 import type {
   InlineCommentProvider,
   InlineCommentThreadView,
@@ -148,27 +149,30 @@ export function registerInlineComments(context: vscode.ExtensionContext): void {
   // threads, but does not start their own from the gutter.
   context.subscriptions.push(
     controller,
-    vscode.commands.registerCommand(
-      'texra.replyComment',
-      (reply: vscode.CommentReply) => {
-        appendComment(reply.thread, USER_AUTHOR, reply.text);
-      },
-    ),
-    vscode.commands.registerCommand(
-      'texra.resolveCommentThread',
-      (thread: vscode.CommentThread) => {
-        setThreadResolved(thread, true);
-      },
-    ),
-    vscode.commands.registerCommand(
-      'texra.unresolveCommentThread',
-      (thread: vscode.CommentThread) => {
-        setThreadResolved(thread, false);
-      },
+    ...Object.entries(COMMENT_COMMANDS).map(([id, run]) =>
+      vscode.commands.registerCommand(id, run),
     ),
     { dispose: disable },
   );
 }
+
+/** The comment threads' own commands. VS Code calls them with the thread or
+ *  reply they were invoked on, so they are registered here rather than with
+ *  the commands that take decodable arguments. */
+const COMMENT_COMMANDS = {
+  'texra.replyComment': (reply: vscode.CommentReply) => {
+    appendComment(reply.thread, USER_AUTHOR, reply.text);
+  },
+  'texra.resolveCommentThread': (thread: vscode.CommentThread) => {
+    setThreadResolved(thread, true);
+  },
+  'texra.unresolveCommentThread': (thread: vscode.CommentThread) => {
+    setThreadResolved(thread, false);
+  },
+} satisfies Partial<Record<ExtensionCommandId, (arg: never) => void>>;
+
+/** The commands {@link registerInlineComments} registers. */
+export type CommentCommandId = keyof typeof COMMENT_COMMANDS;
 
 function disable(): void {
   for (const thread of threads.values()) thread.dispose();

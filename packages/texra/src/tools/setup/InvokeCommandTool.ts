@@ -4,7 +4,7 @@ import { Effect, Schema } from 'effect';
 // Local imports
 import { defineTool } from '@texra-ai/harness';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
-import { commandCatalog } from '@texra/shared/commands/catalog';
+import type { CommandId } from '@texra/shared/commands/catalog';
 
 // Local file imports
 import { assertInSetupAllowlist, SetupPlatform } from './platform';
@@ -17,12 +17,31 @@ const LEAN4_SETUP_COMMANDS = [
   'lean4.setup.selectDefaultToolchain',
 ];
 
-/** The commands the setup agent may invoke: the catalog's `setupInvokable`
- *  rows and the Lean 4 extension's installers. */
+/**
+ * The TeXRA commands the setup agent may invoke: each opens an existing,
+ * trusted UI flow. Never add one that deletes, resets or cleans anything.
+ */
+const SETUP_INVOKABLE_COMMANDS = [
+  'texra.createSampleProject',
+  'texra.openGettingStarted',
+  'texra.cloneOverleafProject',
+  'texra.downloadArXivSource',
+  'texra.setApiKey',
+  'texra.removeApiKey',
+  'texra.showMemory',
+  'texra.showModels',
+  'texra.showAgents',
+  'texra.showTools',
+  'texra.showTeamSettings',
+  'texra.showGitSettings',
+  'texra.showMainView',
+  'texra.showDashboard',
+] as const satisfies readonly CommandId[];
+
+/** The commands the setup agent may invoke: TeXRA's own and the Lean 4
+ *  extension's installers. */
 const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
-  ...commandCatalog.flatMap((entry) =>
-    'setupInvokable' in entry ? [entry.id] : [],
-  ),
+  ...SETUP_INVOKABLE_COMMANDS,
   ...LEAN4_SETUP_COMMANDS,
 ]);
 
