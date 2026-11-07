@@ -1,6 +1,6 @@
 ---
 created: 2026-11-03
-status: proposed (item 1 done 2026-11-05, #14742; item 2 open)
+status: proposed (item 1 done 2026-11-05, #14742; item 2 done 2026-11-07)
 ---
 
 # Overlapping responsibilities: git reads and subscription provider facts
@@ -84,8 +84,8 @@ The coding plans (`kimiCode`, `glmCodingPlan`) are a separate set:
 describe them, not the sign-in providers above.
 
 Why it matters: the identical name invites importing the wrong module.
-Proposed follow-up: rename the texra file to what it holds (for example
-`subscriptionStatus.ts`), six importers. Smaller and less urgent than item 1.
+Done: the texra file is now `packages/texra/src/shared/model/subscriptionStatus.ts`
+(six importers). Smaller and less urgent than item 1.
 
 ## Not found
 

@@ -24,7 +24,7 @@
 
 import { Schema } from 'effect';
 
-import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuth';
+import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionStatus';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {

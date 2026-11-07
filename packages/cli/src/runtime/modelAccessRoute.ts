@@ -1,5 +1,5 @@
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
-import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuth';
+import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionStatus';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
