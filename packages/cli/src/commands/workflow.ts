@@ -16,7 +16,11 @@ import {
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
-import { failUsage, type CliContext } from '../runtime/cliContext';
+import {
+  failUsage,
+  type CliContext,
+  type CliInvocation,
+} from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   formatInterruptedResumeHint,
@@ -116,7 +120,7 @@ function classifyInputFiles(files: readonly string[]) {
 export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   context: CliContext,
   init: HeadlessRunInit,
-): Effect.fn.Return<number, Error, ProcessServices> {
+): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
   if (init.output && init.outputDir) {
     return yield* failUsage('Use either --output or --output-dir, not both.');
   }
@@ -251,7 +255,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   agentSource: AgentConfigPayload['agentSource'],
   instruction: string,
   services: CliPlatformServices,
-): Effect.fn.Return<number, Error, ProcessServices> {
+): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
   // `--output` and `--output-dir` are rejected as a pair before this point, so
   // at most one of them is set here.
   const option = Rec.keys(DOCUMENT_TASK_OPTIONS).find(
@@ -304,7 +308,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
       });
       if (!run.ok) return run.exitCode;
 
-      emitCliResult(runContext, {
+      yield* emitCliResult({
         json: run.result,
         ndjson: { kind: 'agent-result', result: run.result },
         text: toolUseResultText(run.result),
@@ -333,7 +337,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       readonly recoveryInputIsDurable: boolean;
       readonly runId?: RunId;
     },
-  ): Effect.fn.Return<number, Error, ProcessServices> {
+  ): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
     const session = yield* options.services.session;
     const fileSystem = yield* FileSystem.FileSystem;
     let workflowResult: CliWorkflowRunResult | undefined;
@@ -425,7 +429,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     // fields, its plugins.
     workflowResult = { ...result, ...workflowResult, outcome: result.outcome };
 
-    emitCliResult(runContext, {
+    yield* emitCliResult({
       json: workflowResult,
       ndjson: { kind: 'result', result: workflowResult },
       text: formatWorkflowTextResult(workflowResult),

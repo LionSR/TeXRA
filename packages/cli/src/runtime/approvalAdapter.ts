@@ -45,7 +45,7 @@ import {
   declineDecision,
   REQUEST_ACTIONS,
 } from '@texra/shared/session/surfaceDecision';
-import { type CliContext } from './cliContext';
+import { CliInvocation } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import type { Session, SessionHost } from '@texra-ai/harness';
 import type { HostInteractions } from '@texra-ai/harness/host';
@@ -58,11 +58,7 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
 
 const askHeadlessUserQuestion = Effect.fn(
   'approvalAdapter.askHeadlessUserQuestion',
-)(function* (
-  payload: UserQuestionRequest,
-  context: CliContext,
-  hooks: CliApprovalPromptHooks,
-) {
+)(function* (payload: UserQuestionRequest, hooks: CliApprovalPromptHooks) {
   const answers: Record<string, UserQuestionAnswers[string]> = {};
   const asked = yield* Effect.result(
     Effect.forEach(
@@ -84,7 +80,7 @@ const askHeadlessUserQuestion = Effect.fn(
         });
         const answer = yield* whilePrompting(
           hooks,
-          queueCliApprovalQuestion(context, {
+          queueCliApprovalQuestion({
             summary: payload.context
               ? `${payload.context}\n\n${formatted}`
               : formatted,
@@ -116,13 +112,14 @@ const askHeadlessUserQuestion = Effect.fn(
  * The headless run's host: its notices, and, in an interactive run, the
  * prompt that answers each request. `session` is the headless run's
  * session, threaded from the composition that opened it; a tool edit's
- * preview is read from it.
+ * preview is read from it. The session answers requests on its own fibers,
+ * so the prompt carries this invocation with it.
  */
-export function createHeadlessCliHostInteractions(
+export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
   session: Pick<Session, 'request'>,
-  context: CliContext,
   hooks: HeadlessCliHostInteractionHooks = {},
-): SessionHost {
+): Effect.fn.Return<SessionHost, never, CliInvocation> {
+  const invocation = yield* CliInvocation;
   /** The prompt content for a tool edit: the session's preview of it, else
    *  the payload's own summary and why there is no diff. */
   const toolEditContent = Effect.fn('approvalAdapter.toolEditContent')(
@@ -148,9 +145,8 @@ export function createHeadlessCliHostInteractions(
   const approve = Effect.fn('approvalAdapter.approve')(function* (
     runId: RunId,
     payload: RequestPayload,
-  ): Effect.fn.Return<RequestDecision, Error> {
-    const ask = (content: CliApprovalContent) =>
-      askApproval(context, content, hooks);
+  ): Effect.fn.Return<RequestDecision, Error, CliInvocation> {
+    const ask = (content: CliApprovalContent) => askApproval(content, hooks);
     switch (payload.kind) {
       case 'bash':
         return yield* ask({ summary: formatBashApprovalSummary(payload.data) });
@@ -184,7 +180,7 @@ export function createHeadlessCliHostInteractions(
         return declineDecision('retry', note);
       }
       case 'userQuestion':
-        return yield* askHeadlessUserQuestion(payload.data, context, hooks);
+        return yield* askHeadlessUserQuestion(payload.data, hooks);
       case 'plugin':
         return yield* Effect.never;
     }
@@ -193,8 +189,13 @@ export function createHeadlessCliHostInteractions(
   return {
     emit: hooks.emit,
     // Only an interactive run can answer a prompt.
-    ...(context.mode === 'interactive'
-      ? { approve: (pending) => approve(pending.runId, pending.payload) }
+    ...(invocation.context.mode === 'interactive'
+      ? {
+          approve: (pending) =>
+            approve(pending.runId, pending.payload).pipe(
+              Effect.provideService(CliInvocation, invocation),
+            ),
+        }
       : { approvalPromptsUnavailable: true }),
   };
-}
+});

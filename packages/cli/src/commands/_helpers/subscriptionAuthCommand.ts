@@ -1,7 +1,7 @@
 import { defineCommand, type CommandDef } from 'citty';
 import { Cause, Effect } from 'effect';
 
-import type { CliContext } from '@cli/runtime/cliContext';
+import { CliInvocation } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { writeErrorStderr } from '@cli/runtime/logSinks';
@@ -68,13 +68,10 @@ export function defineSubscriptionAuthCommand(
   /** Registered ndjson discriminator; the status record appends '-status'. */
   const ndjsonKind = `${options.providerId}-auth` as const;
 
-  function runLogin(
-    context: CliContext,
-    init: { device: boolean; noBrowser: boolean },
-  ) {
-    const writeProgress = cliProgressWriter(context);
-
+  function runLogin(init: { device: boolean; noBrowser: boolean }) {
     return Effect.gen(function* () {
+      const { context } = yield* CliInvocation;
+      const writeProgress = yield* cliProgressWriter;
       const services = yield* initCliPlatform(context);
       const signInResult = yield* withCliAuthError(
         signInCliSubscription(
@@ -97,7 +94,7 @@ export function defineSubscriptionAuthCommand(
         provider.displayName,
         account.label,
       );
-      emitCliResult(context, {
+      yield* emitCliResult({
         json: payload,
         ndjson: { kind: ndjsonKind, ...payload },
         text: `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`,
@@ -124,8 +121,8 @@ export function defineSubscriptionAuthCommand(
           'Print the loopback sign-in URL instead of opening a browser',
       },
     },
-    run: (context, ctx) =>
-      runLogin(context, {
+    run: (_, ctx) =>
+      runLogin({
         device: ctx.args.device === true,
         noBrowser: booleanArg(ctx.args, 'no-browser'),
       }),
@@ -151,7 +148,7 @@ export function defineSubscriptionAuthCommand(
           ? { preferenceError: update.preferenceError }
           : {}),
       };
-      emitCliResult(context, {
+      yield* emitCliResult({
         json: payload,
         ndjson: { kind: ndjsonKind, ...payload },
         text: subscriptionSignOutOutcomeMessage(options.providerId, update),
@@ -171,7 +168,7 @@ export function defineSubscriptionAuthCommand(
       const statusResult = yield* withCliAuthError(provider.getStatus());
       if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
       const { label, ...status } = statusResult.value;
-      emitCliResult(context, {
+      yield* emitCliResult({
         json: status,
         ndjson: { kind: `${ndjsonKind}-status`, ...status },
         text: status.signedIn

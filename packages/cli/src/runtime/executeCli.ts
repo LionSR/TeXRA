@@ -52,6 +52,7 @@ import {
   launchApprovalNotice,
   projectApprovalPolicy,
   type CliContext,
+  type CliInvocation,
 } from './cliContext';
 import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
 
@@ -188,9 +189,11 @@ export const executeCliConfig: (
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliExecuteOptions,
-) => Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> = Effect.fn(
-  'executeCliConfig',
-)(
+) => Effect.Effect<
+  CliConfigExecuteResult,
+  Error,
+  ProcessServices | CliInvocation
+> = Effect.fn('executeCliConfig')(
   function* (
     config: AgentConfigPayload,
     runContext: CliContext,
@@ -230,7 +233,7 @@ export const executeCliConfig: (
     yield* presentationHost
       .attachRunProgressRenderer(session, request.runId)
       .pipe(Scope.provide(presentationScope));
-    const host = createHeadlessCliHostInteractions(session, runContext, {
+    const host = yield* createHeadlessCliHostInteractions(session, {
       prompting: () => presentationHost.holdForPrompt?.(),
       emit: (event, payload) => {
         if (event === 'requestShowError') failurePresented = true;

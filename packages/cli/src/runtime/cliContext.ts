@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import {
+  Context,
   Effect,
   FileSystem,
   Result,
@@ -14,8 +15,10 @@ import {
 import { DatabaseOpenFailed } from '@texra-ai/harness';
 import {
   type ConfigProvider,
+  type PerKeyLane,
   type SkillSourceOptions,
   Settings,
+  withPerKeyLane,
 } from '@texra-ai/harness/host';
 import { modelConfig } from '@texra-ai/llm';
 import {
@@ -103,6 +106,30 @@ export interface CliContext {
     request: CliPromptRequest,
   ) => Effect.Effect<string, Error>;
 }
+
+/**
+ * The invocation a command's program runs for: its context, decided once
+ * from argv, and the one prompt lane over this process's stdin.
+ * `defineCliCommand` provides it, so the helpers that print a result or ask
+ * the operator read it here instead of taking the context as a parameter.
+ */
+export class CliInvocation extends Context.Service<
+  CliInvocation,
+  {
+    readonly context: CliContext;
+    /** Run a prompt alone on stdin, so two prompts never read it at once. */
+    readonly onPromptLane: <A, E, R>(
+      self: Effect.Effect<A, E, R>,
+    ) => Effect.Effect<A, E, R>;
+  }
+>()('@texra-ai/cli/CliInvocation') {}
+
+/** Run `self` as one invocation of `context`. */
+export const provideCliInvocation = (context: CliContext) =>
+  Effect.provideService(CliInvocation, {
+    context,
+    onPromptLane: withPerKeyLane(new Map<'stdin', PerKeyLane>(), 'stdin'),
+  });
 
 export class CliUsageError extends Schema.TaggedError<CliUsageError>()(
   'CliUsageError',

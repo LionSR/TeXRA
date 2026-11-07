@@ -32,7 +32,11 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import {
+  CliInvocation,
+  CliUsageError,
+  type CliContext,
+} from '../runtime/cliContext';
 
 function parseHistoryListLimit(value: string | undefined): number | undefined {
   if (!value || !/^\d+$/.test(value)) return undefined;
@@ -40,16 +44,15 @@ function parseHistoryListLimit(value: string | undefined): number | undefined {
   return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;
 }
 
-const runHistoryList = Effect.fn('runHistoryList')(function* (
-  context: CliContext,
-  options: { limit?: number },
-) {
-  const stores = yield* initCliPlatform(context);
+const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
+  limit?: number;
+}) {
+  const stores = yield* initCliPlatform((yield* CliInvocation).context);
   const entries = yield* listCliHistoryEntries(yield* stores.runSession);
   const visibleEntries =
     options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
-  yield* emitPagedCliResult(context, {
+  yield* emitPagedCliResult({
     json: visibleEntries,
     ndjson: cliHistoryNdjsonRecords(visibleEntries),
     text: visibleEntries.length
@@ -76,7 +79,7 @@ const runHistoryShow = Effect.fn('runHistoryShow')(function* (
     return CliExitCode.Usage;
   }
 
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: details,
     ndjson: cliHistoryDetailNdjsonRecord(details),
     text: formatCliHistoryDetailsText(details),
@@ -216,7 +219,7 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
     text = '';
   }
 
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: result,
     ndjson: { kind: 'history-delete', result },
     text,
@@ -242,7 +245,7 @@ const historyListCommand = defineCliCommand({
   // 2 the program would have returned — and refuses before `defineCliCommand`
   // installs a process runtime this command would never bring a platform up
   // to dispose.
-  run: (context, ctx) => {
+  run: (_, ctx) => {
     const limitValue = optString(ctx.args.limit);
     const limit = parseHistoryListLimit(limitValue);
     if (limitValue !== undefined && limit === undefined) {
@@ -250,7 +253,7 @@ const historyListCommand = defineCliCommand({
         message: `Invalid history limit: ${limitValue}`,
       });
     }
-    return runHistoryList(context, { limit });
+    return runHistoryList({ limit });
   },
 });
 

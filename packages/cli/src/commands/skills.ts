@@ -60,7 +60,7 @@ const listSkills = Effect.fn('listSkills')(function* (
   // (nothing useful to show); the helper skips the write for the
   // resulting empty string.
   const items = result.skills.map(({ display }) => display);
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: items,
     ndjson: [
       ...items.map((skill) => ({ kind: 'skill' as const, skill })),
