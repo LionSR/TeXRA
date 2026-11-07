@@ -17,7 +17,11 @@ import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import {
+  generateRunId,
+  qualifyAggregateId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
@@ -221,6 +225,32 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
               .map((row) => Schema.decodeUnknownSync(RunEndData)(row.data));
             expect(stops).toStrictEqual([{ reason: 'shutdown' }]);
             expect(ends).toStrictEqual([{ outcome: 'cancelled' }]);
+          }),
+      );
+
+      it.effect(
+        'ends cancelled a launch whose shutdown stop came before it started',
+        () =>
+          Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            const sdk = yield* packageSession(
+              yield* persistentTestSession(roots),
+            );
+            // The CLI mints the id, and a shutdown's stop can reach the
+            // session before the launch registers it: no rows exist yet.
+            const runId = generateRunId();
+            yield* sdk.request({ kind: 'run.stop', runId, reason: 'shutdown' });
+            const run = yield* sdk.start({
+              agent: 'golden_parent',
+              instruction: 'Read the notes, plan, delegate.',
+              model: MODEL,
+              runId,
+            });
+            expect((yield* run.result).outcome).toBe('cancelled');
+            const stops = storedRows(roots.storage)
+              .filter((row) => row.run === runId && row.type === 'run.stop')
+              .map((row) => Schema.decodeUnknownSync(RunStopData)(row.data));
+            expect(stops).toStrictEqual([{ reason: 'shutdown' }]);
           }),
       );
 

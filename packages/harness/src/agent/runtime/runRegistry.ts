@@ -132,6 +132,10 @@ export class RunRegistry implements RunsShape {
   >();
   /** The runs whose stop is committing: a start is refused meanwhile. */
   private readonly stopping = new Set<RunId>();
+  /** Stops asked of a run id with no rows yet: a launch whose caller minted
+   *  the id and has not registered it. Its start takes the stop as one
+   *  asked while it opened, so the run ends CANCELLED instead of running. */
+  private readonly stoppedBeforeStart = new Map<RunId, RunStopReason>();
   /** The runs a file operation or a deletion holds, for its lifetime
    *  ({@link withInactiveRun}): a launch arriving meanwhile waits for it. */
   private readonly busy = new Map<RunId, Deferred.Deferred<void>>();
@@ -324,7 +328,11 @@ export class RunRegistry implements RunsShape {
       const busy = this.busy.get(runId);
       if (busy !== undefined)
         return Effect.andThen(Deferred.await(busy), this.start(runId, launch));
-      const opening = { stop: null, settled: Deferred.makeUnsafe<void>() };
+      const opening = {
+        stop: this.stoppedBeforeStart.get(runId) ?? null,
+        settled: Deferred.makeUnsafe<void>(),
+      };
+      this.stoppedBeforeStart.delete(runId);
       this.starting.set(runId, opening);
       this.publishHeld();
       // The rows of a stop asked meanwhile: the run's `run.stop` and, with
@@ -442,7 +450,7 @@ export class RunRegistry implements RunsShape {
    * interruption of the fiber driving it here. A run no fiber drives here
    * gets its end in the same batch as the stop. A run still opening takes
    * the stop once its opening committed: its start forks it and interrupts
-   * it at once.
+   * it at once. So does a run whose id has no rows yet, when it starts.
    */
   stop(runId: RunId, reason: RunStopReason): Effect.Effect<boolean, Error> {
     return Effect.suspend(() => {
@@ -454,9 +462,18 @@ export class RunRegistry implements RunsShape {
       const fiber = this.live.get(runId);
       this.stopping.add(runId);
       return Effect.gen({ self: this }, function* () {
-        yield* this.inSession(
+        const known = yield* this.inSession(
           this.init.programs.stop(runId, reason, fiber === undefined),
         );
+        // No rows and no fiber: the launch has not registered yet. Its start
+        // takes the stop (one that began meanwhile already has its opening).
+        if (!known && fiber === undefined) {
+          const opened = this.starting.get(runId);
+          if (opened !== undefined) opened.stop ??= reason;
+          else if (!this.stoppedBeforeStart.has(runId))
+            this.stoppedBeforeStart.set(runId, reason);
+          return false;
+        }
         const detach =
           reason === 'user' &&
           (yield* Settings.get(

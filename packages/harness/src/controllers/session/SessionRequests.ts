@@ -119,24 +119,32 @@ const requireRunAction = (
 };
 
 /** Admit on current sequence rows: the run exists and is open. */
+/** The run's stored aggregate state; `undefined` while it has no rows. */
+const storedState = (
+  deps: RequestDeps,
+  runId: RunId,
+): Effect.Effect<AggregateState | undefined> =>
+  deps.log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
+    Effect.orDie,
+    Effect.map((rows) => rows[0]),
+  );
+
+const noLongerOpen = (deps: RequestDeps, runId: RunId) =>
+  new Unavailable({
+    runId,
+    reason: `The ${runNoun(deps.view, runId)} is no longer open.`,
+  });
+
 const admit = (
   deps: RequestDeps,
   req: RuntimeCommand,
 ): Effect.Effect<AggregateState, RequestError> => {
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   return Effect.flatMap(
-    deps.log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
-      Effect.orDie,
-      Effect.map((rows) => rows[0]),
-    ),
+    storedState(deps, runId),
     (state): Effect.Effect<AggregateState, RequestError> =>
       !state || state.closed
-        ? Effect.fail(
-            new Unavailable({
-              runId,
-              reason: `The ${runNoun(deps.view, runId)} is no longer open.`,
-            }),
-          )
+        ? Effect.fail(noLongerOpen(deps, runId))
         : Effect.succeed(state),
   );
 };
@@ -359,8 +367,13 @@ export function sessionRequests(
     }
     const runs = registryOf(yield* Runs);
     if (req.kind === 'run.stop') {
-      // Admitted on its rows unless a fiber here drives it.
-      if (runs.get(req.runId) === undefined) yield* admit(deps, req);
+      // Refused for a closed run no fiber here drives. An id with no rows
+      // yet is a launch its caller minted and has not registered: the
+      // registry keeps the stop for its start.
+      if (runs.get(req.runId) === undefined) {
+        const state = yield* storedState(deps, req.runId);
+        if (state?.closed) return yield* noLongerOpen(deps, req.runId);
+      }
       return yield* runs.stop(req.runId, req.reason).pipe(
         // An unread setting or a refused row: the run is still in flight.
         Effect.mapError(
