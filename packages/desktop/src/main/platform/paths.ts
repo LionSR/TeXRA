@@ -6,7 +6,7 @@ import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness/host';
 import { absentReason, pathExists } from '@texra-ai/harness/node';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 
-/** No resources candidate holds every bundled agent directory. */
+/** The app's resources directory holds no bundled agents. */
 class DesktopResourcesNotFound extends Schema.TaggedError<DesktopResourcesNotFound>()(
   'DesktopResourcesNotFound',
   {
@@ -66,35 +66,27 @@ export const resolveDesktopMainDir = Effect.fn('resolveDesktopMainDir')(
  * The bundled `packages/extension/resources` tree: beside the packaged app's
  * `Resources/` (`extraResources` in `electron-builder.yml`), or the extension
  * package's own copy in a development run from `packages/desktop/dist/main`.
+ * Which one is Electron's `app.isPackaged`, so nothing is searched; the one
+ * place fails by its path when it holds no bundled agents.
  */
 export const resolveResourcesPath = Effect.fn('resolveResourcesPath')(
-  function* (mainDirname: string) {
+  function* (mainDirname: string, isPackaged: boolean) {
     const fs = yield* FileSystem.FileSystem;
-    const resourcesPath = process.resourcesPath;
-    const candidates = [
-      resourcesPath ? join(resourcesPath, 'resources') : undefined,
-      join(mainDirname, '../../../extension/resources'),
-    ].filter((candidate): candidate is string => Boolean(candidate));
-
-    for (const candidate of candidates) {
-      if (yield* hasRequiredResourceDirectories(fs, candidate)) {
-        return candidate;
-      }
-    }
-    return yield* new DesktopResourcesNotFound({
-      message: `Unable to locate TeXRA resources. Checked: ${candidates.join(', ')}`,
-    });
+    const resources = isPackaged
+      ? join(process.resourcesPath, 'resources')
+      : join(mainDirname, '../../../extension/resources');
+    if (
+      !(yield* isExistingDirectory(
+        fs,
+        join(resources, BUNDLED_AGENTS_DIRECTORY),
+      ))
+    )
+      return yield* new DesktopResourcesNotFound({
+        message: `Unable to locate TeXRA resources: ${resources} holds no ${BUNDLED_AGENTS_DIRECTORY}/ directory`,
+      });
+    return resources;
   },
 );
-
-const hasRequiredResourceDirectories = Effect.fn(
-  'hasRequiredResourceDirectories',
-)(function* (fs: FileSystem.FileSystem, candidate: string) {
-  for (const path of [candidate, join(candidate, BUNDLED_AGENTS_DIRECTORY)]) {
-    if (!(yield* isExistingDirectory(fs, path))) return false;
-  }
-  return true;
-});
 
 const isExistingDirectory = (fs: FileSystem.FileSystem, path: string) =>
   fs.stat(path).pipe(

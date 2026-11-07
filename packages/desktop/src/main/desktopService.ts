@@ -8,6 +8,7 @@
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
+import { app } from 'electron';
 import { Effect, type Scope } from 'effect';
 
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
@@ -19,13 +20,11 @@ import {
 import type { GlobalValues } from '@texra-ai/harness/host';
 
 /** The service bundle: the packaged app's, or the extension build's in a
- *  development run. */
-function serviceBundle(mainDir: string): string | undefined {
-  return [
-    path.join(process.resourcesPath, 'serve', 'texra-serve.mjs'),
-    path.join(mainDir, '../../../extension/serve/texra-serve.mjs'),
-  ].find((candidate) => existsSync(candidate));
-}
+ *  development run, as `app.isPackaged` says. */
+const serviceBundle = (mainDir: string): string =>
+  app.isPackaged
+    ? path.join(process.resourcesPath, 'serve', 'texra-serve.mjs')
+    : path.join(mainDir, '../../../extension/serve/texra-serve.mjs');
 
 /**
  * Hold the service of `dataRoot`, starting it when none answers, for the
@@ -44,8 +43,10 @@ export function reachDesktopService(
         ),
       );
     const bundle = serviceBundle(mainDir);
-    if (bundle === undefined)
-      return Effect.fail(new Error('this build ships no service bundle'));
+    if (!existsSync(bundle))
+      return Effect.fail(
+        new Error(`this build has no service bundle at ${bundle}`),
+      );
     return linkService(
       dataRoot,
       spawnService(dataRoot, process.execPath, [bundle, 'serve'], {
