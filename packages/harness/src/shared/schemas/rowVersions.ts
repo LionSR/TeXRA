@@ -245,7 +245,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // would show a cut answer as complete).
   'response.finalized': { version: 2, listing: 'none' },
   'run.report': { ...V1, listing: 'own' },
-  'process.output': { ...V1, listing: 'none' },
+  // v2: a capped log's tail row says how many characters it follows a gap
+  // of (`elided`), in place of a notice row (an earlier build's capped log
+  // would read as one unbroken stream).
+  'process.output': { version: 2, listing: 'none' },
   'process.exit': { ...V1, listing: 'own' },
   'followup.closed': { ...V1, listing: 'own' },
   // v2: dispatch facts record `lane`, not `parallelSafe` (an earlier build's

@@ -53,26 +53,16 @@ const callAttributes = ({ command, description }: BackgroundBashCall) => [
  *
  * Each stream's excerpt is projected from `rows`, the run's display rows
  * once every output row it published is committed: its text is its
- * `process.output` rows in commit order. Past the log cap those rows are
- * the stream's first `recorded` characters, then the last window of what
- * followed; `gaps` says how many characters sit between the two.
+ * `process.output` rows in commit order. Past the log cap, the row marking
+ * the gap (`elided`) starts the stream's last window, and the rows before
+ * it are the stream's first characters.
  */
 export function formatBashDelivery(
   runId: string,
   call: BackgroundBashCall,
   wallTimeMs: number,
   result: ExecResult,
-  output: {
-    readonly rows: readonly DisplayRow[];
-    /** Per stream, where its rows skip what the cap held back: after its
-     *  first `recorded` characters, `elided` are missing (0: none are). */
-    readonly gaps: Readonly<
-      Record<
-        'stdout' | 'stderr',
-        { readonly recorded: number; readonly elided: number }
-      >
-    >;
-  },
+  rows: readonly DisplayRow[],
 ): string {
   const lines = [
     `<exit-code>${result.exitCode}</exit-code>`,
@@ -87,20 +77,23 @@ export function formatBashDelivery(
     ['stderr', 'stderr'],
   ] as const;
   for (const [name, stream] of outputStreams) {
-    const text = output.rows
-      .flatMap((row) =>
-        row.type === 'process.output' && row.stream === stream
-          ? [row.text]
-          : [],
-      )
-      .join('');
-    const { recorded, elided: missing } = output.gaps[stream];
-    // Past the cap the head is cut from what the stream recorded, and its
-    // tail is the window its rows end with.
+    const chunks = rows.flatMap((row) =>
+      row.type === 'process.output' && row.stream === stream ? [row] : [],
+    );
+    const gap = chunks.findIndex((chunk) => chunk.elided !== undefined);
+    const textOf = (from: number, to?: number) =>
+      chunks
+        .slice(from, to)
+        .map((chunk) => chunk.text)
+        .join('');
+    const text = textOf(0);
+    const missing = gap < 0 ? 0 : (chunks[gap]?.elided ?? 0);
+    // Past the cap the head is cut from the rows before the gap, and the
+    // tail is the window the gap's row starts.
     const [before, tail] =
-      missing > 0
-        ? [text.slice(0, recorded), text.slice(recorded)]
-        : [text, appendTail('', text, BACKGROUND_OUTPUT_TAIL_CHARS)];
+      gap < 0
+        ? [text, appendTail('', text, BACKGROUND_OUTPUT_TAIL_CHARS)]
+        : [textOf(0, gap), textOf(gap)];
     // A head only when the tail dropped earlier text: otherwise the tail
     // holds the whole stream and a head would repeat it.
     if (missing > 0 || text.length > tail.length) {

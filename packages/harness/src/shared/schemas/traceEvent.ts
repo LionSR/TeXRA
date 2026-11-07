@@ -35,10 +35,14 @@ export const TraceRowFieldsSchema = Schema.Union([
     messageType: Schema.optional(MessageTypeSchema),
   }),
   /** A chunk of a process run's output (a background command's), on the
-   *  stream it came from: the run's transcript, and what `/output` reads. */
+   *  stream it came from: the run's transcript, and what `/output` reads.
+   *  `elided` marks the gap a capped log leaves: how many characters of
+   *  the stream were left out before this chunk, whose rows from here on
+   *  are the stream's last window. */
   trace('process.output', {
     stream: Schema.Literals(['stdout', 'stderr']),
     text: Schema.String,
+    elided: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
   }),
   trace('stage.start', {
     id: Schema.String,
