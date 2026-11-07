@@ -6,8 +6,7 @@ import { RunFileService } from '@texra-ai/harness/plugins';
 import { createExternalLocation } from '@texra-ai/harness/host';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { fakePath } from '@test/support/FakePlatform';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { FakeHost } from '@test/support/testKernel';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -25,6 +24,7 @@ interface LaunchFiles {
 
 /** What the extraction reads of a run launched with these files. */
 function replyContext(
+  roots: WorkspaceRoots,
   inputFiles: string[] = ['paper.tex'],
   options: LaunchFiles = {},
 ) {
@@ -42,16 +42,20 @@ function replyContext(
       },
       { strict: true },
     ),
-    fileService: new RunFileService(RUN_ID, testWorkspaceRoots()),
+    fileService: new RunFileService(RUN_ID, roots),
   };
 }
 
+/** A file of the run directory, in the test host's root. */
+const runFile = (name: string) =>
+  FakeHost.useSync((host) => host.path('tmp/run', name));
+
 /** Seed the run directory: the fake host roots every path in a real temp
  *  directory, so the cases run on the live clock. */
-const write = (target: string, content: string) =>
+const write = (name: string, content: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    yield* fs.writeFileString(target, content);
+    yield* fs.writeFileString(yield* runFile(name), content);
   });
 
 /** Write a response and unpack it through the extraction pipeline. */
@@ -60,13 +64,14 @@ const writeAndSplitDocuments = Effect.fn('writeAndSplitDocuments')(function* (
   inputFiles: string[] = ['paper.tex'],
   options: LaunchFiles = {},
 ) {
-  yield* write(fakePath('tmp/run/output.xml'), output.join('\n'));
+  const host = yield* FakeHost;
+  yield* write('output.xml', output.join('\n'));
   const { outputs } = yield* extractReplyDocuments(
-    replyContext(inputFiles, options),
-    createExternalLocation(fakePath('tmp/run/output.xml')),
+    replyContext(host.roots, inputFiles, options),
+    createExternalLocation(host.path('tmp/run/output.xml')),
     0,
     options.baseFiles?.map((name) =>
-      createExternalLocation(fakePath('tmp/run', name)),
+      createExternalLocation(host.path('tmp/run', name)),
     ) ?? [],
   );
   return outputs;
@@ -77,7 +82,7 @@ const expectWritten = Effect.fn('expectWritten')(function* (
   content: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const written = yield* fs.readFileString(fakePath('tmp/run', path));
+  const written = yield* fs.readFileString(yield* runFile(path));
   expect(written).toBe(content);
 });
 
@@ -187,7 +192,6 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
 layer(
   FakeHost.layer({
     files: { '/tmp/run/output.xml': '<documents />' },
-    workspacePath: fakePath('workspace'),
   }),
   { buildPerTest: true, excludeTestServices: true },
 )('extractReplyDocuments', (it) => {
@@ -211,11 +215,11 @@ layer(
     () =>
       Effect.gen(function* () {
         yield* write(
-          fakePath('tmp/run/appendices.tex'),
+          'appendices.tex',
           '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n',
         );
         yield* write(
-          fakePath('tmp/run/cost_section.tex'),
+          'cost_section.tex',
           '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
         );
 
@@ -287,7 +291,7 @@ layer(
           'Page one transcription.\n\nPage two transcription.\n',
         );
         const fs = yield* FileSystem.FileSystem;
-        expect(yield* fs.exists(fakePath('tmp/run/ocr_result-2.tex'))).toBe(
+        expect(yield* fs.exists(yield* runFile('ocr_result-2.tex'))).toBe(
           false,
         );
       }).pipe(Effect.provide(nodePlatformLayer)),
@@ -298,8 +302,8 @@ layer(
     () =>
       Effect.gen(function* () {
         const stub = '\\section{Stub}\nShared template content.\n';
-        yield* write(fakePath('tmp/run/a.tex'), stub);
-        yield* write(fakePath('tmp/run/b.tex'), stub);
+        yield* write('a.tex', stub);
+        yield* write('b.tex', stub);
 
         const outputs = yield* writeAndSplitDocuments(
           [

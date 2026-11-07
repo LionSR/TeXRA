@@ -3,36 +3,28 @@ import { setLogSink } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 
 import { runCli } from '../commands/root';
-import { formatCrashReportLine } from '../runtime/cliContext';
-import { disposeCliProcessRuntime } from '../runtime/cliProcessRuntime';
-import { CliExitCode } from '../runtime/exitCodes';
-import { cliPlatformShutdown } from '../runtime/initPlatform';
+import { formatCrashReportLine } from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   cliErrorMessage,
   installCliPipeErrorHandlers,
   prePlatformDiagnosticSink,
   writeTextStderr,
-} from '../runtime/logSinks';
+} from '../runtime/platform/logSinks';
 
-// This process owns its diagnostic sink from here, not from the init that
-// eventually installs the platform's: the harness's console fallback
-// sends DEBUG and INFO to stdout, and the process runtime logs while its
-// layers build (`UsageLogService started …`) — which happens before
-// `initCliPlatform`, and for the two platform-less entries before a platform
-// that never comes up. Under `--output-format ndjson` that line was the
-// first thing on stdout and the stream was no longer parseable. Every
-// pre-platform diagnostic goes to stderr instead; `--quiet` is not known
-// until citty has parsed the argv, so `defineCliCommand` swaps in the silent
-// sink for it, and `initCliPlatform` swaps in the platform's as before.
+// This process owns its diagnostic sink from here, not from the platform
+// that eventually installs its own: the harness's console fallback sends
+// DEBUG and INFO to stdout, and a command's runtime logs while its layers
+// build (`UsageLogService started …`) — before its platform comes up, or
+// for a command with none at all. Under `--output-format ndjson` that line
+// was the first thing on stdout and the stream was no longer parseable.
+// Every pre-platform diagnostic goes to stderr instead; `--quiet` is not
+// known until citty has parsed the argv, so `defineCliCommand` swaps in the
+// silent sink for it, and the platform swaps in its own as before.
 setLogSink(prePlatformDiagnosticSink, { trusted: true });
 
-// The process entry: one run, with the platform's shutdown and the process
-// runtime's disposal as its finalizers, in that order. A platform's shutdown
-// disposes the runtime as its last step; a command that refused its arguments
-// before bringing a platform up registered no such step, and its runtime's
-// global-root change poll would hold the event loop open forever, so the entry
-// disposes whatever runtime is still installed (a no-op after a platform
-// shutdown).
+// The process entry: one run. Each command disposes the runtime it built
+// (`defineCliCommand`), so nothing is left here to shut down.
 await Effect.runPromise(
   Effect.tryPromise({
     try: async () => {
@@ -55,9 +47,6 @@ await Effect.runPromise(
         if (reportLine) writeTextStderr(reportLine);
         process.exitCode = CliExitCode.AgentError;
       }),
-    ),
-    Effect.ensuring(
-      cliPlatformShutdown.pipe(Effect.ensuring(disposeCliProcessRuntime)),
     ),
   ),
 );

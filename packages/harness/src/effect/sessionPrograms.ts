@@ -18,7 +18,11 @@
 import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 
 // Each runtime value comes from the module that defines it.
-import type { AgentCatalog } from '@agent/index/agentCatalog';
+import {
+  agentMissMessage,
+  missingAgentRefusal,
+  type AgentCatalog,
+} from '@agent/index/agentCatalog';
 import type { ProjectView } from '@controllers/session/readSessionView';
 import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { describeResumeRefusal } from '@agent/runtime/resumeRun';
@@ -125,9 +129,10 @@ const admitInput = Effect.fn('admitInput')(function* (
       ? catalog.get(agent)
       : { name: null, source: 'inline' as const };
   if (!resolved) {
-    return yield* new LaunchRefused({
-      message: `Agent "${String(agent)}" was not found in the configured agent directory.`,
-      notice: { event: 'agentNotFound', payload: { agentName: String(agent) } },
+    // The same wording as the catalog's miss, so every host says one thing.
+    return yield* missingAgentRefusal({
+      agent: String(agent),
+      message: agentMissMessage(String(agent)),
     });
   }
   // The schema is the launch's last refusal, and it is a refusal rather

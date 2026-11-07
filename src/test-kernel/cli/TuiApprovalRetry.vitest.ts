@@ -57,7 +57,7 @@ import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
-import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import type { CliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import {
   SessionLog,
   Approvals,
@@ -65,7 +65,6 @@ import {
   runStateAppend,
 } from '@shared/session/runHistory';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
-import { installedHost } from '@test/support/setupPlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 import {
@@ -74,6 +73,7 @@ import {
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
 import {
+  FakeHost,
   SessionGraph,
   sessionHandleOf,
   TestSession,
@@ -118,12 +118,21 @@ const cancelOpenRequests = Effect.gen(function* () {
  * Attach the TUI presentation host for one test, until its scope closes. It
  * answers nothing on its own: it stages what a request needs before it can
  * be shown, and performs the `useOwnApiKey` capability a retry decision
- * names. The scope's close detaches it, then cancels the requests left
- * open.
+ * names. It counts the host's secret reads for the test. The scope's close
+ * detaches it, cancels the requests left open, then drops the stored OpenAI
+ * key, so each case starts with none.
  */
 const tui = Effect.gen(function* () {
+  const { secrets } = yield* FakeHost;
+  secretReads = vi.spyOn(secrets, 'get');
+  yield* Effect.addFinalizer(() =>
+    Effect.suspend(() => {
+      secretReads.mockRestore();
+      return secrets.delete(OPENAI_KEY);
+    }).pipe(Effect.orDie),
+  );
   const cliContext = createTuiCliContext();
-  setTestApprovalPolicy(cliContext.approvalPolicy);
+  yield* setTestApprovalPolicy(cliContext.approvalPolicy);
   // cast: the TUI host interactions only emit through the presentation host.
   const presentationHost = {
     emit: vi.fn(),
@@ -254,10 +263,10 @@ const boundSessionView = Layer.effectDiscard(
   }),
 );
 
-/** The OpenAI key's entry in the installed host's secret store. */
+/** The OpenAI key's entry in the fake host's secret store. */
 const OPENAI_KEY = apiKeySecretName('openai');
 
-/** Reads of the installed host's secret store; a key check is a read of
+/** Reads of the fake host's secret store; a key check is a read of
  *  the provider's entry. Each case starts with no OpenAI key stored. */
 let secretReads: MockInstance<PlatformSecrets['get']>;
 
@@ -276,17 +285,13 @@ layer(
   { excludeTestServices: true },
 )('TUI request decisions', (it) => {
   beforeEach(() => {
-    const { secrets } = installedHost();
-    secretReads = vi.spyOn(secrets, 'get');
     // The session runtime reads key variables from the process environment; a
     // blank one counts as unset, so an ambient key never stands in for one.
     for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.unstubAllEnvs();
-    secretReads.mockRestore();
-    await Effect.runPromise(installedHost().secrets.delete(OPENAI_KEY));
     mocks.setCliSubscriptionPreference.mockReset();
   });
 
@@ -318,7 +323,7 @@ layer(
     'switches a ChatGPT subscription retry to the API key only on the explicit decision',
     () =>
       Effect.gen(function* () {
-        yield* installedHost().secrets.set(OPENAI_KEY, 'sk-own-key');
+        yield* (yield* FakeHost).secrets.set(OPENAI_KEY, 'sk-own-key');
         yield* tui;
         const pending = yield* Effect.forkChild(
           openRetry(chatGptSubscriptionRetry('s3')),

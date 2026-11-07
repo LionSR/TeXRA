@@ -1,0 +1,246 @@
+import { Effect, Schema } from 'effect';
+
+import { hasUsableApiKey } from '@texra-ai/llm';
+import { Secrets } from '@texra-ai/harness/host';
+import {
+  toErrorMessage,
+  SUBSCRIPTION_AUTH_PROVIDERS,
+} from '@texra-ai/harness/schemas';
+import {
+  codingPlanSubscriptionRuntimes,
+  type CodingPlanSubscriptionRuntime,
+} from '@texra/model/codingPlanSubscriptions';
+import {
+  subscriptionAuthStatus,
+  subscriptionProvider,
+  type SubscriptionProviderId,
+} from '@texra/controllers/modelAccess/subscriptionProviders';
+
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
+import {
+  shouldUseSubscriptionDeviceCode,
+  signInCliSubscription,
+  type CliSubscriptionLoginOptions,
+} from './subscriptionLogin';
+import {
+  type CliModelAccessSelection,
+  type CliModelAccessStatus,
+} from './modelAccessRoute';
+import type { CliContext } from '../platform/cliContext';
+import type { SettingsStores } from '@texra-ai/harness/host';
+
+interface CliModelAccessSelectionResult {
+  readonly message: string;
+}
+
+/**
+ * A subscription preference transition the stores would not carry out. The
+ * three members are the session read and the two preference writes, and both
+ * writes go through the same settings store every host shares.
+ */
+class ModelAccessPreferenceFailed extends Schema.TaggedError<ModelAccessPreferenceFailed>()(
+  'ModelAccessPreferenceFailed',
+  {
+    member: Schema.Literals(['setPreferSubscription', 'setEnabled']),
+    subscription: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
+/**
+ * A program: each coding plan's key status is a credential read that types its
+ * own failure, so the surface that wants this status yields it or runs it
+ * on the runtime it holds.
+ */
+export const readCliModelAccessStatus = Effect.fn(
+  'modelAccessSelection.readCliModelAccessStatus',
+)(function* (stores: SettingsStores) {
+  const secrets = yield* Secrets;
+  const [subscriptionEntries, codingPlanEntries] = yield* Effect.all(
+    [
+      Effect.forEach(
+        SUBSCRIPTION_AUTH_PROVIDERS,
+        (provider) =>
+          Effect.map(
+            subscriptionAuthStatus(provider, stores),
+            (status) => [provider, status] as const,
+          ),
+        { concurrency: 'unbounded' },
+      ),
+      Effect.forEach(
+        codingPlanSubscriptionRuntimes,
+        Effect.fnUntraced(function* (runtime) {
+          const keySet = yield* hasUsableApiKey(
+            secrets,
+            runtime.descriptor.apiProvider,
+          );
+          const preferred = yield* runtime.getEnabled(stores);
+          return [runtime.descriptor.id, { preferred, keySet }] as const;
+        }),
+        { concurrency: 'unbounded' },
+      ),
+    ] as const,
+    { concurrency: 'unbounded' },
+  );
+  type Access = CliModelAccessStatus;
+  const subscriptions =
+    // cast: one entry per SUBSCRIPTION_AUTH_PROVIDERS member, the record's keys.
+    Object.fromEntries(subscriptionEntries) as Access['subscriptions'];
+  const codingPlans =
+    // cast: one runtime per coding plan, so the plan ids are the record's keys.
+    Object.fromEntries(codingPlanEntries) as Access['codingPlans'];
+  return { subscriptions, codingPlans } satisfies Access;
+});
+
+// ---------------------------------------------------------------------------
+// The four subscription arms share two skeletons — an OAuth sign-in flow
+// (Grok/ChatGPT, driven by the shared provider catalog) and a key-credential
+// gate (Kimi Code/GLM) — so a fifth provider is a catalog row plus a dispatch
+// case, not another 30-line copy.
+// ---------------------------------------------------------------------------
+
+/** Toggle an OAuth-subscription preference (Grok/ChatGPT) with sign-in. */
+const updateSubscriptionCliModelAccess = Effect.fn(
+  'modelAccessSelection.updateSubscriptionCliModelAccess',
+)(function* (
+  stores: SettingsStores,
+  context: CliContext | undefined,
+  selection: CliModelAccessSelection,
+  providerId: SubscriptionProviderId,
+  options: CliSubscriptionLoginOptions,
+) {
+  const provider = subscriptionProvider(providerId);
+  const { displayName, modelFamily } = provider;
+  if (selection.state === 'off') {
+    yield* provider.setPreferSubscription(stores, false).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ModelAccessPreferenceFailed({
+            member: 'setPreferSubscription',
+            subscription: providerId,
+            message: `${displayName} subscription could not be disabled: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
+    );
+    return {
+      message: `${displayName} subscription disabled for ${modelFamily}.`,
+    } satisfies CliModelAccessSelectionResult;
+  }
+
+  const status = yield* provider.getStatus();
+  let accountLabel = status.label;
+  if (!status.signedIn) {
+    const init = { device: false, noBrowser: false };
+    const device =
+      context != null && shouldUseSubscriptionDeviceCode(context, init);
+    const account = yield* signInCliSubscription(
+      providerId,
+      { ...init, device },
+      options,
+    );
+    accountLabel = account.label;
+  }
+
+  yield* provider.setPreferSubscription(stores, true).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ModelAccessPreferenceFailed({
+          member: 'setPreferSubscription',
+          subscription: providerId,
+          message: `${displayName} subscription could not be enabled: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    ),
+  );
+  return {
+    message: `${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`,
+  } satisfies CliModelAccessSelectionResult;
+});
+
+/** Toggle a key-credential subscription preference (Kimi Code/GLM). */
+const updateKeyedCliModelAccess = Effect.fn(
+  'modelAccessSelection.updateKeyedCliModelAccess',
+)(function* (
+  stores: SettingsStores,
+  selection: CliModelAccessSelection,
+  runtime: CodingPlanSubscriptionRuntime,
+) {
+  const plan = runtime.descriptor;
+  if (selection.state === 'off') {
+    yield* runtime.setEnabled(stores, false).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ModelAccessPreferenceFailed({
+            member: 'setEnabled',
+            subscription: plan.id,
+            message: `${plan.preferenceLabel} could not be disabled: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
+    );
+    return {
+      message: `${plan.preferenceLabel} disabled for ${plan.modelFamily}.`,
+    } satisfies CliModelAccessSelectionResult;
+  }
+
+  // The provider API key is the subscription credential — there is no
+  // separate sign-in flow.
+  const secrets = yield* Secrets;
+  const keySet = yield* hasUsableApiKey(secrets, plan.apiProvider);
+  if (!keySet) {
+    return {
+      message: `No ${plan.credentialName} API key configured — add one with /key or /config → API keys (get one at ${plan.credentialSetupUrl}).`,
+    } satisfies CliModelAccessSelectionResult;
+  }
+  yield* runtime.setEnabled(stores, true).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ModelAccessPreferenceFailed({
+          member: 'setEnabled',
+          subscription: plan.id,
+          message: `${plan.preferenceLabel} could not be enabled: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    ),
+  );
+  return {
+    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${OWN_API_KEYS.inline}.`,
+  } satisfies CliModelAccessSelectionResult;
+});
+
+/**
+ * Apply one declarative preference transition. A program: the command action
+ * or slash handler runs it, where its cancellation signal (if any) becomes
+ * fiber interruption of a sign-in in flight.
+ */
+export const updateCliModelAccess = Effect.fn(
+  'modelAccessSelection.updateCliModelAccess',
+)(function* (
+  stores: SettingsStores,
+  context: CliContext | undefined,
+  selection: CliModelAccessSelection,
+  options: CliSubscriptionLoginOptions = { writeProgress: () => undefined },
+) {
+  const codingPlan = codingPlanSubscriptionRuntimes.find(
+    (runtime) => runtime.descriptor.cliProvider === selection.provider,
+  );
+  if (codingPlan) {
+    return yield* updateKeyedCliModelAccess(stores, selection, codingPlan);
+  }
+  if (selection.provider === 'grok' || selection.provider === 'chatgpt') {
+    return yield* updateSubscriptionCliModelAccess(
+      stores,
+      context,
+      selection,
+      selection.provider,
+      options,
+    );
+  }
+  return yield* Effect.die(
+    new Error(
+      `Coding-plan provider is missing from the runtime catalog: ${selection.provider}`,
+    ),
+  );
+});

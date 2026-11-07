@@ -9,7 +9,7 @@ import {
   listCliEnabledModelCatalog,
   setCliModelEnabled,
   type CliEnabledModelRow,
-} from '@cli/runtime/enabledModels';
+} from '@cli/runtime/models/enabledModels';
 import { AsyncListForm } from './_shared/ListForm';
 import type { ProcessRuntime, StateStore } from '@texra-ai/harness/host';
 

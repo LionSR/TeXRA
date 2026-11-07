@@ -1,7 +1,7 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Stream, Context } from 'effect';
-import { beforeEach, expect } from 'vitest';
+import { expect } from 'vitest';
 import { type BashRequest, generateRunId } from '@texra-ai/harness/schemas';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
@@ -49,9 +49,8 @@ function watchBashRequests(session: Context.Context<SessionServices>) {
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'command approval queueing',
   (it) => {
-    // The project's policy is the fake host's setting, shared by the file.
-    beforeEach(() => setTestApprovalPolicy('ask'));
-
+    // The project's policy is the fake host's setting, shared by the file,
+    // so each test sets the one it runs under.
     it.effect(
       'lets never override a run bypass and a hook allow at the shared boundary',
       () =>
@@ -59,7 +58,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
             const runId = generateRunId();
-            setTestApprovalPolicy('never');
+            yield* setTestApprovalPolicy('never');
             yield* publishTestRunStart(session, runId);
             yield* Context.get(session, Approvals).change(
               runId,
@@ -87,6 +86,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       () =>
         Effect.scoped(
           Effect.gen(function* () {
+            yield* setTestApprovalPolicy('ask');
             const session = yield* isolatedTestSession();
             const runId = generateRunId();
             yield* publishTestRunStart(session, runId);

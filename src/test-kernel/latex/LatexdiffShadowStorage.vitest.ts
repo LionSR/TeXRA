@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import {
@@ -11,7 +11,6 @@ import {
 } from '@texra-ai/harness/node';
 import { createExternalLocation } from '@texra-ai/harness/host';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
@@ -48,19 +47,22 @@ describe('latexdiff shadow output', () => {
           '\\documentclass{article}\n\\begin{document}\nnew\n\\end{document}\n',
         );
       });
-      yield* Layer.build(
-        FakeHost.layer(
-          {
-            app: TEXRA_APP,
-            workspacePath: sourceDir,
-            storagePath: resolveWorkspaceStoragePath(storageRoot, sourceDir),
-            globalStoragePath: resolveGlobalStoragePath(storageRoot),
-          },
-          {
-            globalState: new MemoryStateStore(),
-            workspaceState: new MemoryStateStore(),
-          },
+      const { roots } = Context.get(
+        yield* Layer.build(
+          FakeHost.layer(
+            {
+              app: TEXRA_APP,
+              workspacePath: sourceDir,
+              storagePath: resolveWorkspaceStoragePath(storageRoot, sourceDir),
+              globalStoragePath: resolveGlobalStoragePath(storageRoot),
+            },
+            {
+              globalState: new MemoryStateStore(),
+              workspaceState: new MemoryStateStore(),
+            },
+          ),
         ),
+        FakeHost,
       );
       mocks.executeCommand.mockReturnValueOnce(
         Effect.succeed({
@@ -81,8 +83,8 @@ describe('latexdiff shadow output', () => {
           createExternalLocation(path.join(sourceDir, 'base.tex')),
           createExternalLocation(path.join(sourceDir, 'revised.tex')),
           {
-            roots: testWorkspaceRoots(),
-            cwd: testWorkspaceRoots().workspace,
+            roots,
+            cwd: roots.workspace,
             suffix: '_diff',
             outputDirectory: path.join(tempDir, 'executions', 'run-1', 'diff'),
           },

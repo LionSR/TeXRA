@@ -5,12 +5,14 @@
  */
 
 /**
- * Allowed CORS origins for security.
- * VS Code extensions use opaque origins (sent as null).
- * Codespaces uses *.github.dev domains.
+ * Allowed CORS origins for security. An editor's extension host and the CLI
+ * send no Origin header at all; those requests are allowed below. A page on
+ * a custom scheme has an opaque origin, which a browser sends as the string
+ * "null"; no entry matches it. Codespaces uses *.github.dev domains.
  */
 const ALLOWED_ORIGINS: (string | RegExp)[] = [
-  // VS Code and forks (opaque origins, sent as null in most browsers)
+  // Editor schemes: no browser sends one as an Origin, so these match only a
+  // client that sets the header itself.
   'vscode://',
   'vscode-insiders://',
   'cursor://',
@@ -27,11 +29,12 @@ const ALLOWED_ORIGINS: (string | RegExp)[] = [
 
 /**
  * Check if origin is allowed for CORS.
- * @returns The origin if allowed, '*' for null origins (VS Code), null otherwise.
+ * @returns The origin if allowed, '*' when the request sent no Origin header
+ *   (the extension host, the CLI), null otherwise.
  */
 function getAllowedOrigin(origin: string | null): string | null {
   if (!origin) {
-    // Null origin (from opaque origins like vscode://) - allow for VS Code extensions
+    // No Origin header: a non-browser client such as the extension host.
     return '*';
   }
 

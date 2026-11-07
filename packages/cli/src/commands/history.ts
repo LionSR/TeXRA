@@ -6,7 +6,7 @@ import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpe
 import { traceHtml } from '@texra/agent/export/standaloneTraceHtml';
 import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
 
-import { CliExitCode } from '../runtime/exitCodes';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
@@ -21,22 +21,18 @@ import {
   readCliHistoryExportInput,
   type CliHistoryDeleteResult,
 } from '../runtime/history';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
   cliErrorMessage,
   writeErrorStderr,
   writeRawStdout,
   writeTextStderr,
-} from '../runtime/logSinks';
+} from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
-import {
-  CliInvocation,
-  CliUsageError,
-  type CliContext,
-} from '../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
 function parseHistoryListLimit(value: string | undefined): number | undefined {
   if (!value || !/^\d+$/.test(value)) return undefined;
@@ -47,7 +43,7 @@ function parseHistoryListLimit(value: string | undefined): number | undefined {
 const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
   limit?: number;
 }) {
-  const stores = yield* initCliPlatform((yield* CliInvocation).context);
+  const stores = yield* cliPlatform;
   const entries = yield* listCliHistoryEntries(yield* stores.runSession);
   const visibleEntries =
     options.limit !== undefined ? entries.slice(0, options.limit) : entries;
@@ -67,7 +63,7 @@ const runHistoryShow = Effect.fn('runHistoryShow')(function* (
   id: RunId,
   options: { full?: boolean },
 ) {
-  const stores = yield* initCliPlatform(context);
+  const stores = yield* cliPlatform;
   const details = yield* readCliHistoryDetails(
     yield* stores.runSession,
     stores.roots.storage,
@@ -105,7 +101,7 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
   id: RunId,
   format: 'html' | 'md',
 ) {
-  const stores = yield* initCliPlatform(context);
+  const stores = yield* cliPlatform;
   if (format === 'md') {
     const exportResult = yield* readCliHistoryExportInput(
       yield* stores.runSession,
@@ -175,7 +171,7 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   context: CliContext,
   options: { target: RunId | 'all'; yes: boolean },
 ) {
-  const stores = yield* initCliPlatform(context);
+  const stores = yield* cliPlatform;
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.

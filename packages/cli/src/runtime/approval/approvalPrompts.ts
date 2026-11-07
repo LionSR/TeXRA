@@ -7,9 +7,9 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 
-import { CliInvocation, type CliPromptRequest } from '../cliContext';
-import { askCliQuestion, writeTextStderr } from '../logSinks';
-import { safeTerminalText } from '../terminalText';
+import { CliInvocation, type CliPromptRequest } from '../platform/cliContext';
+import { askCliQuestion, writeTextStderr } from '../platform/logSinks';
+import { safeTerminalText } from '../terminal/terminalText';
 
 const CHANNEL = 'cli.approval';
 

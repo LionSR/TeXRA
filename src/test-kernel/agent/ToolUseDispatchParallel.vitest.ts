@@ -168,6 +168,7 @@ function boundModel(): BoundModel {
   };
   return {
     modelId: GPT54,
+    catalogEntry: MODEL_CONFIGS[GPT54],
     config: MODEL_CONFIGS[GPT54],
     backend: 'openai',
     declinedRoutes: [],
@@ -238,14 +239,15 @@ interface DispatchKit {
   readonly cell: RunCell;
   /** The tools the dispatch's step offers. */
   readonly tools: ResolvedTools['registry'];
-  /** The run's services and its calls', over the block's process services. */
+  /** The run's services and its calls', over the block's process services
+   *  and the test's host. */
   readonly layer: Layer.Layer<
     | AgentRun
     | RunHistory
     | Runs
     | Exclude<PluginToolServices, RunServices | Scope.Scope>,
     never,
-    RunServices
+    RunServices | FakeHost
   >;
 }
 
@@ -286,7 +288,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       payload: {
         kind: 'attempt',
         request: '0'.repeat(64),
-        sentAtMs: 0,
         invocation: INVOCATION,
         origin: ORIGIN,
       },

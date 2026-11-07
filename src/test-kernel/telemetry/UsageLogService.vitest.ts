@@ -6,22 +6,21 @@ import { AGENT_SOURCE } from '@texra-ai/harness/schemas';
 import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
 import { AppState, UsageLog } from '@texra-ai/harness/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { usageAgentName } from '@shared/usageLog';
-import {
-  usageLogLayer,
-  type UsageLogOptions,
-} from '@telemetry/UsageLogService';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { usageLogLayer } from '@telemetry/UsageLogService';
 import {
   jsonResponse,
   testHttpClientLayer,
 } from '@test/support/fetchTestUtils';
-import { fakeHostAppState } from '@test/support/setupPlatform';
 import { FakeHost } from '@test/support/testKernel';
 import {
   TELEMETRY_ENABLED_SETTING,
   TEXRA_SETTINGS,
 } from '@texra/shared/settingsView/texraSettings';
+
+/** The shipped periodic flush. */
+const FLUSH_INTERVAL_MS = 30_000;
 
 function usageEntry(model: string) {
   return {
@@ -30,7 +29,7 @@ function usageEntry(model: string) {
     agentName: 'agent',
     inputTokens: 1,
     outputTokens: 1,
-    cost: 0.001,
+    listCost: 0.001,
   };
 }
 
@@ -59,44 +58,38 @@ describe('UsageLogService', () => {
     if (scope) await Effect.runPromise(Scope.close(scope, Exit.void));
   };
 
-  const startUsageLog = async (
-    config: UsageLogOptions['config'],
-  ): Promise<void> => {
-    await stopUsageLog();
-    lifetime = Scope.makeUnsafe();
-    const context = await Effect.runPromise(
-      Scope.provide(
-        Layer.build(
-          usageLogLayer({
-            version: undefined,
-            editorType: undefined,
-            config,
-          }).pipe(
-            Layer.provide(
-              Layer.mergeAll(
-                // The process runtime's diagnostics, which the service logs
-                // through; the fetch each test stubs; and the installed
-                // host's app state, where the install id is kept.
-                effectDiagnosticsLayer('Trace'),
-                testHttpClientLayer,
-                AppState.layer(fakeHostAppState),
-              ),
+  /** Start the service over the test host's app state, where the install
+   *  id is kept, replacing one already running. */
+  const startUsageLog = Effect.gen(function* () {
+    yield* Effect.promise(stopUsageLog);
+    const host = yield* FakeHost;
+    const scope = Scope.makeUnsafe();
+    lifetime = scope;
+    const context = yield* Scope.provide(
+      Layer.build(
+        usageLogLayer({
+          version: undefined,
+          editorType: undefined,
+        }).pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              // The process runtime's diagnostics, which the service logs
+              // through; the fetch each test stubs; and the host's app
+              // state.
+              effectDiagnosticsLayer('Trace'),
+              testHttpClientLayer,
+              AppState.layer(host.roots.globalState),
             ),
           ),
         ),
-        lifetime,
       ),
+      scope,
     );
     usageLog = Context.get(context, UsageLog);
-  };
+  });
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    await startUsageLog({
-      batchSize: 1,
-      flushIntervalMs: 60_000,
-      enabled: true,
-    });
   });
 
   afterEach(async () => {
@@ -118,29 +111,25 @@ describe('UsageLogService', () => {
     { buildPerTest: true, excludeTestServices: true },
   )('texra.telemetry.enabled opt-out', (it) => {
     // Optional entries must be discarded without a request.
-    async function expectNoOptionalUsageSent(): Promise<void> {
+    async function expectNoOptionalUsageSent(
+      config: WorkspaceRoots['config'],
+    ): Promise<void> {
       const fetchMock = stubBatchFetch();
 
-      logUsage(usageEntry('optional'), testWorkspaceRoots().config);
-      await vi.advanceTimersByTimeAsync(0);
+      logUsage(usageEntry('optional'), config);
+      await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
 
       expect(fetchMock).not.toHaveBeenCalled();
     }
 
     it.effect('does not let a project opt in over a user-wide opt-out', () =>
       Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_SETTING.key,
-          false,
-          'global',
-        );
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_SETTING.key,
-          true,
-          'workspace',
-        );
+        yield* startUsageLog;
+        const { config } = (yield* FakeHost).roots;
+        yield* config.update(TELEMETRY_ENABLED_SETTING.key, false, 'global');
+        yield* config.update(TELEMETRY_ENABLED_SETTING.key, true, 'workspace');
 
-        yield* Effect.promise(() => expectNoOptionalUsageSent());
+        yield* Effect.promise(() => expectNoOptionalUsageSent(config));
       }),
     );
 
@@ -148,20 +137,17 @@ describe('UsageLogService', () => {
     // queued under the old value rather than letting the next flush ship them.
     it.effect('discards entries queued before the setting was turned off', () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 }),
-        );
+        yield* startUsageLog;
+        const { config } = (yield* FakeHost).roots;
 
         const fetchMock = stubBatchFetch();
 
-        logUsage(usageEntry('before-opt-out'), testWorkspaceRoots().config);
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_SETTING.key,
-          false,
-          'global',
-        );
+        logUsage(usageEntry('before-opt-out'), config);
+        yield* config.update(TELEMETRY_ENABLED_SETTING.key, false, 'global');
 
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(60_000));
+        yield* Effect.promise(() =>
+          vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS),
+        );
 
         expect(fetchMock).not.toHaveBeenCalled();
       }),
@@ -172,14 +158,64 @@ describe('UsageLogService', () => {
     // texra run`. It overrides a stored `true` and cannot re-enable logging.
     it.effect('sends nothing while TEXRA_NO_TELEMETRY=1 is set', () =>
       Effect.gen(function* () {
-        yield* testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_SETTING.key,
-          true,
-          'global',
-        );
+        yield* startUsageLog;
+        const { config } = (yield* FakeHost).roots;
+        yield* config.update(TELEMETRY_ENABLED_SETTING.key, true, 'global');
         vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
 
-        yield* Effect.promise(() => expectNoOptionalUsageSent());
+        yield* Effect.promise(() => expectNoOptionalUsageSent(config));
+      }),
+    );
+  });
+
+  layer(
+    FakeHost.layer(
+      {},
+      { config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog) },
+    ),
+    { buildPerTest: true, excludeTestServices: true },
+  )('delivery', (it) => {
+    // The client checks every entry against the schema the edge decodes, so
+    // the edge rejecting a batch means the two versions disagree: that batch
+    // is dropped, and the entries after it still go out.
+    it.effect('a rejected batch does not block the next good entry', () =>
+      Effect.gen(function* () {
+        yield* startUsageLog;
+        const { config } = (yield* FakeHost).roots;
+        const bodies: { entries: { model: string }[] }[] = [];
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+            const body = (await new Response(init?.body).json()) as {
+              entries: { model: string }[];
+            };
+            bodies.push(body);
+            return body.entries.some(({ model }) => model === 'skewed')
+              ? jsonResponse({
+                  success: false,
+                  accepted: 0,
+                  error: 'Invalid batch format or entry data',
+                  retryable: false,
+                  errorCode: 'BATCH_REJECTED',
+                  issueCount: 1,
+                  issues: [{ path: ['entries', '0', 'model'], message: 'x' }],
+                })
+              : jsonResponse({ success: true, accepted: body.entries.length });
+          }),
+        );
+
+        logUsage(usageEntry('skewed'), config);
+        yield* Effect.promise(() =>
+          vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS),
+        );
+        logUsage(usageEntry('good'), config);
+        yield* Effect.promise(() =>
+          vi.advanceTimersByTimeAsync(4 * FLUSH_INTERVAL_MS),
+        );
+
+        expect(
+          bodies.map(({ entries }) => entries.map(({ model }) => model)),
+        ).toEqual([['skewed'], ['good']]);
       }),
     );
   });

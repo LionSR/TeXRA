@@ -1,4 +1,4 @@
-import { CliUsageError } from '../runtime/cliContext';
+import { CliUsageError } from '../runtime/platform/cliContext';
 import { parseCliHistoryId } from '../runtime/history';
 import { runResumeCommand } from './resumeRun';
 
@@ -40,6 +40,8 @@ export const resumeCommand = defineCliCommand({
   setup(ctx) {
     resumeRunId(ctx.args.id);
   },
+  // A conversation continues in the service: the platform starts it.
+  platform: { startsService: true },
   run: (context, ctx) =>
     runResumeCommand(context, resumeRunId(ctx.args.id), ctx.args.fork === true),
 });

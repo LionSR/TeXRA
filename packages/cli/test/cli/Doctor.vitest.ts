@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { type DoctorReport, writeDoctorReport } from '@cli/runtime/doctor';
-import type { CliContext } from '@cli/runtime/cliContext';
+import type { CliContext } from '@cli/runtime/platform/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 

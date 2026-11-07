@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll } from 'vitest';
-import type { CliContext } from '@cli/runtime/cliContext';
+import type { CliContext } from '@cli/runtime/platform/cliContext';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 

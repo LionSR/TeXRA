@@ -3,9 +3,8 @@ import { Effect, Result, Schema } from 'effect';
 import { expect, vi } from 'vitest';
 import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeConfig, FakeStateStore } from '@test/support/FakePlatform';
-import { SessionGraph, TestSession } from '@test/support/testKernel';
+import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -60,9 +59,10 @@ const createSettingsFixture = (config: ConfigProvider) =>
   Effect.gen(function* () {
     // The paper's three setting slots reach the body through its session's
     // roots, as the desktop passes them.
+    const host = yield* FakeHost;
     const session = yield* TestSession.open({
-      ...testWorkspaceRoots(),
-      storage: '/workspace/settings-ipc/storage',
+      ...host.roots,
+      storage: host.path('workspace/settings-ipc/storage'),
       config,
       workspaceState: new FakeStateStore(),
       repoState: new FakeStateStore(),

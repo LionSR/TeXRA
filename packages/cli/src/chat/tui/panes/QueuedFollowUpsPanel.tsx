@@ -5,7 +5,7 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   textDisplayWidth,
   truncateSummaryToWidth,
-} from '@cli/runtime/terminalText';
+} from '@cli/runtime/terminal/terminalText';
 import { pluralize } from '@texra-ai/harness/schemas';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;

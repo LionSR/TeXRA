@@ -188,7 +188,7 @@ export function presenterOn(host: HostInteractions): Notices {
  * answers while none is. Notices raised while neither presents (none, or
  * none with `emit`) wait in `notices` for the next host that does.
  */
-export interface SessionInteractions extends Notices {
+interface SessionInteractions extends Notices {
   /** The attached host, while one is. */
   readonly host: SubscriptionRef.SubscriptionRef<
     Option.Option<HostInteractions>

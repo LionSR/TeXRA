@@ -2,7 +2,7 @@ import { Text, useWindowSize } from 'ink';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
-import { truncateToWidth } from '@cli/runtime/terminalText';
+import { truncateToWidth } from '@cli/runtime/terminal/terminalText';
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { ConfirmCard } from './ConfirmCard';

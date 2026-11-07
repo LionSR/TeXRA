@@ -162,20 +162,17 @@ import {
   appendLocalUserTranscript,
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
-import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
-import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
-import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
-import {
-  cliPlatformShutdown,
-  initCliPlatform,
-} from '../src/runtime/initPlatform';
-import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
+import { defaultShortcutModifierLabel } from '../src/runtime/terminal/shortcutLabels';
+import { updateCliModelAccess } from '../src/runtime/models/modelAccessSelection';
+import { makeCliProcessRuntime } from '../src/runtime/platform/cliProcessRuntime';
+import { cliPlatform } from '../src/runtime/platform/initPlatform';
+import { resolveCliResourcesPath } from '../src/runtime/platform/resourcesPath';
 import {
   createCliRuntimeHost,
   type CliRuntimeHost,
-} from '../src/runtime/cliPresentationHost';
+} from '../src/runtime/headless/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
-import type { CliContext } from '../src/runtime/cliContext';
+import type { CliContext } from '../src/runtime/platform/cliContext';
 
 const harnessRunId = Schema.decodeUnknownSync(RunIdSchema);
 const HARNESS_RUN_ID = harnessRunId('aaaa0001f10e');
@@ -342,28 +339,13 @@ if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
 }
 
-const HARNESS_PLATFORM_SERVICES = await installCliProcessRuntime(
-  HARNESS_STORAGE_ROOT,
-  {
-    // The built-in agents load from here, as `texra chat` passes it.
-    resourcesPath: HARNESS_RESOURCES_PATH,
-    minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
-  },
-).runPromise(
-  initCliPlatform({
-    // The same provider the harness context resolves its rows through,
-    // exactly as startup hands `buildCliContext`'s provider to the real init.
-    config: HARNESS_CLI_CONTEXT.config,
-    cwd: HARNESS_CWD,
-    installSignalHandlers: false,
-    quietLogs: true,
-    minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
-    resourcesPath: HARNESS_RESOURCES_PATH,
-    storageRoot: HARNESS_STORAGE_ROOT,
-    skillSourceOptions: {},
-    version: '0.0.0-harness',
-  }),
-);
+// The harness runs over the same runtime and platform `texra chat` builds,
+// from the harness context (its provider is the one its rows resolve
+// through), with no signal handler of its own.
+const HARNESS_PLATFORM_SERVICES = await makeCliProcessRuntime(
+  HARNESS_CLI_CONTEXT,
+  { installSignalHandlers: false },
+).runPromise(cliPlatform);
 if (RESET_MULTI_AGENT_DISABLED) {
   await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
     setCliToolEnabled('multi-agent', false),
@@ -396,7 +378,7 @@ if (HARNESS_MEMORY_FILES.length > 0) {
     utimesSync(filePath, mtime, mtime);
   });
 }
-// The persistent session `initCliPlatform` opened over the harness roots,
+// The persistent session the platform opened over the harness roots,
 // and its internal owners, which the fixtures seed rows through: the same
 // root's, from the process's session owner.
 const harnessRunSession = await harnessRuntime.runPromise(
@@ -2055,7 +2037,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   ink.unmount();
   try {
     await Effect.runPromise(harnessRuntimeHost.close());
-    await Effect.runPromise(cliPlatformShutdown);
+    await harnessRuntime.dispose();
   } finally {
     process.exit(exitCode);
   }

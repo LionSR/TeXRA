@@ -5,8 +5,8 @@ import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
-import { finishedToolCalls } from '@cli/runtime/runProgressRenderer';
-import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
+import { finishedToolCalls } from '@cli/runtime/headless/runProgressRenderer';
+import { truncateSummaryToWidth } from '@cli/runtime/terminal/terminalText';
 import { formatLoopPositionLabel, runStatus } from '@ui/copy/runStatus';
 
 import { childElapsed } from '../state/childControls';

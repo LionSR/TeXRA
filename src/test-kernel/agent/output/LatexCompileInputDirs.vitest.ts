@@ -12,7 +12,6 @@ import {
   fileLocationDisplayPath,
 } from '@texra-ai/harness/schemas';
 import { RunFileService } from '@texra-ai/harness/plugins';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { FakeHost } from '@test/support/testKernel';
 import { TEXRA_APP } from '@test/support/texraApp';
@@ -20,13 +19,7 @@ import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 
 // Local file imports
-import {
-  compileFsLayer,
-  runDir,
-  runStorageFile,
-  storagePath,
-  workspacePath,
-} from './compileCheckTestUtils';
+import { compileFsLayer, runStorageFile } from './compileCheckTestUtils';
 import { LATEXDIFF_BETWEEN_ROUNDS_SETTING } from '@texra/shared/settingsView/documentsSettings';
 
 const mocks = vi.hoisted(() => ({
@@ -70,6 +63,9 @@ const document = (body: string) =>
 const files = ['original', 'r0', 'r1'].flatMap((dir) =>
   ['a', 'b'].map((folder) => path.join(dir, folder, 'main.tex')),
 );
+/** The run's directory as a seed key: under the host's default storage
+ *  root, `workspace/.texra/storage`, where `runStorageFile` reads it. */
+const seededRunDir = path.join('/workspace/.texra/storage/executions', runId);
 
 // Two documents sharing a file name: each pair's diff once landed on the
 // same flat `diff/r1/main_diff.tex`, the second overwriting the first.
@@ -77,10 +73,8 @@ layer(
   FakeHost.layer({
     app: TEXRA_APP,
     files: Object.fromEntries(
-      files.map((file) => [path.join(runDir(runId), file), document(file)]),
+      files.map((file) => [path.join(seededRunDir, file), document(file)]),
     ),
-    storagePath,
-    workspacePath,
     workspaceState: {
       [LATEXDIFF_BETWEEN_ROUNDS_SETTING.key]: true,
     },
@@ -89,15 +83,18 @@ layer(
 )('workflow LaTeX compile input directories', (it) => {
   it.effect("writes each document's latexdiffs under its own folder", () =>
     Effect.gen(function* () {
+      const { roots } = yield* FakeHost;
       const output = (round: number, folder: string): OutputFileInfo => ({
         source: `${folder}/main.tex`,
         round,
         location: runStorageFile(
+          roots,
           runId,
           path.join(`r${round}`, folder, 'main.tex'),
         ),
         lineage: {
           base: runStorageFile(
+            roots,
             runId,
             path.join('original', folder, 'main.tex'),
           ),
@@ -108,8 +105,8 @@ layer(
       const { entries } = yield* revisionLatexdiffs(
         {
           logger: spiedTrace(),
-          fileService: new RunFileService(runId, testWorkspaceRoots()),
-          roots: testWorkspaceRoots(),
+          fileService: new RunFileService(runId, roots),
+          roots,
         },
         1,
         [output(1, 'a'), output(1, 'b')],

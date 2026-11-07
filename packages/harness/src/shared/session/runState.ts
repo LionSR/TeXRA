@@ -96,7 +96,7 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
  * (`waiting`, `turn.ended`) or somewhere inside a turn. Never written: derived
  * from the run's `run.position` rows.
  */
-export type RunLoopPhase =
+type RunLoopPhase =
   | 'model.ready'
   | 'model.submitted'
   | 'results.ready'

@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schema, Struct } from 'effect';
+import { Context, Effect, Layer, Schema } from 'effect';
 
 import { TurnProtocolSchema } from '@texra-ai/llm';
 import type { ConfigProvider } from '@shared/config/settings';
@@ -20,54 +20,51 @@ export function usageAgentName(
   return source === AGENT_SOURCE.BUILT_IN ? name : 'custom';
 }
 
-const UsageLogMetadataSchema = Schema.Struct({
-  model: Schema.String,
-  /** Wire surface of the turn (`openai-responses`, `anthropic-messages`, ...).
-   * The edge function stores it in the `provider` column; the column takes
-   * protocol names under the same versioning rule as the rest of this wire. */
-  provider: TurnProtocolSchema,
-  agentName: Schema.optional(Schema.String),
-  /** Canonical route used to account for API-key/subscription usage. */
-  usageRoute: Schema.optional(UsageRouteSchema),
-  /** Wire key of the usage-log edge function (`supabase/functions/log-usage-v2`), which
-   * stores it as `stream_id`; the value is the run id. External contract, versioned
-   * with the edge function, not with the run vocabulary. */
-  streamId: Schema.optional(Schema.String),
-});
+const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const Text = Schema.String.check(Schema.isMinLength(1));
 
 /**
- * Field names here intentionally follow this wire schema, not
- * `NormalizedUsage`'s — this is the persisted log contract, so
- * renaming fields isn't free.
+ * One entry of the usage log's wire, a body of the `log-usage-v2` edge
+ * function. The sender checks each entry against it before queueing, so
+ * nothing goes out that the edge would reject. Field names are the wire's,
+ * not `NormalizedUsage`'s.
+ *
+ * The edge decodes the same entry (`supabase/functions/log-usage-v2/usageBatch.ts`)
+ * and the two must match: everything this schema accepts, that one accepts.
+ * There the counts are non-negative ints, `listCost` a non-negative finite
+ * number, `timestamp` a UTC ISO 8601 date-time and every string non-empty,
+ * `provider` and `usageRoute` included.
  */
-const UsageLogStatsSchema = Schema.Struct({
-  inputTokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  outputTokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  cost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-  responseTimeMs: Schema.optional(
-    Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+export const UsageLogEntrySchema = Schema.Struct({
+  timestamp: Schema.String.check(
+    Schema.isPattern(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/, {
+      expected: 'a UTC ISO 8601 date-time',
+    }),
   ),
-  cachedInputTokens: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-  reasoningTokens: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
+  /** The catalog id, before any route's rewrite. */
+  model: Text,
+  /** Wire surface of the turn (`openai-responses`, `anthropic-messages`,
+   *  ...), stored in the `provider` column. */
+  provider: TurnProtocolSchema,
+  agentName: Schema.optional(Text),
+  /** The route the call was billed through. */
+  usageRoute: Schema.optional(UsageRouteSchema),
+  /** The run id, stored as `stream_id`: the edge function's name for it. */
+  streamId: Schema.optional(Text),
+  /** Cache-miss input tokens; the cache reads are `cachedInputTokens`. */
+  inputTokens: Count,
+  outputTokens: Count,
+  /** What the call costs at the catalog's list prices, in USD, whatever
+   *  the route billed: a plan's call is covered by its subscription. A
+   *  model the catalog lists only for a plan (Kimi Code's
+   *  `kimi-for-coding*`) has no list price, so its calls report 0. */
+  listCost: Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)),
+  responseTimeMs: Schema.optional(Count),
+  cachedInputTokens: Schema.optional(Count),
+  reasoningTokens: Schema.optional(Count),
+  extensionVersion: Schema.optional(Text),
+  editorType: Schema.optional(Text),
 });
-
-const UsageLogEntrySchema = UsageLogMetadataSchema.mapFields(
-  Struct.assign(UsageLogStatsSchema.fields),
-).mapFields(
-  Struct.assign({
-    timestamp: Schema.String.check(
-      Schema.makeFilter((value) => !Number.isNaN(Date.parse(value)), {
-        message: 'an ISO date-time',
-      }),
-    ),
-    extensionVersion: Schema.optional(Schema.String),
-    editorType: Schema.optional(Schema.String),
-  }),
-);
 
 export type UsageLogEntry = typeof UsageLogEntrySchema.Type;
 

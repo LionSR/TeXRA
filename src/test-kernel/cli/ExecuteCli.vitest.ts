@@ -28,8 +28,11 @@ import {
 import { liveToolGates } from '@agent/runtime/requests';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
-import { CliInvocation, provideCliInvocation } from '@cli/runtime/cliContext';
-import type { executeCliConfig } from '@cli/runtime/executeCli';
+import {
+  CliInvocation,
+  provideCliInvocation,
+} from '@cli/runtime/platform/cliContext';
+import type { executeCliConfig } from '@cli/runtime/headless/executeCli';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { SessionLog } from '@shared/session/runHistory';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
@@ -119,27 +122,31 @@ function runSessionFake(session: LocalSession): LocalSession {
   };
 }
 
-vi.mock('@cli/runtime/cliPresentationHost', () => ({
+vi.mock('@cli/runtime/headless/cliPresentationHost', () => ({
   createCliRuntimeHost: mocks.createCliRuntimeHost,
 }));
 
-vi.mock('@cli/runtime/approvalAdapter', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/approvalAdapter')>()),
+vi.mock('@cli/runtime/headless/approvalAdapter', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@cli/runtime/headless/approvalAdapter')
+  >()),
   createHeadlessCliHostInteractions: mocks.createHeadlessCliHostInteractions,
 }));
 
-vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
+vi.mock('@cli/runtime/headless/sessionProgressSubscription', () => ({
   attachCliSessionProgressProjection: vi.fn(() =>
     Effect.succeed(Effect.suspend(mocks.detachSessionProgressProjection)),
   ),
 }));
 
-vi.mock('@cli/runtime/scriptPlainOutput', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/scriptPlainOutput')>()),
+vi.mock('@cli/runtime/headless/scriptPlainOutput', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@cli/runtime/headless/scriptPlainOutput')
+  >()),
   attachScriptPlainOutput: mocks.attachScriptPlainOutput,
 }));
 
-vi.mock('@cli/runtime/logSinks', () => ({
+vi.mock('@cli/runtime/platform/logSinks', () => ({
   writeTextStderr: mocks.writeTextStderr,
   writeTextStderrAndWait: mocks.writeTextStderrAndWait,
 }));
@@ -170,14 +177,14 @@ function launchedRunId(): RunId {
 type WithoutSession<O> = Omit<O, 'services'>;
 
 /**
- * The command under test. The commands thread `initCliPlatform`'s session,
+ * The command under test. The commands thread their platform's session,
  * runtime and shutdown scope in; here the test's session stands in for the
  * first, the block's graph for the second and the test host's shutdown
  * scope for the third.
  */
 const loadExecuteCli = Effect.gen(function* () {
   const runtime = yield* Effect.promise(
-    () => import('@cli/runtime/executeCli'),
+    () => import('@cli/runtime/headless/executeCli'),
   );
   const session = yield* TestSession;
   const services = {

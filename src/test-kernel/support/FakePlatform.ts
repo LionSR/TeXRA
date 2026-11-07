@@ -1,11 +1,5 @@
 // Node imports
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -36,12 +30,12 @@ declare global {
 }
 
 /**
- * One real temporary directory per worker process, holding both the fake
- * filesystem root and the shared global-storage directory. Cached on
- * `globalThis` so a suite that resets its module registry keeps the same
- * directories. It sits in the run's temp folder, which the run's teardown
- * removes (`testTempRoot.ts`): the pool ends a worker without its exit
- * handlers.
+ * One real temporary directory per worker process, holding the storage root
+ * every fake host shares (its global storage, and the MCP config a test
+ * process reads). Cached on `globalThis` so a suite that resets its module
+ * registry keeps the same directory. It sits in the run's temp folder, which
+ * the run's teardown removes (`testTempRoot.ts`): the pool ends a worker
+ * without its exit handlers.
  *
  * The realpath is resolved so the paths handed out are canonical: on macOS
  * `os.tmpdir()` traverses the `/tmp` to `/private/tmp` symlink and on Windows
@@ -57,10 +51,10 @@ function workerTempHome(): string {
 }
 
 /**
- * A directory under the worker temp home, created on first use and remembered
- * per worker so the thousands of per-test fake hosts do not each pay for a
- * `mkdir`. Nothing here runs at module load: importing this module must stay
- * free of process-wide side effects, so the pure test tier can reach it.
+ * A directory under the worker temp home, created on first use and
+ * remembered per worker. Nothing here runs at module load: importing this
+ * module must stay free of process-wide side effects, so the pure test tier
+ * can reach it.
  */
 function workerDir(name: string): string {
   const dir = path.join(workerTempHome(), name);
@@ -73,21 +67,13 @@ function workerDir(name: string): string {
 }
 
 /**
- * The real directory every fake host's files live in: what `/` meant to the
- * in-memory filesystem this replaced. Emptied whenever a fake platform is
- * built, so a host starts from the files it seeds and nothing else.
+ * A fake host's own root: a fresh real directory in the run's temp folder,
+ * canonical, holding the files it seeds and its default workspace. What `/`
+ * meant to the in-memory filesystem this replaced. `FakeHost.layer` removes
+ * it on release.
  */
-function fakeRoot(): string {
-  return workerDir('root');
-}
-
-/**
- * A real path inside the {@link fakeRoot}. `fakePath('workspace/a.tex')` is the
- * path a `files` seed keyed `'/workspace/a.tex'` writes to, and is what a
- * suite asserting on an absolute path compares against.
- */
-export function fakePath(...segments: string[]): string {
-  return path.join(fakeRoot(), ...segments);
+export function makeHostRoot(): string {
+  return realpathSync(mkdtempSync(path.join(os.tmpdir(), 'texra-host-')));
 }
 
 /** The worker's storage root, which every fake host shares: the fake host's
@@ -107,32 +93,16 @@ function fakeGlobalStorage(): string {
 }
 
 /**
- * The real file a seed key names. Keys are paths inside the {@link fakeRoot},
- * so `'/workspace/a.tex'` and `fakePath('workspace/a.tex')` name the same file:
- * the first is the spelling a suite writes by hand, the second the one a path
- * helper built on the installed roots produces.
+ * The real file a seed key names inside `root`. A key is a path inside the
+ * root: `'/workspace/a.tex'` and `host.path('workspace/a.tex')` name the same
+ * file, the first the spelling a suite writes by hand, the second one a path
+ * helper built on the host produces. A key that resolves outside the root
+ * throws.
  */
-function seedTarget(key: string): string {
-  const root = fakeRoot();
-  if (key.startsWith(root)) {
-    // A key this harness handed out (fakePath(...)) or built from one: it is
-    // still confined below, a prefix match alone is not containment.
-    return confineToRoot(root, path.resolve(key), key);
-  }
-  // A path this harness handed out but from outside the fake root -- the
-  // worker temp home itself, or a sibling of the root under it -- would be
-  // nested under the root silently. Every other absolute key ('/tmp/run/x'
-  // included) is a path inside the fake root, not a real one.
-  if (key.startsWith(workerTempHome())) {
-    throw new Error(
-      `Seed key ${key} is a real path under the harness temp home; seed keys are paths inside the fake root (use fakePath).`,
-    );
-  }
-  return confineToRoot(root, path.resolve(root, `.${path.sep}${key}`), key);
-}
-
-/** The resolved target, or a throw when it is not the root or a descendant. */
-function confineToRoot(root: string, target: string, key: string): string {
+function seedTarget(root: string, key: string): string {
+  const target = key.startsWith(root)
+    ? path.resolve(key)
+    : path.resolve(root, `.${path.sep}${key}`);
   if (target !== root && !target.startsWith(root + path.sep)) {
     throw new Error(
       `Seed key ${key} resolves outside the fake root; seed keys must stay inside it.`,
@@ -141,13 +111,13 @@ function confineToRoot(root: string, target: string, key: string): string {
   return target;
 }
 
-/** Empties the {@link fakeRoot} and writes the seeded files into it. */
-function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
-  const root = fakeRoot();
-  rmSync(root, { recursive: true, force: true });
-  mkdirSync(root, { recursive: true });
+/** Writes the seeded files into `root`. */
+function seedRoot(
+  root: string,
+  files: Record<string, string | Uint8Array>,
+): void {
   for (const [key, content] of Object.entries(files)) {
-    const file = seedTarget(key);
+    const file = seedTarget(root, key);
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, content);
   }
@@ -161,7 +131,8 @@ function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
  */
 export interface TestApp {
   readonly settings: SettingsCatalog;
-  readonly plugins: () => readonly Plugin[];
+  /** Its plugins, over the host's setup platform. */
+  readonly plugins: (setup: SetupPlatformShape) => readonly Plugin[];
   readonly teamMembers?: AgentDirectoriesPort['teamMembers'];
 }
 
@@ -235,17 +206,16 @@ export interface FakePlatformOptions {
   globalState?: Record<string, unknown>;
   workspaceState?: Record<string, unknown>;
   /**
-   * Files seeded into the fake root before the host is installed. Keys
-   * are paths inside that root: `'/workspace/a.tex'` and
-   * `fakePath('workspace/a.tex')` both name the same file, under the default
-   * workspace root.
+   * Files seeded into the host's root when it is made. Keys are paths
+   * inside that root: `'/workspace/a.tex'` and `host.path('workspace/a.tex')`
+   * both name the same file, under the default workspace root.
    */
   files?: Record<string, string | Uint8Array>;
   secrets?: Record<string, string>;
   /**
-   * The workspace root, as a real path: `fakePath('workspace')` by default.
-   * A suite pointing the workspace elsewhere passes a real directory it owns
-   * (a `fakePath(...)` subdirectory, its own temp dir, or `process.cwd()`).
+   * The workspace root, as a real path: the host's `workspace` directory by
+   * default. A suite pointing the workspace elsewhere passes a real
+   * directory it owns (its own temp dir, or `process.cwd()`).
    */
   workspacePath?: string | undefined;
   /** The storage root, as a real path. Defaults under the workspace root. */
@@ -277,7 +247,8 @@ export type FakeHostOverrides = Partial<FakeProcessPorts> &
     readonly setup?: SetupPlatformShape;
   };
 
-/** The workspace roots a fake host installs beside its platform. */
+/** The workspace roots a fake host holds beside its platform, its default
+ *  workspace and storage under `root` (a fresh one unless named). */
 export function createFakeWorkspaceRoots(
   options: FakePlatformOptions = {},
   overrides: Partial<
@@ -286,13 +257,14 @@ export function createFakeWorkspaceRoots(
       'config' | 'workspaceState' | 'repoState' | 'globalState'
     >
   > = {},
+  root: string = makeHostRoot(),
 ): WorkspaceRoots {
   return {
     workspace: Object.hasOwn(options, 'workspacePath')
       ? options.workspacePath
-      : fakePath('workspace'),
+      : path.join(root, 'workspace'),
     storageRoot: fakeStorageRoot(),
-    storage: options.storagePath ?? fakePath('workspace/.texra/storage'),
+    storage: options.storagePath ?? path.join(root, 'workspace/.texra/storage'),
     globalStorage: options.globalStoragePath ?? fakeGlobalStorage(),
     config:
       overrides.config ??
@@ -305,23 +277,26 @@ export function createFakeWorkspaceRoots(
   };
 }
 
-const fakeAgentDirectories = ({
-  teamMembers,
-}: TestApp): AgentDirectoriesPort => ({
-  custom: () => Effect.sync(() => fakePath('workspace/.texra/agents')),
+const fakeAgentDirectories = (
+  root: string,
+  { teamMembers }: TestApp,
+): AgentDirectoriesPort => ({
+  custom: () => Effect.succeed(path.join(root, 'workspace/.texra/agents')),
   customConfigured: () => Effect.succeed(false),
-  builtIn: () => Effect.sync(() => fakePath('workspace/resources/agents')),
+  builtIn: () => Effect.succeed(path.join(root, 'workspace/resources/agents')),
   ...(teamMembers ? { teamMembers } : {}),
 });
 
+/** A host's process ports over `root`, with `options.files` seeded into it. */
 export function createFakePlatform(
+  root: string,
   options: FakePlatformOptions = {},
   overrides: Partial<FakeProcessPorts> = {},
 ): FakeProcessPorts {
-  seedFakeRoot(options.files ?? {});
+  seedRoot(root, options.files ?? {});
   return {
     shutdownScope: Scope.makeUnsafe(),
-    agentDirectories: fakeAgentDirectories(options.app ?? HARNESS_APP),
+    agentDirectories: fakeAgentDirectories(root, options.app ?? HARNESS_APP),
     ...overrides,
   };
 }

@@ -59,13 +59,13 @@ import { AgentCatalog, ValidationModel } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import { validationModelLayer } from '@cli/runtime/validationModel';
+import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import {
   VALIDATION_FLAG,
   VALIDATION_FLAG_CONTENT,
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
-} from '@cli/runtime/validationSwitch';
+} from '@cli/runtime/models/validationSwitch';
 import { databaseLayer } from '@controllers/session/Database';
 import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
 import { rowReader } from '@controllers/session/rowReader';
@@ -97,7 +97,6 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { texraPlugins } from '@texra/tools/registry';
 import { factKindsOf } from '@tools/plugins';
@@ -626,7 +625,7 @@ describe('the golden run killed after its effect', () => {
         'reports the command as an unknown outcome and never reruns it',
         () =>
           Effect.gen(function* () {
-            const { storage, workspace } = testWorkspaceRoots();
+            const { storage, workspace } = (yield* FakeHost).roots;
             if (workspace === undefined) throw new Error('no test workspace');
             // The resume, in a session that closes before the store is read.
             yield* Effect.scoped(
@@ -718,7 +717,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
       const storage = goldenRoot();
       if (rewrite !== undefined) raw(storage, (db) => db.exec(rewrite));
       const session = yield* (yield* Sessions).open(
-        { ...testWorkspaceRoots(), storage },
+        { ...(yield* FakeHost).roots, storage },
         { persistent: true, host: {} },
       );
       return { storage, session };

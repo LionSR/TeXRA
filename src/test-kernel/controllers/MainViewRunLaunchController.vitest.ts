@@ -16,7 +16,6 @@ import {
 import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { BUNDLED_AGENTS } from '@test/support/storeFaults';
-import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { FakeHost } from '@test/support/testKernel';
 import { LaunchSurfaceSchema } from '@texra/shared/session/surface';
@@ -30,11 +29,11 @@ import {
  * A program over the process's global storage view and the bundled agents:
  * a launch's agent decides its mode, so the catalog is the one a real host
  * scans. The global storage view only satisfies the requirement the catalog
- * readers name; the installed fake host answers `custom()` itself.
+ * readers name; the block's fake host answers `custom()` itself.
  */
 function onGlobalStorage<A, E>(
   program: Effect.Effect<A, E, AgentCatalog>,
-): Effect.Effect<A, E> {
+): Effect.Effect<A, E, FakeHost> {
   return Effect.provide(
     program,
     AgentCatalog.layer.pipe(
@@ -44,10 +43,14 @@ function onGlobalStorage<A, E>(
           storePluginsLayer,
           nodePlatformLayer,
           noHttpClientLayer,
-          Layer.succeed(AgentDirectories)({
-            ...fakeHostAgentDirectories,
-            builtIn: () => Effect.succeed(BUNDLED_AGENTS),
-          }),
+          Layer.unwrap(
+            FakeHost.useSync((host) =>
+              Layer.succeed(AgentDirectories)({
+                ...host.platform.agentDirectories,
+                builtIn: () => Effect.succeed(BUNDLED_AGENTS),
+              }),
+            ),
+          ),
           AppState.layer(new FakeStateStore()),
         ),
       ),

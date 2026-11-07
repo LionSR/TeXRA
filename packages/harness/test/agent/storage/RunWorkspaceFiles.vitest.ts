@@ -6,25 +6,23 @@ import { Effect } from 'effect';
 import { expect } from 'vitest';
 
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
-import { fakePath } from '@test/support/FakePlatform';
 import { FakeHost } from '@test/support/testKernel';
 
-const WORKSPACE_PATH = fakePath('workspace');
-
-layer(FakeHost.layer({ workspacePath: WORKSPACE_PATH }), {
+layer(FakeHost.layer(), {
   excludeTestServices: true,
 })('listRunWorkspaceFiles', (it) => {
   it.effect(
     'lists unique contained entries in path order and omits missing paths',
     () =>
       Effect.gen(function* () {
+        const workspacePath = (yield* FakeHost).path('workspace');
         yield* Effect.promise(async () => {
-          await mkdir(path.join(WORKSPACE_PATH, 'z-dir'), { recursive: true });
-          await writeFile(path.join(WORKSPACE_PATH, 'a-file.tex'), 'content');
+          await mkdir(path.join(workspacePath, 'z-dir'), { recursive: true });
+          await writeFile(path.join(workspacePath, 'a-file.tex'), 'content');
         });
 
         const files = yield* listRunWorkspaceFiles(
-          { workingDirectory: WORKSPACE_PATH },
+          { workingDirectory: workspacePath },
           [
             'z-dir',
             'missing.tex',

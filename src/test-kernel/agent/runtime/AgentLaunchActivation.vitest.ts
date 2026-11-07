@@ -33,8 +33,11 @@ import {
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
-import { sessionHandleOf, TestSession } from '@test/support/testKernel';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import {
+  FakeHost,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 
 /** What a run of a launch was offered and asked, and how its calls ended,
@@ -100,7 +103,7 @@ describe(
           'a child launch whose opening is refused leaves no run and ends failed for its parent',
           () =>
             Effect.gen(function* () {
-              const roots = testWorkspaceRoots();
+              const { roots } = yield* FakeHost;
               const session = yield* persistentTestSession();
               const parentRunId = generateRunId();
               yield* rootRun({
@@ -143,7 +146,7 @@ describe(
           'R6: an agent file and its equivalent inline persona are offered the same tools and asked the same approvals',
           () =>
             Effect.gen(function* () {
-              const roots = testWorkspaceRoots();
+              const { roots } = yield* FakeHost;
               /** Launch `agent` on `session` with the launch's `approval`, and
                *  read what it was offered and asked once `ready` holds. */
               const launch = (

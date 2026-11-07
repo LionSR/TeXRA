@@ -73,7 +73,6 @@ import {
   failedNext,
   failuresBefore,
   nextAttempt,
-  sameRef,
   type Attempt,
   type Invocation,
   type NextAttempt,
@@ -124,6 +123,13 @@ const INTERRUPTED_RETRY_MESSAGE =
  * bound keeps a long generation out of the error and off the run history row.
  */
 const PARTIAL_TEXT_TAIL_MAX = 4096;
+
+/** The monotonic clock in milliseconds. A response time is the difference
+ *  of two readings, which a wall-clock step cannot make negative. */
+const monotonicMillis = Effect.map(
+  Clock.monotonicTimeNanos,
+  (nanos) => Number(nanos) / 1e6,
+);
 
 interface InvocationResponse {
   readonly kind: 'response';
@@ -206,6 +212,9 @@ export const modelInvokerLayer = (): Layer.Layer<
       const roots = yield* SessionRoots;
       const aggregateId = qualifyAggregateId('run', runId);
       const usageLog = yield* UsageLog;
+      /** When each attempt was sent, by its reference, for pricing a failure
+       *  the provider billed by the time it took. */
+      const attemptStarts = new WeakMap<InvocationRef, number>();
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
       const attribution = {
@@ -237,7 +246,8 @@ export const modelInvokerLayer = (): Layer.Layer<
        * completed result is kept. Then the handles close, a failed stream
        * classifies, an empty one is a malformed output, and a completed
        * turn is priced and committed as the `response` row before any
-       * local tool runs. `started` is when the request went out.
+       * local tool runs. `started` is when the request went out, on
+       * {@link monotonicMillis}.
        */
       const consume = Effect.fn('ModelInvoker.consume')(function* (
         cell: RunCell,
@@ -323,7 +333,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               )
             : Effect.fail(found.success);
         }
-        const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
+        const responseTimeMs = (yield* monotonicMillis) - started;
         const turn = completed.value;
         if (turn === null) {
           trace.thinking.finalize(undefined);
@@ -377,7 +387,14 @@ export const modelInvokerLayer = (): Layer.Layer<
             contextWindow: bound.config.contextWindow,
           });
         }
-        yield* reportUsage(usageLog, bound, usage, attribution, roots);
+        yield* reportUsage(
+          usageLog,
+          bound,
+          turn.usage,
+          responseTimeMs,
+          attribution,
+          roots,
+        );
         return { kind: 'response', state: next };
       });
 
@@ -448,11 +465,12 @@ export const modelInvokerLayer = (): Layer.Layer<
         });
         // The durable fact before the billed request, with the prepared
         // turn it sends, which the rows alone must rebuild.
-        const started = yield* Clock.currentTimeMillis;
         yield* cell.append((state) =>
-          attemptRows(run, state, invocation, bound.origin, resolved, started),
+          attemptRows(run, state, invocation, bound.origin, resolved),
         );
         yield* checkRecordedRequest(run, resolved);
+        const started = yield* monotonicMillis;
+        attemptStarts.set(invocation, started);
         return yield* consume(
           cell,
           invocation,
@@ -493,7 +511,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             cell,
             invocation,
             bound,
-            yield* Clock.currentTimeMillis,
+            yield* monotonicMillis,
             observeBackground(
               run,
               cell,
@@ -643,24 +661,30 @@ export const modelInvokerLayer = (): Layer.Layer<
             { ...info, rawErrorBody: error.cause },
           );
         // A response the provider billed before refusing it is priced
-        // and reported like a turn's, on its `failed` row, timed from when
-        // its attempt row says it was sent.
-        const attempt = (yield* cell.current).invocation?.current;
-        const started =
-          attempt !== undefined && sameRef(attempt.ref, ref)
-            ? attempt.sent?.atMs
-            : undefined;
-        const usage =
+        // and reported like a turn's, on its `failed` row.
+        const started = attemptStarts.get(ref);
+        const billed =
           error instanceof ModelError &&
           error.usage !== undefined &&
           started !== undefined
-            ? priceTurnUsage(
-                bound,
-                error.usage,
-                (yield* Clock.currentTimeMillis) - started,
-              )
+            ? {
+                usage: error.usage,
+                responseTimeMs: (yield* monotonicMillis) - started,
+              }
             : null;
-        yield* reportUsage(usageLog, bound, usage, attribution, roots);
+        const usage =
+          billed === null
+            ? null
+            : priceTurnUsage(bound, billed.usage, billed.responseTimeMs);
+        if (billed !== null)
+          yield* reportUsage(
+            usageLog,
+            bound,
+            billed.usage,
+            billed.responseTimeMs,
+            attribution,
+            roots,
+          );
         yield* cell.append(
           yield* failedRows(cell, ref, info, next, bound, usage, quota),
         );

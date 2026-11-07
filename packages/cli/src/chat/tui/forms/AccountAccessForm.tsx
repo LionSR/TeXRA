@@ -1,18 +1,18 @@
 import { Box, Text } from 'ink';
 
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
-import { loadCliModelAccessOverview } from '@cli/runtime/apiStatus';
+import { loadCliModelAccessOverview } from '@cli/runtime/models/apiStatus';
 import type {
   CliLogoutTarget,
   LoginFormValue,
-} from '@cli/runtime/loginOptions';
+} from '@cli/runtime/models/loginOptions';
 import {
   buildCliAccountAccessRows,
   buildCliModelAccessItems,
   CLI_ACCOUNT_ACCESS_DESCRIPTION,
   type CliModelAccessItemsInput,
   type CliModelAccessSelection,
-} from '@cli/runtime/modelAccessRoute';
+} from '@cli/runtime/models/modelAccessRoute';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';

@@ -91,11 +91,44 @@ export function turnCost(
   usage: TurnUsage,
   billing: { readonly plan: boolean; readonly tier?: 'fast' },
 ): number {
-  const { plan } = billing;
+  if (billing.plan) return costAt(model, usage, PLAN_RATES);
+  const provider = usage.providerUsage;
+  if (provider?.kind === 'xai' && provider.costInUsdTicks !== null)
+    return Math.max(0, provider.costInUsdTicks / 1e10);
+  return listCost(model, usage, billing.tier);
+}
+
+/**
+ * The cost of one turn at the catalog's rates on its service tier, never
+ * negative: what an API key would be billed, whatever route the turn took.
+ * It reads no receipt's own cost, so a subscription turn's zero-cost receipt
+ * cannot stand in for its list price.
+ */
+export function listCost(
+  model: ModelConfig,
+  usage: TurnUsage,
+  tier?: 'fast',
+): number {
+  return costAt(
+    model,
+    usage,
+    requestRates(model, usage.inputTokens ?? 0, { tier }),
+  );
+}
+
+const PLAN_RATES: TurnRates = Object.freeze({
+  inputPrice: 0,
+  outputPrice: 0,
+  cacheDiscountFactor: 1,
+});
+
+/** One turn's cost at `rates`, by its provider's accounting. */
+function costAt(
+  model: ModelConfig,
+  usage: TurnUsage,
+  rates: TurnRates,
+): number {
   const inputTokens = usage.inputTokens ?? 0;
-  const rates: TurnRates = plan
-    ? { inputPrice: 0, outputPrice: 0, cacheDiscountFactor: 1 }
-    : requestRates(model, inputTokens, { tier: billing.tier });
   const provider = usage.providerUsage;
   let cost: number;
   switch (provider?.kind) {
@@ -103,10 +136,7 @@ export function turnCost(
       cost = anthropicCost(usage, provider, rates);
       break;
     case 'xai':
-      cost =
-        !plan && provider.costInUsdTicks !== null
-          ? provider.costInUsdTicks / 1e10
-          : standardCost(usage, rates, true);
+      cost = standardCost(usage, rates, true);
       break;
     case undefined:
       // Reasoning is part of the reported output everywhere but where a

@@ -6,9 +6,10 @@
  * not a Supabase user JWT.
  */
 import { handleCors } from '../_shared/cors.ts';
-import { errorResponse, jsonResponse } from '../_shared/responses.ts';
+import { bearerToken, errorResponse, jsonResponse } from '../_shared/http.ts';
 import {
   parseRepositoryClaim,
+  TokenRejected,
   validateWorkflowIdentity,
   verifyGitHubActionsToken,
   type GitHubActionsClaims,
@@ -45,17 +46,6 @@ function productionDependencies(): ExchangeDependencies {
     appId: Deno.env.get('GITHUB_APP_ID'),
     privateKey: Deno.env.get('GITHUB_APP_PRIVATE_KEY'),
   };
-}
-
-/**
- * Deliberately not imported from `../_shared/auth.ts`: that module's
- * `authenticateJwt` pulls in `@supabase/supabase-js` at module scope, and
- * this Supabase-free OIDC-only endpoint shouldn't gain that dependency just
- * to reuse a three-line header parse.
- */
-function bearerToken(req: Request): string | null {
-  const header = req.headers.get('Authorization');
-  return header?.startsWith('Bearer ') ? header.slice(7) : null;
 }
 
 export async function handleExchangeRequest(
@@ -125,11 +115,7 @@ export async function handleExchangeRequest(
         403,
       );
     }
-    if (
-      error instanceof Error &&
-      (error.message.startsWith('GitHub OIDC') ||
-        error.message.startsWith('TeXRA workflow'))
-    ) {
+    if (error instanceof TokenRejected) {
       return errorResponse(req, error.message, 403);
     }
     console.error(

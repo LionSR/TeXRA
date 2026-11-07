@@ -37,20 +37,23 @@ import {
   launchApprovalNotice,
   projectApprovalPolicy,
   type CliContext,
-} from '@cli/runtime/cliContext';
-import { isLinked, linkClient } from '@cli/runtime/cliService';
+} from '@cli/runtime/platform/cliContext';
+import { isLinked, linkClient } from '@cli/runtime/platform/cliService';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
-import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import type { CliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
+import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
+import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import {
+  cliPlatform,
+  setCliHelperModel,
+} from '@cli/runtime/platform/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
-} from '@cli/runtime/modelAccess';
-import { writeTextStderr } from '@cli/runtime/logSinks';
+} from '@cli/runtime/models/modelAccess';
+import { writeTextStderr } from '@cli/runtime/platform/logSinks';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
@@ -150,7 +153,7 @@ const CHAT_STARTUP_MODEL_RECOVERY = {
   configureKeyAction: 'add a provider API key with `texra setup`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
-/** `runtime` is the one the command entry installed and ran its program on;
+/** `runtime` is the one the command entry built and ran its program on;
  *  platform signals hand off before Ink mounts. */
 export async function runChat(
   runtime: CliProcessRuntime,
@@ -164,15 +167,11 @@ export async function runChat(
   const startup = await runtime.runPromise(
     Effect.gen(function* () {
       // Every chat is a client of the one service, so other terminals and
-      // windows see its task: the platform starts it when none runs and
-      // holds the link, which reaches the service again (starting one when
-      // none answers) whenever it goes away. One the platform could not
-      // link runs here, and says so once.
-      const services = yield* initCliPlatform({
-        ...context,
-        presentsStoreMovedAside: true,
-        startsService: true,
-      });
+      // windows see its task: the platform (`startsService`) starts it when
+      // none runs and holds the link, which reaches the service again
+      // (starting one when none answers) whenever it goes away. One the
+      // platform could not link runs here, and says so once.
+      const services = yield* cliPlatform;
       const link = isLinked(services.service) ? services.service : undefined;
       const served = link !== undefined;
       // Where this chat's runs run: the service's session, or this one.
@@ -688,6 +687,7 @@ export async function runChat(
     chatScope,
     terminal,
     runtime,
+    leaveProcess: services.leave,
     submitted: chatController.submitted,
     getApprovalPolicy,
     // What the session's publisher still holds, drained before shutdown

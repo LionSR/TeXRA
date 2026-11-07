@@ -1,0 +1,113 @@
+/**
+ * CLI projection of the enabled-models catalog. The selection itself
+ * (`MODEL_SELECTION_KEY.key`) is owned by the harness —
+ * `getEnabledModels` reads it, `setModelEnabled` writes it and enforces the
+ * "at least one enabled" and "never enable a retired model" invariants for
+ * every host. This module only resolves CLI argument spellings and shapes the
+ * rows `texra models enabled` and the `/models` form print.
+ *
+ * The global state store arrives from the caller (the CLI composition root's
+ * own `CliPlatformServices`, or the `AppState` service), so the read and the
+ * write that follows it hit the same store.
+ */
+import { Effect } from 'effect';
+
+import {
+  isUnservedModel,
+  modelConfig,
+  modelRefOf,
+  MODELS,
+} from '@texra-ai/llm';
+import {
+  getEnabledModels,
+  setModelEnabled,
+  StateWriteFailed,
+  type StateReadFailed,
+  type StateStore,
+  MODEL_SELECTION_KEY,
+} from '@texra-ai/harness/host';
+import { getModelLabel } from '@texra-ai/harness/schemas';
+
+import { resolveKnownCliModelId } from '../platform/cliConfig';
+
+export interface CliEnabledModelRow {
+  readonly id: string;
+  readonly label: string;
+  readonly provider: string;
+  readonly enabled: boolean;
+  readonly deprecated: boolean;
+}
+
+/**
+ * Full catalog for enable/disable UIs: every CLI-supported model TeXRA can
+ * still serve, marked with whether it is currently enabled.
+ */
+export const listCliEnabledModelCatalog = Effect.fn(
+  'listCliEnabledModelCatalog',
+)(function* (state: StateStore) {
+  const enabled = new Set(yield* getEnabledModels(state));
+  return MODELS.filter((id) => {
+    const config = modelConfig(id);
+    return config === undefined || !isUnservedModel(config);
+  })
+    .map((id) => {
+      const config = modelConfig(id);
+      return {
+        id,
+        label: getModelLabel(id),
+        provider: config?.provider ?? 'unknown',
+        enabled: enabled.has(id),
+        deprecated: config?.deprecated ?? false,
+      };
+    })
+    .toSorted((a, b) => {
+      if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+      return a.label.localeCompare(b.label);
+    });
+});
+
+/**
+ * Enable or disable one model from a CLI argument, resolving common spellings
+ * (`grok-4.7` → `xai/grok-4.7`) before handing the id to the shared writer.
+ *
+ * One program: the caller runs it on the process runtime, so this refusal and
+ * the writer's own invariant refusals land in the same channel — the
+ * unknown-id case as a `StateWriteFailed`, the writer's as its own typed
+ * refusals — and `Effect.suspend` keeps both inside the program rather than
+ * at the call site.
+ */
+export function setCliModelEnabled(
+  state: StateStore,
+  modelInput: string,
+  enabled: boolean,
+): Effect.Effect<
+  {
+    readonly model: string;
+    readonly enabled: boolean;
+    readonly list: readonly string[];
+  },
+  StateWriteFailed | StateReadFailed
+> {
+  return Effect.suspend(() => {
+    // Enablement belongs to the model, not to an effort or mode suffix.
+    const resolved = resolveKnownCliModelId(modelInput);
+    const model = resolved && (modelRefOf(resolved) ?? resolved);
+    if (!model) {
+      // A refusal in the channel this signature declares, not a defect: the
+      // caller shows it to the user, and a defect would reach that caller as a
+      // FiberFailure with the message buried in the pretty-printed cause.
+      const message = `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`;
+      return Effect.fail(
+        new StateWriteFailed({
+          key: MODEL_SELECTION_KEY.key,
+          message,
+          cause: new Error(message),
+        }),
+      );
+    }
+
+    return setModelEnabled({ model, enabled, state }).pipe(
+      Effect.map((list) => ({ model, enabled: list.includes(model), list })),
+    );
+  });
+}

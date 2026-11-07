@@ -6,11 +6,21 @@ import { beforeEach, expect, vi } from 'vitest';
 import {
   type AgentConfig,
   AgentConfigSchema,
+  emptyRunEndOutput,
   qualifyAggregateId,
   RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { provideCliInvocation, type CliContext } from '@cli/runtime/cliContext';
+import {
+  provideCliInvocation,
+  type CliContext,
+} from '@cli/runtime/platform/cliContext';
+import {
+  CliPlatform,
+  type CliPlatformServices,
+} from '@cli/runtime/platform/initPlatform';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import type { Session } from '@texra-ai/harness';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
@@ -21,23 +31,16 @@ import {
 } from '@test/support/testKernel';
 
 const mocks = vi.hoisted(() => ({
-  initCliPlatform: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
-// `texra resume` reopens the chat TUI for tool-use sessions, so it must never
-// pass `installSignalHandlers: false` — that leaves the TUI as the sole
-// SIGINT/SIGTERM owner once it mounts (see initPlatform.ts).
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: mocks.initCliPlatform,
-}));
 // The platform links the service a conversation continues in; none here.
-vi.mock('@cli/runtime/cliService', () => ({
+vi.mock('@cli/runtime/platform/cliService', () => ({
   isLinked: (link: { readonly none?: string }) => !('none' in link),
 }));
 
-vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/logSinks')>()),
+vi.mock('@cli/runtime/platform/logSinks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/platform/logSinks')>()),
   writeTextStderr: mocks.writeTextStderr,
 }));
 
@@ -49,27 +52,20 @@ const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 });
 
 /** Seed the real (fake-platform-backed) run records and run aggregate into
- *  the test's session, which the command resolves off the services the
- *  init returns; the seeded session's handle comes back. */
-const seedRunRecord = (config: AgentConfig | null) =>
+ *  the test's session, which the command resolves off its platform; the
+ *  seeded session's handle comes back. */
+const seedRunRecord = (
+  config: AgentConfig | null,
+  { takesFollowUps, ended }: { takesFollowUps: boolean; ended: boolean },
+) =>
   Effect.gen(function* () {
-    const session = yield* TestSession;
-    const handle = yield* sessionHandleOf(session);
-    // `runResumeCommand` reads the session off the services the init returns.
-    mocks.initCliPlatform.mockReturnValue(
-      Effect.succeed({
-        runtime: yield* SessionGraph.runtime,
-        session: Effect.succeed(session),
-        runSession: Effect.succeed(session),
-        service: { none: 'no service in this test' },
-      }),
-    );
+    const handle = yield* sessionHandleOf(yield* TestSession);
     yield* Context.get(handle, SessionLog).transact([
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', RUN_ID),
         identity: { kind: 'agent', agent: 'planner' },
-        takesFollowUps: false,
+        takesFollowUps,
         parent: null,
         provenance: null,
       },
@@ -86,6 +82,15 @@ const seedRunRecord = (config: AgentConfig | null) =>
         payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
     ]);
+    if (ended)
+      yield* Context.get(handle, SessionLog).transact([
+        {
+          type: 'run.end',
+          aggregateId: qualifyAggregateId('run', RUN_ID),
+          outcome: 'completed',
+          output: emptyRunEndOutput(),
+        },
+      ]);
     return handle;
   });
 
@@ -101,13 +106,27 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
-/** The command's program, run the way `defineCliCommand` runs it. */
-const run = (context: CliContext, id: RunId = RUN_ID) =>
-  Effect.flatMap(
-    Effect.promise(() => import('@cli/commands/resumeRun')),
-    ({ runResumeCommand }) =>
-      runResumeCommand(context, id).pipe(provideCliInvocation(context)),
-  );
+/** The command's program, run the way `defineCliCommand` runs it, over a
+ *  platform that is the test's session and links no service. A `session`
+ *  given stands in for the test's (a service window's, say). */
+const run = (context: CliContext, id: RunId = RUN_ID, given?: Session) =>
+  Effect.gen(function* () {
+    const session = given ?? (yield* TestSession);
+    const { runResumeCommand } = yield* Effect.promise(
+      () => import('@cli/commands/resumeRun'),
+    );
+    // cast: the command reads only these members of its platform.
+    const platform = {
+      runtime: yield* SessionGraph.runtime,
+      session: Effect.succeed(session),
+      runSession: Effect.succeed(session),
+      service: { none: 'no service in this test' },
+    } as unknown as CliPlatformServices;
+    return yield* runResumeCommand(context, id).pipe(
+      provideCliInvocation(context),
+      Effect.provideService(CliPlatform, Effect.succeed(platform)),
+    );
+  });
 
 // Live clock: the command runs as its entry runs it.
 layer(SessionGraph.hosted, { excludeTestServices: true })(
@@ -120,13 +139,45 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     // A session of its own per case, seeded by the case.
     it.layer(TestSession.layer(), { buildPerTest: true })((it) => {
       it.effect(
-        'reopens the chat TUI with the persisted tool-use run record',
+        'reopens the chat TUI to finish an interrupted one-shot run',
         () =>
           Effect.gen(function* () {
-            yield* seedRunRecord(TOOL_USE_CONFIG);
+            // A headless `texra run` stopped mid-turn: no outcome yet, so
+            // its resume finishes the turn (a fork needs a finished one).
+            yield* seedRunRecord(TOOL_USE_CONFIG, {
+              takesFollowUps: false,
+              ended: false,
+            });
             expect(yield* run(cliContext())).toEqual({
               chat: { initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG } },
             });
+          }),
+      );
+
+      it.effect(
+        'does not reopen the chat for a run that takes no messages',
+        () =>
+          Effect.gen(function* () {
+            // A service window's view fills after it opens, so the one the
+            // command first sees lacks the run its log already holds.
+            const session = yield* TestSession;
+            const opened = session.view.current();
+            // A headless `texra run` root that ended: it ran once and reads
+            // no input.
+            yield* seedRunRecord(TOOL_USE_CONFIG, {
+              takesFollowUps: false,
+              ended: true,
+            });
+            const lagging: Session = {
+              ...session,
+              view: { ...session.view, current: () => opened },
+            };
+            expect(yield* run(cliContext(), RUN_ID, lagging)).toBe(
+              CliExitCode.Usage,
+            );
+            expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+              expect.stringContaining(`resume ${RUN_ID} --fork`),
+            );
           }),
       );
     });

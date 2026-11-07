@@ -12,16 +12,16 @@ import {
   signOutCliSubscription,
   subscriptionSignOutPreferenceMessage,
   type CliSubscriptionLoginTransportInit,
-} from '@cli/runtime/subscriptionLogin';
-import { loadCliModelAccessOverview } from '@cli/runtime/apiStatus';
-import { type CliContext } from '@cli/runtime/cliContext';
+} from '@cli/runtime/models/subscriptionLogin';
+import { loadCliModelAccessOverview } from '@cli/runtime/models/apiStatus';
+import { type CliContext } from '@cli/runtime/platform/cliContext';
 import {
   hasLoginTransportConflict,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,
   type CliLoginSlashArgs,
   type CliLogoutTarget,
-} from '@cli/runtime/loginOptions';
+} from '@cli/runtime/models/loginOptions';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,

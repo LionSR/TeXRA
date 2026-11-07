@@ -2,17 +2,17 @@ import { defineCommand } from 'citty';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
-import { CliUsageError } from '../runtime/cliContext';
-import { bashCompletion } from '../runtime/completionBash';
+import { CliUsageError } from '../runtime/platform/cliContext';
+import { bashCompletion } from '../runtime/completion/completionBash';
 import {
   collectCommands,
   parseCompletionShell,
   type CliCompletionShell,
   type CompletionCommand,
-} from '../runtime/completionCommandTree';
-import { fishCompletion } from '../runtime/completionFish';
-import { zshCompletion } from '../runtime/completionZsh';
-import { writeTextStdout } from '../runtime/logSinks';
+} from '../runtime/completion/completionCommandTree';
+import { fishCompletion } from '../runtime/completion/completionFish';
+import { zshCompletion } from '../runtime/completion/completionZsh';
+import { writeTextStdout } from '../runtime/platform/logSinks';
 
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 

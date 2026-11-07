@@ -2,7 +2,7 @@ import { writeSync } from 'node:fs';
 
 import { kittyFlags } from 'ink';
 
-import { cliEnvValue } from '../runtime/cliContext';
+import { cliEnvValue } from '../runtime/platform/cliContext';
 
 // Undo exactly the input/display modes the TUI turns on: mouse tracking
 // (1000/1003/1006), the kitty keyboard stack (<u), bracketed paste (2004), and
@@ -64,8 +64,6 @@ interface TuiTerminalTitle {
   readonly suspend: () => void;
   /** Project live state again. */
   readonly resume: () => void;
-  /** Show the idle title and stop for good. */
-  readonly dispose: () => void;
 }
 
 /** The mounted TUI's hold on the terminal: raw mode, emulator modes, title. */
@@ -74,7 +72,8 @@ export interface TuiTerminal {
   readonly suspend: () => void;
   /** Take it back after SIGCONT; the caller repaints. */
   readonly resume: () => void;
-  /** Restore the terminal for good. Idempotent and synchronous. */
+  /** Restore the terminal for good: a later suspend or resume does
+   *  nothing. Idempotent and synchronous. */
   readonly release: () => void;
 }
 
@@ -98,12 +97,13 @@ export function acquireTuiTerminal(options: {
     if (released) return;
     released = true;
     process.off('exit', release);
-    title.dispose();
+    title.suspend();
     cleanupTerminalModes();
   };
   process.on('exit', release);
   return {
     suspend: () => {
+      if (released) return;
       title.suspend();
       cleanupTerminalModes();
       setRawMode(false);
@@ -111,6 +111,7 @@ export function acquireTuiTerminal(options: {
     // The shell restores only the termios snapshot from suspend time
     // (non-raw); the emulator-side modes were popped outright, so re-arm both.
     resume: () => {
+      if (released) return;
       setRawMode(true);
       writeTerminalSequence(
         `${options.kittyKeyboard ? KITTY_PUSH_DISAMBIGUATE : ''}${REARM_INPUT_MODES}`,

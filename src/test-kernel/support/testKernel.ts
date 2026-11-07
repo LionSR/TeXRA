@@ -4,14 +4,16 @@
  * and `it.layer(L)`: a block states what it runs over, the block's scope
  * releases it, and nothing is installed at import or held in a slot.
  *
- * `FakeHost.layer` installs a fake host for the block (`buildPerTest: true`
+ * `FakeHost.layer` serves a fake host for the block (`buildPerTest: true`
  * gives each test its own); `SessionGraph.layer` is the process a host
- * composes (`processLayer` over the host's app and the installed host's
- * ports), built over the block's host, with no `ManagedRuntime` and
- * no slot (`SessionGraph.hosted` brings a default host); and
- * `TestSession.layer` opens an ephemeral session on it. No host is
- * installed by default: a block names the host it runs over.
+ * composes (`processLayer` over the host's app and ports), built over the
+ * block's host, with no `ManagedRuntime` (`SessionGraph.hosted` brings a
+ * default host); and `TestSession.layer` opens an ephemeral session on it.
+ * No host exists by default: a block names the host it runs over.
  */
+
+// Node imports
+import { rm } from 'node:fs/promises';
 
 // Third-party imports
 import {
@@ -20,7 +22,9 @@ import {
   FileSystem,
   Layer,
   ManagedRuntime,
+  Option,
   Path,
+  Ref,
   type Scope,
 } from 'effect';
 import { HttpClient } from 'effect/http';
@@ -48,6 +52,7 @@ import {
   UsageLog,
   type HostInteractions,
   type ProcessRuntime,
+  type StateStore,
   type ProcessServices,
   type ValidationModel,
 } from '@texra-ai/harness/host';
@@ -57,8 +62,10 @@ import {
 } from '@agent/runtime/HostInteractions';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import { RouteRetries } from '@agent/runtime/ModelRetryGate';
-import { validationModelLayer } from '@cli/runtime/validationModel';
+import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { withForkFailureReporting } from '@platform/processRuntime';
+import type { AgentDirectoriesPort } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SessionRoots } from '@platform/rootedFs';
 import {
@@ -67,18 +74,14 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { Plugin } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
 import {
   createFakeHost,
-  fakeHostAgentDirectories,
-  fakeHostAppState,
-  fakeHostSecrets,
-  installFakeHost,
   type FakeHost as InstalledHost,
 } from './setupPlatform';
-import { testWorkspaceRoots } from './testWorkspaceRoots';
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import type { FakeHostOverrides, FakePlatformOptions } from './FakePlatform';
 
@@ -87,9 +90,20 @@ import type { FakeHostOverrides, FakePlatformOptions } from './FakePlatform';
 type HostBuilder = () => InstalledHost | Promise<InstalledHost>;
 
 /**
- * The fake host a block runs over, installed while the layer lives: the
- * host the process's ports and `testWorkspaceRoots()` read. The release
- * reinstalls the host it replaced, so a block's host never outlives it.
+ * The host a block's process follows: the block's `FakeHost.layer` makes it,
+ * and a test's own `FakeHost.layer` inside the block points it at the test's
+ * host while that layer lives. A process is built once per block while hosts
+ * change per test, so its ports read this on every call.
+ */
+class CurrentHost extends Context.Service<
+  CurrentHost,
+  Ref.Ref<InstalledHost>
+>()('@test/support/CurrentHost') {}
+
+/**
+ * The fake host a block or a test runs over, for the layer's lifetime; the
+ * release removes its root. Inside a block that already has one, it also points the block's process
+ * at this host until its release, which points it back.
  */
 export class FakeHost extends Context.Service<FakeHost, InstalledHost>()(
   '@test/support/FakeHost',
@@ -99,20 +113,69 @@ export class FakeHost extends Context.Service<FakeHost, InstalledHost>()(
   static layer(
     optionsOrBuilder: FakePlatformOptions | HostBuilder = {},
     overrides: FakeHostOverrides = {},
-  ): Layer.Layer<FakeHost> {
+  ): Layer.Layer<FakeHost | CurrentHost> {
     const build: HostBuilder =
       typeof optionsOrBuilder === 'function'
         ? optionsOrBuilder
         : () => createFakeHost(optionsOrBuilder, overrides);
-    return Layer.effect(
-      FakeHost,
-      Effect.tap(
-        Effect.promise(async () => build()),
-        installFakeHost,
-      ),
+    return Layer.effectContext(
+      Effect.gen(function* () {
+        const host = yield* Effect.acquireRelease(
+          Effect.promise(async () => build()),
+          ({ root }) =>
+            Effect.promise(() => rm(root, { recursive: true, force: true })),
+        );
+        const outer = yield* Effect.serviceOption(CurrentHost);
+        const current = Option.isSome(outer)
+          ? outer.value
+          : yield* Ref.make(host);
+        if (Option.isSome(outer))
+          yield* Effect.acquireRelease(Ref.getAndSet(current, host), (was) =>
+            Ref.set(current, was),
+          );
+        return Context.make(FakeHost, host).pipe(
+          Context.add(CurrentHost, current),
+        );
+      }),
     );
   }
 }
+
+/** A block process's host ports: each member reads the host the block
+ *  points at when it is called. */
+const followedPorts = (current: Ref.Ref<InstalledHost>) => {
+  const host = () => Ref.getUnsafe(current);
+  const secrets: PlatformSecrets = {
+    get: (key) => host().secrets.get(key),
+    set: (key, value) => host().secrets.set(key, value),
+    delete: (key) => host().secrets.delete(key),
+    listStoredKeys: () => host().secrets.listStoredKeys(),
+  };
+  const appState: StateStore = {
+    get: (key) => Effect.suspend(() => host().roots.globalState.get(key)),
+    update: (key, value) => host().roots.globalState.update(key, value),
+    modify: (key, change) =>
+      Effect.suspend(() => host().roots.globalState.modify(key, change)),
+  };
+  const agentDirectories: AgentDirectoriesPort = {
+    custom: () => host().platform.agentDirectories.custom(),
+    customConfigured: () => host().platform.agentDirectories.customConfigured(),
+    builtIn: () => host().platform.agentDirectories.builtIn(),
+    teamMembers: (repoState, teamId) =>
+      host().app.teamMembers?.(repoState, teamId) ?? Effect.succeed(undefined),
+  };
+  // A host without a setup platform has none of its members, as a host that
+  // passes none.
+  const setup: SetupPlatformShape = {
+    get commands() {
+      return host().setup?.commands;
+    },
+    get terminal() {
+      return host().setup?.terminal;
+    },
+  };
+  return { secrets, appState, agentDirectories, setup };
+};
 
 /**
  * The services a host's `ProcessRuntime` holds, one tag each, for
@@ -164,17 +227,19 @@ const composedProcess = (
   // (provideMerge); the suites' root launches and `sessionHandleOf` ask it.
   // cast: the process layer provides `SessionOwner`, which its type omits.
   Layer.unwrap(
-    Effect.map(FakeHost, (host) =>
-      processLayer({
+    Effect.gen(function* () {
+      const host = yield* FakeHost;
+      const ports = followedPorts(yield* CurrentHost);
+      return processLayer({
         // Under the host's storage root, the worker's: its global storage,
         // and its mcp.json rather than the developer's `~/.texra/mcp.json`.
         storageRoot: host.roots.storageRoot,
         settings: host.app.settings,
-        plugins: [...host.app.plugins(), ...extra],
-        secrets: Secrets.layer(fakeHostSecrets),
-        appState: AppState.layer(fakeHostAppState),
+        plugins: [...host.app.plugins(ports.setup), ...extra],
+        secrets: Secrets.layer(ports.secrets),
+        appState: AppState.layer(ports.appState),
         agentDirectories: Layer.succeed(AgentDirectories)(
-          fakeHostAgentDirectories,
+          ports.agentDirectories,
         ),
         toolAvailability: unprobedToolAvailability,
         // The process reports no usage; the telemetry suite starts its own.
@@ -183,17 +248,21 @@ const composedProcess = (
         // level the programs run and let each test filter what it reads.
         minimumLogLevel: 'Trace',
         processStart: Effect.succeed('vitest'),
-      }).pipe(Layer.provide(model)),
-    ),
-  ) as Layer.Layer<ProcessServices | Sessions | SessionOwner, never, FakeHost>;
+      }).pipe(Layer.provide(model));
+    }),
+  ) as Layer.Layer<
+    ProcessServices | Sessions | SessionOwner,
+    never,
+    FakeHost | CurrentHost
+  >;
 
 /**
  * The process a host composes, as a layer over the block's fake host:
  * `processLayer` over the host's app (`HARNESS_APP` unless the host names
  * another) and the fake host's ports. The process reads the host as
  * it builds and after (its tool switches, whether a custom agents directory
- * is set), and its ports read the host installed when they are called, so
- * a block's graph follows its per-test hosts. Built once per block and
+ * is set), and its ports read the host the block points at when they are
+ * called, so a block's graph follows its per-test hosts. Built once per block and
  * released with it, which closes the sessions still open on it. The CLI's
  * validation model stands in for a real one, as the suites open runs the
  * way validation does.
@@ -248,8 +317,8 @@ export const SessionGraph = {
 
 /**
  * A session on the block's graph, open while the layer lives and closed
- * with it: the public `LocalSession` a host holds, over the installed fake
- * host's roots unless the suite names its own, and ephemeral unless its
+ * with it: the public `LocalSession` a host holds, over the fake host's
+ * roots unless the suite names its own, and ephemeral unless its
  * `options` ask for the root's store. One root holds one session, so a
  * per-test block reopens it for each test once the previous test's has
  * closed.
@@ -260,11 +329,18 @@ export class TestSession extends Context.Service<TestSession, LocalSession>()(
   /** The session for the calling scope, for a test whose roots are only
    *  known in its body; closed when the scope closes. */
   static open(
-    roots: WorkspaceRoots = testWorkspaceRoots(),
+    roots?: WorkspaceRoots,
     options?: OpenOptions,
-  ): Effect.Effect<LocalSession, SessionOpenError, Sessions | Scope.Scope> {
+  ): Effect.Effect<
+    LocalSession,
+    SessionOpenError,
+    Sessions | FakeHost | Scope.Scope
+  > {
     return Effect.acquireRelease(
-      Effect.flatMap(Sessions, (sessions) => sessions.open(roots, options)),
+      Effect.gen(function* () {
+        const sessions = yield* Sessions;
+        return yield* sessions.open(roots ?? (yield* FakeHost).roots, options);
+      }),
       (session) =>
         Effect.flatMap(Sessions, (sessions) => sessions.close(session.roots)),
     );
@@ -273,7 +349,7 @@ export class TestSession extends Context.Service<TestSession, LocalSession>()(
   static layer(
     roots?: WorkspaceRoots,
     options?: OpenOptions,
-  ): Layer.Layer<TestSession, SessionOpenError, Sessions> {
+  ): Layer.Layer<TestSession, SessionOpenError, Sessions | FakeHost> {
     return Layer.effect(TestSession, TestSession.open(roots, options));
   }
 }
@@ -309,7 +385,7 @@ let isolatedSessions = 0;
 
 /**
  * A session of the calling scope's own, beside the block's: over the
- * installed fake host's roots with a storage root of its own (one root
+ * fake host's roots with a storage root of its own (one root
  * holds one session, so a test opens as many as it needs), with
  * `interactions` attached as its presentation host when given. It is
  * opened as by a host whose person answers from the view (`host: {}`), so
@@ -322,11 +398,11 @@ export const isolatedTestSession = (
 ): Effect.Effect<
   Context.Context<SessionServices>,
   SessionOpenError,
-  Sessions | SessionOwner | Scope.Scope
+  Sessions | SessionOwner | FakeHost | Scope.Scope
 > =>
   Effect.gen(function* () {
     isolatedSessions += 1;
-    const roots = testWorkspaceRoots();
+    const { roots } = yield* FakeHost;
     const session = yield* TestSession.open(
       { ...roots, storage: `${roots.storage}/isolated/${isolatedSessions}` },
       { host: {} },

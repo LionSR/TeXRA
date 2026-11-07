@@ -64,7 +64,8 @@ import {
   VALIDATION_FLAG_CONTENT,
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
-} from '@cli/runtime/validationSwitch';
+} from '@cli/runtime/models/validationSwitch';
+import { SessionRoots } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,
@@ -84,7 +85,6 @@ import type { TestApp } from './FakePlatform';
 import { REPO_ROOT } from './repoScan';
 import { createTempDirPlatform } from './tempDirPlatform';
 import { FakeHost, sessionHandleOf, TestSession } from './testKernel';
-import { testWorkspaceRoots } from './testWorkspaceRoots';
 import type { Sessions } from '@texra-ai/harness';
 
 const WRITES = ['appendAll', 'job'] as const;
@@ -463,18 +463,18 @@ export const validationHost = (
   );
 
 /**
- * A session over `roots` (the installed host's, unless named) on the calling
+ * A session over `roots` (the fake host's, unless named) on the calling
  * block's process, its history in the root's SQLite store, opened as by a
  * host whose person answers from the view, so a request its runs open waits
  * for a decision. Returns the internal handle the suites drive runs on; the
  * session closes with the scope.
  */
 export const persistentTestSession = (
-  roots: WorkspaceRoots = testWorkspaceRoots(),
+  roots?: WorkspaceRoots,
 ): Effect.Effect<
   Context.Context<SessionServices>,
   SessionOpenError,
-  Sessions | SessionOwner | Scope.Scope
+  Sessions | SessionOwner | FakeHost | Scope.Scope
 > =>
   Effect.flatMap(
     TestSession.open(roots, { persistent: true, host: {} }),
@@ -555,7 +555,7 @@ export const parkedAfter =
 
 /**
  * Launch a root run of the bundled `assistant` with `instruction` on
- * `session`, a session over the installed host's roots, and wait until it
+ * `session`, a persistent session, and wait until it
  * answered and parked waiting for input. The launch lives in the caller's
  * scope.
  */
@@ -564,7 +564,7 @@ export const parkedRoot = (
   instruction = 'Start here.',
 ): Effect.Effect<RunId, Cause.TimeoutError, SessionOwner | Scope.Scope> =>
   Effect.gen(function* () {
-    const { storage } = testWorkspaceRoots();
+    const { storage } = Context.get(session, SessionRoots);
     const runId = generateRunId();
     yield* rootRun({
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -598,9 +598,13 @@ export const parkedRunAfterCrash = (
     readonly instruction?: string;
     readonly interactions?: HostInteractions;
   } = {},
-): Effect.Effect<CrashedRun, Error, Sessions | SessionOwner | Scope.Scope> =>
+): Effect.Effect<
+  CrashedRun,
+  Error,
+  Sessions | SessionOwner | FakeHost | Scope.Scope
+> =>
   Effect.gen(function* () {
-    const roots = testWorkspaceRoots();
+    const { roots } = yield* FakeHost;
     // The session and the launch live in this scope: closing it is the
     // kill, and a setup that fails on the way kills it too.
     const { runId, storage } = yield* Effect.scoped(

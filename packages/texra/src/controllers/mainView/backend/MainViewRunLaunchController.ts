@@ -60,7 +60,7 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
     ? null
     : yield* workspaceAgents.forLaunch(agent).pipe(
         Effect.catchTags({
-          LaunchRefused: () => Effect.succeed(null),
+          AgentNotFound: () => Effect.succeed(null),
           AgentCatalogLoadError: (failed) =>
             Effect.fail(new Rejected({ reason: failed.message })),
         }),

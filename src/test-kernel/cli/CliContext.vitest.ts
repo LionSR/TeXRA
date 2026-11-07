@@ -14,7 +14,7 @@ import {
   buildCliContext,
   type BuildCliContextInit,
   type CliContext,
-} from '@cli/runtime/cliContext';
+} from '@cli/runtime/platform/cliContext';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';
@@ -103,7 +103,7 @@ describe('CLI context config defaults', () => {
     ).resolves.toMatchObject({ approvalPolicy: 'never' });
 
     // The user-wide file decides elsewhere, as it does for the extension and
-    // desktop hosts through `testWorkspaceRoots().config`.
+    // desktop hosts through their roots' config.
     await expect(
       cliContext({
         ambient,

@@ -17,10 +17,16 @@ import {
 } from '@texra-ai/harness/schemas';
 import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
 import { FakeHost } from '@test/support/testKernel';
 
 const GLM53 = MODEL_CONFIGS['glm/glm-5.3'];
+
+/** `effect` reading the test host's secrets as its `Secrets`, with the
+ *  subscription accounts over them. */
+const withHostSecrets = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  FakeHost.use((host) =>
+    effect.pipe(Effect.provide(Secrets.layer(host.secrets))),
+  );
 
 /** The endpoint and plan the decided route binds `config` to. */
 const boundEndpoint = (
@@ -28,10 +34,9 @@ const boundEndpoint = (
   declinedRoutes?: readonly DeclinableUsageRoute[],
 ) =>
   Effect.gen(function* () {
+    const { roots } = yield* FakeHost;
     const facts = routeFactsFor(
-      yield* readModelSettings(installedHost().roots).pipe(
-        Effect.provide(Secrets.layer(fakeHostSecrets)),
-      ),
+      yield* readModelSettings(roots).pipe(withHostSecrets),
       declinedRoutes ?? [],
     );
     const route = decideModelRoute(config, facts);
@@ -85,10 +90,8 @@ layer(
     'keeps the bound endpoint and subscription usage aligned for $name',
     ({ providerEndpoint, modelBaseUrl, baseUrl, usageRoute }) =>
       Effect.gen(function* () {
-        yield* installedHost().roots.globalState.update(
-          'endpoint.glm',
-          providerEndpoint,
-        );
+        const { roots } = yield* FakeHost;
+        yield* roots.globalState.update('endpoint.glm', providerEndpoint);
         if (modelBaseUrl) MODEL_CONFIGS['glm/glm-5.3'].baseUrl = modelBaseUrl;
 
         const endpoint = yield* boundEndpoint({
@@ -101,8 +104,8 @@ layer(
           ...(usageRoute && { usageRoute }),
         });
         expect(
-          (yield* readModelOptions(installedHost().roots, ['glm/glm-5.3']).pipe(
-            Effect.provide(Secrets.layer(fakeHostSecrets)),
+          (yield* readModelOptions(roots, ['glm/glm-5.3']).pipe(
+            withHostSecrets,
           ))[0]?.usageRoute,
         ).toBe(usageRoute);
       }),
@@ -112,10 +115,8 @@ layer(
     'leaves the stored preference alone for a run that declined the plan',
     () =>
       Effect.gen(function* () {
-        yield* installedHost().roots.globalState.update(
-          GLM_CODING_PLAN_SETTING.key,
-          true,
-        );
+        const { roots } = yield* FakeHost;
+        yield* roots.globalState.update(GLM_CODING_PLAN_SETTING.key, true);
 
         expect((yield* boundEndpoint(GLM53)).usageRoute).toBe(
           'glm-coding-plan-subscription',
@@ -125,11 +126,9 @@ layer(
         ).toEqual({ baseUrl: expect.stringMatching(/\/api\/v1$/) });
         // The decline is the asking run's, so the user's switch is untouched and
         // a concurrent run still routes through the plan.
-        expect(
-          yield* installedHost().roots.globalState.get(
-            GLM_CODING_PLAN_SETTING.key,
-          ),
-        ).toBe(true);
+        expect(yield* roots.globalState.get(GLM_CODING_PLAN_SETTING.key)).toBe(
+          true,
+        );
       }),
   );
 });

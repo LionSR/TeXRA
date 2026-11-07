@@ -3,8 +3,9 @@
  * usage for analytics.
  *
  * Receives batched usage entries from the TeXRA clients. Each function
- * supplies an owner resolver (`log-usage`: login JWT, released clients;
- * `log-usage-v2`: anonymous install id) and a store that writes the batch.
+ * supplies its wire's batch schema, an owner resolver (`log-usage`: login
+ * JWT, released clients; `log-usage-v2`: anonymous install id) and a store
+ * that writes the batch.
  *
  * Response contract:
  * - Complete writes return success with the exact accepted entry count.
@@ -12,23 +13,26 @@
  *   `success: false`, `accepted: 0`, `retryable: false`, and a stable
  *   `errorCode`; HTTP 200 lets clients predating the retry marker read the
  *   body during rolling deploys. Sanitized validation issues identify the
- *   rejected fields without echoing request values.
+ *   rejected fields without echoing request values. The current client
+ *   checks each entry against the schema `log-usage-v2` decodes before
+ *   sending, so a rejection there means the two versions disagree; it drops
+ *   that batch at warn and retries only the failures without the marker.
  *   Restore HTTP 422 after clients predating #8267 age out under #6981.
  * - Malformed JSON uses the same permanent-rejection body with HTTP 400.
  * - Authentication and operational failures omit the permanent-rejection
- *   marker so clients retain and retry the original batch identifier.
+ *   marker so clients retain and retry the original batch identifier: 401
+ *   for a missing or refused credential, 503 when it could not be checked,
+ *   500 otherwise.
  */
 
 import { Result, Schema, SchemaIssue } from 'effect';
 
+import { AuthUnavailable } from './auth.ts';
 import { handleCors } from './cors.ts';
-import { adminClient, SUPABASE_ANON_KEY, SUPABASE_URL } from './edgeClients.ts';
-import { jsonResponse } from './responses.ts';
-import { UsageBatchSchema, type UsageBatch } from './usageValidation.ts';
+import { jsonResponse } from './http.ts';
 
 const MAX_REPORTED_VALIDATION_ISSUES = 20;
 const flattenIssues = SchemaIssue.makeFormatterStandardSchemaV1();
-const decodeBatch = Schema.decodeUnknownResult(UsageBatchSchema);
 
 function successResponse(
   req: Request,
@@ -46,7 +50,8 @@ function successResponse(
   );
 }
 
-function errorResponse(
+/** An answer that accepts none of the batch, in the usage wire's shape. */
+function rejectBatch(
   req: Request,
   error: string,
   status: number,
@@ -68,44 +73,41 @@ function errorResponse(
   );
 }
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !adminClient) {
-  console.error('[LOG_USAGE] Missing required environment variables');
-}
-
 /**
- * Serve usage logging. `resolveOwner` yields the batch owner (null = 401);
- * `store` writes the batch and returns false when it was already stored (a
+ * Serve usage logging over `batchSchema`, the one thing the two functions'
+ * wires differ in. `resolveOwner` yields the batch owner (null = 401), or
+ * throws {@link AuthUnavailable} when it cannot tell (503); `store` writes
+ * the batch and returns false when it was already stored (a
  * client retry), and throws on failure.
  */
-export function serveLogUsage<Owner>(
+export function serveLogUsage<
+  Owner,
+  Batch extends { readonly entries: readonly unknown[] },
+>(
+  batchSchema: Schema.Codec<Batch, unknown>,
   resolveOwner: (req: Request) => Promise<Owner | null>,
-  store: (owner: Owner, batch: UsageBatch) => Promise<boolean>,
+  store: (owner: Owner, batch: Batch) => Promise<boolean>,
 ): void {
+  const decodeBatch = Schema.decodeUnknownResult(batchSchema);
   Deno.serve(async (req: Request) => {
     const response = handleCors(req);
     if (response) return response;
 
     if (req.method !== 'POST') {
-      return errorResponse(req, 'Method not allowed', 405);
-    }
-
-    // Module-level init only logs, so requests must get an explicit 500 here
-    // rather than crashing on a null dereference deeper in the store.
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !adminClient) {
-      return errorResponse(req, 'Server configuration error', 500);
+      return rejectBatch(req, 'Method not allowed', 405);
     }
 
     try {
       const owner = await resolveOwner(req);
       if (!owner) {
-        return errorResponse(req, 'Missing or invalid credential', 401);
+        return rejectBatch(req, 'Missing or invalid credential', 401);
       }
 
       let body: unknown;
       try {
         body = await req.json();
       } catch {
-        return errorResponse(req, 'Invalid JSON body', 400, {
+        return rejectBatch(req, 'Invalid JSON body', 400, {
           retryable: false,
           errorCode: 'INVALID_JSON',
         });
@@ -121,7 +123,7 @@ export function serveLogUsage<Owner>(
         // of their retry queue. They already understand success:false on 2xx.
         // This status can return to 422 under the #6981 retirement gate once
         // the minimum supported client includes #8267.
-        return errorResponse(req, 'Invalid batch format or entry data', 200, {
+        return rejectBatch(req, 'Invalid batch format or entry data', 200, {
           retryable: false,
           errorCode: 'BATCH_REJECTED',
           issueCount: issues.length,
@@ -144,8 +146,12 @@ export function serveLogUsage<Owner>(
         stored ? undefined : 'Batch already processed (deduplicated)',
       );
     } catch (error) {
+      if (error instanceof AuthUnavailable) {
+        console.warn('[LOG_USAGE]', error.message);
+        return rejectBatch(req, 'Authentication is unavailable', 503);
+      }
       console.error('[LOG_USAGE] Unexpected error:', error);
-      return errorResponse(req, 'Internal server error', 500);
+      return rejectBatch(req, 'Internal server error', 500);
     }
   });
 }

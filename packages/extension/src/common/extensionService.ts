@@ -14,7 +14,7 @@ import {
   type ServiceLink,
 } from '@texra/controllers/server/client';
 import type { GlobalValues } from '@texra-ai/harness/host';
-import type { Effect, Scope } from 'effect';
+import { Effect, type Scope } from 'effect';
 
 /** Hold the service, starting it when none answers, for the caller's
  *  scope; the link reaches it again when it goes away. */
@@ -29,5 +29,6 @@ export function reachExtensionService(
       [path.join(extensionPath, 'serve', 'texra-serve.mjs'), 'serve'],
       { ELECTRON_RUN_AS_NODE: '1' },
     ),
+    Effect.logWarning,
   );
 }

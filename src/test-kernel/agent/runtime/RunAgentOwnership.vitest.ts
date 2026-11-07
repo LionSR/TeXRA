@@ -27,7 +27,7 @@ import {
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { FakeHost } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 
 const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -51,7 +51,7 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
         'refuses a second launch while the first is still running',
         () =>
           Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
+            const { roots } = yield* FakeHost;
             const session = yield* persistentTestSession();
             const runId = generateRunId();
             const first = yield* Effect.forkChild(launch(session, runId));
@@ -77,7 +77,7 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
         'a launch whose opening is refused fails as itself and leaves no run',
         () =>
           Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
+            const { roots } = yield* FakeHost;
             const session = yield* persistentTestSession();
             const runId = generateRunId();
             const faults = yield* sessionStoreFaults(roots.storage);

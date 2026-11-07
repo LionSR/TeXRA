@@ -5,9 +5,14 @@
  * folder, no service) opens the project's session here, for the caller's
  * scope.
  */
-import { Effect, type Scope } from 'effect';
+import { type Context, Effect, type Scope } from 'effect';
 
-import { Sessions, type WorkspaceRoots } from '@texra-ai/harness';
+import {
+  type LocalSession,
+  type SessionOpenError,
+  Sessions,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
@@ -30,17 +35,28 @@ export const openProjectSession = Effect.fn('openProjectSession')(function* (
       link: service,
       session: yield* serviceSession(service, roots.workspace, roots),
     };
-  const sessions = yield* Sessions;
-  const session = yield* Effect.acquireRelease(
-    sessions.open(roots, { persistent: true, host: {} }),
-    // The one close every session takes: its runs stopped under the
-    // shutdown deadline, the ones still live past it ended, its
-    // artifacts flushed, its entry released.
-    (opened) => Effect.asVoid(sessions.close(opened.roots)),
-  );
-  yield* recordFirstCompletedRun(session);
+  const session = yield* openLocalSession(yield* Sessions, roots);
   // A store moved aside at open (pre-1.0 or corrupt) is said once.
   if (session.storeMovedAside)
     yield* warn(sessionStoreMovedAsideMessage(session.storeMovedAside));
   return { session, link: yield* (yield* HostWindows).localLink(session) };
 });
+
+/**
+ * Open the persistent session of the project at `roots` in this process,
+ * closed with the caller's scope, and record the onboarding milestone its
+ * first completed run marks: the one local open every host makes (a GUI
+ * window, the CLI's platform, a project of the background service). Each
+ * says a store moved aside at open (`storeMovedAside`) in its own place.
+ */
+export const openLocalSession = (
+  sessions: Context.Service.Shape<typeof Sessions>,
+  roots: WorkspaceRoots,
+): Effect.Effect<LocalSession, SessionOpenError, Scope.Scope> =>
+  Effect.acquireRelease(
+    sessions.open(roots, { persistent: true, host: {} }),
+    // The one close every session takes: its runs stopped under the
+    // shutdown deadline, the ones still live past it ended, its
+    // artifacts flushed, its entry released.
+    (opened) => Effect.asVoid(sessions.close(opened.roots)),
+  ).pipe(Effect.tap(recordFirstCompletedRun));

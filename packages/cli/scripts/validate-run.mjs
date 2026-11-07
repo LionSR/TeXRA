@@ -2,6 +2,7 @@
 
 import {
   appendFileSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -25,7 +26,7 @@ import {
   VALIDATION_FLAG_CONTENT,
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
-} from '../src/runtime/validationSwitch.ts';
+} from '../src/runtime/models/validationSwitch.ts';
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 
 // Every `texra` this script starts resolves `~/.texra` in a temporary home.
@@ -903,6 +904,39 @@ prompt: |
 }
 
 /**
+ * The rows `sql` selects from the store in `dir`, read from a copy of its
+ * `texra.db` and write-ahead log: the process that holds a project store (a
+ * service, a chat, a headless run) admits no other connection, so the
+ * validator reads what the holder has committed to the files. The log is
+ * copied first: a holder that closes after that has checkpointed it into
+ * the file the copy takes next, and a store with no log has it all there.
+ */
+function storeRows(dir, sql, ...params) {
+  const copy = mkdtempSync(path.join(tmpdir(), 'texra-validate-store-'));
+  try {
+    try {
+      copyFileSync(
+        path.join(dir, 'texra.db-wal'),
+        path.join(copy, 'texra.db-wal'),
+      );
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    copyFileSync(path.join(dir, 'texra.db'), path.join(copy, 'texra.db'));
+    const db = new DatabaseSync(path.join(copy, 'texra.db'), {
+      readOnly: true,
+    });
+    try {
+      return db.prepare(sql).all(...params);
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+}
+
+/**
  * A project for the view-edit validators: an agent with no tools whose
  * (validation) model answers with the user messages it was shown, so each
  * reply is what the run's view held, and every request is rebuilt from the
@@ -975,20 +1009,13 @@ prompt: |
       assertSuccess(first, 'texra run echo_validation');
       return parseJson(first.stdout, 'echo run').runId;
     },
-    /** One read of the project's store, closed again for the next writer. */
+    /** The rows `sql` selects from the project's store (`storeRows`). */
     readStore: (sql) => {
       // The project's store: a service also keeps a no-workspace one.
       const project = readdirSync(storage).find((name) =>
         name.startsWith('work-'),
       );
-      const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
-        readOnly: true,
-      });
-      try {
-        return db.prepare(sql).all();
-      } finally {
-        db.close();
-      }
+      return storeRows(path.join(storage, project), sql);
     },
     /**
      * `texra resume` with `args` under a PTY, then each exchange in turn:
@@ -1406,23 +1433,17 @@ async function validateSdkResumeApproval() {
       [storage, '-path', '*/workspace-storage/*', '-name', 'texra.db'],
       { encoding: 'utf8' },
     ).stdout.trim();
-    const db = new DatabaseSync(store, { readOnly: true });
-    let rows;
-    try {
-      rows = db
-        .prepare(
-          `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
-             json_extract(e.data, '$.decision.action') AS decision,
-             json_extract(e.data, '$.payload.callId') AS callId
-           FROM event e JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? AND e.type IN
-             ('request.opened', 'request.decided', 'tool.result', 'run.end')
-           ORDER BY e."commit"`,
-        )
-        .all(runId);
-    } finally {
-      db.close();
-    }
+    const rows = storeRows(
+      path.dirname(store),
+      `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
+         json_extract(e.data, '$.decision.action') AS decision,
+         json_extract(e.data, '$.payload.callId') AS callId
+       FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type IN
+         ('request.opened', 'request.decided', 'tool.result', 'run.end')
+       ORDER BY e."commit"`,
+      runId,
+    );
     const approvedPath = path.join(work, 'approved.txt');
     const approved = existsSync(approvedPath)
       ? readFileSync(approvedPath, 'utf8')
@@ -1739,9 +1760,11 @@ prompt: |
 /**
  * Background compaction end to end (durable harness H5, gap 4): at a 1%
  * threshold, a long first message puts the conversation over it. The
- * resumed chat's next turn starts the summary off the loop and still sends
- * the whole history (the reply names the first message), and the turn
- * after lands it, as an edit of the messages before that turn's request,
+ * message starts a task in the service, which takes messages as a chat's
+ * run does (a headless `texra run` takes none). The chat that resumes it
+ * runs a turn that starts the summary off the loop and still sends the
+ * whole history (the reply names the first message), and the turn after
+ * lands it, as an edit of the messages before that turn's request,
  * keeping what followed (the reply names the summary and the new message
  * only). The store's `context.edit` rows are kept as the artifact.
  */
@@ -1751,7 +1774,33 @@ async function validateBackgroundCompaction() {
     const project = echoProject(cwd, {
       'texra.model.compactionThresholdPercent': 1,
     });
-    const source = project.firstRun(`${'filler '.repeat(8_000)}First message`);
+    const started = run(
+      process.execPath,
+      [
+        binaryPath,
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-sol',
+        '--instruction',
+        `${'filler '.repeat(8_000)}First message`,
+        '--cwd',
+        project.work,
+      ],
+      { cwd: project.work, env: project.ptyEnv },
+    );
+    assertSuccess(started, 'texra tasks start echo_validation');
+    const source = started.stdout.trim();
+    await waitFor(
+      'the first turn to end',
+      () =>
+        project.readStore(
+          `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = '${source}' AND e.type = 'run.position'
+           AND json_extract(e.data, '$.payload.at') = 'waiting'`,
+        ).length > 0,
+    );
     const replies = [
       'First message | Second message',
       'Earlier turns, summarized. | Third message',
@@ -1889,9 +1938,9 @@ async function validateServiceChatsSeeEachOther() {
 
 /**
  * The service's build identity (D1-D4): clients of one build share its
- * service; a client of a newer build retires it and starts its own while
- * the old one finishes the task it holds; the newer service stays
- * reachable once the old one exits; a client of the older build then
+ * service; a client of a newer build retires it and waits while the old
+ * one finishes the task it holds and exits, then starts its own (one
+ * service serves a storage root); a client of the older build then
  * leaves the newer service alone. Every host stamps
  * the same workspace version, so this holds across the CLI, the extension
  * and the desktop app. The statuses each client saw are the artifact.
@@ -1954,6 +2003,7 @@ prompt: |
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   };
+  let nextList;
   try {
     // A task at work in this build's service: its model call is held.
     texraWith(
@@ -1976,19 +2026,31 @@ prompt: |
       'texra tasks list (this build, again)',
     );
     const same = status(binaryPath, 'service status (this build, again)');
-    // A newer build retires it; it drains, finishing that task, while the
-    // newer service serves.
-    texraWith(
-      nextBuildPath,
-      ['tasks', 'list'],
-      'texra tasks list (next build)',
+    // A newer build retires it and waits: one service serves a storage
+    // root, so the old one drains, finishing that task, and exits first.
+    nextList = spawn(
+      process.execPath,
+      [nextBuildPath, 'tasks', 'list', '--cwd', project.work],
+      { cwd: project.work, env: { ...process.env, CI: '1', ...env } },
     );
-    const next = status(nextBuildPath, 'service status (next build)');
-    const drainingKept = alive(first.pid);
-    // The retired service now exits: the newer one must still be found.
-    process.kill(first.pid, 'SIGTERM');
+    let nextStderr = '';
+    nextList.stderr.on('data', (chunk) => (nextStderr += chunk));
+    let nextExit = null;
+    nextList.on('exit', (code) => (nextExit = code ?? 1));
+    let draining;
+    await until('the older service to drain', () => {
+      draining = status(binaryPath, 'service status (draining)');
+      return draining.draining === true;
+    });
+    const waited = nextExit === null && alive(first.pid);
+    writeFileSync(path.join(project.work, 'golden-park.release'), '');
+    await until('the newer client to finish', () => nextExit !== null);
+    assert(
+      nextExit === 0,
+      `texra tasks list (next build) should succeed once the older service exits (exit ${nextExit})\nstderr:\n${nextStderr}`,
+    );
     await until('the retired service to exit', () => !alive(first.pid));
-    const reachable = status(nextBuildPath, 'service status (next, after)');
+    const next = status(nextBuildPath, 'service status (next build)');
     texraWith(
       binaryPath,
       ['tasks', 'list'],
@@ -1998,9 +2060,9 @@ prompt: |
     const artifactPath = writeArtifact('service-builds.json', {
       first,
       same,
+      draining,
+      waited,
       next,
-      drainingKept,
-      reachable,
       after,
     });
     assert(
@@ -2008,22 +2070,19 @@ prompt: |
       `two clients of one build should share its service (artifact: ${artifactPath})`,
     );
     assert(
+      draining.pid === first.pid && waited,
+      `a newer build should retire the older service and wait while its task works (artifact: ${artifactPath})`,
+    );
+    assert(
       next.version === NEXT_BUILD && next.pid !== first.pid,
-      `a newer build should retire the older service and start its own (artifact: ${artifactPath})`,
-    );
-    assert(
-      drainingKept,
-      `a retired service should keep running while its task works (artifact: ${artifactPath})`,
-    );
-    assert(
-      reachable.pid === next.pid,
-      `the newer service should stay reachable once the retired one exits (artifact: ${artifactPath})`,
+      `a newer build should start its own service once the older one exits (artifact: ${artifactPath})`,
     );
     assert(
       after.pid === next.pid && after.version === NEXT_BUILD,
       `an older build should leave a newer service running (artifact: ${artifactPath})`,
     );
   } finally {
+    nextList?.kill('SIGKILL');
     removeScratch(cwd);
   }
 }
@@ -2079,22 +2138,14 @@ prompt: |
     const storage = path.join(storageRoot, 'v1', 'workspace-storage');
     const dir = readdirSync(storage).find((name) => name.startsWith('work-'));
     if (dir === undefined) return [];
-    const db = new DatabaseSync(path.join(storage, dir, 'texra.db'), {
-      readOnly: true,
-    });
-    try {
-      return db
-        .prepare(
-          `SELECT e.data FROM event e
-           JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? AND e.type = 'tool.result'
-           ORDER BY e."commit"`,
-        )
-        .all(runId)
-        .map((row) => String(row.data));
-    } finally {
-      db.close();
-    }
+    return storeRows(
+      path.join(storage, dir),
+      `SELECT e.data FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type = 'tool.result'
+       ORDER BY e."commit"`,
+      runId,
+    ).map((row) => String(row.data));
   };
   const windows = [];
   const attachWindow = async (mode) => {
@@ -2170,8 +2221,8 @@ prompt: |
  * A project's session in the service closes once it has no client and no
  * run held for the idle time (audit 2026-10-07 #6), while the service
  * stays up for another project's window; the next task reopens it. The
- * service is started in the foreground with a short idle time. Its log
- * lines about the close and both tasks' outcomes are the artifact.
+ * service is started in the foreground with a short idle time. Both tasks
+ * and whether the other project's session is still open are the artifact.
  */
 async function validateServiceSessionIdle() {
   const cwd = makeScratch('texra-cli-service-idle-');
@@ -2241,11 +2292,29 @@ async function validateServiceSessionIdle() {
          WHERE s.logical_id = '${runId}' AND e.type = 'run.position'
          AND json_extract(e.data, '$.payload.at') = 'waiting'`,
       ).length > 0;
+    // A project's session is the one holder of its store, which it keeps
+    // exclusively: the session is open while a reader is refused
+    // (`SQLITE_BUSY`). The service logs nothing as a session closes.
+    const storage = path.join(storageRoot, 'v1', 'workspace-storage');
+    const sessionOpen = (prefix) => {
+      const dir = readdirSync(storage).find((name) => name.startsWith(prefix));
+      assert(dir !== undefined, `the ${prefix} project should have a store`);
+      const db = new DatabaseSync(path.join(storage, dir, 'texra.db'), {
+        readOnly: true,
+      });
+      try {
+        db.prepare('SELECT 1 FROM event LIMIT 1').all();
+        return false;
+      } catch (error) {
+        if (error.errcode !== 5) throw error;
+        return true;
+      } finally {
+        db.close();
+      }
+    };
     await waitFor('the first task to wait', () => ended(first));
     texra(['tasks', 'stop', first], 'texra tasks stop (first)');
-    await waitFor('the project session to close', () =>
-      /Closed the idle session of .*work-/.test(log),
-    );
+    await waitFor('the project session to close', () => !sessionOpen('work-'));
     const second = texra(
       [
         'tasks',
@@ -2259,23 +2328,15 @@ async function validateServiceSessionIdle() {
       'texra tasks start (reopened)',
     );
     await waitFor('the second task to wait', () => ended(second));
+    const otherOpen = sessionOpen('other-');
     const artifactPath = writeArtifact('service-session-idle.json', {
-      closed: log
-        .split('\n')
-        .filter((line) => line.includes('Closed the idle session')),
       first,
       second,
+      otherOpen,
       serviceAlive: service.exitCode === null,
     });
     assert(
-      service.exitCode === null &&
-        !log
-          .split('\n')
-          .some(
-            (line) =>
-              line.includes('Closed the idle session') &&
-              line.includes('other'),
-          ),
+      service.exitCode === null && otherOpen,
       `the service should stay up and keep the attached project's session (artifact: ${artifactPath})`,
     );
     texra(['tasks', 'stop', second], 'texra tasks stop (second)');
@@ -2290,9 +2351,9 @@ async function validateServiceSessionIdle() {
  * A project's `.env` reaches its service tasks and their commands, scoped
  * to the project (audit 2026-10-07 #3): the service is started bare, the
  * project's `.env` sets a variable and a provider key, and a task's
- * command sees the variable but never the key. A key set only in the
- * starting terminal is said not to reach the task. The command's output
- * and the CLI's notice are the artifact.
+ * command sees the variable but never a key: neither the project's nor
+ * the one the starting terminal sends with the task's start. The
+ * command's output is the artifact.
  */
 async function validateServiceProjectEnv() {
   const cwd = makeScratch('texra-cli-service-env-');
@@ -2383,11 +2444,6 @@ prompt: |
     const reported = readFileSync(output, 'utf8');
     const artifactPath = writeArtifact('service-project-env.json', {
       command: reported,
-      notice: started.stderr
-        .split('\n')
-        .filter((line) =>
-          line.includes('not reach tasks in the TeXRA service'),
-        ),
     });
     assert(
       reported === 'from-project-dotenv|withheld',
@@ -2427,12 +2483,6 @@ prompt: |
     assert(
       edited === 'edited-dotenv|withheld',
       `a task started after .env changed should read the new value (got ${edited})`,
-    );
-    assert(
-      /OPENAI_API_KEY[^\n]* from this terminal do(es)? not reach tasks/.test(
-        started.stderr,
-      ),
-      `a key set only in the starting terminal should be said not to reach the task (artifact: ${artifactPath})`,
     );
   } finally {
     run(process.execPath, [binaryPath, 'service', 'stop'], {
@@ -2668,23 +2718,14 @@ prompt: |
       path.join(projectDir(), 'config.json'),
       `${JSON.stringify({ 'texra.approvalPolicy': policy })}\n`,
     );
-  const rowTypes = (runId) => {
-    const db = new DatabaseSync(path.join(projectDir(), 'texra.db'), {
-      readOnly: true,
-    });
-    try {
-      return db
-        .prepare(
-          `SELECT e.type FROM event e
-           JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? ORDER BY e."commit"`,
-        )
-        .all(runId)
-        .map((row) => row.type);
-    } finally {
-      db.close();
-    }
-  };
+  const rowTypes = (runId) =>
+    storeRows(
+      projectDir(),
+      `SELECT e.type FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? ORDER BY e."commit"`,
+      runId,
+    ).map((row) => row.type);
   let windowA;
   try {
     // A first task opens the project in the service, which makes its
@@ -2785,21 +2826,13 @@ prompt: |
     const narrowedRows = rowTypes(narrowed);
     // The limit is what holds it, recorded on its run.start; the project's
     // Auto-approve may land before or after that row.
-    const db = new DatabaseSync(path.join(projectDir(), 'texra.db'), {
-      readOnly: true,
-    });
-    let limit;
-    try {
-      limit = db
-        .prepare(
-          `SELECT json_extract(e.data, '$.approvalPolicy.limit') AS limit_ FROM event e
-           JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? AND e.type = 'run.start'`,
-        )
-        .get(narrowed)?.limit_;
-    } finally {
-      db.close();
-    }
+    const limit = storeRows(
+      projectDir(),
+      `SELECT json_extract(e.data, '$.approvalPolicy.limit') AS limit_ FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type = 'run.start'`,
+      narrowed,
+    )[0]?.limit_;
     writeArtifact('service-policy-narrowed.json', {
       limit,
       rows: narrowedRows,
@@ -2872,20 +2905,13 @@ prompt: |
       name.startsWith('work-'),
     );
     if (project === undefined) return [];
-    const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
-      readOnly: true,
-    });
-    try {
-      return db
-        .prepare(
-          `SELECT e.type, e.data LIKE '%Ping%' AS ping FROM event e
-           JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? ORDER BY e."commit"`,
-        )
-        .all(runId);
-    } finally {
-      db.close();
-    }
+    return storeRows(
+      path.join(storage, project),
+      `SELECT e.type, e.data LIKE '%Ping%' AS ping FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? ORDER BY e."commit"`,
+      runId,
+    );
   };
   try {
     const runId = texra(

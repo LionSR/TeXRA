@@ -145,9 +145,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
     invocation: InvocationRefSchema,
     request: Sha256Schema,
     origin: StoredOriginSchema,
-    /** When it was sent, a `Clock` reading: the start of the response time
-     *  its response, or the failure the provider billed, records. */
-    sentAtMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   }),
   /** Provider identity observed before completion. */
   Schema.Struct({

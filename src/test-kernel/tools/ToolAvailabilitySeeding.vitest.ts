@@ -6,7 +6,6 @@ import { assert, expect } from 'vitest';
 // Local imports
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { installedHost } from '@test/support/setupPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { wolfram } from '@texra/tools/wolframPlugin';
 import { texraPlugins } from '@texra/tools/registry';
@@ -45,12 +44,11 @@ layer(SessionGraph.hosted)('external tool availability probes', (it) => {
   it.effect('an interrupted version probe stops the process it spawned', () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawnerLayer(() => 'hang');
+      const { roots } = yield* FakeHost;
       const { availability } = wolfram;
       assert.exists(availability);
       const fiber = yield* Effect.forkChild(
-        availability
-          .check(installedHost().roots)
-          .pipe(Effect.provide(spawner.layer)),
+        availability.check(roots).pipe(Effect.provide(spawner.layer)),
       );
 
       yield* Effect.promise(() =>

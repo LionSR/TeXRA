@@ -52,6 +52,9 @@ import type { CallFailure } from './failureInfo';
 export interface BoundModel extends Binding {
   /** The run's model string (`provider/id[@effort][+pro]`), as its rows name it. */
   readonly modelId: string;
+  /** The catalog entry the model string names, before any route's overlay:
+   *  the id and list prices the usage log reports each call under. */
+  readonly catalogEntry: ModelConfig;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
   /** The subscription routes the run had declined when this binding was
@@ -126,21 +129,24 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
   Scope.Scope | HttpClient.HttpClient | Secrets | SubscriptionAccounts
 > {
   const selected = selectModel(request.modelId);
-  const catalog = request.config ?? selected?.config;
-  if (catalog === undefined) {
+  const requested = request.config ?? selected?.config;
+  if (requested === undefined) {
     return yield* RouteUnavailable.of(
       new Error(`Model ${request.modelId} is not registered`),
     );
   }
   const ask = selected?.request ?? {};
   const settings = yield* settingsOf(stores);
-  const decision = yield* decideRoute(catalog, settings, {
+  const decision = yield* decideRoute(requested, settings, {
     ...request,
     mode: ask.mode,
   });
   return yield* bindRoute({
     request,
-    requested: catalog,
+    requested,
+    // A rebind that keeps the route's overlay as `request.config` still
+    // reports its usage under the catalog entry.
+    catalogEntry: selected?.config ?? requested,
     ask,
     settings,
     decision,

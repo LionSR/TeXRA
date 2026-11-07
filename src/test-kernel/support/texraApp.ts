@@ -1,6 +1,6 @@
 /**
  * TeXRA as a fake host's app (`TestApp`): its settings catalog, its plugins
- * over the installed host's setup platform, and its teams. A suite of
+ * over the host's setup platform, and its teams. A suite of
  * TeXRA's tools, settings or agents names it (`FakeHost.layer({ app:
  * TEXRA_APP })`); a suite of the harness alone runs over `HARNESS_APP`.
  */
@@ -15,27 +15,12 @@ import { texraPlugins } from '@texra/tools/registry';
 import type { Plugin } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import type { TestApp } from './FakePlatform';
-import { installedHost } from './setupPlatform';
 import { FakeHost, SessionGraph } from './testKernel';
-
-/**
- * The setup platform of every test's TeXRA plugin list: each member reads
- * the installed host's `setup` when called, so a suite that swaps hosts per
- * test swaps setup platforms with them. A host without one has none of its
- * members, as a host that passes no setup platform.
- */
-export const fakeSetupPlatform: SetupPlatformShape = {
-  get commands() {
-    return installedHost().setup?.commands;
-  },
-  get terminal() {
-    return installedHost().setup?.terminal;
-  },
-};
 
 export const TEXRA_APP: TestApp = Object.freeze({
   settings: TEXRA_SETTINGS.catalog,
-  plugins: () => texraPlugins({ name: 'vscode', setup: fakeSetupPlatform }),
+  plugins: (setup: SetupPlatformShape) =>
+    texraPlugins({ name: 'vscode', setup }),
   teamMembers,
 });
 

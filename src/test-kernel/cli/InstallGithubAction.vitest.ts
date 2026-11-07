@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { SessionGraph } from '@test/support/testKernel';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
@@ -22,21 +22,24 @@ const installed = vi.hoisted((): { runtime: ProcessRuntime | undefined } => ({
   runtime: undefined,
 }));
 
-vi.mock('@cli/runtime/browser', () => ({
+vi.mock('@cli/runtime/models/browser', () => ({
   tryOpenBrowser: browserMocks.tryOpenBrowser,
 }));
 
-// The command brings no platform up, but its entry still installs the process
-// runtime its program runs on. Here that is the block's, so the suite never
-// builds a real one.
-vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
+// The command brings no platform up, but its entry still builds the runtime
+// its program runs on. Here that runtime serves the block's services, so the
+// suite never builds a real one.
+vi.mock('@cli/runtime/platform/cliProcessRuntime', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
+    await importOriginal<
+      typeof import('@cli/runtime/platform/cliProcessRuntime')
+    >();
+  const { Layer } = await import('effect');
   return {
     ...actual,
-    installCliProcessRuntime: () => {
+    cliSecretsLayer: () => {
       if (!installed.runtime) throw new Error('No test runtime is installed.');
-      return installed.runtime;
+      return Layer.effectContext(installed.runtime.contextEffect);
     },
   };
 });

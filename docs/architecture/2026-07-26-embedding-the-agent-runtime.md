@@ -140,7 +140,7 @@ Alternatively, skip the packaged tree entirely and hand `processLayer` an
 ### Prerequisite A — a session
 
 A root launch runs on a session (`session.start`). The CLI bootstrap in
-`packages/cli/src/runtime/initPlatform.ts` prepares one memoized session-opening
+`packages/cli/src/runtime/platform/initPlatform.ts` prepares one memoized session-opening
 Effect; commands run `services.session` when they need a session. Utility commands
 that need no session leave the store unopened.
 
@@ -394,7 +394,7 @@ approval guard, which may deny the call, rather than removed. The tools that ope
 (`guard.bash`), which `asksApproval` reads.
 
 The headless CLI host answers it from its mode alone
-(`packages/cli/src/runtime/approvalAdapter.ts`); the session applies its
+(`packages/cli/src/runtime/headless/approvalAdapter.ts`); the session applies its
 approval policy to that fact, so `yolo` still offers the gated tools to a run
 that cannot prompt.
 
@@ -408,7 +408,7 @@ the denial as the run's `request.decided` row, with no listener of its own.
 The `@texra-ai/harness` package's sessions rely on that, and the headless CLI
 answers what its policy leaves open from a terminal prompt
 (`createHeadlessCliHostInteractions`,
-`packages/cli/src/runtime/approvalAdapter.ts`).
+`packages/cli/src/runtime/headless/approvalAdapter.ts`).
 
 The same holds for a plan, a delegation proposal and a question
 (`policyDecidedRows` in `packages/harness/src/agent/runtime/requests.ts`,
@@ -476,7 +476,7 @@ port's `resourcesRoot` (`enabledBuiltInRoots`,
 
 ## 5. Reading the CLI: obligations vs. product features
 
-`initCliPlatform` (`packages/cli/src/runtime/initPlatform.ts:280-463`) is one
+`initCliPlatform` (`packages/cli/src/runtime/platform/initPlatform.ts:280-463`) is one
 Effect program that builds the process runtime, the process roots and the
 process session, and every `texra` command runs it. An embedder reading it cannot tell
 which steps are runtime requirements and which are `texra`-the-product. The
@@ -519,7 +519,7 @@ following classification makes that distinction.
   Recommended for any long-lived process that runs `bash` tools; an embedder
   holds the same order in its own scope, closing sessions before it disposes
   the runtime.
-- **`holdSignals(policy)`** (`packages/cli/src/runtime/processSignals.ts`):
+- **`holdSignals(policy)`** (`packages/cli/src/runtime/platform/processSignals.ts`):
   the one place the CLI listens for a signal; the platform's own policy
   closes that scope through `cliExit`, and a holder above it (a foreground
   child, the chat TUI) answers instead while it holds.

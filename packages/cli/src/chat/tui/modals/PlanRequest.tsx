@@ -7,7 +7,7 @@ import {
   confirmCardContentWidth,
   isCompactRows,
 } from '@cli/tui/ui/theme';
-import { fillRows, truncateToWidth } from '@cli/runtime/terminalText';
+import { fillRows, truncateToWidth } from '@cli/runtime/terminal/terminalText';
 import {
   REQUEST_ACTIONS,
   type SurfaceDecision,

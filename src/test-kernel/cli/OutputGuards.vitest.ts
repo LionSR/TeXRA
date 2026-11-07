@@ -5,11 +5,11 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { CliUsageError } from '@cli/runtime/cliContext';
+import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
-} from '@cli/runtime/workflowOutput';
+} from '@cli/runtime/headless/workflowOutput';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 

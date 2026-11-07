@@ -12,7 +12,7 @@
 // Multiplexer-aware DCS wrapping for tmux/screen is deferred per
 // 2026-05-14-30-reference.md (R9).
 
-import { ANSI_BEL, osc } from '@cli/runtime/ansiEscapes';
+import { ANSI_BEL, osc } from '@cli/runtime/terminal/ansiEscapes';
 import { writeTerminalSequence } from '@cli/tui/terminalCleanup';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 

@@ -37,6 +37,8 @@ interface BindPlan {
   readonly request: BindRequest;
   /** The catalog config, or the route overlay the request keeps. */
   readonly requested: ModelConfig;
+  /** The catalog entry the model string names, whatever `requested` is. */
+  readonly catalogEntry: ModelConfig;
   /** The effort, thinking and mode the model string asks for. */
   readonly ask: ReasoningRequest;
   readonly settings: ModelSettings;
@@ -79,8 +81,9 @@ const reasoningOf = Effect.fn('binding.reasoning')(function* (
 });
 
 /** What every binding of `plan` shares. */
-const commonOf = ({ request, decision, settings }: BindPlan) => ({
+const commonOf = ({ request, catalogEntry, decision, settings }: BindPlan) => ({
   modelId: request.modelId,
+  catalogEntry,
   backend: decision.backend,
   declinedRoutes: request.declinedRoutes,
   automaticRetries: settings.automaticRetries,

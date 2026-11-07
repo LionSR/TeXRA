@@ -133,8 +133,6 @@ export function attemptRows(
   invocation: InvocationRef,
   origin: ModelOrigin,
   resolved: ResolvedTurn,
-  /** When it is sent, a `Clock` reading. */
-  sentAtMs: number,
 ): RunHistoryDraft[] {
   const { agent, request } = recorded(run, resolved);
   return [
@@ -152,7 +150,6 @@ export function attemptRows(
         invocation,
         request: sha256(request),
         origin,
-        sentAtMs,
       },
     },
   ];

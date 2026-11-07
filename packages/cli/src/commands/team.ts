@@ -2,6 +2,7 @@ import { Effect, Predicate } from 'effect';
 import { defineCommand } from 'citty';
 
 import { AgentCatalog, type ProcessServices } from '@texra-ai/harness/host';
+import type { Sessions } from '@texra-ai/harness';
 import { canLaunchTeam, planTeamRuns } from '@texra/shared/teamLaunch';
 import { findTeamPreset, planTeamRun } from '@texra/shared/teamPlan';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
@@ -11,13 +12,14 @@ import {
   failUsage,
   type CliContext,
   type CliInvocation,
-} from '../runtime/cliContext';
-import { CliExitCode } from '../runtime/exitCodes';
+} from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
-  initCliPlatform,
+  cliPlatform,
+  type CliPlatform,
   type CliPlatformServices,
-} from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+} from '../runtime/platform/initPlatform';
+import { writeTextStderr } from '../runtime/platform/logSinks';
 import {
   cliTeamListRecord,
   cliTeamNdjsonRecords,
@@ -30,7 +32,7 @@ import {
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
-} from '../runtime/runModel';
+} from '../runtime/models/runModel';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
@@ -43,9 +45,9 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliToolUseConfig } from '../runtime/executeCli';
-import { toolUseResultText } from '../runtime/terminalStatus';
-import { withExpandedRunInputs } from '../runtime/workflowInputs';
+import { executeCliToolUseConfig } from '../runtime/headless/executeCli';
+import { toolUseResultText } from '../runtime/headless/terminalStatus';
+import { withExpandedRunInputs } from '../runtime/headless/workflowInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 interface TeamRunInit {
@@ -125,13 +127,17 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
 const runTeam = Effect.fn('runTeam')(function* (
   context: CliContext,
   init: TeamRunInit,
-): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
+): Effect.fn.Return<
+  number,
+  Error,
+  ProcessServices | Sessions | CliPlatform | CliInvocation
+> {
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   const hasInstruction = instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInstruction) {
     return yield* failUsage(TEAM_TASK_REQUIRED_MESSAGE);
   }
-  const services = yield* initCliPlatform(context);
+  const services = yield* cliPlatform;
 
   // The policy the team's launch decides privileged actions under: an Ask
   // request under a Block project gets Block, which needs no prompt.
@@ -247,8 +253,8 @@ const teamListCommand = defineCliCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  run: Effect.fn('team.run')(function* (context) {
-    const services = yield* initCliPlatform(context);
+  run: Effect.fn('team.run')(function* () {
+    const services = yield* cliPlatform;
     return yield* runTeamList(services);
   }),
 });
@@ -267,7 +273,7 @@ const teamShowCommand = defineCliCommand({
     },
   },
   run: Effect.fn('team.run')(function* (context, ctx) {
-    const services = yield* initCliPlatform(context);
+    const services = yield* cliPlatform;
     return yield* runTeamShow(ctx.args.team, services);
   }),
 });

@@ -1,0 +1,129 @@
+// Third-party imports
+import { Effect, type Scope } from 'effect';
+
+// Local imports - runtime
+import {
+  formatInstructionActionHint,
+  instructionActions,
+} from '@ui/copy/instructionActions';
+import { modelFailureText } from '@ui/copy/modelAccess';
+
+// Local imports - CLI runtime
+import { writeNdjsonStdout, writeTextStderr } from '../platform/logSinks';
+import { createRunProgressRenderer } from './runProgressRenderer';
+import { missingAgentMessage } from '../agents';
+import type { Session } from '@texra-ai/harness';
+import type {
+  PresentationEventHandlers,
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@texra-ai/harness/host';
+import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
+import type { CliContext } from '../platform/cliContext';
+
+export interface CliRuntimeHost {
+  emit<K extends RuntimePresentationEvent>(
+    event: K,
+    payload: RuntimePresentationEventPayloads[K],
+  ): boolean;
+  attachRunProgressRenderer(
+    session: Session,
+    runId: RunId,
+  ): Effect.Effect<void, never, Scope.Scope>;
+  prepareInteractivePrompt?: () => void;
+  /** {@link prepareInteractivePrompt}, held until the returned release is
+   *  called: for a prompt, which owns the terminal while it is open. */
+  holdForPrompt?: () => (() => void) | undefined;
+  close(): Effect.Effect<void>;
+}
+
+export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
+  let closed = false;
+  const ndjson = context.outputFormat === 'ndjson';
+  const runProgress = createRunProgressRenderer(context);
+
+  /** One presentation record. NDJSON: a `kind: 'log'` record on the public
+   *  wire. Text: `LEVEL message` on stderr, the shape of the CLI's config
+   *  warnings; the timestamp and fields stay in the NDJSON record. */
+  function present(
+    level: LogLevel,
+    message: string,
+    fields: { readonly [key: string]: unknown } = {},
+  ): void {
+    if (ndjson) {
+      writeNdjsonStdout({
+        kind: 'log',
+        ts: new Date().toISOString(),
+        level,
+        message,
+        fields,
+      });
+    } else {
+      writeTextStderr(`${level.toUpperCase()} ${message}`);
+    }
+  }
+
+  /**
+   * The one runtime-presentation handler map, both modes. Every event returns
+   * `true` when it rendered a user-visible record. `agentNotFound` is
+   * rendered as a visible, actionable
+   * "agent not found" error so CLI launch failures surface once through the
+   * targeted path. Reproduced per-key rather than as a catch-all, so a future
+   * `RuntimePresentationEventPayloads` addition is a compile error to decide
+   * on rather than a silent fall-through.
+   *
+   * `openFile` has no presentation of its own in either mode.
+   * `runProgress?.preserve()` is inert in NDJSON mode: production never builds
+   * a renderer there (`shouldRenderRunProgress`), and where a test context
+   * does, `preserve()` no-ops behind its own `ansi && liveLine` guard.
+   */
+  const handlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
+    {
+      requestShowError: (payload) => {
+        runProgress?.preserve();
+        present('error', modelFailureText(payload));
+        return true;
+      },
+      requestShowInstruction: (payload) => {
+        // An actionable instruction (e.g. missing API key), not routine
+        // progress noise. The action hint is a text-mode affordance; NDJSON
+        // carries the actions as fields instead.
+        runProgress?.preserve();
+        const actions = instructionActions(payload.key);
+        const hint = ndjson ? '' : formatInstructionActionHint(actions);
+        // A notice with nothing to offer carries no `actions` field, as before.
+        present('info', `${payload.message}${hint}`, {
+          key: payload.key,
+          ...(actions.length > 0 ? { actions } : {}),
+          showSuppress: payload.showSuppress,
+        });
+        return true;
+      },
+      openFile: () => false,
+      agentNotFound: ({ agentName }) => {
+        runProgress?.preserve();
+        present('error', missingAgentMessage(agentName));
+        return true;
+      },
+    };
+
+  return {
+    attachRunProgressRenderer: (session, runId) =>
+      runProgress ? runProgress.attach(session, runId) : Effect.void,
+    prepareInteractivePrompt: () => runProgress?.preserve(),
+    holdForPrompt: () => runProgress?.suspend(),
+    emit<K extends RuntimePresentationEvent>(
+      event: K,
+      payload: RuntimePresentationEventPayloads[K],
+    ): boolean {
+      if (closed) return false;
+      return handlers[event](payload) === true;
+    },
+    close() {
+      return Effect.sync(() => {
+        closed = true;
+        runProgress?.clear();
+      });
+    },
+  };
+}

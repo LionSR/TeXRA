@@ -2,7 +2,7 @@ import { Text } from 'ink';
 import { useState } from 'react';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { tryOpenBrowser } from '@cli/runtime/browser';
+import { tryOpenBrowser } from '@cli/runtime/models/browser';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { CROSS } from '@cli/tui/ui/glyphs';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
