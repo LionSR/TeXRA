@@ -90,7 +90,7 @@ its kind is its `type` column.
 The store is one SQLite file named `texra.db` under the storage root
 (`controllers/session/Database.ts#SESSION_DATABASE_FILE`); the file name and the
 application id (`TeXR`) carry the product's name. An ephemeral session runs the
-same schema in memory (`controllers/session/Database.ts#':memory:'`).
+same schema in memory (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
 The store MUST carry application id `0x54655852` and schema version 101 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts#APPLICATION_ID`,
