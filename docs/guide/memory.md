@@ -43,7 +43,7 @@ Agents work with memory through a small set of commands on the `memory` tool:
 | `pin`         | Mark a note as a **core long-term memory** (loaded at every session start) |
 | `unpin`       | Remove the pinned status                                                   |
 
-Every note is a Markdown file. Agents see them at `/memories/<name>.md`; on disk they live in the shared TeXRA root at `~/.texra/workspace-storage/<workspace-name>-<hash>/memories/`, which the VS Code extension, the desktop app, and the CLI all share for the same workspace. Each file carries a small YAML header that records which agent last modified it, when, and whether it's pinned. That header is what the metadata strip in Settings shows.
+Every note is a Markdown file. Agents see them at `/memories/<name>.md`; on disk they live in the shared TeXRA root at `~/.texra/v1/workspace-storage/<workspace-name>-<hash>/memories/`, which the VS Code extension, the desktop app, and the CLI all share for the same workspace. Each file carries a small YAML header that records which agent last modified it, when, and whether it's pinned. That header is what the metadata strip in Settings shows.
 
 <MemoryCommandsHero />
 
@@ -69,7 +69,7 @@ updated. For each note you get:
 - **Contents**: a collapsible Markdown preview rendered inline (pinned notes start expanded)
 - **Actions**: pin / unpin, open in editor, delete
 
-The toolbar above the list has **Refresh** and **Open folder**. Open folder reveals the on-disk `memories/` directory in your file explorer, useful if you want to edit notes by hand or check them into a side repo.
+The toolbar above the list has **Refresh memories** and **Open memory folder**. Open memory folder reveals the on-disk `memories/` directory in your file explorer, useful if you want to edit notes by hand or check them into a side repo.
 
 <MemoryItemAnatomy />
 

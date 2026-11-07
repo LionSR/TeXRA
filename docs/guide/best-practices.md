@@ -51,7 +51,7 @@ project/
 - **Keep an `AGENTS.md` at the workspace root**: record project-wide notation conventions, custom macros, compilation commands, and forbidden edits so every agent session inherits them automatically.
 - **Attach only the files a document task needs**: put the target `.tex` file in **Input** and shared preamble or `.bib` files in **Context**.
 - **Format before running `latexdiff`**: run `latexindent` or `tex-fmt` before comparing revisions so line-wrapping differences do not obscure prose edits.
-- **Archive milestone revisions**: use **Archive outputs** in the ProgressBoard menu to move key revisions into `History/`, and delete stale run folders when no longer needed.
+- **Archive milestone revisions**: use **Archive outputs to History** in the ProgressBoard menu to copy key revisions into `History/`, and delete stale run folders when no longer needed.
 
 ## Workflow integration
 

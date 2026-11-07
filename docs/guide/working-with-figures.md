@@ -9,10 +9,11 @@ Figures carry a lot of the evidence in theoretical work: a plot that a derivatio
 
 ::: tip CLI
 This page covers the VS Code **Media** selector. From the [`texra` CLI](./texra-cli.md),
-work with a figure conversationally in `texra chat`, or let an agent
-pull figures out of your documents with the built-in extraction tools.
-(`--context` files are read as text, so they are for `.tex` and
-`.bib` sources, not images.)
+work with a figure conversationally in `texra chat`, pass it to
+`texra run` with `--input` (which takes supported media files and attaches
+them), or let an agent pull figures out of your documents with the built-in
+extraction tools. (`--context` files are read as text, so they are for `.tex`
+and `.bib` sources, not images.)
 :::
 
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick task: add a figure caption
@@ -99,11 +100,11 @@ Enable extraction from the **Auto Extract** dropdown (<wa-icon library="texra" n
 <p class="hero-caption">The lit wand button opens a checkbox menu with Figures, TikZ Figures, and Compile Input PDF.</p>
 
 - **Figures** (<wa-icon library="texra" name="file-media"></wa-icon>): extracts images from `\includegraphics` commands.
-- **TikZ Figures** (<wa-icon library="texra" name="symbol-structure"></wa-icon>): extracts `tikzpicture` environments as `.tikz` files and compiles them.
+- **TikZ Figures** (<wa-icon library="texra" name="symbol-structure"></wa-icon>): extracts `tikzpicture` environments as standalone `.tex` files and compiles them.
 
 ## <wa-icon library="texra" name="tools"></wa-icon> Figure extraction tools
 
-Agents can extract figures programmatically. These tools are part of the **LaTeX Extraction** built-in tool group and are always available. In a run, an agent like `research` drives them one after another, attaching what it finds so a multimodal model can read it:
+Agents can extract figures programmatically. These tools are part of the **LaTeX Extraction** plugin, which is on by default (switch it under **Settings → Plugins**). In a run, an agent like `research` drives them one after another, attaching what it finds so a multimodal model can read it:
 
 <ToolCallPanel
   title="research"
@@ -112,7 +113,7 @@ Agents can extract figures programmatically. These tools are part of the **LaTeX
   :calls="[
     { state: 'done', verb: 'extract_figures', target: 'paper/main.tex', effect: 'Found 9 \\includegraphics: attached 9 files' },
     { state: 'done', verb: 'extract_bib_entries', target: 'paper/main.tex', effect: 'Returned BibTeX for every \\cite key' },
-    { state: 'active', verb: 'extract_tikz_figures', target: 'paper/main.tex', effect: 'compile: true → latexmk renders 7 tikzpicture snippets, attaches 7 PDFs' },
+    { state: 'active', verb: 'extract_tikz_figures', target: 'paper/main.tex', effect: 'compile: true → pdflatex renders 7 tikzpicture snippets, attaches 7 PDFs' },
   ]"
 />
 
@@ -140,7 +141,7 @@ Extracts and optionally compiles `tikzpicture` environments (up to 12 PDFs):
 }
 ```
 
-Setting `compile: true` runs `latexmk`/`pdflatex` on each snippet and attaches the resulting PDFs so multimodal models can read them directly.
+Setting `compile: true` (the default) runs `pdflatex` on each snippet and attaches the resulting PDFs so multimodal models can read them directly.
 
 ### `extract_bib_entries`
 

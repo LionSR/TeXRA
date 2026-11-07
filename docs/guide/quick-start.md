@@ -44,7 +44,7 @@ TeXRA panel offers the main access choices:
    set your provider's key in the **API keys** list, or place a `.env` file in your workspace with
    variables like `OPENAI_API_KEY`.
 2. **Use ChatGPT subscription**: OpenAI models through your ChatGPT plan. Open the Settings **Models**
-   page and use the **ChatGPT subscription** sign-in section.
+   page and use the **Subscriptions** sign-in section.
 3. **Use another provider subscription**: Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
    already pay for. Connect them from the same **Models** page.
 
@@ -70,7 +70,7 @@ environment, agents, and first task. Read the
 
 ## The New task view in detail
 
-Open the TeXRA panel from the brain icon in the sidebar, or run **TeXRA: New Task**
+Open the TeXRA panel from the TeXRA icon in the Secondary Side Bar, or run **TeXRA: New Task**
 (`Ctrl+Alt+M`, `Cmd+Option+M` on macOS).
 
 ### Select files
@@ -146,7 +146,7 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
 1. When the run completes, VS Code opens the generated output file from the run folder (e.g., `r0/draft.tex`, keeping your input filename).
 2. Inspect the proposed edits; the scientific judgment stays yours. Compare the original and modified versions with either tool:
-   - **ProgressBoard Diff**: Select the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated run-storage output.
+   - **ProgressBoard Diff**: Under **Generated files**, select a file's <wa-icon library="texra" name="code-compare"></wa-icon> **Compare with base** button to compare the original file against the generated run-storage output.
 
      <CompareHero />
 
@@ -154,7 +154,7 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
      You can accept reviewed outputs from the ProgressBoard after comparing the changes.
 
-   - **TeXRA's LaTeXdiff feature**: Use the LaTeXDiffs section in the TeXRA panel for a compiled, visual comparison. It creates a PDF with additions highlighted in blue and deletions in red.
+   - **TeXRA's LaTeXdiff feature**: Use a file's latexdiff button, or **LaTeXDiffs…** in the panel's **⋯** menu, for a compiled, visual comparison. It creates a PDF with additions highlighted in blue and deletions in red.
 
 <div class="quick-pdf-viewer">
   <div class="pdf-tabs">
@@ -187,7 +187,7 @@ texra auth chatgpt login
 # Or let the guided setup handle credentials, environment, and your first task:
 texra setup
 
-# One-shot run (prints the revised file's path; --output copies it next to the input):
+# One-shot run (prints the revised file's path; --output copies it to a file you name):
 texra run polish --input draft.tex \
   --instruction "Improve clarity; preserve math and citations."
 
@@ -314,12 +314,14 @@ Some common tasks to try with TeXRA. Each is an agent, a model, and a one-line i
 ## Understanding the output
 
 A completed run writes everything into the run folder under run storage, one
-folder per revision. Each revision holds three artifacts, and the document keeps your
-**input filename** (`draft.tex`, not `output.tex`):
+folder per revision (`r0/`, `r1/`, …). Each revision folder holds the revised document,
+which keeps your **input filename** (`draft.tex`, not `output.tex`), and the model's raw
+reply (`output.xml`); the run's latexdiff PDFs go under `diff/r{round}/` and compile
+logs under `compile/`:
 
 <OutputArtifactsTree />
 
-<p class="hero-caption">One folder per revision under <code>r{round}/&lt;input-filename&gt;</code>: the revised <strong>Output</strong>, a <strong>Log</strong> of the run, and the <strong>Diff</strong> PDF. The second revision (and any further one) repeats the same trio in <code>r1/</code>, <code>r2/</code>, …</p>
+<p class="hero-caption">One folder per revision: the revised document at <code>r{round}/&lt;input-filename&gt;</code>, with its compile log and diff PDF beside the revision folders. The second revision (and any further one) repeats the layout in <code>r1/</code>, <code>r2/</code>, …</p>
 
 The CLI writes the same per-revision tree under `executions/<run-id>/` in the
 workspace store. Read [First run](./first-run.md) for the terminal walkthrough.

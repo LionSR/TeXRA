@@ -36,7 +36,7 @@ These `.yaml` files are flat. An agent with a document task has two main parts:
     - `temperature` and (for agents without a `task` block only) `tools`. See [Custom agents](./custom-agents.md) for details.
 2.  **`task`**: Present only on agents with a document task. Text templates that TeXRA fills with your context (input files, instruction) to guide the LLM at each stage, plus output settings:
     - `prefix`: Provides the main context, including your input file(s) (available as `{{ INPUT_CONTENT }}`) and the instruction you typed in the UI (available as `{{ INSTRUCTION }}`).
-    - `requests`: A list with one entry per revision. The first entry asks the LLM to perform the initial task (the first revision). It often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped in the fixed `<documents>` container, with one `<document name="...">...</document>` entry per output file. Each further entry drives one reflection revision.
+    - `requests`: A list with one entry per revision. The first entry asks the LLM to perform the initial task (the first revision). It often instructs the LLM to think within `<scratchpad>` tags. TeXRA appends the reply format to every request itself: the fixed `<documents>` container, with one `<document name="...">...</document>` entry per output file. Each further entry drives one reflection revision.
     - `outputs` and `files`: the files a generator agent writes (an agent that names none edits its inputs), and template files kept beside the YAML.
 
 _(Prompts use Nunjucks templating (Jinja2-style syntax). For the list of available variables such as `{{ INPUT_CONTENT }}` and how to use them, read the [Custom agents](./custom-agents.md) guide.)_
@@ -109,7 +109,7 @@ Control how many revisions run by editing the agent YAML: add or remove entries 
 **Critic review (opt-in):** Launched with reflection on (`texra run <agent> --reflect` on the CLI, or `reflect: true` on a lead's `document_task` call), a document task has the bundled `critic` agent review every revision but the last. After the revision is compiled and diffed, the critic reads the requests so far, the diff of each output against the document the task started from, and the compile result, and answers with grounded corrections, each tied to a location, plus the single most valuable optional improvement. The next revision's prompt carries that critique in a `<critique>` block. The revision count stays the number of `task.requests` entries; reflection adds one critic call between revisions.
 
 ::: warning Potential XML Issues
-Occasionally an LLM generates slightly malformed XML (for example, a missing closing tag), especially for very long or complex outputs. If TeXRA fails to extract content from an agent's raw XML output (any revision's `r{n}/output.xml`, for example `r0/output.xml`), open the `.xml` file and correct the structural error (such as adding a missing `</document>` tag); TeXRA can then process it. Read the [Troubleshooting guide](./troubleshooting.md#output-file-corruption) for details.
+Occasionally an LLM generates slightly malformed XML, especially for very long or complex outputs. TeXRA closes an unclosed `<document>` tag itself and tries to recover untagged files, and it keeps every revision's raw reply (`r{n}/output.xml`, for example `r0/output.xml`). If a file still fails to extract, open that `.xml` file to recover the text. Read the [Troubleshooting guide](./troubleshooting.md#missing-or-truncated-output-files) for details.
 :::
 
 ### Reflection

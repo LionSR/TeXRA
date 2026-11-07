@@ -103,12 +103,12 @@ TeXRA can pull TikZ figures out of your LaTeX source for separate processing.
 
 <p class="hero-caption">Open the wand <strong>Auto-extract</strong> menu in the Media group and check <strong>TikZ Figures</strong>. Every <code>tikzpicture</code> in your selected files is then pulled out on the next run.</p>
 
-When automatic extraction is enabled, each `tikzpicture` in your selected files is extracted into a standalone `.tex` document, compiled to PDF with `latexmk` / `pdflatex`, and attached to the prompt alongside the source code:
+When automatic extraction is enabled, each `tikzpicture` in your selected files is extracted into a standalone `.tex` document, compiled to PDF with `pdflatex`, and attached to the prompt alongside the source code:
 
 <FlowSteps :steps="[
   { icon: 'file-code', title: 'Source', desc: 'One .tex file with several tikzpicture environments.', chips: [{ text: 'diagrams.tex', variant: 'info', icon: 'file-code' }] },
   { icon: 'file-submodule', title: 'Extract', desc: 'A standalone LaTeX document per figure.', chips: [{ text: 'fig1.tex', variant: 'neutral' }, { text: 'fig2.tex', variant: 'neutral' }, { text: 'fig3.tex', variant: 'neutral' }] },
-  { icon: 'play-circle', title: 'Compile', desc: 'latexmk / pdflatex builds each standalone.', chips: [{ text: '3 PDFs', variant: 'warning', icon: 'file-pdf' }] },
+  { icon: 'play-circle', title: 'Compile', desc: 'pdflatex builds each standalone.', chips: [{ text: '3 PDFs', variant: 'warning', icon: 'file-pdf' }] },
   { icon: 'output', title: 'Attach', desc: 'Models with native PDF support read the PDFs directly; others get rasterised PNGs via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: 'PDF or PNG', variant: 'success', icon: 'eye' }] },
   { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered output.', chips: [{ text: 'code + image', variant: 'accent' }] }
 ]" />

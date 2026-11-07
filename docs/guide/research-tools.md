@@ -59,7 +59,7 @@ The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model pr
 If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status and switch it on under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 
 ```
-Search my Zotero library for papers by Vaswani on attention mechanisms.
+Search my Zotero library for papers on attention mechanisms.
 ```
 
 ```

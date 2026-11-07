@@ -221,7 +221,7 @@ Verify the agent registered, then smoke-test it in one go:
 
 Built-in agents ship with TeXRA and update when TeXRA does. A custom agent with the same name as a built-in overrides it. **Customize** in the Agents tab (or `texra agents customize <name>`) copies the built-in into your custom agents folder and records which version it copied in a `basedOn:` line at the end of the file.
 
-When an update changes that built-in, the Agents tab marks your copy and offers **View built-in**, **Reset to built-in** (deletes your copy so the new version is used), and **Keep mine** (keeps your copy and dismisses the notice). In the terminal, `texra agents list` and `texra agents show` print the same notice, and `texra agents reset <name>` or `texra agents keep <name>` settle it. An agent you wrote yourself under a built-in's name has no `basedOn:` line and is never flagged.
+When an update changes that built-in, the Agents tab marks your copy and offers **View built-in**, **Reset to built-in** (deletes your copy so the new version is used), and **Keep mine** (keeps your copy and dismisses the notice). In the terminal, `texra agents list` and `texra agents show` print the same notice, and `texra agents reset <name>` or `texra agents keep <name>` resolve it. An agent you wrote yourself under a built-in's name has no `basedOn:` line and is never flagged.
 
 ### <wa-icon library="texra" name="shield"></wa-icon> Strict XML extraction
 

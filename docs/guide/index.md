@@ -13,7 +13,7 @@ serve as supporting capabilities within your research project.
 
 <GuideIntroHero />
 
-<p class="hero-caption">A single task, split across three specialists in the Sessions view. Select a delegation to see what it produced.</p>
+<p class="hero-caption">A single task, split across three specialists in the TeXRA view. Select a delegation to see what it produced.</p>
 
 ## Get started
 
@@ -63,11 +63,11 @@ verifiable output.
 
 The VS Code extension, the desktop app, and the `texra` CLI share the same
 agents, credentials, and run history. A run started in the CLI appears live in
-the extension's Sessions view, and vice versa.
+the extension's **Tasks** list, and vice versa.
 
 <RunParityHero />
 
-<p class="hero-caption">One run seen from two surfaces: the same execution id lands in the terminal's output and the extension's Sessions view.</p>
+<p class="hero-caption">One run seen from two surfaces: the same execution id lands in the terminal's output and the extension's Tasks list.</p>
 
 ```mermaid
 graph TB
