@@ -76,7 +76,7 @@ import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { followCliCredentialChanges } from './hosts/cliProviderKeys';
-import { createTuiViewportController } from './render/tuiViewportController';
+import { chatScrollback } from './panes/staticTranscriptRing';
 import {
   rootRunId,
   selectedRunId as selectedRunIdSignal,
@@ -93,7 +93,6 @@ import {
   runPhaseOf,
   runViewOf,
 } from './state/sessionView';
-import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
   appendLocalErrorTranscript,
@@ -517,6 +516,9 @@ export async function runChat(
     approvalPolicy: () => chatPolicy,
   });
 
+  const inkRef: { current?: InkInstance } = {};
+  const scrollback = chatScrollback(runtime, inkRef);
+
   const resetSessionForClear = (): boolean => {
     const currentRunId = session.runId ?? selectedRunIdSignal.get();
     const activeRun = runViewOf(currentView(), currentRunId);
@@ -537,14 +539,10 @@ export async function runChat(
     chatController.clearPendingSkills();
     session.clearRunState();
     resetCliState(meta);
+    // The erase happens outside Ink, so the scrollback prints again from a
+    // new origin even when the history it rebuilds is empty.
     clearTerminalScrollback();
-    // The erase above happened outside Ink, so everything the static
-    // transcript printed is gone from the terminal, even when the state
-    // rebuild is a no-op (empty history) that would skip the repaint-epoch
-    // bump. The erase epoch forces a rebuild after the reset state commits,
-    // so the remounted `<Static>` repaints the header without ever carrying
-    // the cleared rows.
-    notifyStaticTranscriptErased();
+    scrollback.restart();
     return true;
   };
 
@@ -612,8 +610,6 @@ export async function runChat(
     },
   });
 
-  const inkRef: { current?: InkInstance } = {};
-  const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
       stores={services}
@@ -626,7 +622,7 @@ export async function runChat(
         );
       }}
       commandName={context.commandName}
-      onStaticTranscriptChange={viewportController.repaintTranscript}
+      scrollback={scrollback}
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
       history={inputHistory}
@@ -693,7 +689,7 @@ export async function runChat(
           ),
       ),
     ),
-    repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
+    repaintAfterTerminalResume: scrollback.restart,
     interruptActive: (reason) => chatController.stop(reason),
   });
   // Transfer signal ownership from the platform handler and arm this session's

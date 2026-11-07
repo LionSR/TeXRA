@@ -144,8 +144,7 @@ import {
   formatCliSessionStatus,
   taskCostStatus,
 } from '../src/chat/tui/sessionStatus';
-import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
-import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
+import { chatScrollback } from '../src/chat/tui/panes/staticTranscriptRing';
 import {
   announceForegroundApprovals,
   createTuiHostInteractions,
@@ -1724,10 +1723,9 @@ function resetHarnessForClear(): void {
   // until a new turn mints a run.
   resetCliState(meta);
   // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
-  // outside Ink, then notify the erase epoch so the transcript rebuilds
-  // after the reset state commits and repaints the session header.
+  // outside Ink, then print the scrollback again from a new origin.
   clearTerminalScrollback();
-  notifyStaticTranscriptErased();
+  scrollback.restart();
 }
 
 function handleHarnessSlashCommand(line: string): boolean {
@@ -1863,7 +1861,7 @@ if (canInterrupt) {
 }
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
-const viewportController = createTuiViewportController(inkRef);
+const scrollback = chatScrollback(harnessRuntime, inkRef);
 
 function handleHarnessCtrlC(): void {
   if (canInterrupt) {
@@ -1880,7 +1878,7 @@ function renderHarnessApp(): React.JSX.Element {
       runtime={harnessRuntime}
       session={harnessRunSession}
       onSubmit={handleHarnessSubmit}
-      onStaticTranscriptChange={viewportController.repaintTranscript}
+      scrollback={scrollback}
       onCtrlC={handleHarnessCtrlC}
     />
   );
@@ -1999,7 +1997,7 @@ if (SHOW_TERMINAL_RESUME_REPAINT) {
     // remounts <Static> and repaints with replace semantics.
     await setTimeout(0);
     await ink.waitUntilRenderFlush();
-    viewportController.repaintAfterTerminalResume();
+    scrollback.restart();
     await setTimeout(0);
     await ink.waitUntilRenderFlush();
   })().catch((error) => {

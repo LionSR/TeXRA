@@ -3,38 +3,39 @@
 // in ordinary terminal scrollback through Ink `<Static>`. On a width change,
 // the width-qualified Static identity remounts these same items so patched Ink
 // can replace its accumulated static output with the new geometry. What the
-// retained tail contains and what it costs lives in `staticTranscriptRing.ts`.
+// retained tail contains, what it costs and when it moves to a new origin
+// lives in `staticTranscriptRing.ts`; the chat holds it in one
+// `SubscriptionRef`.
 
 import path from 'node:path';
 
 import * as os from 'node:os';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
+import { SubscriptionRef } from 'effect';
 import { Box, Static, Text } from 'ink';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 
 import {
-  rootRunId as rootRunIdSignal,
   sessionMeta as sessionMetaSignal,
   type SessionMeta,
 } from '../state/cliState';
 import { sessionView, runLabelOf, runViewOf } from '../state/sessionView';
-import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
 import {
   mergeLocalNotices,
   notices as noticesSignal,
   noticesFor,
 } from '../state/transcript';
 import { useSignal } from '../state/useSignal';
+import { useSubscriptionRef } from '../state/useSubscriptionRef';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
-  advanceStaticTranscriptState,
-  buildStaticTranscriptState,
+  advanceScrollback,
+  type ChatScrollback,
   type ChildHeader,
   type StaticScrollbackSource,
   type StaticTranscriptItem,
-  type StaticTranscriptState,
 } from './staticTranscriptRing';
 import { TranscriptEntry } from './TranscriptEntry';
 import { transcriptColumns } from './transcriptEntryLayout';
@@ -171,25 +172,21 @@ function StaticTranscriptItemContent({
 
 export function StaticConversationTranscript({
   maxRows,
-  onRenderKeyChange,
   ownerKey,
-  renderKey = ownerKey,
+  scrollback,
   scrollbackRunId,
   width,
 }: {
   readonly maxRows?: number;
-  readonly onRenderKeyChange?: () => void;
   readonly ownerKey: string;
-  readonly renderKey?: string;
+  readonly scrollback: ChatScrollback;
   readonly scrollbackRunId: RunId | undefined;
   readonly width?: number;
 }): React.JSX.Element {
   const normalizedWidth = transcriptColumns(width);
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
-  const rootRunId = useSignal(rootRunIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
-  const eraseRequest = useSignal(staticTranscriptEraseEpoch);
   const source = useMemo((): StaticScrollbackSource => {
     const stream = runViewOf(view, scrollbackRunId);
     const runNotices = noticesFor(allNotices, scrollbackRunId);
@@ -207,49 +204,35 @@ export function StaticConversationTranscript({
         stream.identity.kind === 'agent' &&
         stream.model === null,
       child: childHeaderFor(view, scrollbackRunId),
-      hardReset:
-        scrollbackRunId === undefined &&
-        rootRunId === undefined &&
-        allNotices.length === 0,
     };
-  }, [allNotices, rootRunId, scrollbackRunId, view]);
-  const [state, setState] = useState<StaticTranscriptState>(() =>
-    buildStaticTranscriptState({
-      eraseRequest,
-      maxRows,
-      meta: sessionMeta,
-      ownerKey,
-      repaintEpoch: 0,
-      source,
-      width: normalizedWidth,
-    }),
-  );
-  // Reconcile before committing the render. Updating derived transcript state
-  // in an effect commits stale rows first and schedules another React update
-  // for every source change, even when only the scan position has advanced.
-  const nextState = advanceStaticTranscriptState(state, {
-    eraseRequest,
+  }, [allNotices, scrollbackRunId, view]);
+  // Advance before committing the render, so a tick never commits stale rows
+  // first; the advanced record is stored once the render commits.
+  const current = useSubscriptionRef(scrollback.runtime, scrollback.ref);
+  const next = advanceScrollback(current, {
     maxRows,
     meta: sessionMeta,
     ownerKey,
     source,
     width: normalizedWidth,
   });
-  if (nextState !== state) setState(nextState);
-  const items = nextState.items;
-  const repaintKey = `${renderKey}:${state.repaintEpoch}`;
-  const previousRenderKey = useRef<string | undefined>(undefined);
+  // The origin the terminal shows. A new one is repainted in the same commit
+  // that remounts `<Static>`, while the remounted items are still in Ink's
+  // tree.
+  const paintedOrigin = useRef(next.origin);
   useLayoutEffect(() => {
-    const previous = previousRenderKey.current;
-    previousRenderKey.current = repaintKey;
-    if (previous !== undefined && previous !== repaintKey) {
-      onRenderKeyChange?.();
+    if (next !== current) {
+      scrollback.runtime.runSync(SubscriptionRef.set(scrollback.ref, next));
     }
-  }, [onRenderKeyChange, repaintKey]);
-  const staticItems = useMemo(() => [...items], [items]);
+    if (paintedOrigin.current !== next.origin) {
+      paintedOrigin.current = next.origin;
+      scrollback.repaint();
+    }
+  }, [current, next, scrollback]);
+  const staticItems = useMemo(() => [...next.items], [next.items]);
   return (
     <Static
-      key={`transcript:${renderKey}:${normalizedWidth}:${state.repaintEpoch}`}
+      key={`transcript:${next.origin}:${normalizedWidth}`}
       items={staticItems}
     >
       {(item: StaticTranscriptItem, index: number) => (

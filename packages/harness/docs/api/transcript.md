@@ -986,9 +986,8 @@ interface TranscriptRowBase {
   readonly messageType?: MessageType;
   /** Present when a host synthesized this row rather than the fold building
    *  it from an event: a local notice the run itself never recorded. Such a
-   *  row is immutable from birth, carries the host's own id, and anchors into
-   *  the merged order through the {@link seqNo}/{@link settlementSeqNo} the
-   *  host captured when it appended it. */
+   *  row is immutable from birth, carries the host's own id, and takes its
+   *  place in the order where the host merges it into the run's rows. */
   readonly origin?: 'local';
 }
 ```

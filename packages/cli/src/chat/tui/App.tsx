@@ -41,6 +41,7 @@ import { TranscriptReader } from './panes/TranscriptReader';
 import { ScriptStagePopup } from './panes/ScriptStagePopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
+import type { ChatScrollback } from './panes/staticTranscriptRing';
 import { StatusBar } from './panes/StatusBar';
 import { currentApproval, promoteApprovalsForRun } from './state/approvalQueue';
 import {
@@ -116,7 +117,8 @@ interface AppProps {
     holdUntil?: 'turn',
   ) => void;
   readonly commandName?: string;
-  readonly onStaticTranscriptChange?: () => void;
+  /** The chat's scrollback record and its repaint. */
+  readonly scrollback: ChatScrollback;
   /** Hand the second Ctrl+C (the one no draft consumed) to the host's SIGINT
    *  policy. Required: the App owns draft discard, never process lifecycle. */
   readonly onCtrlC: () => void;
@@ -597,7 +599,7 @@ export function App(props: AppProps): React.JSX.Element {
       <ConversationRegion
         columns={columns}
         inputBarVisible={inputBarVisible}
-        onStaticTranscriptChange={props.onStaticTranscriptChange}
+        scrollback={props.scrollback}
         renderFooterChrome={() => (
           <>
             <InputBar

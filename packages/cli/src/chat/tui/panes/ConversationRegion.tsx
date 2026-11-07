@@ -25,6 +25,7 @@ import {
   queuedFollowUpPanelRowCount,
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
+import type { ChatScrollback } from './staticTranscriptRing';
 import { SubagentList } from './SubagentList';
 import { PlanPanel } from './PlanPanel';
 import {
@@ -36,7 +37,6 @@ import {
   slashPaletteOpen as slashPaletteOpenSignal,
 } from '../state/cliState';
 import { sessionView, runViewOf } from '../state/sessionView';
-import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 
@@ -55,10 +55,10 @@ interface ConversationRegionSnapshot {
 interface ConversationRegionProps {
   readonly columns: number;
   readonly inputBarVisible: boolean;
-  readonly onStaticTranscriptChange?: () => void;
   readonly renderForegroundSurface: (availableRows: number) => ReactNode;
   readonly renderFooterChrome: () => ReactNode;
   readonly rows: number;
+  readonly scrollback: ChatScrollback;
   readonly snapshot: ConversationRegionSnapshot;
   readonly onCancelChildList: () => void;
   readonly onChildSelectionChange: (value: RunId) => void;
@@ -73,10 +73,10 @@ export function ConversationRegion({
   onChildSelectionChange,
   onFocusSession,
   onKillRun,
-  onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
   rows,
+  scrollback,
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
   const foregroundOpen = snapshot.foregroundKind !== undefined;
@@ -96,8 +96,6 @@ export function ConversationRegion({
     rootRunId,
     scopedTranscript,
   });
-  const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
-  const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
   const activePlan = activeRun ? planOf(activeRun) : null;
   const queuedFollowUpMessages = (
@@ -179,8 +177,7 @@ export function ConversationRegion({
       <StaticConversationTranscript
         maxRows={staticTranscriptRows}
         ownerKey={scrollbackTarget.ownerKey}
-        onRenderKeyChange={onStaticTranscriptChange}
-        renderKey={staticTranscriptKey}
+        scrollback={scrollback}
         scrollbackRunId={scrollbackTarget.runId}
         width={transcriptWidth}
       />
