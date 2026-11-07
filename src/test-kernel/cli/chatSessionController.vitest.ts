@@ -461,6 +461,54 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     );
 
     it.effect(
+      'sends a message to the launched root before the view shows it',
+      () =>
+        Effect.gen(function* () {
+          // A service window's view follows the run on its own watch, so the
+          // launch can hand the chat its run before the view lists it. A
+          // message in that gap goes to that run, not to a second root.
+          installSession(installableViewRef());
+          const session = new TuiSession();
+          const ctrl = createChatSessionController(
+            yield* makeInit({
+              session,
+              served: true,
+              // cast: these plain messages match no slash command, so only
+              // the empty table is read.
+              getSlashCommandContext: () =>
+                ({ commands: slashCommands([]) }) as SlashCommandContext,
+            }),
+          );
+          const sent: RunId[] = [];
+          mocks.request.mockImplementation((req: RuntimeCommand) =>
+            Effect.sync((): Outcome => {
+              if (req.kind === 'followUp.send') sent.push(req.runId);
+              return {
+                kind: 'followUp',
+                id: 'sent-1',
+                status: 'sent',
+                receipt: { state: 'accepted' },
+              };
+            }),
+          );
+          // The run works on: its result never comes in this test.
+          mocks.executeAgent.mockReturnValue(new Promise(() => {}));
+
+          yield* ctrl.startRootRun({
+            agent: 'demo-agent',
+            model: 'demo-model',
+            instruction: 'Start here.',
+          });
+          const launched = rootRunId.get();
+          assert(launched !== undefined, 'the launch named its run');
+          yield* ctrl.submit({ ...EMPTY_DRAFT, text: 'And then this.' });
+
+          expect(mocks.rootLaunch).toHaveBeenCalledOnce();
+          expect(sent).toEqual([launched]);
+        }),
+    );
+
+    it.effect(
       "keeps a resume's run as the root when an earlier message's reply resumes the old one",
       () =>
         Effect.gen(function* () {

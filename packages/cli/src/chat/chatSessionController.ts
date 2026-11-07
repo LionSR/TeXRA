@@ -863,13 +863,24 @@ export function createChatSessionController(
       // one that failed) starts a fresh run, which picks its model again. A
       // run that does not start gives back only the skills: its failure is
       // in the transcript.
-      const root = runViewOf(currentView(), rootRunId.get());
+      const rootId = rootRunId.get();
+      const root = runViewOf(currentView(), rootId);
       if (
         root !== undefined &&
         (root.holder === 'here' ||
           (root.outcome === 'cancelled' && acceptsFollowUp(root)))
       )
         return yield* send(root.id, true);
+      // A root the view does not show yet: a launch whose run the session
+      // holds before the view (a service window's watch) has caught up. Its
+      // stored rows say it is the run, so the message goes to it rather than
+      // starting a second root beside it.
+      if (
+        root === undefined &&
+        rootId !== undefined &&
+        (yield* runSession.records(rootId).exists())
+      )
+        return yield* send(rootId, true);
       const started = yield* startSession(
         prepared.instruction,
         mediaFiles,
