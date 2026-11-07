@@ -15,10 +15,7 @@
 // the spec's timestamp tolerance against replay).
 
 // Local imports
-import {
-  checkEmailDomain,
-  checkGitHubAccountAge,
-} from '../_shared/emailPolicy.ts';
+import { checkEmailDomain, checkGitHubAccountAge } from './emailPolicy.ts';
 import { createWebhookVerifier } from './webhookVerification.ts';
 
 const webhook = createWebhookVerifier(

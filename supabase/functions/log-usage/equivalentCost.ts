@@ -1,24 +1,19 @@
 /**
- * List-price equivalent cost for subscription-backed usage entries.
+ * List-price equivalent cost for the subscription-backed usage entries of
+ * released (0.40) clients.
  *
- * Subscription rounds (ChatGPT/Codex, Kimi Code, Grok) reach the client's
- * pricing layer with zeroed rates (`zeroCostAccessOverrides` in
- * `packages/llm/src/models/modelRoute.ts`), so their entries arrive here
- * with `cost: 0` even though llm-zoo still carries the models' API list
- * prices. This module recovers the notional cost server-side so
- * `subscription_usage_logs.cost` answers "what would this usage have cost at
- * list price" for every client version, old or new.
+ * A 0.40 client prices a subscription round (ChatGPT/Codex, Kimi Code, Grok,
+ * the GLM coding plan) at zeroed rates, so its entry arrives with `cost: 0`
+ * even though llm-zoo still carries the model's API list price. This module
+ * recovers that price, so `subscription_usage_logs.cost` answers "what would
+ * this usage have cost at list price". Current clients send the list price
+ * themselves (`log-usage-v2`).
  *
- * Formula parity: mirrors the client's `standardCost`
- * (`packages/harness/src/agent/runtime/run/pricing.ts`) on the wire fields. The client reports
- * `inputTokens` as cache-MISS tokens (`UsageMonitor.logToBackend` sends
- * `usage.cacheMissInputTokens`) with cached tokens separate, so
- *   miss·in + cached·in·discount + (output + separate reasoning)·out
- * is algebraically the client's inclusive-cache formula
- *   input·in − cached·in·(1−discount) + output·out + separate reasoning·out.
+ * The 0.40 client reports `inputTokens` as cache-MISS tokens, with cached
+ * tokens separate (its `UsageMonitor.logToBackend`), so the cost is
+ *   miss·in + cached·in·discount + (output + separate reasoning)·out.
  * Reasoning tokens are already inside the output count for every provider
- * but xAI, whose receipts count them beside it (`responsesUsage` in
- * `packages/llm/src/openaiResponsesUsage.ts`); only there are they added.
+ * but xAI, whose receipts count them beside it; only there are they added.
  */
 
 import {
@@ -33,11 +28,11 @@ import {
 } from './usageValidation.ts';
 
 /**
- * Catalog entries keyed by the provider's API model id, the `model` every
- * client version sends. Each function pins its own llm-zoo (`log-usage` 2.0,
- * `log-usage-v2` 4.0), and both cover every id 1.x priced. A fast
- * service tier is a rate table inside the entry, so the entry's own rates
- * are the standard tier. A short name is the fallback key.
+ * Catalog entries keyed by API model id, with the short name as the
+ * fallback key, for the `model` a 0.40 client sends. This function's
+ * llm-zoo pin (2.0) covers every id the 0.40 clients' llm-zoo 1.x priced. A
+ * fast service tier is a rate table inside the entry, so the entry's own
+ * rates are the standard tier.
  */
 const [configById, configByShortName] = (() => {
   const byId = new Map<string, ModelConfig>();

@@ -52,7 +52,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
       const session = new TuiSession();
       session.markRunPending(Effect.never, Effect.void);
       await Promise.resolve();
-      updates.dispose();
+      updates.suspend();
       expect(writeSync).not.toHaveBeenCalled();
 
       terminalCapabilities.set({
@@ -68,7 +68,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
         1,
         '\x1b]0;{T}·evil]0;pwned\x07',
       );
-      capableUpdates.dispose();
+      capableUpdates.suspend();
     });
   });
 });

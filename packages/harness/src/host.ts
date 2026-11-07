@@ -180,7 +180,11 @@ export type { UsageAttribution } from '@agent/runtime/run/pricing';
 export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 export { getHelperModelName } from '@agent/runtime/helperModelName';
 // Where every model call's usage goes, and the entry a sender ships.
-export { UsageLog, type UsageLogEntry } from '@shared/usageLog';
+export {
+  UsageLog,
+  UsageLogEntrySchema,
+  type UsageLogEntry,
+} from '@shared/usageLog';
 // The rooted file systems plugins read, and their layers outside a run.
 export {
   GlobalStorageFs,

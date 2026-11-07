@@ -40,9 +40,8 @@ export class ToolAvailability extends Context.Service<
      * Probe every plugin for `inputs`' workspace and publish the results:
      * the round after the one in flight for that root reads `inputs` (or
      * newer ones another caller asked with), and every caller asking while
-     * it waits shares it. Tools recently found missing are looked up again,
-     * so one installed since shows up. Each plugin's probe has its own
-     * deadline and reports a failure as `unknown`, so this never fails.
+     * it waits shares it. Each plugin's probe has its own deadline and
+     * reports a failure as `unknown`, so this never fails.
      */
     readonly refresh: (
       inputs: ToolProbeInputs,

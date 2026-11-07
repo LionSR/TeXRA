@@ -8,7 +8,7 @@
  * up to the binding's automatic retries. A subscription token the provider
  * rejects is llm's to renew, inside the request.
  */
-import { Clock, Effect } from 'effect';
+import { Duration, Effect } from 'effect';
 import {
   completedTurn,
   ModelError,
@@ -65,14 +65,20 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* (
       return yield* Effect.die(
         new Error('A call off a run prepared as background work.'),
       );
-    const started = yield* Clock.currentTimeMillis;
-    const turn = yield* completedTurn(bound.model.streamTurn(prepared));
-    const usage = priceTurnUsage(
+    // Timed on the monotonic clock, which a wall-clock step cannot reverse.
+    const [elapsed, turn] = yield* Effect.timed(
+      completedTurn(bound.model.streamTurn(prepared)),
+    );
+    const responseTimeMs = Duration.toMillis(elapsed);
+    const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
+    yield* reportUsage(
+      usageLog,
       bound,
       turn.usage,
-      (yield* Clock.currentTimeMillis) - started,
+      responseTimeMs,
+      call.attribution,
+      call.settings,
     );
-    yield* reportUsage(usageLog, bound, usage, call.attribution, call.settings);
     return { turn, usage };
   });
   return yield* Effect.flatMap(call.binding, (bound) =>

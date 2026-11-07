@@ -3,56 +3,26 @@ import { fileURLToPath } from 'node:url';
 
 import YAML from 'yaml';
 
+// The signed build; `electron-builder.yml` is the unsigned one. The installer
+// job's `node scripts/verify-desktop.mjs signing-env` chooses this config only
+// once a platform's credentials are complete, so it signs unconditionally: a
+// missing signing identity or Azure setting fails the build instead of
+// building unsigned. (A missing App Store Connect key is electron-builder's to
+// report: it warns and skips notarization.)
 const configPath = fileURLToPath(
   new URL('electron-builder.yml', import.meta.url),
 );
 const baseConfig = YAML.parse(readFileSync(configPath, 'utf8')) ?? {};
 
-function hasEnv(name) {
-  return Boolean(process.env[name]);
-}
-
-function hasAppleNotarizationCredentials() {
-  return (
-    hasEnv('APPLE_API_KEY') &&
-    hasEnv('APPLE_API_KEY_ID') &&
-    hasEnv('APPLE_API_ISSUER')
-  );
-}
-
-function hasMacSigningCredentials() {
-  return hasEnv('CSC_LINK') && hasEnv('CSC_KEY_PASSWORD');
-}
-
-function windowsAzureSignOptions() {
-  const {
-    TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: publisherName,
-    TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ENDPOINT: endpoint,
-    TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME:
-      certificateProfileName,
-    TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: codeSigningAccountName,
-  } = process.env;
-
-  if (
-    !publisherName ||
-    !endpoint ||
-    !certificateProfileName ||
-    !codeSigningAccountName
-  ) {
-    return undefined;
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `${name} is not set. electron-builder.signed.config.mjs always signs; package unsigned with electron-builder.yml.`,
+    );
   }
-
-  return {
-    publisherName,
-    endpoint,
-    certificateProfileName,
-    codeSigningAccountName,
-  };
+  return value;
 }
-
-const macSigningReady =
-  hasMacSigningCredentials() && hasAppleNotarizationCredentials();
-const azureSignOptions = windowsAzureSignOptions();
 
 export default {
   ...baseConfig,
@@ -60,22 +30,33 @@ export default {
     ...baseConfig.mac,
     hardenedRuntime: true,
     gatekeeperAssess: false,
-    notarize: macSigningReady,
-    forceCodeSigning: macSigningReady,
+    notarize: true,
+    forceCodeSigning: true,
   },
   // electron-builder notarizes only the app; the workflow notarizes and
   // staples the signed DMG after packaging.
   dmg: {
     ...baseConfig.dmg,
-    sign: macSigningReady,
+    sign: true,
   },
   win: {
     ...baseConfig.win,
-    ...(azureSignOptions
-      ? {
-          azureSignOptions,
-          forceCodeSigning: true,
-        }
-      : {}),
+    forceCodeSigning: true,
+    // Azure Trusted Signing runs where Windows is built; the macOS job has no
+    // Azure settings to read.
+    ...(process.platform === 'win32' && {
+      azureSignOptions: {
+        publisherName: requiredEnv(
+          'TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME',
+        ),
+        endpoint: requiredEnv('TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ENDPOINT'),
+        certificateProfileName: requiredEnv(
+          'TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME',
+        ),
+        codeSigningAccountName: requiredEnv(
+          'TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ACCOUNT_NAME',
+        ),
+      },
+    }),
   },
 };

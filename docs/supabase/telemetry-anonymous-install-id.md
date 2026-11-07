@@ -12,15 +12,20 @@ anonymous data goes to its own table.
 | `log-usage`    | `Authorization: Bearer` login JWT       | `usage_logs`, `subscription_usage_logs`       | already-released clients   |
 
 - Shared: `supabase/functions/_shared/logUsage.ts` (CORS, method, owner
-  resolution, JSON parse, batch validation and the 1000-entry cap, response
-  shapes), `usageValidation.ts`, `equivalentCost.ts` (including `storedCost`:
-  a subscription round with client cost 0 stores its llm-zoo list-price
-  equivalent). Per function: `index.ts` (one `serveLogUsage(resolver, store)`
-  call), `usageOwner.ts` (the resolver), the store (`log-usage-v2/installStore.ts`,
-  `log-usage/legacyStore.ts`), `deno.json` and `deno.lock` (same pins; keep both
-  in step, see the releasing skill).
+  resolution, JSON parse, batch validation against the function's schema,
+  response shapes). Per function: `index.ts` (one
+  `serveLogUsage(schema, resolver, store)` call), `usageOwner.ts` (the
+  resolver), the batch schema (`log-usage-v2/usageBatch.ts`,
+  `log-usage/usageValidation.ts`), the store (`log-usage-v2/installStore.ts`,
+  `log-usage/legacyStore.ts`), `deno.json` and `deno.lock`.
 - `log-usage-v2`: a stray `Authorization` header is ignored; a missing or
-  malformed install ID is a 401.
+  malformed install ID is a 401. The schema is exactly what the current
+  client sends; `cost` stores the `listCost` the client priced (a plan's call
+  at what it would cost on an API key), so the function carries no catalog.
+- `log-usage`: keeps the 0.40 wire's tolerances (nulls, the `relay` route,
+  `usedRelay`, `viaChatGptSubscription`, `agentCategory`), and
+  `log-usage/equivalentCost.ts` reprices a subscription round the client sent
+  at cost 0 from the function's own llm-zoo pin, which stays at 2.0.
 - `log-usage`: the bearer token must authenticate (else 401) and the install
   header is never read.
 - The sign-in system is gone, so `log-usage` is a legacy path that shrinks to
@@ -37,7 +42,7 @@ anonymous data goes to its own table.
   gives anonymous data no account link, deletes by `install_id`, and lets the
   legacy tables drop whole later.
 - The client sends one entry per model call (`reportUsage` in
-  `packages/harness/src/agent/runtime/run/modelCall.ts`, called once per call with that call's
+  `packages/harness/src/agent/runtime/run/pricing.ts`, called once per call with that call's
   usage): deltas, never cumulative snapshots. So the table is an event log:
   one row per entry, `UNIQUE (install_id, batch_id, entry_index)` makes a retry
   a no-op (`INSERT ... ON CONFLICT DO NOTHING`), and the function does a plain
@@ -91,7 +96,7 @@ header) keeps working for every client.
    carry no `Authorization` header before the function runs. Then smoke test
    `/functions/v1/log-usage-v2` with a throwaway UUID (no credentials beyond
    the public function URL):
-   `curl -i -X POST "$URL/functions/v1/log-usage-v2" -H 'Content-Type: application/json' -H 'X-TeXRA-Install-Id: 00000000-0000-4000-8000-000000000001' -d '{"batchId":"<uuid>","entries":[{"timestamp":"<iso>","model":"x","provider":"x","inputTokens":1,"outputTokens":1,"cost":0}]}'`
+   `curl -i -X POST "$URL/functions/v1/log-usage-v2" -H 'Content-Type: application/json' -H 'X-TeXRA-Install-Id: 00000000-0000-4000-8000-000000000001' -d '{"batchId":"<uuid>","entries":[{"timestamp":"<iso>","model":"x","provider":"x","inputTokens":1,"outputTokens":1,"listCost":0}]}'`
    expects 200 `accepted: 1`; repeat for `deduplicated`; no header and a
    malformed ID each expect 401. Then delete the test rows
    (`DELETE FROM public.install_usage_logs WHERE install_id = '00000000-0000-4000-8000-000000000001'`).
@@ -106,9 +111,6 @@ header) keeps working for every client.
    2. Then run `install-usage-logs-retire-legacy.sql`. Running it first would
       drop `install_id` and restore `user_id NOT NULL` under the live combined
       function, which would 500 on any install request until the redeploy.
-
-The pending llm-zoo 2.0 pricing change (#13602) rides along with whichever
-deploy happens next.
 
 ## Rollback
 

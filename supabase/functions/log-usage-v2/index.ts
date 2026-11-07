@@ -9,6 +9,7 @@
 
 import { serveLogUsage } from '../_shared/logUsage.ts';
 import { storeForInstall } from './installStore.ts';
+import { UsageBatchSchema } from './usageBatch.ts';
 import { resolveInstallOwner } from './usageOwner.ts';
 
-serveLogUsage(resolveInstallOwner, storeForInstall);
+serveLogUsage(UsageBatchSchema, resolveInstallOwner, storeForInstall);

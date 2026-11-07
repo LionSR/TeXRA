@@ -1,6 +1,16 @@
-/** Shared JSON response helpers for edge functions. */
+/**
+ * Shared HTTP helpers for edge functions: the bearer token a request carries
+ * and the JSON responses they answer with. No Supabase import, so a function
+ * that never talks to Supabase can use it.
+ */
 
 import { getCorsHeaders } from './cors.ts';
+
+/** The bearer token in the Authorization header, or null. */
+export function bearerToken(req: Request): string | null {
+  const authHeader = req.headers.get('Authorization');
+  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+}
 
 /** JSON response carrying CORS headers. */
 export function jsonResponse(
