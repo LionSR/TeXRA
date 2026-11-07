@@ -27,6 +27,7 @@ import {
 } from 'effect';
 
 import {
+  LaunchRefused,
   Rejected,
   RunFailure,
   ToolsRefused,
@@ -39,7 +40,6 @@ import {
 } from '@texra-ai/harness';
 import {
   activationView,
-  AgentError,
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
@@ -240,23 +240,23 @@ export const environmentApiKeys = (): Readonly<Record<string, string>> =>
   );
 
 /** A failure of a call to the service, as a run's own. */
-const runFailure = (message: string, cause: Error = new Error(message)) =>
-  new RunFailure({ cause, message });
+const runFailure = (message: string) =>
+  new RunFailure({ cause: new Error(message), message });
 
-/** The service's answer to a start or resume it did not run, worded
- *  `message`, as this window's own refused launch: its notice
- *  (`TaskFailed.notice`) rides it, for this window's presenter to show. */
-const refusedByService = (
-  message: string,
-  error: TaskFailed | { readonly _tag: 'RpcClientError' },
-) =>
-  runFailure(
-    message,
-    new AgentError({
-      message,
-      notice: error._tag === 'TaskFailed' ? error.notice : undefined,
-    }),
-  );
+/** The service's answer to a start or resume it did not run: a refused
+ *  launch as itself, for this window's presenter to show with its notice,
+ *  anything else worded `prefix` and its message, as the run's own. */
+const refusedByService =
+  (prefix = '') =>
+  (
+    error:
+      | TaskFailed
+      | LaunchRefused
+      | { readonly _tag: 'RpcClientError'; readonly message: string },
+  ) =>
+    error._tag === 'LaunchRefused'
+      ? error
+      : runFailure(`${prefix}${error.message}`);
 
 /**
  * The session of `workspace` in the service, keyed by `roots.storage` (the
@@ -609,7 +609,9 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     start: ({ tools, ...start }) => {
       if (!('config' in start))
         // The service takes a host's whole configuration.
-        return Effect.fail(runFailure('A service task needs its config.'));
+        return Effect.fail(
+          new LaunchRefused({ message: 'A service task needs its config.' }),
+        );
       const refused = windowTools(tools);
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
@@ -617,11 +619,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           workspace,
           start: { ...start, apiKeys: start.apiKeys ?? environmentApiKeys() },
         }).pipe(
-          Effect.mapError((error) =>
-            refusedByService(
-              `The TeXRA service could not start the task: ${error.message}`,
-              error,
-            ),
+          Effect.mapError(
+            refusedByService('The TeXRA service could not start the task: '),
           ),
         ),
       ).pipe(Effect.flatMap(runOf));
@@ -634,9 +633,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           workspace,
           runId,
           apiKeys: input?.apiKeys ?? environmentApiKeys(),
-        }).pipe(
-          Effect.mapError((error) => refusedByService(error.message, error)),
-        ),
+        }).pipe(Effect.mapError(refusedByService())),
       ).pipe(
         Effect.flatMap((resumed) =>
           runOf(resumed, resumed.runId === runId ? undefined : runId),

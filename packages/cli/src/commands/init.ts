@@ -108,13 +108,12 @@ function initTextSummary(summary: InitSummary): string {
 }
 
 function emitInitSummary(
-  context: CliContext,
   filePath: string,
   answers: InitAnswers,
   config: InitConfigShape,
   models: readonly CliModelAccess[],
   gitignore: GitignoreOutcome | undefined,
-): void {
+) {
   const warning = initWarning(answers, models);
   const summary: InitSummary = {
     path: filePath,
@@ -126,7 +125,7 @@ function emitInitSummary(
     warning,
     next: initNextSteps(warning),
   };
-  emitCliResult(context, {
+  return emitCliResult({
     json: summary,
     ndjson: { kind: 'init-config', init: summary },
     text: initTextSummary(summary),
@@ -200,7 +199,7 @@ const runInit = Effect.fn('runInit')(function* (
     ? yield* ensureTexraGitignored(context.cwd)
     : undefined;
 
-  emitInitSummary(context, filePath, answers, config, models, gitignoreOutcome);
+  yield* emitInitSummary(filePath, answers, config, models, gitignoreOutcome);
   return CliExitCode.Success;
 });
 

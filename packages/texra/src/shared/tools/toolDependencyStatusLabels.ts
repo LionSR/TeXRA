@@ -1,4 +1,4 @@
-import type { ToolDependencyStatus } from '@texra/shared/tools/toolPlugin';
+import type { ToolDependencyStatus } from '@texra-ai/harness/schemas';
 
 const TOOL_DEPENDENCY_STATUS_FALLBACK_LABELS = {
   available: 'Ready',

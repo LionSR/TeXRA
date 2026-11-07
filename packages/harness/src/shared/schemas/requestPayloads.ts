@@ -11,14 +11,14 @@ import {
 } from './proposalFields';
 import { DeclinableUsageRouteSchema } from './usage';
 
-/** Common permission request fields */
-const PermissionBaseSchema = Schema.Struct({
+/** The fields the bash, tool edit and question requests share. */
+const RequestBaseSchema = Schema.Struct({
   requestId: Schema.String,
   allowBypass: Schema.Boolean,
   runId: RunSelectionSchema,
 });
 
-export const ToolEditPermissionSchema = PermissionBaseSchema.mapFields(
+export const ToolEditRequestSchema = RequestBaseSchema.mapFields(
   Struct.assign({
     path: Schema.String,
     relativePath: Schema.String,
@@ -31,7 +31,7 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.mapFields(
     content: Sha256Schema,
   }),
 );
-export type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
+export type ToolEditRequest = typeof ToolEditRequestSchema.Type;
 
 /** One unified-diff hunk: the line ranges it spans on each side, and its
  *  lines, each marked ` `, `-` or `+` (`\` notes a missing final newline). */
@@ -48,7 +48,7 @@ const DiffHunkSchema = Schema.Struct({
  *  the diff between them, computed once where the request is built: its
  *  hunks and the 0-based line of the proposed text a diff view reveals
  *  first (null when nothing changed). `request.preview` reads the stored
- *  proposal named by `ToolEditPermission.content` and renders a missing
+ *  proposal named by `ToolEditRequest.content` and renders a missing
  *  original file as empty text. The stored proposal distinguishes absence
  *  from an empty file so applying it detects concurrent creation. */
 export const ToolEditContentSchema = Schema.Struct({
@@ -87,7 +87,7 @@ export const readToolEditContent = (
   readBlobs: (
     digests: readonly string[],
   ) => Effect.Effect<ReadonlyMap<string, string>, Error>,
-  address: ToolEditPermission['content'],
+  address: ToolEditRequest['content'],
 ): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
   Effect.map(Effect.orDie(readBlobs([address])), (held) => {
     const text = held.get(address);
@@ -98,13 +98,13 @@ export const readToolEditContent = (
     )(text);
   });
 
-export const BashPermissionSchema = PermissionBaseSchema.mapFields(
+export const BashRequestSchema = RequestBaseSchema.mapFields(
   Struct.assign({
     command: Schema.String,
     cwd: Schema.optional(Schema.String),
   }),
 );
-export type BashPermission = typeof BashPermissionSchema.Type;
+export type BashRequest = typeof BashRequestSchema.Type;
 
 /**
  * The API-key providers a stored retry offer names. Storage owns the enum
@@ -143,7 +143,7 @@ export const CredentialSwitchSchema = Schema.Union([
 ]);
 export type CredentialSwitch = typeof CredentialSwitchSchema.Type;
 
-export const RetryPermissionSchema = Schema.Struct({
+export const RetryRequestSchema = Schema.Struct({
   requestId: Schema.String,
   runId: RunIdSchema,
   operation: Schema.String,
@@ -154,7 +154,7 @@ export const RetryPermissionSchema = Schema.Struct({
   /** Null or absent when the failure offers no credential move. */
   credentialSwitch: Schema.optional(Schema.NullOr(CredentialSwitchSchema)),
 });
-export type RetryPermission = typeof RetryPermissionSchema.Type;
+export type RetryRequest = typeof RetryRequestSchema.Type;
 
 /**
  * A delegation awaiting approval: the agent and its prompt, and, for a
@@ -172,7 +172,7 @@ export const AgentProposalSchema = BaseProposalFieldsSchema.mapFields(
 );
 export type AgentProposal = typeof AgentProposalSchema.Type;
 
-export const AgentProposalPermissionSchema = AgentProposalSchema.mapFields(
+export const AgentProposalRequestSchema = AgentProposalSchema.mapFields(
   Struct.assign({
     requestId: Schema.String,
     /** Whether a grant turned on while it waits answers it: false when a
@@ -181,8 +181,7 @@ export const AgentProposalPermissionSchema = AgentProposalSchema.mapFields(
     runId: RunIdSchema,
   }),
 );
-export type AgentProposalPermission =
-  (typeof AgentProposalPermissionSchema)['Type'];
+export type AgentProposalRequest = (typeof AgentProposalRequestSchema)['Type'];
 
 // ============================================================================
 // User Question
@@ -212,7 +211,7 @@ export const UserQuestionAnswersSchema = Schema.Record(
 );
 export type UserQuestionAnswers = typeof UserQuestionAnswersSchema.Type;
 
-export const UserQuestionPermissionSchema = PermissionBaseSchema.mapFields(
+export const UserQuestionRequestSchema = RequestBaseSchema.mapFields(
   Struct.assign({
     questions: Schema.Array(UserQuestionPromptSchema)
       .check(Schema.isMinLength(1))
@@ -220,17 +219,15 @@ export const UserQuestionPermissionSchema = PermissionBaseSchema.mapFields(
     context: Schema.optional(Schema.NullOr(Schema.String)),
   }),
 );
-export type UserQuestionPermission =
-  (typeof UserQuestionPermissionSchema)['Type'];
+export type UserQuestionRequest = (typeof UserQuestionRequestSchema)['Type'];
 
 // ============================================================================
 // Plan Approval
 // ============================================================================
 
-export const PlanApprovalPermissionSchema = Schema.Struct({
+export const PlanApprovalRequestSchema = Schema.Struct({
   requestId: Schema.String,
   runId: RunIdSchema,
   plan: PlanSchema,
 });
-export type PlanApprovalPermission =
-  (typeof PlanApprovalPermissionSchema)['Type'];
+export type PlanApprovalRequest = (typeof PlanApprovalRequestSchema)['Type'];

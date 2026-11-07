@@ -235,8 +235,8 @@ console.log(result.outcome);
 ```
 
 `session.start` validates its input itself: a refusal before any model work
-fails it with a tagged error (`AgentNotFound`, `ToolsRefused`); an input its
-schemas reject fails it with `RunFailure` before admission too (`admitInput`,
+fails it with a tagged error (`LaunchRefused`, `ToolsRefused`); an input its
+schemas reject fails it with `LaunchRefused` before admission too (`admitInput`,
 `packages/harness/src/effect/sessionPrograms.ts:94-137`, wraps
 `InlinePersonaSchema.parse` and `AgentConfigSchema.parse`, so a typed
 `temperature: 2` is one); and a failure after admission fails the handle's
@@ -558,7 +558,7 @@ than being repeated per host.
    session.
 5. **Some failure modes cluster at run time, not startup.** Skipping
    `AgentCatalog.refresh` is harmless: the catalog loads on the first miss.
-   Resolution fails for an agent no source holds (`AgentNotFound`), a load
+   Resolution fails for an agent no source holds (`LaunchRefused`), a load
    that fails (`AgentCatalogLoadError`), or a failed workspace-state read
    (`StateReadFailed`). A request nobody decides parks
    the run mid-way (§3). None of these fails fast at bootstrap.

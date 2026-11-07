@@ -6,7 +6,7 @@ import { requireRun, executed } from '@texra-ai/harness/plugins';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
-  type UserQuestionPermission,
+  type UserQuestionRequest,
 } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'UserQuestionTool';
@@ -47,7 +47,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     withLogChannel(CHANNEL),
   );
 
-  const permission: UserQuestionPermission = {
+  const permission: UserQuestionRequest = {
     requestId,
     questions: input.questions,
     context: input.context ?? undefined,

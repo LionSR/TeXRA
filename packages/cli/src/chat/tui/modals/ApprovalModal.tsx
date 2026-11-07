@@ -5,16 +5,16 @@
 import { absurd } from 'effect';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { AgentProposal } from './AgentProposal';
-import { BashApproval } from './BashApproval';
-import { EditApproval } from './EditApproval';
-import { PlanApproval } from './PlanApproval';
+import { BashRequest } from './BashRequest';
+import { ToolEditRequest } from './ToolEditRequest';
+import { PlanRequest } from './PlanRequest';
 import { RetryRequest } from './RetryRequest';
 import { UserQuestion } from './UserQuestion';
-import type { ApprovalPayload } from '../state/approvalQueue';
+import type { TuiRequest } from '../state/approvalQueue';
 
 interface ApprovalModalProps {
   readonly availableRows?: number;
-  readonly payload: ApprovalPayload;
+  readonly payload: TuiRequest;
   /** Land the user's decision on the request. */
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
@@ -24,7 +24,7 @@ export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
   switch (payload.kind) {
     case 'bash':
       return (
-        <BashApproval
+        <BashRequest
           availableRows={availableRows}
           payload={payload.data}
           onDecide={onDecide}
@@ -32,7 +32,7 @@ export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
       );
     case 'toolEdit':
       return (
-        <EditApproval
+        <ToolEditRequest
           availableRows={availableRows}
           payload={payload}
           onDecide={onDecide}
@@ -40,7 +40,7 @@ export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
       );
     case 'planApproval':
       return (
-        <PlanApproval
+        <PlanRequest
           availableRows={availableRows}
           payload={payload.data}
           onDecide={onDecide}

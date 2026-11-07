@@ -27,7 +27,7 @@ import {
 } from '../state/cliState';
 import {
   pendingApprovalKindsByRun,
-  type PendingApprovalKind,
+  type PendingRequestKind,
 } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
 import type { RunId, RunView } from '@texra-ai/harness/schemas';
@@ -99,7 +99,7 @@ function SessionRow({
   readonly expanded: boolean;
   readonly metadataColumn: boolean;
   readonly nowMs: number;
-  readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
+  readonly pendingKinds: readonly PendingRequestKind[] | undefined;
   readonly run: RunView;
 }): React.JSX.Element {
   const statusLabel = runStatus(run).word;

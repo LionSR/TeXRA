@@ -103,7 +103,7 @@ export {
   ToolsRefused,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';
-export { AgentNotFound } from '@agent/index/agentCatalog';
+export { LaunchRefused } from '@common/errors/agentErrors';
 export {
   DatabaseOpenFailed,
   DatabaseReadFailed,

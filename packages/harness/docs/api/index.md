@@ -52,17 +52,6 @@ type AgentEvent =
   | StreamChunkEvent;
 ```
 
-## AgentNotFound
-
-No agent of that name in the catalog, with what the last load said.
-
-```ts
-class AgentNotFound extends Schema.TaggedError<AgentNotFound>()(
-  'AgentNotFound',
-  { agent: Schema.String, message: Schema.String },
-)
-```
-
 ## AgentPlatform
 
 The process services the package composes, together with the workspace
@@ -355,7 +344,24 @@ branches on. A run that fails after admission fails with
 {@link RunFailure} instead.
 
 ```ts
-type LaunchError = AgentNotFound | ToolsRefused;
+type LaunchError = LaunchRefused | ToolsRefused;
+```
+
+## LaunchRefused
+
+A launch refused before its run exists, for an input its caller supplied:
+an unknown agent or model (each with the `notice` a host shows in place of
+the message), a persona or configuration its schema rejects, or a run id
+already in use.
+
+```ts
+class LaunchRefused extends Schema.TaggedError<LaunchRefused>()(
+  'LaunchRefused',
+  {
+    message: Schema.String,
+    notice: Schema.optional(LaunchNoticeSchema),
+  },
+)
 ```
 
 ## LocalSession
@@ -716,8 +722,8 @@ type RunEnd = typeof RunEndSchema.Type;
 
 ## RunFailure
 
-A run that failed on its own. `cause` is exactly what the launch path
-threw.
+A run that failed on its own: an activation with no readable end.
+`cause` is exactly what the launch path threw.
 
 ```ts
 class RunFailure extends Schema.TaggedError<RunFailure>()('RunFailure', {
@@ -853,9 +859,9 @@ interface Session {
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
-   * returned to you and shown to no host: a launch refused for an unknown
-   * model, or for a `config` naming an unknown agent, carries the notice a
-   * host shows for it (`launchNoticeOf` in `./host`).
+   * returned to you and shown to no host: an input the launch will not run
+   * is a `LaunchRefused`, which for an unknown agent or model carries
+   * the notice a host shows for it.
    */
   readonly start: (
     input: StartInput,
@@ -872,7 +878,7 @@ interface Session {
   readonly resume: (
     runId: RunId,
     input?: ResumeInput,
-  ) => Effect.Effect<Run, ResumeRefused | ToolsRefused | RunFailure>;
+  ) => Effect.Effect<Run, ResumeRefused | LaunchError | RunFailure>;
   /** Everything else you ask of the session, as one typed request
    *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).

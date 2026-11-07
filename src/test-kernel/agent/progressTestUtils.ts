@@ -10,7 +10,7 @@ import {
 // Local imports
 import { defineTool } from '@texra-ai/harness';
 import {
-  type BashPermission,
+  type BashRequest,
   type DisplaySessionEvent,
   qualifyAggregateId,
   type RequestDecision,
@@ -209,7 +209,7 @@ export function bashApprovalRequest(request: {
   readonly command: string;
   readonly cwd?: string;
   readonly runId?: RunId;
-}): BashPermission {
+}): BashRequest {
   return {
     requestId: `bash-${crypto.randomUUID()}`,
     command: request.command,

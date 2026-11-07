@@ -19,7 +19,7 @@ import type { Surface, SurfaceAction } from '@texra/shared/session/surface';
 
 type Launch = Surface['launch'];
 /** An agent proposal as the view holds it. */
-type AgentProposalPermission = Extract<
+type AgentProposalRequest = Extract<
   SessionView['requests'][number]['payload'],
   { kind: 'proposal' }
 >['data'];
@@ -27,16 +27,13 @@ type LaunchPatch = Extract<SurfaceAction, { kind: 'launch' }>['patch'];
 
 /** The proposal's agent as an option value: options carry source-qualified
  *  keys, and a proposal with no source names the agent bare. */
-function proposedAgentKey({ agent, agentSource }: AgentProposalPermission) {
+function proposedAgentKey({ agent, agentSource }: AgentProposalRequest) {
   return agentSource == null ? agent : agentKey(agentSource, agent);
 }
 
 /** Whether an agent option value (a key) is the proposal's agent: the
  *  exact key, or, for a proposal with no source, any key of that name. */
-function isProposedAgent(
-  value: string,
-  data: AgentProposalPermission,
-): boolean {
+function isProposedAgent(value: string, data: AgentProposalRequest): boolean {
   return (
     value === proposedAgentKey(data) ||
     (data.agentSource == null && agentName(value) === data.agent)
@@ -47,7 +44,7 @@ function isProposedAgent(
 export function editedProposal(
   surface: Surface,
   view: SessionView,
-): { readonly data: AgentProposalPermission; readonly run?: RunView } | null {
+): { readonly data: AgentProposalRequest; readonly run?: RunView } | null {
   const editing = surface.shown;
   if (editing._tag !== 'Proposal') return null;
   const request = view.requests.find(
@@ -67,7 +64,7 @@ export function editedProposal(
  * what was proposed.
  */
 function proposalAgentOptions(
-  data: AgentProposalPermission,
+  data: AgentProposalRequest,
   run: RunView | undefined,
   host: HostSnapshot,
 ): HostSnapshot['agentOptions'] {
@@ -111,7 +108,7 @@ export function formHost(
 
 /** The launch form filled with what the proposal would launch. */
 export function proposalLaunchPatch(
-  data: AgentProposalPermission,
+  data: AgentProposalRequest,
   run: RunView | undefined,
   host: HostSnapshot,
 ): LaunchPatch {
@@ -141,7 +138,7 @@ export function proposalLaunchPatch(
  *  agent and model when they differ from it, and its instruction, files
  *  and, for a task, options, which the run compares with the proposal. */
 export function proposalApproval(
-  data: AgentProposalPermission,
+  data: AgentProposalRequest,
   launch: Launch,
 ): Extract<RequestDecision, { action: 'approve' }> {
   return {

@@ -1,4 +1,4 @@
-import { Predicate } from 'effect';
+import { Predicate, Record as EffectRecord } from 'effect';
 import { type ScriptTally } from '@shared/schemas';
 
 const CALL_FILE_PREVIEW_LIMIT = 3;
@@ -24,12 +24,14 @@ export function formatWorkflowCallFiles(files: {
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
-const TALLY_OUTCOMES = [
-  'ok',
-  'failed',
-  'cancelled',
-  'skipped',
-] as const satisfies readonly (keyof ScriptTally)[];
+/** The outcomes a tally counts, in the order it reads them; `total` is
+ *  their sum, not an outcome. */
+const TALLY_OUTCOMES = EffectRecord.keys({
+  ok: true,
+  failed: true,
+  cancelled: true,
+  skipped: true,
+} satisfies Record<Exclude<keyof ScriptTally, 'total'>, true>);
 
 /** `6 ok · 1 failed · 1 cancelled` — the one spelling of a tally, by outcome,
  *  so no count can read as "done" beside a failure it includes. */

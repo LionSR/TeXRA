@@ -43,10 +43,7 @@ import {
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
 import type { GlobalValues, ProcessRuntime } from '@texra-ai/harness/host';
-import type {
-  ApprovalPayload,
-  PendingApprovalFact,
-} from '../state/approvalQueue';
+import type { TuiRequest, PendingApprovalFact } from '../state/approvalQueue';
 
 /** The service's client, through the chat's link. */
 type ConnectService = () => Effect.Effect<
@@ -228,7 +225,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     );
   });
 
-  const presentable = ((): ApprovalPayload | undefined => {
+  const presentable = ((): TuiRequest | undefined => {
     if (!pending) return undefined;
     const { payload } = pending;
     switch (payload.kind) {

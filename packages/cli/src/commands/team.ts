@@ -7,7 +7,11 @@ import { findTeamPreset, planTeamRun } from '@texra/shared/teamPlan';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
-import { failUsage, type CliContext } from '../runtime/cliContext';
+import {
+  failUsage,
+  type CliContext,
+  type CliInvocation,
+} from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   initCliPlatform,
@@ -89,7 +93,6 @@ function formatAttachedFileList(
 }
 
 const runTeamList = Effect.fn('runTeamList')(function* (
-  context: CliContext,
   services: CliPlatformServices,
 ) {
   const plans = planTeamRuns(yield* readCliTeams(services.repoState), {
@@ -97,7 +100,7 @@ const runTeamList = Effect.fn('runTeamList')(function* (
     rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
   });
 
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: plans.map(cliTeamListRecord),
     ndjson: cliTeamNdjsonRecords(plans),
     text: formatCliTeamList(plans),
@@ -106,13 +109,12 @@ const runTeamList = Effect.fn('runTeamList')(function* (
 });
 
 const runTeamShow = Effect.fn('runTeamShow')(function* (
-  context: CliContext,
   teamIdOrName: string,
   services: CliPlatformServices,
 ) {
   const plan = yield* loadTeamRunPlan({ team: teamIdOrName }, services);
 
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: plan,
     ndjson: { kind: 'team-inspection', plan },
     text: formatCliTeamInspection(plan),
@@ -123,7 +125,7 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
 const runTeam = Effect.fn('runTeam')(function* (
   context: CliContext,
   init: TeamRunInit,
-): Effect.fn.Return<number, Error, ProcessServices> {
+): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   const hasInstruction = instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInstruction) {
@@ -229,7 +231,7 @@ const runTeam = Effect.fn('runTeam')(function* (
         rootAgent: rootAgent.name,
         result: run.result,
       };
-      emitCliResult(runContext, {
+      yield* emitCliResult({
         json: payload,
         ndjson: { kind: 'team-result', ...payload },
         text: toolUseResultText(run.result),
@@ -247,7 +249,7 @@ const teamListCommand = defineCliCommand({
   },
   run: Effect.fn('team.run')(function* (context) {
     const services = yield* initCliPlatform(context);
-    return yield* runTeamList(context, services);
+    return yield* runTeamList(services);
   }),
 });
 
@@ -266,7 +268,7 @@ const teamShowCommand = defineCliCommand({
   },
   run: Effect.fn('team.run')(function* (context, ctx) {
     const services = yield* initCliPlatform(context);
-    return yield* runTeamShow(context, ctx.args.team, services);
+    return yield* runTeamShow(ctx.args.team, services);
   }),
 });
 

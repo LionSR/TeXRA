@@ -29,7 +29,7 @@ import {
   launchApproval,
   launchApprovalNotice,
   projectApprovalPolicy,
-  type CliContext,
+  CliInvocation,
 } from '../runtime/cliContext';
 import {
   isLinked,
@@ -83,23 +83,23 @@ function findTask(client: ServiceClient, id: string) {
 
 /** The service's client, through the platform's link; a command that
  *  holds none fails with why. */
-const serviceClient = (context: CliContext) =>
+const serviceClient = CliInvocation.use(({ context }) =>
   Effect.flatMap(
     initCliPlatform({ ...context, startsService: true }),
     ({ service }: { readonly service: CliServiceLink }) =>
       isLinked(service)
         ? linkClient(service)
         : Effect.fail(new Error(service.none)),
-  );
+  ),
+);
 
 /** One request to the task `id` names, refused as a usage error. */
 function requestTask<R extends RuntimeRequest>(
-  context: CliContext,
   id: string,
   request: (runId: RunId) => R,
 ) {
   return Effect.gen(function* () {
-    const { client } = yield* serviceClient(context);
+    const { client } = yield* serviceClient;
     const task = yield* findTask(client, id);
     const outcome = yield* requestOnService(
       client,
@@ -129,10 +129,10 @@ const listCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS },
   catchExitCode: CliExitCode.AgentError,
-  run: Effect.fn('run')(function* (context) {
-    const { client } = yield* serviceClient(context);
+  run: Effect.fn('run')(function* () {
+    const { client } = yield* serviceClient;
     const tasks = yield* client['tasks.list']({ all: false });
-    emitCliResult(context, {
+    yield* emitCliResult({
       json: tasks,
       ndjson: tasks.map((task) => ({ kind: 'task' as const, task })),
       text: tasks.length
@@ -159,7 +159,7 @@ const attachCommand = defineCliCommand({
           '`texra tasks attach` prints text or NDJSON (`--output-format ndjson`), not JSON.',
       });
     return Effect.gen(function* () {
-      const { client } = yield* serviceClient(context);
+      const { client } = yield* serviceClient;
       const task = yield* findTask(client, ctx.args.id);
       const outcome = yield* attachTask(client, task, {
         format: context.outputFormat === 'ndjson' ? 'ndjson' : 'text',
@@ -251,7 +251,7 @@ const startCommand = defineCliCommand({
         },
       }),
     ).pipe(Effect.mapError(ensureError));
-    emitCliResult(context, {
+    yield* emitCliResult({
       json: { runId, workspace: context.cwd },
       ndjson: { kind: 'task', task: { runId, workspace: context.cwd } },
       text: runId,
@@ -272,20 +272,19 @@ const sendCommand = defineCliCommand({
     },
   },
   catchExitCode: CliExitCode.AgentError,
-  run: (context, ctx) =>
-    requestTask(context, ctx.args.id, (runId) => ({
+  run: (_, ctx) =>
+    requestTask(ctx.args.id, (runId) => ({
       kind: 'followUp.send',
       runId,
       text: ctx.args.text,
     })).pipe(
-      Effect.map(({ task, outcome }) => {
+      Effect.flatMap(({ task, outcome }) => {
         const { status } = outcome;
-        emitCliResult(context, {
+        return emitCliResult({
           json: { runId: task.runId, status },
           ndjson: { kind: 'task', task: { runId: task.runId, status } },
           text: `Follow-up ${status} to ${task.runId}.`,
-        });
-        return CliExitCode.Success;
+        }).pipe(Effect.as(CliExitCode.Success));
       }),
     ),
 });
@@ -297,20 +296,19 @@ const stopCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS, id: TASK_ID_ARG },
   catchExitCode: CliExitCode.AgentError,
-  run: (context, ctx) =>
-    requestTask(context, ctx.args.id, (runId) => ({
+  run: (_, ctx) =>
+    requestTask(ctx.args.id, (runId) => ({
       kind: 'run.stop',
       runId,
       reason: 'user',
     })).pipe(
-      Effect.map(({ task }) => {
-        emitCliResult(context, {
+      Effect.flatMap(({ task }) =>
+        emitCliResult({
           json: { runId: task.runId, stopped: true },
           ndjson: { kind: 'task', task: { runId: task.runId, stopped: true } },
           text: `Stopped ${task.runId}.`,
-        });
-        return CliExitCode.Success;
-      }),
+        }).pipe(Effect.as(CliExitCode.Success)),
+      ),
     ),
 });
 

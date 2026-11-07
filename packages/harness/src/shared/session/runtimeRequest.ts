@@ -18,8 +18,8 @@ import { Schema, Struct } from 'effect';
 import {
   APPROVAL_BYPASS_KINDS,
   APPROVAL_POLICY_LIMITS,
+  LaunchApprovalSchema,
 } from '@shared/approvalBypassKind';
-import { ApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
   AgentConfigSchema,
   FollowUpReceiptSchema,
@@ -309,14 +309,9 @@ export const StartOptionsSchema = Schema.Struct({
   continues: Schema.optional(RunIdSchema),
   /** Run on the configured helper model instead of the selected one. */
   helperModel: Schema.optional(Schema.Boolean),
-  /** A stricter approval policy for this run (it only narrows the
-   *  project's), and whether the work it delegates starts approved. */
-  approval: Schema.optional(
-    Schema.Struct({
-      policy: Schema.optional(ApprovalPolicySchema),
-      delegated: Schema.optional(Schema.Boolean),
-    }),
-  ),
+  /** Auto-approve this run's work, or narrow its policy (`launchPolicy`).
+   *  Absent, it follows the project's. */
+  approval: Schema.optional(LaunchApprovalSchema),
   /** Keep the run open for follow-up messages after each answer, as a chat
    *  window does. Absent, the run ends after its first answer. */
   interactive: Schema.optional(Schema.Boolean),

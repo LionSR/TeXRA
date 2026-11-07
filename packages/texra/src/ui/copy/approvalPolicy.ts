@@ -4,8 +4,11 @@
  * policy itself is the harness's (`ApprovalPolicy` in
  * `@texra-ai/harness/schemas`).
  */
+import { Record as EffectRecord } from 'effect';
+
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 
+/** Each policy's copy, declared in the order selectors list them. */
 const APPROVAL_POLICY_COPY = {
   ask: {
     label: 'Ask',
@@ -27,15 +30,8 @@ const APPROVAL_POLICY_COPY = {
   }
 >;
 
-/** Display order for selectors; must stay a permutation of `APPROVAL_POLICIES`. */
-const APPROVAL_POLICY_DISPLAY_ORDER = [
-  'ask',
-  'never',
-  'yolo',
-] as const satisfies ReadonlyArray<ApprovalPolicy>;
-
 export const APPROVAL_POLICY_OPTIONS = Object.freeze(
-  APPROVAL_POLICY_DISPLAY_ORDER.map((value) =>
+  EffectRecord.keys(APPROVAL_POLICY_COPY).map((value) =>
     Object.freeze({
       value,
       ...APPROVAL_POLICY_COPY[value],

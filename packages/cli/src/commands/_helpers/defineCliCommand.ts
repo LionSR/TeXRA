@@ -14,7 +14,11 @@ import {
   writeErrorStderr,
 } from '@cli/runtime/logSinks';
 import type { RunChatInit } from '@cli/chat/tui/runChatTui';
-import type { CliContext } from '@cli/runtime/cliContext';
+import {
+  provideCliInvocation,
+  type CliContext,
+  type CliInvocation,
+} from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 
 import { contextFromArgs } from './context';
@@ -49,7 +53,8 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
   /**
    * Core handler. Receives the already-built `CliContext` (with config
    * warnings surfaced by `contextFromArgs`) and citty's run context, and
-   * returns the command as the program it is: one Effect ending in the
+   * returns the command as the program it is, run with that context as its
+   * `CliInvocation`: one Effect ending in the
    * process exit code, which this helper runs on the process runtime below.
    * The value it finishes with is forwarded to `setExitCode`, so a handler
    * reduces to "do the work, return a code" — or, for a command that ends in
@@ -67,7 +72,7 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
   readonly run: (
     context: CliContext,
     ctx: CliCommandRunContext<A>,
-  ) => Effect.Effect<CliCommandOutcome, E, CliServices>;
+  ) => Effect.Effect<CliCommandOutcome, E, CliServices | CliInvocation>;
   /**
    * Set by the two commands that bring no platform up. Their program still
    * runs on a process runtime, but one installed with `NO_PLATFORM_INSTALL`:
@@ -127,7 +132,9 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       // builder throws is the command refusing its arguments, which `runCli`
       // reports as a usage error, and `catchExitCode` speaks only for the
       // work. Building it here keeps that true for a command that does both.
-      const program = options.run(context, ctx);
+      const program = options
+        .run(context, ctx)
+        .pipe(provideCliInvocation(context));
       // The sink that covers the runtime build below, chosen now that the
       // context has answered `--quiet`. `installCliProcessRuntime` logs
       // while its layers build (`UsageLogService started …`), and for a

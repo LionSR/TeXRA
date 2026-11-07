@@ -162,11 +162,10 @@ interface AgentNotFoundPayload {
 type AgentProposal = typeof AgentProposalSchema.Type;
 ```
 
-## AgentProposalPermission
+## AgentProposalRequest
 
 ```ts
-type AgentProposalPermission =
-  (typeof AgentProposalPermissionSchema)['Type'];
+type AgentProposalRequest = (typeof AgentProposalRequestSchema)['Type'];
 ```
 
 ## AgentRunListingEntry
@@ -350,10 +349,10 @@ function attentionOf<View extends ReadSessionView>(
 ): Attention<View['requests'][number]>
 ```
 
-## BashPermission
+## BashRequest
 
 ```ts
-type BashPermission = typeof BashPermissionSchema.Type;
+type BashRequest = typeof BashRequestSchema.Type;
 ```
 
 ## blocksCaller
@@ -997,6 +996,12 @@ same contract instead of re-declaring it per module.
 const JsonValueSchema: Codec<Json, Json, never, never>
 ```
 
+## LaunchApproval
+
+```ts
+type LaunchApproval = typeof LaunchApprovalSchema.Type;
+```
+
 ## LaunchNotice
 
 A refused launch's notice ({@link LaunchNoticeSchema}).
@@ -1008,13 +1013,26 @@ type LaunchNotice = typeof LaunchNoticeSchema.Type;
 ## LaunchNoticeSchema
 
 The notice a refused launch carries for its caller to show
-(`AgentError.notice`), as the presentation event and payload a host's
+(`LaunchRefused.notice`), as the presentation event and payload a host's
 `emit` takes: the instruction for a model the build does not recognize,
 or the agent the launch named that the catalog does not hold. The launch
 shows nothing itself; the caller shows this where it shows the failure.
 
 ```ts
 const LaunchNoticeSchema: Union<readonly [Struct<{ readonly event: Literal<"requestShowInstruction">; readonly payload: Struct<{ readonly key: String; readonly message: String; readonly showSuppress: optional<Boolean>; }>; }>, Struct<{ readonly event: Literal<"agentNotFound">; readonly payload: Struct<{ readonly agentName: String; }>; }>]>
+```
+
+## launchPolicy
+
+The policy a launch's run runs under: the project's, narrowed by the
+limit the launch asks for, or Auto-approve, which widens its own task
+but never over Block.
+
+```ts
+function launchPolicy(
+  project: ApprovalPolicy,
+  approval: LaunchApproval | undefined,
+): ApprovalPolicy
 ```
 
 ## LineCountSchema
@@ -1227,6 +1245,18 @@ Used by AgentConfig where `editedFile` may be null.
 const NullableFileFieldsSchema: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; }>
 ```
 
+## offeredGrant
+
+The run grant `payload` offers: its kind's grant, or null when the opener
+said only a person answers it (`allowBypass: false`: a hook asked, or a
+command prompt for another tool's call, whose grant is not the shell's).
+The one reading every surface renders "approve all in this task" from,
+and every grant the run holds is checked against.
+
+```ts
+const offeredGrant: (payload: { readonly kind: "toolEdit"; readonly data: { readonly requestId: string; readonly allowBypass: boolean; readonly runId: "" | (string & Brand<"RunId">); readonly path: string; readonly relativePath: string; readonly sourceTool: string; readonly addedLines: number; readonly removedLines: number; readonly content: string; }; } | { readonly kind: "bash"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly command: string; readonly cwd?: string | undefined; }; } | { readonly kind: "retry"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly operation: string; readonly errorDetails: { readonly message: string; readonly statusCode?: number | undefined; readonly statusText?: string | undefined; readonly provider?: string | undefined; readonly classification?: { readonly kind: "missing-api-key" | "context-window" | "upstream-credit"; } | { readonly kind: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly planType?: string | undefined; readonly resetsInMs?: number | undefined; } | { readonly kind: "subscription-session"; readonly route: "chatgpt-subscription" | "xai-subscription"; readonly needsReauth: boolean; readonly sessionError: string; } | undefined; readonly requestId?: string | undefined; readonly partialText?: string | undefined; }; readonly model?: string | undefined; readonly credentialSwitch?: { readonly kind: "decline-route"; readonly route: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; readonly automatic: boolean; } | { readonly kind: "new-key"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; } | null | undefined; }; } | { readonly kind: "proposal"; readonly data: { readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly allowBypass: boolean; readonly task: boolean; readonly script?: { readonly title: string | null; readonly source: string; readonly calls: readonly { readonly toolName: string; readonly preview: string; }[]; } | null | undefined; readonly workingDirectory?: string | null | undefined; readonly agentSource?: "plugin" | "custom" | "builtIn" | "inline" | null | undefined; readonly persona?: { readonly name: string; readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; } | null | undefined; readonly rootUserInstruction?: string | null | undefined; readonly options?: { readonly [x: string]: Json; } | null | undefined; }; } | { readonly kind: "planApproval"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly plan: { readonly objective: string; }; }; } | { readonly kind: "userQuestion"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly questions: readonly { readonly options: readonly { readonly label: string; readonly description?: string | null | undefined; }[]; readonly question: string; readonly header?: string | null | undefined; readonly multiSelect?: boolean | null | undefined; readonly allowFreeText?: boolean | null | undefined; }[]; readonly context?: string | null | undefined; }; } | { readonly kind: "plugin"; readonly plugin: string; readonly blocksCaller: boolean; readonly answers: readonly ("retry" | "approve" | "approve_and_goal" | "submit" | "answer" | "skip")[]; readonly data: { readonly [x: string]: Json; readonly requestId: string; readonly runId: string & Brand<"RunId">; }; }) => "bash" | "toolEdit" | "superYolo" | null
+```
+
 ## OpenFilePayload
 
 Open a file for the person, beside what they are looking at, and build
@@ -1244,7 +1274,7 @@ interface OpenFilePayload {
 What the runtime answers with: a typed value the host renders.
 
 ```ts
-const OutcomeSchema: Union<readonly [Struct<{ readonly kind: Literal<"done">; }>, Struct<{ readonly kind: Literal<"followUp">; readonly id: String; readonly status: Literals<readonly ["sent", "queued"]>; readonly receipt: Union<readonly [Struct<{ readonly state: Literal<"accepted">; }>, Struct<{ readonly state: Literal<"incorporated">; readonly turn: Int; }>, Struct<{ readonly state: Literal<"answered">; readonly turn: optional<Int>; readonly answer: Int; }>, Struct<{ readonly state: Literal<"unanswered">; readonly turn: optional<Int>; readonly reason: Literals<readonly ["failed", "cancelled", "completed", "noop", "ended", "closed"]>; readonly error: optional<String>; }>]>; }>, Struct<{ readonly kind: Literal<"receipt">; readonly receipt: Union<readonly [Struct<{ readonly state: Literal<"accepted">; }>, Struct<{ readonly state: Literal<"incorporated">; readonly turn: Int; }>, Struct<{ readonly state: Literal<"answered">; readonly turn: optional<Int>; readonly answer: Int; }>, Struct<{ readonly state: Literal<"unanswered">; readonly turn: optional<Int>; readonly reason: Literals<readonly ["failed", "cancelled", "completed", "noop", "ended", "closed"]>; readonly error: optional<String>; }>]>; }>, Struct<{ readonly kind: Literal<"forked">; readonly runId: brand<String, "RunId">; }>, Struct<{ readonly kind: Literal<"preview">; readonly preview: NullOr<Struct<{ readonly originalContent: String; readonly proposedContent: String; readonly hunks: $Array<Struct<{ readonly oldStart: Int; readonly oldLines: Int; readonly newStart: Int; readonly newLines: Int; readonly lines: $Array<String>; }>>; readonly firstChangedLine: NullOr<Int>; }>>; }>, Struct<{ readonly kind: Literal<"runFiles">; readonly result: Union<readonly [Struct<{ readonly status: Literal<"done">; readonly to: optional<String>; }>, Struct<{ readonly status: Literal<"noFiles">; }>, Struct<{ readonly status: Literal<"error">; readonly error: String; }>]>; }>]>
+const OutcomeSchema: Union<readonly [Struct<{ readonly kind: Literal<"done">; }>, Struct<{ readonly kind: Literal<"followUp">; readonly id: String; readonly status: Literals<readonly ["sent", "queued"]>; readonly receipt: Union<readonly [Struct<{ readonly state: Literal<"accepted">; }>, Struct<{ readonly state: Literal<"incorporated">; readonly turn: Int; }>, Struct<{ readonly state: Literal<"answered">; readonly turn: optional<Int>; readonly answer: Int; }>, Struct<{ readonly state: Literal<"unanswered">; readonly turn: optional<Int>; readonly reason: Union<readonly [Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>, Literals<readonly ["noop", "ended", "closed"]>]>; readonly error: optional<String>; }>]>; }>, Struct<{ readonly kind: Literal<"receipt">; readonly receipt: Union<readonly [Struct<{ readonly state: Literal<"accepted">; }>, Struct<{ readonly state: Literal<"incorporated">; readonly turn: Int; }>, Struct<{ readonly state: Literal<"answered">; readonly turn: optional<Int>; readonly answer: Int; }>, Struct<{ readonly state: Literal<"unanswered">; readonly turn: optional<Int>; readonly reason: Union<readonly [Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>, Literals<readonly ["noop", "ended", "closed"]>]>; readonly error: optional<String>; }>]>; }>, Struct<{ readonly kind: Literal<"forked">; readonly runId: brand<String, "RunId">; }>, Struct<{ readonly kind: Literal<"preview">; readonly preview: NullOr<Struct<{ readonly originalContent: String; readonly proposedContent: String; readonly hunks: $Array<Struct<{ readonly oldStart: Int; readonly oldLines: Int; readonly newStart: Int; readonly newLines: Int; readonly lines: $Array<String>; }>>; readonly firstChangedLine: NullOr<Int>; }>>; }>, Struct<{ readonly kind: Literal<"runFiles">; readonly result: Union<readonly [Struct<{ readonly status: Literal<"done">; readonly to: optional<String>; }>, Struct<{ readonly status: Literal<"noFiles">; }>, Struct<{ readonly status: Literal<"error">; readonly error: String; }>]>; }>]>
 ```
 
 ## OwnerId
@@ -1271,14 +1301,6 @@ what is asked: a command, an edit, a plan, a retry, a question).
 type PendingRequest = SessionView['requests'][number];
 ```
 
-## PermissionPayload
-
-A pending request's payload, as {@link PermissionPayloadSchema} reads it.
-
-```ts
-type PermissionPayload = typeof PermissionPayloadSchema.Type;
-```
-
 ## Persona
 
 A persona with its defaults applied: what a run is offered and told.
@@ -1293,11 +1315,10 @@ type Persona = typeof PersonaSchema.Type;
 type Plan = typeof PlanSchema.Type;
 ```
 
-## PlanApprovalPermission
+## PlanApprovalRequest
 
 ```ts
-type PlanApprovalPermission =
-  (typeof PlanApprovalPermissionSchema)['Type'];
+type PlanApprovalRequest = (typeof PlanApprovalRequestSchema)['Type'];
 ```
 
 ## planOf
@@ -1322,7 +1343,7 @@ function planSummaryLine(objective: string): string
 
 ## PluginRequest
 
-A request a plugin opens (`PermissionPayload`'s plugin case).
+A request a plugin opens (`RequestPayload`'s plugin case).
 
 ```ts
 type PluginRequest = typeof PluginRequestSchema.Type;
@@ -1343,16 +1364,6 @@ function previewLabel(text: string): string
 
 ```ts
 type ProcessExit = typeof ProcessExitSchema.Type;
-```
-
-## ProgressPermissionKind
-
-The one request kind vocabulary, read off the payload union. The
-`request.opened` fact and every surface that lists pending requests key
-off it, so a spelling that drifts fails to compile.
-
-```ts
-type ProgressPermissionKind = PermissionPayload['kind'];
 ```
 
 ## ProposalFileFields
@@ -1518,7 +1529,7 @@ class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
 ```ts
 function requestAnswerability(
   run: ReadRunView,
-  payload: PermissionPayload,
+  payload: RequestPayload,
 ): RequestAnswerability
 ```
 
@@ -1556,6 +1567,24 @@ a handler that died) on its side.
 
 ```ts
 const RequestErrorSchema: Union<readonly [typeof RunActive, typeof Unavailable, typeof Cancelled, typeof Rejected, typeof Conflict]>
+```
+
+## RequestKind
+
+The one request kind vocabulary, read off the payload union. The
+`request.opened` fact and every surface that lists pending requests key
+off it, so a spelling that drifts fails to compile.
+
+```ts
+type RequestKind = RequestPayload['kind'];
+```
+
+## RequestPayload
+
+A pending request's payload, as {@link RequestPayloadSchema} reads it.
+
+```ts
+type RequestPayload = typeof RequestPayloadSchema.Type;
 ```
 
 ## RequestShowErrorPayload
@@ -1647,10 +1676,10 @@ type RetryApprovalDecision =
     };
 ```
 
-## RetryPermission
+## RetryRequest
 
 ```ts
-type RetryPermission = typeof RetryPermissionSchema.Type;
+type RetryRequest = typeof RetryRequestSchema.Type;
 ```
 
 ## rollupOf
@@ -1822,6 +1851,18 @@ exit once its command exited.
 
 ```ts
 const RunResultSchema: Struct<{ readonly error: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["disk-full", "result-lost", "unexpected"]>; readonly message: String; }>, Struct<{ readonly message: String; readonly statusCode: optional<Int>; readonly statusText: optional<String>; readonly provider: optional<String>; readonly classification: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["missing-api-key", "context-window", "upstream-credit"]>; }>, Struct<{ readonly kind: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly planType: optional<String>; readonly resetsInMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"subscription-session">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription"]>; readonly needsReauth: Boolean; readonly sessionError: String; }>]>>; readonly requestId: optional<String>; readonly partialText: optional<String>; readonly kind: Literal<"model">; }>]>>; readonly usage: optional<Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cachedInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheWriteTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly toolUsePromptTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; }>>; readonly output: Struct<{ readonly response: String; readonly files: $Array<String>; readonly structured: optional<Codec<Json, Json, never, never>>; }>; readonly outcome: optional<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; readonly exit: optional<Struct<{ readonly code: NullOr<Int>; readonly timedOut: Boolean; }>>; }>
+```
+
+## RunStanding
+
+Where a run stands: its loop position, and its outcome once it ended
+(`RunView` carries both).
+
+```ts
+interface RunStanding {
+  readonly position: RunPosition;
+  readonly outcome: RunOutcome | null;
+}
 ```
 
 ## RunStorageFileLocation
@@ -2100,7 +2141,7 @@ give it, or `config`, a complete configuration an application host has
 already resolved. A host sends it to a service as it is.
 
 ```ts
-const StartRequestSchema: Union<readonly [Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Struct<{ readonly policy: optional<Literals<readonly ["never", "ask", "yolo"]>>; readonly delegated: optional<Boolean>; }>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly agent: Union<readonly [String, toEncoded<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>]>; readonly instruction: String; readonly model: optional<String>; }>, Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Struct<{ readonly policy: optional<Literals<readonly ["never", "ask", "yolo"]>>; readonly delegated: optional<Boolean>; }>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly config: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>; }>]>
+const StartRequestSchema: Union<readonly [Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Union<readonly [Literal<"autoApprove">, Literals<readonly ["never", "ask"]>]>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly agent: Union<readonly [String, toEncoded<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>]>; readonly instruction: String; readonly model: optional<String>; }>, Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Union<readonly [Literal<"autoApprove">, Literals<readonly ["never", "ask"]>]>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly config: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>; }>]>
 ```
 
 ## StateSettingEntry
@@ -2159,17 +2200,6 @@ gone.
 
 ```ts
 const StoredMediaSchema: Struct<{ readonly mimeType: String; readonly digest: String; readonly name: String; }>
-```
-
-## stricterPolicy
-
-The stricter of two policies (`never` < `ask` < `yolo`).
-
-```ts
-function stricterPolicy(
-  a: ApprovalPolicy,
-  b: ApprovalPolicy,
-): ApprovalPolicy
 ```
 
 ## stripControlCharacters
@@ -2281,6 +2311,21 @@ Tool definition type - derived from schema
 type ToolDefinition = typeof ToolDefinitionSchema.Type;
 ```
 
+## ToolDependencyStatus
+
+```ts
+type ToolDependencyStatus = typeof ToolDependencyStatusSchema.Type;
+```
+
+## ToolDependencyStatusSchema
+
+Whether a tool plugin's external dependency is there, as the
+availability probes find it (not a tool call's `ToolCallStatus`).
+
+```ts
+const ToolDependencyStatusSchema: Literals<readonly ["available", "not-found", "unknown"]>
+```
+
 ## ToolEditContent
 
 A pending tool edit's content.
@@ -2289,10 +2334,10 @@ A pending tool edit's content.
 type ToolEditContent = typeof ToolEditContentSchema.Type;
 ```
 
-## ToolEditPermission
+## ToolEditRequest
 
 ```ts
-type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
+type ToolEditRequest = typeof ToolEditRequestSchema.Type;
 ```
 
 ## ToolFact
@@ -2401,13 +2446,6 @@ type UserQuestionAnswers = typeof UserQuestionAnswersSchema.Type;
 const UserQuestionAnswersSchema: $Record<String, Union<readonly [String, $Array<String>]>>
 ```
 
-## UserQuestionPermission
-
-```ts
-type UserQuestionPermission =
-  (typeof UserQuestionPermissionSchema)['Type'];
-```
-
 ## UserQuestionPrompt
 
 ```ts
@@ -2418,6 +2456,12 @@ type UserQuestionPrompt = typeof UserQuestionPromptSchema.Type;
 
 ```ts
 const UserQuestionPromptSchema: Struct<{ readonly question: String; readonly header: optional<NullOr<String>>; readonly options: $Array<Struct<{ readonly label: String; readonly description: optional<NullOr<String>>; }>>; readonly multiSelect: optional<NullOr<Boolean>>; readonly allowFreeText: optional<NullOr<Boolean>>; }>
+```
+
+## UserQuestionRequest
+
+```ts
+type UserQuestionRequest = (typeof UserQuestionRequestSchema)['Type'];
 ```
 
 ## WorkspaceAgentsSelection

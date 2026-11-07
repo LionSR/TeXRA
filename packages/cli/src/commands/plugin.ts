@@ -11,7 +11,7 @@ import {
   type PluginUpdate,
 } from '@texra-ai/harness/host';
 
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import { CliInvocation, CliUsageError } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -44,15 +44,21 @@ function pluginExitCode(error: unknown): number {
  * operation on the runtime it installed, whose spawner git runs on.
  */
 const withPluginEnv = Effect.fn('withPluginEnv')(function* <A, E>(
-  context: CliContext,
   operation: (
     env: PluginEnv,
-  ) => Effect.Effect<A, E, ChildProcessSpawner | FileSystem.FileSystem>,
+  ) => Effect.Effect<
+    A,
+    E,
+    ChildProcessSpawner | FileSystem.FileSystem | CliInvocation
+  >,
 ) {
-  const services = yield* initCliPlatform(context);
+  const invocation = yield* CliInvocation;
+  const services = yield* initCliPlatform(invocation.context);
   return yield* withProcessServices(
     services.runtime,
-    operation(services.roots),
+    operation(services.roots).pipe(
+      Effect.provideService(CliInvocation, invocation),
+    ),
   );
 });
 
@@ -161,7 +167,7 @@ const pluginInstallCommand = defineCliCommand({
     if (Result.isFailure(origin))
       throw new CliUsageError({ message: origin.failure.message });
     const only = collectStringFlagValues(ctx.rawArgs, 'plugin');
-    return withPluginEnv(context, (env) =>
+    return withPluginEnv((env) =>
       InstalledPlugins.install(origin.success, only, env).pipe(
         Effect.flatMap((added) =>
           InstalledPlugins.list(env).pipe(
@@ -172,17 +178,16 @@ const pluginInstallCommand = defineCliCommand({
             ),
           ),
         ),
-        Effect.map((installed) => {
-          emitCliResult(context, {
+        Effect.flatMap((installed) =>
+          emitCliResult({
             json: installed,
             ndjson: installed.map((plugin) => ({
               kind: 'plugin' as const,
               plugin,
             })),
             text: `Installed:\n${formatPluginList(installed)}\nEnable with \`texra plugin enable <name>\`.`,
-          });
-          return CliExitCode.Success;
-        }),
+          }).pipe(Effect.as(CliExitCode.Success)),
+        ),
       ),
     );
   },
@@ -192,20 +197,19 @@ const pluginListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List installed plugins' },
   args: { ...GLOBAL_ARGS },
   catchExitCode: pluginExitCode,
-  run: (context) =>
-    withPluginEnv(context, (env) =>
+  run: () =>
+    withPluginEnv((env) =>
       InstalledPlugins.list(env).pipe(
-        Effect.map((plugins) => {
-          emitCliResult(context, {
+        Effect.flatMap((plugins) =>
+          emitCliResult({
             json: plugins,
             ndjson: plugins.map((plugin) => ({
               kind: 'plugin' as const,
               plugin,
             })),
             text: formatPluginList(plugins),
-          });
-          return CliExitCode.Success;
-        }),
+          }).pipe(Effect.as(CliExitCode.Success)),
+        ),
       ),
     ),
 });
@@ -242,8 +246,8 @@ const pluginShowCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS, name: NAME_ARG },
   catchExitCode: pluginExitCode,
-  run: (context, ctx) =>
-    withPluginEnv(context, (env) =>
+  run: (_, ctx) =>
+    withPluginEnv((env) =>
       InstalledPlugins.list(env).pipe(
         Effect.flatMap((plugins) => {
           const plugin = plugins.find(({ name }) => name === ctx.args.name);
@@ -253,14 +257,13 @@ const pluginShowCommand = defineCliCommand({
                 message: `No plugin named ${ctx.args.name} is installed.`,
               }),
             );
-          return Effect.map(formatPluginShow(plugin), (text) => {
-            emitCliResult(context, {
+          return Effect.flatMap(formatPluginShow(plugin), (text) =>
+            emitCliResult({
               json: plugin,
               ndjson: { kind: 'plugin' as const, plugin },
               text,
-            });
-            return CliExitCode.Success;
-          });
+            }).pipe(Effect.as(CliExitCode.Success)),
+          );
         }),
       ),
     ),
@@ -274,25 +277,24 @@ const pluginRemoveCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS, name: NAME_ARG },
   catchExitCode: pluginExitCode,
-  run: (context, ctx) =>
-    withPluginEnv(context, (env) =>
+  run: (_, ctx) =>
+    withPluginEnv((env) =>
       InstalledPlugins.remove(ctx.args.name, env).pipe(
-        Effect.map((removed) => {
+        Effect.flatMap((removed) => {
           const result = { removed: removed.name, path: removed.path };
           let text = `Removed ${removed.name}.`;
           if (removed.leftover)
             text = `${removed.name} was already forgotten; removed its leftover directory ${removed.path}.`;
           else if (removed.local)
             text = `Removed ${removed.name}. Its directory ${removed.path} is yours and was left in place.`;
-          emitCliResult(context, {
+          return emitCliResult({
             json: result,
             ndjson: {
               kind: 'result',
               result: { command: 'plugin remove', ...result },
             },
             text,
-          });
-          return CliExitCode.Success;
+          }).pipe(Effect.as(CliExitCode.Success));
         }),
       ),
     ),
@@ -306,15 +308,15 @@ const pluginEnableCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS, name: NAME_ARG },
   catchExitCode: pluginExitCode,
-  run: (context, ctx) =>
-    withPluginEnv(context, (env) =>
+  run: (_, ctx) =>
+    withPluginEnv((env) =>
       InstalledPlugins.enable(ctx.args.name, env, askTrust).pipe(
-        Effect.map((outcome) => {
+        Effect.flatMap((outcome) => {
           const result = {
             name: ctx.args.name,
             enabled: outcome === 'enabled',
           };
-          emitCliResult(context, {
+          return emitCliResult({
             json: result,
             ndjson: {
               kind: 'result',
@@ -324,10 +326,13 @@ const pluginEnableCommand = defineCliCommand({
               outcome === 'enabled'
                 ? `Enabled ${ctx.args.name}. Open runs load it at their next step.`
                 : `Not enabled: ${ctx.args.name} was not trusted.`,
-          });
-          return outcome === 'enabled'
-            ? CliExitCode.Success
-            : CliExitCode.AgentError;
+          }).pipe(
+            Effect.as(
+              outcome === 'enabled'
+                ? CliExitCode.Success
+                : CliExitCode.AgentError,
+            ),
+          );
         }),
       ),
     ),
@@ -341,20 +346,19 @@ const pluginDisableCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS, name: NAME_ARG },
   catchExitCode: pluginExitCode,
-  run: (context, ctx) =>
-    withPluginEnv(context, (env) =>
+  run: (_, ctx) =>
+    withPluginEnv((env) =>
       InstalledPlugins.disable(ctx.args.name, env).pipe(
-        Effect.map(() => {
+        Effect.flatMap(() => {
           const result = { name: ctx.args.name, enabled: false };
-          emitCliResult(context, {
+          return emitCliResult({
             json: result,
             ndjson: {
               kind: 'result',
               result: { command: 'plugin disable', ...result },
             },
             text: `Disabled ${ctx.args.name}.`,
-          });
-          return CliExitCode.Success;
+          }).pipe(Effect.as(CliExitCode.Success));
         }),
       ),
     ),
@@ -375,14 +379,14 @@ const pluginUpdateCommand = defineCliCommand({
     },
   },
   catchExitCode: pluginExitCode,
-  run: (context, ctx) =>
-    withPluginEnv(context, (env) =>
+  run: (_, ctx) =>
+    withPluginEnv((env) =>
       InstalledPlugins.update(
         typeof ctx.args.name === 'string' ? [ctx.args.name] : [],
         env,
       ).pipe(
-        Effect.map((updates) => {
-          emitCliResult(context, {
+        Effect.flatMap((updates) =>
+          emitCliResult({
             json: updates,
             ndjson: {
               kind: 'result',
@@ -392,9 +396,8 @@ const pluginUpdateCommand = defineCliCommand({
               updates.length === 0
                 ? 'No plugins installed.'
                 : updates.map(formatPluginUpdate).join('\n'),
-          });
-          return CliExitCode.Success;
-        }),
+          }).pipe(Effect.as(CliExitCode.Success)),
+        ),
       ),
     ),
 });

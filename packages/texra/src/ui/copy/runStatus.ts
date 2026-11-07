@@ -8,6 +8,7 @@
 import {
   isInterrupted,
   isPlainAgentIdentity,
+  type RunStanding,
   type RunView,
 } from '@texra-ai/harness/schemas';
 import type { IconName } from '@ui/wa/iconNames';
@@ -100,17 +101,10 @@ interface RunStatus {
   readonly section: RunSection;
 }
 
-/** The facts a run's status is read from. */
-type RunStatusFacts = Pick<
-  RunView,
-  | 'position'
-  | 'outcome'
-  | 'holder'
-  | 'approval'
-  | 'turn'
-  | 'identity'
-  | 'forkPoint'
->;
+/** The facts a run's status is read from: where it stands, and what
+ *  outranks or refines that. */
+type RunStatusFacts = RunStanding &
+  Pick<RunView, 'holder' | 'approval' | 'turn' | 'identity' | 'forkPoint'>;
 
 /**
  * The one reading of a run's status: an interrupted run outranks one
