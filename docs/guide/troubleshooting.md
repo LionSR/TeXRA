@@ -191,11 +191,11 @@ Opening VS Code from a configured terminal provides the most reliable environmen
    - Each revision writes its extracted file under its input filename (e.g., `r0/draft.tex`, `r1/draft.tex`), alongside the raw model response `r0/output.xml`.
 2. **Repair malformed XML**:
    - Document tasks wrap their output in `<documents><document name="...">...</document></documents>`.
-   - If the model hits its output token limit or drops the closing `</document>` / `</documents>` tag, extraction fails. Open `r0/output.xml` in the run folder and restore the missing closing tag to recover the text:
+   - TeXRA closes an unclosed `<document>` tag itself and tries to recover files that have no tags. If the model hit its output token limit or the reply is malformed in another way and a file still fails to extract, open `r0/output.xml` in the run folder and repair the tags to recover the text:
 
 <XmlRepairCard />
 
-<p class="hero-caption">A dropped <code>&lt;/documents&gt;</code> breaks extraction. Open <code>r0/output.xml</code> and restore the closing tag to recover the run.</p>
+<p class="hero-caption">When a file still fails to extract, open <code>r0/output.xml</code> and repair the tags to recover the text.</p>
 
 ### High memory use in long CLI sessions
 

@@ -10,7 +10,7 @@ On a fresh install, the **setup assistant** walks you through connecting a model
 
 <QuickStartHero />
 
-<p class="hero-caption">The New task view: point it at your file, pick an agent and a model, write one sentence, and press Execute.</p>
+<p class="hero-caption">The New task view: point it at your file, pick an agent and a model, write one sentence, and select Start task.</p>
 
 ## Overview
 
@@ -19,7 +19,7 @@ A typical document task takes five steps:
 1. Select your file
 2. Pick an agent and model
 3. Write a short instruction
-4. Select **Execute**
+4. Select **Start task**
 5. Review the diff
 
 > 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
@@ -134,9 +134,9 @@ The selected agent controls how many revisions run; most writing agents already 
 For advanced debugging, enable the `texra.debug.saveModelIO` setting in `.texra/config.json` to store the generated prompt alongside other debug artifacts.
 :::
 
-### Execute and watch the run
+### Start the task and watch it
 
-Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The ProgressBoard opens in the TeXRA view and streams the run live. Read the [ProgressBoard guide](./progress-board.md) for help interpreting the logs.
+Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The ProgressBoard opens in the TeXRA view and streams the run live. Read the [ProgressBoard guide](./progress-board.md) for help interpreting the logs.
 
 <GuideIntroHero />
 

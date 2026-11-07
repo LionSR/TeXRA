@@ -87,7 +87,7 @@ TeXRA can pull TikZ figures out of your LaTeX source for separate processing.
 1. Open the **Auto Extract** dropdown (<wa-icon library="texra" name="wand"></wa-icon>) next to the Media selector.
 2. Enable **TikZ Figures**.
 3. Select your input file(s) (<wa-icon library="texra" name="file-code"></wa-icon>).
-4. Execute your chosen agent (<wa-icon library="texra" name="play"></wa-icon>).
+4. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
 <DropdownMenu
   label="Media · Auto-extract"

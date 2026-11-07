@@ -1,10 +1,10 @@
 <script setup>
 // The output lifecycle for guide/file-management.md → "Run storage".
 // Workflow outputs are written FIRST into an isolated run folder under run storage
-// (executions/<id>/, r{round}/output.ext) — never directly over the workspace.
+// (executions/<id>/, r{revision}/<input filename>) — never directly over the workspace.
 // From there three commands move the artifacts to three different places:
 //   Accept → copies reviewed outputs back into the workspace
-//   Pack   → archives the whole run into the History folder
+//   Pack   → copies the whole run into the History folder
 //   Clean  → deletes the run folder
 // The prose scatters these across three sections (Pack / Clean / Task Run
 // Storage); this single flow puts the run-storage box at the center with one
@@ -36,9 +36,9 @@ import StatusPill from './StatusPill.vue';
       </header>
       <div class="surface sf-code">
         <div class="cl"><span class="kw">executions/</span>&lt;id&gt;/</div>
-        <div class="cl indent">r0/output.tex</div>
-        <div class="cl indent">r0/output.log</div>
-        <div class="cl indent">r1/output.tex</div>
+        <div class="cl indent">r0/draft.tex</div>
+        <div class="cl indent">r0/output.xml</div>
+        <div class="cl indent">r1/draft.tex</div>
       </div>
       <footer class="sf-store-foot">
         written here first — never over your workspace
@@ -74,7 +74,7 @@ import StatusPill from './StatusPill.vue';
           ></wa-icon>
           <span class="sf-dest-txt">
             <span class="sf-dest-name">History/</span>
-            <span class="sf-dest-sub">archives the whole run, timestamped</span>
+            <span class="sf-dest-sub">copies the whole run, timestamped</span>
           </span>
         </span>
       </div>

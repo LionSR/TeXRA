@@ -21,7 +21,7 @@ conversation.
 
 ## Step 0: add a key or connect a subscription
 
-A credential is the one step no agent can do for you. Three ways in:
+A credential is the one step no agent can do for you. Two ways in:
 
 - **Use your own provider API key**: Anthropic, OpenAI, Google, and
   more. Read

@@ -309,7 +309,7 @@ the team.
 
 <CliTeamHero />
 
-<p class="hero-caption">The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
+<p class="hero-caption">A chat with the Software Engineer team picked in <code>/agent</code>. The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
 
 In an interactive team session, focusing a subagent shows only its own
 transcript. Scroll back through its earlier output with normal terminal

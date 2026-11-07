@@ -81,7 +81,7 @@ Open `your-local-folder` in VS Code and run your agents (`polish`, `correct`, `r
 
 <OverleafEditActions />
 
-<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Execute</code>, reviewing outputs, <code>latexdiff</code>/merge, and auto-extract.</p>
+<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Start task</code>, reviewing outputs, <code>latexdiff</code>/merge, and auto-extract.</p>
 
 ### 3. Commit local changes
 
