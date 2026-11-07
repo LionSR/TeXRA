@@ -27,7 +27,7 @@ import {
   withText,
   type Draft,
 } from '../input/draftAttachments';
-import { ImagePasteQueue } from '../input/imagePasteQueue';
+import { useImagePastes } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
 import {
   appendSlashCommandEcho,
@@ -170,9 +170,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     },
     [readDraft, writeDraft],
   );
-  const imagePasteQueueRef = useRef<ImagePasteQueue | null>(null);
-  imagePasteQueueRef.current ??= new ImagePasteQueue();
-  const imagePasteQueue = imagePasteQueueRef.current;
+  const imagePasteQueue = useImagePastes(runtime);
 
   const clearDraft = useCallback(() => {
     imagePasteQueue.discardPending();
@@ -222,7 +220,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   );
   const onImagePaste = useMemo(
     () => ({
-      runtime,
+      pastes: imagePasteQueue,
       probe: () =>
         Effect.map(attachClipboardImage(roots), (result): string | null => {
           if (!result.ok) {
@@ -242,7 +240,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           ttlMs: Number.POSITIVE_INFINITY,
         }),
     }),
-    [readDraft, roots, runtime, writeDraft],
+    [imagePasteQueue, readDraft, roots, writeDraft],
   );
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
@@ -465,7 +463,6 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
               onHistoryDown={
                 paletteOwnsArrows ? undefined : () => browseHistory(1)
               }
-              imagePasteQueue={imagePasteQueue}
               readLatestValue={() => readDraft().text}
               prepareInputChunk={
                 showPalette ? replaceSlashTriggerInput : undefined

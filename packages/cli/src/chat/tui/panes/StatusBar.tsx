@@ -1,17 +1,16 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
-import { Cause, Effect, Exit, type Fiber } from 'effect';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Cause, Effect, Exit, Fiber, Stream, type Duration } from 'effect';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { readModelOptions } from '@texra-ai/harness/host';
+import { apiProviderOfSecretName } from '@texra-ai/llm';
+import { appSignalStream, readModelOptions } from '@texra-ai/harness/host';
 import { isEmptyUsage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
-import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 
 import {
-  codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
   selectedRunId as selectedRunIdSignal,
   sessionMeta as sessionMetaSignal,
@@ -36,8 +35,20 @@ import type {
   SettingsStores,
 } from '@texra-ai/harness/host';
 
-const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
-const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
+// Polling re-reads what another process changed; an in-process change to
+// model access is followed at once.
+const ROUTE_REFRESH = '10 seconds';
+const QUOTA_REFRESH = '30 seconds';
+
+/** A change in this process to what routes a model: a provider key, or an
+ *  access preference. */
+const modelAccessChanges: Stream.Stream<void, never, ProcessServices> =
+  Stream.merge(
+    appSignalStream('credentialChanged').pipe(
+      Stream.filter(({ key }) => apiProviderOfSecretName(key) !== undefined),
+    ),
+    appSignalStream('modelAccessChanged'),
+  ).pipe(Stream.as(undefined));
 interface StatusBarProps {
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;
@@ -62,63 +73,37 @@ interface StatusBarProps {
 }
 
 /**
- * Poll `read` every `intervalMs` on the shared poll registry, and at once when
- * `key` changes. One rule governs staleness: a key already in flight is not
- * re-read, and only the latest request finishes: a superseded read is
- * interrupted, as is the read in flight at unmount. The finished exit is
- * returned only while its key is still current; an undefined key reads
- * nothing.
+ * The latest exit of `read(key)`: read at once, again on every tick of
+ * `every` and every model-access change, a newer read interrupting the one in
+ * flight; a new key or unmount interrupts the reads. A run of failures is one
+ * value, so its report is said once. An undefined key reads nothing.
  */
-function usePolledRead<K extends string, A, E>(
+function useFollowedRead<K extends string, A, E>(
   runtime: ProcessRuntime,
   key: K | undefined,
   read: (key: K) => Effect.Effect<A, E, ProcessServices>,
-  intervalMs: number,
+  every: Duration.Input,
 ): Exit.Exit<A, E> | undefined {
-  const [settled, setSettled] = useState<{
+  const [latest, setLatest] = useState<{
     readonly key: K;
     readonly exit: Exit.Exit<A, E>;
   }>();
-  const requestRef = useRef<{
-    generation: number;
-    inFlightKey?: K;
-    reading?: Fiber.Fiber<A, E>;
-  }>({ generation: 0 });
-  useEffect(
-    () => () => {
-      const request = requestRef.current;
-      request.generation += 1;
-      request.reading?.interruptUnsafe();
-    },
-    [],
-  );
-  usePollingInterval(
-    () => {
-      const request = requestRef.current;
-      if (key !== undefined && request.inFlightKey === key) return;
-      const generation = ++request.generation;
-      request.inFlightKey = key;
-      request.reading?.interruptUnsafe();
-      request.reading = undefined;
-      if (key === undefined) {
-        setSettled(undefined);
-        return;
-      }
-      const reading = runtime.runFork(read(key));
-      request.reading = reading;
-      reading.addObserver((exit) => {
-        if (request.generation !== generation) return;
-        request.inFlightKey = undefined;
-        request.reading = undefined;
-        setSettled({ key, exit });
-      });
-    },
-    intervalMs,
-    key,
-  );
-  return settled !== undefined && settled.key === key
-    ? settled.exit
-    : undefined;
+  useEffect(() => {
+    if (key === undefined) return;
+    const reads = runtime.runFork(
+      Stream.merge(Stream.tick(every), modelAccessChanges).pipe(
+        Stream.switchMap(() => Stream.fromEffect(Effect.exit(read(key)))),
+        Stream.changesWith((a, b) => Exit.isFailure(a) && Exit.isFailure(b)),
+        Stream.runForEach((exit) =>
+          Effect.sync(() => setLatest({ key, exit })),
+        ),
+      ),
+    );
+    return () => {
+      runtime.runFork(Fiber.interrupt(reads));
+    };
+  }, [every, key, read, runtime]);
+  return latest !== undefined && latest.key === key ? latest.exit : undefined;
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
@@ -156,37 +141,27 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
 
   // Which subscription, if any, would serve the selected stream's model on its
   // next request. The completed usage snapshot supersedes this prospective
-  // value in the display. Polling re-reads external config changes; an
-  // in-process access change also bumps `codexPreferenceVersion` for an
-  // immediate refresh. A probe failure is reported once per read key until
-  // that key probes successfully.
-  const codexPreferenceVersion = useSignal(codexPreferenceVersionSignal);
-  const reportedProbeFailureKeysRef = useRef(new Set<string>());
-  const routeReadKey = `${accessModel}:${codexPreferenceVersion}`;
-  const routeRead = usePolledRead(
-    props.runtime,
-    routeReadKey,
-    () =>
-      readModelOptions(props.stores, [accessModel]).pipe(
+  // value in the display. A probe failure is reported once per run of
+  // failures.
+  const readRoute = useCallback(
+    (model: string) =>
+      readModelOptions(props.stores, [model]).pipe(
         Effect.map(([option]) => option?.usageRoute),
       ),
-    CODEX_SUBSCRIPTION_REFRESH_MS,
+    [props.stores],
   );
-  // Only a read of the current key finishes here, so a probe that a newer key
-  // overtook neither reports nor latches its failure.
+  const routeRead = useFollowedRead(
+    props.runtime,
+    accessModel,
+    readRoute,
+    ROUTE_REFRESH,
+  );
   useEffect(() => {
-    if (routeRead === undefined) return;
-    const reported = reportedProbeFailureKeysRef.current;
-    if (Exit.isSuccess(routeRead)) {
-      reported.delete(routeReadKey);
-      return;
-    }
-    if (reported.has(routeReadKey)) return;
-    reported.add(routeReadKey);
+    if (routeRead === undefined || Exit.isSuccess(routeRead)) return;
     writeStderr(
       `[warn] [cli.tui] subscription route probe failed for ${accessModel}: ${toErrorMessage(Cause.squash(routeRead.cause))}\n`,
     );
-  }, [routeRead, routeReadKey, accessModel, writeStderr]);
+  }, [routeRead, accessModel, writeStderr]);
   const prospectiveRoute =
     routeRead !== undefined && Exit.isSuccess(routeRead)
       ? routeRead.value
@@ -203,11 +178,16 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     usageRoute: displayUsage?.usageRoute,
     prospectiveRoute,
   });
-  const quotaRead = usePolledRead(
+  const readQuota = useCallback(
+    (provider: NonNullable<typeof subscriptionUsageProvider>) =>
+      subscriptionUsage.getUsage(provider),
+    [subscriptionUsage],
+  );
+  const quotaRead = useFollowedRead(
     props.runtime,
     subscriptionUsageProvider,
-    (provider) => subscriptionUsage.getUsage(provider),
-    SUBSCRIPTION_QUOTA_REFRESH_MS,
+    readQuota,
+    QUOTA_REFRESH,
   );
   const subscriptionQuota =
     quotaRead !== undefined && Exit.isSuccess(quotaRead)

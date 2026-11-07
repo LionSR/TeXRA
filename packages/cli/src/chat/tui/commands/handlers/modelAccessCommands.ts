@@ -1,8 +1,9 @@
 import { Effect } from 'effect';
 
+import { emitAppSignal } from '@texra-ai/harness/host';
+
 import { type ApiKeyProviderId } from '@texra-ai/llm';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
-import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { type CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
@@ -56,7 +57,7 @@ export const applyCliModelAccessSelection = Effect.fn(
     selection,
     { writeProgress: output.writeProgress },
   );
-  bumpCodexPreferenceVersion();
+  yield* emitAppSignal('modelAccessChanged', undefined);
   output.appendOutcome(access.message);
 });
 

@@ -6,6 +6,8 @@
  * of two inputs ordered by the same transcript seq, so a row the session view's
  * residency cap drops never shifts a notice.
  */
+import { randomUUID } from 'node:crypto';
+
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
@@ -52,8 +54,6 @@ function rowSeq(row: TranscriptRow | undefined): number {
 }
 
 export const notices = signal<readonly LocalNotice[]>([]);
-
-let localEntrySeq = 0;
 
 /** A result the TUI itself reports (a slash command, a model fallback): a
  *  dim, marked row, so it never reads as the model speaking. */
@@ -116,11 +116,7 @@ function appendLocalTranscriptEntry(
     {
       runId,
       afterSeq,
-      row: localTranscriptRow(
-        kind,
-        `local:${localEntrySeq++}:${runId}`,
-        normalized,
-      ),
+      row: localTranscriptRow(kind, `local:${randomUUID()}`, normalized),
     },
   ]);
 }
@@ -223,7 +219,4 @@ export function reportRequestDefect(
   );
 }
 
-registerCliStateResetHook(() => {
-  localEntrySeq = 0;
-  notices.set([]);
-});
+registerCliStateResetHook(() => notices.set([]));

@@ -204,6 +204,65 @@ export const sessionListRunIds = computed(() =>
     .flatMap((row) => (row.kind === 'run' ? [row.run.id] : [])),
 );
 
+/** The child list's keyboard ownership and the row the user moved to, with
+ *  the run that was active when they did: a later change of the active run
+ *  moves the highlight to it. */
+interface ChildListFocus {
+  readonly focused: boolean;
+  readonly chosen?: { readonly runId: RunId; readonly whileActive?: RunId };
+}
+const CHILD_LIST = signal<ChildListFocus>({ focused: false });
+
+/**
+ * The child list's highlighted row: the row the user moved to while the
+ * active run has not changed since, else the active run when it is listed,
+ * else (with none active) the first row. Resolved against the list on every
+ * read, so a run leaving the list moves it.
+ */
+export const childListHighlight = computed((): RunId | undefined => {
+  const listed = sessionListRunIds.get();
+  const active = selectedRunId.get();
+  const chosen = CHILD_LIST.get().chosen;
+  if (
+    chosen !== undefined &&
+    listed.includes(chosen.runId) &&
+    (active === undefined || active === chosen.whileActive)
+  ) {
+    return chosen.runId;
+  }
+  if (active !== undefined) return listed.includes(active) ? active : undefined;
+  return listed[0];
+});
+
+/** Whether the child list owns the keys: it was given them and still lists
+ *  a run. Otherwise the input does. */
+export const childListFocused = computed(
+  () => CHILD_LIST.get().focused && sessionListRunIds.get().length > 0,
+);
+
+/** Move the child list's highlight to `runId`. */
+export function highlightChildListRun(runId: RunId): void {
+  CHILD_LIST.set({
+    ...CHILD_LIST.get(),
+    chosen: { runId, whileActive: selectedRunId.get() },
+  });
+}
+
+/** Give the child list the keys (its highlight, or its first row, stays
+ *  highlighted), or hand them back to the input. */
+export function focusChildList(focused: boolean): void {
+  if (!focused) {
+    if (CHILD_LIST.get().focused) {
+      CHILD_LIST.set({ ...CHILD_LIST.get(), focused: false });
+    }
+    return;
+  }
+  const first = childListHighlight.get() ?? sessionListRunIds.get()[0];
+  if (first === undefined) return;
+  highlightChildListRun(first);
+  CHILD_LIST.set({ ...CHILD_LIST.get(), focused: true });
+}
+
 /** The top-level run the current session rooted at. */
 export const rootRunId = signal<RunId | undefined>(undefined);
 
@@ -400,23 +459,6 @@ export function clearTransientNotice(): void {
   transientNotice.set(undefined);
 }
 
-// ---------------------------------------------------------------------------
-// codexPreferenceSlice
-// ---------------------------------------------------------------------------
-
-// Bumped whenever an in-process write changes model access (a subscription
-// preference, a stored key, an access setting) so the status bar re-reads it
-// immediately instead of waiting for its periodic
-// poll. External changes (extension/desktop/config edits) are still picked up by
-// that poll.
-
-export const codexPreferenceVersion = signal<number>(0);
-
-/** Signal the status bar to re-read subscription preferences now. */
-export function bumpCodexPreferenceVersion(): void {
-  codexPreferenceVersion.set(codexPreferenceVersion.get() + 1);
-}
-
 const RESET_HOOKS = new Set<() => void>();
 
 export function registerCliStateResetHook(resetHook: () => void): void {
@@ -450,6 +492,7 @@ export function resetCliState(
   FOREGROUND_READER.set(undefined);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
+  CHILD_LIST.set({ focused: false });
   clearTransientNotice();
   for (const resetHook of RESET_HOOKS) resetHook();
 }

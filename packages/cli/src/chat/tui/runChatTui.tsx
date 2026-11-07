@@ -83,7 +83,6 @@ import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
-import { followCliCredentialChanges } from './hosts/cliProviderKeys';
 import { chatScrollback } from './panes/staticTranscriptRing';
 import { EMPTY_DRAFT } from './input/draftAttachments';
 import {
@@ -448,7 +447,6 @@ export async function runChat(
   onChatClose(announceForegroundApprovals());
   runtime.runSync(
     Effect.gen(function* () {
-      yield* Effect.forkIn(followCliCredentialChanges, chatScope);
       // Keys another TeXRA window or the service saves reach this chat too.
       yield* Effect.forkIn(
         FileSecrets.watch(secretsDirectory(context.storageRoot), (key) =>

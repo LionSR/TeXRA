@@ -24,7 +24,7 @@ import { FormFrame } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 const RESET_HINTS = [{ key: 'Ctrl-R', action: 'reset' }];
@@ -151,9 +151,11 @@ interface ConfigFormProps {
   readonly writeValue: (
     entry: TexraSettingRow,
     value: unknown,
-  ) => Effect.Effect<void, Error>;
+  ) => Effect.Effect<void, Error, ProcessServices>;
   /** Reset a setting to its default (delete the key). */
-  readonly resetValue: (entry: TexraSettingRow) => Effect.Effect<void, Error>;
+  readonly resetValue: (
+    entry: TexraSettingRow,
+  ) => Effect.Effect<void, Error, ProcessServices>;
   /** The runtime the writes above run on, from the surface that mounted
    *  this form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
@@ -205,7 +207,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const runWrite = (
     entry: TexraSettingRow,
     optimisticValue: unknown,
-    action: () => Effect.Effect<void, Error>,
+    action: () => Effect.Effect<void, Error, ProcessServices>,
   ): void => {
     const previous = effective(entry);
     setOverrides((current) => ({ ...current, [entry.key]: optimisticValue }));

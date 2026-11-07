@@ -3,16 +3,15 @@
 // Node imports
 
 // Third-party imports
-import { Effect, SubscriptionRef } from 'effect';
+import { Effect, FiberHandle, Scope, SubscriptionRef } from 'effect';
 import { useInput, useWindowSize, type Key } from 'ink';
 import {
   Fragment,
   useCallback,
-  useEffect,
   useLayoutEffect,
   useMemo,
-  useReducer,
   useRef,
+  useState,
 } from 'react';
 
 // Local imports - shared runtime
@@ -42,6 +41,7 @@ import { ScriptStagePopup } from './panes/ScriptStagePopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import type { ChatScrollback } from './panes/staticTranscriptRing';
+import { useMountScope } from './state/useMountScope';
 import { StatusBar } from './panes/StatusBar';
 import { currentApproval, promoteApprovalsForRun } from './state/approvalQueue';
 import {
@@ -66,15 +66,15 @@ import {
   slashPaletteOpen as slashPaletteOpenSignal,
   sessionListRunIds,
   focusRun,
+  childListFocused as childListFocusedSignal,
+  childListHighlight,
+  focusChildList,
+  highlightChildListRun,
 } from './state/cliState';
 import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from './state/transcript';
-import {
-  INITIAL_CHILD_LIST_SELECTION,
-  reduceChildListSelection,
-} from './state/childListSelection';
 import {
   currentView,
   killableRunId,
@@ -140,13 +140,8 @@ export function App(props: AppProps): React.JSX.Element {
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const formBusy = formProgress?.status === 'running';
-  const [childListSelection, dispatchChildListSelection] = useReducer(
-    reduceChildListSelection,
-    INITIAL_CHILD_LIST_SELECTION,
-  );
-  const childListActiveRunRef = useRef(activeRunId);
-  const childListFocused = childListSelection.focused;
-  const selectedChildValue = childListSelection.selectedValue;
+  const childListFocused = useSignal(childListFocusedSignal);
+  const selectedChildValue = useSignal(childListHighlight);
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const activeRun = runViewOf(view, activeRunId);
@@ -214,44 +209,6 @@ export function App(props: AppProps): React.JSX.Element {
   const childListAvailable = childListValues.length > 0;
   const selectedChild = runViewOf(view, selectedChildValue);
   const selectedChildKillable = killableRunId(selectedChild) !== undefined;
-  const reconcileSelection = {
-    kind: 'reconcile' as const,
-    activeRunId,
-    values: childListValues,
-  };
-  if (
-    reduceChildListSelection(childListSelection, reconcileSelection) !==
-    childListSelection
-  ) {
-    dispatchChildListSelection(reconcileSelection);
-  }
-  // Stream focus can also move through lifecycle completion or a numeric
-  // accelerator. Align the selected row before the changed frame is painted;
-  // ordinary row reconciliation still preserves manual list selection.
-  useLayoutEffect(() => {
-    if (childListActiveRunRef.current === activeRunId) return;
-    childListActiveRunRef.current = activeRunId;
-    if (!activeRunId) return;
-    dispatchChildListSelection({
-      kind: 'syncActiveRun',
-      runId: activeRunId,
-      values: childListValues,
-    });
-  }, [activeRunId, childListValues]);
-  useEffect(() => {
-    if (!childListAvailable && childListFocused) {
-      dispatchChildListSelection({ kind: 'blur' });
-    }
-  }, [childListAvailable, childListFocused]);
-  const cancelChildList = useCallback(() => {
-    dispatchChildListSelection({ kind: 'blur' });
-  }, []);
-  const focusChildList = useCallback(() => {
-    const firstChildValue = childListValues.at(0);
-    if (firstChildValue) {
-      dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
-    }
-  }, [childListValues]);
   // Kill, skip and retry; a refusal (a finished call) reads into the transcript.
   const request = (req: RuntimeRequest): void => {
     props.runtime.runFork(
@@ -261,7 +218,8 @@ export function App(props: AppProps): React.JSX.Element {
     );
   };
   const focusSession = (runId: RunId): void => {
-    dispatchChildListSelection({ kind: 'focusRun', runId });
+    highlightChildListRun(runId);
+    focusChildList(false);
     if (resumableRunId(view.runs.get(runId))) {
       props.onSubmit({ ...EMPTY_DRAFT, text: `/resume ${runId}` });
     } else {
@@ -383,14 +341,20 @@ export function App(props: AppProps): React.JSX.Element {
       ? undefined
       : foregroundSurfaces[foregroundKind];
 
+  // A bare Esc waiting out the chord window: the run it navigates from, and
+  // the timer as a fiber in the App's mount scope, which the next key clears.
   const pendingEscapeInterrupt = useRef<
-    | {
-        readonly parentRunId: RunId | undefined;
-        readonly runId: RunId;
-        readonly timer: ReturnType<typeof setTimeout>;
-      }
+    | { readonly parentRunId: RunId | undefined; readonly runId: RunId }
     | undefined
   >(undefined);
+  const mountScope = useMountScope(props.runtime);
+  const [escapeTimer] = useState(() =>
+    props.runtime.runSync(
+      FiberHandle.make<void>().pipe(
+        Effect.provideService(Scope.Scope, mountScope),
+      ),
+    ),
+  );
   const inputBarRef = useRef<InputBarHandle>(null);
   // The key that just resolved a pending Esc chord. Ink hands every keypress
   // to each `useInput` listener in subscription order, so the draft may see
@@ -410,13 +374,10 @@ export function App(props: AppProps): React.JSX.Element {
   );
 
   const clearPendingEscapeInterrupt = () => {
-    const scheduled = pendingEscapeInterrupt.current;
-    if (scheduled === undefined) return;
-    clearTimeout(scheduled.timer);
+    if (pendingEscapeInterrupt.current === undefined) return;
     pendingEscapeInterrupt.current = undefined;
+    props.runtime.runSync(FiberHandle.clear(escapeTimer));
   };
-
-  useEffect(() => clearPendingEscapeInterrupt, []);
 
   const handleMetaShortcut = (value: string): boolean => {
     if (!/^[1-9]$/.test(value)) return false;
@@ -456,11 +417,20 @@ export function App(props: AppProps): React.JSX.Element {
   const scheduleBareEscape = (runId: RunId) => {
     clearPendingEscapeInterrupt();
     const parentRunId = parentIdOf(runId);
-    const timer = setTimeout(() => {
-      pendingEscapeInterrupt.current = undefined;
-      handlePendingBareEscape(runId, parentRunId);
-    }, ESC_META_CHORD_INTERRUPT_DELAY_MS);
-    pendingEscapeInterrupt.current = { parentRunId, runId, timer };
+    pendingEscapeInterrupt.current = { parentRunId, runId };
+    props.runtime.runFork(
+      FiberHandle.run(
+        escapeTimer,
+        Effect.sleep(ESC_META_CHORD_INTERRUPT_DELAY_MS).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              pendingEscapeInterrupt.current = undefined;
+              handlePendingBareEscape(runId, parentRunId);
+            }),
+          ),
+        ),
+      ),
+    );
   };
 
   // Shared tail of both bare-Escape trigger sites below: defer through the
@@ -547,7 +517,7 @@ export function App(props: AppProps): React.JSX.Element {
     }
 
     if (childListFocused && !foregroundOpen) {
-      if (key.tab) dispatchChildListSelection({ kind: 'blur' });
+      if (key.tab) focusChildList(false);
       return;
     }
 
@@ -568,7 +538,7 @@ export function App(props: AppProps): React.JSX.Element {
     // Tab transfers keyboard ownership from the input to the child list;
     // Shift-Tab is the input's (a message held for the turn's end).
     if (key.tab && !key.shift) {
-      focusChildList();
+      focusChildList(true);
       return;
     }
 
@@ -641,16 +611,10 @@ export function App(props: AppProps): React.JSX.Element {
         snapshot={{
           foregroundMaxRows: foregroundSurface?.maxRows,
           foregroundKind,
-          childListFocused,
-          selectedChildValue,
         }}
-        onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
         onKillRun={(runId) =>
           request({ kind: 'run.stop', runId, reason: 'user' })
-        }
-        onChildSelectionChange={(value) =>
-          dispatchChildListSelection({ kind: 'highlight', value })
         }
       />
     </ActiveDraftScope>
