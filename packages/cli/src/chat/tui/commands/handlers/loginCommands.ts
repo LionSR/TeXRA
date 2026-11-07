@@ -38,6 +38,7 @@ import type {
   Secrets,
   SettingsStores,
 } from '@texra-ai/harness/host';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 
 const CHAT_LOGIN_USAGE = [
@@ -112,7 +113,11 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
 ): Effect.fn.Return<
   readonly string[],
   never,
-  Secrets | AgentCatalogServices | HttpClient.HttpClient | AppSignals
+  | Secrets
+  | SubscriptionAccounts
+  | AgentCatalogServices
+  | HttpClient.HttpClient
+  | AppSignals
 > {
   const lines: string[] = [];
 

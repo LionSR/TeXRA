@@ -9,6 +9,7 @@
 import { Context, Effect, Layer } from 'effect';
 import { AppSignals } from '@platform/appSignals';
 import type { CredentialStore, SecretsFailed } from '@texra-ai/llm';
+import { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 /**
  * Provider for secure secret storage (API keys, tokens).
@@ -45,14 +46,20 @@ export interface PlatformSecrets extends CredentialStore {
  * or writes a credential yields the store's own Effect and matches
  * {@link SecretsFailed}.
  *
+ * Both layers also serve the store's `SubscriptionAccounts`, built with it:
+ * a program that reads a subscription session reads it from the store in
+ * force, and a layer that provides another store provides its accounts.
+ *
  * `layer` takes a store built before the runtime (an embedder's, a test's):
  * the service is that value, not a thunk resolved per member call.
  */
 export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
   '@texra-ai/harness/platform/Secrets',
 ) {
-  static layer(secrets: PlatformSecrets): Layer.Layer<Secrets> {
-    return Layer.succeed(Secrets)(secrets);
+  static layer(
+    secrets: PlatformSecrets,
+  ): Layer.Layer<Secrets | SubscriptionAccounts> {
+    return withAccounts(Layer.succeed(Secrets)(secrets));
   }
 
   /**
@@ -62,12 +69,23 @@ export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
    */
   static announcing(
     make: (announce: (key: string) => void) => PlatformSecrets,
-  ): Layer.Layer<Secrets, never, AppSignals> {
-    return Layer.effect(
-      Secrets,
-      Effect.map(AppSignals, (signals) =>
-        make((key) => signals.emit('credentialChanged', { key })),
+  ): Layer.Layer<Secrets | SubscriptionAccounts, never, AppSignals> {
+    return withAccounts(
+      Layer.effect(
+        Secrets,
+        Effect.map(AppSignals, (signals) =>
+          make((key) => signals.emit('credentialChanged', { key })),
+        ),
       ),
     );
   }
 }
+
+/** `store` and the subscription accounts over the store it serves. */
+const withAccounts = <R>(
+  store: Layer.Layer<Secrets, never, R>,
+): Layer.Layer<Secrets | SubscriptionAccounts, never, R> =>
+  Layer.effect(
+    SubscriptionAccounts,
+    Effect.flatMap(Secrets, SubscriptionAccounts.make),
+  ).pipe(Layer.provideMerge(store));

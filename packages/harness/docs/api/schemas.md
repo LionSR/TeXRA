@@ -2524,13 +2524,18 @@ function stripControlCharacters(text: string, replacement = ''): string
 
 ## SUBSCRIPTION_AUTH_PROVIDERS
 
-The subscription providers, as a settings view signs in and out of them:
-the one spelling of a provider id everywhere. What a person calls each
-subscription and its sign-in is an app's copy; the harness's own failure
-text names a subscription by the provider it bills.
-
 ```ts
 const SUBSCRIPTION_AUTH_PROVIDERS: readonly ["chatgpt", "grok"]
+```
+
+## SUBSCRIPTION_ROUTES
+
+The route each provider's session bills, which names its account
+(`SubscriptionAccounts`). The ids stay as they are: the CLI's commands and
+the settings views' messages spell them.
+
+```ts
+const SUBSCRIPTION_ROUTES: Readonly<{ chatgpt: "chatgpt-subscription"; grok: "xai-subscription"; }>
 ```
 
 ## SubscriptionAuthProvider

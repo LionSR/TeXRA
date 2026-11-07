@@ -1123,10 +1123,11 @@ as `attribution`. No row is written. Returns the
 turn's assistant text and its priced usage (`null`: the provider reported
 none), for a caller whose row records what the call cost. `stores` are the
 asking session's setting slots: the binding, the retry limit and the usage
-consent read them, beside the process `Secrets`.
+consent read them, beside the process `Secrets` and its subscription
+accounts.
 
 ```ts
-const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<{ readonly text: string; readonly usage: { readonly provider: string; readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly responseTimeMs: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; } | null; }, Error | CallFailure, HttpClient | Secrets | UsageLog | RouteRetries>
+const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<{ readonly text: string; readonly usage: { readonly provider: string; readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly responseTimeMs: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; } | null; }, Error | CallFailure, HttpClient | Secrets | SubscriptionAccounts | UsageLog | RouteRetries>
 ```
 
 ## HelperPrompt
@@ -1504,8 +1505,9 @@ interface PlatformSecrets extends CredentialStore {
 ## PlatformServices
 
 The platform- and shared-owned services every process serves, merged once
-in `processLayer`'s `services` layer: the host ports, the language-model
-bridge and the HTTP client, plus the standard library's `FileSystem`,
+in `processLayer`'s `services` layer: the host ports (the secret store with
+the subscription accounts over it), the language-model bridge and the HTTP
+client, plus the standard library's `FileSystem`,
 `Path` and `ChildProcessSpawner`, which the same install provides from
 `@effect/platform-node` so a program that reads a file or starts a child
 process takes them from context instead of building a Node layer of its
@@ -1530,6 +1532,7 @@ type PlatformServices =
   | ProjectDatabases
   | HttpClient.HttpClient
   | Secrets
+  | SubscriptionAccounts
   | AppState
   | AgentDirectories
   | GlobalValues
@@ -1808,7 +1811,13 @@ interface ProcessServicesOptions {
    * and the tool catalog over it (`ToolCatalog`).
    */
   readonly plugins: readonly Plugin[];
-  readonly secrets: Layer.Layer<Secrets, never, AppSignals>;
+  /** The process's store and the subscription accounts over it
+   *  (`Secrets.layer`, `Secrets.announcing`). */
+  readonly secrets: Layer.Layer<
+    Secrets | SubscriptionAccounts,
+    never,
+    AppSignals
+  >;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
@@ -1889,7 +1898,7 @@ session's `roots`); provider keys and sign-ins come from the process
 {@link Secrets} service.
 
 ```ts
-const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelOption[], StateReadFailed | SecretsFailed | RouteUnavailable, Secrets>
+const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelOption[], StateReadFailed | SecretsFailed | RouteUnavailable, Secrets | SubscriptionAccounts>
 ```
 
 ## readStorageInventory
@@ -2197,6 +2206,10 @@ The process's secret store as an Effect service, provided once by the compositio
 `processLayer`. The shape is the port itself: a program that reads
 or writes a credential yields the store's own Effect and matches
 {@link SecretsFailed}.
+
+Both layers also serve the store's `SubscriptionAccounts`, built with it:
+a program that reads a subscription session reads it from the store in
+force, and a layer that provides another store provides its accounts.
 
 `layer` takes a store built before the runtime (an embedder's, a test's):
 the service is that value, not a thunk resolved per member call.

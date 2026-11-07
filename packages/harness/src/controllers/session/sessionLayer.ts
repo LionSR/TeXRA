@@ -34,6 +34,7 @@ import { AppSignals } from '@platform/appSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { globalStorageFsLayer, SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import {
   nodeProcesses,
   processOwnerId,
@@ -306,7 +307,13 @@ export interface ProcessServicesOptions {
    * and the tool catalog over it (`ToolCatalog`).
    */
   readonly plugins: readonly Plugin[];
-  readonly secrets: Layer.Layer<Secrets, never, AppSignals>;
+  /** The process's store and the subscription accounts over it
+   *  (`Secrets.layer`, `Secrets.announcing`). */
+  readonly secrets: Layer.Layer<
+    Secrets | SubscriptionAccounts,
+    never,
+    AppSignals
+  >;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;

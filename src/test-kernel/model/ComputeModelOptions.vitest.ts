@@ -33,7 +33,7 @@ function onlyEnabled(models: readonly string[]) {
 /** The installed host's options for `models`, over its secret store. */
 const readHostModelOptions = (models: readonly string[]) =>
   readModelOptions(installedHost().roots, models).pipe(
-    Effect.provideService(Secrets, fakeHostSecrets),
+    Effect.provide(Secrets.layer(fakeHostSecrets)),
   );
 
 /** Install, for the test, a host with the access state the case needs. */

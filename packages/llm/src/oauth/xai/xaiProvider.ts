@@ -1,7 +1,7 @@
 /**
  * The experimental "Sign in with Grok" (xAI SuperGrok) provider: its
- * constants, token and session schemas, JWT claims, OAuth policy, and the
- * coordinator and loopback sign-in bound to them. The RFC 8628 device
+ * constants, token and session schemas, JWT claims, OAuth policy (its
+ * account is `SubscriptionAccounts`'s), and the loopback sign-in. The RFC 8628 device
  * protocol lives in `xaiOAuthClient.ts` and `xaiDeviceLogin.ts`.
  *
  * Rides a public Grok-CLI OAuth client registration. xAI can change or revoke
@@ -18,21 +18,11 @@
 import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
-import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import {
   SubscriptionSessionBaseSchema,
   SubscriptionTokenResponseSchema,
 } from '../subscriptionSessionSchema.js';
-import type {
-  CredentialStore,
-  SecretsFailed,
-} from '../../providers/credentials.js';
-import type { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
-import type {
-  SubscriptionCoordinator,
-  SubscriptionOAuthPolicy,
-  SubscriptionSessionStatus,
-} from '../subscriptionCoordinator.js';
+import type { SubscriptionOAuthPolicy } from '../subscriptionCoordinator.js';
 
 /** Borrowed OAuth client id (Grok CLI desktop registration). */
 export const XAI_CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828';
@@ -199,7 +189,7 @@ function decodeXaiJwtClaims(token: string): XaiJwtClaims {
  * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT,
  * so the shared coordinator runs it as is.
  */
-const XAI_POLICY = Object.freeze<SubscriptionOAuthPolicy<XaiSession>>({
+export const XAI_POLICY = Object.freeze<SubscriptionOAuthPolicy<XaiSession>>({
   secretKey: XAI_SESSION_SECRET_KEY,
   sessionSchema: XaiSessionSchema,
   tokenEndpoint: Object.freeze({
@@ -234,26 +224,6 @@ const XAI_POLICY = Object.freeze<SubscriptionOAuthPolicy<XaiSession>>({
     };
   },
 });
-
-/**
- * The coordinator for the caller's secret store: one coordinator per store
- * instance, so distinct stores never share session state.
- */
-export const xaiCoordinator: (
-  secrets: CredentialStore,
-) => SubscriptionCoordinator<XaiSession> =
-  SubscriptionOAuthCoordinator.forProvider(XAI_POLICY);
-
-/** Signed-in status, read from the caller's secret store. A store that
- *  cannot be read, or a stored session that does not parse, fails. */
-export function getXaiStatus(
-  secrets: CredentialStore,
-): Effect.Effect<
-  SubscriptionSessionStatus,
-  SecretsFailed | SubscriptionOAuthError
-> {
-  return Effect.suspend(() => xaiCoordinator(secrets).getStatus());
-}
 
 /** The browser sign-in, bound to the registered Grok callback. */
 export const xaiLoginWithLoopback = defineLoopbackLogin<XaiSession>({

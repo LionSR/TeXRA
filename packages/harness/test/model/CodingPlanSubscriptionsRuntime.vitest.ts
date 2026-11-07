@@ -30,7 +30,7 @@ const boundEndpoint = (
   Effect.gen(function* () {
     const facts = routeFactsFor(
       yield* readModelSettings(installedHost().roots).pipe(
-        Effect.provideService(Secrets, fakeHostSecrets),
+        Effect.provide(Secrets.layer(fakeHostSecrets)),
       ),
       declinedRoutes ?? [],
     );
@@ -102,7 +102,7 @@ layer(
         });
         expect(
           (yield* readModelOptions(installedHost().roots, ['glm/glm-5.3']).pipe(
-            Effect.provideService(Secrets, fakeHostSecrets),
+            Effect.provide(Secrets.layer(fakeHostSecrets)),
           ))[0]?.usageRoute,
         ).toBe(usageRoute);
       }),
