@@ -24,9 +24,11 @@
 // Third-party imports
 import {
   Cause,
+  Context,
   Duration,
   Effect,
   Exit,
+  FileSystem,
   Layer,
   Option,
   Predicate,
@@ -36,10 +38,13 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { HttpClient } from 'effect/http';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import { subscribeAppSignal, type AppSignals } from '@platform/appSignals';
+import { Secrets } from '@platform/secrets';
 import type { StateStore } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { storedDisabledTools, type Plugin } from '@tools/plugins';
@@ -158,7 +163,14 @@ export const toolAvailabilityLayer: Layer.Layer<
         (plugin) => plugin.availability.reprobeOnSecrets ?? [],
       ),
     );
-    const services = yield* Effect.context<ToolProbeServices>();
+    // What a round runs on, beside a plugin's own services: exactly the
+    // probe services, never the build's scope or references with them.
+    const services = Context.pick(
+      Secrets,
+      FileSystem.FileSystem,
+      HttpClient.HttpClient,
+      ChildProcessSpawner,
+    )(yield* Effect.context<ToolProbeServices>());
     const results = yield* SubscriptionRef.make<AvailabilityResults>(new Map());
 
     const probeRound = (inputs: ToolProbeInputs) =>
