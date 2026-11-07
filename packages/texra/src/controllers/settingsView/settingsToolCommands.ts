@@ -15,7 +15,10 @@ import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,
 } from '@texra/controllers/settingsView/LatexToolingController';
-import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
+import {
+  buildPluginRows,
+  type PluginPageRoots,
+} from '@texra/controllers/settingsView/pluginRows';
 import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 
@@ -25,15 +28,11 @@ import {
   type SettingsHostBindings,
   type SettingsPresentation,
 } from './settingsHostBindings';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** The Plugins and LaTeX pages: their arms, their pages, and the follower
  *  of the tool availability the Plugins page reads. */
 export function settingsToolCommands(ports: {
-  readonly roots: Pick<
-    WorkspaceRoots,
-    'workspace' | 'config' | 'globalState' | 'globalStorage' | 'storageRoot'
-  >;
+  readonly roots: PluginPageRoots;
   readonly bindings: SettingsHostBindings;
   readonly present: Pick<SettingsPresentation, 'changed'>;
   /** The host installs an editor extension a plugin card names. */
