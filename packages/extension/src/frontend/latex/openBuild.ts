@@ -8,9 +8,12 @@ import {
 
 import * as vscode from 'vscode';
 import {
+  Duration,
   Effect,
   Exit,
   FileSystem,
+  Option,
+  Schedule,
   type Path,
   type PlatformError,
   type Scope,
@@ -26,10 +29,6 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import {
-  LATEX_VIEWER_OPEN_DELAY_MS,
-  LATEX_VIEWER_REFRESH_DELAY_MS,
-} from '@texra/shared/constants/latexTiming';
 
 // Local imports - utilities
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -91,6 +90,10 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
   return path.isAbsolute(resolved) ? resolved : path.resolve(dir, resolved);
 }
 
+/** The PDF a build of `texPath` writes, where LaTeX Workshop's viewer reads it. */
+const builtPdfPath = (texPath: string): string =>
+  path.join(resolveLatexWorkshopOutDir(texPath), `${getFileStem(texPath)}.pdf`);
+
 /**
  * Invoke the LaTeX Workshop build command for a file, warn-logging on failure.
  * `warnLabel` prefixes the failure message so callers keep their diagnostic context.
@@ -136,20 +139,23 @@ export const openBuilt = Effect.fn('openBuild.openBuilt')(function* (
     }
   }).pipe(
     Effect.onExit((exit) => {
-      if (viewerFile === undefined) return Effect.void;
+      const target = viewerFile;
+      if (target === undefined) return Effect.void;
       const stillCurrent =
         Exit.isSuccess(exit) &&
-        viewerFile.absolutePath === locations.at(-1)?.absolutePath;
+        target.absolutePath === locations.at(-1)?.absolutePath;
       return (
         stillCurrent
           ? Effect.succeed(true)
-          : reopenViewerFile(viewerFile, preserveFocus)
+          : reopenViewerFile(target, preserveFocus)
       ).pipe(
         Effect.flatMap((ready) =>
           ready
             ? // In the caller's scope: the viewer opens after this returns,
               // and closing that scope cancels an open still waiting.
-              Effect.forkScoped(openViewer, { startImmediately: true })
+              Effect.forkScoped(openViewer(builtPdfPath(target.absolutePath)), {
+                startImmediately: true,
+              })
             : Effect.void,
         ),
       );
@@ -272,39 +278,44 @@ const prepareLatexBuild = Effect.fn('openBuild.prepareLatexBuild')(function* (
 });
 
 /**
- * The refresh that follows a successful viewer open, delayed so LaTeX Workshop
- * has rendered the PDF it was asked for. Forked into the caller's scope when
- * scheduled: it fires long after the caller that scheduled it has moved on.
+ * How long the viewer waits for a PDF that is not there yet.
+ * `latex-workshop.build` normally returns once its recipe has finished, so
+ * the PDF is there; it returns early while a build LaTeX Workshop started
+ * itself (on save) is still running, and a first build may not have
+ * written it yet.
  */
-const scheduleViewerRefresh: Effect.Effect<void> = Effect.gen(function* () {
-  yield* Effect.sleep(LATEX_VIEWER_REFRESH_DELAY_MS);
-  yield* executeVscodeCommand('latex-workshop.refresh-viewer').pipe(
-    Effect.catch((err) =>
-      Effect.logWarning(`Viewer refresh failed: ${toErrorMessage(err)}`).pipe(
-        withLogChannel(CHANNEL),
-      ),
-    ),
-  );
-});
+const PDF_WRITE_BUDGET = Duration.seconds(15);
+
+/** How often the viewer looks for the PDF while it waits. */
+const PDF_POLL_INTERVAL = Duration.millis(250);
 
 /**
- * Open the PDF viewer on LaTeX Workshop's current document, then refresh it.
- * A rejected open is logged at warn, and leaves nothing to refresh.
+ * Open the PDF viewer on LaTeX Workshop's current document once the build
+ * has written `pdfPath`, then refresh it so a viewer already showing that
+ * PDF shows this build. When the PDF is still missing after the budget, the
+ * viewer opens anyway and the wait is logged at warn; so is a failure.
  */
-const openViewer: Effect.Effect<void, never, Scope.Scope> = Effect.gen(
-  function* () {
-    yield* Effect.sleep(LATEX_VIEWER_OPEN_DELAY_MS);
-    yield* executeVscodeCommand('latex-workshop.view').pipe(
-      // It starts immediately so its delay runs from the open rather than
-      // from whenever a fiber next gets the scheduler.
-      Effect.andThen(
-        Effect.forkScoped(scheduleViewerRefresh, { startImmediately: true }),
-      ),
-      Effect.catch((err) =>
-        Effect.logWarning(`Viewer display failed: ${toErrorMessage(err)}`).pipe(
-          withLogChannel(CHANNEL),
-        ),
-      ),
+const openViewer = Effect.fn('openBuild.openViewer')(
+  function* (pdfPath: string) {
+    const fs = yield* FileSystem.FileSystem;
+    const written = yield* fs.exists(pdfPath).pipe(
+      Effect.repeat({
+        schedule: Schedule.spaced(PDF_POLL_INTERVAL),
+        until: (exists) => exists,
+      }),
+      Effect.timeoutOption(PDF_WRITE_BUDGET),
     );
+    if (Option.isNone(written)) {
+      yield* Effect.logWarning(
+        `The build had not written ${pdfPath} after ${Duration.format(PDF_WRITE_BUDGET)}; opening the PDF viewer anyway`,
+      ).pipe(withLogChannel(CHANNEL));
+    }
+    yield* executeVscodeCommand('latex-workshop.view');
+    yield* executeVscodeCommand('latex-workshop.refresh-viewer');
   },
+  Effect.catch((err) =>
+    Effect.logWarning(`PDF viewer failed: ${toErrorMessage(err)}`).pipe(
+      withLogChannel(CHANNEL),
+    ),
+  ),
 );
