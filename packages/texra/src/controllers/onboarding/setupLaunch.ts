@@ -1,5 +1,5 @@
 import type { ProcessServices } from '@texra-ai/harness/host';
-import { Effect, Result } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { Cancelled } from '@texra-ai/harness';
 import { agentName, type AgentConfig } from '@texra-ai/harness/schemas';
@@ -19,14 +19,25 @@ import type { SettingsStores } from '@texra-ai/harness/host';
 const SETUP_INSTRUCTION =
   'Finish installing TeXRA. Probe my environment, install anything missing, and configure a working credential.';
 
+/** The session already holds a live setup run. */
+class SetupAlreadyRunning extends Schema.TaggedError<SetupAlreadyRunning>()(
+  'SetupAlreadyRunning',
+  { message: Schema.String },
+) {}
+
+/** The user's credentials can call no setup model. */
+class NoSetupModel extends Schema.TaggedError<NoSetupModel>()(
+  'NoSetupModel',
+  { message: Schema.String },
+) {}
+
 /**
  * Launch the setup conversation in `session` and wait for it to end. Every
- * host's setup entry point comes through here. `already-running` when the
- * session holds a live setup run, `no-model` when the user's credentials
- * can call no setup model (the missing-credential case; a check that cannot
- * be answered fails), `not-started` when the launch path refused the run.
- * That refusal is the launch path's to show, and a failure once the run
- * started is its result row's: neither is a failure here.
+ * host's setup entry point comes through here. It fails with
+ * {@link SetupAlreadyRunning} or {@link NoSetupModel}, and with an `Error`
+ * when the credential check cannot be answered. A refusal of the launch path
+ * is that path's to show, and a failure once the run started is its result
+ * row's: neither is a failure here.
  */
 export const launchSetup = Effect.fn('launchSetup')(function* <E, R>(options: {
   readonly session: Pick<Session, 'view'>;
@@ -34,7 +45,11 @@ export const launchSetup = Effect.fn('launchSetup')(function* <E, R>(options: {
   /** This host's launch path for the setup request, which logs and shows a
    *  failure to start (`HostRunActions.runValidated`). */
   readonly start: (config: AgentConfig) => Effect.Effect<Run, E, R>;
-}) {
+}): Effect.fn.Return<
+  void,
+  SetupAlreadyRunning | NoSetupModel | Error,
+  R | Effect.Services<ReturnType<typeof resolveSetupLaunchModel>>
+> {
   // A second setup conversation, however it was started, would race the
   // first one's installs and config writes.
   const live = [...options.session.view.current().runs.values()].some(
@@ -43,28 +58,37 @@ export const launchSetup = Effect.fn('launchSetup')(function* <E, R>(options: {
       run.identity.kind === 'agent' &&
       agentName(run.identity.agent) === SETUP_AGENT_NAME,
   );
-  if (live) return 'already-running' as const;
+  if (live)
+    return yield* new SetupAlreadyRunning({
+      message: 'The setup assistant is already running.',
+    });
   // The launch model the credential predicate every host shares decides:
   // adapter-level checks, so a blank env key does not count and fail later
   // as "No model is available".
   const model = yield* resolveSetupLaunchModel(options.roots);
-  if (model === null) return 'no-model' as const;
+  if (model === null)
+    return yield* new NoSetupModel({
+      message:
+        'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
+    });
   // An Error, as every host words a failed setup launch by its message.
   const config = yield* decodeLaunchConfig({
     agent: SETUP_AGENT_NAME,
     model,
     instruction: SETUP_INSTRUCTION,
   }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
-  const started = yield* Effect.result(options.start(config));
-  if (Result.isFailure(started)) return 'not-started' as const;
-  const run = started.success;
-  yield* run.result.pipe(
-    Effect.asVoid,
-    Effect.catch((failure) =>
-      Effect.logDebug(`The setup run failed: ${failure.message}`),
+  yield* options.start(config).pipe(
+    Effect.flatMap((run) =>
+      run.result.pipe(
+        Effect.asVoid,
+        Effect.catch((failure) =>
+          Effect.logDebug(`The setup run failed: ${failure.message}`),
+        ),
+      ),
     ),
+    // The launch path has shown its refusal already.
+    Effect.catch(() => Effect.void),
   );
-  return 'launched' as const;
 });
 
 /**
@@ -96,20 +120,12 @@ export const kickoffDesktopSetup = (options: {
     return Effect.logWarning(
       'Setup did not start: the window has not bound its project yet.',
     );
-  return Effect.gen(function* () {
-    const outcome = yield* launchSetup({
-      session: options.project.session,
-      roots: options.project.roots,
-      start: run.runValidated,
-    });
-    if (outcome === 'no-model') {
-      return yield* Effect.fail(
-        new Error(
-          'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
-        ),
-      );
-    }
+  return launchSetup({
+    session: options.project.session,
+    roots: options.project.roots,
+    start: run.runValidated,
   }).pipe(
+    Effect.catchTag('SetupAlreadyRunning', () => Effect.void),
     Effect.catch((error) =>
       error instanceof Cancelled
         ? Effect.void
