@@ -27,16 +27,16 @@ Each is cited where a finding borders it.
 
 ## Numbers
 
-| Where                       | Suites | Lines  |
-| --------------------------- | ------ | ------ |
-| `src/test-kernel` (suites)  | 125    | 19,329 |
-| `packages/harness/test`     | 84     | 7,329  |
-| `packages/desktop/tests/e2e`| 11     | 3,612  |
-| `packages/llm/test`         | 11     | 1,719  |
-| `supabase/functions`        | 10     | 860    |
-| `packages/texra/test`       | 17     | 591    |
-| `packages/llm/test-live`    | 13     | 506    |
-| `packages/cli`, `desktop/test`, `extension/test` | 9 | 320 |
+| Where                                            | Suites | Lines  |
+| ------------------------------------------------ | ------ | ------ |
+| `src/test-kernel` (suites)                       | 125    | 19,329 |
+| `packages/harness/test`                          | 84     | 7,329  |
+| `packages/desktop/tests/e2e`                     | 11     | 3,612  |
+| `packages/llm/test`                              | 11     | 1,719  |
+| `supabase/functions`                             | 10     | 860    |
+| `packages/texra/test`                            | 17     | 591    |
+| `packages/llm/test-live`                         | 13     | 506    |
+| `packages/cli`, `desktop/test`, `extension/test` | 9      | 320    |
 
 Helper share (lines in top-level and `describe`-level declarations: helper
 functions, fixture constants, types; imports and test bodies excluded; TS
@@ -44,13 +44,13 @@ compiler walk) is 23% over all suites (7,967 of 34,179 lines).
 
 **The five largest suites:**
 
-| Suite                                                  | Lines | Tests | Helper share | Churn (11-01..) |
-| ------------------------------------------------------ | ----- | ----- | ------------ | --------------- |
-| `src/test-kernel/controllers/session/sessionEvents.vitest.ts` | 1,560 | 14 | 27% (418) | 13 |
-| `src/test-kernel/controllers/session/goldenStore.vitest.ts`   | 784   | 8  | 24% (187) | 11 |
-| `src/test-kernel/agent/runtime/RetryState.vitest.ts`          | 700   | 10 | 35% (246) | 13 |
-| `packages/desktop/tests/e2e/workspaceTabs.spec.ts`            | 649   | 9  | 17% (112) | 1  |
-| `packages/llm/test/api/AnthropicMessages.vitest.ts`           | 639   | 7  | 37% (238) | 3  |
+| Suite                                                         | Lines | Tests | Helper share | Churn (11-01..) |
+| ------------------------------------------------------------- | ----- | ----- | ------------ | --------------- |
+| `src/test-kernel/controllers/session/sessionEvents.vitest.ts` | 1,560 | 14    | 27% (418)    | 13              |
+| `src/test-kernel/controllers/session/goldenStore.vitest.ts`   | 784   | 8     | 24% (187)    | 11              |
+| `src/test-kernel/agent/runtime/RetryState.vitest.ts`          | 700   | 10    | 35% (246)    | 13              |
+| `packages/desktop/tests/e2e/workspaceTabs.spec.ts`            | 649   | 9     | 17% (112)    | 1               |
+| `packages/llm/test/api/AnthropicMessages.vitest.ts`           | 639   | 7     | 37% (238)    | 3               |
 
 Next by helper share among suites of 250+ lines: `LeanServerPool` 51% (a
 fake `lake` script: the edge, fine), `ReplyDocuments` 45% (a case table,

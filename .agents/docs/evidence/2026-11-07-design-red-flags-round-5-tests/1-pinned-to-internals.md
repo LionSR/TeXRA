@@ -307,13 +307,13 @@ part A's PR replaces.
 Drive it through the controller's public verbs (`submit`, `resume`, `stop`),
 and assert the session and the process. The replacements:
 
-| Case | Assert |
-| --- | --- |
-| Ctrl-C during resume | the run's view `outcome: 'cancelled'` and exit code 130 |
-| Failure while leaving | exit code `AgentError` |
-| Typed while a stop is pending | `queuedFollowUps(session, id)` in order, and one `run.start` row (no second root) |
-| Bash approve-for-session | the `request.decided` row; that its grant field is the one to read is unverified |
-| Personal-key retry | the decided row's `{ action: 'retry', credentials: 'personal' }`, and the stored preference read back from the settings store unchanged; no call count |
+| Case                          | Assert                                                                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ctrl-C during resume          | the run's view `outcome: 'cancelled'` and exit code 130                                                                                                |
+| Failure while leaving         | exit code `AgentError`                                                                                                                                 |
+| Typed while a stop is pending | `queuedFollowUps(session, id)` in order, and one `run.start` row (no second root)                                                                      |
+| Bash approve-for-session      | the `request.decided` row; that its grant field is the one to read is unverified                                                                       |
+| Personal-key retry            | the decided row's `{ action: 'retry', credentials: 'personal' }`, and the stored preference read back from the settings store unchanged; no call count |
 
 The frame-level behaviour (the modal, the Ctrl-C hint) is already
 `validate-tui`'s `queued-followups`, `Ctrl-C stop` and approval scenarios,
@@ -534,11 +534,11 @@ Electron at E2E cost, and pinned to the view's field names.
 
 **The better design.**
 
-| Spec | Replacement |
-| --- | --- |
-| `sessionLifecycle` | for each tab, `getByRole('img', { name: <status word> })`, where both restarted runs show the interrupted word |
-| `settingsPersistence` | the memory row's visible text |
-| `trajectories` | the diff pane's rendered `old body` / `new body`, as `devStartup` does |
+| Spec                  | Replacement                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `sessionLifecycle`    | for each tab, `getByRole('img', { name: <status word> })`, where both restarted runs show the interrupted word |
+| `settingsPersistence` | the memory row's visible text                                                                                  |
+| `trajectories`        | the diff pane's rendered `old body` / `new body`, as `devStartup` does                                         |
 
 **Deleted:** three `HTMLElement & {…}` property reads.
 
@@ -567,6 +567,7 @@ Before: the schema, the fold, and the UI and `sessionLifecycle.spec.ts`
 
   The two trace-viewer ones test `trace.json`, a format. The rest fall
   under the 10-27 note's §4 A1 codemod: cited, not re-reported.
+
 - **`resumeRun.vitest.ts` calls `resumeRun` directly** (`:64`). It already
   builds the public session (`packageSession`, `:115-123`), whose
   `session.resume(runId)` is the host verb. Fix: resume through it in the
@@ -624,6 +625,7 @@ Before: the schema, the fold, and the UI and `sessionLifecycle.spec.ts`
   encoding, collection, the ordinal never reused, `sessionEvents.vitest.ts:829-1000`).
   The store's format is a versioned contract (`packages/harness/AGENTS.md`
   "Storage format").
+
 - **R3's other residue.** The scripted-model residue in 1.1 is R1's
   (`../2026-11-07-design-red-flags-round-3/R-test-infrastructure.md:102`),
   reported here only with its churn evidence and what #14823 left. R2, R3,

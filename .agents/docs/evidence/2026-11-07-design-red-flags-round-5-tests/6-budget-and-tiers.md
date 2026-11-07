@@ -20,13 +20,13 @@ on 4 cores (`maxWorkers: '50%'`, so 2 workers):
   `endTime - startTime`, which leaves out module import), and wall time from
   one run of each project alone:
 
-| Project    | Files | Tests | File time (full run) | Wall alone | Wall split (Vitest's summary)              |
-| ---------- | ----: | ----: | -------------------: | ---------: | ------------------------------------------ |
-| `crash`    |     7 |     9 |               60.9 s |     31.6 s | tests 93 %                                 |
-| `kernel`   |   106 |   208 |               26.6 s |     16.6 s | tests 76 %, import 12 %                    |
-| `isolated` |    34 |    74 |                6.3 s |     26.0 s | import 52 %, setup 17 %, **tests 17 %**    |
-| `pure`     |    99 |   227 |                2.1 s |      4.5 s | import 39 %, transform 30 %, tests 24 %    |
-| `!crash`   |   239 |   509 |                    — |     49.5 s | tests 44 %, import 35 %                    |
+| Project    | Files | Tests | File time (full run) | Wall alone | Wall split (Vitest's summary)           |
+| ---------- | ----: | ----: | -------------------: | ---------: | --------------------------------------- |
+| `crash`    |     7 |     9 |               60.9 s |     31.6 s | tests 93 %                              |
+| `kernel`   |   106 |   208 |               26.6 s |     16.6 s | tests 76 %, import 12 %                 |
+| `isolated` |    34 |    74 |                6.3 s |     26.0 s | import 52 %, setup 17 %, **tests 17 %** |
+| `pure`     |    99 |   227 |                2.1 s |      4.5 s | import 39 %, transform 30 %, tests 24 % |
+| `!crash`   |   239 |   509 |                    — |     49.5 s | tests 44 %, import 35 %                 |
 
 Per file, alone: `pure` 0.045 s, `kernel` 0.16 s, `isolated` 0.77 s. The
 `crash` project is 63 % of the suite's test time. `isolated` is 14 % of the
@@ -35,23 +35,23 @@ files.
 
 **Top 15 files by duration** (full run, file time):
 
-| #   | Time   | Tests | File                                                                                  | Slowest test, and why it is slow                                                                                       |
-| --- | ------ | ----: | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 1   | 15.4 s |     1 | `packages/harness/test/controllers/session/crashConformanceResume.1.vitest.ts`        | resumes from every commit point (one test replays each of its commit points)                                           |
-| 2   | 14.9 s |     1 | `…/crashConformanceResume.2.vitest.ts`                                                | same                                                                                                                   |
-| 3   | 12.8 s |     1 | `…/crashConformanceResume.3.vitest.ts`                                                | same                                                                                                                   |
-| 4   | 12.6 s |     1 | `…/crashConformanceResume.4.vitest.ts`                                                | same                                                                                                                   |
-| 5   | 6.6 s  |     4 | `packages/harness/test/utils/system/SystemUtils.vitest.ts`                            | 3.0 s: a host `SIGKILL`ed with a background job. Real process time is what it tests                                    |
-| 6   | 4.2 s  |     2 | `src/test-kernel/controllers/session/sessionStore.vitest.ts`                          | 3.7 s: R24. Six injected read faults ride the view's real `Schedule.exponential('50 millis')`, `times: 5` (`sessionInputs.ts:57-59`), on a live clock |
-| 7   | 3.3 s  |     6 | `src/test-kernel/agent/runtime/resumeRun.vitest.ts`                                   | 0.7 s each: a crash, then a resume over a real store                                                                   |
-| 8   | 3.3 s  |     3 | `…/crashConformanceChildResults.1.vitest.ts`                                          | 2.2 s: a detached command a dead process left running                                                                  |
-| 9   | 2.3 s  |     2 | `src/test-kernel/agent/runtime/AgentLaunchActivation.vitest.ts`                       | 1.3 s: R6, agent file against inline persona                                                                           |
-| 10  | 1.7 s  |    15 | `src/test-kernel/controllers/session/sessionEvents.vitest.ts`                         | 1.0 s: refuses a store another OS process holds (a real child process)                                                 |
-| 11  | 1.7 s  |     3 | `src/test-kernel/effect/sessionPrograms.vitest.ts`                                    | 0.8 s: R14                                                                                                             |
-| 12  | 1.1 s  |     3 | `src/test-kernel/agent/CodeSandbox.vitest.ts`                                         | 0.6 s: QuickJS                                                                                                         |
-| 13  | 1.0 s  |     7 | `src/test-kernel/controllers/session/goldenStore.vitest.ts`                           | 0.3 s                                                                                                                  |
-| 14  | 1.0 s  |     1 | `…/crashConformanceChildResults.2.vitest.ts`                                          | 1.0 s                                                                                                                  |
-| 15  | 0.9 s  |     4 | `src/test-kernel/agent/ToolUseDispatchParallel.vitest.ts`                             | 0.5 s                                                                                                                  |
+| #   | Time   | Tests | File                                                                           | Slowest test, and why it is slow                                                                                                                      |
+| --- | ------ | ----: | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 15.4 s |     1 | `packages/harness/test/controllers/session/crashConformanceResume.1.vitest.ts` | resumes from every commit point (one test replays each of its commit points)                                                                          |
+| 2   | 14.9 s |     1 | `…/crashConformanceResume.2.vitest.ts`                                         | same                                                                                                                                                  |
+| 3   | 12.8 s |     1 | `…/crashConformanceResume.3.vitest.ts`                                         | same                                                                                                                                                  |
+| 4   | 12.6 s |     1 | `…/crashConformanceResume.4.vitest.ts`                                         | same                                                                                                                                                  |
+| 5   | 6.6 s  |     4 | `packages/harness/test/utils/system/SystemUtils.vitest.ts`                     | 3.0 s: a host `SIGKILL`ed with a background job. Real process time is what it tests                                                                   |
+| 6   | 4.2 s  |     2 | `src/test-kernel/controllers/session/sessionStore.vitest.ts`                   | 3.7 s: R24. Six injected read faults ride the view's real `Schedule.exponential('50 millis')`, `times: 5` (`sessionInputs.ts:57-59`), on a live clock |
+| 7   | 3.3 s  |     6 | `src/test-kernel/agent/runtime/resumeRun.vitest.ts`                            | 0.7 s each: a crash, then a resume over a real store                                                                                                  |
+| 8   | 3.3 s  |     3 | `…/crashConformanceChildResults.1.vitest.ts`                                   | 2.2 s: a detached command a dead process left running                                                                                                 |
+| 9   | 2.3 s  |     2 | `src/test-kernel/agent/runtime/AgentLaunchActivation.vitest.ts`                | 1.3 s: R6, agent file against inline persona                                                                                                          |
+| 10  | 1.7 s  |    15 | `src/test-kernel/controllers/session/sessionEvents.vitest.ts`                  | 1.0 s: refuses a store another OS process holds (a real child process)                                                                                |
+| 11  | 1.7 s  |     3 | `src/test-kernel/effect/sessionPrograms.vitest.ts`                             | 0.8 s: R14                                                                                                                                            |
+| 12  | 1.1 s  |     3 | `src/test-kernel/agent/CodeSandbox.vitest.ts`                                  | 0.6 s: QuickJS                                                                                                                                        |
+| 13  | 1.0 s  |     7 | `src/test-kernel/controllers/session/goldenStore.vitest.ts`                    | 0.3 s                                                                                                                                                 |
+| 14  | 1.0 s  |     1 | `…/crashConformanceChildResults.2.vitest.ts`                                   | 1.0 s                                                                                                                                                 |
+| 15  | 0.9 s  |     4 | `src/test-kernel/agent/ToolUseDispatchParallel.vitest.ts`                      | 0.5 s                                                                                                                                                 |
 
 The crash shards re-run the clean pass in each file. A scratch shard that
 replays no point (`crashConformanceSuite(['resume'], { index: 9999, count:

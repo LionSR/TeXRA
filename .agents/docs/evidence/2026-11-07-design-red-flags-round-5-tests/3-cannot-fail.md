@@ -24,7 +24,7 @@ is marked "unverified".
   - Defaults re-asserted: 1 site uses a schema's decoding default as the
     expected value (F4). `Settings.defaultOf` appears once, as a data check
     (`ModelOptionsBasic.vitest.ts:15`, fine).
-- Most `toHaveBeenCalled` hits are real outcomes: a port double's call *is*
+- Most `toHaveBeenCalled` hits are real outcomes: a port double's call _is_
   the effect under test (`OverleafClone.vitest.ts:70`,
   `SessionSurfaces.vitest.ts:119`, `DesktopWindowLifecycle.vitest.ts:36-50`).
   This lens reports only those where the call or value comes back from the
@@ -53,7 +53,7 @@ host.
   `withSetup` reads.
 - `src/test-kernel/tools/setup/SendToTerminalTool.vitest.ts:36-50`: the same
   thing with the `terminal` recorder `runs`.
-- **Executed.** Same setup, same recorder, an *allowlisted* command
+- **Executed.** Same setup, same recorder, an _allowlisted_ command
   (`texra.setApiKey`, no args):
   `{"status":"error","error":"VS Code command invocation is unavailable in this host."}`,
   with 0 invocations recorded. A valid single-line terminal command
@@ -324,7 +324,7 @@ Each is a line or two, recorded so the fixes can ride with a nearby PR.
     fixture made. The `vi.waitFor` on `runId` at `:382-384` is the check.
 - **A title the assertion does not reach.**
   `packages/llm/test-live/support.ts:333-349`, "chains the next turn on the
-  anchor the first left", sends the full history *and* the anchor
+  anchor the first left", sends the full history _and_ the anchor
   (`:152-165`). Then it asserts only `finishReason === 'stop'` and non-empty
   text, which also holds for a codec that ignores the anchor. Either rename
   it to what it shows (a turn carrying an anchor is accepted) or assert the

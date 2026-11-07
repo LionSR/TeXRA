@@ -11,21 +11,21 @@ otherwise "measured" (`simplify`/`refactor` subjects since 11-01).
 
 ## Numbers
 
-| Primitive (suites only)                                                            | Files | Sites |
-| ---------------------------------------------------------------------------------- | ----- | ----- |
-| Outer `layer(...)` with `excludeTestServices: true` (whole block on the live clock) | 73    | -     |
-| `it.live` or `excludeTestServices: true`                                            | 91    | -     |
-| `TestClock` used at all                                                             | 14    | 37    |
-| Forever-loop "clock pumps" (`TestClock.adjust` on a real tick)                     | 3     | 3     |
-| Macrotask "settle" helpers (`setTimeout(resolve, 0)`)                               | 5     | 5 defs, 10 uses |
-| `vi.waitFor` (18 of them on the default 1 s timeout)                                | 8     | 19    |
-| Hand-written sleep-poll loops (`while … sleep`, `for … sleep`)                     | 6     | 8     |
-| `vi.useFakeTimers` under an Effect service                                          | 1     | 1     |
-| Fire-and-forget `runFork` in a suite (not joined, not scoped)                       | 5     | 8     |
-| Module-level `let` (per-case state in module slots, or id counters)                 | 17    | 39    |
-| `vi.stubEnv` / `vi.stubGlobal`                                                       | 11 / 3 | 32 / 5 |
-| Playwright `expect.poll` (allowed: retrying readiness check)                        | 6     | 16    |
-| `waitForTimeout`, `Math.random`, vitest/Playwright `retries`                        | 0     | 0     |
+| Primitive (suites only)                                                             | Files  | Sites           |
+| ----------------------------------------------------------------------------------- | ------ | --------------- |
+| Outer `layer(...)` with `excludeTestServices: true` (whole block on the live clock) | 73     | -               |
+| `it.live` or `excludeTestServices: true`                                            | 91     | -               |
+| `TestClock` used at all                                                             | 14     | 37              |
+| Forever-loop "clock pumps" (`TestClock.adjust` on a real tick)                      | 3      | 3               |
+| Macrotask "settle" helpers (`setTimeout(resolve, 0)`)                               | 5      | 5 defs, 10 uses |
+| `vi.waitFor` (18 of them on the default 1 s timeout)                                | 8      | 19              |
+| Hand-written sleep-poll loops (`while … sleep`, `for … sleep`)                      | 6      | 8               |
+| `vi.useFakeTimers` under an Effect service                                          | 1      | 1               |
+| Fire-and-forget `runFork` in a suite (not joined, not scoped)                       | 5      | 8               |
+| Module-level `let` (per-case state in module slots, or id counters)                 | 17     | 39              |
+| `vi.stubEnv` / `vi.stubGlobal`                                                      | 11 / 3 | 32 / 5          |
+| Playwright `expect.poll` (allowed: retrying readiness check)                        | 6      | 16              |
+| `waitForTimeout`, `Math.random`, vitest/Playwright `retries`                        | 0      | 0               |
 
 Nothing in CI or `package.json` runs `--sequence.shuffle`, the detector
 `vitest.config.mjs:121-126` names for order dependence (finding 9).
@@ -38,6 +38,7 @@ Nothing in CI or `package.json` runs `--sequence.shuffle`, the detector
 and general code mixed (live clock for the block, test clock per case).
 
 **Evidence.**
+
 - `src/test-kernel/agent/runtime/RetryState.vitest.ts:108-112` (churn 13):
   ```ts
   const pumpClock = Effect.forkChild(
@@ -103,6 +104,7 @@ that PR touches it (**unverified**: no open-PR list was reachable).
 `addObserver` in a test; non-obvious code.
 
 **Evidence.** Five copies of the same helper:
+
 - `packages/harness/test/tools/Cancellation.vitest.ts:11-13` ("Let the
   forked request start"), used at `:45` before `TestClock.adjust`. This is
   the exemplar `src/test-kernel/AGENTS.md` ("Effect-based tests use
@@ -110,8 +112,10 @@ that PR touches it (**unverified**: no open-PR list was reachable).
 - `src/test-kernel/cli/ExecuteCli.vitest.ts:68-70` (churn 10), used four
   times at `:373-392`, ending in an absence check after one macrotask:
   ```ts
-  shutdown.addObserver(() => { shutdownResolved = true; });
-  yield* settle;
+  shutdown.addObserver(() => {
+    shutdownResolved = true;
+  });
+  yield * settle;
   expect(shutdownResolved).toBe(false);
   ```
   If shutdown stopped waiting for the recovery write but took two
@@ -135,6 +139,7 @@ a point. Each helper answers "long enough", which is the wall-clock wait the
 guide forbids, moved to the event loop.
 
 **The better design.**
+
 - Cancellation: succeed a `Deferred` inside the request body after the
   abort listener is attached, and await it instead of `started`. The
   `TestClock` layer already tracks the racers' scheduler hops
@@ -152,7 +157,7 @@ guide forbids, moved to the event loop.
 - RunRegistry: keep `Deferred` ordering only; the absence after one
   `yieldNow` can be stated by awaiting `drained` after `release` and
   checking `generation` ended first.
-Deleted: 5 `settle` definitions, 10 uses, 1 `addObserver`.
+  Deleted: 5 `settle` definitions, 10 uses, 1 `addObserver`.
 
 **What we give up.** ExecuteCli no longer observes "still pending at time
 t", which it only sampled once anyway.
@@ -170,6 +175,7 @@ lifecycle PR (**unverified**); sequence with it.
 two representations (a fake's array beside the event it records).
 
 **Evidence.** 18 waits on `vi.waitFor`'s default 1 s budget, every 50 ms:
+
 - `src/test-kernel/progressView/SessionSurfaces.vitest.ts:121`, `:150`,
   `:168`, `:178` (measured 5): poll `surfaces.get(KEY)?.surface$.get()`, a
   signal. The module under test subscribes to the same signals with
@@ -201,16 +207,17 @@ two representations (a fake's array beside the event it records).
 The owners publish (signals, `SubscriptionRef`), and the suites sample.
 
 **The better design.** Two waits, both over what the code publishes:
+
 - for signals, one support helper `untilSignal(signal, predicate)` over
   `subscribeToSignalChanges`, returning an `Effect` that ends when the
   predicate holds (3 consumers: SessionSurfaces, TuiApprovalRetry,
   chatSessionController, so the rule of three is met);
 - for the session view, the `holdTestRun` form (BashTool,
   ExecutionsToolOutput on the `run.end`).
-DesktopToolEditApproval's fake UI pushes into `Queue.unbounded` per kind
-and the case takes from it; the `stagePreview` spy goes. Deleted: 19
-`vi.waitFor` sites, TuiApprovalRetry's `waitFor`/`waitForApproval` (2
-helpers), 1 spy.
+  DesktopToolEditApproval's fake UI pushes into `Queue.unbounded` per kind
+  and the case takes from it; the `stagePreview` spy goes. Deleted: 19
+  `vi.waitFor` sites, TuiApprovalRetry's `waitFor`/`waitForApproval` (2
+  helpers), 1 spy.
 
 **What we give up.** Nothing. A wait that never comes now fails on the
 case's own timeout (10 s) instead of after 1 s, with a less specific
@@ -229,6 +236,7 @@ likely in A's TUI lifecycle PR (**unverified**); sequence with it.
 
 **Evidence.** R3-R found and fixed this in `publishTestRows` (now in the
 caller's fiber, `sessionTestUtils.ts:31-42`). The suites still carry 8 sites:
+
 - `packages/harness/test/tools/BashTool.vitest.ts:62`:
   `Effect.runFork(Context.get(session, Inbox).closeInput(parentRunId));`
 - `src/test-kernel/agent/runtime/AgentRunLifecycle.vitest.ts:90-95`: a
@@ -265,6 +273,7 @@ case must call first). Same species as R3-R's R6 (the fake host in a module
 slot, fixed in #14826), now in the suites.
 
 **Evidence.**
+
 - `src/test-kernel/tools/ToolEditApprovalGate.vitest.ts:47-74` (measured,
   not ranked): `let host`, `let workspacePath`, `let session`, `let runId`,
   `let nextDecision`, `let decisions`, module-level `workspaceWrites`
@@ -308,6 +317,7 @@ mixed (two ways to hold a probe in one file).
 
 **Evidence.** `src/test-kernel/agent/ToolUseDispatchParallel.vitest.ts`
 (churn 11):
+
 - `:538` `slow_barrier: probeTool(probe, 'slow_barrier', 5_000)`, a real
   5 s sleep, then `:552-556`
   `while (!probe.events.some((event) => event.startsWith('start slow'))) { yield* Effect.sleep(5); }`.
@@ -371,6 +381,7 @@ with it, since the rewrite changes what the suite drives.
 
 These waits are allowed (`src/test-kernel/AGENTS.md`: a real subprocess),
 but each suite writes its own:
+
 - `src/test-kernel/tools/lean/LeanServerPool.vitest.ts`: `untilRoots`,
   500 × 10 ms (`:279-292`); `eventually` over `vi.waitFor` (`:210-211`); the
   `settle` loop (`:192-205`); the fake lake configured through the test
