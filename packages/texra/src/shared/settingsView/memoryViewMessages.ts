@@ -1,7 +1,7 @@
 /**
  * Schema definitions for MemoryView messages.
  *
- * Outbound: Backend → Frontend (UPDATE_MEMORY, UPDATE_MEMORY_PREVIEW)
+ * Outbound: Backend → Frontend (the `memory` page of the host state, UPDATE_MEMORY_PREVIEW)
  * Inbound: Frontend → Backend (GET_MEMORY_DATA, OPEN_MEMORY_FILE, etc.)
  */
 import { Schema, Struct } from 'effect';
@@ -25,8 +25,8 @@ const MemoryPreviewSchema = Schema.Struct({
 // Outbound message schemas (backend → frontend)
 // ============================================================
 
-export const UpdateMemoryMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY),
+/** The Memory page's list. */
+export const MemoryPageSchema = Schema.Struct({
   items: Schema.Array(MemoryViewItemSchema),
 });
 

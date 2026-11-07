@@ -7,10 +7,10 @@ import {
 import { Skills, withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@texra-ai/harness/host';
-import { unsupported } from '@texra/shared/utils/dispatcher';
+import { unsupported } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
-import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
+import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import {
   SETTINGS_LOG_CHANNEL,
   type SettingsHostBindings,
@@ -61,7 +61,7 @@ export interface DesktopSettingsIpcOptions {
   readonly spawn: DesktopSpawn;
 }
 
-type SettingsViewBody = ReturnType<typeof createSettingsViewBody>;
+type SettingsViewBody = Effect.Success<ReturnType<typeof makeSettingsViewBody>>;
 
 /** The commands the settings view posts to its host. */
 export const SETTINGS_VIEW_INBOUND_COMMANDS =
@@ -88,143 +88,142 @@ export interface DesktopSettingsIpc extends Pick<
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): Effect.Effect<DesktopSettingsIpc, never, Scope.Scope | ProcessServices> {
-  const { bindings, spawn, signInPresentation } = options;
+  return Effect.gen(function* () {
+    const { bindings, spawn, signInPresentation } = options;
 
-  /**
-   * Show one informational part of a sign-in, reporting a failure in its own
-   * dialog and a dialog that fails too in the log: failing to show a notice
-   * never aborts the sign-in it describes. The caller decides whether the flow
-   * waits for it, which it must not for a part that blocks until the user acts.
-   */
-  const reportPresentation = (
-    displayName: string,
-    present: Effect.Effect<void, Error>,
-  ) =>
-    present.pipe(
-      Effect.catch((failure) =>
-        bindings.notify.showErrorMessage(
-          `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
+    /**
+     * Show one informational part of a sign-in, reporting a failure in its own
+     * dialog and a dialog that fails too in the log: failing to show a notice
+     * never aborts the sign-in it describes. The caller decides whether the flow
+     * waits for it, which it must not for a part that blocks until the user acts.
+     */
+    const reportPresentation = (
+      displayName: string,
+      present: Effect.Effect<void, Error>,
+    ) =>
+      present.pipe(
+        Effect.catch((failure) =>
+          bindings.notify.showErrorMessage(
+            `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
+          ),
         ),
-      ),
-      Effect.catchTag('NotificationFailed', (notice) =>
-        Effect.logError(notice.message).pipe(
-          withLogChannel(SETTINGS_LOG_CHANNEL),
+        Effect.catchTag('NotificationFailed', (notice) =>
+          Effect.logError(notice.message).pipe(
+            withLogChannel(SETTINGS_LOG_CHANNEL),
+          ),
         ),
-      ),
-    );
+      );
 
-  /**
-   * The loopback browser is the normal route; failing to reach one is a
-   * transport failure, so the shared flow retries with a device code, which
-   * this window shows in its own dialog.
-   */
-  const signInSubscription = (providerId: SubscriptionProviderId) => {
-    const provider = subscriptionProvider(providerId);
-    const { displayName } = provider;
-    return Effect.gen(function* () {
-      const account = yield* provider.signIn({
-        transport: 'auto',
-        present: {
-          presentDeviceCode: (prompt) =>
-            reportPresentation(
-              displayName,
-              signInPresentation.presentSubscriptionDeviceCode(
-                prompt,
+    /**
+     * The loopback browser is the normal route; failing to reach one is a
+     * transport failure, so the shared flow retries with a device code, which
+     * this window shows in its own dialog.
+     */
+    const signInSubscription = (providerId: SubscriptionProviderId) => {
+      const provider = subscriptionProvider(providerId);
+      const { displayName } = provider;
+      return Effect.gen(function* () {
+        const account = yield* provider.signIn({
+          transport: 'auto',
+          present: {
+            presentDeviceCode: (prompt) =>
+              reportPresentation(
                 displayName,
+                signInPresentation.presentSubscriptionDeviceCode(
+                  prompt,
+                  displayName,
+                ),
               ),
-            ),
-          presentSignInUrl: (url) =>
-            signInPresentation.openSubscriptionSignInUrl(url).pipe(
-              Effect.mapError(
-                (failure) =>
-                  new LoopbackTransportUnavailableError({
-                    message: `Could not open a browser for ${displayName} sign-in.`,
-                    cause: failure.cause,
-                  }),
-              ),
-              Effect.andThen(
-                Effect.sync(() =>
-                  spawn(
-                    reportPresentation(
-                      displayName,
-                      signInPresentation.presentSubscriptionSignInUrl(
-                        url,
+            presentSignInUrl: (url) =>
+              signInPresentation.openSubscriptionSignInUrl(url).pipe(
+                Effect.mapError(
+                  (failure) =>
+                    new LoopbackTransportUnavailableError({
+                      message: `Could not open a browser for ${displayName} sign-in.`,
+                      cause: failure.cause,
+                    }),
+                ),
+                Effect.andThen(
+                  Effect.sync(() =>
+                    spawn(
+                      reportPresentation(
                         displayName,
+                        signInPresentation.presentSubscriptionSignInUrl(
+                          url,
+                          displayName,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-        },
+          },
+        });
+        yield* provider.setPreferSubscription(options.roots, true);
+        yield* bindings.notify.showInfoMessage(
+          ACCOUNT_OUTCOME.signedInAs(displayName, account.label),
+        );
       });
-      yield* provider.setPreferSubscription(options.roots, true);
-      yield* bindings.notify.showInfoMessage(
-        ACCOUNT_OUTCOME.signedInAs(displayName, account.label),
-      );
+    };
+
+    const body = yield* makeSettingsViewBody({
+      installsExtensions: false,
+      // The approval policy is the project's persisted setting: the write
+      // is the change, which this session and the service both read.
+      roots: options.roots,
+      resourcesPath: options.resourcesPath,
+      skillDisplay: Skills.display(options.roots),
+      accountCopy: ACCOUNT_OUTCOME,
+      bindings: {
+        ...bindings,
+        signInSubscription,
+      },
     });
-  };
 
-  const body = createSettingsViewBody({
-    host: 'desktop',
-    // The approval policy is the project's persisted setting: the write
-    // is the change, which this session and the service both read.
-    roots: options.roots,
-    resourcesPath: options.resourcesPath,
-    skillDisplay: Skills.display(options.roots),
-    accountCopy: ACCOUNT_OUTCOME,
-    bindings: {
-      ...bindings,
-      signInSubscription,
-    },
-  });
+    const registry: SettingsViewInboundHandlerRegistry<
+      ProcessServices | StorageFs
+    > = {
+      ...body.handlers,
+      installToolExtension: unsupported(NO_EXTENSION_HOSTING),
+      installLatexWorkshop: unsupported(NO_EXTENSION_HOSTING),
+      applyLatexSettings: unsupported(
+        'Recommended VS Code settings can only be applied from the TeXRA VS Code extension.',
+      ),
+    };
 
-  const registry: SettingsViewInboundHandlerRegistry<
-    ProcessServices | StorageFs
-  > = {
-    ...body.handlers,
-    installToolExtension: unsupported(NO_EXTENSION_HOSTING),
-    installLatexWorkshop: unsupported(NO_EXTENSION_HOSTING),
-    applyLatexSettings: unsupported(
-      'Recommended VS Code settings can only be applied from the TeXRA VS Code extension.',
-    ),
-  };
-
-  const subscriptions: Array<Effect.Effect<void, never, ProcessServices>> = [
-    // Each repaint runs as a fiber of the window, like its other callbacks.
-    body.followRepaints((repaint) => Effect.sync(() => spawn(repaint))),
-    // Outside VS Code a rejected token left the pollers failing in silence.
-    // The dialog is the whole fix: the token status reports only which store
-    // holds a token, and rejection leaves the secret in place, so re-posting
-    // it would repaint the same "token set" badge.
-    onAppSignal('githubTokenInvalid', ({ message }) => {
-      spawn(
-        bindings.notify
-          .showErrorMessage(gitHubTokenRejectedMessage(message))
-          .pipe(
-            Effect.catchTag('NotificationFailed', (notice) =>
-              Effect.logError(notice.message).pipe(
-                withLogChannel(SETTINGS_LOG_CHANNEL),
+    const subscriptions: Array<Effect.Effect<void, never, ProcessServices>> = [
+      body.follow,
+      // Outside VS Code a rejected token left the pollers failing in silence.
+      // The dialog is the whole fix: the token status reports only which store
+      // holds a token, and rejection leaves the secret in place, so re-posting
+      // it would repaint the same "token set" badge.
+      onAppSignal('githubTokenInvalid', ({ message }) => {
+        spawn(
+          bindings.notify
+            .showErrorMessage(gitHubTokenRejectedMessage(message))
+            .pipe(
+              Effect.catchTag('NotificationFailed', (notice) =>
+                Effect.logError(notice.message).pipe(
+                  withLogChannel(SETTINGS_LOG_CHANNEL),
+                ),
               ),
             ),
-          ),
-      );
-    }),
-  ];
+        );
+      }),
+    ];
 
-  const settingsIpc: DesktopSettingsIpc = {
-    signInSubscription: body.signInSubscription,
-    route: parsedRoute(SettingsViewInboundMessageSchema, (message) =>
-      body.handleMessage(message, registry),
-    ),
-  };
-  return Effect.as(
-    Effect.forEach(
+    const settingsIpc: DesktopSettingsIpc = {
+      signInSubscription: body.signInSubscription,
+      route: parsedRoute(SettingsViewInboundMessageSchema, (message) =>
+        body.handleMessage(message, registry),
+      ),
+    };
+    yield* Effect.forEach(
       subscriptions,
       (subscription) =>
         Effect.forkScoped(subscription, { startImmediately: true }),
       { discard: true },
-    ),
-    settingsIpc,
-  );
+    );
+    return settingsIpc;
+  });
 }

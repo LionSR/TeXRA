@@ -23,8 +23,7 @@ export const WebviewReadyMessageSchema = Schema.Struct({
 /** Settings-view command literals, both directions. */
 export const SETTINGS_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
-  // Schema-referenced: mostly inbound (webview → host), plus a few outbound
-  // ones such as `SET_TAB` and the auth-status updates.
+  // Inbound (webview → host), except `SET_TAB` and the three at the end.
   // Navigation commands
   SET_TAB: 'setTab',
   // Memory commands
@@ -74,37 +73,25 @@ export const SETTINGS_VIEW_COMMANDS = {
   // plugin, and open the MCP config file
   PLUGIN_ACTION: 'pluginAction',
   // GitHub token commands (for PR subscription tool)
-  UPDATE_GITHUB_TOKEN_STATUS: 'updateGitHubTokenStatus',
   SET_GITHUB_TOKEN: 'setGitHubToken',
   REMOVE_GITHUB_TOKEN: 'removeGitHubToken',
   OPEN_GITHUB_TOKEN_URL: 'openGitHubTokenUrl',
-  // Subscription sign-in status, provider-keyed in its payload.
-  UPDATE_SUBSCRIPTION_AUTH_STATUS: 'updateSubscriptionAuthStatus',
   // Subscription sign-in commands, provider-keyed in their payload.
   SIGN_IN_SUBSCRIPTION: 'signInSubscription',
   SIGN_OUT_SUBSCRIPTION: 'signOutSubscription',
   SET_SUBSCRIPTION_PREFERENCE: 'setSubscriptionPreference',
   GET_SUBSCRIPTION_USAGE: 'getSubscriptionUsage',
-  UPDATE_PR_SUBSCRIPTIONS: 'updatePRSubscriptions',
   UNSUBSCRIBE_PR: 'unsubscribePR',
   OPEN_PR_SUBSCRIPTION_STREAM: 'openPRSubscriptionStream',
   // LaTeX settings commands
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
   INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
   RUN_INSTALL_COMMAND: 'runInstallCommand',
-  // Outbound-only commands (backend → frontend, not schema-validated)
-  UPDATE_MEMORY: 'updateMemory',
+  // Outbound (host → webview), each a member of the validated outbound union.
+  // What the host knows for the view, as one record patched field by field.
+  UPDATE_HOST_STATE: 'updateHostState',
   UPDATE_MEMORY_PREVIEW: 'updateMemoryPreview',
-  UPDATE_PROFILE: 'updateProfile',
-  UPDATE_MODEL_SELECTION: 'updateModelSelection',
-  UPDATE_AGENT_SELECTION: 'updateAgentSelection',
-  UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
-  UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
   // Every catalog-derived snapshot in `settingsViewMessages.ts`'s
   // derived-snapshot list, keyed by its `snapshot` field.
   UPDATE_SETTINGS_SNAPSHOT: 'updateSettingsSnapshot',
-  UPDATE_SKILLS_LIST: 'updateSkillsList',
-  UPDATE_PLUGINS: 'updatePlugins',
-  UPDATE_SUBSCRIPTION_USAGE: 'updateSubscriptionUsage',
-  UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
 } as const;

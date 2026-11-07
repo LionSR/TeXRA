@@ -75,7 +75,7 @@ export class SettingsViewProvider {
     if (this._view) {
       const panel = this._view;
       panel.reveal(vscode.ViewColumn.One);
-      yield* this.messageHandler.body.postAll;
+      yield* this.messageHandler.body.changed('view');
     } else {
       const panel = vscode.window.createWebviewPanel(
         SettingsViewProvider.viewType,
@@ -97,7 +97,7 @@ export class SettingsViewProvider {
       );
     }
 
-    // this._view can be undefined here: the postAll above yields, and
+    // this._view can be undefined here: the `changed(view)` above yields, and
     // disposing the dashboard panel meanwhile runs cleanupView.
     if (tab == null || !this._view) return;
     if (this.viewReady) {
@@ -134,9 +134,9 @@ export class SettingsViewProvider {
             message.command !== SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
           )
             return;
-          // The ready handler has repainted the view; the tab asked for while
-          // it loaded goes after that data, as a reveal of a live panel
-          // orders them.
+          // The ready handler has asked every page for the view; the tab
+          // asked for while it loaded goes now, as a reveal of a live panel
+          // does.
           this.viewReady = true;
           const pending = this.pendingTab;
           this.pendingTab = undefined;

@@ -1,72 +1,62 @@
 /**
- * Outbound message-handler registry for SettingsView.
- *
- * Backend → webview messages are validated and routed by
- * `dispatchSettingsViewOutbound` (`@texra/shared/utils/dispatcher`); every handler
- * lives in the one registry below, which the
- * `SettingsViewOutboundHandlerRegistry` annotation keeps exhaustive — a
- * missing or unknown command is a compile error. Handlers mutate the
- * module-level signals in `settingsState.ts` directly.
+ * What the settings view does with each host message: decode it against the
+ * outbound union once, then write it into the state in `settingsState.ts`.
  */
+import { Result, Schema } from 'effect';
+
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import type { SettingsViewOutboundHandlerRegistry } from '@texra/shared/settingsView/settingsViewMessages';
+import {
+  SettingsViewOutboundMessageSchema,
+  type SettingsViewOutboundMessage,
+} from '@texra/shared/settingsView/settingsViewMessages';
 import {
   SETTINGS_PAGE_SECTIONS,
   SETTINGS_TAB_ORDER,
 } from '@texra/shared/settingsView/settingsTarget';
 
 import {
-  activePresetId,
-  agentSelectionItems,
   applySettingsSnapshot,
-  customAgentDir,
-  customAgentDirIsDefault,
-  customAgentScanIssues,
-  githubTokenStatus,
-  gitSettingsLoaded,
-  latexSettingsLoaded,
-  latexSettingsStatus,
-  memoryItems,
-  modelSelectionItems,
-  settingsSnapshotRevisions,
-  orchestratorAgents,
-  prSubscriptions,
-  providerKeyStatuses,
+  hostState,
   selectSettingsPage,
   settingSignal,
-  skillLoadIssues,
-  skillsList,
-  subscriptionAuth,
-  subscriptionUsage,
-  pluginsPage,
-  teamPresets,
+  settingsSnapshotRevisions,
 } from './settingsState';
 
-export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
-  // View chrome: active tab and the derived capability gating across tabs.
-  [SETTINGS_VIEW_COMMANDS.SET_TAB]: (data) => {
-    // The schema admits only `page` or a `page/section` pair it declares.
-    const { tab } = data;
-    const page = SETTINGS_TAB_ORDER.find(
-      (name) => tab === name || tab.startsWith(`${name}/`),
-    );
-    if (!page) throw new Error(`Unknown settings tab "${tab}"`);
-    const section = SETTINGS_PAGE_SECTIONS[page].find(
-      (name: string) => tab === `${page}/${name}`,
-    );
-    selectSettingsPage(page, section);
-  },
+const decodeOutbound = Schema.decodeUnknownResult(
+  SettingsViewOutboundMessageSchema,
+);
 
-  // Memory.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY]: (data) => {
-    memoryItems.set(data.items);
-  },
-
-  [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW]: (data) => {
-    const { storagePath, preview, lineCount, error } = data.preview;
-    memoryItems.set(
-      memoryItems.get().map((item) => {
+function apply(message: SettingsViewOutboundMessage): void {
+  switch (message.command) {
+    case SETTINGS_VIEW_COMMANDS.SET_TAB: {
+      // The schema admits only `page` or a `page/section` pair it declares.
+      const { tab } = message;
+      const page = SETTINGS_TAB_ORDER.find(
+        (name) => tab === name || tab.startsWith(`${name}/`),
+      );
+      if (!page) throw new Error(`Unknown settings tab "${tab}"`);
+      const section = SETTINGS_PAGE_SECTIONS[page].find(
+        (name: string) => tab === `${page}/${name}`,
+      );
+      selectSettingsPage(page, section);
+      return;
+    }
+    case SETTINGS_VIEW_COMMANDS.UPDATE_HOST_STATE: {
+      const { patch } = message;
+      hostState.set({ ...hostState.get(), ...patch });
+      // The helper model is a catalog setting the Models page also sends.
+      if (patch.models)
+        settingSignal<string>(GlobalStateKey.HELPER_MODEL).set(
+          patch.models.helperModel,
+        );
+      return;
+    }
+    case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW: {
+      const memory = hostState.get().memory;
+      if (!memory) return;
+      const { storagePath, preview, lineCount, error } = message.preview;
+      const items = memory.items.map((item) => {
         if (item.storagePath !== storagePath) return item;
         if (error) {
           return {
@@ -82,87 +72,24 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
           lineCount: lineCount ?? item.lineCount,
           previewError: undefined,
         };
-      }),
-    );
-  },
+      });
+      hostState.set({ ...hostState.get(), memory: { items } });
+      return;
+    }
+    case SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT: {
+      applySettingsSnapshot(message.values);
+      const revisions = settingsSnapshotRevisions.get();
+      settingsSnapshotRevisions.set({
+        ...revisions,
+        [message.snapshot]: (revisions[message.snapshot] ?? 0) + 1,
+      });
+      return;
+    }
+  }
+}
 
-  // Profile.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE]: (data) => {
-    providerKeyStatuses.set(data.providerKeyStatuses);
-  },
-
-  // Model selection.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION]: (data) => {
-    modelSelectionItems.set(data.models);
-    settingSignal<string>(GlobalStateKey.HELPER_MODEL).set(data.helperModel);
-  },
-
-  // Agent selection.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION]: (data) => {
-    agentSelectionItems.set(data.agents);
-    customAgentScanIssues.set(data.customAgentIssues);
-  },
-
-  [SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR]: (data) => {
-    customAgentDir.set(data.path);
-    customAgentDirIsDefault.set(data.isDefault);
-  },
-
-  // Skills.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST]: (data) => {
-    skillsList.set(data.skills);
-    skillLoadIssues.set(data.issues);
-  },
-
-  // Catalog-derived settings snapshots.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT]: (data) => {
-    applySettingsSnapshot(data.values);
-    if (data.snapshot === 'git-author') gitSettingsLoaded.set(true);
-    const revisions = settingsSnapshotRevisions.get();
-    settingsSnapshotRevisions.set({
-      ...revisions,
-      [data.snapshot]: (revisions[data.snapshot] ?? 0) + 1,
-    });
-  },
-
-  // Agent teams.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS]: (data) => {
-    teamPresets.set(data.presets);
-    orchestratorAgents.set(data.orchestratorAgents);
-    activePresetId.set(data.activePresetId);
-  },
-
-  // Plugins page.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS]: ({ command: _command, ...page }) => {
-    pluginsPage.set(page);
-  },
-
-  // Git and integration auth.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS]: (data) => {
-    githubTokenStatus.set(data.status);
-  },
-
-  [SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS]: (data) => {
-    subscriptionAuth.set({
-      ...subscriptionAuth.get(),
-      [data.status.provider]: data.status,
-    });
-  },
-
-  [SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS]: (data) => {
-    prSubscriptions.set(data.subscriptions);
-  },
-
-  // Subscription usage.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE]: (data) => {
-    subscriptionUsage.set(data.snapshots);
-  },
-
-  // LaTeX settings status. The LaTeX config values themselves arrive through
-  // UPDATE_SETTINGS_SNAPSHOT above; these two carry the toolchain status the
-  // LaTeX tab renders around them.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS]: (data) => {
-    latexSettingsStatus.set(data.settings);
-    latexSettingsLoaded.set(true);
-  },
-};
+/** Decode and apply one host message; a message that is not one of the
+ *  settings view's is returned as the decode failure. */
+export function applyOutboundMessage(raw: unknown): Result.Result<void, Error> {
+  return Result.map(decodeOutbound(raw), apply);
+}

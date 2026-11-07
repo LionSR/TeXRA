@@ -24,8 +24,6 @@ import {
 } from '@texra-ai/harness';
 import {
   type StateStore,
-  type StateReadFailed,
-  type StateWriteFailed,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -134,13 +132,6 @@ interface ExtensionHostRequestsOptions {
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
-  /** The onboarding funnel recomputes after an action that changes its
-   *  inputs (a key stored, a sign-in, the setup assistant run). */
-  readonly refreshApiKeyStatus: Effect.Effect<void, Error, ProcessServices>;
-  refreshOnboardingFunnel(): Effect.Effect<
-    void,
-    StateReadFailed | StateWriteFailed
-  >;
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
@@ -354,21 +345,10 @@ export const createExtensionHostRequests = Effect.fn(
     );
   }
 
-  /** The onboarding funnel recomputed after an action that changed its
-   *  inputs. */
-  const refreshOnboardingFunnel = Effect.suspend(() =>
-    options.refreshOnboardingFunnel(),
-  );
-
-  /** The reads a new credential invalidates: the API-key banner with the
-   *  funnel that reads it, and the catalogs. */
+  /** The reads a new credential invalidates: the credential, which the
+   *  funnel and the banner follow, and the catalogs. */
   const refreshAfterCredentialChange = Effect.all(
-    [
-      options.refreshApiKeyStatus.pipe(
-        Effect.mapError((cause) => hostFailure('refreshApiKeyStatus', cause)),
-      ),
-      snapshot.refreshCatalogs,
-    ],
+    [snapshot.refreshHostBanners, snapshot.refreshCatalogs],
     { concurrency: 'unbounded', discard: true },
   );
 
@@ -411,10 +391,10 @@ export const createExtensionHostRequests = Effect.fn(
     openSettings: (target) =>
       runHandler('openSettings', options.openSettings(target)),
     // SecretManager has no key-changed event, so the set-key flow's
-    // completion is the explicit refresh point for the funnel.
+    // completion is the explicit point to check the credential again.
     setApiKey: (provider) =>
       runHandler('setApiKey', setApiKey(roots, provider)).pipe(
-        Effect.andThen(refreshOnboardingFunnel),
+        Effect.andThen(snapshot.refreshHostBanners),
       ),
     openGuide: (page, anchor) =>
       Effect.asVoid(
@@ -434,12 +414,11 @@ export const createExtensionHostRequests = Effect.fn(
         yield* signInWithSubscription(roots, CHANNEL, 'chatgpt');
         yield* refreshAfterCredentialChange;
       }),
-      skip: Effect.gen(function* () {
-        yield* setOnboardingDeclined(globalState, true);
-        yield* refreshOnboardingFunnel;
-      }),
-      runSetup: Effect.gen(function* () {
-        yield* runHandler(
+      // The snapshot follows the flags it reads.
+      skip: setOnboardingDeclined(globalState, true),
+      // The launcher is read as the run starts.
+      runSetup: Effect.suspend(() =>
+        runHandler(
           'runSetupAssistant',
           launchSetupAssistant(
             roots,
@@ -448,10 +427,8 @@ export const createExtensionHostRequests = Effect.fn(
             options.showConnectModel(),
             options.showProgressView(),
           ),
-        );
-        yield* refreshOnboardingFunnel;
-      }),
-      // The provider's `firstRunDone` follower refreshes the funnel.
+        ),
+      ),
       skipSetup: setFirstRunDone(globalState),
       openGettingStarted: runHandler(
         'openGettingStarted',

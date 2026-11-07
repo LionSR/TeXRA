@@ -256,6 +256,19 @@
           "signature": "export const gitHubSubscriptionsLayer: Layer.Layer< GitHubSubscriptions, never, AppSignals > = Layer.effect(…);"
         }
       ]
+    },
+    {
+      "id": "RT-desktop-window-fiberhandle",
+      "candidate": "the desktop window as one FiberHandle: open as FiberHandle.run with onlyIfMissing, the closed event as FiberHandle.clear, the shutdown as awaitEmpty, the quit's resume as a Deferred",
+      "why": "FiberHandle.run with onlyIfMissing returns an already-interrupted fiber while the handle still holds the closing window's fiber (FiberHandle.js runImpl), and clear holds it there until the window's scope has released. A reopen asked for during a close (the macOS dock click right after closing) would be dropped instead of waiting for the release and opening, which the current open does with `releasing`. awaitEmpty before run cannot replace it: on an open window it never returns, so open would need the closing state again. The quit's resume must also stay on setImmediate: a quit requested from inside `closed` lands before Electron removes the window and is abandoned. What remains is the three optionals as one state value (closed, open, closing), not a different primitive.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
+      "symbols": [
+        {
+          "file": "packages/desktop/src/main/desktopWindows.ts",
+          "symbol": "createDesktopWindows",
+          "signature": "export function createDesktopWindows(options: {…}): DesktopWindows {…}"
+        }
+      ]
     }
   ]
 }

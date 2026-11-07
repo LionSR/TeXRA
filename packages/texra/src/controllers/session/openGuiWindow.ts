@@ -15,15 +15,7 @@
  */
 import { formatResultCount } from '@texra-ai/harness/transcript';
 
-import {
-  Effect,
-  Exit,
-  FiberSet,
-  Layer,
-  Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Exit, Layer, Scope, Stream, SubscriptionRef } from 'effect';
 
 import {
   Cancelled,
@@ -49,10 +41,7 @@ import type {
   FileOpResult,
   HostRequest,
 } from '@texra/shared/session/hostRequest';
-import type {
-  HostSnapshot,
-  ProjectDisplay,
-} from '@texra/shared/session/hostSnapshot';
+import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import type { MessageHost } from '@texra/hosts/uiHosts';
@@ -90,7 +79,7 @@ import {
   type HostRunActionPorts,
 } from './hostRunActions';
 import {
-  createHostSnapshotSource,
+  openHostSnapshotSource,
   type HostSnapshotSource,
 } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
@@ -266,8 +255,8 @@ interface GuiWindowPorts {
   readonly project: ProjectDisplay;
   /** The snapshot reads only this host answers. */
   readonly snapshot: Omit<
-    Parameters<typeof createHostSnapshotSource>[0],
-    'project' | 'tools' | 'root' | 'stores' | 'publish'
+    Parameters<typeof openHostSnapshotSource>[0],
+    'project' | 'tools' | 'root' | 'stores'
   >;
   readonly toolEdits: ToolEditApprovalHost;
   /** Emits when the window gains focus, so the project's calls come here
@@ -339,12 +328,11 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   yield* Effect.addFinalizer(() =>
     Effect.asVoid(Effect.forkDetach(Scope.close(bridgeScope, Exit.void))),
   );
-  const hostSnapshot = yield* SubscriptionRef.make<HostSnapshot | null>(null);
   // cast: the table holds TeXRA's list as listed, each entry a `TexraPlugin`.
   const plugins = [
     ...(yield* ToolRegistry).entries.values(),
   ] as readonly TexraPlugin[];
-  const snapshot = createHostSnapshotSource({
+  const snapshot = yield* openHostSnapshotSource({
     ...ports.snapshot,
     project: ports.project,
     tools: {
@@ -355,16 +343,17 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     },
     root: roots.workspace,
     stores: roots,
-    publish: (next) => SubscriptionRef.set(hostSnapshot, next),
   });
-  // Recorder notifications can arrive outside a request fiber.
-  const fork = yield* FiberSet.makeRuntime<never>();
-  const draftRequests = yield* ports.draftRequests.attach(roots, (recording) =>
-    fork(snapshot.setRecording(recording)),
+  const draftRequests = yield* ports.draftRequests.attach(roots);
+  yield* Effect.forkScoped(
+    Stream.runForEach(
+      SubscriptionRef.changes(ports.draftRequests.recording),
+      snapshot.setRecording,
+    ),
   );
   const bridge = yield* SessionBridge.make({
     session,
-    host: hostSnapshot,
+    host: snapshot.changes,
     handleHostRequest: handle,
     onPortClosed: draftRequests.closePort,
   }).pipe(Scope.provide(bridgeScope));

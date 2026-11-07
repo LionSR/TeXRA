@@ -19,7 +19,6 @@ import {
   PluginRequestError,
   type PluginEnv,
   type PluginReview,
-  type ProcessServices,
 } from '@texra-ai/harness/host';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 
@@ -37,8 +36,6 @@ export function settingsPluginCommands(ports: {
   };
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
-  /** Repaint the Plugins page, whose rows this case's changes feed. */
-  readonly repaint: Effect.Effect<void, Error, ProcessServices>;
 }) {
   const { roots, bindings, present } = ports;
 
@@ -129,7 +126,7 @@ export function settingsPluginCommands(ports: {
               )
               .pipe(
                 Effect.andThen(bindings.refreshCatalogs()),
-                Effect.andThen(ports.repaint),
+                Effect.andThen(present.changed('plugins')),
               ),
     },
   };

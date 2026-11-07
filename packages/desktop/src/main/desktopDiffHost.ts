@@ -1,6 +1,4 @@
-import path from 'node:path';
-
-import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { nanoid } from 'nanoid';
 
 import {
@@ -9,12 +7,7 @@ import {
   withLogChannel,
   withProcessServices,
 } from '@texra-ai/harness/host';
-import { formatHunkLines, toErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  ExternalOpenFailed,
-  type DiffSource,
-  type DiffViewHost,
-} from '@texra/hosts/uiHosts';
+import type { DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '../shared/monacoLanguage';
 
 import {
@@ -22,56 +15,10 @@ import {
   type DesktopCloseDiffMessage,
   type DesktopShowDiffMessage,
 } from '../shared/desktopDiffMessages.js';
-import {
-  tryShowInRenderer,
-  type DesktopOverlayPostOptions,
-} from './desktopIpcTypes.js';
+import type { DesktopRenderer } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
-/**
- * The temp directories holding the external-editor patch files of every
- * window's diff host. A directory cannot be removed as soon as `openPath`
- * settles because the OS editor may still be reading the patch, so removal
- * belongs to the process that outlives the window (on macOS the app outlives
- * every window): {@link removeExternalDiffPatchDirs} runs once during quit.
- */
-const externalPatchDirs = new Set<string>();
-
-/**
- * Removes every recorded patch directory, reporting each failure instead of
- * swallowing it: a directory that survives is left for OS temp cleanup, and
- * quit must not stall on it.
- */
-export const removeExternalDiffPatchDirs: Effect.Effect<
-  void,
-  never,
-  FileSystem.FileSystem
-> = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  const tempDirs = [...externalPatchDirs];
-  externalPatchDirs.clear();
-  yield* Effect.forEach(
-    tempDirs,
-    (tempDir) =>
-      fs
-        .remove(tempDir, { recursive: true, force: true })
-        .pipe(
-          Effect.catch((error: PlatformError.PlatformError) =>
-            Effect.logWarning(
-              `Failed to remove the temporary diff directory ${tempDir}; it is left for OS temp cleanup: ${toErrorMessage(error.reason.cause ?? error)}`,
-            ).pipe(withLogChannel('desktop')),
-          ),
-        ),
-    { concurrency: 'unbounded', discard: true },
-  );
-});
-
-interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
-  /**
-   * Falls back to the OS default editor (writes a `.diff` patch file and
-   * calls `openPath`). Used when the renderer overlay is unavailable.
-   */
-  openPath(filePath: string): Effect.Effect<void, Error>;
+interface DesktopDiffHostOptions extends DesktopRenderer {
   /** The process runtime the window was handed. The members below are
    *  programs the caller runs, so this only supplies the filesystem they
    *  read and write through — nothing settles here. */
@@ -145,7 +92,7 @@ export function createDesktopDiffHost(
           { concurrency: 2 },
         );
         // Compare opens pairs no approval diffed, so this diff reports its
-        // own timeout; the counts and the fallback patch read the same hunks.
+        // own timeout.
         const diff = buildDiffHunks(originalContent, proposedContent);
         if (diff.timeout !== undefined) {
           yield* Effect.logWarning(diff.timeout).pipe(
@@ -153,102 +100,34 @@ export function createDesktopDiffHost(
           );
         }
         const changed = diff.hunks.flatMap((hunk) => hunk.lines);
-
-        // Prefer the in-app Review workbench when wired. A `false` return value
-        // or a thrown error opts into the external-editor fallback (covers the
-        // startup IPC race and a destroyed BrowserWindow).
-        const shownInRenderer = tryShowInRenderer(
-          {
-            ...options,
-            source: 'desktopDiffHost',
-            fallback: 'external editor',
-          },
-          {
-            command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
-            session: reviewSession,
-            previewId,
-            title,
-            displayPath: title.replace(/^Tool edit:\s*/, ''),
-            originalText: originalContent,
-            proposedText: proposedContent,
-            additions: changed.filter((line) => line.startsWith('+')).length,
-            deletions: changed.filter((line) => line.startsWith('-')).length,
-            language: monacoLanguageForPath(proposed.filePath),
-          } satisfies DesktopShowDiffMessage,
-        );
-        if (shownInRenderer) return;
-
-        // External-editor fallback: write a unified patch file and open it.
-        const patch =
-          diff.hunks.length > 0
-            ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${formatHunkLines(diff.hunks).join('\n')}\n`
-            : `No textual changes for ${path.basename(proposed.filePath)}.\n`;
-        const tempDir = yield* fs.makeTempDirectory({
-          prefix: 'texra-desktop-diff-',
-        });
-        externalPatchDirs.add(tempDir);
-        const diffPath = path.join(tempDir, `${nanoid()}.diff`);
-
-        yield* Effect.gen(function* () {
-          yield* fs.writeFileString(diffPath, patch);
-          yield* options.openPath(diffPath).pipe(
-            Effect.mapError(
-              (cause) =>
-                new ExternalOpenFailed({
-                  target: diffPath,
-                  message: 'The patch file could not be opened.',
-                  cause,
-                }),
-            ),
-          );
-        }).pipe(
-          // The patch never reached an editor: remove it now instead of
-          // leaving it until quit, and let the original failure travel on to
-          // the caller. The directory stays recorded, so a failed removal is
-          // retried by the process-level removal, and it is logged instead of
-          // swallowed.
-          Effect.onError(() =>
-            fs
-              .remove(tempDir, { recursive: true, force: true })
-              .pipe(
-                Effect.catchCause((cause) =>
-                  Effect.logWarning(
-                    `Failed to remove the temporary diff directory; the process-level removal at quit retries it: ${toErrorMessage(
-                      Cause.squash(cause),
-                    )}`,
-                  ).pipe(withLogChannel('desktop')),
-                ),
-              ),
-          ),
-        );
+        options.postToRenderer({
+          command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
+          session: reviewSession,
+          previewId,
+          title,
+          displayPath: title.replace(/^Tool edit:\s*/, ''),
+          originalText: originalContent,
+          proposedText: proposedContent,
+          additions: changed.filter((line) => line.startsWith('+')).length,
+          deletions: changed.filter((line) => line.startsWith('-')).length,
+          language: monacoLanguageForPath(proposed.filePath),
+        } satisfies DesktopShowDiffMessage);
       }),
     );
   }
 
-  /**
-   * Nothing is posted when the renderer is unreachable, which is the
-   * external-editor fallback's own path: a patch file opened in the OS
-   * editor is not a view this host can close, and the directory holding it
-   * is removed at quit.
-   */
+  /** Close the review `previewId` opened in the renderer. */
   function closeDiff(
     reviewSession: string,
     previewId: string,
   ): Effect.Effect<void> {
-    return Effect.sync(() => {
-      tryShowInRenderer(
-        {
-          ...options,
-          source: 'desktopDiffHost',
-          fallback: 'no in-app review tab to close',
-        },
-        {
-          command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF,
-          session: reviewSession,
-          previewId,
-        } satisfies DesktopCloseDiffMessage,
-      );
-    });
+    return Effect.sync(() =>
+      options.postToRenderer({
+        command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF,
+        session: reviewSession,
+        previewId,
+      } satisfies DesktopCloseDiffMessage),
+    );
   }
 
   return {

@@ -32,6 +32,7 @@ function createMemoryPage(options: { confirmResponses: readonly boolean[] }) {
     present: {
       report: (_prefix, cause) => Effect.die(cause),
       reported: (_prefix, program) => Effect.orDie(program),
+      changed: () => Effect.void,
     },
   });
   return { handlers, posted };

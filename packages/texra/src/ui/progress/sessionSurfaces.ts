@@ -9,7 +9,7 @@
  * the host bridge for a session.
  */
 import { signal, type Signal } from '@lit-labs/signals';
-import { Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { RequestErrorSchema } from '@texra-ai/harness/schemas';
 
@@ -350,10 +350,27 @@ export function createSessionSurfaces(options: {
     settleHost(entry, request, origin, result);
   }
 
-  async function hostRequestFor(
+  /** Mark `key` busy in the surface's `field` now, so a second click finds
+   *  it so, and clear it however `program` ends. */
+  function busyWhile(
     entry: Held,
-    request: HostRequest,
-  ): Promise<void> {
+    field: 'sending' | 'polishing',
+    key: string,
+    program: Effect.Effect<void>,
+  ): Effect.Effect<void> {
+    const update = (change: (keys: Set<string>) => void) => {
+      const current = entry.surface$.get();
+      const keys = new Set<string>(current[field]);
+      change(keys);
+      setSurface(entry, { ...current, [field]: keys });
+    };
+    update((keys) => keys.add(key));
+    return program.pipe(
+      Effect.ensuring(Effect.sync(() => update((keys) => keys.delete(key)))),
+    );
+  }
+
+  function hostRequestFor(entry: Held, request: HostRequest): void {
     const surface = entry.surface$.get();
     let runId = surface.selected;
     if (request.kind === 'record' && request.action.kind === 'start') {
@@ -361,58 +378,42 @@ export function createSessionSurfaces(options: {
     }
     const origin: DraftOrigin = { runId };
     const target = origin.runId ?? 'launch';
+    // Built when it runs: a click that finds the stream busy sends nothing.
+    const exchange = Effect.flatMap(
+      Effect.suspend(() =>
+        transport.request({
+          kind: 'host.request',
+          session: entry.key,
+          requestId: requestId(),
+          request,
+        }),
+      ),
+      (result) =>
+        Effect.sync(() => settleHostResponse(entry, request, origin, result)),
+    );
     if (request.kind === 'polish') {
       if (surface.polishing.has(target)) return;
-      setSurface(entry, {
-        ...surface,
-        polishing: new Set([...surface.polishing, target]),
-      });
+      transport.run(entry.key, busyWhile(entry, 'polishing', target, exchange));
+      return;
     }
     // A second Send before the host admits the launch would start a
     // second run, so the launch claims its stream like a follow-up does.
     if (request.kind === 'launch') {
       if (surface.sending.has('launch')) return;
-      setSurface(entry, {
-        ...surface,
-        sending: new Set([...surface.sending, 'launch']),
-      });
+      transport.run(entry.key, busyWhile(entry, 'sending', 'launch', exchange));
+      return;
     }
-    const result = await transport.request({
-      kind: 'host.request',
-      session: entry.key,
-      requestId: requestId(),
-      request,
-    });
-    if (held.get(entry.key) !== entry) return;
-    if (request.kind === 'polish') {
-      const current = entry.surface$.get();
-      const polishing = new Set(current.polishing);
-      polishing.delete(target);
-      setSurface(entry, { ...current, polishing });
-    }
-    if (request.kind === 'launch') {
-      const current = entry.surface$.get();
-      const sending = new Set(current.sending);
-      sending.delete('launch');
-      setSurface(entry, { ...current, sending });
-    }
-    settleHostResponse(entry, request, origin, result);
+    transport.run(entry.key, exchange);
   }
 
-  async function runtimeRequestFor(
-    entry: Held,
-    request: RuntimeRequest,
-  ): Promise<void> {
+  function runtimeRequestFor(entry: Held, request: RuntimeRequest): void {
     const { key } = entry;
     const runId = 'runId' in request ? request.runId : null;
-    if (request.kind === 'followUp.send') {
-      const current = entry.surface$.get();
-      if (current.sending.has(request.runId)) return;
-      setSurface(entry, {
-        ...current,
-        sending: new Set([...current.sending, request.runId]),
-      });
-    }
+    if (
+      request.kind === 'followUp.send' &&
+      entry.surface$.get().sending.has(request.runId)
+    )
+      return;
     // A new request on the run retires the answer to the last one.
     if (runId !== null && entry.surface$.get().rejected.has(runId)) {
       const current = entry.surface$.get();
@@ -431,13 +432,35 @@ export function createSessionSurfaces(options: {
     const fromForm =
       request.kind === 'request.decide' &&
       entry.surface$.get().editing?.requestId === request.requestId;
-    const result = await transport.request({
-      kind: 'runtime.request',
-      session: key,
-      requestId: requestId(),
-      request,
-    });
-    if (held.get(key) !== entry) return;
+    const answered = (result: Response['result']) =>
+      Effect.sync(() =>
+        settleRuntimeResponse(entry, request, result, submitted, fromForm),
+      );
+    const exchange = Effect.flatMap(
+      transport.request({
+        kind: 'runtime.request',
+        session: key,
+        requestId: requestId(),
+        request,
+      }),
+      answered,
+    );
+    transport.run(
+      key,
+      request.kind === 'followUp.send'
+        ? busyWhile(entry, 'sending', request.runId, exchange)
+        : exchange,
+    );
+  }
+
+  function settleRuntimeResponse(
+    entry: Held,
+    request: RuntimeRequest,
+    result: Response['result'],
+    submitted: ReturnType<Surface['drafts']['get']>,
+    fromForm: boolean,
+  ): void {
+    const runId = 'runId' in request ? request.runId : null;
     presentResult(entry, result);
     // The runtime's refusal also reaches the run it was made on
     // (7.6): that run's controls paint it, and nothing here
@@ -452,16 +475,11 @@ export function createSessionSurfaces(options: {
     }
     // The form's approval went through: back to the run that asked, where
     // its child starts.
-    if (result.ok && fromForm) {
+    if (result.ok && fromForm && request.kind === 'request.decide') {
       act(entry, { kind: 'launch', patch: { instruction: '' } });
       act(entry, { kind: 'select', runId: request.runId });
     }
-    if (request.kind !== 'followUp.send') return;
-    const current = entry.surface$.get();
-    const sending = new Set(current.sending);
-    sending.delete(request.runId);
-    setSurface(entry, { ...current, sending });
-    if (!result.ok) return;
+    if (request.kind !== 'followUp.send' || !result.ok) return;
     if (
       submitted !== undefined &&
       entry.surface$.get().drafts.get(request.runId) === submitted
@@ -491,7 +509,7 @@ export function createSessionSurfaces(options: {
       const media = draft.images.flatMap((image) =>
         image.media === null ? [] : [image.media],
       );
-      void runtimeRequestFor(entry, {
+      runtimeRequestFor(entry, {
         kind: 'followUp.send',
         runId,
         text: text === '' ? '(image)' : text,
@@ -518,7 +536,7 @@ export function createSessionSurfaces(options: {
         });
         return;
       }
-      void runtimeRequestFor(entry, {
+      runtimeRequestFor(entry, {
         kind: 'request.decide',
         runId: data.runId,
         requestId: data.requestId,
@@ -530,7 +548,7 @@ export function createSessionSurfaces(options: {
     // request settles only with the run, so the next task must not find it.
     if (launch.approval !== 'policy')
       act(entry, { kind: 'launch', patch: { approval: 'policy' } });
-    void hostRequestFor(entry, { kind: 'launch', launch, instruction });
+    hostRequestFor(entry, { kind: 'launch', launch, instruction });
   }
 
   transport.onSurfaceAction((key, action) => {
@@ -579,12 +597,12 @@ export function createSessionSurfaces(options: {
     },
     runtimeRequest(key, request) {
       const entry = held.get(key);
-      if (entry) void runtimeRequestFor(entry, request);
+      if (entry) runtimeRequestFor(entry, request);
     },
     answer: transport.answer,
     hostRequest(key, hostRequest) {
       const entry = held.get(key);
-      if (entry) void hostRequestFor(entry, hostRequest);
+      if (entry) hostRequestFor(entry, hostRequest);
     },
     submit(key) {
       const entry = held.get(key);

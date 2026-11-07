@@ -15,7 +15,7 @@ describe('applyStateSettingUpdate', () => {
   it.effect('uses null as an explicit reset and omission as a no-op', () =>
     Effect.gen(function* () {
       const fake = makeFakeSettingsStores();
-      const ports = { stores: fake.stores, host: 'vscode' as const };
+      const ports = { stores: fake.stores, host: 'settingsView' as const };
 
       yield* applyStateSettingUpdate(
         TexraStateKey.LATEX_FORMATTER,

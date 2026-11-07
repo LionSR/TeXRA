@@ -31,13 +31,11 @@ import {
   Cause,
   Effect,
   Exit,
-  Fiber,
-  Predicate,
+  FiberHandle,
   Result,
   Schema,
   Scope,
   Stream,
-  SubscriptionRef,
 } from 'effect';
 
 import {
@@ -79,8 +77,8 @@ interface SessionBridgeOptions {
   readonly session: Session;
   /** The host snapshot every port frames, which the host's producers
    *  write. */
-  readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
-  readonly onPortClosed: (port: string) => void;
+  readonly host: Stream.Stream<HostSnapshot>;
+  readonly onPortClosed: (port: string) => Effect.Effect<void>;
   /** The host's capabilities, performed on the surface's behalf, as
    *  one program per request that takes the process services from the fiber
    *  the host's transport runs `receive` on. A handler cancels with
@@ -132,19 +130,28 @@ class SessionBridgeClosedError extends Schema.TaggedError<SessionBridgeClosedErr
  *  surface decodes back (a `postMessage` keeps no Error prototype). */
 const wireError = Schema.encodeSync(RequestErrorSchema);
 
-/** One attached port: its transport, its scopes, and the framer in flight. */
+const refused = (
+  error: typeof RequestErrorSchema.Type,
+): Response['result'] => ({ ok: false, error: wireError(error) });
+
+const response = (
+  session: string,
+  requestId: string,
+  result: Response['result'],
+): DownMessage => ({ kind: 'response', session, requestId, result });
+
+/** One attached port: its transport, its scope, and the framer in flight. */
 interface PortEntry {
   readonly port: SessionPort;
-  /** The framer fiber's home, forked from the port's scope before the
-   *  release finalizer is registered: finalizers close last-in first-out, so the
+  /** The replay in flight. Made in the port's scope before the release
+   *  finalizer is registered: finalizers close last-in first-out, so the
    *  port is released (its map entry, its transcript set, the host's
    *  `onPortClosed`) before the replay is interrupted, and a host that
    *  closes a port and re-attaches under the same id in one turn finds the
    *  id free. */
-  readonly framers: Scope.Closeable;
+  readonly frames: FiberHandle.FiberHandle<void>;
   /** Closes the port's scope; the bridge's scope closes it last. */
   readonly close: Effect.Effect<void>;
-  fiber: Fiber.Fiber<void> | null;
   /** Host actions sent before the port's first `Subscribe`, in order, or
    *  null once it has subscribed. A port is live only when its surface has
    *  mounted and asked for frames: a message posted to a webview whose
@@ -205,25 +212,15 @@ export class SessionBridge {
       if (previous) {
         yield* previous.close;
       }
-      const scope = yield* Scope.fork(this.scope);
-      const framers = yield* Scope.fork(scope);
       // `Scope.fork` of a closed parent hands back an already-closed child
-      // rather than failing, so the closed-bridge check has to observe the
-      // forked scopes before the port is registered.
-      if (
-        this.scope.state._tag === 'Closed' ||
-        scope.state._tag === 'Closed' ||
-        framers.state._tag === 'Closed'
-      ) {
-        yield* Scope.close(framers, Exit.void);
-        yield* Scope.close(scope, Exit.void);
+      // rather than failing, so the bridge's own scope is the check.
+      if (this.scope.state._tag === 'Closed')
         return yield* new SessionBridgeClosedError();
-      }
+      const scope = yield* Scope.fork(this.scope);
       const entry: PortEntry = {
         port,
-        framers,
+        frames: yield* FiberHandle.make<void>().pipe(Scope.provide(scope)),
         close: Scope.close(scope, Exit.void),
-        fiber: null,
         held: [],
       };
       const { onPortClosed } = this.options;
@@ -232,7 +229,7 @@ export class SessionBridge {
         Effect.suspend(() => {
           if (this.ports.get(port.id) !== entry) return Effect.void;
           this.ports.delete(port.id);
-          return Effect.sync(() => onPortClosed(port.id));
+          return onPortClosed(port.id);
         }),
       );
       this.ports.set(port.id, entry);
@@ -247,17 +244,15 @@ export class SessionBridge {
   );
 
   /**
-   * Answer a `Subscribe`: the next replay's fiber interrupts the one in
-   * flight before its first frame, so the superseded generation stops
-   * before the next starts and `receive` never waits on it; the frames a
-   * dying fiber still cuts echo its generation and the decoder drops them.
+   * Answer a `Subscribe`: the next replay replaces the one in flight, which
+   * is interrupted, so `receive` never waits on it; the frames a dying
+   * fiber still cuts echo its generation and the decoder drops them.
    */
   private subscribe(
     entry: PortEntry,
     subscribe: Subscribe,
   ): Effect.Effect<void> {
     return Effect.suspend(() => {
-      const previous = entry.fiber;
       // Nothing joins this fiber: a failed replay or tail read would stop the
       // port's transcript with no trace, so its death is logged here.
       const frames = Stream.runForEach(
@@ -268,8 +263,7 @@ export class SessionBridge {
           ),
           // What the host renders but does not own, as its producers write
           // it: its own message beside the frames.
-          SubscriptionRef.changes(this.options.host).pipe(
-            Stream.filter(Predicate.isNotNull),
+          this.options.host.pipe(
             Stream.map((host): DownMessage => ({
               kind: 'host',
               session: this.key,
@@ -288,16 +282,7 @@ export class SessionBridge {
               ).pipe(withLogChannel(CHANNEL)),
         ),
       );
-      return Effect.forkIn(
-        previous
-          ? Fiber.interrupt(previous).pipe(Effect.andThen(frames))
-          : frames,
-        entry.framers,
-      ).pipe(
-        Effect.map((fiber) => {
-          entry.fiber = fiber;
-        }),
-      );
+      return Effect.asVoid(FiberHandle.run(entry.frames, frames));
     });
   }
 
@@ -319,15 +304,13 @@ export class SessionBridge {
           Effect.andThen(
             Effect.sync(() => {
               if (!Result.isSuccess(envelope)) return;
-              port.send({
-                kind: 'response',
-                session: envelope.success.session,
-                requestId: envelope.success.requestId,
-                result: {
-                  ok: false,
-                  error: wireError(new Invalid({ reason })),
-                },
-              });
+              port.send(
+                response(
+                  envelope.success.session,
+                  envelope.success.requestId,
+                  refused(new Invalid({ reason })),
+                ),
+              );
             }),
           ),
         );
@@ -353,10 +336,7 @@ export class SessionBridge {
             up.requestId,
             this.options.session.request(up.request).pipe(
               Effect.match({
-                onFailure: (error): Response['result'] => ({
-                  ok: false,
-                  error: wireError(error),
-                }),
+                onFailure: refused,
                 onSuccess: (outcome): Response['result'] => ({
                   ok: true,
                   outcome,
@@ -372,7 +352,7 @@ export class SessionBridge {
               Effect.matchEffect({
                 onFailure: (error): Effect.Effect<Response['result']> =>
                   isRequestRefusal(error)
-                    ? Effect.succeed({ ok: false, error: wireError(error) })
+                    ? Effect.succeed(refused(error))
                     : Effect.die(error),
                 onSuccess: (outcome): Effect.Effect<Response['result']> =>
                   Effect.succeed({ ok: true, outcome }),
@@ -400,21 +380,13 @@ export class SessionBridge {
             `Request ${requestId} from port ${entry.port.id} failed: ${toErrorMessage(Cause.squash(cause))}`,
           ).pipe(
             withLogChannel(CHANNEL),
-            Effect.as<Response['result']>({
-              ok: false,
-              error: wireError(new Internal({ ref: requestId })),
-            }),
+            Effect.as(refused(new Internal({ ref: requestId }))),
           ),
         ),
         Effect.flatMap((answer) =>
           Effect.sync(() => {
             if (this.ports.get(entry.port.id) !== entry) return;
-            entry.port.send({
-              kind: 'response',
-              session: this.key,
-              requestId,
-              result: answer,
-            });
+            entry.port.send(response(this.key, requestId, answer));
           }),
         ),
         Effect.uninterruptible,
