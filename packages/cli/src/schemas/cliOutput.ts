@@ -256,7 +256,8 @@ const CliNdjsonRecordSchema = Schema.Union([
 /** A single `--output-format ndjson` line record. */
 export type CliNdjsonRecord = typeof CliNdjsonRecordSchema.Type;
 
-/** The run-status vocabulary the CLI prints and its history records. */
+/** The run-status vocabulary the headless text status line prints. History
+ *  records carry the run's `outcome` itself. */
 const CLI_RUN_STATUS = {
   COMPLETED: 'completed',
   INTERRUPTED: 'interrupted',
@@ -267,11 +268,10 @@ export type CliRunStatus = (typeof CLI_RUN_STATUS)[keyof typeof CLI_RUN_STATUS];
 
 /**
  * Project the canonical outcome onto the frozen public run-status
- * vocabulary (CLI NDJSON history status, CLI display prose).
- * The only production mapping — flows and hosts must not hand-roll their
- * own. An out-of-vocabulary value (stale fixture, unparsed legacy data)
- * fails with a named error instead of an undefined-property crash
- * downstream.
+ * vocabulary of the headless text status line. The only production
+ * mapping; hosts must not hand-roll their own. An out-of-vocabulary value
+ * (stale fixture, unparsed legacy data) fails with a named error instead of
+ * an undefined-property crash downstream.
  */
 export function runOutcomeToCliRunStatus(outcome: RunOutcome): CliRunStatus {
   switch (outcome) {

@@ -271,13 +271,13 @@ const EXECUTION_ROUTES: ReadonlyArray<{
   },
   {
     path: '/executions/{id}/files',
-    summary: 'Generated files (workflows only)',
+    summary: 'Generated files (task runs only)',
     kinds: ['task'],
     actions: { view: ({ runId }) => listFiles(runId) },
   },
   {
     path: '/executions/{id}/files/{path}',
-    summary: 'Read specific generated file (workflows only)',
+    summary: 'Read specific generated file (task runs only)',
     actions: {
       view: ({ context, input, runId, rest }) =>
         readFile(context, runId, rest, input.view_range ?? undefined),
@@ -734,7 +734,7 @@ Use action: "kill" on /executions/{id} to terminate a live run.
 Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle or ended run wakes to read it. A run that takes none (a headless one-shot run, a background command, an agent-CLI turn) refuses it.
 Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most 200 rows and refuse a JSON page larger than 4 MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
 ${HISTORY_VIEW_SUMMARY}
-Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
+Delegated subagent and document task results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,
   execute: executeExecutionsTool,
 });

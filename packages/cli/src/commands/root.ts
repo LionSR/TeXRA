@@ -119,7 +119,7 @@ export const rootCommand = withUsageSections(
         ['texra auth grok login', 'sign in with a Grok (xAI) subscription'],
         ['texra chat', 'start an interactive tool-use session'],
         [
-          'texra clone <project> ./paper',
+          'texra clone <project> ./project',
           'clone an Overleaf or ShareLaTeX project',
         ],
         ['texra run <agent> --input file.tex', 'run an agent headless'],

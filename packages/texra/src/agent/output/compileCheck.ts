@@ -51,6 +51,9 @@ interface CompileCheckContext {
   fileService: RunFileService;
   logger: AgentTrace;
   runId: RunId;
+  /** Directories the compile searches besides the output's own: where the
+   *  task's bound files live (a poster's theme `.sty` beside its agent). */
+  inputDirs: readonly string[];
 }
 
 /** A round's check: the outputs that failed and the PDFs of those that
@@ -310,7 +313,10 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
     const sourceLocation =
       locatedSource?.kind === 'workspace' ? locatedSource : outputFile.location;
     const sourceDir = resolveWorkspaceSourceDir(ctx.roots, sourceLocation);
-    const extraInputDirs = sourceDir ? [sourceDir] : [];
+    const extraInputDirs = [
+      ...(sourceDir ? [sourceDir] : []),
+      ...ctx.inputDirs,
+    ];
 
     // On the timeout the command's scope kills the child, so we don't orphan
     // hanging latexmk/pdflatex runs.

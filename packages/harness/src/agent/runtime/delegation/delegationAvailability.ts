@@ -116,7 +116,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
 const worktreeLine = (enabled: boolean): string =>
   enabled
     ? 'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to `agent` to run a tool-use subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
-    : 'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` to `agent` because the call will be rejected. Ask the user to turn on `git.worktreeSupport` ("Subagent worktrees" in Settings > General > Git) if worktree operation is needed.';
+    : 'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` to `agent` because the call will be rejected. Ask the user to turn on `git.worktreeSupport` ("Subagent worktrees" in Settings > Agents > Advanced) if worktree operation is needed.';
 
 /** The system text's delegation section, rendered once, at the freeze. */
 export function delegationSection(targets: DelegationTargets): string {
@@ -132,6 +132,13 @@ export function delegationSection(targets: DelegationTargets): string {
             ({ name, description, tools: agentTools, task }) =>
               `- ${name}${task ? ' (task)' : ''}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
           ),
+          // What a task is belongs to the plugin whose block makes the agent
+          // one; the harness says only that the marker names such an agent.
+          ...(targets.agents.some(({ task }) => task)
+            ? [
+                "An agent marked (task) also runs as its plugin's task, through that plugin's task tool where it is offered.",
+              ]
+            : []),
         ];
   if (targets.models === null)
     lines.push(
