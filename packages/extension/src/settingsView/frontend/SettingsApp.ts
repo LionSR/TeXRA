@@ -19,7 +19,6 @@ import type {
   SettingsSectionName,
   SettingsTabPanelName,
 } from '@texra/shared/settingsView/settingsTarget';
-import { installToolbarTooltips } from '@ui/litControllers/TooltipController';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
@@ -91,7 +90,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    installToolbarTooltips();
     window.addEventListener('message', this.messageListener);
     postMessage(SETTINGS_VIEW_COMMANDS.WEBVIEW_READY);
   }
