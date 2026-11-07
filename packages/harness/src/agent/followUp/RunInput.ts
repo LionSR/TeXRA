@@ -11,7 +11,7 @@ import { Effect, Latch } from 'effect';
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
 import { isInstruction } from '@shared/session/runFacts';
 import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
-import type { RunRows } from '@shared/session/runRowsShape';
+import type { RunRowsRead } from '@shared/session/runRowReads';
 
 /** Where in its loop a run reads its input: before a model request inside
  *  a turn, at the turn's end, or while it waits for input. */
@@ -56,7 +56,7 @@ function readableMessages(
  * revives a run that ended, and a host's notification wakes nothing: it
  * is read by a generation already running.
  */
-export function needsWake(input: RunRows): boolean {
+export function needsWake(input: RunRowsRead<'input'>): boolean {
   // A resumed run that crashed carries no end, so no earlier Stop of it
   // holds a message back.
   const { end, stop } = input;

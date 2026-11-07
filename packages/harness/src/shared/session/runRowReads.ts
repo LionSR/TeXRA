@@ -1,13 +1,12 @@
 /**
- * `RunRows`: what a run's rows say about it, for every reader but the run
- * state and the session view (those apply their shared rows through
- * `runRows.ts`): the fold of the rows one read selects (`runRowsFrom`,
- * `RUN_ROW_READS`), one committed row's own record for a reader of the
- * tail (`recordOf`), a row as the decision of a request
- * (`isRequestDecision`), and the phase a row moves its run to
- * (`phaseMoveOf`, `closesRunWindow`), and what became of one input
- * (`followUpReceipt`). A reader reads these instead of a row's type, so a
- * row kind is decided here once.
+ * The reads of a run's rows, for every reader but the run state and the
+ * session view (those apply their shared rows through `runRows.ts`): each
+ * read of {@link RUN_ROW_READS} names the kinds it selects and folds those
+ * rows, typed as them, into what it answers (`foldRunRows`); a run's record
+ * rows fold into its `RunRows` (`runRowsFrom`). Beside them: a row as the
+ * decision of a request (`isRequestDecision`), the phase a row moves its run
+ * to (`phaseMoveOf`, `closesRunWindow`), and what became of one input
+ * (`followUpReceipt`).
  *
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
@@ -21,45 +20,124 @@ import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   applyRunRow,
   type BatchCopies,
-  freshRunRows,
+  freshSharedRunRows,
   isSharedRunRow,
+  type SharedRunRow,
 } from './runRows';
-import type { RowOf, RunRows } from './runRowsShape';
+import type { RowOf, RunRows, SharedRunRows } from './runRowsShape';
+
+/** One read: the kinds it selects and what it makes of those rows. */
+interface RowRead<K extends SessionEvent['type'], A> {
+  readonly kinds: readonly K[];
+  readonly fold: (rows: readonly RowOf<K>[]) => A;
+}
+
+const rowRead = <const K extends SessionEvent['type'], A>(
+  kinds: readonly K[],
+  fold: (rows: readonly RowOf<K>[]) => A,
+): RowRead<K, A> => ({ kinds, fold });
 
 /**
- * The kinds each read of a run folds, by what it reads: its input
- * (`Inbox.read`), its parks with the lifecycle that bounds them, its
- * requests, its child turns, its lifecycle rows, the plugin facts of an
- * aggregate (a run's, or a plugin's own), its calls' results, a script's
- * calls with their results, and its positions. A store reads one through
- * its type index and folds it (`SessionLog.runRows`), so no reader names a
- * row kind.
+ * The shared rows among a run's committed rows, applied. A read of a kind
+ * holds every row of it, so a contradiction or an unknown request means
+ * corrupt history and throws, as `applyRunRows` rejects it.
+ */
+function sharedRowsFrom(rows: readonly SharedRunRow[]): SharedRunRows {
+  let shared = freshSharedRunRows();
+  const copies: BatchCopies = new WeakSet();
+  for (const row of rows) {
+    const verdict = applyRunRow(shared, row, copies);
+    if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
+      throw new Error(
+        `${row.type} on ${row.aggregateId}: ${
+          verdict.kind === 'unresolved'
+            ? `decision names no request ${verdict.requestId}`
+            : verdict.detail
+        }`,
+      );
+    }
+    if (verdict.kind === 'applied') shared = { ...shared, ...verdict.rows };
+  }
+  return shared;
+}
+
+/** The key a plugin row kind's latest row is held under. */
+const factKey = (row: RowOf<'plugin.fact'>) => `${row.plugin}/${row.kind}`;
+
+/**
+ * The reads of a run's rows, by what each answers: its input (`Inbox.read`)
+ * with the parent edge and lifecycle that bound it, its requests, its
+ * lifecycle rows, the plugin facts of an aggregate (a run's, or a plugin's
+ * own), its calls' results, a script's calls with their results, and its
+ * positions. A store reads one through its type index and folds it
+ * (`SessionLog.runRows`), so no reader names a row kind.
  */
 export const RUN_ROW_READS = {
-  input: [
-    'followup.queued',
-    'followup.consumed',
-    'run.start',
-    'run.detach',
-    'run.activate',
-    'run.stop',
-    'run.end',
-    'followup.closed',
-    'run.removed',
-  ],
-  requests: ['request.opened', 'request.decided'],
-  lifecycle: ['run.activate', 'run.stop', 'run.end'],
-  facts: ['plugin.fact'],
-  results: ['tool.result'],
-  script: ['script.call', 'tool.result'],
-  positions: ['run.position'],
-} as const satisfies Record<string, readonly SessionEvent['type'][]>;
+  input: rowRead(
+    [
+      'followup.queued',
+      'followup.consumed',
+      'run.start',
+      'run.detach',
+      'run.activate',
+      'run.stop',
+      'run.end',
+      'followup.closed',
+      'run.removed',
+    ],
+    (rows) => {
+      const { parent, end, stop, inputClosed } = runRowsFrom(rows);
+      const { followUps, taken } = sharedRowsFrom(rows.filter(isSharedRunRow));
+      return { parent, end, stop, inputClosed, followUps, taken };
+    },
+  ),
+  requests: rowRead(['request.opened', 'request.decided'], (rows) => ({
+    requests: sharedRowsFrom(rows).requests,
+  })),
+  lifecycle: rowRead(['run.activate', 'run.end'], (lifecycles) => ({
+    lifecycles,
+  })),
+  facts: rowRead(['plugin.fact'], (rows) => ({
+    facts: Object.fromEntries(rows.map((row) => [factKey(row), row])),
+  })),
+  results: rowRead(['tool.result'], (rows) => ({
+    results: rows.map((row) => row.payload),
+  })),
+  script: rowRead(['script.call', 'tool.result'], (rows) => ({
+    scriptCalls: rows.flatMap((row) =>
+      row.type === 'script.call' ? [row.payload] : [],
+    ),
+    results: rows.flatMap((row) =>
+      row.type === 'tool.result' ? [row.payload] : [],
+    ),
+  })),
+  positions: rowRead(['run.position'], (positions) => ({ positions })),
+};
 
 /** One read of a run's rows: a key of {@link RUN_ROW_READS}. */
 export type RunRowRead = keyof typeof RUN_ROW_READS;
 
-/** What one lifecycle or record row changes on `rows`. Every kind has a
- *  case, so a new kind does not compile until it is decided here. */
+/** What read `R` answers. */
+export type RunRowsRead<R extends RunRowRead> = ReturnType<
+  (typeof RUN_ROW_READS)[R]['fold']
+>;
+
+/** Read `read` over `rows`: the rows of its kinds among them, folded. */
+export function foldRunRows<R extends RunRowRead>(
+  read: R,
+  rows: readonly SessionEvent[],
+): RunRowsRead<R> {
+  const { kinds, fold } = RUN_ROW_READS[read];
+  const selected: readonly string[] = kinds;
+  // cast: the rows kept are of the read's kinds, which its fold takes;
+  // TypeScript cannot tie a generic key to its own entry's parameter.
+  return (fold as (rows: readonly SessionEvent[]) => RunRowsRead<R>)(
+    rows.filter((row) => selected.includes(row.type)),
+  );
+}
+
+/** What one record row changes on `rows`. Every kind has a case, so a new
+ *  kind does not compile until it is decided here. */
 function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
   switch (row.type) {
     case 'run.start': {
@@ -71,21 +149,14 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
     case 'run.detach':
       return { parent: null };
     case 'run.activate':
-      return {
-        activation: row,
-        end: null,
-        stop: null,
-        inputClosed: false,
-        lifecycles: [...rows.lifecycles, row],
-      };
+      return { activation: row, end: null, stop: null, inputClosed: false };
     case 'run.stop':
       return { stop: row };
     case 'run.end':
-      return { end: row, lifecycles: [...rows.lifecycles, row] };
+      return { end: row };
     case 'followup.closed':
-      return { inputClosed: true };
     case 'run.removed':
-      return { inputClosed: true, removed: row };
+      return { inputClosed: true };
     case 'run.report':
       return { report: row.report };
     case 'process.exit':
@@ -93,13 +164,9 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
     case 'run.config':
       return { config: row.config };
     case 'run.position':
-      return { position: row, positions: [...rows.positions, row] };
-    case 'tool.result':
-      return { results: [...rows.results, row.payload] };
-    case 'script.call':
-      return { scriptCalls: [...rows.scriptCalls, row.payload] };
+      return { position: row };
     case 'plugin.fact':
-      return { facts: { ...rows.facts, [`${row.plugin}/${row.kind}`]: row } };
+      return { facts: { ...rows.facts, [factKey(row)]: row } };
     case 'run.description': {
       const label = row.by === 'model' ? { label: row } : {};
       // A user's title stands until the user renames again.
@@ -113,6 +180,8 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
     case 'followup.consumed':
     case 'request.opened':
     case 'request.decided':
+    case 'tool.result':
+    case 'script.call':
     case 'log':
     case 'process.output':
     case 'stage.start':
@@ -135,47 +204,29 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
 }
 
 /**
- * The `RunRows` of one run's committed aggregate (or the kinds a reader
- * needs), for a reader that needs only what these rows say (is this
- * request open, is this follow-up queued) without building a `RunState`.
- * A whole aggregate answers every decision it holds, so a contradiction or
- * an unknown request means corrupt history and throws, as `applyRunRows`
- * rejects it.
+ * The `RunRows` of a run's record rows: its committed records
+ * (`SessionLog.facts`), or the lifecycle rows a read selects. Every other
+ * row records nothing.
  */
 export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
-  let slice = freshRunRows();
-  const copies: BatchCopies = new WeakSet();
-  for (const row of rows) {
-    slice = { ...slice, ...recordFacts(slice, row) };
-    if (!isSharedRunRow(row)) continue;
-    const verdict = applyRunRow(slice, row, copies);
-    if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
-      throw new Error(
-        `${row.type} on ${row.aggregateId}: ${
-          verdict.kind === 'unresolved'
-            ? `decision names no request ${verdict.requestId}`
-            : verdict.detail
-        }`,
-      );
-    }
-    if (verdict.kind === 'applied') slice = { ...slice, ...verdict.rows };
-  }
-  return slice;
-}
-
-/**
- * What one committed row says on its own: the `RunRows` after that row
- * alone, for a reader of the tail that acts on a row's arrival (a run's
- * end, its removal, a child's held park, a delivery to a parent). A
- * request's decision and a follow-up's consumption say nothing alone: what
- * they answer is not here.
- */
-export function recordOf(row: SessionEvent): RunRows {
-  const fresh = freshRunRows();
-  const rows = { ...fresh, ...recordFacts(fresh, row) };
-  if (!isSharedRunRow(row)) return rows;
-  const verdict = applyRunRow(rows, row);
-  return verdict.kind === 'applied' ? { ...rows, ...verdict.rows } : rows;
+  let record: RunRows = {
+    start: null,
+    parent: null,
+    activation: null,
+    end: null,
+    stop: null,
+    inputClosed: false,
+    report: null,
+    exit: null,
+    config: null,
+    position: null,
+    title: null,
+    label: null,
+    grants: null,
+    facts: {},
+  };
+  for (const row of rows) record = { ...record, ...recordFacts(record, row) };
+  return record;
 }
 
 /** Whether `row` decides a request: what a waiter on a request reads off

@@ -39,7 +39,11 @@ import {
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
-import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRowReads';
+import {
+  foldRunRows,
+  RUN_ROW_READS,
+  runRowsFrom,
+} from '@shared/session/runRowReads';
 import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
 import type {
   SessionLogShape,
@@ -225,8 +229,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
         database.readAggregate(id, fromSeq, types),
       runRows: (id, read, through) =>
         database
-          .readAggregate(id, 1, RUN_ROW_READS[read], through)
-          .pipe(Effect.map(runRowsFrom)),
+          .readAggregate(id, 1, RUN_ROW_READS[read].kinds, through)
+          .pipe(Effect.map((rows) => foldRunRows(read, rows))),
       blobs: database.readBlobs,
       facts: (runId) =>
         database

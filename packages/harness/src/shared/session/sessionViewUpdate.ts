@@ -58,7 +58,7 @@ import { runStatus } from '@shared/runs/runStatusDisplay';
 import { isSettledRow, rowHeadline } from '../transcript/transcriptRow';
 import {
   applyRunRow,
-  freshRunRows,
+  freshSharedRunRows,
   isSharedRunRow,
   isMessage,
   type SharedRunRow,
@@ -80,7 +80,7 @@ import {
 
 import { runActions } from './runActions';
 import { emptySessionView, rollupOf } from './sessionView';
-import type { RunRows } from './runRowsShape';
+import type { SharedRunRows } from './runRowsShape';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -220,7 +220,7 @@ interface SessionState {
   readonly listed: Set<AggregateId>;
   /** What the rows `runRows.ts` reads say about each run: `view.requests`,
    *  `view.queuedFollowUps` and `RunView.turn` are built from it. */
-  readonly rows: Map<RunId, RunRows>;
+  readonly rows: Map<RunId, SharedRunRows>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the newest
    *  listing fact applied for it, so an older one a later read replays is
    *  skipped. The lifecycle entry outlives its run: it keeps a replayed
@@ -764,7 +764,7 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
 
 /** The run's loop position, read from what `runRows.ts` recorded, moved to
  *  the phase {@link phaseMoveOf} names. */
-function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
+function withPosition(run: RunView, rows: SharedRunRows, row: SharedRunRow) {
   if (rows.family === null || rows.at === null) return run;
   if (row.type === 'run.position' && row.payload.at === 'waiting')
     run = { ...run, forkPoint: row.seq };
@@ -835,14 +835,14 @@ function applySessionFacts(
  *  `latest` entry and never reaches here. */
 function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
   const { rows } = u.state;
-  const before = rows.get(run.id) ?? freshRunRows();
+  const before = rows.get(run.id) ?? freshSharedRunRows();
   const verdict = applyRunRow(before, event);
   if (verdict.kind === 'contradiction') {
     throw new Error(`${event.type} on ${run.id}: ${verdict.detail}`);
   }
   if (verdict.kind !== 'applied') return run;
   const moved = verdict.rows;
-  const after: RunRows = { ...before, ...moved };
+  const after: SharedRunRows = { ...before, ...moved };
   rows.set(run.id, after);
   if (moved.requests !== undefined) projectRequests(u.view, run.id, after);
   if (moved.followUps !== undefined) projectFollowUps(u, run.id, after);
@@ -853,7 +853,7 @@ function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
  *  opened them: this run's rebuilt from its rows, every other run's left
  *  where they are. Identity is (runId, requestId), so the dedupe of
  *  already-listed requests is scoped to this run, never another's. */
-function projectRequests(view: ViewDraft, runId: RunId, rows: RunRows) {
+function projectRequests(view: ViewDraft, runId: RunId, rows: SharedRunRows) {
   const open = Object.entries(rows.requests).filter(([, r]) => !r.decision);
   const ids = new Set(open.map(([requestId]) => requestId));
   const kept = view.requests.filter(
@@ -870,7 +870,7 @@ function projectRequests(view: ViewDraft, runId: RunId, rows: RunRows) {
 }
 
 /** The run's untaken messages (not its own requests), as the view shows them. */
-function projectFollowUps(u: Update, runId: RunId, rows: RunRows) {
+function projectFollowUps(u: Update, runId: RunId, rows: SharedRunRows) {
   const { view } = u;
   const messages = rows.followUps.filter(isMessage);
   if (messages.length === 0) {

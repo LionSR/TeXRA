@@ -40,7 +40,7 @@ import {
   type UserFollowUpSupport,
 } from '@shared/schemas';
 
-import { byId, isSharedRunRow } from './runRows';
+import { byId } from './runRows';
 import { runRowsFrom } from './runRowReads';
 import type { TurnResult } from '@texra-ai/llm';
 import type { RunHistoryDraft, RunInputDraft } from './runState';
@@ -189,16 +189,13 @@ export const consumedRow = (
   disposition,
 });
 
-/** Run `runId`'s rows among `rows`, folded (a shared row left out, so a
- *  partial read, a listing's, folds too). */
+/** Run `runId`'s record rows among `rows`, folded (`runRowsFrom`). */
 export const recordsOf = (
   rows: readonly SessionEvent[],
   runId: RunId,
 ): RunRows => {
   const id = qualifyAggregateId('run', runId);
-  return runRowsFrom(
-    rows.filter((row) => row.aggregateId === id && !isSharedRunRow(row)),
-  );
+  return runRowsFrom(rows.filter((row) => row.aggregateId === id));
 };
 
 /** The row that bounds run `runId`'s current lifecycle in `rows`: its last

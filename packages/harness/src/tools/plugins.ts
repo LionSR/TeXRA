@@ -35,7 +35,6 @@ import {
   type ToolFact,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
-import { recordOf } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
@@ -214,14 +213,16 @@ export const announceWrites = (
     ),
   );
   return (row) => {
-    if (aggregateTarget(row.aggregateId).kind !== 'run') return Effect.void;
-    const [fact] = Object.values(recordOf(row).facts);
-    if (fact === undefined) return Effect.void;
-    const writes = writing.get(`${fact.plugin}/${fact.kind}`);
+    if (
+      aggregateTarget(row.aggregateId).kind !== 'run' ||
+      row.type !== 'plugin.fact'
+    )
+      return Effect.void;
+    const writes = writing.get(`${row.plugin}/${row.kind}`);
     if (writes === undefined) return Effect.void;
     // File notifications are advisory; a plugin callback must not stop the
     // reader that acknowledges committed rows.
-    return Effect.sync(() => [...writes(fact.value)]).pipe(
+    return Effect.sync(() => [...writes(row.value)]).pipe(
       Effect.catchDefect((defect) =>
         Effect.logWarning(
           'Plugin workspace-write notification failed',
@@ -229,8 +230,8 @@ export const announceWrites = (
         ).pipe(
           Effect.annotateLogs({
             data: {
-              plugin: fact.plugin,
-              kind: fact.kind,
+              plugin: row.plugin,
+              kind: row.kind,
               aggregateId: row.aggregateId,
               commit: row.commit,
             },

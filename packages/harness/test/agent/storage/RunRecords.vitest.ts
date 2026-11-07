@@ -128,11 +128,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   records.readResult(),
                 ]),
               ).toEqual([false, null, null, [], null]);
-              const retained = yield* Context.get(session, SessionLog).runRows(
+              const retained = yield* Context.get(session, SessionLog).history(
                 qualifyAggregateId('run', runId),
-                'input',
+                1,
+                ['run.removed'],
               );
-              expect(retained.removed).not.toBeNull();
+              expect(retained).toHaveLength(1);
             }),
           ),
       );
