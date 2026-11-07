@@ -1,13 +1,14 @@
 import { writeSync } from 'node:fs';
 
 import { layer } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { Layer } from 'effect';
+import { afterEach, assert, beforeEach, describe, expect, vi } from 'vitest';
 
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { installTerminalTitleUpdates } from '@cli/chat/tui/terminalTitle';
 import { SessionGraph } from '@test/support/testKernel';
 import {
@@ -50,7 +51,8 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
         '/tmp/evil\x07\x1b]0;pwned\x07',
       );
       const session = new TuiSession();
-      session.markRunPending(Effect.never, Effect.void);
+      const launched = session.claimLaunch();
+      assert(launched !== undefined);
       await Promise.resolve();
       updates.suspend();
       expect(writeSync).not.toHaveBeenCalled();
@@ -62,7 +64,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
       const capableUpdates = installTerminalTitleUpdates(
         '/tmp/evil\x07\x1b]0;pwned\x07',
       );
-      session.clearRunState();
+      session.endLaunch(launched, { exitCode: CliExitCode.Success });
       await Promise.resolve();
       expect(writeSync).toHaveBeenLastCalledWith(
         1,

@@ -579,7 +579,7 @@ interface StatusBarRunTarget {
 /**
  * Which run the status bar describes (the active run when the view
  * holds it), and what Ctrl-C does there. `canStop` is the SIGINT handler's
- * own predicate (`chatTuiCanStopVisibleRun`), so the hint cannot disagree
+ * own predicate (`canStopRootRun`), so the hint cannot disagree
  * with what the key does.
  */
 export function statusBarRunTarget({

@@ -27,10 +27,7 @@ import {
   sessionView,
 } from '../state/sessionView';
 import { resolveChildListTarget } from '../state/childControls';
-import {
-  chatTuiCanStopVisibleRun,
-  runStopFacts as runStopFactsSignal,
-} from '../state/sessionRunState';
+import { canStopRootRun as canStopRootRunSignal } from '../state/sessionRunState';
 import { attentionRequests as attentionRequestsSignal } from '../state/approvalQueue';
 import { modelConnectionNeeded as modelConnectionNeededSignal } from '../modelConnection';
 import { useSignal } from '../state/useSignal';
@@ -130,14 +127,14 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const highlightedChild = runViewOf(view, useSignal(childListHighlight));
   const listedRuns = useSignal(sessionListRunIds);
   const { columns } = useWindowSize();
-  // The Ctrl-C stop/exit hint derives from the run-claim signal, never from
-  // impure session closures: memoized renders cache a closure's result on the
+  // The Ctrl-C stop/exit hint derives from a signal, never from impure
+  // session closures: memoized renders cache a closure's result on the
   // closure's identity, which froze the hint at its boot-time value for the
   // whole run (#8273).
-  const runStopFacts = useSignal(runStopFactsSignal);
+  const canStop = useSignal(canStopRootRunSignal);
   const target = statusBarRunTarget({
     activeRunId,
-    canStop: chatTuiCanStopVisibleRun(runStopFacts),
+    canStop,
     view,
   });
   const displayRunId = target.displayRunId;

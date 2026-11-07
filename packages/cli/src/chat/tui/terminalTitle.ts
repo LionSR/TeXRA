@@ -17,7 +17,7 @@ import { rootRunIds } from './state/cliState';
 import { attentionRequests } from './state/approvalQueue';
 import { sessionView } from './state/sessionView';
 import { writeOsc } from './notifications/terminalNotifier';
-import { chatTuiCanStopActiveRun, runStopFacts } from './state/sessionRunState';
+import { canStopRootRun } from './state/sessionRunState';
 import type { SessionTitleState } from '@texra-ai/harness/schemas';
 
 // The TUI's ASCII spin cycle reads as stray punctuation once a frame stands
@@ -47,7 +47,7 @@ const terminalTitleState = computed((): SessionTitleState => {
   if (attentionRequests.get().length > 0) return 'approval';
   const { runs } = sessionView().get();
   if (
-    chatTuiCanStopActiveRun(runStopFacts.get()) ||
+    canStopRootRun.get() ||
     rootRunIds.get().some((id) => {
       const run = runs.get(id);
       return run !== undefined && isWorking(run);

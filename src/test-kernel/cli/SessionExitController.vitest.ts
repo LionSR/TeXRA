@@ -3,6 +3,7 @@ import { beforeEach, expect, vi } from 'vitest';
 
 import { Effect, Layer, Scope } from 'effect';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
+import { rootRunId } from '@cli/chat/tui/state/cliState';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { SessionGraph } from '@test/support/testKernel';
 import { boundTestSessionView } from './fixtures/sessionViewFixture';
@@ -54,6 +55,7 @@ const createController = (session: TuiSession) =>
       runtime,
       leaveProcess: mocks.leaveProcess,
       submitted: Effect.void,
+      rootRunEnded: Effect.void,
       getApprovalPolicy: () => 'ask',
       flushArtifacts: Effect.fail(new Error('disk full')),
       repaintAfterTerminalResume: vi.fn(),
@@ -78,7 +80,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
       Effect.gen(function* () {
         const session = new TuiSession();
         // cast: the exit hint prints the id as held; nothing here decodes it.
-        session.runId = 'exec-graceful-flush' as RunId;
+        rootRunId.set('exec-graceful-flush' as RunId);
         const { controller, terminal } = yield* createController(session);
 
         yield* Effect.promise(() => controller.exit());

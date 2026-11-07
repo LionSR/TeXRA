@@ -139,10 +139,7 @@ import {
   sessionView,
   runViewOf,
 } from '../src/chat/tui/state/sessionView';
-import {
-  chatTuiCanStartRootRun,
-  TuiSession,
-} from '../src/chat/tui/state/sessionRunState';
+import { TuiSession } from '../src/chat/tui/state/sessionRunState';
 import {
   formatCliSessionStatus,
   taskCostStatus,
@@ -1592,8 +1589,8 @@ if (SHOW_AGENT_PROPOSAL) {
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
-  const claim = harnessSession.runSettled;
-  if (claim) harnessSession.markRunCompleted(claim);
+  if (harnessLaunch)
+    harnessSession.endLaunch(harnessLaunch, { runId: HARNESS_RUN_ID });
   cancelHarnessRequests('Session interrupted.');
   appendHarnessAssistantTranscript(
     'Harness interrupt requested.',
@@ -1798,7 +1795,7 @@ const harnessCommands = builtinSlashCommands({
     loginFromChat(value, HARNESS_PLATFORM_SERVICES, undefined, output),
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending.
-  canSelectAgent: () => chatTuiCanStartRootRun(harnessSession),
+  canSelectAgent: () => harnessSession.canStartRootRun(),
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: (model) =>
     Effect.succeed(
@@ -1863,13 +1860,10 @@ const harnessCommands = builtinSlashCommands({
     );
   },
 });
-// An interruptible harness run is a pending root-run claim on the harness
-// run, so the status bar derives the Ctrl-C stop hint exactly as `texra chat`
-// does.
-if (canInterrupt) {
-  harnessSession.markRunPending(Effect.never, Effect.void);
-  harnessSession.runId = HARNESS_RUN_ID;
-}
+// An interruptible harness run is a root launch on its way to the session,
+// ended when the harness is interrupted, so the status bar derives the
+// Ctrl-C stop hint exactly as `texra chat` does.
+const harnessLaunch = canInterrupt ? harnessSession.claimLaunch() : undefined;
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const scrollback = chatScrollback(harnessRuntime, inkRef);

@@ -1,52 +1,46 @@
 import { computed, signal } from '@lit-labs/signals';
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 
 import {
-  isWorking,
+  isInterrupted,
   type RunId,
-  type RunStanding,
+  type RunView,
 } from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import { runOutcomeExitCode } from '@cli/runtime/headless/terminalStatus';
 
-import { registerCliStateResetHook, sessionViewFailure } from './cliState';
+import {
+  registerCliStateResetHook,
+  rootRunId,
+  sessionViewFailure,
+} from './cliState';
 import { runViewOf, sessionView } from './sessionView';
 
 /**
- * The claimed root run's end, as the slot holds it: the program that
- * completes when that run finishes, fails or is interrupted. It is the
- * `Deferred.await` of the deferred the claiming path finishes, so the slot
- * stores a value every reader runs on its own fiber instead of a promise the
- * claim had to run a fiber to produce.
- */
-export type RootRunSettled = Effect.Effect<void, Error>;
-
-/**
- * The root session's run claim: the run it claimed (cleared while a new run
- * is pending, unlike `rootRunId`, which stays put as the transcript anchor
- * across pending windows), that run's end, and whether it finished.
- * Held in a signal, not in `TuiSession` fields, so renders read the claim
+ * The chat's latest root launch: a fresh run or a resume, from the moment it
+ * is asked for until the session holds its run. Once the session holds it,
+ * `rootRunId` names the run and the session view says how it stands; a
+ * launch that ended without a run keeps the code the chat then exits with.
+ * Held in a signal, not in `TuiSession` fields, so renders read it
  * reactively instead of calling impure session closures that memoized
- * renders would cache stale (#8273). Written only through `TuiSession`.
+ * renders would cache stale (#8273).
  */
-interface RootRunClaim {
-  readonly runId: RunId | undefined;
-  readonly runSettled: RootRunSettled | undefined;
-  readonly runCompleted: boolean;
-  /** Done once the session holds the claim's run, or its launch failed: a
-   *  stop asked meanwhile waits for it and lands on the run it bore. */
-  readonly launched: Effect.Effect<void>;
-  /** The exit code the claim's run ends with, written only through
-   *  `settleExitCode`. */
-  readonly exitCode: CliExitCode;
+interface RootLaunch {
+  /** Done once the session holds the launch's run, or the launch ended
+   *  without one: a stop asked meanwhile waits for it, then lands on the
+   *  root the chat holds. */
+  readonly launched: Deferred.Deferred<void>;
+  /** For a launch that ended without a run: the code the chat exits with
+   *  unless a later root replaces it (a refused resume is a usage error, a
+   *  failed launch an agent error, a resume with no run a success). */
+  readonly exitCode: CliExitCode | undefined;
 }
 
-const NO_CLAIM: RootRunClaim = {
-  runId: undefined,
-  runSettled: undefined,
-  runCompleted: false,
-  launched: Effect.void,
-  exitCode: CliExitCode.Success,
-};
+/** How a root launch ended: the session holds its run, or it has none and
+ *  the chat exits with `exitCode`. */
+type LaunchEnd =
+  | { readonly runId: RunId }
+  | { readonly exitCode: CliExitCode };
 
 /** How the chat leaves, once decided: on its own (`/exit`, a Ctrl-C with
  *  nothing to stop), or on a signal with that signal's exit code. */
@@ -54,37 +48,53 @@ export type ChatExit =
   | { readonly kind: 'graceful' }
   | { readonly kind: 'signal'; readonly exitCode: number };
 
-const rootRunClaim = signal<RootRunClaim>(NO_CLAIM);
-registerCliStateResetHook(() => rootRunClaim.set(NO_CLAIM));
+const rootLaunch = signal<RootLaunch | undefined>(undefined);
+registerCliStateResetHook(() => rootLaunch.set(undefined));
 
-/** The run facts the stop predicates consume, read by the session, the
- *  status bar's Ctrl-C hint and the terminal title. */
-export const runStopFacts = computed((): ChatTuiRunStopFacts => {
-  const claim = rootRunClaim.get();
-  const run = runViewOf(sessionView().get(), claim.runId);
-  return {
-    runPending: chatTuiRunPending(claim),
-    runId: claim.runId,
-    standing: run,
-    working: run != null && isWorking(run),
-  };
+/** The launch still on its way to the session, if one is. */
+const launchInFlight = (): RootLaunch | undefined => {
+  const launch = rootLaunch.get();
+  return launch !== undefined && !Deferred.isDoneUnsafe(launch.launched)
+    ? launch
+    : undefined;
+};
+
+/** The chat's root run as the session view shows it. */
+const rootRun = (): RunView | undefined =>
+  runViewOf(sessionView().get(), rootRunId.get());
+
+/** The root waits between turns in a launch the session holds. */
+const rootWaiting = (): boolean => {
+  const root = rootRun();
+  return (
+    launchInFlight() === undefined &&
+    root?.holder === 'here' &&
+    root.position === 'waiting'
+  );
+};
+
+/** Whether a Ctrl-C stops the root run: a launch on its way, or a root the
+ *  session holds that is not waiting between turns. Read by the SIGINT
+ *  handler, the status bar's Ctrl-C hint and the terminal title. */
+export const canStopRootRun = computed((): boolean => {
+  if (launchInFlight() !== undefined) return true;
+  const root = rootRun();
+  return root?.holder === 'here' && root.position !== 'waiting';
 });
 
 /**
- * Root-run state of one chat TUI session. The run claim lives in
- * {@link rootRunClaim}; its multi-field transitions are methods so each is
- * one write rather than a half-applied intermediate state. The run-control
- * questions the exit paths and slash commands ask are methods too, read live
- * from the session view and the session's tool-use flows.
+ * Root-run state of one chat TUI session: the launch in {@link rootLaunch},
+ * and the run-control questions the exit paths and slash commands ask, read
+ * live from it and the session view.
  */
 export class TuiSession {
   private readonly runsElsewhere: boolean;
 
-  /** A new session starts with no claim. `runsElsewhere`: its runs run in
+  /** A new session starts with no launch. `runsElsewhere`: its runs run in
    *  the background service, so leaving the chat never ends one. */
   constructor(runsElsewhere = false) {
     this.runsElsewhere = runsElsewhere;
-    rootRunClaim.set(NO_CLAIM);
+    rootLaunch.set(undefined);
   }
 
   /** The chat's one exit, once an exit path decided it: its result is the
@@ -94,186 +104,90 @@ export class TuiSession {
   exited: Promise<CliExitCode> | undefined;
 
   /** The chat's exit code: a dead session view is a failure on every exit
-   *  path; otherwise the claimed run's, as `settleExitCode` wrote it. */
+   *  path; then a launch that ended without a run says it; otherwise the
+   *  root run's outcome does, and a root whose end was lost (interrupted
+   *  with nothing driving it) is a failure. */
   get exitCode(): CliExitCode {
-    return sessionViewFailure.get() !== undefined
-      ? CliExitCode.AgentError
-      : rootRunClaim.get().exitCode;
+    if (sessionViewFailure.get() !== undefined) return CliExitCode.AgentError;
+    const launched = rootLaunch.get()?.exitCode;
+    if (launched !== undefined) return launched;
+    const root = rootRun();
+    if (root === undefined) return CliExitCode.Success;
+    if (isInterrupted(root)) return CliExitCode.AgentError;
+    return root.outcome === null
+      ? CliExitCode.Success
+      : runOutcomeExitCode(root.outcome);
   }
 
-  /** The slot's claim, as a stop reads it: the run it names, its end and
-   *  its launch. */
-  get claim(): RootRunClaim {
-    return rootRunClaim.get();
+  /** The launch on its way to the session: what a stop waits for. */
+  get launched(): Deferred.Deferred<void> | undefined {
+    return launchInFlight()?.launched;
   }
 
-  get runId(): RunId | undefined {
-    return rootRunClaim.get().runId;
-  }
-
-  /** The held claim's run moves to the one a resume adopted (its parent). */
-  set runId(runId: RunId | undefined) {
-    rootRunClaim.set({ ...rootRunClaim.get(), runId });
-  }
-
-  get runSettled(): RootRunSettled | undefined {
-    return rootRunClaim.get().runSettled;
-  }
-
-  get runCompleted(): boolean {
-    return rootRunClaim.get().runCompleted;
-  }
-
-  clearRunState(): void {
-    rootRunClaim.set(NO_CLAIM);
-  }
-
-  /** Claim the slot for `runSettled`'s run, `runId`, in one write, so a
-   *  message typed while the claimant is still choosing its model already
-   *  names the run it will go to. */
-  markRunPending(
-    runSettled: RootRunSettled,
-    launched: Effect.Effect<void>,
-    runId?: RunId,
-  ): void {
-    rootRunClaim.set({
-      runId,
-      runSettled,
-      runCompleted: false,
-      launched,
-      exitCode: CliExitCode.Success,
-    });
-  }
-
-  /** The exit code a claim's run ends with, while the slot still holds that
-   *  claim: a run it replaced does not set the chat's exit. */
-  settleExitCode(runSettled: RootRunSettled, code: CliExitCode): void {
-    if (this.holdsClaim(runSettled))
-      rootRunClaim.set({ ...rootRunClaim.get(), exitCode: code });
-  }
-
-  /** Whether the slot still holds the claim `runSettled` belongs to. */
-  holdsClaim(runSettled: RootRunSettled): boolean {
-    return rootRunClaim.get().runSettled === runSettled;
-  }
-
-  /** The claim `runSettled` belongs to is over. A claim the slot no longer
-   *  holds is left alone: a chain that finishes after the slot moved on (a
-   *  resume taken up before the run it replaced had ended) must not
-   *  free the claim that replaced it. */
-  markRunCompleted(runSettled: RootRunSettled): void {
-    if (!this.holdsClaim(runSettled)) return;
-    rootRunClaim.set({ ...rootRunClaim.get(), runCompleted: true });
+  /** No launch is on its way and the session holds no root of the chat:
+   *  a message starts a fresh run, and the agent can change. */
+  canStartRootRun(): boolean {
+    return launchInFlight() === undefined && rootRun()?.holder !== 'here';
   }
 
   /**
-   * Atomically check-and-claim the root-run slot: fuses
-   * {@link chatTuiCanStartRootRun} and {@link markRunPending} into one
-   * synchronous call so no caller can observe — or race on — a window between
-   * the check and the claim. Every root-run entry point that awaits *before*
-   * it would otherwise claim (resume, follow-up-wake resume) MUST call this as
-   * its first statement, before any `await`, so the claim happens before the
-   * caller can be suspended and a concurrent entry point can slip in and claim
-   * the same slot. `launchRootRun` claims via `markRunPending` directly
-   * instead — it never suspends before claiming, so it has no check-then-await
-   * window for this primitive to close.
+   * Claim the root launch: the check that no root run is in flight and the
+   * claim are one synchronous step, so no other launch, resume or taken-up
+   * root lands between them, and a message typed while the claimant still
+   * chooses its model already sees it. Undefined when a root run is in
+   * flight. The claimant ends it with {@link endLaunch}.
    */
-  tryClaimRootRunSlot(
-    runSettled: RootRunSettled,
-    launched: Effect.Effect<void>,
-    runId?: RunId,
-  ): boolean {
-    if (!chatTuiCanStartRootRun(this)) return false;
-    this.markRunPending(runSettled, launched, runId);
-    return true;
+  claimLaunch(): Deferred.Deferred<void> | undefined {
+    if (!this.canStartRootRun()) return undefined;
+    const launched = Deferred.makeUnsafe<void>();
+    rootLaunch.set({ launched, exitCode: undefined });
+    return launched;
   }
 
-  /** Where the claimed run stands, as the session view derives it. */
-  standing(): RunStanding | undefined {
-    return runStopFacts.get().standing;
+  /** The launch `launched` reached its end: the session holds its run,
+   *  which becomes the chat's root, or it has none. Only its first end
+   *  counts, and only while it is still the chat's latest launch. */
+  endLaunch(launched: Deferred.Deferred<void>, end: LaunchEnd): void {
+    if (Deferred.isDoneUnsafe(launched)) return;
+    if (rootLaunch.get()?.launched === launched) {
+      if ('runId' in end) rootRunId.set(end.runId);
+      // A new record, so renders that read whether the launch is on its
+      // way see that it is not.
+      rootLaunch.set({
+        launched,
+        exitCode: 'exitCode' in end ? end.exitCode : undefined,
+      });
+    }
+    // Last: the fibers waiting on the launch resume inside this call, and
+    // they read the root it names.
+    Deferred.doneUnsafe(launched, Effect.void);
   }
 
-  /** Whether the claimed run is live, as the session view derives it: what
-   *  a model switch reaches. */
-  runLive(): boolean {
-    const run = runViewOf(sessionView().get(), this.runId);
-    return run !== undefined && run.holder === 'here';
+  /** A root the session resumed on its own becomes the chat's: it replaces
+   *  the latest launch, whose end no longer decides the exit. */
+  takeUpRoot(runId: RunId): void {
+    rootLaunch.set(undefined);
+    rootRunId.set(runId);
   }
 
-  /** Model selection is open with no pending run, or at a tool-use wait. */
+  /** Model selection is open with no root in flight, or while the root
+   *  waits between turns, where the switch reaches the live run. */
   canSelectModel(): boolean {
-    return (
-      chatTuiCanStartRootRun(this) ||
-      (this.standing()?.position === 'waiting' && this.runLive())
-    );
-  }
-
-  /** Whether an actively-running turn can be stopped (vs idle/WAITING). */
-  canStopVisibleRun(): boolean {
-    return chatTuiCanStopVisibleRun(runStopFacts.get());
+    return this.canStartRootRun() || rootWaiting();
   }
 
   /**
-   * On exit, a tool-use session suspended at a wait (idle/WAITING) with an
-   * active tool-use run is not stopped the way a Ctrl-C stops a turn: the
-   * user's stop policy (`detachSubagentsOnStop`) does not apply, and the exit
-   * needs no second Ctrl-C. The session's close still ends the generation,
-   * which records its terminal `run.end` as cancelled ("Stopped"): every
-   * activation ends with one, and a run left without it would read as
-   * interrupted by a crash. Resumability survives either way: a run's rows
-   * stay until the run is explicitly deleted.
+   * On exit, a tool-use session suspended at a wait (idle/WAITING) is not
+   * stopped the way a Ctrl-C stops a turn: the user's stop policy
+   * (`detachSubagentsOnStop`) does not apply, and the exit needs no second
+   * Ctrl-C. The session's close still ends the generation, which records its
+   * terminal `run.end` as cancelled ("Stopped"): every activation ends with
+   * one, and a run left without it would read as interrupted by a crash.
+   * Resumability survives either way: a run's rows stay until the run is
+   * explicitly deleted.
    */
   isResumableIdle(): boolean {
     // The service holds the task: the chat leaves it as it is, any time.
-    if (this.runsElsewhere) return true;
-    return (
-      this.runId !== undefined &&
-      chatTuiRunPending(this) &&
-      !this.canStopVisibleRun() &&
-      this.runLive()
-    );
+    return this.runsElsewhere || rootWaiting();
   }
-}
-
-type PendingTuiRunSessionState = Pick<
-  RootRunClaim,
-  'runSettled' | 'runCompleted'
->;
-
-/** Run facts the stop predicates consume: {@link runStopFacts}. */
-interface ChatTuiRunStopFacts {
-  readonly runPending: boolean;
-  readonly runId: RunId | undefined;
-  readonly standing: RunStanding | undefined;
-  readonly working: boolean;
-}
-
-export function chatTuiCanStopActiveRun(facts: ChatTuiRunStopFacts): boolean {
-  if (!facts.runPending) return false;
-  if (!facts.runId) return true;
-  return (
-    facts.standing === undefined ||
-    (facts.standing.position === 'ready' && facts.standing.outcome === null) ||
-    facts.working
-  );
-}
-
-export function chatTuiCanStopVisibleRun(facts: ChatTuiRunStopFacts): boolean {
-  return (
-    chatTuiCanStopActiveRun(facts) || Boolean(facts.runId && facts.working)
-  );
-}
-
-/** Whether the session still holds an unfinished root-run claim. Sole
- *  derivation of that fact: the availability predicate, {@link runStopFacts},
- *  and every caller-side "a run is in flight" check read it here instead of
- *  re-deriving `runSettled && !runCompleted`. */
-export function chatTuiRunPending(session: PendingTuiRunSessionState): boolean {
-  return Boolean(session.runSettled) && !session.runCompleted;
-}
-
-export function chatTuiCanStartRootRun(
-  session: PendingTuiRunSessionState,
-): boolean {
-  return !chatTuiRunPending(session);
 }
