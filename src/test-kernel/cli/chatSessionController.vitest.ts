@@ -461,12 +461,15 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     );
 
     it.effect(
-      'sends a message to the launched root before the view shows it',
+      'holds the launch until the view shows its run, for a stop and a message',
       () =>
         Effect.gen(function* () {
           // A service window's view follows the run on its own watch, so the
-          // launch can hand the chat its run before the view lists it. A
-          // message in that gap goes to that run, not to a second root.
+          // session can acknowledge the launch before the view lists it.
+          // Until it does, the launch is the chat's way to the run: Ctrl-C
+          // can stop it, and a stop or a message asked then reaches it once
+          // the view shows it, instead of being lost or starting a second
+          // root.
           installSession(installableViewRef());
           const session = new TuiSession();
           const ctrl = createChatSessionController(
@@ -479,33 +482,81 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
                 ({ commands: slashCommands([]) }) as SlashCommandContext,
             }),
           );
-          const sent: RunId[] = [];
+          const sent: string[] = [];
           mocks.request.mockImplementation((req: RuntimeCommand) =>
             Effect.sync((): Outcome => {
-              if (req.kind === 'followUp.send') sent.push(req.runId);
-              return {
-                kind: 'followUp',
-                id: 'sent-1',
-                status: 'sent',
-                receipt: { state: 'accepted' },
-              };
+              if (req.kind === 'followUp.send' || req.kind === 'run.stop')
+                sent.push(`${req.kind} ${req.runId}`);
+              return req.kind === 'followUp.send'
+                ? {
+                    kind: 'followUp',
+                    id: 'sent-1',
+                    status: 'sent',
+                    receipt: { state: 'accepted' },
+                  }
+                : { kind: 'done' };
             }),
           );
           // The run works on: its result never comes in this test.
           mocks.executeAgent.mockReturnValue(new Promise(() => {}));
 
-          yield* ctrl.startRootRun({
-            agent: 'demo-agent',
-            model: 'demo-model',
-            instruction: 'Start here.',
-          });
-          const launched = rootRunId.get();
-          assert(launched !== undefined, 'the launch named its run');
-          yield* ctrl.submit({ ...EMPTY_DRAFT, text: 'And then this.' });
+          const starting = yield* Effect.forkChild(
+            ctrl.startRootRun({
+              agent: 'demo-agent',
+              model: 'demo-model',
+              instruction: 'Start here.',
+            }),
+            { startImmediately: true },
+          );
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(mocks.rootLaunch).toHaveBeenCalledOnce()),
+          );
+          const [{ runId: launched }] = mocks.rootLaunch.mock.calls[0];
+          expect(canStopRootRun.get()).toBe(true);
+          const messaging = yield* Effect.forkChild(
+            ctrl.submit({ ...EMPTY_DRAFT, text: 'And then this.' }),
+            { startImmediately: true },
+          );
+          ctrl.stop('user');
+
+          seedView(viewWith([{ id: launched }]));
+          yield* Fiber.join(starting);
+          yield* Fiber.join(messaging);
 
           expect(mocks.rootLaunch).toHaveBeenCalledOnce();
-          expect(sent).toEqual([launched]);
+          yield* Effect.promise(() =>
+            vi.waitFor(() =>
+              expect(sent.toSorted()).toEqual([
+                `followUp.send ${launched}`,
+                `run.stop ${launched}`,
+              ]),
+            ),
+          );
         }),
+    );
+
+    it.effect("exits as a failure when the root's result cannot be read", () =>
+      Effect.gen(function* () {
+        // The run's result fails (its connection died) while the view,
+        // no longer updated, still shows it running here.
+        const session = new TuiSession();
+        mocks.resumeRun.mockImplementationOnce((id: RunId) =>
+          Effect.succeed({
+            runId: id,
+            result: Effect.fail(new Error('the service connection closed')),
+          }),
+        );
+        const ctrl = createChatSessionController(yield* makeInit({ session }));
+        seedView(viewWith([{ id: decodeRunId('aaaaaa') }]));
+        yield* ctrl.resume(decodeRunId('aaaaaa'));
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(mocks.appendLocalErrorTranscript).toHaveBeenCalled(),
+          ),
+        );
+
+        expect(session.exitCode).toBe(CliExitCode.AgentError);
+      }),
     );
 
     it.effect(

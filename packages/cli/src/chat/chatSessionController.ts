@@ -19,6 +19,7 @@ import {
 
 import {
   LaunchRefused,
+  type Run,
   type RunStopReason,
   type Session,
 } from '@texra-ai/harness';
@@ -72,7 +73,8 @@ import {
 } from './tui/state/cliState';
 import type { TuiSession } from './tui/state/sessionRunState';
 import { oneShotResumeNotice } from './tui/state/resumeHint';
-import { currentView, runViewOf } from './tui/state/sessionView';
+import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
@@ -388,6 +390,35 @@ export function createChatSessionController(
   // startRootRun
   // -----------------------------------------------------------------------
 
+  /** Done once the chat's view shows `runId` held here. */
+  const shownHeld = (runId: RunId): Effect.Effect<void> =>
+    Effect.callback<void>((resume) => {
+      const shown = () => runViewOf(currentView(), runId)?.holder === 'here';
+      if (shown()) return resume(Effect.void);
+      const unsubscribe = subscribeToSignalChanges([sessionView()], () => {
+        if (shown()) resume(Effect.void);
+      });
+      return Effect.sync(unsubscribe);
+    });
+
+  /**
+   * Hand the launch `launched` over to `run`: the launch ends, naming the
+   * run, once the chat's view shows it held here or its result is in. Until
+   * then the launch is still on its way, so a stop, a message and the Ctrl-C
+   * hint wait for it instead of reading a view that has not caught up (a
+   * service window's watch can lag the session's start). Answers the run's
+   * result, read once.
+   */
+  const handOver = Effect.fnUntraced(function* (
+    launched: Deferred.Deferred<RunId | null>,
+    run: Run,
+  ) {
+    const result = yield* Effect.cached(run.result);
+    yield* Effect.raceFirst(shownHeld(run.runId), Effect.ignore(result));
+    session.endLaunch(launched, { runId: run.runId });
+    return result;
+  });
+
   /**
    * The one root-run launch: claims the root launch, then prepares and
    * starts the run on its own fiber, so a message typed while the model is
@@ -431,8 +462,7 @@ export function createChatSessionController(
           held = true;
           moveLocalTranscriptToRun(run.runId);
           focusRun(run.runId);
-          session.endLaunch(launched, { runId: run.runId });
-          return run;
+          return { runId: run.runId, result: yield* handOver(launched, run) };
         });
         // Owned by the process's shutdown scope, as the chat's sends are.
         return recoverRun(launch, (error) => {
@@ -562,8 +592,8 @@ export function createChatSessionController(
           // an open `/plan` reader reads the same `RunView`.
           focusRun(run.runId);
           // A stop asked before this point lands on the run adopted here.
-          session.endLaunch(launched, { runId: run.runId });
-          yield* recoverRun(Effect.asVoid(run.result), (error) =>
+          const result = yield* handOver(launched, run);
+          yield* recoverRun(Effect.asVoid(result), (error) =>
             reportHeldRunFailure(run.runId, error),
           );
         });
@@ -577,6 +607,7 @@ export function createChatSessionController(
           Effect.ensuring(endWithout(CliExitCode.Success)),
           Effect.forkIn(shutdownScope),
           Effect.andThen(restore(Deferred.await(launched))),
+          Effect.asVoid,
         );
       }),
     );
@@ -658,10 +689,11 @@ export function createChatSessionController(
   };
 
   /** A stop lands on the root the session holds. One asked while a launch
-   *  is still entering the session waits for it, then lands on the root the
-   *  chat holds then. Ctrl-C leaves the child policy unset, so the stop
-   *  itself (`Runs.stop`) applies the configured "Keep agents running"; why
-   *  the run then stops is the run registry's fact. */
+   *  is still entering the session waits for it, then lands on the run that
+   *  launch reached (a stop of a run that already ended is a no-op).
+   *  Ctrl-C leaves the child policy unset, so the stop itself (`Runs.stop`)
+   *  applies the configured "Keep agents running"; why the run then stops
+   *  is the run registry's fact. */
   const stop = (reason: RunStopReason): void => {
     // A chat of the background service leaves its task running when the
     // terminal goes: only the user's own stop reaches it.
@@ -669,14 +701,14 @@ export function createChatSessionController(
     const launched = session.launched;
     if (launched === undefined && heldRoot() === undefined) return;
     runtime.runFork(
-      (launched === undefined ? Effect.void : Deferred.await(launched)).pipe(
-        Effect.andThen(
-          Effect.suspend(() => {
-            const root = heldRoot();
-            return root === undefined
-              ? Effect.void
-              : request({ kind: 'run.stop', runId: root.id, reason });
-          }),
+      (launched === undefined
+        ? Effect.sync((): RunId | null => heldRoot()?.id ?? null)
+        : Deferred.await(launched)
+      ).pipe(
+        Effect.flatMap((runId) =>
+          runId == null
+            ? Effect.void
+            : request({ kind: 'run.stop', runId, reason }),
         ),
       ),
     );
@@ -863,24 +895,13 @@ export function createChatSessionController(
       // one that failed) starts a fresh run, which picks its model again. A
       // run that does not start gives back only the skills: its failure is
       // in the transcript.
-      const rootId = rootRunId.get();
-      const root = runViewOf(currentView(), rootId);
+      const root = runViewOf(currentView(), rootRunId.get());
       if (
         root !== undefined &&
         (root.holder === 'here' ||
           (root.outcome === 'cancelled' && acceptsFollowUp(root)))
       )
         return yield* send(root.id, true);
-      // A root the view does not show yet: a launch whose run the session
-      // holds before the view (a service window's watch) has caught up. Its
-      // stored rows say it is the run, so the message goes to it rather than
-      // starting a second root beside it.
-      if (
-        root === undefined &&
-        rootId !== undefined &&
-        (yield* runSession.records(rootId).exists())
-      )
-        return yield* send(rootId, true);
       const started = yield* startSession(
         prepared.instruction,
         mediaFiles,
