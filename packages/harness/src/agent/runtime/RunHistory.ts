@@ -35,6 +35,7 @@ import {
 import type {
   HistoryMessage,
   RunHistoryRow,
+  WithBlobs,
 } from '@shared/session/historyTurns';
 import type { Alongside, Append } from '@shared/session/sessionEvents';
 import type { SessionLogShape } from '@shared/session/sessionLog';
@@ -268,6 +269,20 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     const refusal = unprepared(run, assembled, kept);
     if (refusal !== null) return yield* refusal;
   }
+  // Converted before the job: a row this build cannot store is refused
+  // with its reason, nothing written.
+  const drafts: WithBlobs<SessionEventDraft>[] = [];
+  for (const row of rows) {
+    const draft = storedDraft(row);
+    if (Result.isFailure(draft))
+      return yield* new RunHistoryRefused({
+        reason: 'inconsistent',
+        runId: run,
+        detail: draft.failure.detail,
+        cause: draft.failure,
+      });
+    drafts.push(draft.success);
+  }
   const target = qualifyAggregateId('run', run);
   const job = Effect.fn('job')(function* (append: Append) {
     // Decided in the job, so it reads what the jobs before it left.
@@ -277,10 +292,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     if (stray !== undefined)
       return yield* broken(`a registration targets ${stray.aggregateId}`);
     const beside = yield* alongside;
-    const written = yield* runStateAppend(append)([
-      ...born,
-      ...rows.map(storedDraft),
-    ]);
+    const written = yield* runStateAppend(append)([...born, ...drafts]);
     yield* append(beside);
     return written;
   }, Effect.scoped);

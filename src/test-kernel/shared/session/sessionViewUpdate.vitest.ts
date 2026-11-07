@@ -268,10 +268,12 @@ const runHistoryRow = (
     runHistoryRows([
       Schema.decodeUnknownSync(SessionEventSchema)({
         // cast: each case writes a run-history draft; the decode around it checks it.
-        ...storedDraft({
-          aggregateId: RUN_HISTORY_AGGREGATE,
-          ...draft,
-        } as unknown as RunHistoryDraft),
+        ...Result.getOrThrow(
+          storedDraft({
+            aggregateId: RUN_HISTORY_AGGREGATE,
+            ...draft,
+          } as unknown as RunHistoryDraft),
+        ),
         seq: commit,
         commit,
         origin: null,
