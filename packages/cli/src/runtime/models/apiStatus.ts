@@ -96,9 +96,9 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     { concurrency: 'unbounded' },
   );
   // Detailed `/login status` is user-invoked, so reopening it is the manual refresh
-  // path. Ordinary chat startup and the status bar never call this service, and
-  // every read below forces a refresh, so the service is built over the caller's
-  // stores here rather than held as a module singleton.
+  // path. Ordinary chat startup and the status bar never call this service. It
+  // is built fresh over the caller's stores for each status, so its cache is
+  // empty and every read below fetches.
   const usageReader = new SubscriptionUsageService({ stores });
   const codingPlanUsageEntries = yield* Effect.forEach(
     CODING_PLAN_SUBSCRIPTIONS,
@@ -106,9 +106,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
       const status = cliCodingPlanStatus(access, plan);
       return Effect.map(
         status.keySet
-          ? usageReader.getUsage(plan.usageProvider, {
-              forceRefresh: true,
-            })
+          ? usageReader.getUsage(plan.usageProvider)
           : Effect.succeed(undefined),
         (usage) => [plan.id, usage] as const,
       );

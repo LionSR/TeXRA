@@ -500,6 +500,32 @@
           "signature": "export function subscribeToSignalChanges( signals: readonly WatchableSignal[], notify: () => void, ): () => void {…}"
         }
       ]
+    },
+    {
+      "id": "UI-terminal-write-without-bound",
+      "candidate": "TerminalOutput.writeTerminalText awaits xterm's write callback alone, or an Effect.callback with Effect.timeout, in place of the promise raced against a 100 ms timer",
+      "why": "The bound is load-bearing: the flush loop holds isFlushingText while it awaits the write, and a terminal disposed or replaced mid-write never calls back, so an unbounded wait would leave every later flush skipped and the new terminal empty. The Effect form needs Effect.runPromise inside a Lit component in packages/texra, where Effect.run* is banned outside the host entries; it would move the same timer behind a runtime the component does not have. Found in round 2 (J-ui-kit.md, batched items); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
+      "symbols": [
+        {
+          "file": "packages/texra/src/ui/progress/components/TerminalOutput.ts",
+          "symbol": "writeTerminalText",
+          "signature": "private async writeTerminalText( terminal: Terminal, text: string, ): Promise<void> {…}"
+        }
+      ]
+    },
+    {
+      "id": "UI-inquiry-decode-by-reference",
+      "candidate": "ExternalInquiryPanel stops decoding permission.data with Schema.decodeUnknownSync and caching the result by reference",
+      "why": "A plugin request's payload is opaque JSON to the harness and its view (the plugin owns the shape), so the panel is the boundary where the inquiry plugin's data is decoded. The reference compare is that decode done once per request, not a second cache; moving it to willUpdate keeps the same decode and adds a field that is undefined before the first update. A typed plugin payload in the session view would delete it, and is the change to make if that lands. Found in round 2 (J-ui-kit.md, batched items); refused in round 3, package B.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/J-ui-kit.md#batched-smaller-items",
+      "symbols": [
+        {
+          "file": "packages/texra/src/ui/progress/components/ExternalInquiryPanel.ts",
+          "symbol": "ExternalInquiryPanel.inquiry",
+          "signature": "private get inquiry(): InquiryRequest {…}"
+        }
+      ]
     }
   ]
 }
