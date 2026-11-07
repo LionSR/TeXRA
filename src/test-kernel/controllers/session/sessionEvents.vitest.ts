@@ -231,7 +231,7 @@ const requested: SessionRowDraft = {
     data: {
       requestId: 'req-1',
       command: 'lake build',
-      allowBypass: true,
+      offersGrant: true,
       runId: RUN,
     },
   },
@@ -1315,7 +1315,7 @@ describe('RunHistory', () => {
       data: {
         requestId: 'req-1',
         command: 'ls',
-        allowBypass: true,
+        offersGrant: true,
         runId: RUN,
       },
     },

@@ -449,7 +449,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     yield* skipCall(call, status, unknownOutcome(entered.attempt));
     return;
   }
-  const { attempt, raised, own: standing } = entered;
+  const { attempt } = entered;
   // Whether this attempt's intent is committed: a re-entered attempt's is.
   let bodyStarted = status.kind === 'started' && status.attempt === attempt;
   // A tool the step offers but did not send (a script's own function, or any
@@ -472,16 +472,15 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     const { logId: id } = fact;
     log.publish(runId, { type: 'stream.chunk', id, text });
   };
-  const { requests, retireStanding } = callRequests(
+  const { requests, retireStanding } = callRequests({
     run,
     session,
     cell,
-    (rows) => commit(call, rows),
-    { ...at, attempt },
-    raised,
-    standing,
-    'The resumed call no longer asks it.',
-  );
+    commit: (rows) => commit(call, rows),
+    at,
+    entered,
+    retireCause: 'The resumed call no longer asks it.',
+  });
   // Its step's PreToolUse hooks, recorded before the chain decides.
   const pre =
     tool &&
@@ -752,18 +751,16 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
                 stage: null,
               };
               const at = { responseId, callId: fact.callId };
-              const entered = resumedAttempt(state, at, status);
-              // A request the call was parked on is withdrawn with it.
-              const { retireStanding } = callRequests(
+              // A request the call was waiting on is withdrawn with it.
+              const { retireStanding } = callRequests({
                 run,
                 session,
                 cell,
-                (rows) => commit(call, rows),
-                { ...at, attempt: entered.attempt },
-                entered.raised,
-                entered.own,
-                'The script ended before this call settled.',
-              );
+                commit: (rows) => commit(call, rows),
+                at,
+                entered: resumedAttempt(state, at, status),
+                retireCause: 'The script ended before this call settled.',
+              });
               const reason = skippedByScriptEnd(attemptOf(status) > 0);
               return Effect.andThen(
                 retireStanding,

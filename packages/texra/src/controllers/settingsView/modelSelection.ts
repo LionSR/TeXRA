@@ -8,6 +8,7 @@ import {
   type ReasoningEffort,
   resolveModelSource,
 } from '@texra-ai/llm';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import {
   getEnabledModels,
   getHelperModelName,
@@ -38,13 +39,17 @@ const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
  * persisted picker state (enabled models, helper model, reasoning levels),
  * and all three are what the availability read resolves the routing
  * switches against, so the rows show the values a run will honor. The
- * process `Secrets` hold the provider credentials behind each option's
- * availability.
+ * process `Secrets` and its subscription accounts hold the credentials
+ * behind each option's availability.
  */
 export const buildModelSelectionPage = Effect.fn('buildModelSelectionPage')(
   function* (
     stores: SettingsStores,
-  ): Effect.fn.Return<ModelSelectionPage, Error, Secrets> {
+  ): Effect.fn.Return<
+    ModelSelectionPage,
+    Error,
+    Secrets | SubscriptionAccounts
+  > {
     const models = yield* buildSelectionItems(stores);
     return {
       models,
@@ -81,7 +86,11 @@ export function setReasoningLevel(
 
 const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
   stores: SettingsStores,
-): Effect.fn.Return<ModelSelectionItem[], Error, Secrets> {
+): Effect.fn.Return<
+  ModelSelectionItem[],
+  Error,
+  Secrets | SubscriptionAccounts
+> {
   const enabledSet = new Set(yield* getEnabledModels(stores.globalState));
 
   // Resolve availability (personal-key, subscription) once for the

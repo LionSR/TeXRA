@@ -29,6 +29,7 @@ import {
 } from 'effect';
 import { HttpClient } from 'effect/http';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 // Local imports
 import {
@@ -183,8 +184,8 @@ const followedPorts = (current: Ref.Ref<InstalledHost>) => {
  * platform services (`PlatformServices`): its `ProcessIdentity`, the Node
  * `FileSystem`, `Path` and `ChildProcessSpawner`, `GlobalStorageFs`, the
  * `GlobalDatabase` and `ProjectDatabases` handles, the `HttpClient`,
- * `Secrets`, `AppState`, `AgentDirectories`, `GlobalValues`, `StateStores`,
- * `UsageLog` and `AppSignals`. The agent runtime adds (`RunServices`) the
+ * `Secrets` with its `SubscriptionAccounts`, `AppState`, `AgentDirectories`,
+ * `GlobalValues`, `StateStores`, `UsageLog` and `AppSignals`. The agent runtime adds (`RunServices`) the
  * `AgentCatalog`, the model routes' `RouteRetries` gate, the `ToolRegistry`
  * and `ToolAvailability`; the composition adds its `ToolCatalog`; and a
  * composition root opens its sessions through `Sessions`, with the internal
@@ -200,6 +201,7 @@ const PROCESS_SERVICES = [
   ProjectDatabases,
   HttpClient.HttpClient,
   Secrets,
+  SubscriptionAccounts,
   AppState,
   AgentDirectories,
   GlobalValues,

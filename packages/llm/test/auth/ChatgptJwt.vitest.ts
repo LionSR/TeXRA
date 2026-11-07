@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { chatgptCoordinator } from '@texra-ai/llm/node';
+import { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { CredentialStore } from '@texra-ai/llm';
 
 /** An access token the claim decoder reads as carrying no claims. */
@@ -22,12 +22,14 @@ function storedClaims(
     delete: () => Effect.void,
   };
   const { accountId, email, planType } = Effect.runSync(
-    chatgptCoordinator(signedOut).storeTokens({
-      access_token: accessToken ?? OPAQUE_ACCESS_TOKEN,
-      id_token: idToken,
-      refresh_token: 'refresh-token',
-      expires_in: 3600,
-    }),
+    Effect.flatMap(SubscriptionAccounts.make(signedOut), (accounts) =>
+      accounts['chatgpt-subscription'].storeTokens({
+        access_token: accessToken ?? OPAQUE_ACCESS_TOKEN,
+        id_token: idToken,
+        refresh_token: 'refresh-token',
+        expires_in: 3600,
+      }),
+    ),
   );
   return { accountId, email, planType };
 }

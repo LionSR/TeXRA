@@ -190,7 +190,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // read without the tier and reset its text named).
   // v8: a retry's failure carries no `userRetryable`; the offer is the
   // `failed` row's own `next`.
-  'request.opened': { version: 8, listing: 'request' },
+  // v9: `allowBypass` is `offersGrant`, what it means: whether the request
+  // offers the run grant of its kind (an earlier build's would fail to read).
+  'request.opened': { version: 9, listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options.
   'request.decided': { version: 2, listing: 'request' },
@@ -276,7 +278,11 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // position (an earlier build's operation would have its position silently
   // dropped).
   // v14: no `purpose`; a compaction's summary records no attempt.
-  'model.message': { version: 14, listing: 'none' },
+  // v15: a failed attempt whose plan ran out records the route it declines
+  // (`next: decline`) instead of a retry request answered at once, and the
+  // rebind records the declined route on a `run.config` (an earlier build's
+  // fallback would resume without its route declined).
+  'model.message': { version: 15, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).

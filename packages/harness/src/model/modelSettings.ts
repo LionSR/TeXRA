@@ -16,7 +16,7 @@ import {
   type RouteFacts,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import { getChatgptStatus, getXaiStatus } from '@texra-ai/llm/node';
+import { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { Secrets } from '@platform/secrets';
@@ -25,6 +25,10 @@ import {
   StateReadFailed,
   type SettingsStores,
 } from '@shared/config/settings';
+import {
+  SUBSCRIPTION_ROUTES,
+  type SubscriptionAuthProvider,
+} from '@shared/model/subscriptionAuth';
 import { type DeclinableUsageRoute } from '@shared/schemas';
 import {
   GLM_ENDPOINT_SETTING,
@@ -163,32 +167,27 @@ function hostPath(input: string): string {
  */
 const subscriptionOn = (
   stores: SettingsStores,
-  provider: 'chatgpt' | 'grok',
-): Effect.Effect<boolean, RouteUnavailable, Secrets> =>
-  SubscriptionPreference.get(provider, stores)
-    ? Effect.flatMap(Secrets, (secrets) =>
-        (provider === 'chatgpt' ? getChatgptStatus : getXaiStatus)(secrets),
+  provider: SubscriptionAuthProvider,
+): Effect.Effect<boolean, RouteUnavailable, SubscriptionAccounts> => {
+  const route = SUBSCRIPTION_ROUTES[provider];
+  return SubscriptionPreference.get(provider, stores)
+    ? Effect.flatMap(SubscriptionAccounts, (accounts) =>
+        accounts[route].getStatus(),
       ).pipe(
         Effect.map((status) => status.signedIn),
-        Effect.mapError((error) =>
-          RouteUnavailable.ofSession(
-            provider === 'chatgpt'
-              ? 'chatgpt-subscription'
-              : 'xai-subscription',
-            error,
-          ),
-        ),
+        Effect.mapError((error) => RouteUnavailable.ofSession(route, error)),
       )
     : Effect.succeed(false);
+};
 
 /** Read every model-access setting from `stores` and the process
- *  {@link Secrets}, once. */
+ *  {@link Secrets} with its subscription accounts, once. */
 export const readModelSettings = Effect.fn('readModelSettings')(function* (
   stores: SettingsStores,
 ): Effect.fn.Return<
   ModelSettings,
   StateReadFailed | SecretsFailed | RouteUnavailable,
-  Secrets
+  Secrets | SubscriptionAccounts
 > {
   const secrets = yield* Secrets;
   // One read decides both the route and how an unreadable key fails.
