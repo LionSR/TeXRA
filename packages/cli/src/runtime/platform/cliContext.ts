@@ -299,10 +299,17 @@ export const resolveCliResourcesPath = Effect.fn(
  * clean), for a store this process could not open (a remote mount, a store a
  * newer build wrote: the message says what to do), or when no tracker URL is
  * configured — only an UNEXPECTED crash with a known `bugs.url` gets the
- * report prompt.
+ * report prompt. It runs in the last-resort crash handler, so it never
+ * throws: a manifest that does not decode is the crash being reported (its
+ * message is already on stderr), and the report line is left off.
  */
 export function formatCrashReportLine(error: unknown): string | undefined {
-  const bugsUrl = loadCliPackageManifest().bugs?.url;
+  let bugsUrl: string | undefined;
+  try {
+    bugsUrl = loadCliPackageManifest().bugs?.url;
+  } catch {
+    return undefined;
+  }
   if (
     error instanceof CliUsageError ||
     error instanceof DatabaseOpenFailed ||
