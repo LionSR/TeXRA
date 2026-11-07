@@ -21,11 +21,12 @@ import { FakeHost } from '@test/support/testKernel';
 
 const GLM53 = MODEL_CONFIGS['glm/glm-5.3'];
 
-/** `effect` reading the test host's secrets as its `Secrets`. */
-const withHostSecrets = Effect.provideServiceEffect(
-  Secrets,
-  FakeHost.useSync((host) => host.secrets),
-);
+/** `effect` reading the test host's secrets as its `Secrets`, with the
+ *  subscription accounts over them. */
+const withHostSecrets = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  FakeHost.use((host) =>
+    effect.pipe(Effect.provide(Secrets.layer(host.secrets))),
+  );
 
 /** The endpoint and plan the decided route binds `config` to. */
 const boundEndpoint = (

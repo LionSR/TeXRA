@@ -17,13 +17,13 @@ When an agent edits only one section of a long document, its output (`r0/draft.t
 
 ## The merge workflow
 
-Open the merge action from the "LaTeXDiffs" section (<wa-icon library="texra" name="chevron-down"></wa-icon> LaTeXDiffs) in the main TeXRA interface:
+Open the merge action from the "LaTeXDiffs" sheet in the main TeXRA interface (header menu → **LaTeXDiffs…**):
 
 <MergePanelHero />
 
-<p class="hero-caption">The LaTeXDiffs section: pick an <strong>Edited File</strong>, then select the highlighted <wa-icon library="texra" name="merge"></wa-icon> <strong>Merge</strong> action in the Edited row. Merge writes into the agent panel's primary Input file.</p>
+<p class="hero-caption">The LaTeXDiffs sheet: pick a <strong>Base File</strong> and an <strong>Edited File</strong>, then select the highlighted <wa-icon library="texra" name="merge"></wa-icon> <strong>Merge</strong> action in the Edited row. Merge combines the edits with the base file.</p>
 
-1.  **Select the base file**: Merge uses the primary **Input** file selected in the agent panel (the first input file) as the document to merge changes _into_. The LaTeXDiffs "Base File" dropdown (<wa-icon library="texra" name="file"></wa-icon> Base) is used by Diff, Compare, and Accept, not by Merge. If no input file is selected, TeXRA says "Choose both the input and edited files to merge."
+1.  **Select the base file**: Choose the document to merge changes _into_ from the "Base File" dropdown (<wa-icon library="texra" name="file"></wa-icon> Base), the same one Diff, Compare, and Accept use. If either file is missing, TeXRA says "Choose a base file and an edited file first."
 2.  **Select the edited file**: Choose the document containing the suggested changes from the "Edited File" dropdown (<wa-icon library="texra" name="edit"></wa-icon> Edited).
 3.  **Select Merge**: Select the "Merge" button (<wa-icon library="texra" name="merge"></wa-icon>) in the "Edited File" row. The merge runs on TeXRA's **helper model**, set from Settings → Models → Models. Models with strong reasoning (such as Claude Opus 5, GPT-6 / GPT-5.6, or Gemini 3.1 Pro) are recommended for complex merges.
 
@@ -31,8 +31,9 @@ There is a second entry point. In the [ProgressBoard](./progress-board.md), each
 
 ::: info Extension and desktop feature
 The Intelligent Merge action pairs a base file with a separate **Edited
-File**, which the VS Code extension and the desktop app supply through their
-file pickers and the ProgressBoard. The `texra run` CLI command takes only
+File**. The VS Code extension supplies the pair through the LaTeXDiffs sheet
+and the ProgressBoard; the desktop app has no LaTeXDiffs sheet and offers the
+ProgressBoard's **Merge edits** action. The `texra run` CLI command takes only
 `--input`/`--context` files and has no edited-file slot, so this merge
 workflow is not available from the CLI.
 :::

@@ -3,8 +3,9 @@
 // enumerates the live status-dot states as colored circles; a swatch legend
 // beats parsing "a colored circle shows the current status" four times.
 //
-// Colors mirror src/shared/styles/statusIndicatorStyles.ts: running = green,
-// waiting = link blue, completed/cancelled = grey, failed = red. No state
+// Colors mirror packages/texra/src/ui/styles/statusIndicatorStyles.ts: running =
+// green, waiting on you or interrupted = yellow, completed/cancelled = grey,
+// failed = red. No state
 // pulses in the live UI. Root carries `.mockup` so every --mk-* token
 // resolves and the figure flips with the theme.
 const states = [
@@ -16,7 +17,7 @@ const states = [
   {
     cls: 'd-wait',
     label: 'Waiting',
-    desc: 'Paused for your input or a follow-up',
+    desc: 'Waiting on you, or interrupted',
   },
   {
     cls: 'd-done',
@@ -67,7 +68,7 @@ const states = [
   background: var(--color-success);
 }
 .sdl-dot.d-wait {
-  background: var(--wa-color-text-link, var(--mk-accent));
+  background: var(--color-warning);
 }
 .sdl-dot.d-done {
   background: var(--mk-text-faint);

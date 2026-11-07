@@ -160,8 +160,19 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
             runs.attachedParent(runId) === null
           )
             return Effect.void;
-          runs.interrupt(runId);
-          return runs.awaitDrained(runId);
+          // The call let go: the child's stop says so, unless a stop of it
+          // (its parent's cascade) already did.
+          return runs.stop(runId, 'released').pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                `Subagent ${runId}: its release was not recorded`,
+              ).pipe(
+                Effect.annotateLogs({ data: Cause.squash(cause) }),
+                Effect.andThen(Effect.sync(() => runs.interrupt(runId))),
+              ),
+            ),
+            Effect.andThen(runs.awaitDrained(runId)),
+          );
         }),
       ),
     );

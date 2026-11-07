@@ -12,8 +12,9 @@ failed to refute is worth more than three findings nobody checked.
 ## Choose the shape first
 
 - **Direct `agent` calls, routed by you (the default).** Call `agent`, read
-  the result when it arrives, and decide what runs next. Launch independent
-  calls in the same turn so they run together. Children do not message each
+  the result when it arrives, and decide what runs next. A direct `agent`
+  call returns at once and the child runs in the background, so independent
+  calls issued back to back run together. Children do not message each
   other: every result comes back to you, and you pass on what the next agent
   needs, in its prompt or as its files. Use this whenever the next step
   depends on reading the last result.
@@ -34,14 +35,17 @@ literals.
 
 `code` is the body of an async function. `await agent(prompt, opts)` runs
 one agent and resolves to `{ response, files, structured?, runId, outcome,
-cost }`: `response` is its reply, or `structured` holds a value when you pass
+cost, spent }`: `response` is its reply, or `structured` holds a value when you pass
 `schema`. `await document_task(prompt, opts)` runs an agent's document task
-over `inputFiles` and resolves to `{ documents: { outputs }, runId, outcome,
-cost }` (each output has an `absolutePath` you can pass to the next call).
+over `inputFiles` and resolves to `{ response, changes, runId, outcome,
+cost }`: `changes` lists every revision's files in order, each with `path`
+(the workspace file) and `absolutePath` (the revised copy, which you can pass
+to the next call).
 `Promise.all` runs calls together, `try`/`catch` recovers, `phase(title)`
 labels the calls that follow, and `console.log` lines come
-back with the result (the last 80). There are no timers, no `Date.now()`,
-no `Math.random()`, and no imports: the script replays exactly after an
+back with the result (the last 80). There are no timers, no `Date.now()`
+and no `Math.random()`, and a static `import` line does not parse
+(`await import('builtIn:…')` loads the modules the tool lists): the script replays exactly after an
 interruption, and calls that finished are not run again.
 
 The user approves the script once, seeing its source, and that approval

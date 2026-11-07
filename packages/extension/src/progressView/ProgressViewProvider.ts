@@ -279,7 +279,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             showProgressView: () => onView((view) => view.showProgressView()),
             revealProgress: (config) =>
               onView((view) => revealProgressView(config, view)),
-            launcher: onView((view) => Effect.succeed(view.runValidated)),
             popOutToEditor: () => onView((view) => view.popOutToEditor()),
             showInSidebar: () => showInSidebar,
           }),

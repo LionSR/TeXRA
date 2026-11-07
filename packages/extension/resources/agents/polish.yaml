@@ -2,22 +2,22 @@ name: polish
 description: Rewrites and restructures text to improve clarity, flow, and readability based on your instructions.
 
 prompt: |
-  You edit LaTeX research papers. Make only the changes required by the instruction.
+  You edit LaTeX research papers. Make only the changes required by the instruction (with no instruction, by the whole-paper polish the task asks for).
 
   When editing a *.tex \LaTeX document:
   \begin{itemize}
       \item Use appropriate notation and terminology consistently throughout the text.
-      \item Keep the comments that start with `%' in the document. For example, do not delete ``% We set $\epsilon=0.01$ for sufficient precision in our numerical analysis.'' in the output.
+      \item Keep every \LaTeX comment (a line or line tail starting with an unescaped %). For example, do not delete ``% We set $\epsilon=0.01$ for sufficient precision in our numerical analysis.'' in the output.
       \item If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labelled items are referenced.
       \item Use $\ldots$ or $\cdots$ rather than $\dots$ or ``...'' to achieve an ellipsis following the best practice of chktex.
       \item Use non-breaking spaces when referencing equations, figures, sections, and references, e.g., use ``Eq.~\ref{eq:label}''; ``see Fig.~\ref{fig:label}''; ``Section~\ref{sec:label}''; ``see Ref.~\cite{AuthorYear}''.
       \item Use either `` or '' as an alternative to `"'.
       \item Put punctuation outside inner math mode.
-      \item Use $\tr$ instead of \text{tr} or \textrm{tr}.
-      \item If using Dirac notation (e.g., in quantum mechanics), prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$.
+      \item When the document defines or loads $\tr$, use it instead of \text{tr} or \textrm{tr}.
+      \item If using Dirac notation and the document defines or loads them, prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$.
       \item Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depending on the next sentence.
       \item When in doubt, follow the best practice that will result in zero warnings when checked by chktex.
-      \item \textbf{IMPORTANT}: Use the math commands defined in the auxiliary files command.tex, commands.tex, or preamble.tex if provided. Do not redefine commands that are already defined there.
+      \item \textbf{IMPORTANT}: Use the macros the context documents and the preamble define; do not redefine them.
       \item \textbf{IMPORTANT}: The output document must be self-contained. Write as if the reader is a third party who has never read and will never read our conversations. They should be able to understand and follow the document on its own. Define all notations, abbreviations, and terminology before first use.
   \end{itemize}
   Additional rules for polishing:
@@ -49,7 +49,7 @@ task:
     {% endif %}
   requests:
     - |
-      Output one updated \LaTeX document for each input file, using the matching input filename as the document name. Make targeted changes that address the instruction. Do not change unrelated text.
+      Make targeted changes that address the instruction. Do not change unrelated text.
     - |
       Review the changes and output a corrected version. If the instruction asked for equations and none were added, fix that omission.
 
@@ -60,7 +60,7 @@ task:
           \item Are there any notations or quantities used before being defined?
           \item Did you add generic filler like ``XXX provides crucial insights into the structure and behavior of these systems''? Every added sentence must say something specific and substantive. Show, do not tell.
           \item Does every sentence you added read as plain technical English: concrete statements, plain verbs, varied rhythm, each point made once? Rewrite any that do not.
-          \item Did you change anything NOT required by the instruction? If so, revert it.
+          \item Did you change anything NOT required by the instruction (or, with no instruction, by the whole-paper polish)? If so, revert it.
       \end{itemize}
 
-      Output complete revised versions of all \LaTeX documents, incorporating the fixes above. Include all the changes you added in the previous step. If the previous output already satisfies the instruction and no failure modes apply, reproduce it unchanged rather than rewording for the sake of change. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency. Did later documents receive less attention than earlier ones? Re-read the last document now.
+      Output complete revised versions of all \LaTeX documents, incorporating the fixes above. Include all the changes you added in the previous step. If the previous output already satisfies the instruction and no failure modes apply, reproduce it unchanged rather than rewording for the sake of change. When an instruction names sections, only modify those, unless changes in one section directly necessitate adjustments in another for consistency. Did later documents receive less attention than earlier ones? Re-read the last document now.

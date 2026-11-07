@@ -47,7 +47,7 @@ export const askCommandApproval = Effect.fn('askCommandApproval')(function* (
       command: ask.command,
       ...(cwd && { cwd }),
       // The policy asked, so the command grant is off.
-      allowBypass: ask.grant === 'bash',
+      offersGrant: ask.grant === 'bash',
       runId,
     },
   });

@@ -1,8 +1,8 @@
 /**
  * "Sign in with ChatGPT": OpenAI's token sharing for open-source agents, in
  * which a ChatGPT plan pays for Responses API calls the user's own agent
- * makes. Its constants, session schema, ID-token check, OAuth policy, and the
- * coordinator and loopback sign-in bound to them.
+ * makes. Its constants, session schema, ID-token check, OAuth policy (its
+ * account is `SubscriptionAccounts`'s), and the loopback sign-in.
  *
  * The first sign-in registers a client for the user (`dynamic_agent_client`),
  * and every later grant uses the client OpenAI issued then. Tokens are scoped
@@ -33,7 +33,6 @@ import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { verifyIdToken } from '../idToken.js';
 import { oauthHttpError, postOAuthForm } from '../oauthRequest.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
-import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import {
   SubscriptionSessionBaseSchema,
@@ -48,9 +47,7 @@ import type {
 } from '../../providers/credentials.js';
 import type {
   SubscriptionAuthorizeRequest,
-  SubscriptionCoordinator,
   SubscriptionOAuthPolicy,
-  SubscriptionSessionStatus,
   SubscriptionTokenResponse,
 } from '../subscriptionCoordinator.js';
 
@@ -315,7 +312,9 @@ const hostId = Effect.fn('chatgpt.hostId')(function* (
  * Single-flight refresh, storage races and error mapping live in the shared
  * machine; this names the endpoints, the per-user client and the grant check.
  */
-const CHATGPT_POLICY = Object.freeze<SubscriptionOAuthPolicy<ChatgptSession>>({
+export const CHATGPT_POLICY = Object.freeze<
+  SubscriptionOAuthPolicy<ChatgptSession>
+>({
   secretKey: CHATGPT_SESSION_SECRET_KEY,
   sessionSchema: ChatgptSessionSchema,
   tokenEndpoint: Object.freeze({
@@ -372,26 +371,6 @@ const CHATGPT_POLICY = Object.freeze<SubscriptionOAuthPolicy<ChatgptSession>>({
     };
   },
 });
-
-/**
- * The coordinator for the caller's secret store: one coordinator per store
- * instance, so distinct stores never share session state.
- */
-export const chatgptCoordinator: (
-  secrets: CredentialStore,
-) => SubscriptionCoordinator<ChatgptSession> =
-  SubscriptionOAuthCoordinator.forProvider(CHATGPT_POLICY);
-
-/** Signed-in status, read from the caller's secret store. A store that
- *  cannot be read, or a stored session that does not parse, fails. */
-export function getChatgptStatus(
-  secrets: CredentialStore,
-): Effect.Effect<
-  SubscriptionSessionStatus,
-  SecretsFailed | SubscriptionOAuthError
-> {
-  return Effect.suspend(() => chatgptCoordinator(secrets).getStatus());
-}
 
 /** The browser sign-in, on the loopback callback OpenAI accepts. */
 export const chatgptLoginWithLoopback = defineLoopbackLogin<ChatgptSession>({

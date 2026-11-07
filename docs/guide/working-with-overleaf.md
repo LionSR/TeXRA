@@ -51,8 +51,9 @@ The whole loop is a round trip: pull your project down from Overleaf, edit it lo
 
 #### Option B: use the TeXRA CLI
 
-Pass either the Overleaf project URL or its 24-character project ID, and the
-directory to create or clone into:
+Pass either the Overleaf project URL or its 24-character project ID, and
+optionally the directory to create or clone into (the working directory when
+left out):
 
 ```bash
 texra clone 0123456789abcdef01234567 ./project
@@ -76,11 +77,11 @@ accepted by the same command.
 
 ### 2. Edit locally with TeXRA in VS Code
 
-Open `your-local-folder` in VS Code and run your agents (`polish`, `correct`, `research`, `merge`, `latexdiff`, etc.) as usual. Optionally use LaTeX Workshop for local PDF previews ([LaTeX compilation setup](./latex-compilation.md)).
+Open `your-local-folder` in VS Code and run your agents (`polish`, `correct`, `research`, `merge`, `latexDiff`, etc.) as usual. Optionally use LaTeX Workshop for local PDF previews ([LaTeX compilation setup](./latex-compilation.md)).
 
 <OverleafEditActions />
 
-<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Execute</code>, reviewing outputs, <code>latexdiff</code>/merge, and auto-extract.</p>
+<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Start task</code>, reviewing outputs, <code>latexdiff</code>/merge, and auto-extract.</p>
 
 ### 3. Commit local changes
 

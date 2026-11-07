@@ -62,10 +62,10 @@ const groups = [
       { name: 'polish', purpose: 'Improve writing quality' },
       { name: 'paper2slide', purpose: 'Convert papers to beamer slides' },
       { name: 'paper2poster', purpose: 'Create academic posters' },
-      { name: 'ocr', purpose: 'Extract text from images / PDFs' },
+      { name: 'ocr', purpose: 'Turn handwritten math images into LaTeX' },
       { name: 'transcribe_audio', purpose: 'Transcribe audio to text' },
       { name: 'merge', purpose: 'Intelligently merge document versions' },
-      { name: 'generic', purpose: 'Edit a paper by your instruction' },
+      { name: 'generic', purpose: 'Edit a document by your instruction' },
       {
         name: 'devise',
         purpose: 'Add derivations, then revise for publication',

@@ -1,5 +1,5 @@
 name: generic
-description: General-purpose LaTeX document editor. Flexibly processes research papers following academic standards and user instructions. Detects and uses existing comment styles (\todo, \comment, %).
+description: General-purpose LaTeX document editor. Flexibly processes research documents following academic standards and user instructions. Detects and uses existing comment styles (\todo, \comment, %).
 
 prompt: |
   Edit the research documents according to the instruction while preserving academic and \LaTeX conventions.
@@ -7,18 +7,18 @@ prompt: |
   When working with a professional *.tex \LaTeX document, you must adhere to the following format rules and conventions:
   \begin{itemize}
       \item Use appropriate notation and terminology consistently throughout the text.
-      \item Keep the comments that start with `%' in the document. For example, do not delete ``% We set $\epsilon=0.01$ for sufficient precision in our numerical analysis.'' in the output.
+      \item Keep every \LaTeX comment (a line or line tail starting with an unescaped %). For example, do not delete ``% We set $\epsilon=0.01$ for sufficient precision in our numerical analysis.'' in the output.
       \item If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labelled items are referenced.
       \item Use $\ldots$ or $\cdots$ rather than $\dots$ or ``...'' to achieve an ellipsis following the best practice of chktex.
       \item Use non-breaking spaces when referencing equations, figures, sections, and references, e.g., use ``Eq.~\ref{eq:label}''; ``see Fig.~\ref{fig:label}''; ``Section~\ref{sec:label}''; ``see Ref.~\cite{AuthorYear}''.
       \item Use either `` or '' as an alternative to `"'.
       \item Put punctuation outside inner math mode.
-      \item Use $\tr$ instead of \text{tr} or \textrm{tr}.
-      \item If using Dirac notation (e.g., in quantum mechanics), prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$.
+      \item When the document defines or loads $\tr$, use it instead of \text{tr} or \textrm{tr}.
+      \item If using Dirac notation and the document defines or loads them, prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$.
       \item Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depending on the next sentence.
       \item When writing formal \LaTeX documents, never list things like 1.\ 2.\ 3.\ \ldots{} as in markdown. Use proper \LaTeX environments such as enumerate or itemize.
       \item When in doubt, follow the best practices that will result in zero warnings when checked by chktex.
-      \item Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided.
+      \item Use the macros the context documents and the preamble define; do not redefine them.
       \item Give complete output containing every section in the input-file order.
   \end{itemize}
 
@@ -34,7 +34,7 @@ prompt: |
   \begin{itemize}
       \item First check if comment commands are defined in the preamble (\verb|\todo|, \verb|\comment|, \verb|\criticize|, etc.)
       \item If defined, use the existing command to ensure compilation
-      \item If no command is defined, use \% \LaTeX comments which always compile
+      \item If no command is defined, use % comments, which always compile
       \item Match the dominant commenting style used in the document
   \end{itemize}
 
@@ -60,8 +60,6 @@ task:
     {% endif %}
   requests:
     - |
-      Work on the \LaTeX document(s). Maintain professional academic standards and adhere to all \LaTeX formatting rules. Maintain consistency across documents (notation, definitions, results). Use the following format:
-
-      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
+      Work on the \LaTeX document(s). Maintain professional academic standards and adhere to all \LaTeX formatting rules. Maintain consistency across documents (notation, definitions, results).
     - |
       Review the completed work across all documents, then output a refined version. Check accuracy, notation consistency, structure, formatting, and clarity. Preserve the changes from the previous step.

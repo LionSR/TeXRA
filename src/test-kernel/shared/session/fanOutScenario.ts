@@ -259,7 +259,7 @@ export function buildScenario({ proposal = false } = {}) {
       kind: 'bash',
       data: {
         requestId: 'req-1',
-        allowBypass: true,
+        offersGrant: true,
         runId: CHILD,
         command: 'ls',
       },
@@ -366,7 +366,7 @@ export function buildScenario({ proposal = false } = {}) {
         kind: 'proposal',
         data: {
           requestId: 'req-plan',
-          allowBypass: true,
+          offersGrant: true,
           runId: ROOT,
           task: true,
           agent: 'review',
@@ -498,7 +498,7 @@ export function withWaitingGrandchild(): SessionView {
       kind: 'bash',
       data: {
         requestId: 'req-lint',
-        allowBypass: true,
+        offersGrant: true,
         runId: GRANDCHILD,
         command: 'latexmk -pdf appendixB.tex',
       },

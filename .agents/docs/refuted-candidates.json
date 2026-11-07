@@ -152,23 +152,18 @@
     {
       "id": "LLM-subscription-credential-facade",
       "candidate": "a subscriptionCredential(route, secrets) call in @texra-ai/llm over the ChatGPT and Grok session coordinators, replacing the harness's two route branches in routeCredential",
-      "why": "Built and closed unmerged: the coordinators keep consumers in two packages (the harness, and the app's subscriptionProviders.ts), so both stay exported and the call hides nothing. The harness's two branches are 32 lines; the facade is 58 plus two new exports, net +26, a layer that deletes nothing it replaces.",
+      "why": "Built and closed unmerged: the coordinators keep consumers in two packages (the harness, and the app's subscriptionProviders.ts), so both stay exported and the call hides nothing. The harness's two branches are 32 lines; the facade is 58 plus two new exports, net +26, a layer that deletes nothing it replaces. The coordinators have since become the SubscriptionAccounts service in llm, built with the store Secrets.layer provides and read by route in both packages, which deleted the per-store memo and the two status pass-throughs and added no call; the facade over it is still refused for the same reason.",
       "ruling": "https://github.com/LionSR/TeXRA/pull/14504",
       "symbols": [
         {
-          "file": "packages/llm/src/oauth/chatgpt/chatgptProvider.ts",
-          "symbol": "chatgptCoordinator",
-          "signature": "export const chatgptCoordinator: ( secrets: CredentialStore, ) => SubscriptionCoordinator<ChatgptSession> = SubscriptionOAuthCoordinator.forProvider(CHATGPT_POLICY);"
-        },
-        {
-          "file": "packages/llm/src/oauth/xai/xaiProvider.ts",
-          "symbol": "xaiCoordinator",
-          "signature": "export const xaiCoordinator: ( secrets: CredentialStore, ) => SubscriptionCoordinator<XaiSession> = SubscriptionOAuthCoordinator.forProvider(XAI_POLICY);"
+          "file": "packages/llm/src/oauth/subscriptionAccounts.ts",
+          "symbol": "SubscriptionAccounts",
+          "signature": "export class SubscriptionAccounts extends Context.Service< SubscriptionAccounts, { readonly 'chatgpt-subscription': SubscriptionCoordinator<ChatgptSession>; readonly 'xai-subscription': SubscriptionCoordinator<XaiSession>; } >()('@texra-ai/llm/SubscriptionAccounts') { static make( secrets: CredentialStore, ): Effect.Effect<SubscriptionAccounts['Service']> {…} }"
         },
         {
           "file": "packages/harness/src/agent/runtime/modelAccess/credentials.ts",
           "symbol": "routeCredential",
-          "signature": "export function routeCredential( route: CredentialRoute, config: ModelConfig, facts: Pick<RouteFacts, 'endpoints'>, rejected: string | undefined, ): Effect.Effect< RouteCredential, RouteUnavailable, HttpClient.HttpClient | Secrets > {…}"
+          "signature": "export function routeCredential( route: CredentialRoute, ): Effect.Effect< RouteCredential, RouteUnavailable, HttpClient.HttpClient | Secrets | SubscriptionAccounts > {…}"
         }
       ]
     },
@@ -524,6 +519,32 @@
           "file": "packages/texra/src/ui/progress/components/ExternalInquiryPanel.ts",
           "symbol": "ExternalInquiryPanel.inquiry",
           "signature": "private get inquiry(): InquiryRequest {…}"
+        }
+      ]
+    },
+    {
+      "id": "TEST-golden-store-staleness-stamp",
+      "candidate": "a check, or a staleness stamp, that fails when src/test-kernel/fixtures/storage/golden-1.0.sql no longer matches what the current CLI would write",
+      "why": "The golden store is a conformance fixture: goldenStore.vitest.ts states that every later build must read it as the build that wrote it did, so the rows an earlier build wrote, stale prompt and tool text included, are what it should hold. A row-format change already fails that suite, which forces the regeneration. A staleness stamp would make every prompt or tool-description edit pay a CLI regeneration (building the validation bundle and driving the CLI for minutes) for nothing it protects. New row kinds gain golden rows in the PR that changes the format. Left open by #14823 (round 3, R3-R); refused for the round-4 catalogue at c9ceb23.",
+      "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-lenses/catalogue.md#status-at-main-c9ceb23",
+      "symbols": [
+        {
+          "file": "packages/cli/scripts/generate-golden-store.mjs",
+          "symbol": "fixturePath",
+          "signature": "const fixturePath = path.join( repoRoot, 'src/test-kernel/fixtures/storage/golden-1.0.sql', );"
+        }
+      ]
+    },
+    {
+      "id": "G11g-usage-region-out-of-cache-key",
+      "candidate": "SubscriptionUsageService reads the GLM region inside the adapter's fetch and keys its cache by provider alone, deleting the optional resolveVariant member and the region column of UsageCacheKey",
+      "why": "The region is part of which request a usage read makes, and the cache key is read from the current setting on every lookup, so a region change misses the cache whichever path wrote it: the settings view, the CLI's /config, or a hand edit of config.json. With the region read inside fetch, the snapshot fetched from the old region's endpoint is served for up to the 30-second TTL after the user fixes the region. Avoiding that would need an `invalidatesUsage` write effect on the region row, which covers only the settings view's write path and is an option for one row. The forceRefresh half of G11g landed in #14824. Found in round 2 (G-app-controllers.md, finding 11g); refused in round 3, package G.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/G-app-controllers.md#finding-11-smaller-items-batched",
+      "symbols": [
+        {
+          "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts",
+          "symbol": "SubscriptionUsageAdapter",
+          "signature": "interface SubscriptionUsageAdapter { readonly resolveVariant?: () => Effect.Effect<boolean, Error>; readonly fetch: ( variant: boolean | undefined, ) => Effect.Effect< ParsedSubscriptionUsage | null, Error, HttpClient.HttpClient | Secrets >; }"
         }
       ]
     }

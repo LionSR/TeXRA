@@ -93,45 +93,37 @@ export const launchSetup = Effect.fn('launchSetup')(function* <E, R>(options: {
   );
 });
 
+/** A project window's launch path for its setup conversation: the project's
+ *  session and settings, its launcher (`HostRunActions.runValidated`), and
+ *  where a failure before a run opens is presented. The window's shared
+ *  body holds all four and hands them to the host's setup verb. */
+export interface WindowSetupLaunch {
+  readonly session: Pick<Session, 'view'>;
+  readonly roots: SettingsStores;
+  readonly runValidated: HostRunActions['runValidated'];
+  readonly present: Notices;
+}
+
 /**
  * Launch the setup conversation from the desktop's setup card through the
- * project's launch path, the one the Execute button uses. `run` and
- * `project` are the project the user started setup in, taken before the
- * first suspension: the run and its presentation belong to it even when the
- * window moves to another project while the model resolves.
+ * launch path of the window that asked, the one its Execute button uses.
  * Setup continues after its initiating request has completed, so a failure
  * before the launch is presented here (the launch path presents its own);
  * the kickoff finishes with the setup run, so a second Run Setup waits for
  * it. A setup run already live in the project is left to run alone.
  */
-export const kickoffDesktopSetup = (options: {
-  readonly project: {
-    readonly session: Pick<Session, 'view'>;
-    readonly roots: SettingsStores;
-  };
-  /** The project window's launch path, and where it presents a failure;
-   *  none before the window has bound the project. */
-  readonly run:
-    | (Pick<HostRunActions, 'runValidated'> & {
-        readonly present: Notices;
-      })
-    | undefined;
-}): Effect.Effect<void, never, Secrets | ProcessServices> => {
-  const { run } = options;
-  if (!run)
-    return Effect.logWarning(
-      'Setup did not start: the window has not bound its project yet.',
-    );
-  return launchSetup({
-    session: options.project.session,
-    roots: options.project.roots,
-    start: run.runValidated,
+export const kickoffDesktopSetup = (
+  launch: WindowSetupLaunch,
+): Effect.Effect<void, never, Secrets | ProcessServices> =>
+  launchSetup({
+    session: launch.session,
+    roots: launch.roots,
+    start: launch.runValidated,
   }).pipe(
     Effect.catchTag('SetupAlreadyRunning', () => Effect.void),
     Effect.catch((error) =>
       error instanceof Cancelled
         ? Effect.void
-        : presentRunFailure(run.present, error),
+        : presentRunFailure(launch.present, error),
     ),
   );
-};

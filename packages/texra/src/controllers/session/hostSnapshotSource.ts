@@ -65,6 +65,7 @@ import type {
   SettingsStores,
 } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 const CHANNEL = 'Host Snapshot';
 
@@ -146,13 +147,19 @@ export interface HostSnapshotSource {
     never,
     | AgentCatalog
     | Secrets
+    | SubscriptionAccounts
     | FileSystem.FileSystem
     | Path.Path
     | ChildProcessSpawner
   >;
   /** The agent, team, and model catalogs changed (an agent list edit, a
-   *  credential, a sign-in). The model catalog reads the process `Secrets`. */
-  readonly refreshCatalogs: Effect.Effect<void, never, AgentCatalog | Secrets>;
+   *  credential, a sign-in). The model catalog reads the process `Secrets`
+   *  and its subscription accounts. */
+  readonly refreshCatalogs: Effect.Effect<
+    void,
+    never,
+    AgentCatalog | Secrets | SubscriptionAccounts
+  >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<
     void,
@@ -165,7 +172,7 @@ export interface HostSnapshotSource {
   readonly refreshHostBanners: Effect.Effect<
     void,
     never,
-    ChildProcessSpawner | Secrets
+    ChildProcessSpawner | Secrets | SubscriptionAccounts
   >;
   /** The workspace folders changed. */
   readonly refreshWorkspaceRoots: Effect.Effect<void>;
@@ -212,7 +219,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
   ): Effect.fn.Return<
     HostSnapshotSource,
     never,
-    Scope.Scope | AppState | AppSignals | Secrets
+    Scope.Scope | AppState | AppSignals | Secrets | SubscriptionAccounts
   > {
     const { stores } = options;
     const appState = yield* AppState;

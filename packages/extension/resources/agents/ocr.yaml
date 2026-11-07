@@ -23,7 +23,7 @@ task:
     I will provide you with:
     1. The existing LaTeX document for context
     2. One or more images containing handwritten mathematical content to be converted
-    3. The specific location where the OCR content should be inserted
+    3. An optional instruction on which handwriting to convert and how it relates to the document
 
     Here are the input files and document:
 

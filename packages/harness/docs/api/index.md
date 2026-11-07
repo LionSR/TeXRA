@@ -641,7 +641,8 @@ interface RunRecords {
 
 ## RunStopReason
 
-Why a run stops: a `user` stop or this process's `shutdown`.
+Why a run stops: a `user` stop, its awaiting call's `released`, or this
+process's `shutdown`.
 
 ```ts
 type RunStopReason = typeof RunStopReasonSchema.Type;

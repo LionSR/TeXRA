@@ -1,12 +1,12 @@
 # Durable Protocol & Recovery
 
-A run's state in [`@texra-ai/harness`](./harness/) is the reduction of the append-only rows committed to its session database (`texra.db`). If a process exits or crashes mid-run, the next process that opens the storage root inspects the committed rows and resumes the run from its last write point.
+A run's state in [`@texra-ai/harness`](./harness/) is the reduction of the append-only rows committed to its session database (`texra.db`). If a process exits or crashes mid-run, the next process that opens the storage root lists the run as interrupted, and `session.resume(runId)` continues it from its last write point.
 
 ## Approvals, commands, and resume in code
 
 ### Attaching an approval handler and resuming interrupted runs
 
-Attach a [`SessionHost`](./harness/#sessionhost) with [`session.attach({ approve })`](./harness/#session) to answer pending requests (`bash`, `toolEdit`, `planApproval`, `retry`, `userQuestion`), and call [`session.resume(runId)`](./harness/#session) to continue an interrupted run (see [`04-approvals-and-requests.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/04-approvals-and-requests.ts) and [`05-durable-resume-and-fork.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/05-durable-resume-and-fork.ts)):
+Attach a [`SessionHost`](./harness/#sessionhost) with [`session.attach({ approve })`](./harness/#session) to answer pending requests (`bash`, `toolEdit`, `proposal`, `planApproval`, `retry`, `userQuestion`, or a plugin's), and call [`session.resume(runId)`](./harness/#session) to continue an interrupted run (see [`04-approvals-and-requests.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/04-approvals-and-requests.ts) and [`05-durable-resume-and-fork.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/05-durable-resume-and-fork.ts)):
 
 ```ts
 import { Effect } from 'effect';
@@ -83,7 +83,7 @@ yield *
   });
 ```
 
-## Storage model and ownership claims
+## Storage model and the one process per store
 
 When opened with `{ persistent: true }`, a [`Session`](./harness/#session) opens `texra.db` under `roots.storage`; without `persistent: true`, it runs the same SQLite schema in memory.
 
@@ -94,10 +94,11 @@ Every durable event is a row in the `event` table with two sequence numbers:
 
 Repeated immutable values (the system prompt, offered tool schemas, and the resolved agent config) are stored once by SHA-256 digest as `context.blob` rows.
 
-Each aggregate has an ownership row holding the active writer's [`ProcessIdentity`](./harness/node#processidentity) (`[hostname, pid, processStart]`):
+A project store is held by the one process that opened it, for its connection's life (SQLite's exclusive locking mode); every row records the writer's [`ProcessIdentity`](./harness/node#processidentity) (`[hostname, pid, processStart]`) as its `origin`:
 
-- Every write transaction checks the caller's claim before inserting. If another process has claimed the aggregate, the write fails with [`DatabaseAggregateClosed`](./harness/schemas#databasenotowner) and the run halts immediately.
-- When a process dies abruptly, its OS identity no longer matches a live process. The next session that opens the store sees that the owner is gone, marks the unfinished run as interrupted in [`SessionView`](./harness/schemas#sessionview), and lets `session.resume(runId)` claim and continue it.
+- A second process that opens a held store is refused at once ("Another TeXRA process holds this project; close it there first."), never made to wait.
+- A write to an aggregate that is closed (its run deleted) fails with [`DatabaseAggregateClosed`](./harness/schemas#databaseaggregateclosed), nothing is written, and the run stops.
+- When a process dies abruptly, its lock goes with it. The next session that opens the store shows each unfinished run that no launch there holds as interrupted in [`SessionView`](./harness/schemas#sessionview), and `session.resume(runId)` continues it.
 - `sessions.close(roots)` stops active runs within `SESSION_CLOSE_DEADLINE_MS` and commits their terminal `cancelled` rows before closing the database.
 
 ## Write points (`W1`–`W7`)
@@ -113,7 +114,7 @@ one (section 9):
 | **W2 — Model response**             | `model.message` (`response`) with `run.position` `response.ready`  | Reuses the committed response; the model is not called again for it.                                                                                                                                                                                                                                                                                          |
 | **W3 — Tool intent**                | `tool.intent`, after pre-call hooks and the guard, before the body | If the call's approval request still stands, or was decided since the run resumed, the call rejoins it. Otherwise it is re-run only if the tool's declaration when the call was committed and its current one both say `replay: 'safe'`, its stored arguments still validate, and it has not already started three times; else it settles as outcome unknown. |
 | **W4 — Tool result**                | `tool.result` with the call's card rows                            | Reuses the result; the tool is not run again.                                                                                                                                                                                                                                                                                                                 |
-| **W5 — Position**                   | `run.position` at every wait and every halt                        | Continues from the recorded position. A `halted` position commits with `run.end`: a recipe task stays finished (`resume` answers `finished`), and a conversation continues in a new lifecycle.                                                                                                                                                                |
+| **W5 — Position**                   | `run.position` at every wait and every halt                        | Continues from the recorded position. A halt is the `run.end` itself: a recipe task stays finished (`resume` answers `finished`), and a conversation continues in a new lifecycle.                                                                                                                                                                            |
 | **W6 — Failed attempt**             | `model.message` (`failed`), naming the next action                 | Follows the recorded action: send the next attempt (`retry`, `unchain`), wait for a person (`ask`, whose answer may cancel the call), or end the call (`stop`).                                                                                                                                                                                               |
 | **W7 — Request opened and decided** | `request.opened`, then one `request.decided`                       | An open request stays pending under the same id and is presented again to the attached `approve` handler.                                                                                                                                                                                                                                                     |
 
@@ -125,31 +126,31 @@ one (section 9):
 
 ### Owned child runs and `context.edit`
 
-- **Owned children**: when a parent run calls `agent` and awaits the child, the child's `runId` is derived deterministically from `(parentRunId, responseId, callId, attempt)` and `run.start.parent.callId` names the owning call. On recovery, the parent's open `agent` call reattaches to that child (reading its result if finished, or resuming it under the same `runId`). Calling `session.resume(childRunId)` on an owned child resumes the parent and sets [`run.redirectedFrom`](./harness/#run).
+- **Owned children**: when a parent run calls `agent` and awaits the child, the child's `runId` is derived deterministically from `(parentRunId, responseId, callId, attempt)` and `run.start.parent.call.callId` names the owning call. On recovery, the parent's open `agent` call reattaches to that child (reading its result if finished, or resuming it under the same `runId`). Calling `session.resume(childRunId)` on an owned child resumes the parent and sets [`run.redirectedFrom`](./harness/#run).
 - **Context edits (`context.edit`) and forks (`run.fork`)**: compaction and forking both write `context.edit` rows that replace a message slice `[from, to)` against a recorded `base` edit. `run.fork` creates a new run whose `run.start.provenance` is `{ kind: 'fork', from, at }` seeded with a `context.edit` snapshot at `at`.
 
 ## Crash-conformance invariants (`I1`–`I9`)
 
 `src/test-kernel/support/crashConformance.ts` runs a multi-step agent workflow against SQLite, truncates the store at every commit `1..N`, reopens the session, resumes the run, and asserts nine invariants:
 
-| ID     | Invariant                                                                                                                                                                    |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **I1** | **Outcome equivalence**: recovery from any commit point reaches the clean run's outcome, preserving committed answers, tool results, owned children, and context edits.      |
-| **I2** | **Single tool result**: a tool call with a committed `tool.result` is never executed a second time.                                                                          |
-| **I3** | **At most one response per model invocation**: recovery never appends a second `response` row to an invocation that already committed one.                                   |
-| **I4** | **Approval and uncertain side effects**: an approval-gated call never runs before its approval commits, and an interrupted `replay: 'unsafe'` call never re-runs unprompted. |
-| **I5** | **Owned child reattachment**: an owned child that finished answers its parent call on recovery; owned children always finish before their parent.                            |
-| **I6** | **Exactly-once child delivery**: results from detached children, scripts, and background commands are queued and consumed once.                                              |
-| **I7** | **Context edit and fork preservation**: committed compactions and forks recover with the exact message history they committed.                                               |
-| **I8** | **Atomic stop**: a stopped run's halt and `run.end` commit together, so recovery never mistakes an acknowledged stop for an interrupted run.                                 |
-| **I9** | **Durable policy revocation**: revoking an approval bypass is acknowledged only after the `approval.policy` row commits to SQLite.                                           |
+| ID     | Invariant                                                                                                                                                                                   |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **I1** | **Outcome equivalence**: recovery from any commit point reaches the clean run's outcome, preserving committed answers, tool results, owned children, and context edits.                     |
+| **I2** | **Single tool result**: a tool call with a committed `tool.result` is never executed a second time.                                                                                         |
+| **I3** | **At most one response per model invocation**: recovery never appends a second `response` row to an invocation that already committed one.                                                  |
+| **I4** | **Approval and uncertain side effects**: an approval-gated call never runs before its approval commits, and an interrupted `replay: 'unsafe'` call never re-runs unprompted.                |
+| **I5** | **Owned child reattachment**: an owned child that finished answers its parent call on recovery and is not launched again without a person's retry; no child is left without a terminal row. |
+| **I6** | **At-most-once child delivery**: a child's result reaches its parent at most once; a result whose child was detached, or whose parent cannot take it, stays in the child's run report.      |
+| **I7** | **Context edit and fork preservation**: committed compactions and forks recover with the exact message history they committed.                                                              |
+| **I8** | **Atomic stop**: a stopped run's halt and `run.end` commit together, so recovery never mistakes an acknowledged stop for an interrupted run.                                                |
+| **I9** | **Durable policy revocation**: revoking an approval bypass is acknowledged only after the `approval.policy` row commits to SQLite.                                                          |
 
 ## Storage failure outcomes (`S1`–`S5`)
 
-| ID     | Failure class                                                                                                                      | Behavior                                                                                                                                                                               |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **S1** | [`DatabaseOpenFailed`](./harness/#databaseopenfailed)                                                                              | Session open fails with the underlying cause; a pre-1.0 or corrupt SQLite file is moved aside (`texra.db.pre1`, [`SessionStoreMovedAside`](./harness/schemas#sessionstoremovedaside)). |
-| **S2** | `DatabaseStoreNewer`                                                                                                               | Store written by a newer schema version is rejected whole without partial reads or writes.                                                                                             |
-| **S3** | [`DatabaseReadFailed`](./harness/#databasereadfailed) (`DatabaseRowCorrupt`, `DatabaseRowEarlier`)                                 | A run with an undecodable or pre-1.0 row is marked unreadable in listings and refused on resume without blocking other runs in the store.                                              |
-| **S4** | [`DatabaseWriteFailed`](./harness/host#databasewritefailed)                                                                        | Transaction rolls back completely and the active run terminates with a typed failure.                                                                                                  |
-| **S5** | [`DatabaseAggregateClosed`](./harness/schemas#databasenotowner) / [`DatabaseClaimRefused`](./harness/schemas#databaseclaimrefused) | Write is rejected; a live run that lost its claim halts immediately, and `resume` or `request` against a foreign-held run fails with [`NotOwner`](./harness/#notowner).                |
+| ID     | Failure class                                                                                      | Behavior                                                                                                                                                                                                                   |
+| ------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **S1** | [`DatabaseOpenFailed`](./harness/#databaseopenfailed)                                              | Session open fails with the underlying cause; a pre-1.0 SQLite file is moved aside to `texra.db.pre1` and a damaged one to `texra.db.corrupt-<ms>` ([`SessionStoreMovedAside`](./harness/schemas#sessionstoremovedaside)). |
+| **S2** | `DatabaseStoreNewer`                                                                               | Store written by a newer schema version is rejected whole without partial reads or writes.                                                                                                                                 |
+| **S3** | [`DatabaseReadFailed`](./harness/#databasereadfailed) (`DatabaseRowCorrupt`, `DatabaseRowEarlier`) | A run with an undecodable or pre-1.0 row is marked unreadable in listings and refused on resume without blocking other runs in the store.                                                                                  |
+| **S4** | [`DatabaseWriteFailed`](./harness/host#databasewritefailed)                                        | Transaction rolls back completely and the active run terminates with a typed failure.                                                                                                                                      |
+| **S5** | [`DatabaseAggregateClosed`](./harness/schemas#databaseaggregateclosed)                             | Nothing is written; a run whose aggregate closed under it stops, with no retry. A project store another process holds does not open at all.                                                                                |

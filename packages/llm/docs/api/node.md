@@ -16,11 +16,11 @@ protocol (`bindModel`) and running subscription OAuth sign-in flows.
   load only the requested protocol (`anthropic-messages`, `openai-responses`,
   `google-interactions`), manage scoped connections and file uploads in the
   caller's `Scope`, and classify provider failures into `ModelError`.
-- **Subscription sign-in (`chatgpt`, `xai`)**: ChatGPT
-  ([`chatgptCoordinator`](#chatgptcoordinator),
-  [`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
-  ([`xaiCoordinator`](#xaicoordinator),
-  [`xaiLoginWithLoopback`](#xailoginwithloopback),
+- **Subscription sign-in (`chatgpt`, `xai`)**: each subscription's
+  account, keyed by its route
+  ([`SubscriptionAccounts`](#subscriptionaccounts)), and the ChatGPT
+  ([`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
+  ([`xaiLoginWithLoopback`](#xailoginwithloopback),
   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows.
 
 ## Binding
@@ -94,17 +94,6 @@ interface BindSpec {
 }
 ```
 
-## chatgptCoordinator
-
-The coordinator for the caller's secret store: one coordinator per store
-instance, so distinct stores never share session state.
-
-```ts
-const chatgptCoordinator: (
-  secrets: CredentialStore,
-) => SubscriptionCoordinator<ChatgptSession>
-```
-
 ## chatgptLoginWithLoopback
 
 The browser sign-in, on the loopback callback OpenAI accepts.
@@ -134,34 +123,6 @@ interface DeviceLoginOptions<S extends SubscriptionSession> {
     prompt: SubscriptionDeviceCodePrompt,
   ) => Effect.Effect<void>;
 }
-```
-
-## getChatgptStatus
-
-Signed-in status, read from the caller's secret store. A store that
-cannot be read, or a stored session that does not parse, fails.
-
-```ts
-function getChatgptStatus(
-  secrets: CredentialStore,
-): Effect.Effect<
-  SubscriptionSessionStatus,
-  SecretsFailed | SubscriptionOAuthError
->
-```
-
-## getXaiStatus
-
-Signed-in status, read from the caller's secret store. A store that
-cannot be read, or a stored session that does not parse, fails.
-
-```ts
-function getXaiStatus(
-  secrets: CredentialStore,
-): Effect.Effect<
-  SubscriptionSessionStatus,
-  SecretsFailed | SubscriptionOAuthError
->
 ```
 
 ## LoopbackLoginOptions
@@ -229,6 +190,24 @@ interface SessionToken {
   readonly current: Effect.Effect<string, ModelError>;
   readonly rejected: (token: string) => Effect.Effect<void, ModelError>;
 }
+```
+
+## SubscriptionAccounts
+
+Each subscription's account (its stored session: status, refresh, sign-in
+and sign-out), named by the route that bills it. Built once over the store
+that holds the sessions, so every caller of one session shares its lock and
+a rotated refresh token is spent once; another store is another set of
+accounts, built with it.
+
+```ts
+class SubscriptionAccounts extends Context.Service<
+  SubscriptionAccounts,
+  {
+    readonly 'chatgpt-subscription': SubscriptionCoordinator<ChatgptSession>;
+    readonly 'xai-subscription': SubscriptionCoordinator<XaiSession>;
+  }
+>()('@texra-ai/llm/SubscriptionAccounts')
 ```
 
 ## SubscriptionAuthorizeRequest
@@ -381,17 +360,6 @@ Raw token-endpoint shape shared by authorization-code and refresh grants.
 ```ts
 type SubscriptionTokenResponse =
   (typeof SubscriptionTokenResponseSchema)['Type'];
-```
-
-## xaiCoordinator
-
-The coordinator for the caller's secret store: one coordinator per store
-instance, so distinct stores never share session state.
-
-```ts
-const xaiCoordinator: (
-  secrets: CredentialStore,
-) => SubscriptionCoordinator<XaiSession>
 ```
 
 ## xaiLoginWithDeviceCode

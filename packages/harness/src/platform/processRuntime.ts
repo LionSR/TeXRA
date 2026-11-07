@@ -40,6 +40,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { AgentDirectories, AppState, AppStateStore } from './interfaces';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 /**
  * The global root's current values: one row per family and key, replaced in
@@ -71,8 +72,9 @@ export class StateStores extends Context.Service<
 
 /**
  * The platform- and shared-owned services every process serves, merged once
- * in `processLayer`'s `services` layer: the host ports, the language-model
- * bridge and the HTTP client, plus the standard library's `FileSystem`,
+ * in `processLayer`'s `services` layer: the host ports (the secret store with
+ * the subscription accounts over it), the language-model bridge and the HTTP
+ * client, plus the standard library's `FileSystem`,
  * `Path` and `ChildProcessSpawner`, which the same install provides from
  * `@effect/platform-node` so a program that reads a file or starts a child
  * process takes them from context instead of building a Node layer of its
@@ -96,6 +98,7 @@ export type PlatformServices =
   | ProjectDatabases
   | HttpClient.HttpClient
   | Secrets
+  | SubscriptionAccounts
   | AppState
   | AgentDirectories
   | GlobalValues

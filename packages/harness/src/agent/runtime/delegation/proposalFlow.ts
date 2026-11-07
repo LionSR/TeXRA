@@ -188,7 +188,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
       kind: 'proposal',
       data: {
         requestId: requests.nextId('proposal'),
-        allowBypass: hook !== 'ask',
+        offersGrant: hook !== 'ask',
         runId,
         ...proposal,
       },

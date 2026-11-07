@@ -36,7 +36,11 @@ import {
 } from '@shared/schemas';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { DatabaseReadFailed } from '@shared/session/database';
-import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
+import {
+  callRequestId,
+  type AttemptRequests,
+  type CallAttempt,
+} from '@shared/session/inFlight';
 import {
   Approvals,
   SessionLog,
@@ -273,37 +277,39 @@ export const guardedToolCall = (
 
 /**
  * One tool call's requests (`CallRequests`), opened through its run's loop
- * under ids its attempt (`at`) derives: a fresh one past every ordinal it
- * `raised`. A resumed attempt joins the request it left `standing` when it
- * asks that kind again; one it no longer asks is retired as cancelled
- * (`retireStanding`, which the call's settlement runs too), so no surface
- * keeps offering it; a retirement the store refuses fails the call with the
+ * under ids its attempt (`at` and `entered.attempt`) derives: a fresh one
+ * past every ordinal the attempt `raised`. A resumed attempt joins the
+ * request it left standing (`own`) when it asks that kind again; one it no
+ * longer asks is retired as cancelled (`retireStanding`, which the call's
+ * settlement runs too, recording `retireCause`), so no surface keeps
+ * offering it; a retirement the store refuses fails the call with the
  * refusal, which ends the run like any refused write. `commit` commits rows
  * of the call.
  */
-export const callRequests = (
-  run: Pick<AgentRunShape, 'runId'>,
-  session: Context.Context<SessionServices>,
-  cell: Pick<RunCell, 'opened'>,
-  commit: (
+export const callRequests = (call: {
+  readonly run: Pick<AgentRunShape, 'runId'>;
+  readonly session: Context.Context<SessionServices>;
+  readonly cell: Pick<RunCell, 'opened'>;
+  readonly commit: (
     rows: readonly RunHistoryDraft[],
-  ) => Effect.Effect<unknown, CellError>,
-  at: Parameters<typeof callRequestId>[0],
-  raised: number,
-  standing: AttemptRequests['own'],
-  retireCause: string,
-): {
+  ) => Effect.Effect<unknown, CellError>;
+  readonly at: Omit<CallAttempt, 'attempt'>;
+  readonly entered: { readonly attempt: number } & AttemptRequests;
+  readonly retireCause: string;
+}): {
   readonly requests: CallRequests;
   readonly retireStanding: Effect.Effect<
     void,
     DatabaseReadFailed | LogWriteError
   >;
 } => {
+  const { run, session, cell, commit, entered, retireCause } = call;
   const { runId } = run;
+  const at: CallAttempt = { ...call.at, attempt: entered.attempt };
   const log = Context.get(session, SessionLog);
   const interactions = Context.get(session, Interactions);
-  let reentering = standing;
-  let opened = raised;
+  let reentering = entered.own;
+  let opened = entered.raised;
   // Through the decision's own check, so an answer a surface landed
   // meanwhile stands and the retirement writes nothing. `retireCause` is
   // why the call no longer asks: a resume that re-entered without it, or
