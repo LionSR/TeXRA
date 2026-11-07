@@ -15,6 +15,7 @@ import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFor
 import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
@@ -112,7 +113,8 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  * spend, and the warning says so.
  *
  * The helper model is resolved against the session's settings slots
- * (`SessionRoots`) and the process `Secrets` read from context.
+ * (`SessionRoots`) and the process `Secrets` and subscription accounts read
+ * from context.
  */
 const generateSessionDescription = Effect.fn('generateSessionDescription')(
   function* (
@@ -127,6 +129,7 @@ const generateSessionDescription = Effect.fn('generateSessionDescription')(
     | UsageLog
     | RouteRetries
     | Secrets
+    | SubscriptionAccounts
     | SessionLog
     | SessionRoots
   > {

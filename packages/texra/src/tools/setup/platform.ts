@@ -12,7 +12,7 @@
 import { Context, Effect, Schema } from 'effect';
 
 // Local imports
-import { getChatgptStatus } from '@texra-ai/llm/node';
+import { SubscriptionAccounts } from '@texra-ai/llm/node';
 import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { ToolError } from '@texra-ai/harness/plugins';
 import type {
@@ -118,7 +118,7 @@ export function assertInSetupAllowlist(
 class SubscriptionProbeFailed extends Schema.TaggedError<SubscriptionProbeFailed>()(
   'SubscriptionProbeFailed',
   {
-    member: Schema.Literals(['getChatgptStatus', 'readModelOptions']),
+    member: Schema.Literals(['getStatus', 'readModelOptions']),
     message: Schema.String,
     cause: Schema.Defect(),
   },
@@ -132,14 +132,14 @@ export const getChatGptSubscriptionStatus = Effect.fn(
 ): Effect.fn.Return<
   { signedIn: boolean; enabled: boolean },
   SubscriptionProbeFailed,
-  Secrets
+  Secrets | SubscriptionAccounts
 > {
-  const secrets = yield* Secrets;
-  const status = yield* getChatgptStatus(secrets).pipe(
+  const accounts = yield* SubscriptionAccounts;
+  const status = yield* accounts['chatgpt-subscription'].getStatus().pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({
-          member: 'getChatgptStatus',
+          member: 'getStatus',
           message: 'The ChatGPT subscription session could not be read.',
           cause,
         }),

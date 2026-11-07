@@ -34,6 +34,7 @@ export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 // The subscriptions a model call can route through, by provider id.
 export {
   SUBSCRIPTION_AUTH_PROVIDERS,
+  SUBSCRIPTION_ROUTES,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
 // Reads of a `SessionView` for a renderer: what needs a person, how busy

@@ -19,6 +19,7 @@ import {
   type ModelRoute,
   selectModel,
 } from '@texra-ai/llm';
+import { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
@@ -122,7 +123,7 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
-  Scope.Scope | HttpClient.HttpClient | Secrets
+  Scope.Scope | HttpClient.HttpClient | Secrets | SubscriptionAccounts
 > {
   const selected = selectModel(request.modelId);
   const catalog = request.config ?? selected?.config;
@@ -147,13 +148,17 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
 });
 
 /**
- * Model access over `stores` (a session's setting slots) and the process
- * {@link Secrets}, for the project whose environment is in force where the
+ * Model access over `stores` (a session's setting slots), the process
+ * {@link Secrets} and its subscription accounts, for the project whose environment is in force where the
  * layer is built.
  */
 export const modelAccessLayer = (
   stores: SettingsStores,
-): Layer.Layer<ModelAccess, never, HttpClient.HttpClient | Secrets> =>
+): Layer.Layer<
+  ModelAccess,
+  never,
+  HttpClient.HttpClient | Secrets | SubscriptionAccounts
+> =>
   Layer.effect(
     ModelAccess,
     Effect.gen(function* () {
@@ -161,12 +166,14 @@ export const modelAccessLayer = (
       const env = yield* ConfigProvider.ConfigProvider;
       const project = yield* ProjectEnvironment;
       const secrets = yield* Secrets;
+      const accounts = yield* SubscriptionAccounts;
       const inProject = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         effect.pipe(
           Effect.provideService(HttpClient.HttpClient, http),
           Effect.provideService(ConfigProvider.ConfigProvider, env),
           Effect.provideService(ProjectEnvironment, project),
           Effect.provideService(Secrets, secrets),
+          Effect.provideService(SubscriptionAccounts, accounts),
         );
       return {
         bind: (request) => inProject(bindOver(stores, request)),
