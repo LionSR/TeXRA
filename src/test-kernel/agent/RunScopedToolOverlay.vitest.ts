@@ -6,7 +6,11 @@ import { layer } from '@effect/vitest';
 import { Effect, Layer, Schema, Context } from 'effect';
 import { afterAll, assert, beforeAll, expect, vi } from 'vitest';
 
-import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import {
+  AgentConfigSchema,
+  generateRunId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import {
   AppSignals,
   AppState,
@@ -44,7 +48,7 @@ import {
 import { texraPlugins } from '@texra/tools/registry';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 
-import { createTestLaunchContext } from './runtime/launchContextTestUtils';
+import { testLaunch } from '@test/support/scriptedRunLayers';
 import type { ITool } from '@texra-ai/harness';
 
 function tool(name: string): ITool {
@@ -56,15 +60,14 @@ function tool(name: string): ITool {
 
 /** A launch whose model binds without a credential (the validation model). */
 function validationLaunch(
-  init: Parameters<typeof createTestLaunchContext>[0],
+  runId: RunId,
   config: RunLaunch['config'],
 ): RunLaunch {
-  return {
-    ...createTestLaunchContext(init),
+  return testLaunch(runId, {
     config: { ...config, instruction: 'Do the thing.' },
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
-  };
+  });
 }
 
 /** A model that records the tools it was offered and then stops the run. */
@@ -154,7 +157,7 @@ layer(
           model: 'test-model',
           workingDirectory: process.cwd(),
         });
-        const ctx = validationLaunch({ runId }, config);
+        const ctx = validationLaunch(runId, config);
         yield* Effect.flatMap(openToolUse({ resume: false }), (opened) =>
           runToolUse({ resume: false }, opened),
         ).pipe(
