@@ -5,9 +5,9 @@
  * `agent` (the `ChildRuns` launch): one proposal, one reuse key, one in-band or
  * detached child. A model that wants a conversation calls `agent` instead.
  */
-import { Effect, Predicate, Record as Rec, Schema } from 'effect';
+import { Effect, Record as Rec, Schema } from 'effect';
 
-import { defineTool, type ToolResult } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness';
 import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   requireRun,
@@ -16,7 +16,7 @@ import {
   CALL_FIELDS,
   fileList,
 } from '@texra-ai/harness/plugins';
-import { agentMatchesIdentifier, toJsonValue } from '@texra-ai/harness/schemas';
+import { agentMatchesIdentifier } from '@texra-ai/harness/schemas';
 import { DOCUMENT_TASK_OPTIONS } from '@texra/shared/plugins/documents';
 import {
   documentTaskKey,
@@ -103,23 +103,8 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
       options: Rec.map(DOCUMENT_TASK_OPTIONS, (_, key) => input[key] ?? false),
     },
   });
-  return withDocuments(launched);
+  return launched;
 });
-
-/**
- * A task's envelope as a script reads it (`scriptReturns`): its run's value
- * is its documents, so `documents` names it. Any other result (a refusal,
- * a background launch's `{ runId }`) is as the launch returned it.
- */
-function withDocuments(result: ToolResult): ToolResult {
-  if (result.status !== 'executed' || !Predicate.isObject(result.value))
-    return result;
-  // cast: an executed child call's value is its run's envelope, an object.
-  const { structured, ...envelope } = result.value as Record<string, unknown>;
-  return structured === undefined
-    ? result
-    : { ...result, value: toJsonValue({ ...envelope, documents: structured }) };
-}
 
 /** The `document_task` tool. */
 export const DocumentTaskTool = defineTool({
@@ -129,11 +114,11 @@ export const DocumentTaskTool = defineTool({
   lane: 'own',
   scriptGlobal: { positional: 'prompt' },
   scriptReturns:
-    "{ response: string; documents: { outputs: { relativePath: string; absolutePath: string; added: number | null; removed: number | null }[] }; runId: string; outcome: 'completed'; cost: number } | { runId: string }",
+    "{ response: string; changes: { path: string; absolutePath: string; base: string | null; added: number | null; removed: number | null }[]; runId: string; outcome: 'completed'; cost: number } | { runId: string }",
   slow: true,
   description: `Run a named agent's document task over files, as a child of this run: it revises every file in \`inputFiles\` in the fixed revisions its task defines, with compile checks and diffs, and proposes one revised document each.
 
-From a script, \`document_task(prompt, opts)\` waits for the task and resolves to its result: \`{ documents: { outputs }, runId, outcome, cost }\`. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. Called directly, the task runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.`,
+From a script, \`document_task(prompt, opts)\` waits for the task and resolves to its result: \`{ changes, runId, outcome, cost }\`, where \`changes\` lists every revision's files in order (\`path\` the workspace file, \`absolutePath\` the revised copy). It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, or \`Skipped\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. Called directly, the task runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.`,
   schema: DocumentTaskInputSchema,
   execute: runDocumentTask,
 });

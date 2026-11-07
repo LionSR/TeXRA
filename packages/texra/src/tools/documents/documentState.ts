@@ -36,9 +36,9 @@ import {
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
-  WORKFLOW_OUTPUT_BASENAME,
+  DOCUMENT_OUTPUT_BASENAME,
   revisionLayout,
-} from '@texra/shared/constants/workflowOutput';
+} from '@texra/shared/constants/revisionLayout';
 import {
   DOCUMENTS_OUTPUT_KIND,
   documentTaskOptions,
@@ -346,7 +346,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
       if (revision > 0)
         yield* deps.fileService.ensureMirroredInRunSubdir(
           revisionLayout(revision).dir,
-          { protectedStem: WORKFLOW_OUTPUT_BASENAME },
+          { protectedStem: DOCUMENT_OUTPUT_BASENAME },
         );
       return yield* media.processInputFiles(
         files,

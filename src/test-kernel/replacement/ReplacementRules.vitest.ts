@@ -3,8 +3,7 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
-import replacementEngine, { applyReplacements } from '@replacement/engine';
-import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
+import replacementEngine from '@replacement/engine';
 import { fakeConfig } from '@test/support/FakePlatform';
 import { TEXRA_APP } from '@test/support/texraApp';
 
@@ -12,14 +11,19 @@ import { TEXRA_APP } from '@test/support/texraApp';
 // fencedLatexBlocksRegex
 // ---------------------------------------------------------------------------
 
-describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
+describe('fenced LaTeX blocks', () => {
+  // XML output normalization runs the fenced-block pass whatever the config
+  // enables; no other category is enabled here, so only that pass rewrites.
+  const fencedOnly = (text: string) =>
+    replacementEngine.applyToXmlContent(
+      text,
+      fakeConfig({ 'latex.enabledReplacements': [] }, TEXRA_APP.settings),
+    ).text;
+
   it('preserves CRLF line endings', () => {
     assert.strictEqual(
-      applyReplacements(
-        '::: align*\r\n&= a + b\\\\\r\n:::\r\n',
-        FENCED_LATEX_BLOCK_REPLACEMENTS,
-      ).text,
-      '\\begin{align*}\r\n&= a + b\\\\\r\n\\end{align*}\r\n',
+      fencedOnly('::: align*\r\n&= a + b\\\\\r\n:::\r\nnext\r\n'),
+      '\\begin{align*}\r\n&= a + b\\\\\r\n\\end{align*}\r\nnext',
     );
   });
 
@@ -28,11 +32,8 @@ describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
 &= 0
 :::
 `;
-    const once = applyReplacements(input, FENCED_LATEX_BLOCK_REPLACEMENTS).text;
-    assert.strictEqual(
-      applyReplacements(once, FENCED_LATEX_BLOCK_REPLACEMENTS).text,
-      once,
-    );
+    const once = fencedOnly(input);
+    assert.strictEqual(fencedOnly(once), once);
   });
 });
 

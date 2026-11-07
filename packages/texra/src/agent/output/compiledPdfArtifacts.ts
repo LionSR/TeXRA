@@ -16,8 +16,8 @@ import { Effect, FileSystem } from 'effect';
 // Local imports
 import {
   revisionLayout,
-  stripWorkflowRoundDir,
-} from '@texra/shared/constants/workflowOutput';
+  stripRevisionDir,
+} from '@texra/shared/constants/revisionLayout';
 
 interface PublishCompiledPdfOptions {
   runDirectory: string;
@@ -41,7 +41,7 @@ function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
   const comparablePath =
     options.source.kind === 'external'
       ? path.basename(options.displayName)
-      : stripWorkflowRoundDir(
+      : stripRevisionDir(
           normalizeFilePath(fileLocationDisplayPath(options.source)),
           options.round,
         );

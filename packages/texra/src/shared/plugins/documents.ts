@@ -33,6 +33,8 @@ const DocumentsOutputSchema = Schema.Struct({
    *  written before the task proposed holds none. */
   ...DocumentDiffsSchema.fields,
 });
+/** A document task's documents, as its latest documents row holds them. */
+export type DocumentsOutput = typeof DocumentsOutputSchema.Type;
 
 /** The documents plugin's one row kind. */
 export const DOCUMENTS_OUTPUT_KIND = {
@@ -119,20 +121,31 @@ export function documentRoundsOf(
     : Schema.decodeUnknownSync(DocumentsOutputSchema)(value).rounds;
 }
 
-/** The documents a run's end reports of its documents fact: every
- *  revision's outputs and compile failures, and the proposed diffs. */
-export function documentsSummary(fact: ToolFact): DocumentsResult {
-  const {
-    rounds,
-    diffs = [],
-    diffsUnavailable,
-  } = Schema.decodeUnknownSync(DocumentsOutputSchema)(fact.value);
+/** What a document task reports of its documents: every revision's
+ *  outputs and compile failures, and the proposed diffs. A projection of
+ *  the documents row, built where it is read and never stored. */
+export function documentsSummary({
+  rounds,
+  diffs = [],
+  diffsUnavailable,
+}: DocumentsOutput): DocumentsResult {
   return {
     outputs: roundOutputsToOutputSummaries(rounds),
     compileFailures: roundOutputsToCompileFailureSummaries(rounds),
     diffs,
     ...(diffsUnavailable === undefined ? {} : { diffsUnavailable }),
   };
+}
+
+/** What a run reports of its documents ({@link documentsSummary}); none
+ *  for a run that recorded no documents row. */
+export function documentsOf(
+  run: Pick<RunView, 'facts'>,
+): DocumentsResult | undefined {
+  const value = run.facts[DOCUMENTS_OUTPUT_KEY];
+  return value === undefined
+    ? undefined
+    : documentsSummary(Schema.decodeUnknownSync(DocumentsOutputSchema)(value));
 }
 
 /**
