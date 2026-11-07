@@ -1,6 +1,3 @@
-// Node imports
-import * as path from 'node:path';
-
 // Third-party imports
 import { Cause, Effect, FiberHandle, FileSystem } from 'effect';
 import * as vscode from 'vscode';
@@ -45,6 +42,7 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
   function* (
     baseLocation: FileLocation,
     editedLocation: FileLocation,
+    title: string,
     /** The window's diff refresh, which this comparison takes over. */
     diffRefresh: FiberHandle.FiberHandle,
   ) {
@@ -54,9 +52,6 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
 
     const baseUri = vscode.Uri.file(baseLocation.absolutePath);
     const editedUri = vscode.Uri.file(editedLocation.absolutePath);
-    const baseFileName = path.basename(baseLocation.absolutePath);
-    const editedFileName = path.basename(editedLocation.absolutePath);
-    const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
 
     const contextKeyCommandId = 'vscode.getContextKeyValue';
     // A host without the context-key command cannot report where the view
@@ -87,7 +82,7 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
     );
 
     yield* Effect.logInfo(
-      `Opened diff comparison between ${baseFileName} and ${editedFileName}`,
+      `Opened diff comparison between ${baseLocation.absolutePath} and ${editedLocation.absolutePath}`,
     ).pipe(withLogChannel(CHANNEL));
   },
   Effect.catchCause((cause) =>

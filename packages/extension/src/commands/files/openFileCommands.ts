@@ -9,8 +9,6 @@ import * as vscode from 'vscode';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'openFileCommands';
 
@@ -53,13 +51,3 @@ export function openFile(file: string, line?: number) {
     Effect.asVoid,
   );
 }
-
-/**
- * Locate a `\label{…}` across the input and context files and reveal it.
- * Returns whether a match was opened; the "not found" message belongs to the
- * shared request body, which owns it for every host.
- */
-export const openLabel = (roots: WorkspaceRoots, label: string) =>
-  findLabelInWorkspace(roots.workspace, label, (absolutePath, index) =>
-    openInEditor(absolutePath, (doc) => doc.positionAt(index)),
-  );

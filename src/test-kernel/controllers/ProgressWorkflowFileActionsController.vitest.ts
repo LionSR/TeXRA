@@ -36,7 +36,7 @@ function createDeps(
       ],
     }),
     host: {
-      compareFiles: () => Effect.void,
+      openDiff: () => Effect.void,
       confirmAccept: () => Effect.succeed(true),
       openDirectory: () => Effect.void,
       showInfo: () => Effect.void,

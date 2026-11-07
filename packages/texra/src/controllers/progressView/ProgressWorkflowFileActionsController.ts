@@ -43,7 +43,12 @@ type FileActionRequest = Extract<HostRequest, { kind: 'fileAction' }>;
 
 /** The workflow toolbar's file verbs a host performs. */
 export interface ProgressWorkflowFileActionsHost {
-  compareFiles(baseFile: string, editedFile: string): FileAction<void>;
+  /** Show `editedFile` against `baseFile` in the host's diff view. */
+  openDiff(
+    baseFile: string,
+    editedFile: string,
+    title: string,
+  ): FileAction<void>;
   /** Ask to write an accepted file; false when the user declines. */
   confirmAccept(message: string): Effect.Effect<boolean, HostRequestFailure>;
   openDirectory(directory: string): FileAction<void>;
@@ -122,9 +127,17 @@ export class ProgressWorkflowFileActionsController {
       file,
       base,
       'Compare original',
-      (targetFile, baseFile) =>
-        this.deps.host.compareFiles(baseFile, targetFile),
+      (targetFile, baseFile) => this.compare(baseFile, targetFile),
     ).pipe(Effect.asVoid);
+  }
+
+  /** The diff of `edited` against `base`, titled the same on every host. */
+  private compare(base: string, edited: string): FileAction<void> {
+    return this.deps.host.openDiff(
+      base,
+      edited,
+      `Compare: ${path.basename(edited)} ↔ ${path.basename(base)}`,
+    );
   }
 
   comparePrevious(file: string, previous?: string): FileAction<void> {
@@ -132,7 +145,7 @@ export class ProgressWorkflowFileActionsController {
       return this.deps.host.showInfo('Compare previous needs a base file.');
     }
 
-    return this.deps.host.compareFiles(previous, file);
+    return this.compare(previous, file);
   }
 
   readonly acceptFile: (

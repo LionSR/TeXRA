@@ -5,10 +5,7 @@
 // with an outcome or a request error; an arm the desktop does not perform is
 // `Rejected` with its reason, never dropped.
 
-import path from 'node:path';
-
 import { Effect } from 'effect';
-import { Cancelled } from '@texra-ai/harness';
 import {
   AppSignals,
   withProcessServices,
@@ -29,8 +26,6 @@ import type {
   OwnHostArms,
   SharedHostRequestBindings,
 } from '@texra/controllers/session/openGuiWindow';
-import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import { instructionActions } from '@ui/copy/instructionActions';
 import { modelFailureText } from '@ui/copy/modelAccess';
 
@@ -41,14 +36,10 @@ import {
 import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
-import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
-  /** The project this window serves: its runs run in its session, here or
-   *  in the service. */
-  project: DesktopProject;
   /** The window's host snapshot. */
   snapshot: HostSnapshotSource;
   host: DesktopAgentRunHost;
@@ -72,8 +63,7 @@ interface DesktopHostRequestsOptions {
 /** The desktop's half of a project's window, for the window's scope. */
 export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
   function* (options: DesktopHostRequestsOptions) {
-    const { project, host, runtime, snapshot } = options;
-    const { roots } = project;
+    const { host, runtime, snapshot } = options;
     const signals = yield* AppSignals;
     /**
      * Each arm answers with the program that presents its notice; the
@@ -109,10 +99,12 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
      *  view, and the project's launch path. */
     const bindings: SharedHostRequestBindings = {
       openPath: (file, line) => host.openPath(file, line),
-      openLabel: (label) =>
-        findLabelInWorkspace(roots.workspace, label, (absolutePath) =>
-          host.openPath(absolutePath),
-        ).pipe(Effect.mapError((cause) => hostFailure('openLabel', cause))),
+      pickFiles: (fileType) =>
+        options.files
+          .pickFiles(fileType)
+          .pipe(
+            Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
+          ),
       latexdiff: {
         // Each diff opens in the PDF tab through the build display, as a
         // run's outputs do.
@@ -165,15 +157,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
      *  named through `hostFailure`, so the failure channel is the value the
      *  arm failed with. */
     const own: OwnHostArms = {
-      pickFiles: (request) =>
-        options.files.pickFiles(request.fileType).pipe(
-          Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
-          Effect.flatMap((paths) =>
-            paths === null
-              ? Effect.fail(new Cancelled())
-              : Effect.succeed<HostOutcome>({ kind: 'files', paths }),
-          ),
-        ),
       workspaceFile: (request) => options.workspaceFile(request.action),
     };
 
@@ -202,13 +185,9 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         revealProgress: () => Effect.void,
       },
       files: {
-        compareFiles: (baseFile: string, editedFile: string) =>
+        openDiff: (baseFile: string, editedFile: string, title: string) =>
           host
-            .openDiff(
-              { filePath: baseFile },
-              { filePath: editedFile },
-              `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
-            )
+            .openDiff({ filePath: baseFile }, { filePath: editedFile }, title)
             .pipe(
               Effect.mapError(
                 (cause) =>

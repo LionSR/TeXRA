@@ -14,7 +14,6 @@ import * as vscode from 'vscode';
 import { Effect, FiberHandle, Scope } from 'effect';
 
 import {
-  Cancelled,
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
@@ -35,7 +34,7 @@ import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
 import { openLatexdiffs } from '@commands/latex/latexdiffCommands';
 import { handleCompare } from '@commands/latex/compareCommands';
 import { findCommitInHistory } from '@commands/git/gitCommands';
-import { openFile, openLabel } from '@commands/files/openFileCommands';
+import { openFile } from '@commands/files/openFileCommands';
 import {
   createFileSelectionPickers,
   getCurrentFile,
@@ -307,20 +306,6 @@ export const createExtensionHostRequests = Effect.fn(
     } satisfies HostOutcome;
   });
 
-  function pickFiles(
-    request: Extract<HostRequest, { kind: 'pickFiles' }>,
-  ): Effect.Effect<HostOutcome, Cancelled> {
-    // The picker reports its own failures where they happen and answers
-    // `null`, so the only outcomes left here are a selection and a cancel.
-    return multipleFilePickers[request.fileType]().pipe(
-      Effect.flatMap((selected) =>
-        selected
-          ? Effect.succeed<HostOutcome>({ kind: 'files', paths: selected })
-          : Effect.fail(new Cancelled()),
-      ),
-    );
-  }
-
   /** The reads a new credential invalidates: the credential, which the
    *  funnel and the banner follow, and the catalogs. */
   const refreshAfterCredentialChange = Effect.all(
@@ -344,7 +329,9 @@ export const createExtensionHostRequests = Effect.fn(
    *  onto a VS Code command, an editor API, or the sidebar. */
   const bindings: SharedHostRequestBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
-    openLabel: (label) => runHandler('openLabel', openLabel(roots, label)),
+    // The picker reports its own failures where they happen and answers
+    // `null`, as it does for a cancel.
+    pickFiles: (fileType) => multipleFilePickers[fileType](),
     latexdiff: {
       // The viewer a diff schedules opens in the view's scope, so a close
       // of the view cancels a delayed open.
@@ -420,7 +407,6 @@ export const createExtensionHostRequests = Effect.fn(
   const own: OwnHostArms = {
     popOut: () => Effect.as(options.popOutToEditor(), done),
     popBack: () => Effect.as(options.showInSidebar(), done),
-    pickFiles: (request) => pickFiles(request),
     useCurrentFile: (request) => useCurrentFile(request),
     addOpenedFiles: (request) =>
       Effect.map(getOpenedFiles(), (opened): HostOutcome => {
@@ -458,10 +444,10 @@ export const createExtensionHostRequests = Effect.fn(
     },
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {
-      compareFiles: (base: string, edited: string) =>
+      openDiff: (base: string, edited: string, title: string) =>
         runFileAction(
           'compare',
-          handleCompare(at(base), at(edited), diffRefresh),
+          handleCompare(at(base), at(edited), title, diffRefresh),
         ),
       confirmAccept: (message: string) =>
         vscodeUi.confirm(message, { confirmLabel: 'Replace file' }),

@@ -288,7 +288,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           createDesktopHostRequests({
             ...parts,
             runtime,
-            project,
             host: hosts.run,
             files,
             workspaceFile: workspace.file,

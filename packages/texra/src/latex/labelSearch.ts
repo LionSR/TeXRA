@@ -6,9 +6,8 @@ import escapeRegExp from 'escape-string-regexp';
 
 /**
  * Scan candidate files for `\label{<label>}` and hand the first match to
- * `onMatch(file, index)`, where `index` is the character offset of the match
- * in the file's text with CRLF line endings read as LF (so editors can reveal
- * the label position).
+ * `onMatch(file, line)`, where `line` is the 1-based line the match starts
+ * on.
  *
  * A candidate that cannot be read is logged and skipped, and so is a match
  * `onMatch` fails to handle, so a transient failure on one file falls through
@@ -18,12 +17,15 @@ import escapeRegExp from 'escape-string-regexp';
  * no match could be handled, the last handling failure is the answer: a label
  * that exists is never reported missing.
  */
-export function openFirstLabelMatch<ReadError, MatchError>(
+export function openFirstLabelMatch<ReadError, MatchError, R>(
   label: string,
   files: Iterable<string>,
-  read: (file: string) => Effect.Effect<string, ReadError>,
-  onMatch: (file: string, index: number) => Effect.Effect<unknown, MatchError>,
-): Effect.Effect<boolean, MatchError> {
+  read: (file: string) => Effect.Effect<string, ReadError, R>,
+  onMatch: (
+    file: string,
+    line: number,
+  ) => Effect.Effect<unknown, MatchError, R>,
+): Effect.Effect<boolean, MatchError, R> {
   // A regex matching `\label{<label>}` for a literal label string.
   const pattern = new RegExp(`\\\\label\\{${escapeRegExp(label)}\\}`, 'm');
   return Effect.gen(function* () {
@@ -37,9 +39,11 @@ export function openFirstLabelMatch<ReadError, MatchError>(
         );
         continue;
       }
-      const match = content.success.replaceAll('\r\n', '\n').match(pattern);
+      const text = content.success.replaceAll('\r\n', '\n');
+      const match = text.match(pattern);
       if (!match || match.index === undefined) continue;
-      const opened = yield* Effect.result(onMatch(file, match.index));
+      const line = text.slice(0, match.index).split('\n').length;
+      const opened = yield* Effect.result(onMatch(file, line));
       if (Result.isSuccess(opened)) return true;
       yield* Effect.logWarning(
         `The match for ${label} in ${file} could not be opened`,
