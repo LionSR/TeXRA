@@ -326,7 +326,7 @@ order.
   file; Google the same shape (`:50-212`, `:321-519`, `:699-764`) plus Wire;
   Responses is six files, with the input-part lowering `responsesContent`
   (`api/openaiResponsesCodec.ts:239-296`), `gifFrameCount` (`:196-231`) and
-  `DocumentAccess` (`:302-305`) in the *codec* (decoder) file, and a comment
+  `DocumentAccess` (`:302-305`) in the _codec_ (decoder) file, and a comment
   explaining that `ResponseOrigin` lives there because "the codec is the lowest
   module of this split" (`:37-39`).
 
@@ -588,72 +588,72 @@ and every UI switch on both; after `CredentialOrigin` and the UI.
 ## 9. Smaller red flags (batched)
 
 a. **The provider manifest's row kinds are a sentinel grammar, and its id
-   list is restated twice outside llm.** `ModelProviderPlugin` encodes four
-   row kinds in `apiKey?: true` and `baseUrl` absent / `null` / string /
-   object (`providers/providerPlugins.ts:43-59`), with a comment explaining
-   what absent and `null` mean (`:52-57`) and four id types extracted by field
-   presence (`:161-185, 207`); three `AssertNever` checks (`:216-249`) hold
-   the coverage of llm-zoo, which is good and stays. The harness restates the
-   backend ids as `MODEL_PROVIDERS` (`packages/harness/src/shared/schemas/runInput.ts:102-113`,
-   the same ten as `BACKEND_PROTOCOLS`, `providerPlugins.ts:191-204`, under a
-   comment saying "a new provider is added once", `:96-100`) and the
-   endpoint rows with display names as `PROVIDER_ENDPOINT_STATE_ENTRIES`
-   (`packages/harness/src/shared/state/providerSettings.ts:25-36`, a third
-   spelling of `providerDisplayName`). **Change amplification, the named
-   change:** "add an API-key provider that serves Responses on its own
-   endpoint" (MiniMax's shape) touches today `providerPlugins.ts` (manifest
-   row and `BACKEND_PROTOCOLS` row), `responsesConfiguration.ts`
-   (`RESPONSES_ROUTES` row), `runInput.ts:102-113`, `providerSettings.ts:25-36`
-   (and `:57-62` for a region toggle), `packages/harness/src/logger/redaction.ts:27-39`
-   (compile-forced, keep), `packages/texra/src/shared/settingsView/settingSurfaces.ts:194-198`,
-   `packages/texra/src/model/providerPresentation.ts:53-56`,
-   `packages/texra/src/model/setupModelDefaults.ts:22`: 8 production files, 9
-   edits, plus `reasoningChoice.ts` when its controls differ (finding 2) and
-   a live suite. After (`MODEL_PROVIDERS` = `keyof BACKEND_PROTOCOLS`, the
-   endpoint and region rows derived from `EndpointProviderId` /
-   `RegionalProviderId` + `providerDisplayName`, a discriminated row
-   `kind: 'backend' | 'alias' | 'unserved'` in place of the sentinels): the
-   manifest row, the route row, the redaction pattern and the app's
-   presentation (dashboard URLs, probe model: product copy): 4.
+list is restated twice outside llm.** `ModelProviderPlugin` encodes four
+row kinds in `apiKey?: true` and `baseUrl` absent / `null` / string /
+object (`providers/providerPlugins.ts:43-59`), with a comment explaining
+what absent and `null` mean (`:52-57`) and four id types extracted by field
+presence (`:161-185, 207`); three `AssertNever` checks (`:216-249`) hold
+the coverage of llm-zoo, which is good and stays. The harness restates the
+backend ids as `MODEL_PROVIDERS` (`packages/harness/src/shared/schemas/runInput.ts:102-113`,
+the same ten as `BACKEND_PROTOCOLS`, `providerPlugins.ts:191-204`, under a
+comment saying "a new provider is added once", `:96-100`) and the
+endpoint rows with display names as `PROVIDER_ENDPOINT_STATE_ENTRIES`
+(`packages/harness/src/shared/state/providerSettings.ts:25-36`, a third
+spelling of `providerDisplayName`). **Change amplification, the named
+change:** "add an API-key provider that serves Responses on its own
+endpoint" (MiniMax's shape) touches today `providerPlugins.ts` (manifest
+row and `BACKEND_PROTOCOLS` row), `responsesConfiguration.ts`
+(`RESPONSES_ROUTES` row), `runInput.ts:102-113`, `providerSettings.ts:25-36`
+(and `:57-62` for a region toggle), `packages/harness/src/logger/redaction.ts:27-39`
+(compile-forced, keep), `packages/texra/src/shared/settingsView/settingSurfaces.ts:194-198`,
+`packages/texra/src/model/providerPresentation.ts:53-56`,
+`packages/texra/src/model/setupModelDefaults.ts:22`: 8 production files, 9
+edits, plus `reasoningChoice.ts` when its controls differ (finding 2) and
+a live suite. After (`MODEL_PROVIDERS` = `keyof BACKEND_PROTOCOLS`, the
+endpoint and region rows derived from `EndpointProviderId` /
+`RegionalProviderId` + `providerDisplayName`, a discriminated row
+`kind: 'backend' | 'alias' | 'unserved'` in place of the sentinels): the
+manifest row, the route row, the redaction pattern and the app's
+presentation (dashboard URLs, probe model: product copy): 4.
 b. **`protocol.ts` is a conjoined file** named for one of five things it
-   holds: binding identity (`:23-96`), background capability (`:104-115`, D3),
-   JSON materialization (`:117-137`), the prepared-history grammar
-   (`:139-194`, which `message.ts:230-233` applies and `index.ts:48` exports
-   for the harness's store check) and the usage schema (`:196-229`). It is the
-   bottom of the import order (`README.md:244-246`), so whatever must be
-   lowest lands there. The grammar belongs with `message.ts`'s schema, the
-   usage schema with `turn.ts`, and the file becomes `origin.ts`.
+holds: binding identity (`:23-96`), background capability (`:104-115`, D3),
+JSON materialization (`:117-137`), the prepared-history grammar
+(`:139-194`, which `message.ts:230-233` applies and `index.ts:48` exports
+for the harness's store check) and the usage schema (`:196-229`). It is the
+bottom of the import order (`README.md:244-246`), so whatever must be
+lowest lands there. The grammar belongs with `message.ts`'s schema, the
+usage schema with `turn.ts`, and the file becomes `origin.ts`.
 c. **`EVIDENCE_PROTOCOL`** (`message.ts:113-124`) keys reasoning-evidence
-   kinds, `providerUsage` kinds (`anthropic`, `xai`) and finish-evidence kinds
-   (`google-interactions`, `openai-responses`) in one map, read for three
-   different fields (`message.ts:139`, `turn.ts:348-350`): three vocabularies
-   in one table because their values happen to be strings.
+kinds, `providerUsage` kinds (`anthropic`, `xai`) and finish-evidence kinds
+(`google-interactions`, `openai-responses`) in one map, read for three
+different fields (`message.ts:139`, `turn.ts:348-350`): three vocabularies
+in one table because their values happen to be strings.
 d. **A plan is spelled as `kind` for session plans and as `usageRoute` for
-   key plans** (`models/modelRoute.ts:71-86`: `{ kind: 'chatgpt-subscription' }`,
-   `{ kind: 'xai-subscription' }`, `{ kind: 'api-key', usageRoute }`), and
-   `bindModel` re-joins them into `BillingRoute`
-   (`node.ts:214`: `route.kind === 'api-key' ? route.usageRoute : route.kind`);
-   `PLAN_ROUTES[...].credential: 'session' | 'key'` (`errors.ts:33-55`)
-   states the same split as data. Route-kind literals appear in 5 llm files
-   (25 refs) and 10 harness/app files (35 refs). One shape,
-   `{ kind: 'api-key' | 'session', provider, plan: PlanRoute | null }`, would
-   let `billing` be `route.plan ?? 'api-key'` and remove the `usageRoute`
-   branch from every reader; it is a wider change and sits beside D2's
-   `'personal'` work, so it is recorded, not ranked.
+key plans** (`models/modelRoute.ts:71-86`: `{ kind: 'chatgpt-subscription' }`,
+`{ kind: 'xai-subscription' }`, `{ kind: 'api-key', usageRoute }`), and
+`bindModel` re-joins them into `BillingRoute`
+(`node.ts:214`: `route.kind === 'api-key' ? route.usageRoute : route.kind`);
+`PLAN_ROUTES[...].credential: 'session' | 'key'` (`errors.ts:33-55`)
+states the same split as data. Route-kind literals appear in 5 llm files
+(25 refs) and 10 harness/app files (35 refs). One shape,
+`{ kind: 'api-key' | 'session', provider, plan: PlanRoute | null }`, would
+let `billing` be `route.plan ?? 'api-key'` and remove the `usageRoute`
+branch from every reader; it is a wider change and sits beside D2's
+`'personal'` work, so it is recorded, not ranked.
 e. **`xaiProvider.ts` states a token's expiry three times:** the schema
-   defaults `expires_in` through both `catchDecoding` and `withDecodingDefault`
-   to the same constant (`oauth/xai/xaiProvider.ts:109-119`), and
-   `buildSession` prefers the access JWT's `exp` over it (`:225-228`). One
-   reading (JWT `exp`, else `expires_in`, else the default) in `buildSession`
-   would leave the schema a plain decode.
+defaults `expires_in` through both `catchDecoding` and `withDecodingDefault`
+to the same constant (`oauth/xai/xaiProvider.ts:109-119`), and
+`buildSession` prefers the access JWT's `exp` over it (`:225-228`). One
+reading (JWT `exp`, else `expires_in`, else the default) in `buildSession`
+would leave the schema a plain decode.
 f. **Signature lies and re-derivations in `models/`:** `isKimiSubscriptionEligible`
-   takes `baseUrl` it never reads (`modelRoute.ts:140-146`);
-   `resolveModelSource` (`:161-165`) is "the provider the route bills" spelled
-   for the picker, and the harness re-derives it from the route it already
-   holds (`packages/harness/src/model/computeModelOptions.ts:578`:
-   `route.kind === 'api-key' ? route.provider : resolveModelSource(config)`).
-   With finding 1's route carrying its provider, `resolveModelSource` is
-   `decideModelRoute(config, OWN_KEY_ROUTE_FACTS).provider`.
+takes `baseUrl` it never reads (`modelRoute.ts:140-146`);
+`resolveModelSource` (`:161-165`) is "the provider the route bills" spelled
+for the picker, and the harness re-derives it from the route it already
+holds (`packages/harness/src/model/computeModelOptions.ts:578`:
+`route.kind === 'api-key' ? route.provider : resolveModelSource(config)`).
+With finding 1's route carrying its provider, `resolveModelSource` is
+`decideModelRoute(config, OWN_KEY_ROUTE_FACTS).provider`.
 
 ---
 
@@ -748,19 +748,19 @@ subject is pure computation or data name no fiber primitive on purpose:
 AGENTS.md "Effect" keeps pure computation plain TypeScript, and a `Schema`
 is the Effect-native form of a refused case.
 
-| Finding | Hand-rolled today                                                                                                                                                                      | Effect primitive that is the thing                                                                                                                                                                                                                                                                                                                                | Note                                                                                                                                                                                |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1       | `decideModelRoute` → `resolveRouteEndpoint` → `routeConfig`, the harness's `routeEndpoint` wrapper that `Effect.die`s on `undefined`, three endpoint constants                        | none at run time: one pure decision over `RouteFacts`. The refused case ("no endpoint for a regional provider") is a `Schema.Record(EndpointProviderIdSchema, Schema.String)` on the facts the host decodes once (`Schema.decodeUnknownSync`), so the decision never sees `undefined`                                                                           | AGENTS.md "Design guardrails": refuse at a boundary over handling everywhere; the harness already decodes host facts with `Schema` in `modelSettings.ts`                            |
-| 2       | `routeControls` switch + six `RESPONSES_ROUTES` row values + `wireEffort`'s catalog read + Google's level fallback                                                                      | none: one table keyed by provider, `ReasoningEffortSchema`'s literals (`turn.ts:60-69`) as the one effort vocabulary                                                                                                                                                                                                                                              | pure                                                                                                                                                                                |
+| Finding | Hand-rolled today                                                                                                                                                                        | Effect primitive that is the thing                                                                                                                                                                                                                                                                                                                                                                      | Note                                                                                                                                                                                                                                                      |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1       | `decideModelRoute` → `resolveRouteEndpoint` → `routeConfig`, the harness's `routeEndpoint` wrapper that `Effect.die`s on `undefined`, three endpoint constants                           | none at run time: one pure decision over `RouteFacts`. The refused case ("no endpoint for a regional provider") is a `Schema.Record(EndpointProviderIdSchema, Schema.String)` on the facts the host decodes once (`Schema.decodeUnknownSync`), so the decision never sees `undefined`                                                                                                                   | AGENTS.md "Design guardrails": refuse at a boundary over handling everywhere; the harness already decodes host facts with `Schema` in `modelSettings.ts`                                                                                                  |
+| 2       | `routeControls` switch + six `RESPONSES_ROUTES` row values + `wireEffort`'s catalog read + Google's level fallback                                                                       | none: one table keyed by provider, `ReasoningEffortSchema`'s literals (`turn.ts:60-69`) as the one effort vocabulary                                                                                                                                                                                                                                                                                    | pure                                                                                                                                                                                                                                                      |
 | 3       | `SubscriptionOAuthCoordinator.forProvider`'s `WeakMap<CredentialStore, …>` memo; `SubscriptionCoordinator` port; `getChatgptStatus`/`getXaiStatus` wrappers; `SubscriptionSessionStatus` | `Context.Service<ChatgptAccount, Shape>()('llm/ChatgptAccount')` (`Context.d.ts:196`) provided by `Layer.effect(ChatgptAccount, …)` (`Layer.d.ts:1166`, "executed in the scope of the layer"); a host provides it once beside `Secrets`; a suite provides `Layer.succeed` (`Layer.d.ts:839`). Inside, D6's `Semaphore.make(1)` (`Semaphore.d.ts:253`). `session: Effect<S \| null>` replaces `signedIn` | `RcMap.make` (`RcMap.d.ts:215`) would be the primitive only if instances were keyed by store at run time; there is one `Secrets` per process, so a layer is the thing. Repo: `Layer.effect` in `packages/harness/src/controllers/session/sessionLayer.ts` |
-| 4       | `anthropicWire`'s `next`/`open` closure state; `googleWire`'s two `store && !id` checks beside the assembly's `allowMissingResponseId`                                                 | the one reducer already there: `Stream.mapEffect(assembly.step)` + `Stream.takeUntil` (`assembleTurn.ts:331-344`); the codec is a pure `(raw) => PartEvent[]` with only the framing state the assembly cannot know                                                                                                                                              | no new primitive; deletes state                                                                                                                                                     |
-| 5       | `ResolvedTurn.transport` + `connectionId: randomUUID()` + `isDeepStrictEqual` + the harness patch                                                                                      | none: the binding identity is already `sameModelOrigin` (data) checked by `boundTurn`; the WebSocket model's lifetime is already `ScopedRef.fromAcquire` + `ScopedRef.set` (`ScopedRef.d.ts:53,130`) and `Semaphore.takeScoped` (`Semaphore.d.ts:628`) at `openaiResponsesWebSocket.ts:359-370`                                                                  | deletion only                                                                                                                                                                       |
-| 6       | `supportsDocumentInput` + `DocumentAccess.accepted` + `uploads === null` + `Model.uploadFile?` presence, beside the catalog's `supportsNativePdf`                                      | none: one field on `Binding.config.capabilities`, written by the route's configuration; `uploadFile` present iff the route has a files API (D3's rule for `background`)                                                                                                                                                                                             | data                                                                                                                                                                                |
-| 7       | `Effect.uninterruptible(setup)` + `Effect.forkDetach(openBrowser, { startImmediately })` + `Fiber.join` + 13 comment lines                                                             | `Effect.scoped` (`Effect.d.ts:12567`) over `Effect.acquireRelease` (`:12676`, kept), `Deferred.make` (`Deferred.d.ts:152`) completed by `Deferred.doneUnsafe` (`:1604`) from the Node handler (kept), `Effect.forkScoped(openBrowser(url))` (`Effect.d.ts:17216`: `Fiber` in the caller's `Scope`) then `Fiber.join`; `Effect.timeoutOrElse` (`:8471`, kept) | interrupting the sign-in interrupts the presenter, as the device flow already does with `Effect.forkChild` (`subscriptionProviders.ts:224-225`)                                  |
-| 7       | `completeDeviceSession`'s `Effect.yieldNow` + `Effect.uninterruptible(complete())`                                                                                                     | the coordinator's own `Effect.uninterruptible` (`Effect.d.ts:14415`) inside `Semaphore.withPermits(1)` (`Semaphore.d.ts:344`), D6                                                                                                                                                                                                                                | single-caller extraction deleted                                                                                                                                                    |
-| 7       | `pollDeviceAuthorization`'s `Clock` deadline, `beforeDeadline`, `guardedPoll`, `transients.last`                                                                                       | `Effect.retry({ while, schedule })` (`Effect.d.ts:7132`, "the last failure is propagated") with `Schedule.spaced(interval).pipe(Schedule.addDelay(…), Schedule.upTo({ duration }))` (`Schedule.d.ts:1070, 353, 1212`; `Schedule.during` `:679` is the elapsed-time schedule on its own)                                                                        | the file already writes `Effect.retry` + `Schedule.spaced` + `addDelay` (`deviceAuthorization.ts:150-166`); `chatgptProvider.ts:282-289` writes `Effect.retry({ times, schedule: Schedule.exponential })` |
-| 8       | four `Effect.map` projections over `resolveApiKey`; `ApiKeyStatus` ↔ `CredentialOrigin` table                                                                                          | none: one `Effect<{ value, origin }>`; the ladder already reads the environment through `Config.String` + `Config.option` (`Config.d.ts:769`) as `resolveCredential` does (`providers/credentials.ts:55-60`)                                                                                                                                                       | "no copy of it is cached here" (`apiProviders.ts:70-71`) is deliberate, so no `Effect.cached` (`Effect.d.ts:13539`)                                                                 |
-| 9a      | `MODEL_PROVIDERS` and `PROVIDER_ENDPOINT_STATE_ENTRIES` restating the manifest; sentinel row kinds                                                                                      | `Schema.Literals(Struct.keys(BACKEND_PROTOCOLS))` (the pattern `errors.ts:61` already uses for `PlanRouteSchema`) and a discriminated `Schema.Union` of row kinds                                                                                                                                                                                                 | data                                                                                                                                                                                |
+| 4       | `anthropicWire`'s `next`/`open` closure state; `googleWire`'s two `store && !id` checks beside the assembly's `allowMissingResponseId`                                                   | the one reducer already there: `Stream.mapEffect(assembly.step)` + `Stream.takeUntil` (`assembleTurn.ts:331-344`); the codec is a pure `(raw) => PartEvent[]` with only the framing state the assembly cannot know                                                                                                                                                                                      | no new primitive; deletes state                                                                                                                                                                                                                           |
+| 5       | `ResolvedTurn.transport` + `connectionId: randomUUID()` + `isDeepStrictEqual` + the harness patch                                                                                        | none: the binding identity is already `sameModelOrigin` (data) checked by `boundTurn`; the WebSocket model's lifetime is already `ScopedRef.fromAcquire` + `ScopedRef.set` (`ScopedRef.d.ts:53,130`) and `Semaphore.takeScoped` (`Semaphore.d.ts:628`) at `openaiResponsesWebSocket.ts:359-370`                                                                                                         | deletion only                                                                                                                                                                                                                                             |
+| 6       | `supportsDocumentInput` + `DocumentAccess.accepted` + `uploads === null` + `Model.uploadFile?` presence, beside the catalog's `supportsNativePdf`                                        | none: one field on `Binding.config.capabilities`, written by the route's configuration; `uploadFile` present iff the route has a files API (D3's rule for `background`)                                                                                                                                                                                                                                 | data                                                                                                                                                                                                                                                      |
+| 7       | `Effect.uninterruptible(setup)` + `Effect.forkDetach(openBrowser, { startImmediately })` + `Fiber.join` + 13 comment lines                                                               | `Effect.scoped` (`Effect.d.ts:12567`) over `Effect.acquireRelease` (`:12676`, kept), `Deferred.make` (`Deferred.d.ts:152`) completed by `Deferred.doneUnsafe` (`:1604`) from the Node handler (kept), `Effect.forkScoped(openBrowser(url))` (`Effect.d.ts:17216`: `Fiber` in the caller's `Scope`) then `Fiber.join`; `Effect.timeoutOrElse` (`:8471`, kept)                                            | interrupting the sign-in interrupts the presenter, as the device flow already does with `Effect.forkChild` (`subscriptionProviders.ts:224-225`)                                                                                                           |
+| 7       | `completeDeviceSession`'s `Effect.yieldNow` + `Effect.uninterruptible(complete())`                                                                                                       | the coordinator's own `Effect.uninterruptible` (`Effect.d.ts:14415`) inside `Semaphore.withPermits(1)` (`Semaphore.d.ts:344`), D6                                                                                                                                                                                                                                                                       | single-caller extraction deleted                                                                                                                                                                                                                          |
+| 7       | `pollDeviceAuthorization`'s `Clock` deadline, `beforeDeadline`, `guardedPoll`, `transients.last`                                                                                         | `Effect.retry({ while, schedule })` (`Effect.d.ts:7132`, "the last failure is propagated") with `Schedule.spaced(interval).pipe(Schedule.addDelay(…), Schedule.upTo({ duration }))` (`Schedule.d.ts:1070, 353, 1212`; `Schedule.during` `:679` is the elapsed-time schedule on its own)                                                                                                                 | the file already writes `Effect.retry` + `Schedule.spaced` + `addDelay` (`deviceAuthorization.ts:150-166`); `chatgptProvider.ts:282-289` writes `Effect.retry({ times, schedule: Schedule.exponential })`                                                 |
+| 8       | four `Effect.map` projections over `resolveApiKey`; `ApiKeyStatus` ↔ `CredentialOrigin` table                                                                                            | none: one `Effect<{ value, origin }>`; the ladder already reads the environment through `Config.String` + `Config.option` (`Config.d.ts:769`) as `resolveCredential` does (`providers/credentials.ts:55-60`)                                                                                                                                                                                            | "no copy of it is cached here" (`apiProviders.ts:70-71`) is deliberate, so no `Effect.cached` (`Effect.d.ts:13539`)                                                                                                                                       |
+| 9a      | `MODEL_PROVIDERS` and `PROVIDER_ENDPOINT_STATE_ENTRIES` restating the manifest; sentinel row kinds                                                                                       | `Schema.Literals(Struct.keys(BACKEND_PROTOCOLS))` (the pattern `errors.ts:61` already uses for `PlanRouteSchema`) and a discriminated `Schema.Union` of row kinds                                                                                                                                                                                                                                       | data                                                                                                                                                                                                                                                      |
 
 What stays as it is because it is already the primitive: `Effect.callback`
 for the `ws` socket's `open`/`error`/`unexpected-response` and the `http`
