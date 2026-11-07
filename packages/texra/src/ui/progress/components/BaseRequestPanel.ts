@@ -53,7 +53,7 @@ import {
 import {
   offeredGrant,
   type RequestAnswerability,
-  type PermissionPayload,
+  type RequestPayload,
   type RunId,
   type RuntimeRequest,
 } from '@texra-ai/harness/schemas';
@@ -92,7 +92,7 @@ const requestCardHostStyles: CSSResult = css`
 `;
 
 export abstract class BaseRequestPanel<
-  K extends PermissionPayload['kind'] = PermissionPayload['kind'],
+  K extends RequestPayload['kind'] = RequestPayload['kind'],
 > extends LitElement {
   static override styles: CSSResultGroup = [
     designTokens,
@@ -103,7 +103,7 @@ export abstract class BaseRequestPanel<
   ];
 
   @property({ attribute: false }) permission!: Extract<
-    PermissionPayload,
+    RequestPayload,
     { kind: K }
   >;
 

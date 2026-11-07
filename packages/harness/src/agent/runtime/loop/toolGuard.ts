@@ -29,8 +29,8 @@ import {
   qualifyAggregateId,
   type DecisionOf,
   type HookOutcomePayload,
-  type PermissionPayload,
-  PermissionPayloadSchema,
+  type RequestPayload,
+  RequestPayloadSchema,
   toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
@@ -338,7 +338,7 @@ export const callRequests = (
         const answered = (decision: DecisionOf<(typeof payload)['kind']>) => ({
           // cast: the derived request id rejoins only this payload's kind.
           payload: (reentered?.request.payload ?? payload) as Extract<
-            PermissionPayload,
+            RequestPayload,
             { kind: (typeof payload)['kind'] }
           >,
           decision,
@@ -378,7 +378,7 @@ export const callRequests = (
             requestId,
             // A plugin's data as the JSON its row stores; one that is not
             // JSON is a defect of the plugin.
-            payload: Schema.decodeUnknownSync(PermissionPayloadSchema)(
+            payload: Schema.decodeUnknownSync(RequestPayloadSchema)(
               toJsonValue(request),
             ),
           },

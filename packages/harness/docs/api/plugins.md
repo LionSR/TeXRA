@@ -280,17 +280,17 @@ interface CallRequests {
    *  resumed call left standing, when it is of this kind, else the
    *  attempt's next derived id. A request is staged under this id before
    *  it opens. */
-  readonly nextId: (kind: PermissionPayload['kind']) => string;
+  readonly nextId: (kind: RequestPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
    *  decision. The returned payload is the request actually answered,
    *  which on resume may differ from the proposal recomputed by the caller.
    *  `blobs` are the strings the payload names by address, stored with its row. */
-  readonly open: <P extends PermissionPayload>(
+  readonly open: <P extends RequestPayload>(
     payload: P,
     blobs?: readonly DraftBlob[],
   ) => Effect.Effect<
     {
-      readonly payload: Extract<PermissionPayload, { kind: P['kind'] }>;
+      readonly payload: Extract<RequestPayload, { kind: P['kind'] }>;
       readonly decision: DecisionOf<P['kind']>;
     },
     DatabaseAggregateClosed | CellError
@@ -478,7 +478,7 @@ refusals. A plugin's request declares its actions on its row, so its
 type admits any decision.
 
 ```ts
-type DecisionOf<K extends PermissionPayload['kind']> =
+type DecisionOf<K extends RequestPayload['kind']> =
   | Extract<
       RequestDecision,
       {

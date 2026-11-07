@@ -63,7 +63,7 @@ import {
 } from '@shared/approvalPolicy';
 import {
   qualifyAggregateId,
-  AgentProposalPermissionSchema,
+  AgentProposalRequestSchema,
   AgentConfigSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -74,16 +74,16 @@ import {
   type JsonValue,
   type LogLevel,
   type MessageType,
-  type AgentProposalPermission,
+  type AgentProposalRequest,
   type NormalizedToolUse,
-  type PermissionPayload,
-  type PlanApprovalPermission,
+  type RequestPayload,
+  type PlanApprovalRequest,
   type RequestDecision,
-  type RetryPermission,
+  type RetryRequest,
   type RunOutcome,
   type RunId,
   type SessionEventDraft,
-  type UserQuestionPermission,
+  type UserQuestionRequest,
   aggregateTarget,
   type ToolEditContent,
 } from '@shared/schemas';
@@ -1022,7 +1022,7 @@ function makeBashApprovalPayload(index = 1) {
   };
 }
 
-function makeRetryApprovalPayload(): RetryPermission {
+function makeRetryApprovalPayload(): RetryRequest {
   return {
     requestId: `harness-retry-${nanoid()}`,
     runId: HARNESS_RUN_ID,
@@ -1063,7 +1063,7 @@ function makeRetryApprovalPayload(): RetryPermission {
   };
 }
 
-function makePlanApprovalPayload(): PlanApprovalPermission {
+function makePlanApprovalPayload(): PlanApprovalRequest {
   return {
     requestId: 'harness-plan-approval',
     runId: HARNESS_RUN_ID,
@@ -1073,10 +1073,10 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
   };
 }
 
-function makeAgentProposalPayload(): AgentProposalPermission {
+function makeAgentProposalPayload(): AgentProposalRequest {
   // A chat delegation: the schema fills the empty file fields a document
   // task would carry.
-  return Schema.decodeUnknownSync(AgentProposalPermissionSchema)({
+  return Schema.decodeUnknownSync(AgentProposalRequestSchema)({
     requestId: 'harness-agent-proposal',
     runId: HARNESS_RUN_ID,
     task: false,
@@ -1131,7 +1131,7 @@ function seedAgentResultTranscript(): void {
   ]);
 }
 
-function makeUserQuestionPayload(): UserQuestionPermission {
+function makeUserQuestionPayload(): UserQuestionRequest {
   return {
     requestId: 'harness-user-question',
     runId: HARNESS_RUN_ID,
@@ -1199,7 +1199,7 @@ function makeUserQuestionPayload(): UserQuestionPermission {
  *  the session's log, answered by the surface's `request.decided`. */
 const askHarness = (
   runId: RunId,
-  payload: PermissionPayload,
+  payload: RequestPayload,
   blobs?: readonly DraftBlob[],
 ) =>
   openRequest(runId, payload, {
@@ -1214,7 +1214,7 @@ const askHarness = (
  *  reads it off the fold, and the surface's `request.decided` answers it. */
 function requestHarnessApproval(
   runId: RunId,
-  payload: PermissionPayload,
+  payload: RequestPayload,
   onSettled: (decision: RequestDecision) => void | Promise<void>,
   /** What the payload names by address, stored with the request's row. */
   blobs?: readonly DraftBlob[],

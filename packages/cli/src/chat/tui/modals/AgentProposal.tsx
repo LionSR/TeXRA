@@ -4,7 +4,7 @@ import {
   getModelLabel,
   getProposalFileGroups,
   offeredGrant,
-  type AgentProposalPermission,
+  type AgentProposalRequest,
 } from '@texra-ai/harness/schemas';
 import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
@@ -30,7 +30,7 @@ import {
 
 interface AgentProposalProps {
   readonly availableRows?: number;
-  readonly payload: AgentProposalPermission;
+  readonly payload: AgentProposalRequest;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
@@ -95,7 +95,7 @@ function agentProposalMetadataLines({
   payload,
 }: {
   readonly fileGroups: ReturnType<typeof getProposalFileGroups>;
-  readonly payload: AgentProposalPermission;
+  readonly payload: AgentProposalRequest;
 }): MetadataLine[] {
   // A script's request for its `agent` calls: what approving allows, the
   // first agent, and the calls it issued first; its code is the scrolling
@@ -209,7 +209,7 @@ function MetadataLineRow(props: {
 
 /** The text a proposal scrolls: a script's code or the agent's task, after
  *  a defined agent's system prompt. */
-function proposalText(payload: AgentProposalPermission): string {
+function proposalText(payload: AgentProposalRequest): string {
   const { script, persona } = payload;
   const body = script ? script.source : payload.instruction;
   if (!persona) return body;

@@ -21,7 +21,7 @@ import {
 } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import { offeredGrant, type ToolEditContent } from '@texra-ai/harness/schemas';
-import type { ToolEditApprovalPayload } from '../state/approvalQueue';
+import type { ToolEditTuiRequest } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
@@ -29,13 +29,13 @@ const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
 const DEFAULT_EDIT_DIFF_ROWS = 30;
 
-interface EditApprovalProps {
+interface ToolEditRequestProps {
   readonly availableRows?: number;
-  readonly payload: ToolEditApprovalPayload;
+  readonly payload: ToolEditTuiRequest;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
-function editApprovalDiffRowsBudget({
+function toolEditDiffRowsBudget({
   availableRows,
   columns,
   feedbackRows = 0,
@@ -59,7 +59,9 @@ function editApprovalDiffRowsBudget({
   });
 }
 
-export function EditApproval(props: EditApprovalProps): React.JSX.Element {
+export function ToolEditRequest(
+  props: ToolEditRequestProps,
+): React.JSX.Element {
   const title = `Apply edit to ${props.payload.data.relativePath}?`;
   return (
     <ConfirmCard
@@ -74,7 +76,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       onDecide={props.onDecide}
     >
       {props.payload.tui.kind === 'preview' ? (
-        <EditApprovalDiff
+        <ToolEditDiff
           availableRows={props.availableRows}
           content={props.payload.tui.content}
           payload={props.payload}
@@ -96,7 +98,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   );
 }
 
-function EditApprovalDiff({
+function ToolEditDiff({
   availableRows,
   content,
   payload,
@@ -105,7 +107,7 @@ function EditApprovalDiff({
   readonly availableRows?: number;
   /** The staged preview the diff shows. */
   readonly content: ToolEditContent;
-  readonly payload: ToolEditApprovalPayload;
+  readonly payload: ToolEditTuiRequest;
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
@@ -114,7 +116,7 @@ function EditApprovalDiff({
   const feedbackWasCompactRef = useRef(false);
   const { data } = payload;
   const diffWidth = clampModalWidth(columns - EDIT_DIFF_PADDING);
-  const maxDiffLines = editApprovalDiffRowsBudget({
+  const maxDiffLines = toolEditDiffRowsBudget({
     availableRows,
     columns,
     feedbackRows: feedback.rows,

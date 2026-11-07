@@ -1,6 +1,6 @@
 /**
  * The one request vocabulary for everything a run asks a person: what a
- * request shows (`PermissionPayload`, the payload of `request.opened`) and
+ * request shows (`RequestPayload`, the payload of `request.opened`) and
  * how a surface answers it (`RequestDecision`, the decision of
  * `request.decided`); pending is the fold, opened without decided. Every
  * kind of request is answered with an arm of the decision union, so the
@@ -21,14 +21,14 @@ import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { RunIdSchema } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 import {
-  AgentProposalPermissionSchema,
-  BashPermissionSchema,
-  PlanApprovalPermissionSchema,
-  RetryPermissionSchema,
-  ToolEditPermissionSchema,
+  AgentProposalRequestSchema,
+  BashRequestSchema,
+  PlanApprovalRequestSchema,
+  RetryRequestSchema,
+  ToolEditRequestSchema,
   UserQuestionAnswersSchema,
-  UserQuestionPermissionSchema,
-} from './prompts';
+  UserQuestionRequestSchema,
+} from './requestPayloads';
 
 export const RequestDecisionSchema = Schema.Union([
   /** A plain approval. A proposal's approve may carry what the person
@@ -127,43 +127,43 @@ const PluginRequestSchema = Schema.Struct({
     [Schema.Record(Schema.String, JsonValueSchema)],
   ),
 });
-/** A request a plugin opens (`PermissionPayload`'s plugin case). */
+/** A request a plugin opens (`RequestPayload`'s plugin case). */
 export type PluginRequest = typeof PluginRequestSchema.Type;
 
 /** What a pending request shows (diff, command, question), never host
  *  handles: the payload of `request.opened`. The harness's own kinds, and
  *  a plugin's request. */
-export const PermissionPayloadSchema = Schema.Union([
+export const RequestPayloadSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('toolEdit'),
-    data: ToolEditPermissionSchema,
+    data: ToolEditRequestSchema,
   }),
-  Schema.Struct({ kind: Schema.Literal('bash'), data: BashPermissionSchema }),
-  Schema.Struct({ kind: Schema.Literal('retry'), data: RetryPermissionSchema }),
+  Schema.Struct({ kind: Schema.Literal('bash'), data: BashRequestSchema }),
+  Schema.Struct({ kind: Schema.Literal('retry'), data: RetryRequestSchema }),
   Schema.Struct({
     kind: Schema.Literal('proposal'),
-    data: AgentProposalPermissionSchema,
+    data: AgentProposalRequestSchema,
   }),
   Schema.Struct({
     kind: Schema.Literal('planApproval'),
-    data: PlanApprovalPermissionSchema,
+    data: PlanApprovalRequestSchema,
   }),
   Schema.Struct({
     kind: Schema.Literal('userQuestion'),
-    data: UserQuestionPermissionSchema,
+    data: UserQuestionRequestSchema,
   }),
   PluginRequestSchema,
 ]);
-/** A pending request's payload, as {@link PermissionPayloadSchema} reads it. */
-export type PermissionPayload = typeof PermissionPayloadSchema.Type;
+/** A pending request's payload, as {@link RequestPayloadSchema} reads it. */
+export type RequestPayload = typeof RequestPayloadSchema.Type;
 /**
  * The one request kind vocabulary, read off the payload union. The
  * `request.opened` fact and every surface that lists pending requests key
  * off it, so a spelling that drifts fails to compile.
  */
-export type ProgressPermissionKind = PermissionPayload['kind'];
+export type RequestKind = RequestPayload['kind'];
 /** The kinds the harness opens itself. */
-type OwnKind = Exclude<PermissionPayload, PluginRequest>['kind'];
+type OwnKind = Exclude<RequestPayload, PluginRequest>['kind'];
 
 /**
  * Whether a request blocks the tool that opened it: every kind the harness
@@ -172,7 +172,7 @@ type OwnKind = Exclude<PermissionPayload, PluginRequest>['kind'];
  * whichever process holds the run by then, so it stays open across every
  * resume. The folds and the decision door all read this one predicate.
  */
-export const blocksCaller = (payload: PermissionPayload): boolean =>
+export const blocksCaller = (payload: RequestPayload): boolean =>
   payload.kind !== 'plugin' || payload.blocksCaller;
 
 /** The actions each of the harness's own kinds takes besides the three
@@ -195,7 +195,7 @@ type AnswerSource =
 /** The decisions a request of kind `K` takes: its own actions and the three
  *  refusals. A plugin's request declares its actions on its row, so its
  *  type admits any decision. */
-export type DecisionOf<K extends PermissionPayload['kind']> =
+export type DecisionOf<K extends RequestPayload['kind']> =
   | Extract<
       RequestDecision,
       {
@@ -210,7 +210,7 @@ export type DecisionOf<K extends PermissionPayload['kind']> =
  *  question, a retry, a plan approval and a plugin's request never appear
  *  here: they need an answer, or carry their own credential semantics. */
 const GRANT_OF: Readonly<
-  Partial<Record<PermissionPayload['kind'], ApprovalBypassKind>>
+  Partial<Record<RequestPayload['kind'], ApprovalBypassKind>>
 > = { bash: 'bash', toolEdit: 'toolEdit', proposal: 'superYolo' };
 
 /** The grants that stand for each grant: its own, and the delegated-work
@@ -238,7 +238,7 @@ export const grantHeld = (
  * and every grant the run holds is checked against.
  */
 export const offeredGrant = (
-  payload: PermissionPayload,
+  payload: RequestPayload,
 ): ApprovalBypassKind | null => {
   const grant = GRANT_OF[payload.kind];
   return grant !== undefined &&
@@ -251,7 +251,7 @@ export const offeredGrant = (
 /** Whether a grant `held` answers `payload`. */
 export const grantAnswering = (
   held: (bypass: ApprovalBypassKind) => boolean,
-  payload: PermissionPayload,
+  payload: RequestPayload,
 ): boolean => {
   const grant = offeredGrant(payload);
   return grant !== null && grantHeld(held, grant);
@@ -260,7 +260,7 @@ export const grantAnswering = (
 /** Whether `bypass` approves `payload`. */
 export const bypassCovers = (
   bypass: ApprovalBypassKind,
-  payload: PermissionPayload,
+  payload: RequestPayload,
 ): boolean => grantAnswering((held) => held === bypass, payload);
 
 /** Whether `decision` is one `request` takes ({@link DecisionOf}). */
@@ -284,7 +284,7 @@ export function decisionFits<P extends AnswerSource>(
  * offers ({@link offeredGrant}).
  */
 export function answerMismatch(
-  payload: PermissionPayload,
+  payload: RequestPayload,
   decision: RequestDecision,
   grant?: ApprovalBypassKind | null,
 ): string | null {

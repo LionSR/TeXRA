@@ -15,10 +15,10 @@ import { Effect, Result } from 'effect';
 import { withLogChannel } from '@texra-ai/harness/host';
 import {
   type RequestDecision,
-  type PermissionPayload,
+  type RequestPayload,
   type RunId,
   type UserQuestionAnswers,
-  type UserQuestionPermission,
+  type UserQuestionRequest,
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -59,7 +59,7 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
 const askHeadlessUserQuestion = Effect.fn(
   'approvalAdapter.askHeadlessUserQuestion',
 )(function* (
-  payload: UserQuestionPermission,
+  payload: UserQuestionRequest,
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ) {
@@ -128,7 +128,7 @@ export function createHeadlessCliHostInteractions(
   const toolEditContent = Effect.fn('approvalAdapter.toolEditContent')(
     function* (
       runId: RunId,
-      payload: Extract<PermissionPayload, { kind: 'toolEdit' }>,
+      payload: Extract<RequestPayload, { kind: 'toolEdit' }>,
     ) {
       const { data } = payload;
       const read = yield* readToolEditPreview(session, runId, data.requestId);
@@ -147,7 +147,7 @@ export function createHeadlessCliHostInteractions(
    *  view drops the request (the answerer interrupts it then). */
   const approve = Effect.fn('approvalAdapter.approve')(function* (
     runId: RunId,
-    payload: PermissionPayload,
+    payload: RequestPayload,
   ): Effect.fn.Return<RequestDecision, Error> {
     const ask = (content: CliApprovalContent) =>
       askApproval(context, content, hooks);

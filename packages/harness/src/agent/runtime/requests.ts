@@ -55,7 +55,7 @@ import {
   qualifyAggregateId,
   type CommitOrdinal,
   type DecisionOf,
-  type PermissionPayload,
+  type RequestPayload,
   type RequestDecision,
   type RunId,
   type SessionEvent,
@@ -125,7 +125,7 @@ export const workAutoApproved = (
 const grantAnswers = (
   owners: PolicyOwners,
   runId: RunId,
-  payload: PermissionPayload,
+  payload: RequestPayload,
 ): boolean =>
   grantAnswering(
     (kind) => owners.approvals.bypass(runId, kind) !== null,
@@ -140,7 +140,7 @@ const grantAnswers = (
 function answerFor(
   owners: PolicyOwners,
   runId: RunId,
-  payload: PermissionPayload,
+  payload: RequestPayload,
   hook: 'allow' | 'ask' | undefined,
 ): RequestDecision | undefined {
   const policy = owners.approvals.policy(runId);
@@ -185,7 +185,7 @@ function answerFor(
  *  about to open: none when a person decides. */
 export const policyDecidedRows = (
   runId: RunId,
-  payload: PermissionPayload,
+  payload: RequestPayload,
   hook?: 'allow' | 'ask',
 ): Effect.Effect<DecidedDraft[], never, Approvals | Interactions> =>
   Effect.map(policyOwners, (owners) => {
@@ -372,7 +372,7 @@ export interface RequestOpening<E> {
  * transaction (`cancelRequestRows`); a session that closes first answers
  * with a cancellation.
  */
-export const openRequest = <P extends PermissionPayload, E = never>(
+export const openRequest = <P extends RequestPayload, E = never>(
   runId: RunId,
   payload: P,
   opening: RequestOpening<E>,

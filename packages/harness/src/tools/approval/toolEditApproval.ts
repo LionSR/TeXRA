@@ -5,7 +5,7 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   readToolEditContent,
   type RefusalDecision,
-  type ToolEditPermission,
+  type ToolEditRequest,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
@@ -106,7 +106,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     };
     const text = JSON.stringify(content);
     const address = blobAddress(text);
-    const permission: ToolEditPermission = {
+    const permission: ToolEditRequest = {
       requestId: requests.nextId('toolEdit'),
       path,
       // The call's own workspace root, as data: the display path a host

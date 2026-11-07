@@ -9,7 +9,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
-import { getModelLabel, type RetryPermission } from '@texra-ai/harness/schemas';
+import { getModelLabel, type RetryRequest } from '@texra-ai/harness/schemas';
 import { REQUEST_ACTIONS } from '@texra/shared/session/surfaceDecision';
 import { modelFailureText } from '@ui/copy/modelAccess';
 import type { IconName } from '@ui/wa/iconNames';
@@ -94,7 +94,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   }
 
   private formatRetryDetails(
-    details: RetryPermission['errorDetails'],
+    details: RetryRequest['errorDetails'],
   ): string | null {
     const lines = [
       details.provider && `provider: ${details.provider}`,

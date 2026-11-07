@@ -16,7 +16,7 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   JsonValueSchema,
-  PermissionPayloadSchema,
+  RequestPayloadSchema,
   PluginFactDraftSchema,
   blocksCaller,
   RunActionSchema,
@@ -29,7 +29,7 @@ import {
   TaskGroupSchema,
   TokenUsageStatsSchema,
   WorktreeInfoSchema,
-  type PermissionPayload,
+  type RequestPayload,
   type RunId,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
@@ -271,7 +271,7 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
 export type RequestAnswerability = 'answerable' | 'resume';
 export function requestAnswerability(
   run: ReadRunView,
-  payload: PermissionPayload,
+  payload: RequestPayload,
 ): RequestAnswerability {
   if (run.approval === 'own' || !blocksCaller(payload)) return 'answerable';
   return 'resume';
@@ -282,7 +282,7 @@ export function requestAnswerability(
 const PendingRequestSchema = Schema.Struct({
   runId: RunIdSchema,
   requestId: Schema.String,
-  payload: PermissionPayloadSchema,
+  payload: RequestPayloadSchema,
 });
 
 /** A run's queued follow-ups as a composer lists them (`displayText`, else

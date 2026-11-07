@@ -38,7 +38,7 @@ export * from './logPayload';
 export * from './taskGroup';
 export * from './plan';
 export * from './subagentProgress';
-export * from './prompts';
+export * from './requestPayloads';
 export * from './request';
 export * from './toolDependencyStatus';
 

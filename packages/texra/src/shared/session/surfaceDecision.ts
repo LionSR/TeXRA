@@ -12,7 +12,7 @@
 import {
   offeredGrant,
   type ApprovalBypassKind,
-  type PermissionPayload,
+  type RequestPayload,
   type RequestDecision,
   type PendingRequest,
   type RuntimeRequest,
@@ -81,7 +81,7 @@ export const REQUEST_ACTIONS = Object.freeze({
   userQuestion: Object.freeze({ n: 'skip' }),
   plugin: Object.freeze({ n: 'skip' }),
 }) satisfies {
-  readonly [K in PermissionPayload['kind']]: {
+  readonly [K in RequestPayload['kind']]: {
     readonly n: RequestDecline;
     readonly [key: string]: SurfaceDecision | RequestDecline;
   };
@@ -90,7 +90,7 @@ export const REQUEST_ACTIONS = Object.freeze({
 /** The decision a `kind` request's decline sends, with the user's note on
  *  it when there is one. */
 export function declineDecision(
-  kind: PermissionPayload['kind'],
+  kind: RequestPayload['kind'],
   note?: string,
 ): RequestDecision {
   const decline: RequestDecline = REQUEST_ACTIONS[kind].n;

@@ -6,7 +6,7 @@
 import type {
   CommitOrdinal,
   FollowUpDisposition,
-  PermissionPayload,
+  RequestPayload,
   PositionAt,
   RequestDecision,
   RunFamily,
@@ -17,7 +17,7 @@ import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import type { QueuedFollowUp } from './runRows';
 
 type RequestState = {
-  readonly payload: PermissionPayload;
+  readonly payload: RequestPayload;
   /** The recorded decision: the `request.decided` row's, null while
    *  the request is open. */
   readonly decision: RequestDecision | null;

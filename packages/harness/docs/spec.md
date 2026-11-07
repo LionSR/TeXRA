@@ -724,7 +724,7 @@ run a launch here holds that would need the run stopped first is refused as
 ### 8.1 Kinds
 
 The request kinds are the harness's own six and one plugin case
-(`shared/schemas/request.ts#PermissionPayloadSchema`):
+(`shared/schemas/request.ts#RequestPayloadSchema`):
 
 | Kind           | Asks                                    | Blocks its caller |
 | -------------- | --------------------------------------- | ----------------- |

@@ -162,11 +162,10 @@ interface AgentNotFoundPayload {
 type AgentProposal = typeof AgentProposalSchema.Type;
 ```
 
-## AgentProposalPermission
+## AgentProposalRequest
 
 ```ts
-type AgentProposalPermission =
-  (typeof AgentProposalPermissionSchema)['Type'];
+type AgentProposalRequest = (typeof AgentProposalRequestSchema)['Type'];
 ```
 
 ## AgentRunListingEntry
@@ -350,10 +349,10 @@ function attentionOf<View extends ReadSessionView>(
 ): Attention<View['requests'][number]>
 ```
 
-## BashPermission
+## BashRequest
 
 ```ts
-type BashPermission = typeof BashPermissionSchema.Type;
+type BashRequest = typeof BashRequestSchema.Type;
 ```
 
 ## blocksCaller
@@ -1312,14 +1311,6 @@ what is asked: a command, an edit, a plan, a retry, a question).
 type PendingRequest = SessionView['requests'][number];
 ```
 
-## PermissionPayload
-
-A pending request's payload, as {@link PermissionPayloadSchema} reads it.
-
-```ts
-type PermissionPayload = typeof PermissionPayloadSchema.Type;
-```
-
 ## Persona
 
 A persona with its defaults applied: what a run is offered and told.
@@ -1334,11 +1325,10 @@ type Persona = typeof PersonaSchema.Type;
 type Plan = typeof PlanSchema.Type;
 ```
 
-## PlanApprovalPermission
+## PlanApprovalRequest
 
 ```ts
-type PlanApprovalPermission =
-  (typeof PlanApprovalPermissionSchema)['Type'];
+type PlanApprovalRequest = (typeof PlanApprovalRequestSchema)['Type'];
 ```
 
 ## planOf
@@ -1363,7 +1353,7 @@ function planSummaryLine(objective: string): string
 
 ## PluginRequest
 
-A request a plugin opens (`PermissionPayload`'s plugin case).
+A request a plugin opens (`RequestPayload`'s plugin case).
 
 ```ts
 type PluginRequest = typeof PluginRequestSchema.Type;
@@ -1384,16 +1374,6 @@ function previewLabel(text: string): string
 
 ```ts
 type ProcessExit = typeof ProcessExitSchema.Type;
-```
-
-## ProgressPermissionKind
-
-The one request kind vocabulary, read off the payload union. The
-`request.opened` fact and every surface that lists pending requests key
-off it, so a spelling that drifts fails to compile.
-
-```ts
-type ProgressPermissionKind = PermissionPayload['kind'];
 ```
 
 ## ProposalFileFields
@@ -1559,7 +1539,7 @@ class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
 ```ts
 function requestAnswerability(
   run: ReadRunView,
-  payload: PermissionPayload,
+  payload: RequestPayload,
 ): RequestAnswerability
 ```
 
@@ -1595,6 +1575,24 @@ The wire form of a request's failure: the classes themselves.
 
 ```ts
 const RequestErrorSchema: Union<readonly [typeof RunActive, typeof Unavailable, typeof Cancelled, typeof Rejected, typeof Conflict, typeof Invalid, typeof Internal]>
+```
+
+## RequestKind
+
+The one request kind vocabulary, read off the payload union. The
+`request.opened` fact and every surface that lists pending requests key
+off it, so a spelling that drifts fails to compile.
+
+```ts
+type RequestKind = RequestPayload['kind'];
+```
+
+## RequestPayload
+
+A pending request's payload, as {@link RequestPayloadSchema} reads it.
+
+```ts
+type RequestPayload = typeof RequestPayloadSchema.Type;
 ```
 
 ## RequestShowErrorPayload
@@ -1686,10 +1684,10 @@ type RetryApprovalDecision =
     };
 ```
 
-## RetryPermission
+## RetryRequest
 
 ```ts
-type RetryPermission = typeof RetryPermissionSchema.Type;
+type RetryRequest = typeof RetryRequestSchema.Type;
 ```
 
 ## rollupOf
@@ -2344,10 +2342,10 @@ A pending tool edit's content.
 type ToolEditContent = typeof ToolEditContentSchema.Type;
 ```
 
-## ToolEditPermission
+## ToolEditRequest
 
 ```ts
-type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
+type ToolEditRequest = typeof ToolEditRequestSchema.Type;
 ```
 
 ## ToolFact
@@ -2456,13 +2454,6 @@ type UserQuestionAnswers = typeof UserQuestionAnswersSchema.Type;
 const UserQuestionAnswersSchema: $Record<String, Union<readonly [String, $Array<String>]>>
 ```
 
-## UserQuestionPermission
-
-```ts
-type UserQuestionPermission =
-  (typeof UserQuestionPermissionSchema)['Type'];
-```
-
 ## UserQuestionPrompt
 
 ```ts
@@ -2473,6 +2464,12 @@ type UserQuestionPrompt = typeof UserQuestionPromptSchema.Type;
 
 ```ts
 const UserQuestionPromptSchema: Struct<{ readonly question: String; readonly header: optional<NullOr<String>>; readonly options: $Array<Struct<{ readonly label: String; readonly description: optional<NullOr<String>>; }>>; readonly multiSelect: optional<NullOr<Boolean>>; readonly allowFreeText: optional<NullOr<Boolean>>; }>
+```
+
+## UserQuestionRequest
+
+```ts
+type UserQuestionRequest = (typeof UserQuestionRequestSchema)['Type'];
 ```
 
 ## WorkspaceAgentsSelection
