@@ -245,11 +245,13 @@ rather than per finding:
   once (a stopped end delivers nothing, and the notice goes only to such a
   run), so both are `deliveryId` now, read by `isDeliveryOf`
   (`agent/storage/runLifecycle.ts`).
-- **`check-guidance-refs.mjs` `NOT_ROWS`**: a two-entry exclusion list for
-  Node's `process` global, since `process.*` is now a row namespace. A list
-  by name is a special case written as data; the checker could instead
-  require a cited row to exist in the vocabulary before reading a token as a
-  citation.
+- **`check-guidance-refs.mjs` `NOT_ROWS`, ended in lane 9.** It was a
+  two-entry exclusion list for Node's `process` global, since `process.*` is
+  now a row namespace. Requiring a row to exist before a token reads as a
+  citation would have ended the check itself (an unknown row would never be
+  reported), so the checker reads the fact instead: a token naming a member
+  of a Node global its namespace shares (`process.env`) names that global,
+  after a declared row is read first (`process.exit` stays the row).
 - **`AgentCliSessionRegistry`, ended in lane 9.** It was a `Set<string>`
   with a `claim` that returned a release: a shallow class under a service
   tag per plugin. The tags (`CodexThreads`, `ClaudeAgentSessions`) now serve
