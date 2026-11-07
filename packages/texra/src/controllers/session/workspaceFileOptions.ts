@@ -20,18 +20,18 @@ import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
  * Reveal the first input or context file of the workspace that defines
  * `\label{label}` (`openFirstLabelMatch`), read through the session's
  * workspace view; `open` is the host's verb, given the match's absolute path
- * and character offset. `false` when no file defines it or no workspace is
+ * and 1-based line. `false` when no file defines it or no workspace is
  * open.
  */
 export const findLabelInWorkspace = Effect.fn(
   'workspaceFileOptions.findLabelInWorkspace',
-)(function* <OpenError>(
+)(function* <OpenError, OpenServices>(
   workspacePath: string | undefined,
   label: string,
   open: (
     absolutePath: string,
-    index: number,
-  ) => Effect.Effect<unknown, OpenError>,
+    line: number,
+  ) => Effect.Effect<unknown, OpenError, OpenServices>,
 ) {
   if (!workspacePath) return false;
   const [inputs, contexts] = yield* listWorkspaceFiles({
@@ -43,10 +43,10 @@ export const findLabelInWorkspace = Effect.fn(
     label,
     new Set([...inputs, ...contexts]),
     (file) => workspaceFs.readFileString(file),
-    (file, index) =>
+    (file, line) =>
       workspaceFs
         .resolve(file)
-        .pipe(Effect.flatMap((absolutePath) => open(absolutePath, index))),
+        .pipe(Effect.flatMap((absolutePath) => open(absolutePath, line))),
   );
 });
 

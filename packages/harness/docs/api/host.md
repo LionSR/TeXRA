@@ -1428,6 +1428,21 @@ A failure as a host reads it: a full disk, a model failure, or the error's words
 function normalizeProviderError(err: unknown): ProviderError
 ```
 
+## Notices
+
+What shows a notice: a session's {@link Interactions}, or a window's own
+host ({@link presenterOn}).
+
+```ts
+interface Notices {
+  emit<K extends RuntimePresentationEvent>(
+    event: K,
+    payload: RuntimePresentationEventPayloads[K],
+    options?: AgentRuntimeEmitOptions,
+  ): Effect.Effect<void>;
+}
+```
+
 ## OFFICE_EXTENSIONS
 
 File extensions for binary office document formats (case-insensitive, with leading dot).
@@ -1715,6 +1730,15 @@ type PresentationEventHandlers<
 };
 ```
 
+## presenterOn
+
+Notices shown on one host that is not a session's: a window presenting
+its own failures before a run opens.
+
+```ts
+function presenterOn(host: HostInteractions): Notices
+```
+
 ## presentFollowUpResult
 
 ```ts
@@ -1738,7 +1762,7 @@ and a run's end is the session's ({@link presentTerminalResult}).
 
 ```ts
 function presentRunFailure(
-  interactions: Pick<SessionHostInteractions, 'emit'>,
+  interactions: Notices,
   error: unknown,
   prefix = '',
 ): Effect.Effect<void>
@@ -1850,8 +1874,6 @@ interface ProcessServicesOptions {
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
-  /** The app's directories on every command's PATH (`CommandDirs`). */
-  readonly commandDirs?: () => readonly string[];
   /** The global application-state layer, acquired in this runtime's scope
    *  (`processLayer` picks the host's and seeds it). */
   readonly appState: Layer.Layer<
@@ -2309,18 +2331,6 @@ function sessionFsLayer(
   never,
   FileSystem.FileSystem | Path.Path
 >
-```
-
-## SessionHostInteractions
-
-Stable per-session presentation owner. The session serves this object
-once (`Interactions`), while one host at a time attaches and detaches;
-the host the session was opened with answers while none is. Notices
-raised while no attached or opened host presents (none, or none with
-`emit`) are replayed to the next host that does.
-
-```ts
-class SessionHostInteractions implements HostInteractions
 ```
 
 ## setModelEnabled

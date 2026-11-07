@@ -78,7 +78,8 @@ import { applyCliModelAccessSelection } from './commands/handlers/modelAccessCom
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
 import { loginFromChat } from './commands/handlers/loginCommands';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
-import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
+import { builtinSlashCommands } from './commands/registerBuiltins';
+import { SlashCommandsProvider } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
@@ -107,7 +108,7 @@ import {
   appendLocalRequestRefusal,
   paintedRunIds,
 } from './state/transcript';
-import { openCliSlashCommandForm } from './commands/slashForms';
+import { openRegisteredCliSlashForm } from './commands/slashForms';
 import {
   checkModelConnection,
   connectChatModel,
@@ -380,15 +381,16 @@ export async function runChat(
   };
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (resetSessionForClear,
-  // chatController.resume) are all defined before the first use.
+  // chatController.resume, commands) are all defined before the first use.
   const slashCommandContext = (): SlashCommandContext => ({
+    commands,
     cliContext: context,
     session,
     runSession,
     stores: services,
     runtime: services.runtime,
     processCwd: process.cwd(),
-    requestInputExit: exitController.requestInputExit,
+    requestInputExit: exitController.exit,
     getApprovalPolicy,
     setApprovalPolicy,
     resetSession: resetSessionForClear,
@@ -509,7 +511,9 @@ export async function runChat(
   // The Ink layer never directly mutates session run-state fields, every
   // state transition flows through one of the controller's narrow commands.
   const draft = runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
-  const modelConnection = makeModelConnection();
+  const modelConnection = makeModelConnection(() =>
+    openRegisteredCliSlashForm(commands.login),
+  );
   const chatController: ChatSessionController = createChatSessionController({
     session,
     runSession,
@@ -556,8 +560,8 @@ export async function runChat(
     return true;
   };
 
-  // Pre-register the slash commands the input palette uses.
-  registerBuiltinSlashCommands({
+  // The chat's slash commands, over the controller they drive.
+  const commands = builtinSlashCommands({
     runSession,
     ...(link !== undefined && { connectService: () => linkClient(link) }),
     onAccountChanged: () =>
@@ -621,20 +625,22 @@ export async function runChat(
   });
 
   const ink = render(
-    <App
-      stores={services}
-      runtime={runtime}
-      session={runSession}
-      draft={draft}
-      onSubmit={(message, holdUntil) => {
-        runtime.runFork(chatController.submit(message, holdUntil));
-      }}
-      commandName={context.commandName}
-      scrollback={scrollback}
-      onCtrlC={() => exitController.handleSigint()}
-      onSuspend={() => exitController.handleSigtstp()}
-      history={inputHistory}
-    />,
+    <SlashCommandsProvider value={commands}>
+      <App
+        stores={services}
+        runtime={runtime}
+        session={runSession}
+        draft={draft}
+        onSubmit={(message, holdUntil) => {
+          runtime.runFork(chatController.submit(message, holdUntil));
+        }}
+        commandName={context.commandName}
+        scrollback={scrollback}
+        onCtrlC={() => exitController.handleSigint()}
+        onSuspend={() => exitController.handleSigtstp()}
+        history={inputHistory}
+      />
+    </SlashCommandsProvider>,
     {
       stdout: tuiOutputStreamForColor(
         process.stdout,
@@ -669,8 +675,12 @@ export async function runChat(
   );
   inkRef.current = ink;
   // No model yet: the "Connect a model" panel is the first thing on screen.
-  if (modelConnectionNeeded.get()) openCliSlashCommandForm('login');
+  if (modelConnectionNeeded.get()) openRegisteredCliSlashForm(commands.login);
 
+  // Making the controller takes the signals over from the platform handler,
+  // not any earlier: everything above (the platform init, onboarding, model
+  // resolution) ran with the platform's own handler still live, so a signal
+  // during that window still got a graceful shutdown.
   const exitController = createSessionExitController({
     ink,
     session,
@@ -700,11 +710,6 @@ export async function runChat(
     repaintAfterTerminalResume: scrollback.restart,
     interruptActive: (reason) => chatController.stop(reason),
   });
-  // Transfer signal ownership from the platform handler and arm this session's
-  // handlers, not any earlier: everything above (the platform init,
-  // onboarding, model resolution) ran with the platform's own handler still
-  // live, so a signal during that window still got a graceful shutdown.
-  exitController.install();
 
   // Interactive resume: kick off the continued tool-use run now that Ink is
   // mounted (so the rehydrated transcript + streamed continuation render) and
@@ -746,10 +751,10 @@ export async function runChat(
   } finally {
     // The exit policy reads the view (a resumable idle root) after it has
     // released the store, so the bridge outlives the chat's scope. The
-    // teardown finishes only on the graceful path, whose drain closes that
-    // scope first (a signal exit ends in process.exit and never returns
-    // here), so nothing subscribed to the view outlives the bridge.
-    exitCode = await exitController.gracefulTeardown();
+    // exit finishes only on the graceful path, whose drain closes that scope
+    // first (a signal exit ends in process.exit and never returns here), so
+    // nothing subscribed to the view outlives the bridge.
+    exitCode = await exitController.exit();
     unbindSessionView();
   }
   return { exitCode };

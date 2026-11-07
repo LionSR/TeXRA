@@ -1,4 +1,13 @@
-import { Cause, Context, Effect, Predicate } from 'effect';
+import {
+  Cause,
+  Context,
+  Effect,
+  Option,
+  Predicate,
+  Queue,
+  type Scope,
+  SubscriptionRef,
+} from 'effect';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -22,7 +31,7 @@ import {
   type RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
 
-const CHANNEL = 'SessionHostInteractions';
+const CHANNEL = 'Interactions';
 
 /**
  * Ceiling on presentation notices queued while no host is attached (a
@@ -106,175 +115,199 @@ function presentOn<K extends RuntimePresentationEvent>(
   );
 }
 
+/** What shows a notice: a session's {@link Interactions}, or a window's own
+ *  host ({@link presenterOn}). */
+export interface Notices {
+  emit<K extends RuntimePresentationEvent>(
+    event: K,
+    payload: RuntimePresentationEventPayloads[K],
+    options?: AgentRuntimeEmitOptions,
+  ): Effect.Effect<void>;
+}
+
+/** The program that shows one notice on whichever host presents it, live or
+ *  replayed. A host that throws on a notice carrying a fallback shows the
+ *  generic error toast on the same host instead. */
+const noticeOf =
+  <K extends RuntimePresentationEvent>(
+    event: K,
+    payload: RuntimePresentationEventPayloads[K],
+    options: AgentRuntimeEmitOptions = {},
+  ): PresentationProgram =>
+  (host) =>
+    presentOn(host, event, payload).pipe(
+      Effect.catch((failure) =>
+        options.fallbackMessage === undefined
+          ? Effect.fail(failure)
+          : Effect.logWarning(
+              'Presentation emit failed; showing the generic error',
+            ).pipe(
+              Effect.annotateLogs({ data: failure.cause }),
+              withLogChannel(CHANNEL),
+              Effect.andThen(
+                presentOn(host, 'requestShowError', {
+                  message: options.fallbackMessage,
+                }),
+              ),
+            ),
+      ),
+    );
+
+/** Run a notice on `host`, logging a failure under `message`. */
+const presentLogged = (
+  notice: PresentationProgram,
+  host: Presenter,
+  message: string,
+): Effect.Effect<void> =>
+  notice(host).pipe(
+    Effect.catch((failure) =>
+      Effect.logWarning(message).pipe(
+        Effect.annotateLogs({ data: failure.cause }),
+        withLogChannel(CHANNEL),
+      ),
+    ),
+  );
+
+/** Notices shown on one host that is not a session's: a window presenting
+ *  its own failures before a run opens. */
+export function presenterOn(host: HostInteractions): Notices {
+  return {
+    emit: (event, payload, options) =>
+      isPresenter(host)
+        ? presentLogged(
+            noticeOf(event, payload, options),
+            host,
+            'Live presentation emit failed',
+          )
+        : Effect.logWarning('A notice has no host to present it').pipe(
+            Effect.annotateLogs({ data: { event } }),
+            withLogChannel(CHANNEL),
+          ),
+  };
+}
+
 /**
- * Stable per-session presentation owner. The session serves this object
- * once (`Interactions`), while one host at a time attaches and detaches;
- * the host the session was opened with answers while none is. Notices
- * raised while no attached or opened host presents (none, or none with
- * `emit`) are replayed to the next host that does.
+ * A session's presentation host. One host at a time attaches
+ * ({@link attachInteractions}) and the host the session was opened with
+ * answers while none is. Notices raised while neither presents (none, or
+ * none with `emit`) wait in `notices` for the next host that does.
  */
-export class SessionHostInteractions implements HostInteractions {
+export interface SessionInteractions extends Notices {
   /** The attached host, while one is. */
-  private attached: HostInteractions | undefined;
-  private readonly opened: HostInteractions | undefined;
-  private readonly pendingPresentationReplays: PresentationProgram[] = [];
-  private disposed = false;
+  readonly host: SubscriptionRef.SubscriptionRef<
+    Option.Option<HostInteractions>
+  >;
+  readonly notices: Queue.Queue<PresentationProgram>;
+  readonly approvalPromptsUnavailable: boolean;
+}
 
-  /** `opened`: the host the session was opened with, which answers while
-   *  no host is attached. */
-  constructor(opened?: HostInteractions) {
-    this.opened = opened;
-  }
-
+/** The session's presentation host ({@link SessionInteractions}): the
+ *  one its runs, requests and host commands present through. */
+export class Interactions extends Context.Service<
+  Interactions,
+  SessionInteractions
+>()('@texra-ai/harness/session/Interactions') {
   /**
-   * Attach the session's host. The returned Effect yields the detach
-   * disposer once the notices queued while no host was attached have been
-   * replayed to it, so an attach and its replay are one step rather than the
-   * attach and a microtask that followed it. A session has one host at a
-   * time: attaching a second while one is attached is a defect.
+   * The interactions of a session opened with `opened`, for the session's
+   * scope. Its close disposes the attached host, then the opened one, each
+   * as its own finalizer, so both are disposed even when the first fails.
    */
-  use(interactions: HostInteractions): Effect.Effect<() => void> {
-    return Effect.suspend(() => {
-      if (this.disposed) {
-        interactions.dispose?.();
-        return Effect.succeed(() => {});
+  static readonly make = Effect.fnUntraced(function* (
+    opened: HostInteractions | undefined,
+  ): Effect.fn.Return<SessionInteractions, never, Scope.Scope> {
+    const host = yield* SubscriptionRef.make(Option.none<HostInteractions>());
+    const notices = yield* Queue.sliding<PresentationProgram>(
+      MAX_PENDING_PRESENTATION_REPLAYS,
+    );
+    yield* Effect.addFinalizer(() =>
+      Effect.gen(function* () {
+        const attached = yield* SubscriptionRef.getAndSet(host, Option.none());
+        yield* Queue.shutdown(notices);
+        yield* Effect.scoped(
+          Effect.forEach(
+            [opened, Option.getOrUndefined(attached)],
+            (each) =>
+              Effect.addFinalizer(() => Effect.sync(() => each?.dispose?.())),
+            { discard: true },
+          ),
+        );
+      }),
+    );
+    const attachedNow = () =>
+      Option.getOrUndefined(SubscriptionRef.getUnsafe(host));
+    return {
+      host,
+      notices,
+      get approvalPromptsUnavailable() {
+        return (attachedNow() ?? opened)?.approvalPromptsUnavailable === true;
+      },
+      emit: (event, payload, options) =>
+        Effect.suspend(() => {
+          const notice = noticeOf(event, payload, options);
+          const live = [attachedNow(), opened].find(isPresenter);
+          if (live)
+            return presentLogged(notice, live, 'Live presentation emit failed');
+          if (notices.state._tag === 'Done') return Effect.void;
+          const dropsOldest = Queue.isFullUnsafe(notices);
+          Queue.offerUnsafe(notices, notice);
+          return dropsOldest
+            ? Effect.logWarning(
+                `Dropped the oldest queued presentation notice: more than ${MAX_PENDING_PRESENTATION_REPLAYS} ` +
+                  'notices are waiting for an interaction host to attach.',
+              ).pipe(withLogChannel(CHANNEL))
+            : Effect.void;
+        }),
+    };
+  });
+}
+
+/**
+ * Attach `attached` as the session's host for the caller's scope, once the
+ * notices queued while no host presented are replayed to it. A session has
+ * one host at a time: attaching a second while one is attached is a defect.
+ * A closed session disposes the host at once; one detached by its scope is
+ * disposed then.
+ */
+export const attachInteractions = (
+  interactions: SessionInteractions,
+  attached: HostInteractions,
+): Effect.Effect<void, never, Scope.Scope> =>
+  Effect.acquireRelease(
+    Effect.gen(function* () {
+      if (interactions.notices.state._tag === 'Done') {
+        attached.dispose?.();
+        return;
       }
-      if (this.attached !== undefined)
-        return Effect.die(
+      const took = yield* SubscriptionRef.modify(interactions.host, (current) =>
+        Option.isSome(current)
+          ? [false, current]
+          : [true, Option.some(attached)],
+      );
+      if (!took)
+        return yield* Effect.die(
           new Error(
             'A host is already attached to this session; a session has one host at a time.',
           ),
         );
-      this.attached = interactions;
-      let detached = false;
-      const detach = (): void => {
-        if (detached) return;
-        detached = true;
-        if (this.attached === interactions) this.attached = undefined;
-        interactions.dispose?.();
-      };
-      return (
-        isPresenter(interactions)
-          ? this.replayPendingPresentations(interactions)
-          : Effect.void
-      ).pipe(Effect.as(detach));
-    });
-  }
-
-  emit<K extends RuntimePresentationEvent>(
-    event: K,
-    payload: RuntimePresentationEventPayloads[K],
-    options: AgentRuntimeEmitOptions = {},
-  ): Effect.Effect<void> {
-    // Live or replayed, a host that throws on a notice carrying a fallback
-    // shows the generic error toast on the same host instead.
-    const present: PresentationProgram = (interactions) =>
-      presentOn(interactions, event, payload).pipe(
-        Effect.catch((failure) =>
-          options.fallbackMessage === undefined
-            ? Effect.fail(failure)
-            : Effect.logWarning(
-                'Presentation emit failed; showing the generic error',
-              ).pipe(
-                Effect.annotateLogs({ data: failure.cause }),
-                withLogChannel(CHANNEL),
-                Effect.andThen(
-                  presentOn(interactions, 'requestShowError', {
-                    message: options.fallbackMessage,
-                  }),
-                ),
-              ),
-        ),
-      );
-    return Effect.suspend(() => {
-      const active = [this.attached, this.opened].find(isPresenter);
-      if (active) {
-        return present(active).pipe(
-          Effect.catch((failure) =>
-            Effect.logWarning('Live presentation emit failed').pipe(
-              Effect.annotateLogs({ data: failure.cause }),
-              withLogChannel(CHANNEL),
-            ),
-          ),
+      if (!isPresenter(attached)) return;
+      for (const notice of yield* Queue.clear(interactions.notices))
+        yield* presentLogged(
+          notice,
+          attached,
+          'Failed to replay a session presentation notice',
         );
-      }
-      // The replay loop warn-logs a replay that fails.
-      return this.disposed
-        ? Effect.void
-        : this.queuePresentationReplay(present);
-    });
-  }
-
-  get approvalPromptsUnavailable(): boolean {
-    return (this.attached ?? this.opened)?.approvalPromptsUnavailable === true;
-  }
-
-  /**
-   * Dispose the attached host, then the one the session was opened with.
-   * Each host's dispose is a scope finalizer, so both are disposed even when
-   * the first fails, and every failure is its own reason in the defect the
-   * close raises, which the session's teardown collects beside its other
-   * owners'.
-   */
-  dispose(): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      if (this.disposed) return Effect.void;
-      this.disposed = true;
-      const hosts = [this.opened, this.attached];
-      this.attached = undefined;
-      this.pendingPresentationReplays.length = 0;
-      return Effect.scoped(
-        Effect.forEach(
-          hosts,
-          (host) =>
-            Effect.addFinalizer(() => Effect.sync(() => host?.dispose?.())),
-          { discard: true },
+    }),
+    () =>
+      SubscriptionRef.modify(interactions.host, (current) =>
+        Option.isSome(current) && current.value === attached
+          ? [true, Option.none()]
+          : [false, current],
+      ).pipe(
+        Effect.flatMap((held) =>
+          held ? Effect.sync(() => attached.dispose?.()) : Effect.void,
         ),
-      );
-    });
-  }
-
-  private queuePresentationReplay(
-    replay: PresentationProgram,
-  ): Effect.Effect<void> {
-    const dropsOldest =
-      this.pendingPresentationReplays.length >=
-      MAX_PENDING_PRESENTATION_REPLAYS;
-    if (dropsOldest) this.pendingPresentationReplays.shift();
-    this.pendingPresentationReplays.push(replay);
-    return dropsOldest
-      ? Effect.logWarning(
-          `Dropped the oldest queued presentation notice: more than ${MAX_PENDING_PRESENTATION_REPLAYS} ` +
-            'notices are waiting for an interaction host to attach.',
-        ).pipe(withLogChannel(CHANNEL))
-      : Effect.void;
-  }
-
-  private readonly replayPendingPresentations = Effect.fn(
-    'SessionHostInteractions.replayPendingPresentations',
-  )(
-    { self: this },
-    function* (interactions: Presenter): Effect.fn.Return<void> {
-      while (
-        this.attached === interactions &&
-        this.pendingPresentationReplays.length > 0
-      ) {
-        const replay = this.pendingPresentationReplays.shift();
-        if (!replay) return;
-        yield* replay(interactions).pipe(
-          Effect.catch((failure) =>
-            Effect.logWarning(
-              'Failed to replay a session presentation notice',
-            ).pipe(
-              Effect.annotateLogs({ data: failure.cause }),
-              withLogChannel(CHANNEL),
-            ),
-          ),
-        );
-      }
-    },
-  );
-}
+      ),
+  ).pipe(Effect.asVoid);
 
 /**
  * Present a classified failure on a host: its instruction (a missing API key)
@@ -282,7 +315,7 @@ export class SessionHostInteractions implements HostInteractions {
  * guidance is lost for want of an attached host.
  */
 function presentAgentFailure(
-  interactions: Pick<SessionHostInteractions, 'emit'>,
+  interactions: Notices,
   error: Parameters<typeof agentErrorPresentation>[0],
 ): Effect.Effect<void> {
   const toast = agentErrorPresentation(error);
@@ -308,13 +341,6 @@ export const presentTerminalResult = Effect.fn('presentTerminalResult')(
     yield* presentAgentFailure(yield* Interactions, row.error);
   },
 );
-
-/** The session's presentation host ({@link SessionHostInteractions}): the
- *  one its runs, requests and host commands present through. */
-export class Interactions extends Context.Service<
-  Interactions,
-  SessionHostInteractions
->()('@texra-ai/harness/session/Interactions') {}
 
 /** The failure a run's raw error stands for: a `Session` start's
  *  `RunFailure` by the failure it carries, an aggregate by its first. */
@@ -348,7 +374,7 @@ export function launchNoticeOf(error: unknown): LaunchNotice | undefined {
  * and a run's end is the session's ({@link presentTerminalResult}).
  */
 export function presentRunFailure(
-  interactions: Pick<SessionHostInteractions, 'emit'>,
+  interactions: Notices,
   error: unknown,
   prefix = '',
 ): Effect.Effect<void> {

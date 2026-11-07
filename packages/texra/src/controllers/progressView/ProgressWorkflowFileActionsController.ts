@@ -2,14 +2,16 @@
 import path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Option } from 'effect';
 
 // Local imports
 import {
+  pathToLocationIn,
   reportDiffTimeout,
   unifiedDiffText,
   withLogChannel,
 } from '@texra-ai/harness/host';
+import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
@@ -41,13 +43,16 @@ type FileActionRequest = Extract<HostRequest, { kind: 'fileAction' }>;
 
 /** The workflow toolbar's file verbs a host performs. */
 export interface ProgressWorkflowFileActionsHost {
-  compareFiles(baseFile: string, editedFile: string): FileAction<void>;
-  acceptEditedFile(
+  /** Show `editedFile` against `baseFile` in the host's diff view. */
+  openDiff(
     baseFile: string,
     editedFile: string,
-  ): FileAction<boolean | void>;
+    title: string,
+  ): FileAction<void>;
+  /** Ask to write an accepted file; false when the user declines. */
+  confirmAccept(message: string): Effect.Effect<boolean, HostRequestFailure>;
   openDirectory(directory: string): FileAction<void>;
-  showInfo(message: string): FileAction<void>;
+  showInfo(message: string): Effect.Effect<void, HostRequestFailure>;
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {
@@ -56,6 +61,8 @@ interface ProgressWorkflowFileActionsControllerDeps {
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
+  /** The window's workspace, which an accepted file's location is in. */
+  workspace: string | undefined;
   /** The window's run actions this controller starts or follows up. */
   runs: Pick<HostRunActions, 'merge' | 'followUpLauncher'>;
 }
@@ -120,9 +127,17 @@ export class ProgressWorkflowFileActionsController {
       file,
       base,
       'Compare original',
-      (targetFile, baseFile) =>
-        this.deps.host.compareFiles(baseFile, targetFile),
+      (targetFile, baseFile) => this.compare(baseFile, targetFile),
     ).pipe(Effect.asVoid);
+  }
+
+  /** The diff of `edited` against `base`, titled the same on every host. */
+  private compare(base: string, edited: string): FileAction<void> {
+    return this.deps.host.openDiff(
+      base,
+      edited,
+      `Compare: ${path.basename(edited)} ↔ ${path.basename(base)}`,
+    );
   }
 
   comparePrevious(file: string, previous?: string): FileAction<void> {
@@ -130,7 +145,7 @@ export class ProgressWorkflowFileActionsController {
       return this.deps.host.showInfo('Compare previous needs a base file.');
     }
 
-    return this.deps.host.compareFiles(previous, file);
+    return this.compare(previous, file);
   }
 
   readonly acceptFile: (
@@ -140,18 +155,19 @@ export class ProgressWorkflowFileActionsController {
   ) => FileAction<void> = Effect.fn(
     'ProgressWorkflowFileActionsController.acceptFile',
   )({ self: this }, function* (file: string, base?: string, activeRun?: RunId) {
-    // Read before the accept writes: what the user changed of the model's
-    // version, which the chat that launched the task is told.
-    const edit =
-      activeRun && file ? yield* this.userEdit(activeRun, file) : undefined;
-    const accepted = yield* this.executeWithBaseFile(
-      file,
-      base,
-      'Accept',
-      (targetFile, baseFile) =>
-        this.deps.host.acceptEditedFile(baseFile, targetFile),
+    if (!base)
+      return yield* this.deps.host.showInfo('Accept needs a base file.');
+    const { host, workspace } = this.deps;
+    // The content the accept wrote, read once by the write itself, so the
+    // diff the launching chat is told of is exactly what was accepted.
+    const written = yield* acceptEditedFileReplace(
+      pathToLocationIn(workspace, base),
+      pathToLocationIn(workspace, file),
+      { confirm: host.confirmAccept, showInfo: host.showInfo },
     );
-    if (accepted && activeRun && edit !== undefined)
+    if (Option.isNone(written) || !activeRun) return;
+    const edit = yield* this.userEdit(activeRun, file, written.value);
+    if (edit !== undefined)
       yield* this.deps.runs.followUpLauncher(activeRun, edit);
   });
 
@@ -180,13 +196,15 @@ export class ProgressWorkflowFileActionsController {
 
   /**
    * The note telling a task's launcher what the user changed of the model's
-   * version of `file` (`revisionLayout(...).modelCopy`) before accepting it; none
+   * version of `file` (`revisionLayout(...).modelCopy`) in `accepted`, the
+   * content the accept wrote; none
    * when they changed nothing or the run kept no model version (a run from
    * an earlier build, or an output outside the workspace and the run).
    */
   private userEdit(
     stream: RunId,
     file: string,
+    accepted: string,
   ): Effect.Effect<string | undefined, never, FileSystem.FileSystem> {
     const output = this.latestOutput(stream, file);
     const copyPath =
@@ -203,7 +221,7 @@ export class ProgressWorkflowFileActionsController {
         Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
       );
       if (kept === undefined) return undefined;
-      const diff = unifiedDiffText(kept, yield* readOutputFile(file));
+      const diff = unifiedDiffText(kept, accepted);
       yield* reportDiffTimeout(diff.timeout);
       return diff.text === undefined
         ? undefined

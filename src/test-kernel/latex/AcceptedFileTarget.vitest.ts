@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Option } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { AppSignals, createWorkspaceLocation } from '@texra-ai/harness/host';
@@ -46,7 +46,7 @@ describe('acceptEditedFileReplace', () => {
           Effect.provide(AppSignals.layer),
         );
 
-        expect(accepted).toBe(true);
+        expect(Option.isSome(accepted)).toBe(true);
         expect(removed).toEqual([]);
       }),
   );

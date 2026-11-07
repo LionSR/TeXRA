@@ -218,7 +218,7 @@ export const revealProgressView = Effect.fn('revealProgressView')(function* (
  * `RuntimePresentationEvent` key is required by
  * `PresentationEventHandlers<RuntimePresentationEventPayloads, HostPresentation>`:
  * omitting one here is a compile error rather than a silently dropped event.
- * `SessionHostInteractions` (the runtime) owns replaying an event emitted
+ * The session's `Interactions` (the runtime) owns replaying an event emitted
  * before this host attaches.
  */
 export function createAgentPresentationHost(
