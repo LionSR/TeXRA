@@ -14,12 +14,15 @@ import {
   Sessions,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import type { GuiSession } from './openGuiWindow';
+
+const CHANNEL = 'openProjectSession';
 
 /**
  * Open the session of the project at `roots`. `reached` is the host's one
@@ -44,7 +47,8 @@ export const openProjectSession = Effect.fn('openProjectSession')(function* (
     roots.workspace !== undefined && Result.isFailure(reached)
       ? `TeXRA runs this project's tasks in this window only, so other windows and terminals will not see them: ${reached.failure.message}`
       : null;
-  if (local !== null) yield* Effect.logWarning(local);
+  if (local !== null)
+    yield* Effect.logWarning(local).pipe(withLogChannel(CHANNEL));
   const session = yield* openLocalSession(yield* Sessions, roots);
   // A store moved aside at open (pre-1.0 or corrupt) is said once.
   if (session.storeMovedAside)
