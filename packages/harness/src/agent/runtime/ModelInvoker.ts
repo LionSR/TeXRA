@@ -30,6 +30,7 @@ import {
   Layer,
   Result,
   ScopedRef,
+  Semaphore,
   Stream,
   SynchronizedRef,
 } from 'effect';
@@ -216,6 +217,9 @@ export const modelInvokerLayer = (): Layer.Layer<
       const attemptStarts = new WeakMap<InvocationRef, number>();
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
+      /** Held across a rebind's check and its replacement: a turn's retry
+       *  and a background compaction's renewal may both rebind the run. */
+      const rebinding = Semaphore.makeUnsafe(1);
       const attribution = {
         agentName: usageAgentName(run.config.agent, run.config.agentSource),
         runId,
@@ -558,46 +562,52 @@ export const modelInvokerLayer = (): Layer.Layer<
 
       /** Rebind on `selection`, retiring the failed binding, on the routes
        *  the run declines as its rows now stand; a failure keeps it, loudly.
-       *  A renew names the token the provider rejected. A switch the rows
-       *  recorded since `failed` was bound stands. */
+       *  A renew names the token the provider rejected. A binding that
+       *  already replaced `failed` (a switch, another call's rebind onto a
+       *  personal key) stands: rebinding from `failed` would bring back its
+       *  route's overlay. */
       const rebind = (
         cell: RunCell,
         selection: RetryCredentials | 'renewed',
         failed: BoundModel,
       ): Effect.Effect<void, CallFailure> =>
-        Effect.flatMap(cell.current, ({ declinedRoutes, modelId }) =>
-          modelId !== failed.modelId
-            ? Effect.void
-            : ScopedRef.set(
-                run.model,
-                access
-                  .bind({
-                    modelId: failed.modelId,
-                    // A personal-key retry drops the route's overlay (window,
-                    // prices, PDF admission, Kimi endpoint) for the catalog's.
-                    config:
-                      selection === 'personal' ? undefined : failed.config,
-                    backend: failed.backend,
-                    declinedRoutes,
-                    textOnly: failed.textOnly,
-                    temperature: run.persona.temperature,
-                    ...(selection === 'renewed' && {
-                      rejected: failed.subscriptionToken,
-                    }),
-                  })
-                  // The ref masks its acquisition; a stop must still cut
-                  // a bind in progress.
-                  .pipe(Effect.interruptible),
-              ),
-        ).pipe(
-          Effect.tapError((error) =>
-            Effect.sync(() =>
-              logger.warn('Failed to refresh the model binding', {
-                data: error,
-              }),
+        rebinding
+          .withPermit(
+            Effect.flatMap(cell.current, ({ declinedRoutes }) =>
+              ScopedRef.getUnsafe(run.model) !== failed
+                ? Effect.void
+                : ScopedRef.set(
+                    run.model,
+                    access
+                      .bind({
+                        modelId: failed.modelId,
+                        // A personal-key retry drops the route's overlay (window,
+                        // prices, PDF admission, Kimi endpoint) for the catalog's.
+                        config:
+                          selection === 'personal' ? undefined : failed.config,
+                        backend: failed.backend,
+                        declinedRoutes,
+                        textOnly: failed.textOnly,
+                        temperature: run.persona.temperature,
+                        ...(selection === 'renewed' && {
+                          rejected: failed.subscriptionToken,
+                        }),
+                      })
+                      // The ref masks its acquisition; a stop must still cut
+                      // a bind in progress.
+                      .pipe(Effect.interruptible),
+                  ),
             ),
-          ),
-        );
+          )
+          .pipe(
+            Effect.tapError((error) =>
+              Effect.sync(() =>
+                logger.warn('Failed to refresh the model binding', {
+                  data: error,
+                }),
+              ),
+            ),
+          );
 
       /**
        * The batch that ends attempt `ref` as `failed` with `error`. One that

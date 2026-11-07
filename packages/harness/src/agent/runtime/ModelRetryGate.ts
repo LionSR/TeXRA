@@ -179,11 +179,35 @@ export const makeRetryGate = (): ModelRetryGate => {
           const exit = yield* Effect.exit(
             restore(
               Effect.gen(function* () {
-                for (const policy of policies) {
-                  const route = routeOf(policy.key);
-                  passed.push([route, policy, yield* admit(route)]);
+                for (;;) {
+                  for (const policy of policies) {
+                    const route = routeOf(policy.key);
+                    passed.push([route, policy, yield* admit(route)]);
+                  }
+                  // A route passed healthy may have cooled while a later one
+                  // was waited on: hand back the probes held and wait again,
+                  // so no call goes out inside a cooldown it was admitted
+                  // before.
+                  if (
+                    passed.every(
+                      ([route, , pass]) =>
+                        pass === 'probe' || route.healthy.isOpen(),
+                    )
+                  )
+                    return yield* attempt;
+                  yield* Effect.uninterruptible(
+                    Effect.suspend(() =>
+                      Effect.forEach(
+                        passed.splice(0),
+                        ([route, , pass]) =>
+                          pass === 'probe'
+                            ? route.probe.release(1)
+                            : Effect.void,
+                        { discard: true },
+                      ),
+                    ),
+                  );
                 }
-                return yield* attempt;
               }),
             ),
           );
