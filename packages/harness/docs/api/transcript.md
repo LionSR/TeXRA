@@ -945,12 +945,9 @@ interface UserRow extends TranscriptRowBase {
 
 The logger of a view's runtime, which builds no process diagnostics layer:
 each entry takes the log sink's write path, redacted unless a host marked
-the sink trusted, instead of Effect's default console logger.
-
-ERROR/FATAL are written as WARN: a view has no host log channel, and
-Electron's smoke harness treats `console.error` (the console sink's ERROR
-path) as a failed view. Fork-failure reports and fold defects still show
-in DevTools after redaction.
+the sink trusted, instead of Effect's default console logger. An entry
+keeps its level: fork-failure reports and fold defects show in DevTools
+as the errors they are.
 
 ```ts
 const viewDiagnosticsLayer: Layer.Layer<never>

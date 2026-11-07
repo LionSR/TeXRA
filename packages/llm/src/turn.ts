@@ -10,12 +10,12 @@ import { Effect, Schema, Stream, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
-  BackgroundCapabilitySchema,
   BindingSchema,
   CountSchema,
   JsonObjectSchema,
   ModelOriginSchema,
   sameModelOrigin,
+  TurnProtocolSchema,
   TurnUsageSchema,
 } from './protocol.js';
 
@@ -23,7 +23,6 @@ import {
 import {
   ContentSchema,
   ContinuationSchema,
-  EVIDENCE_PROTOCOL,
   GoogleContinuationSchema,
   PreparedHistorySchema,
   ResponsesContinuationSchema,
@@ -90,6 +89,16 @@ const EffortSchema = Schema.NullOr(
   ReasoningEffortLevelSchema.pick(['low', 'medium', 'high', 'xhigh', 'max']),
 );
 const CacheSchema = Schema.Literals(['disabled', '5m']);
+
+/** The protocol each provider's own usage report belongs to. */
+const PROVIDER_USAGE_PROTOCOL = Object.freeze({
+  anthropic: 'anthropic-messages',
+  xai: 'openai-responses',
+} as const satisfies Record<
+  NonNullable<(typeof TurnUsageSchema.Type)['providerUsage']>['kind'],
+  typeof TurnProtocolSchema.Type
+>);
+
 /** The thinking levels Google's Interactions request takes. */
 export const ThinkingLevelSchema = Schema.Literals([
   'minimal',
@@ -147,6 +156,11 @@ const AnthropicControlsSchema = Schema.Struct({
  * decoded, so it states the shape only. A null default `temperature` or
  * `maxOutputTokens` is a route that takes none.
  */
+/** Whether a configuration's protocol may run a turn in the background. */
+export const BackgroundCapabilitySchema = Schema.Literals([
+  'supported',
+  'unsupported',
+]);
 const ModelConfigurationSchema = Schema.Union([
   BindingSchema.mapFields(
     Struct.assign({
@@ -195,6 +209,26 @@ const ModelConfigurationSchema = Schema.Union([
   ),
 ]);
 export type ModelConfiguration = typeof ModelConfigurationSchema.Type;
+
+/**
+ * Whether a configuration admits background work: Responses and Google mark
+ * it, and Google retrieves a background result through server-side state.
+ * The one answer: a protocol model carries its `background` member exactly
+ * when this holds, and the binding reports that member.
+ */
+export function backgroundCapable(configuration: ModelConfiguration): boolean {
+  switch (configuration.protocol) {
+    case 'openai-responses':
+      return configuration.background === 'supported';
+    case 'google-interactions':
+      return (
+        configuration.background === 'supported' && configuration.defaults.store
+      );
+    case 'anthropic-messages':
+      return false;
+  }
+}
+
 type ConfigurationOf<P> = Extract<ModelConfiguration, { protocol: P }>;
 export type GoogleInteractionsConfiguration =
   ConfigurationOf<'google-interactions'>;
@@ -344,9 +378,10 @@ export const TurnResultSchema = Schema.Struct({
         result.requestedOrigin.protocol !== 'anthropic-messages') ||
       (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
       (usageKind != null &&
-        result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[usageKind]) ||
-      (finishKind != null &&
-        result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[finishKind])
+        result.requestedOrigin.protocol !==
+          PROVIDER_USAGE_PROTOCOL[usageKind]) ||
+      // Finish evidence is named by the protocol that wrote it.
+      (finishKind != null && result.requestedOrigin.protocol !== finishKind)
     ) {
       issues.push(
         'Provider identity and evidence require their original protocol and outcome.',

@@ -23,7 +23,7 @@ import {
   listingKeyOf,
   listingTypeOf,
   pendingKeyOf,
-  SessionEventDraftSchema,
+  SessionRowDraftSchema,
   sumUsageStats,
   TokenUsageStatsSchema,
   type AggregateId,
@@ -105,7 +105,7 @@ type ProjectionName = (typeof PROJECTION_NAMES)[number];
 const PROJECTORS = {
   listing: {
     version: 1,
-    inputs: SessionEventDraftSchema.members
+    inputs: SessionRowDraftSchema.members
       .map((schema) => schema.fields.type.literal)
       .filter((type) => listingTypeOf({ type }) !== null),
     prior: null,

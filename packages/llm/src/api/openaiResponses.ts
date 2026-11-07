@@ -22,13 +22,14 @@ import {
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
   type TurnEvent,
+  backgroundCapable,
 } from '../turn.js';
 import {
   ModelError,
   RemoteOperationSchema,
   fillModelError,
 } from '../errors.js';
-import { backgroundCapable, originOf } from '../protocol.js';
+import { originOf } from '../protocol.js';
 import { backgroundLifecycle } from './background.js';
 import {
   decodeWireOrFail,

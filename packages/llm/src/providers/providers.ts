@@ -22,10 +22,10 @@ export function providerDisplayName(provider: string): string {
 
 /** Environment variable for a provider's API key. */
 export function apiKeyEnvName(provider: ApiKeyProviderId): string {
-  return (
-    findModelProviderPlugin(provider)?.apiKeyEnvName ??
-    `${provider.toUpperCase()}_API_KEY`
-  );
+  const plugin = findModelProviderPlugin(provider);
+  return plugin?.kind === 'plan-key'
+    ? plugin.apiKeyEnvName
+    : `${provider.toUpperCase()}_API_KEY`;
 }
 
 /**

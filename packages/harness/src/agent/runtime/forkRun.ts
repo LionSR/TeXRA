@@ -25,6 +25,7 @@ import {
   blocksCaller,
   type RunId,
   generateRunId,
+  factName,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { Rejected } from '@shared/session/runtimeRequest';
@@ -204,17 +205,17 @@ const forkedFacts = Effect.fn('forkRun.facts')(function* (
 ) {
   const copied = new Set(
     [...(yield* ToolRegistry).entries.values()].flatMap(({ factKinds = [] }) =>
-      factKinds
-        .filter(({ fork }) => fork === 'copy')
-        .map(({ plugin, kind }) => `${plugin}/${kind}`),
+      factKinds.filter(({ fork }) => fork === 'copy').map(factName),
     ),
   );
   const aggregate = qualifyAggregateId('run', from);
   const log = yield* SessionLog;
   const { facts } = yield* log.runRows(aggregate, 'facts', cut);
-  const kept = Object.entries(facts).flatMap(
-    ([name, { plugin, kind, version, value }]) =>
-      copied.has(name) ? [{ plugin, kind, version, value }] : [],
+  const kept = Object.values(facts).flatMap(
+    ({ plugin, kind, version, value }) =>
+      copied.has(factName({ plugin, kind }))
+        ? [{ plugin, kind, version, value }]
+        : [],
   );
   // Stated on the fork as a call states its run's facts: no plugin's own
   // aggregate among them, so nothing is appended beside.

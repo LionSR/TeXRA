@@ -18,7 +18,7 @@ import {
   CURRENT_VALUE_VERSION,
   RETIRED_ROW_KINDS,
   ROW_KINDS,
-  SessionEventDraftSchema,
+  SessionRowDraftSchema,
 } from '@shared/schemas';
 import { APP_STATE, REPO_STATE } from '@shared/session/valueFamily';
 import { TEXRA_SERVICE } from '@texra/controllers/server/protocol';
@@ -62,7 +62,7 @@ const VALUE_FAMILIES = [
 ];
 
 const VERSIONED: readonly Versioned[] = [
-  ...SessionEventDraftSchema.members.map((arm) => {
+  ...SessionRowDraftSchema.members.map((arm) => {
     const kind = ROW_KINDS[arm.fields.type.literal];
     return {
       name: arm.fields.type.literal,

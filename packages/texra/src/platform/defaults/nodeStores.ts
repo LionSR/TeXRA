@@ -59,9 +59,6 @@ import {
  *
  * No write runner is supplied: a config store is written through the store's
  * own Effect `set`, which composes into the writer's program.
- *
- * `follow` opens both stores following their files
- * (`JsonStoreOptions.follow`), for a process other processes configure.
  */
 export const openTexraWorkspaceConfigStores = Effect.fn(
   'nodeStores.openTexraWorkspaceConfigStores',
@@ -70,14 +67,12 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   storageRoot: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
-  follow?: boolean,
 ) {
   const openLocal = JsonStore.open(
     path.join(
       resolveWorkspaceStoragePath(storageRoot, workspaceRoot),
       TEXRA_CONFIG_FILE_NAME,
     ),
-    { follow },
   );
   if (!workspaceRoot) {
     const store = yield* openLocal;
@@ -86,13 +81,15 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
   const [workspace, local] = yield* Effect.all(
     [
-      JsonStore.open(projectConfigPath, {
-        follow,
-        onUnreadable: (error) =>
-          warn(
-            `Cannot read ${projectConfigPath}; project settings are ignored and cannot be saved until it is fixed. Cause: ${toErrorMessage(error)}`,
-          ),
-      }),
+      JsonStore.open(projectConfigPath).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() =>
+            warn(
+              `Cannot read ${projectConfigPath}; project settings are ignored and cannot be saved until it is fixed. Cause: ${toErrorMessage(error)}`,
+            ),
+          ).pipe(Effect.andThen(JsonStore.unreadable(projectConfigPath))),
+        ),
+      ),
       openLocal,
     ],
     { concurrency: 'unbounded' },
@@ -112,8 +109,7 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
  * workspace `workspaceRoot` under `storageRoot`. Neither store creates
  * anything on open, so a caller that must not create a directory under the
  * storage root (the CLI's pre-platform startup read, whose `clone` entry may
- * only be able to read it) is served too. `follow` opens all three
- * following their files, as {@link openTexraWorkspaceConfigStores} does.
+ * only be able to read it) is served too.
  */
 export const openTexraConfigStores = Effect.fn(
   'nodeStores.openTexraConfigStores',
@@ -122,23 +118,15 @@ export const openTexraConfigStores = Effect.fn(
   storageRoot: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
-  follow?: boolean,
 ) {
   const [{ workspace, local }, global] = yield* Effect.all(
     [
-      openTexraWorkspaceConfigStores(
-        catalog,
-        storageRoot,
-        workspaceRoot,
-        warn,
-        follow,
-      ),
+      openTexraWorkspaceConfigStores(catalog, storageRoot, workspaceRoot, warn),
       JsonStore.open(
         path.join(
           resolveGlobalStoragePath(storageRoot),
           TEXRA_CONFIG_FILE_NAME,
         ),
-        { follow },
       ),
     ],
     { concurrency: 'unbounded' },

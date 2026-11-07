@@ -28,7 +28,7 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`callerRun`](#callerrun), [`ChildRuns`](#childruns), and
   [`RunInbox`](#runinbox).
 - **Lifetimes, prompt sections & durable rows**:
-  [`ALWAYS_AVAILABLE`](#always_available), [`PromptSection`](#promptsection),
+  [`PromptSection`](#promptsection),
   [`ProcessPluginLayer`](#processpluginlayer),
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
   [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
@@ -148,14 +148,6 @@ interface AgentTrace {
    */
   openToolCard(log: ToolUseLog): ToolCardHandle;
 }
-```
-
-## ALWAYS_AVAILABLE
-
-A plugin that is probed but needs nothing installed: always available.
-
-```ts
-const ALWAYS_AVAILABLE: ToolAvailabilityChecks
 ```
 
 ## ApprovedEditConflictError
@@ -1088,9 +1080,9 @@ interface Plugin {
    */
   readonly availability?: ToolAvailabilityChecks;
   /** The plugin has a user switch, which a fresh install sets to this
-   *  position; while off, its tools are withheld from every agent. It must
-   *  be probed (`availability`, `ALWAYS_AVAILABLE` when it needs nothing
-   *  installed). Without one the plugin is always on. */
+   *  position; while off, its tools are withheld from every agent. A
+   *  switched plugin with no `availability` is probed as needing nothing.
+   *  Without a switch the plugin is always on. */
   readonly toggle?: 'on' | 'off';
   /** Tools of this plugin offered to every agent with tools, declared or not,
    *  while the plugin is on and a boolean catalog setting is on: tool name to

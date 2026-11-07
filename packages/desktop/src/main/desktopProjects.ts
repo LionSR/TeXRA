@@ -91,12 +91,8 @@ interface DesktopProjectRegistryOptions {
   readonly processRoots: WorkspaceRoots;
   /** The fallback project owns its state and session through this one scope. */
   readonly processScope: Scope.Closeable;
-  /**
-   * The one store over the global config file, shared by every project's
-   * config provider: a `JsonStore` serves reads from its own open-time view,
-   * so a second instance over the same file would not see a global setting
-   * another project changed until the next launch.
-   */
+  /** The one store over the global config file, shared by every project's
+   *  config provider. */
   readonly globalConfigStore: ConfigStore;
   /** The background service, when the app is its client: a folder's
    *  runs run there. */

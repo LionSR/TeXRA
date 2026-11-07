@@ -17,7 +17,7 @@ import { Result } from 'effect';
 import { assistantMessageFromResult } from '@texra-ai/llm';
 import { addUsage, type DispatchFacts } from '@shared/schemas';
 import { byId, copyById, ownCopy, type BatchCopies } from './runRows';
-import { resultFacts, turnText, withInput } from './runFacts';
+import { resultFacts, turnText, withInput, callKey } from './runFacts';
 import {
   attemptOf,
   callSettlementOf,
@@ -118,7 +118,7 @@ const withIssued = (
 ): RunState => {
   const calls = ownCopy(copies, state.calls, copyById);
   for (const { callId, toolName, logId } of issued)
-    calls[`${at.responseId}/${callId}`] = { ...at, toolName, logId };
+    calls[callKey(at.responseId, callId)] = { ...at, toolName, logId };
   return { ...state, calls };
 };
 
@@ -306,7 +306,7 @@ export const TURN_ROW_HANDLERS: {
         status: { kind: 'issued' },
       });
       // Issued where its script was (a handed-down one, by no response).
-      const script = state.calls[`${pending.responseId}/${p.scriptCallId}`];
+      const script = state.calls[callKey(pending.responseId, p.scriptCallId)];
       return Result.succeed(
         script === undefined ? called : withIssued(copies, called, [p], script),
       );

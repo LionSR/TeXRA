@@ -6,6 +6,8 @@ import {
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
   unavailableFactReason,
+  factName,
+  type FactName,
 } from '@shared/schemas';
 
 /**
@@ -48,17 +50,14 @@ export function readTraceFacts(
 ): TraceDocument {
   const factKinds = new Map(
     [GOAL_PLAN_KIND, ...appFactKinds].map(
-      (factKind): [string, TraceFactKind] => [
-        `${factKind.plugin}/${factKind.kind}`,
-        factKind,
-      ],
+      (factKind): [FactName, TraceFactKind] => [factName(factKind), factKind],
     ),
   );
   const events = document.events.map((event) => {
     if (event.type !== 'plugin.fact') return event;
     // The exporting build's reason is not this build's.
     const { unavailable: _unavailable, ...fact } = event;
-    const name = `${fact.plugin}/${fact.kind}`;
+    const name = factName(fact);
     const factKind = factKinds.get(name);
     if (factKind === undefined && RETIRED_PLUGIN_FACTS.has(name))
       throw new Error(

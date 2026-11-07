@@ -17,8 +17,11 @@ import {
 } from '../models/reasoningChoice.js';
 import { BACKEND_PROTOCOLS } from '../providers/providerPlugins.js';
 import { responsesConfiguration } from './responsesConfiguration.js';
-import { backgroundCapable } from '../protocol.js';
-import { type ModelConfiguration, ThinkingLevelSchema } from '../turn.js';
+import {
+  type ModelConfiguration,
+  ThinkingLevelSchema,
+  backgroundCapable,
+} from '../turn.js';
 import type { BindSpec } from '../node.js';
 
 type HttpProtocol = ModelConfiguration['protocol'];
