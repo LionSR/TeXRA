@@ -42,23 +42,37 @@ function schemaLiteralValue(schema: JSONSchemaObject): unknown {
   return members?.length === 1 ? schemaLiteralValue(members[0]) : undefined;
 }
 
-/** A field's description and value schema: the schema with its description
- *  and the `null` member of a nullable optional field taken off, which is
+/** A field's description, its value schema and whether it admits `null`:
+ *  the schema with its description and its `null` member taken off, which is
  *  what one field's copies on different branches are compared by. */
 function splitField(schema: JSONSchemaObject): {
   readonly description: string | undefined;
   readonly shape: JSONSchemaObject;
+  readonly nullable: boolean;
 } {
   const { description, anyOf, ...rest } = schema;
   const members = anyOf?.filter((member) => member.type !== 'null');
+  const admitsNull = anyOf?.some((member) => member.type === 'null') ?? false;
   if (members === undefined || members.length === 0) {
-    return { description, shape: anyOf ? { ...rest, anyOf } : rest };
+    return {
+      description,
+      shape: anyOf ? { ...rest, anyOf } : rest,
+      nullable: false,
+    };
   }
   if (members.length > 1) {
-    return { description, shape: { ...rest, anyOf: members } };
+    return {
+      description,
+      shape: { ...rest, anyOf: members },
+      nullable: admitsNull,
+    };
   }
   const { description: inner, ...member } = members[0];
-  return { description: description ?? inner, shape: { ...rest, ...member } };
+  return {
+    description: description ?? inner,
+    shape: { ...rest, ...member },
+    nullable: admitsNull,
+  };
 }
 
 /** "a", "a or b", "a, b, or c": the discriminator values a field is used with. */
@@ -140,6 +154,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
     readonly index: number;
     readonly description: string | undefined;
     readonly shape: JSONSchemaObject;
+    readonly nullable: boolean;
   }[];
 
   /** The field's description: the one its copies share, else each
@@ -195,7 +210,9 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
       value = shapes.length === 1 ? shapes[0] : { anyOf: shapes };
       description = describe(copies);
     }
-    if (!required.includes(name)) value = nullable(value);
+    // Optional here (another branch lacks it), or nullable as declared.
+    if (!required.includes(name) || copies.some((copy) => copy.nullable))
+      value = nullable(value);
     return description === undefined ? value : { ...value, description };
   };
 
