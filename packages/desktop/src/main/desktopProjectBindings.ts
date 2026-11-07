@@ -163,12 +163,11 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         getWindow: () => (host.window.isDestroyed() ? undefined : host.window),
         // Electron's window-open handler is the caller here, so the hand-off
         // forks on the binding's spawner rather than reaching the view as a
-        // program. The reporting host has shown the user-facing error; the
-        // failure is recorded too.
+        // program. The window shows the failure, and it is recorded too.
         openExternalUrl: (url) =>
           spawn(
-            host.previewHost
-              .openExternal(url)
+            host
+              .presented(host.previewHost.openExternal(url))
               .pipe(
                 Effect.catch((error) =>
                   Effect.sync(() => host.reportBackgroundError(error)),

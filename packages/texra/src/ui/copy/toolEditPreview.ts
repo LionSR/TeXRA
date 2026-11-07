@@ -1,3 +1,28 @@
+import { pluralize } from '@texra-ai/harness/transcript';
+
+import type { DiffLabel } from '@texra/hosts/uiHosts';
+
+/** A tool edit's diff, as every host names it: the tool, the file, and how
+ *  many lines it changes. */
+export function toolEditDiffLabel(request: {
+  readonly sourceTool: string;
+  readonly relativePath: string;
+  readonly addedLines: number;
+  readonly removedLines: number;
+}): DiffLabel {
+  const { addedLines: added, removedLines: removed } = request;
+  const changeParts: string[] = [];
+  if (added > 0) changeParts.push(`+${added}`);
+  if (removed > 0) changeParts.push(`-${removed}`);
+  const changeSuffix = changeParts.length
+    ? ` · ${changeParts.join(' / ')} ${pluralize(added + removed, 'line')}`
+    : '';
+  return {
+    title: `Tool edit (${request.sourceTool}): ${request.relativePath}${changeSuffix}`,
+    displayPath: request.relativePath,
+  };
+}
+
 const notApplied = (relativePath: string) =>
   `Your changes to the proposed ${relativePath} were not applied: its request closed without them.`;
 
