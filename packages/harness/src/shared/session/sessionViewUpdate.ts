@@ -71,7 +71,12 @@ import {
 } from './transcriptState';
 
 import { runActions } from './runActions';
-import { emptySessionView, isInterrupted, rollupOf } from './sessionView';
+import {
+  emptySessionView,
+  isInterrupted,
+  requireRun,
+  rollupOf,
+} from './sessionView';
 import type { SharedRunRows } from './runRowsShape';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
@@ -438,7 +443,7 @@ function withAggregates(u: Update, run: RunView): RunView {
     holder === 'here' &&
     view.requests.some((r) => r.runId === run.id && blocksCaller(r.payload));
   const unreadable = u.state.unreadable.get(run.id);
-  const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
+  const children = run.childIds.map((id) => requireRun(view, id));
   const treeUsage = sumUsageStats([
     run.usage,
     ...children.map((child) => child.treeUsage),
@@ -1056,9 +1061,7 @@ function removeRun(u: Update, runId: RunId): boolean {
   // A child whose parent is gone is top-level: no dangling edge, no
   // ancestors.
   for (const childId of run.childIds) {
-    const child = view.runs.get(childId);
-    if (!child) continue;
-    setRun(u, { ...child, parentId: null });
+    setRun(u, { ...requireRun(view, childId), parentId: null });
     view.order = insertOrdered(view, view.order, childId);
     refreshAncestors(u, childId);
   }
