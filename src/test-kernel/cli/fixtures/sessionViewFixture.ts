@@ -1,25 +1,24 @@
 /**
- * The TUI's one session state under test: a `SessionView` seeded straight
- * into the signal the Ink components read (`sessionView()`), so a suite
- * states the fold's output and asserts what the surface renders from it.
+ * The TUI's one session state under test: a `SessionView` the production
+ * fold builds from a few rows, seeded straight into the signal the Ink
+ * components read (`sessionView()`), so a suite asserts what the surface
+ * renders from the fold's own output.
  * The runtime bridge is bound over an empty level on the block's session
  * graph (`boundTestSessionView`); `seedView` writes the signal directly,
  * which is what a folded change would do.
  */
-import { Effect, Layer, SubscriptionRef } from 'effect';
+import { Effect, Layer, Schema, SubscriptionRef } from 'effect';
 import {
-  blocksCaller,
-  isInterrupted,
-  rollupOf as viewRollupOf,
+  AgentConfigSchema,
+  type RequestPayload,
   type RunId,
-  type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
 import { emptySessionView } from '@shared/session/sessionView';
-import { runActions } from '@shared/session/runActions';
+import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { SessionGraph } from '@test/support/testKernel';
+import { local, Log, tail, viewOf } from '@test/shared/session/fanOutScenario';
 
 /**
  * An empty view bound for the block's life, on a runtime over the block's
@@ -43,139 +42,69 @@ export function seedView(view: SessionView): void {
   sessionView().set(view);
 }
 
-type RunViewOverrides = Partial<RunView> & Pick<RunView, 'id'>;
-
-/** One stream as the fold would state it; every field explicit. A run
- *  with no outcome is held here unless the case says otherwise, and the
- *  actions follow the final fields through the fold's own rule. */
-export function makeRunView(over: RunViewOverrides): RunView {
-  const run = runViewFields(over);
-  // A case may blank the identity to stand for metadata not yet folded; the
-  // fold never states such a run, so it offers nothing.
-  // cast: `RunView` types the identity as always present; a case's may not be.
-  const identity = run.identity as RunView['identity'] | undefined;
-  return { ...run, actions: identity ? runActions(run, false) : [] };
+/** A run the fixture view holds: a started agent run mid-turn, a child when
+ *  it names its parent, and held by this terminal unless `held` is false. */
+export interface FixtureRun {
+  readonly id: RunId;
+  readonly parentId?: RunId;
+  readonly held?: boolean;
 }
 
-function runViewFields(over: RunViewOverrides): RunView {
-  const { id } = over;
-  const outcome = over.outcome ?? null;
-  const common = {
-    id,
-    identity: { kind: 'agent' as const, agent: 'agent' },
-    label: over.id,
-    description: null,
-    descriptionBy: null,
-    model: null,
-    modelLabel: null,
-    command: null,
-    inputFiles: [],
-    agentScope: null,
-    worktree: null,
-    position: 'running' as const,
-    outcome,
-    holder: outcome === null ? ('here' as const) : ('none' as const),
-    statusNotice: null,
-    createdAt: 1,
-    launchedAt: 1,
-    turnStartedAt: null,
-    runStartedAt: null,
-    lastTimestamp: 1,
-    turn: null,
-    takesFollowUps: true,
-    context: null,
-    parentId: null,
-    ancestors: [],
-    childIds: [],
-    rollup: { total: 0, running: 0, finished: 0 },
-    approval: 'none' as const,
-    actions: [],
-    usage: { inputTokens: 0, outputTokens: 0, cost: 0 },
-    treeUsage: { inputTokens: 0, outputTokens: 0, cost: 0 },
-    thinkingActive: false,
-    compactingActive: false,
-    latestLine: null,
-    transcript: {
-      rows: [],
-      taskGroups: [],
-      settledRows: 0,
-    },
-  };
-  // cast: every field is stated above; a case's override may blank one.
-  return {
-    ...common,
-    recipe: null,
-    facts: {},
-    ...over,
-    id,
-    title: over.title ?? (over.description || (over.label ?? over.id)),
-  } as RunView;
+/** A request a run opened, as the view lists it. */
+export interface FixtureRequest {
+  readonly runId: RunId;
+  readonly requestId: string;
+  readonly payload: RequestPayload;
 }
 
 /**
- * A view over the given runs: `order` lists the roots in the order
- * given, each parent's `childIds` are completed from the children's
- * `parentId` when the caller did not state them (in the fold's
- * `runOrdering`: newest `createdAt` first, ties by id), and every
- * stream's `rollup` counts its descendants the way the fold does.
+ * The view the fold states for `runs`, given parents first, and the requests
+ * they opened: each run's start, activation, config and first turn, and its
+ * requests, applied through the production updater, so every derived field
+ * (order, rollups, approval, actions) is the fold's own.
  */
 export function viewWith(
-  runs: readonly RunView[],
-  over: Partial<Omit<SessionView, 'runs' | 'order'>> = {},
+  runs: readonly FixtureRun[],
+  { requests = [] }: { readonly requests?: readonly FixtureRequest[] } = {},
 ): SessionView {
-  const byId = new Map<RunId, RunView>();
-  for (const stream of runs) byId.set(stream.id, stream);
-  const completed = new Set<RunId>();
-  for (const stream of runs) {
-    if (stream.parentId === null) continue;
-    const parent = byId.get(stream.parentId);
-    if (parent && !parent.childIds.includes(stream.id)) {
-      completed.add(parent.id);
-      byId.set(parent.id, {
-        ...parent,
-        childIds: [...parent.childIds, stream.id],
-      });
-    }
-  }
-  const orderingKey = (id: RunId) => ({
-    id,
-    createdAt: byId.get(id)?.createdAt ?? 0,
-  });
-  for (const parentId of completed) {
-    const parent = byId.get(parentId);
-    if (!parent) continue;
-    byId.set(parentId, {
-      ...parent,
-      childIds: [...parent.childIds].sort((a, b) =>
-        compareByNewestCreationTime(orderingKey(a), orderingKey(b)),
-      ),
+  const log = new Log();
+  for (const run of runs) {
+    log.emit(run.id, 1, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: 'agent' },
+      parent: run.parentId === undefined ? null : log.parent(run.parentId),
+      provenance: null,
+      takesFollowUps: true,
+    });
+    log.emit(run.id, 1, { type: 'run.activate' });
+    log.emit(run.id, 1, {
+      type: 'run.config',
+      config: Schema.decodeUnknownSync(AgentConfigSchema)({
+        agent: 'agent',
+        model: 'test-model',
+        instruction: 'go',
+      }),
+    });
+    log.emit(run.id, 1, {
+      type: 'run.position',
+      payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
     });
   }
-  // A held run with a request that parks its caller is waiting on it, as the
-  // fold's aggregates derive it. Fixture runs model runs this process holds;
-  // one built interrupted (unheld) or with its own approval keeps it.
-  for (const request of over.requests ?? []) {
-    const run = byId.get(request.runId);
-    if (
-      !run ||
-      run.approval !== 'none' ||
-      isInterrupted(run) ||
-      !blocksCaller(request.payload)
-    )
-      continue;
-    byId.set(run.id, { ...run, approval: 'own' });
-  }
-  for (const stream of [...byId.values()]) {
-    if (stream.childIds.length === 0) continue;
-    byId.set(stream.id, {
-      ...stream,
-      rollup: viewRollupOf(stream.childIds.flatMap((id) => byId.get(id) ?? [])),
+  for (const request of requests) {
+    log.emit(request.runId, 2, {
+      type: 'request.opened',
+      requestId: request.requestId,
+      payload: request.payload,
     });
   }
-  return {
-    ...emptySessionView('test'),
-    ...over,
-    runs: byId,
-    order: runs.filter((s) => s.parentId === null).map((s) => s.id),
-  };
+  return viewOf(
+    [
+      ...log.events.map(tail),
+      log.drained(),
+      local({
+        runsHere: runs.flatMap((run) => (run.held === false ? [] : [run.id])),
+      }),
+    ],
+    makeSessionViewUpdater('test'),
+  );
 }

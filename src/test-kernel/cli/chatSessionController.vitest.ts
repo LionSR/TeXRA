@@ -90,7 +90,6 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import {
   boundTestSessionView,
-  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
@@ -368,7 +367,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           );
 
           // A stop lands only on a run the fold holds.
-          seedView(viewWith([makeRunView({ id: decodeRunId('aaaaaa') })]));
+          seedView(viewWith([{ id: decodeRunId('aaaaaa') }]));
           // The resume command, run the way the Ink handler runs it.
           const resumed = yield* Effect.forkChild(
             ctrl.resume(decodeRunId('aaaaaa')),
@@ -423,7 +422,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           const ctrl = createChatSessionController(
             yield* makeInit({ session }),
           );
-          seedView(viewWith([makeRunView({ id: decodeRunId('aaaaaa') })]));
+          seedView(viewWith([{ id: decodeRunId('aaaaaa') }]));
           const resumed = yield* Effect.forkChild(
             ctrl.resume(decodeRunId('aaaaaa')),
             { startImmediately: true },
@@ -451,7 +450,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           // once the stopped run's claim lets go, the slot passes to the
           // continued run, so a later message cannot start a second root
           // beside it.
-          seedView(viewWith([makeRunView({ id: decodeRunId('a11111') })]));
+          seedView(viewWith([{ id: decodeRunId('a11111') }]));
           installSession(installableViewRef());
           const teardown = pendingRunClaim();
           const session = makeSession({
