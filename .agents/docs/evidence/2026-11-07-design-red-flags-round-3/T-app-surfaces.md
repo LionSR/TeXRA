@@ -19,7 +19,7 @@ nothing here waits on it. Paths are repo-relative; consumer counts are over
 Found before this round and not repeated: N11's trace-viewer items (the
 viewer re-declares the reader's frame order, now `traceFrames.ts:103-129`;
 the `cloneNode` remount, `main.ts:93-101`; the bridge's module `let`s,
-`traceHostBridge.ts:179-181`); J10's catalog columns (`extensionRegistry`,
+`traceHostBridge.ts:65-67`); J10's catalog columns (`extensionRegistry`,
 `host`, `commandKeybindingOrder`, `setupInvokable`); I3's compile-outcome
 sentinel; I7's extraction ladder; M5's `/executions` route table. Where a
 finding below borders one of them it says so and adds only the new angle.
@@ -28,20 +28,20 @@ finding below borders one of them it says so and adds only the new angle.
 
 Lines (excluding tests and `dist/`):
 
-| Subtree                                                      | Lines                              |
-| ------------------------------------------------------------ | ---------------------------------- |
-| `packages/trace-viewer/` (`src/*.ts`, `vite.config.ts`)      | 468                                |
-| `packages/extension/src/commands/`                           | 2,015                              |
-| `  latex/` · `git/` · `files/` · `api/` · `system/`          | 728 · 331 · 179 · 170 · 143        |
-| `  housekeeping/` · `setup/` · `agent/` · the two root files | 139 · 87 · 47 · 191                |
-| `packages/extension/src/commands.ts`                         | 171                                |
-| `packages/texra/src/shared/commands/` (catalog, registry)    | 518                                |
-| `scripts/sync-package-contributes.mjs`                       | 125                                |
-| bundled agents: 35 core + 5 Lean (`*.yaml`)                  | 4,364 (3,749 + 615)                |
+| Subtree                                                      | Lines                                   |
+| ------------------------------------------------------------ | --------------------------------------- |
+| `packages/trace-viewer/` (`src/*.ts`, `vite.config.ts`)      | 468                                     |
+| `packages/extension/src/commands/`                           | 2,015                                   |
+| `  latex/` · `git/` · `files/` · `api/` · `system/`          | 728 · 331 · 179 · 170 · 143             |
+| `  housekeeping/` · `setup/` · `agent/` · the two root files | 139 · 87 · 47 · 191                     |
+| `packages/extension/src/commands.ts`                         | 171                                     |
+| `packages/texra/src/shared/commands/` (catalog, registry)    | 518                                     |
+| `scripts/sync-package-contributes.mjs`                       | 125                                     |
+| bundled agents: 35 core + 5 Lean (`*.yaml`)                  | 4,364 (3,749 + 615)                     |
 | agent templates (`resources/templates/`)                     | 118 (two agent YAMLs, `chatExport.tex`) |
-| agent-creation docs (4 `.md`)                                | 484                                |
-| bundled skills: 15 `SKILL.md` + references; 15 `openai.yaml` | 1,209 Markdown                     |
-| `.github/prompts/` (6)                                       | 518                                |
+| agent-creation docs (4 `.md`)                                | 484                                     |
+| bundled skills: 15 `SKILL.md` + references; 15 `openai.yaml` | 1,209 Markdown                          |
+| `.github/prompts/` (6)                                       | 518                                     |
 
 The 40 agent files are 15 document tasks (a `task:` block), 24 tool-using
 personas and one text-only persona (`critic.yaml`).
@@ -114,7 +114,7 @@ protocol every template author must know); special and general code mixed
   `{{ TOKEN }}` (`buildTemplatePassthrough`,
   `packages/harness/src/agent/prompt/templateInputs.ts:83-100`;
   `agentTemplateRenderer.ts:16-20,40-48`).
-- That keeps a `{{ TOKEN }}` *expression* literal, but not a *tag* that reads
+- That keeps a `{{ TOKEN }}` _expression_ literal, but not a _tag_ that reads
   the token. The task template wraps its `{% if INSTRUCTION %}` in
   `{% raw %}` (`resources/templates/agentTemplate-workflowSingle.yaml:33,38`)
   and does not wrap its two loops:
@@ -186,8 +186,8 @@ silent degradation.
   (`packages/texra/src/tools/documents/documentTask.ts:109-111`).
 - "Customize" writes a copy of the one YAML file into the custom directory,
   stamped with the bundled file's digest
-  (`packages/harness/src/agent/index/AgentDirectoryService.ts:324-336`
-  `writeStampedCopy`, `:340-359` `copyTarget`). Its callers are the settings
+  (`packages/harness/src/agent/index/AgentDirectoryService.ts:320-338`
+  `writeStampedCopy`, `:340-362` `copyTarget`). Its callers are the settings
   view (`settingsAgentCommands.ts:275,286,355`, both GUI hosts) and the CLI
   (`packages/cli/src/commands/agents.ts:128,185`). A customized
   `paper2poster` therefore resolves its templates under the custom directory,
@@ -310,9 +310,10 @@ disagree; a "canonical" claim the copies contradict.
   - C (a different macro, `\textcolor{red}{\textbf{[#2|#3]} #1}`):
     `skills/inline-paper-critic/SKILL.md:22`,
     `skills/inline-paper-critic/references/critique-checklist.md:39`.
-  `firstread.yaml:118` and the orchestrator call version A "the canonical
-  TeXRA \criticize macro"; each task adds it "if it is not already there", so
-  which version a paper ends up with depends on which task ran first.
+    `firstread.yaml:40,118` calls version A "the canonical TeXRA \criticize
+    macro", and the orchestrator quotes it "for context"
+    (`orchestrator.yaml:78`). Each task adds it "if it is not already there",
+    so which version a paper ends up with depends on which task ran first.
 - The scale's labels disagree. `logic.yaml:29-31` and `notation.yaml:25-27`:
   "severity and confidence are 1-5", 5 Critical, 4 Major, 3 Moderate.
   `criticize.yaml:229-250`: 5 Fatal, 4 Critical, 3 Major, and it writes
@@ -337,12 +338,13 @@ bound by each producing task as `task.files: { CRITICIZE: criticize.tex }`
 and read as `{{ CRITICIZE_CONTENT }}` in its `task.prefix`. The two copies now
 in `prompt:` (`criticize.yaml:102`, `enhance.yaml:81`) move to the prefix,
 since task-file variables render only there. The orchestrator's copy and its
-"add the definition beforehand" step (`orchestrator.yaml:77-79`) go: every
+"add the definition beforehand" step (`orchestrator.yaml:76,78-79`) go: every
 producing task adds the macro itself. The parser keeps its range check as the
 boundary (0-5, 1-5), now stated beside the file it must agree with. The skill
 keeps a copy of its own by the standalone rule
-(`docs/dev/skill-authoring.md:3,12`), version A. Deleted: 8 of 9
-definitions, 4 scale statements.
+(`docs/dev/skill-authoring.md:3,12`), updated to version A. Deleted: the 7
+definitions in agent files (the skill's two copies stay) and 4 scale
+statements.
 
 **What we give up.** The rendering differences between versions (B's
 `\textit`), and a customized copy of a producing task needs finding 2 to
@@ -351,7 +353,7 @@ tasks are told; that is a prompt change reviewed as such.
 
 **Change amplification.** "Add a severity level or relabel one": today 9
 definitions and 4 scale statements in 8 files, and the parser; after, the
-file and the parser.
+file, the skill's copy and the parser.
 
 **Depends on:** finding 2 (a customized task must carry its bound file).
 
@@ -424,19 +426,19 @@ substituting for a read of the real structure.
   `tool_catalog.md` holds "every tool in the registry"
   (`resources/agents/creator.yaml:36-46`). The doc's per-tool section restates
   each tool's description and parameters by hand
-  (`resources/docs/agent-creation/tool_catalog.md:5-150`).
+  (`resources/docs/agent-creation/tool_catalog.md:5-135`).
 - It has drifted from the code it copies. The doc's `script` entry
-  (`tool_catalog.md:66-81`) says scripts have "no imports" and lists
+  (`tool_catalog.md:67-81`) says scripts have "no imports" and lists
   `tools`, `agent`, `document_task`, `phase`, `console.log`. The tool's own
   description (`packages/harness/src/tools/codemode/ScriptTool.ts:335-349`)
   documents `await import('builtIn:<module>')`, `searchTools`, `describeTool`
   and `self(prompt, …)`; the documents plugin's section tells the model to
   `import('builtIn:documents')` (`registry.ts:300-302`). `self` does not
   appear in the doc at all.
-- `document_task_schema.md:62-75` lists nine template variables by hand;
+- `document_task_schema.md:62-75` lists eight fixed template variables (and the `X_FILE`/`X_CONTENT` pattern) by hand;
   the vocabulary's declared owner is `TemplateInputsSchema`
   ("the single source of truth for the vocabulary",
-  `packages/harness/src/agent/prompt/templateInputs.ts:21-67`), which has 22.
+  `packages/harness/src/agent/prompt/templateInputs.ts:21-67`), which has 23.
 - Nothing checks either doc (`grep` for `tool_catalog` outside `resources/`
   finds only the packaging list, `scripts/extension-package-utils.mjs:24`).
 
@@ -445,7 +447,7 @@ in a template?" is answered by the registry and the schema at run time, and
 by prose for the one agent that writes agents.
 
 **The better design.** The doc keeps only what no code states: the
-recommended groups and the conventions (`tool_catalog.md:150-175`). The tool
+recommended groups and the conventions (`tool_catalog.md:136-175`). The tool
 list becomes one generated table (name, plugin, first sentence of its
 description) and the variable list one generated table from
 `TemplateInputsSchema.fields`, both written by the sync script that already
@@ -539,7 +541,8 @@ false comment.
   (`src/test-kernel/commands/ExtensionCommandRegistry.vitest.ts:42-62`, a
   19-member literal of no-ops), and that test asserts what
   `dispatchCommandFromRegistry` does: it returns the handler's program
-  untouched (`packages/texra/src/shared/commands/registry.ts:263-296`).
+  untouched (`packages/texra/src/shared/commands/registry.ts:72-105`;
+  `definedHandler` at `:51-66`).
 - **A second spelling.** `EXTENSION_COMMANDS` (`commands/extensionCommandIds.ts:14-22`,
   seven ids, 12 references in 3 files) exists so "a renamed ID [is] a compile
   error" (`:1-10`); `CommandId` is already a literal union
@@ -642,7 +645,7 @@ stylesheet the bundle cannot inline): today `standaloneTraceHtml.ts`,
   `Effect.forkDetach(…)` (19 in `commands/`) and 24 are awaited; VS Code
   settles a notice's thenable "when being dismissed"
   (`@types/vscode` `index.d.ts:11285`), so an awaited notice holds its
-  command until the user closes it (for example `latexCommands.ts:88-104`,
+  command until the user closes it (for example `latexCommands.ts:84-104`,
   whose result an `executeCommand` caller receives). A notice with no items
   has nothing to wait for: the helper decides from its arguments, forking
   itself when it offers no action (`Effect.forkDetach`, `Effect.d.ts:17255`),
@@ -684,7 +687,7 @@ stylesheet the bundle cannot inline): today `standaloneTraceHtml.ts`,
   refused, `contributes.configuration` refused, and a `--check` in
   `gate:invariants`. Findings 6 and 7 extend it rather than add a tool.
 - The trace viewer's boundary: one `parseTraceData` for both load paths
-  (`traceDataSchema.ts:26-36`), plugin facts read by the store's own rules
+  (`traceDataSchema.ts:24-36`), plugin facts read by the store's own rules
   over one table (`APP_FACT_KINDS`, which the plugin registry also reads), and
   the unchanged progress webview mounted on a page-local host
   (`traceHostBridge.ts`). `injectStandaloneTrace` escapes `<` once, with the
@@ -711,7 +714,7 @@ stylesheet the bundle cannot inline): today `standaloneTraceHtml.ts`,
   bundled agent is customized as a whole-file copy stamped with `basedOn`
   (`AgentDirectoryService.ts:290-336`), a prompt is reviewed as its final
   resolved text (AGENTS.md "Prompts"), and the renderer refuses
-  `{% include %}` on purpose (`packages/harness/src/utils/prompt.ts:52-60`).
+  `{% include %}` on purpose (`packages/harness/src/utils/prompt.ts:52-70`).
   A shared fragment would change a user's copy under it without changing its
   digest. Left as copies; the wording is out of scope.
 - **Tool lists per agent.** The six file tools appear in 19 of 24 tool
@@ -720,7 +723,7 @@ stylesheet the bundle cannot inline): today `standaloneTraceHtml.ts`,
   second vocabulary beside tool names and would grow an agent's offered set,
   and so its behaviour, without a prompt review; a plugin that wants a tool
   offered everywhere already has `injectedWhen`
-  (`packages/harness/src/tools/plugins.ts:122-127`). Left explicit.
+  (`packages/harness/src/tools/plugins.ts:123-128`). Left explicit.
 - **Skills' `agents/openai.yaml`** (15 files, no TeXRA reader): documented as
   optional product metadata for standalone skills
   (`docs/dev/skill-authoring.md:18`).
@@ -740,15 +743,15 @@ a structure, not a runtime primitive. Every Effect API named was read in
 `node_modules/effect/dist/` (version 4.1.2, `package.json`). There is no
 `Layer.scoped` in 4.1.2 and none is proposed.
 
-| Finding | Hand-rolled today | The structure or primitive (4.1.2) | Why it is the thing |
-| ------- | ----------------- | ---------------------------------- | ------------------- |
-| 1 | a Nunjucks creation pass over the runtime template, a passthrough map, `{% raw %}` per tag | none: the template as YAML data (`yaml` parse/stringify, as `memoryMeta.ts:87`), validated with `Schema.decodeUnknownEffect(AgentDefinitionSchema)` (`Schema.d.ts:1229`) before the write | one render, at run time, so no tag belongs to the wrong pass |
-| 2 | a one-file copy and a one-file digest | `AgentBlock.files` (data); the copy with `FileSystem.copyFile` (`FileSystem.d.ts:85`), refusing a path outside the original's directory | the block knows its files; the harness copies what it is told without reading inside the block |
-| 3 | 27 reply skeletons in YAML | none: pure TypeScript in `revisionPrompt`, from `OUTPUT_DOCUMENTS_TAG` / `OUTPUT_DOCUMENT_TAG` and the names the recipe accepts | the module that parses the reply writes the instruction for it |
-| 4 | 9 macro copies, two label sets | one bound file (`task.files`); the parser's range as `Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 5 }))` (`Schema.d.ts:6180`, `:6117`) | one definition the tasks read, one range the boundary checks |
-| 5 | tool mechanics in personas | none: the tool's `description`, `Plugin.prompt` (`packages/harness/src/tools/plugins.ts:130`), `TOOL_USE_INSTRUCTIONS` | each fact shown by its owner, only while the tool or plugin is offered |
-| 6 | a hand tool catalog and variable list | none: generated by the sync script from the registry and `TemplateInputsSchema.fields`, checked by `--check` | the registry and the schema are the facts; the doc is a projection |
-| 7 | a hand palette table | none: a `palette: false` catalog field, written by the sync script | the catalog owns a command's identity, so it owns where it appears |
-| 8 | a map forwarding to an actions record; awaited notices | one id-to-handler map in `commands.ts`; the notice helper forks itself when it has no items, `Effect.forkDetach` (`Effect.d.ts:17255`, "a new fiber with no parent and no scope") | a notice with nothing to answer must not hold its command |
-| 9 | two export sequences | `Effect.fn` (`Effect.d.ts:18880`) with `Schema.TaggedError` failures (`Schema.d.ts:11985`), `Effect.catchTag` at each host (`Effect.d.ts:4392`), `Effect.catchIf(absentReason, …)` (`Effect.d.ts:5517`) over `FileSystem.readFileString` (`FileSystem.d.ts:246`) | one operation with typed failures; the hosts own only their words |
-| 10 | `settled` once-flag around `resume` | `Effect.callback` (`Effect.d.ts:1724`; "Call `resume` at most once …; later calls are ignored", `:1689-1690`) | the primitive already makes a second resume a no-op |
+| Finding | Hand-rolled today                                                                           | The structure or primitive (4.1.2)                                                                                                                                                                                                                               | Why it is the thing                                                                                            |
+| ------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 1       | a Nunjucks creation pass over the runtime template, a passthrough map, `{% raw %}` per tag  | none: the template as YAML data (`yaml` parse/stringify, as `memoryMeta.ts:87`), validated with `Schema.decodeUnknownEffect(AgentDefinitionSchema)` (`Schema.d.ts:1229`) before the write                                                                        | one render, at run time, so no tag belongs to the wrong pass                                                   |
+| 2       | a one-file copy and a one-file digest                                                       | `AgentBlock.files` (data); the copy with `FileSystem.copyFile` (`FileSystem.d.ts:85`), refusing a path outside the original's directory                                                                                                                          | the block knows its files; the harness copies what it is told without reading inside the block                 |
+| 3       | 27 reply skeletons in YAML                                                                  | none: pure TypeScript in `revisionPrompt`, from `OUTPUT_DOCUMENTS_TAG` / `OUTPUT_DOCUMENT_TAG` and the names the recipe accepts                                                                                                                                  | the module that parses the reply writes the instruction for it                                                 |
+| 4       | 9 macro copies, two label sets                                                              | one bound file (`task.files`); the parser's range as `Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 5 }))` (`Schema.d.ts:6180`, `:6117`)                                                                                                              | one definition the tasks read, one range the boundary checks                                                   |
+| 5       | tool mechanics in personas                                                                  | none: the tool's `description`, `Plugin.prompt` (`packages/harness/src/tools/plugins.ts:130`), `TOOL_USE_INSTRUCTIONS`                                                                                                                                           | each fact shown by its owner, only while the tool or plugin is offered                                         |
+| 6       | a hand tool catalog and variable list                                                       | none: generated by the sync script from the registry and `TemplateInputsSchema.fields`, checked by `--check`                                                                                                                                                     | the registry and the schema are the facts; the doc is a projection                                             |
+| 7       | a hand palette table                                                                        | none: a `palette: false` catalog field, written by the sync script                                                                                                                                                                                               | the catalog owns a command's identity, so it owns where it appears                                             |
+| 8       | a map forwarding to an actions record; a second id table; a command called as a function    | none: one id-to-handler map in `commands.ts` over `definedHandler` (the registry's own decode); `openGuidePage` called directly                                                                                                                                  | the boundary decodes and runs; nothing between it and the module forwards                                      |
+| 9       | two export sequences                                                                        | `Effect.fn` (`Effect.d.ts:18880`) with `Schema.TaggedError` failures (`Schema.d.ts:11985`), `Effect.catchTag` at each host (`Effect.d.ts:4392`), `Effect.catchIf(absentReason, …)` (`Effect.d.ts:5517`) over `FileSystem.readFileString` (`FileSystem.d.ts:246`) | one operation with typed failures; the hosts own only their words                                              |
+| 10      | 19 `Effect.forkDetach` wrappers chosen per call site; a `settled` once-flag around `resume` | the notice helper forks itself when it offers no action, `Effect.forkDetach` (`Effect.d.ts:17255`, "a new fiber with no parent and no scope"); `Effect.callback` (`Effect.d.ts:1724`; "Call `resume` at most once …; later calls are ignored", `:1689-1690`)     | a notice with nothing to answer must not hold its command; the primitive already makes a second resume a no-op |
