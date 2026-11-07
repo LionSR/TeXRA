@@ -8,22 +8,16 @@ import * as path from 'node:path';
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Deferred, Effect, Fiber, FileSystem, Layer, Context } from 'effect';
-import { afterEach, vi } from 'vitest';
 
 // Local imports
 
-import {
-  generateRunId,
-  type RequestDecision,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { generateRunId, type RequestDecision } from '@texra-ai/harness/schemas';
 import {
   requestToolEditApproval,
   type PluginToolServices,
 } from '@texra-ai/harness/plugins';
 import { WorkspaceFs } from '@texra-ai/harness/host';
 import { SessionRequests } from '@agent/runtime/requests';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog } from '@shared/session/runHistory';
 import {
   setTestApprovalPolicy,
@@ -42,139 +36,123 @@ import { writeFileTool } from '@tools/WriteTool';
 // Local file imports
 import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';
 
-// The case's host, and its workspace: a real directory, since the edit
-// flow reads the current content through the process filesystem, so the
-// file a case stubs has to exist where the workspace says it does.
-let host: Context.Service.Shape<typeof FakeHost>;
-let workspacePath: string;
-
-// A tool edit opens its request on a run, so every case owns a freshly
-// started one, on a session of its own.
-let session: Context.Context<SessionServices>;
-let runId: RunId;
-
-// The decision a surface sends for each request the run opens; a case that
-// must park one returns null and decides it later with `decideRequest`.
-let nextDecision: () => RequestDecision | null = () => ({ action: 'approve' });
-let decisions:
-  | Effect.Success<ReturnType<typeof autoDecideRequests>>
-  | undefined;
-// The tool edits the run opened, as their rows reached the log; tests
-// override the decision when they need to reject or adjust, and assert on
-// this list otherwise.
-const openedEdits = () =>
-  decisions?.opened.filter((event) => event.payload.kind === 'toolEdit') ?? [];
-
-// The write side of both views the edit flow reaches: an absolute path writes
-// through the process `FileSystem`, a workspace-relative one through the
-// session's rooted `WorkspaceFs` view. One
-// recorder serves both, so a case asserts on what was applied either way.
-const workspaceWrites = vi.fn<(target: string, content: string) => void>();
-// The workspace-relative half of the read side, which no real directory backs.
-const relativeFiles = new Map<string, { exists: boolean; content: string }>();
-
-/** Install the stubbed halves over the real services for one tool call. */
-function withStubbedEditFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
-  return Effect.gen(function* () {
-    const workspaceFs = yield* WorkspaceFs;
-    const processFs = yield* FileSystem.FileSystem;
-    return yield* program.pipe(
-      Effect.provideService(WorkspaceFs, {
-        ...workspaceFs,
-        exists: (target: string) =>
-          Effect.succeed(relativeFiles.get(target)?.exists ?? false),
-        readFile: (target: string) =>
-          Effect.succeed(
-            Buffer.from(relativeFiles.get(target)?.content ?? '', 'utf-8'),
-          ),
-        writeFile: (target: string, content: Uint8Array) => {
-          workspaceWrites(target, Buffer.from(content).toString('utf-8'));
-          return Effect.void;
-        },
-        makeDirectory: () => Effect.void,
-      }),
-      Effect.provideService(FileSystem.FileSystem, {
-        ...processFs,
-        writeFile: (target: string, content: Uint8Array) => {
-          workspaceWrites(target, Buffer.from(content).toString('utf-8'));
-          return Effect.void;
-        },
-        makeDirectory: () => Effect.void,
-      }),
-    );
-  });
-}
-
-// Seeds the file a tool edits — on disk for the edit flow's own read, and in
-// the rooted view a relative path resolves through — and returns the write
-// spy so a test can inspect what was applied. Whether the run has read the
-// file is a fact of its rows, which a case seeds apart (`seedEditedFiles`).
-function stubWorkspaceFile(
-  filePath: string,
-  options: { exists: boolean; content: string },
-) {
-  const absolutePath = path.join(workspacePath, filePath);
-  if (options.exists) {
-    mkdirSync(path.dirname(absolutePath), { recursive: true });
-    writeFileSync(absolutePath, options.content);
-  }
-  relativeFiles.set(filePath, {
-    exists: options.exists,
-    content: options.content,
-  });
-  return workspaceWrites;
-}
-
-/** Set the approval policy on the case's host. */
-const approvalPolicy = (policy: Parameters<typeof setTestApprovalPolicy>[0]) =>
-  setTestApprovalPolicy(policy).pipe(Effect.provideService(FakeHost, host));
-
-/** Supply the exact per-call capabilities a dispatched tool receives. */
-function inRun<A, E>(effect: Effect.Effect<A, E, PluginToolServices>) {
-  return withStubbedEditFiles(effect).pipe(
-    Effect.provide(
-      nativeToolTestLayer({
-        workingDirectory: workspacePath,
-        run: { runId, session, toolPolicy: {} },
-      }),
-    ),
-  );
-}
-
 /**
- * Every case's start, for the test's scope: a host over the workspace, a
- * session over its roots whose policy host counts denials, the
- * policy at `ask`, and a freshly started run whose requests a surface
- * answers with `nextDecision`.
+ * Every case's start, for the test's scope: a host over a real workspace
+ * directory (the edit flow reads the current content through the process
+ * filesystem, so a file a case stubs has to exist where the workspace says
+ * it does), a session of its own over the host's roots with the policy at
+ * `ask`, and a freshly started run whose requests a surface answers with
+ * `decide`. A case that must leave a request pending returns null and decides
+ * it later with `decideRequest`.
  */
-const setUp = () =>
+const setUp = (
+  decide: () => RequestDecision | null = () => ({ action: 'approve' }),
+) =>
   Effect.gen(function* () {
-    nextDecision = () => ({ action: 'approve' });
-    host = Context.get(yield* Layer.build(FakeHost.layer()), FakeHost);
-    workspacePath = host.path('workspace');
-    session = yield* Effect.flatMap(
+    const host = Context.get(yield* Layer.build(FakeHost.layer()), FakeHost);
+    const workspacePath = host.path('workspace');
+    const session = yield* Effect.flatMap(
       TestSession.open(host.roots, { host: {} }),
       sessionHandleOf,
     );
+    const approvalPolicy = (
+      policy: Parameters<typeof setTestApprovalPolicy>[0],
+    ) =>
+      setTestApprovalPolicy(policy).pipe(Effect.provideService(FakeHost, host));
     yield* approvalPolicy('ask');
-    workspaceWrites.mockReset();
-    relativeFiles.clear();
-    runId = yield* publishTestRunStart(session, generateRunId());
+    const runId = yield* publishTestRunStart(session, generateRunId());
     yield* Context.get(session, SessionLog).settled;
-    decisions = yield* autoDecideRequests(session, () => nextDecision());
+    const decisions = yield* autoDecideRequests(session, decide);
+
+    // The write side of both views the edit flow reaches: an absolute path
+    // writes through the process `FileSystem`, a workspace-relative one
+    // through the session's rooted `WorkspaceFs` view. One recorder serves
+    // both, so a case asserts on what was applied either way.
+    const writes: Array<{ target: string; content: string }> = [];
+    const record = (target: string, content: Uint8Array) =>
+      Effect.sync(() => {
+        writes.push({
+          target,
+          content: Buffer.from(content).toString('utf-8'),
+        });
+      });
+    // The workspace-relative half of the read side, which no real directory
+    // backs.
+    const relativeFiles = new Map<
+      string,
+      { exists: boolean; content: string }
+    >();
+
+    return {
+      workspacePath,
+      session,
+      runId,
+      approvalPolicy,
+      writes,
+      // The tool edits the run opened, as their rows reached the log.
+      openedEdits: () =>
+        decisions.opened.filter((event) => event.payload.kind === 'toolEdit'),
+      // Seeds the file a tool edits: on disk for the edit flow's own read,
+      // and in the rooted view a relative path resolves through. Whether the
+      // run has read the file is a fact of its rows, seeded apart.
+      stubWorkspaceFile: (
+        filePath: string,
+        options: { exists: boolean; content: string },
+      ) => {
+        const absolutePath = path.join(workspacePath, filePath);
+        if (options.exists) {
+          mkdirSync(path.dirname(absolutePath), { recursive: true });
+          writeFileSync(absolutePath, options.content);
+        }
+        relativeFiles.set(filePath, options);
+      },
+      /**
+       * Run a tool call with the exact per-call capabilities a dispatched
+       * tool receives, over the stubbed halves of the edited files.
+       */
+      inRun: <A, E>(effect: Effect.Effect<A, E, PluginToolServices>) =>
+        Effect.gen(function* () {
+          const workspaceFs = yield* WorkspaceFs;
+          const processFs = yield* FileSystem.FileSystem;
+          return yield* effect.pipe(
+            Effect.provideService(WorkspaceFs, {
+              ...workspaceFs,
+              exists: (target: string) =>
+                Effect.succeed(relativeFiles.get(target)?.exists ?? false),
+              readFile: (target: string) =>
+                Effect.succeed(
+                  Buffer.from(
+                    relativeFiles.get(target)?.content ?? '',
+                    'utf-8',
+                  ),
+                ),
+              writeFile: record,
+              makeDirectory: () => Effect.void,
+            }),
+            Effect.provideService(FileSystem.FileSystem, {
+              ...processFs,
+              writeFile: record,
+              makeDirectory: () => Effect.void,
+            }),
+          );
+        }).pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              workingDirectory: workspacePath,
+              run: { runId, session, toolPolicy: {} },
+            }),
+          ),
+        ),
+    };
   });
 
 // Live clock: requests are opened and answered on the session's log.
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'Tool edit approval gating',
   (it) => {
-    afterEach(() => {
-      vi.restoreAllMocks();
-    });
-
     it.effect('gates an edit to a dangling symlink as an existing file', () =>
       Effect.gen(function* () {
-        yield* setUp();
+        const { workspacePath, inRun, writes, openedEdits } = yield* setUp();
         mkdirSync(workspacePath, { recursive: true });
         // A dangling symlink names a workspace entry even though stat through
         // the link fails; the read-before-edit gate must not treat it as new.
@@ -193,28 +171,35 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
 
         assert.strictEqual(result.status, 'error');
         assert.match(result.error ?? '', /require a prior read/);
-        assert.strictEqual(workspaceWrites.mock.calls.length, 0);
+        assert.strictEqual(writes.length, 0);
         assert.strictEqual(openedEdits().length, 0);
       }),
     );
 
     it.effect('denies an edit under never, and tells the host', () =>
       Effect.gen(function* () {
-        yield* setUp();
+        const {
+          approvalPolicy,
+          stubWorkspaceFile,
+          inRun,
+          writes,
+          openedEdits,
+        } = yield* setUp();
         yield* approvalPolicy('never');
 
-        const write = stubWorkspaceFile('denied.txt', {
-          exists: false,
-          content: '',
-        });
+        stubWorkspaceFile('denied.txt', { exists: false, content: '' });
 
         const result = yield* inRun(
           writeFileTool().call({ path: 'denied.txt', content: 'blocked' }),
         );
 
         assert.strictEqual(openedEdits().length, 0);
-        assert.strictEqual(write.mock.calls.length, 0);
+        assert.strictEqual(writes.length, 0);
         assert.strictEqual(result.status, 'error');
+        assert.strictEqual(
+          result.error,
+          'Tool edit denied: write_file for denied.txt.\n\nDenied by the approval policy.',
+        );
       }),
     );
 
@@ -222,14 +207,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       "stores a pending edit's proposal with its request, where any process reads it",
       () =>
         Effect.gen(function* () {
-          yield* setUp();
           // Left pending: the proposal must be readable while nothing but the
           // rows holds it, as it is after the process that opened it is gone.
           const editOpened = yield* Deferred.make<void>();
-          nextDecision = () => {
+          const { session, runId, inRun, openedEdits } = yield* setUp(() => {
             Deferred.doneUnsafe(editOpened, Effect.void);
             return null;
-          };
+          });
           const request = yield* Effect.forkChild(
             inRun(
               requestToolEditApproval({
