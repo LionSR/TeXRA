@@ -483,11 +483,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           // A working directory must be one of the host's open workspace
           // folders, as the composer lists them.
           const asked = request.launch.workingDirectory.trim();
-          const folders = (yield* SubscriptionRef.get(hostSnapshot))
-            ?.workspaceRoots;
+          const folders = ports.snapshot.workspaceRoots();
           if (
             asked !== '' &&
-            !(folders ?? []).some(
+            !folders.some(
               (folder) => path.resolve(folder.value) === path.resolve(asked),
             )
           )
