@@ -997,7 +997,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
         uploadFile({
           mimeType: part.mimeType,
           filename: getBasename(path) || 'attachment',
-          base64: bytes.get(part.digest) ?? '',
+          base64: bytes(part.digest),
         }).pipe(
           Effect.catchTag('ModelError', (error) =>
             Effect.sync(() =>

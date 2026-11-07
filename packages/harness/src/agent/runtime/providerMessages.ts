@@ -40,6 +40,7 @@ import {
   RunHistoryInconsistent,
   type RunHistoryDraft,
 } from '@shared/session/runState';
+import type { StoredBlobs } from '@shared/session/database';
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -342,23 +343,16 @@ export function addressedMessages(messages: readonly AppendedMessage[]): {
  */
 export const providerMessages = <E>(
   messages: readonly HistoryMessage[],
-  read: (
-    digests: readonly string[],
-  ) => Effect.Effect<ReadonlyMap<string, string>, E>,
+  read: (digests: readonly string[]) => Effect.Effect<StoredBlobs, E>,
 ): Effect.Effect<readonly ProviderMessage[], E> => {
   const digests = new Set<string>();
   for (const message of messages)
     for (const part of inputParts(message))
       if (part.kind !== 'text') digests.add(part.digest);
-  const resolved = (
-    part: StoredInputPart,
-    texts: ReadonlyMap<string, string>,
-  ): InputPart => {
+  const resolved = (part: StoredInputPart, texts: StoredBlobs): InputPart => {
     if (part.kind === 'text') return part;
     const { digest, ...rest } = part;
-    const base64 = texts.get(digest);
-    // `read` fails on a digest the store lacks, so none is missing here.
-    if (base64 === undefined) throw new Error(`Media blob ${digest} not read`);
+    const base64 = texts(digest);
     if (rest.kind !== 'image')
       return { kind: rest.kind, mimeType: rest.mimeType, base64 };
     const { detail, ...image } = rest;
