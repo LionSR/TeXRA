@@ -556,7 +556,7 @@ export function createChatSessionController(
         // The durable record carries the config the TUI adopts before the run.
         const store = init.runSession.records(id);
         const [config, exists] = yield* Effect.all(
-          [store.readConfig(), store.exists()],
+          [store.readConfig, store.exists],
           { concurrency: 2 },
         );
         const refuseResume = (reason: string): void =>
@@ -610,7 +610,7 @@ export function createChatSessionController(
           const adoptedConfig =
             resumed === id
               ? config
-              : yield* init.runSession.records(resumed).readConfig();
+              : yield* init.runSession.records(resumed).readConfig;
           if (adoptedConfig === null)
             return yield* Effect.fail(
               new Error(`Run ${resumed} has no configuration to resume`),
@@ -679,7 +679,7 @@ export function createChatSessionController(
    *  chat's model and settings may not be the run's. */
   const adoptRunRecord = (runId: RunId) =>
     Effect.gen(function* () {
-      const config = yield* init.runSession.records(runId).readConfig();
+      const config = yield* init.runSession.records(runId).readConfig;
       if (!config)
         return yield* Effect.fail(new Error('it has no stored configuration'));
       yield* adoptRunConfig(config, 'history');

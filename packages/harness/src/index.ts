@@ -62,7 +62,7 @@ export type {
 } from './effect/sessions.js';
 // What a session's methods take and hand out: a run's id
 // (`session.resume`), a commit position and a display event (`view`), a
-// stored conversation's nodes (`records(runId).readConversation()`), a
+// stored conversation's nodes (`records(runId).readConversation`), a
 // request (`session.request`), and the request an `ApprovalHandler` is
 // asked with and the decision it answers.
 

@@ -382,7 +382,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         // fails the command when a completed run's copy was asked for, and
         // only warns otherwise.
         const recorded = yield* Effect.result(
-          session.records(ended.runId).readConfig(),
+          session.records(ended.runId).readConfig,
         );
         if (Result.isFailure(recorded)) {
           const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;

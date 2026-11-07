@@ -288,22 +288,20 @@ export const serviceHandlers = TexraRpcs.toLayer(
       'session.view': ({ workspace, runIds }) =>
         session(workspace, (held) => held.view.read(runIds)),
       'session.listRuns': ({ workspace }) =>
-        session(workspace, (held) => held.listRuns()),
+        session(workspace, (held) => held.listRuns),
       'session.deleteRuns': ({ workspace, target }) =>
         session(workspace, (held) => held.deleteRuns(target)),
-      'records.exists': record((records) => records.exists()),
-      'records.config': record((records) => records.readConfig()),
-      'records.report': record((records) => records.readReport()),
-      'records.runEnd': record((records) => records.readRunEnd()),
-      'records.result': record((records) => records.readResult()),
-      'records.workspaceFiles': record((records) =>
-        records.readWorkspaceFiles(),
-      ),
-      'records.skills': record((records) => records.readSkills()),
-      'records.resumable': record((records) => records.readResumable()),
-      'records.rejection': record((records) => records.readRejection()),
-      'records.conversation': record((records) => records.readConversation()),
-      'records.trace': record((records) => records.readTrace()),
+      'records.exists': record((records) => records.exists),
+      'records.config': record((records) => records.readConfig),
+      'records.report': record((records) => records.readReport),
+      'records.runEnd': record((records) => records.readRunEnd),
+      'records.result': record((records) => records.readResult),
+      'records.workspaceFiles': record((records) => records.readWorkspaceFiles),
+      'records.skills': record((records) => records.readSkills),
+      'records.resumable': record((records) => records.readResumable),
+      'records.rejection': record((records) => records.readRejection),
+      'records.conversation': record((records) => records.readConversation),
+      'records.trace': record((records) => records.readTrace),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           projects.open(workspace).pipe(

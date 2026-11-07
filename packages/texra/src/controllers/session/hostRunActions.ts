@@ -200,19 +200,16 @@ export const createHostRunActions = Effect.fn(
   const readConfig = (
     runId: RunId,
   ): Effect.Effect<AgentConfig | undefined, Unavailable> =>
-    session
-      .records(runId)
-      .readConfig()
-      .pipe(
-        Effect.map((config) => config ?? undefined),
-        Effect.mapError(
-          (cause) =>
-            new Unavailable({
-              runId,
-              reason: `Its saved setup could not be read: ${toErrorMessage(cause)}`,
-            }),
-        ),
-      );
+    session.records(runId).readConfig.pipe(
+      Effect.map((config) => config ?? undefined),
+      Effect.mapError(
+        (cause) =>
+          new Unavailable({
+            runId,
+            reason: `Its saved setup could not be read: ${toErrorMessage(cause)}`,
+          }),
+      ),
+    );
   /** When a run this window started ends, a document task's final output
    *  opens. Presentation reacts to the outcome the run committed; it never
    *  runs inside the run, so it cannot change that outcome. Its documents

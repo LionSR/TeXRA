@@ -50,37 +50,37 @@ import type { LocalSession } from './sessions.js';
  */
 export interface RunRecords {
   /** Its `run.start` is still listed. */
-  readonly exists: () => Effect.Effect<boolean, Error>;
+  readonly exists: Effect.Effect<boolean, Error>;
   /** Its saved setup; null for a run that saved none (not an agent's). */
-  readonly readConfig: () => Effect.Effect<AgentConfig | null, Error>;
+  readonly readConfig: Effect.Effect<AgentConfig | null, Error>;
   /** The report its agent wrote, or null. */
-  readonly readReport: () => Effect.Effect<string | null, Error>;
+  readonly readReport: Effect.Effect<string | null, Error>;
   /** Its terminal fact (outcome, error, output, usage), or null while it
    *  has not ended. */
-  readonly readRunEnd: () => Effect.Effect<RunEnd | null, Error>;
+  readonly readRunEnd: Effect.Effect<RunEnd | null, Error>;
   /** Its result as delivered: the terminal fact with the output its
    *  delivery reported, or a background command's own record. */
-  readonly readResult: () => Effect.Effect<RunResult | null, Error>;
+  readonly readResult: Effect.Effect<RunResult | null, Error>;
   /** The workspace files its settled calls edited that are still there,
    *  under its working directory, by path. */
-  readonly readWorkspaceFiles: () => Effect.Effect<
+  readonly readWorkspaceFiles: Effect.Effect<
     readonly RunWorkspaceFile[],
     Error
   >;
   /** The skills its latest step listed. */
-  readonly readSkills: () => Effect.Effect<readonly string[], Error>;
+  readonly readSkills: Effect.Effect<readonly string[], Error>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
-  readonly readResumable: () => Effect.Effect<boolean, Error>;
+  readonly readResumable: Effect.Effect<boolean, Error>;
   /** Why a resume of it here is refused before its agent is checked
    *  (`finished`, `earlierBuild`, `unusableCheckpoint` or
    *  `pluginUnavailable`), or null when it may go ahead; a fact that could
    *  not be read right now fails. */
-  readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
+  readonly readRejection: Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
-  readonly readConversation: () => Effect.Effect<readonly ExportNode[], Error>;
+  readonly readConversation: Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
-  readonly readTrace: () => Effect.Effect<AssembleTraceResult, Error>;
+  readonly readTrace: Effect.Effect<AssembleTraceResult, Error>;
 }
 
 /** What this process holds of one run ({@link LocalSession.held}): a launch
@@ -206,38 +206,38 @@ export function sessionReads(
     records: (runId) => {
       const stored = getRunRecords(runId);
       return {
-        exists: () => read(stored.exists()),
-        readConfig: () => read(stored.readConfig()),
-        readReport: () => read(stored.readReport()),
-        readRunEnd: () => read(stored.readRunEnd()),
-        readResult: () => read(stored.readResult()),
-        readWorkspaceFiles: () =>
-          Effect.all([stored.readConfig(), stored.readWorkspaceFiles()], {
+        exists: read(stored.exists()),
+        readConfig: read(stored.readConfig()),
+        readReport: read(stored.readReport()),
+        readRunEnd: read(stored.readRunEnd()),
+        readResult: read(stored.readResult()),
+        readWorkspaceFiles: Effect.all(
+          [stored.readConfig(), stored.readWorkspaceFiles()],
+          {
             concurrency: 2,
-          }).pipe(
-            Effect.flatMap(([config, paths]) =>
-              listRunWorkspaceFiles(config, paths),
-            ),
-            read,
+          },
+        ).pipe(
+          Effect.flatMap(([config, paths]) =>
+            listRunWorkspaceFiles(config, paths),
           ),
-        readSkills: () => read(stored.readSkills()),
-        readResumable: () =>
-          Effect.map(
-            read(deriveResumability(runId)),
-            (decision) => decision.kind === 'checkpoint',
+          read,
+        ),
+        readSkills: read(stored.readSkills()),
+        readResumable: Effect.map(
+          read(deriveResumability(runId)),
+          (decision) => decision.kind === 'checkpoint',
+        ),
+        readRejection: read(checkpointRefusal(runId)),
+        readConversation: read(
+          readCompletedRunConversation(
+            runId,
+            Context.get(session, SessionRoots).config,
           ),
-        readRejection: () => read(checkpointRefusal(runId)),
-        readConversation: () =>
-          read(
-            readCompletedRunConversation(
-              runId,
-              Context.get(session, SessionRoots).config,
-            ),
-          ),
-        readTrace: () => read(assembleTrace(runId)),
+        ),
+        readTrace: read(assembleTrace(runId)),
       };
     },
-    listRuns: () => read(listRuns()),
+    listRuns: read(listRuns()),
     held: heldRuns(Context.get(session, Runs)),
     deleteRuns: deleteRuns(session),
     emit: interactions.emit,

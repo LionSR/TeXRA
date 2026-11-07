@@ -120,4 +120,4 @@ Each [`ToolRow`](./harness/transcript#toolrow) pre-computes a [`ToolRowModel`](.
 
 ### Static trace export (`TraceDocument`)
 
-`session.records(runId).readTrace()` exports a run into a self-contained [`TraceDocument`](./harness/schemas#tracedocument) (validated by [`TraceDocumentSchema`](./harness/schemas#tracedocumentschema) and inspected with [`readTraceFacts`](./harness/schemas#readtracefacts) in `@texra-ai/harness/schemas`) for offline viewing in `packages/trace-viewer`.
+`session.records(runId).readTrace` exports a run into a self-contained [`TraceDocument`](./harness/schemas#tracedocument) (validated by [`TraceDocumentSchema`](./harness/schemas#tracedocumentschema) and inspected with [`readTraceFacts`](./harness/schemas#readtracefacts) in `@texra-ai/harness/schemas`) for offline viewing in `packages/trace-viewer`.

@@ -456,7 +456,7 @@ export const executeCliConfig: (
         if (
           stopped &&
           onFinalized !== undefined &&
-          (yield* session.records(launchRunId).readResumable())
+          (yield* session.records(launchRunId).readResumable)
         )
           yield* onFinalized(launchRunId);
         // A failed run's end reaches the host through the session's

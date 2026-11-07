@@ -562,21 +562,21 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ) => Effect.Effect<A, Error>,
     ) => asked(link, (client) => read(client, { workspace, runId }));
     return {
-      exists: () => ask((client, input) => client['records.exists'](input)),
-      readConfig: () => ask((client, input) => client['records.config'](input)),
-      readReport: () => ask((client, input) => client['records.report'](input)),
-      readRunEnd: () => ask((client, input) => client['records.runEnd'](input)),
-      readResult: () => ask((client, input) => client['records.result'](input)),
-      readWorkspaceFiles: () =>
-        ask((client, input) => client['records.workspaceFiles'](input)),
-      readSkills: () => ask((client, input) => client['records.skills'](input)),
-      readResumable: () =>
-        ask((client, input) => client['records.resumable'](input)),
-      readRejection: () =>
-        ask((client, input) => client['records.rejection'](input)),
-      readConversation: () =>
-        ask((client, input) => client['records.conversation'](input)),
-      readTrace: () => ask((client, input) => client['records.trace'](input)),
+      exists: ask((client, input) => client['records.exists'](input)),
+      readConfig: ask((client, input) => client['records.config'](input)),
+      readReport: ask((client, input) => client['records.report'](input)),
+      readRunEnd: ask((client, input) => client['records.runEnd'](input)),
+      readResult: ask((client, input) => client['records.result'](input)),
+      readWorkspaceFiles: ask((client, input) =>
+        client['records.workspaceFiles'](input),
+      ),
+      readSkills: ask((client, input) => client['records.skills'](input)),
+      readResumable: ask((client, input) => client['records.resumable'](input)),
+      readRejection: ask((client, input) => client['records.rejection'](input)),
+      readConversation: ask((client, input) =>
+        client['records.conversation'](input),
+      ),
+      readTrace: ask((client, input) => client['records.trace'](input)),
     };
   };
   return {
@@ -589,8 +589,9 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         asked(link, (client) => client['session.view']({ workspace, runIds })),
     },
     records,
-    listRuns: () =>
-      asked(link, (client) => client['session.listRuns']({ workspace })),
+    listRuns: asked(link, (client) =>
+      client['session.listRuns']({ workspace }),
+    ),
     deleteRuns: (target) =>
       asked(link, (client) =>
         client['session.deleteRuns']({ workspace, target }),

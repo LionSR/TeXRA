@@ -137,7 +137,7 @@ session is closed.
 A later process can open the same root and call `session.resume(runId)` to
 continue a run from its committed history, returning the same `Run` handle that
 `start` returns. A run that cannot continue fails with `ResumeRefused`, whose
-`reason` is a `ResumeRefusal`, the same value `records(runId).readRejection()`
+`reason` is a `ResumeRefusal`, the same value `records(runId).readRejection`
 gives: its `kind` is `finished`, `blocked` (the agent or plugin
 named by `name` is missing, off or not trusted), `unusableCheckpoint`,
 `earlierBuild` (with its `cause`), or `notResumable` (it was deleted). If
