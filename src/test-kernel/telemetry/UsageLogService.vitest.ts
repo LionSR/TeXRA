@@ -7,10 +7,7 @@ import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
 import { AppState, UsageLog } from '@texra-ai/harness/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { usageAgentName } from '@shared/usageLog';
-import {
-  usageLogLayer,
-  type UsageLogOptions,
-} from '@telemetry/UsageLogService';
+import { usageLogLayer } from '@telemetry/UsageLogService';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   jsonResponse,
@@ -22,6 +19,9 @@ import {
   TELEMETRY_ENABLED_KEY,
   TEXRA_SETTINGS,
 } from '@texra/shared/settingsView/texraSettings';
+
+/** The shipped periodic flush. */
+const FLUSH_INTERVAL_MS = 30_000;
 
 function usageEntry(model: string) {
   return {
@@ -59,9 +59,7 @@ describe('UsageLogService', () => {
     if (scope) await Effect.runPromise(Scope.close(scope, Exit.void));
   };
 
-  const startUsageLog = async (
-    config: UsageLogOptions['config'],
-  ): Promise<void> => {
+  const startUsageLog = async (): Promise<void> => {
     await stopUsageLog();
     lifetime = Scope.makeUnsafe();
     const context = await Effect.runPromise(
@@ -70,7 +68,6 @@ describe('UsageLogService', () => {
           usageLogLayer({
             version: undefined,
             editorType: undefined,
-            config,
           }).pipe(
             Layer.provide(
               Layer.mergeAll(
@@ -92,11 +89,7 @@ describe('UsageLogService', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    await startUsageLog({
-      batchSize: 1,
-      flushIntervalMs: 60_000,
-      enabled: true,
-    });
+    await startUsageLog();
   });
 
   afterEach(async () => {
@@ -122,7 +115,7 @@ describe('UsageLogService', () => {
       const fetchMock = stubBatchFetch();
 
       logUsage(usageEntry('optional'), testWorkspaceRoots().config);
-      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
 
       expect(fetchMock).not.toHaveBeenCalled();
     }
@@ -148,10 +141,6 @@ describe('UsageLogService', () => {
     // queued under the old value rather than letting the next flush ship them.
     it.effect('discards entries queued before the setting was turned off', () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 }),
-        );
-
         const fetchMock = stubBatchFetch();
 
         logUsage(usageEntry('before-opt-out'), testWorkspaceRoots().config);
@@ -161,7 +150,9 @@ describe('UsageLogService', () => {
           'global',
         );
 
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(60_000));
+        yield* Effect.promise(() =>
+          vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS),
+        );
 
         expect(fetchMock).not.toHaveBeenCalled();
       }),

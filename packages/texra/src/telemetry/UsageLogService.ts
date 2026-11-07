@@ -56,22 +56,14 @@ const UsageLogResponseSchema = Schema.Union([
 
 type UsageLogResponse = typeof UsageLogResponseSchema.Type;
 const MAX_QUEUE_SIZE = 1000;
+/** A queue this long asks for a flush before the periodic one. */
+const BATCH_SIZE = 10;
+/** The periodic flush, and the first wait between retries. */
+const FLUSH_INTERVAL = Duration.seconds(30);
 const REQUEST_TIMEOUT_MS = 10000;
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;
 /** The longest wait between retries of an undelivered batch. */
 const MAX_RETRY_DELAY = Duration.minutes(30);
-
-interface UsageLogConfig {
-  batchSize: number;
-  flushIntervalMs: number;
-  enabled: boolean;
-}
-
-const DEFAULT_CONFIG: UsageLogConfig = {
-  batchSize: 10,
-  flushIntervalMs: 30000,
-  enabled: true,
-};
 
 /**
  * Environment variables that switch usage logging off without editing config.
@@ -111,8 +103,7 @@ const telemetryOptOutEnvVar = Effect.fnUntraced(function* (
  * Reading it on each queue and send is what makes turning the setting off take
  * effect immediately instead of at the next launch — and lets the flush path
  * drop rounds recorded before the opt-out rather than shipping one last
- * batch. `config.enabled` remains a separate, independent gate so a host (or a
- * test) can hold the service off regardless of user settings.
+ * batch.
  *
  * `config` is the workspace's configuration the consent is read from: the
  * recording run's session roots, or the one captured with a queued entry.
@@ -268,7 +259,7 @@ const sendBatch = Effect.fn('UsageLogService.sendBatch')(function* (
   return response;
 });
 
-/** What a host stamps on its entries, and the cadence a test overrides. */
+/** What a host stamps on its entries, and its own telemetry switch. */
 export interface UsageLogOptions {
   /** This host's version, reported with every entry. */
   readonly version: string | undefined;
@@ -278,9 +269,6 @@ export interface UsageLogOptions {
   /** The host's own telemetry switch, read live on each queue and send: the
    *  extension passes `vscode.env.isTelemetryEnabled`. */
   readonly hostTelemetryEnabled?: () => boolean;
-  /** Batch size, flush cadence and the host-side off switch; the shipped
-   *  defaults stand where a caller passes nothing. */
-  readonly config?: Partial<UsageLogConfig>;
 }
 
 /**
@@ -290,7 +278,7 @@ export interface UsageLogOptions {
  * batch-size trigger and the periodic one), in order, one batch at a time;
  * an undelivered batch is retried on an exponential backoff from the flush
  * interval, capped at {@link MAX_RETRY_DELAY}. The layer's close stops
- * admitting entries, stops the sender (cutting a backoff short, never a
+ * accepting entries, stops the sender (cutting a backoff short, never a
  * send), then tries each batch still waiting once.
  */
 export const usageLogLayer = (
@@ -299,14 +287,10 @@ export const usageLogLayer = (
   Layer.effect(
     UsageLog,
     Effect.gen(function* () {
-      const { batchSize, flushIntervalMs, enabled } = {
-        ...DEFAULT_CONFIG,
-        ...options.config,
-      };
       const { version, editorType } = options;
       const hostTelemetryEnabled = options.hostTelemetryEnabled ?? (() => true);
       /** Entries waiting for the next batch; past capacity the oldest goes.
-       *  The close ends it: no entry is admitted after, and those queued
+       *  The close ends it: no entry is accepted after, and those queued
        *  remain for the final drain. */
       const queue = yield* Queue.sliding<QueuedUsageEntry, Cause.Done>(
         MAX_QUEUE_SIZE,
@@ -326,9 +310,9 @@ export const usageLogLayer = (
           ? isTelemetryEnabledBySetting(config, env)
           : Effect.succeed(false);
 
-      /** Synchronous producer admission; the sender does the I/O. */
+      /** Ask the sender for a flush, synchronously; the sender does the I/O. */
       const requestFlush = (): void => {
-        if (enabled) Queue.offerUnsafe(triggers, undefined);
+        Queue.offerUnsafe(triggers, undefined);
       };
 
       /** The endpoint refused the batch for good (`retryable: false`): drop it,
@@ -455,9 +439,7 @@ export const usageLogLayer = (
         }
       });
 
-      const backoff = Schedule.exponential(
-        Duration.millis(flushIntervalMs),
-      ).pipe(
+      const backoff = Schedule.exponential(FLUSH_INTERVAL).pipe(
         Schedule.modifyDelay(({ duration }) =>
           Effect.succeed(Duration.min(duration, MAX_RETRY_DELAY)),
         ),
@@ -501,7 +483,6 @@ export const usageLogLayer = (
         config: ConfigProvider,
         env?: Readonly<Record<string, string | undefined>>,
       ) {
-        if (!enabled) return;
         if (!(yield* allowed(config, env))) return;
 
         const full = yield* Queue.isFull(queue);
@@ -521,11 +502,11 @@ export const usageLogLayer = (
         const size = yield* Queue.size(queue);
         yield* Effect.logDebug(`Queued usage entry (queue size: ${size})`);
 
-        if (size >= batchSize) requestFlush();
+        if (size >= BATCH_SIZE) requestFlush();
       }, withLogChannel(CHANNEL));
 
       /**
-       * Stop admitting entries, stop the sender, then send what is already
+       * Stop accepting entries, stop the sender, then send what is already
        * queued, each batch once.
        */
       const drainAndStop = Effect.fn('UsageLogService.drainAndStop')(function* (
@@ -569,7 +550,7 @@ export const usageLogLayer = (
       yield* Effect.forkScoped(
         Clock.clockWith((clock) =>
           Effect.sync(requestFlush).pipe(
-            Effect.schedule(Schedule.spaced(Duration.millis(flushIntervalMs))),
+            Effect.schedule(Schedule.spaced(FLUSH_INTERVAL)),
             Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
           ),
         ),
@@ -585,9 +566,9 @@ export const usageLogLayer = (
         ).pipe(withLogChannel(CHANNEL));
       }
 
-      yield* Effect.logDebug(
-        `UsageLogService started (batchSize=${batchSize}, flushIntervalMs=${flushIntervalMs}, enabled=${enabled})`,
-      ).pipe(withLogChannel(CHANNEL));
+      yield* Effect.logDebug('UsageLogService started').pipe(
+        withLogChannel(CHANNEL),
+      );
       return { log };
     }).pipe(Effect.withSpan('UsageLogService.start')),
   );

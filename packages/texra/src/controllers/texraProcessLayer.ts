@@ -57,7 +57,7 @@ export interface TexraProcessHost extends Omit<
   readonly skillSourceOptions?: SkillSourceOptions;
   /** What the usage log stamps on each entry, and the host's own live
    *  telemetry switch; the runtime's disposal drains the log's queue. */
-  readonly usageLog: Omit<UsageLogOptions, 'config'>;
+  readonly usageLog: UsageLogOptions;
   /** The runtime's floor for Effect diagnostics. */
   readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
