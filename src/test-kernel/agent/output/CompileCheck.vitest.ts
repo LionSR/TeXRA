@@ -5,7 +5,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
-import { expect, vi } from 'vitest';
+import { assert, expect, vi } from 'vitest';
 
 // Local imports
 import { RunIdSchema } from '@texra-ai/harness/schemas';
@@ -47,6 +47,7 @@ layer(latexHost({}), { excludeTestServices: true })('runCompileCheck', (it) => {
           outputFile(runId, path.join('r0', 'main.tex'), 'main.tex', 0),
         ]);
 
+        assert(result._tag === 'checked');
         const { failures } = result;
         expect(failures).toHaveLength(1);
         expect(failures[0].displayName).toBe('main.tex');

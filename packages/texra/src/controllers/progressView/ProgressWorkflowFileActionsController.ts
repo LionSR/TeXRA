@@ -18,7 +18,7 @@ import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { revisionLayout } from '@texra/shared/constants/workflowOutput';
 import type { AppSignals, ProcessServices } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
-import type { documentsOf } from '@texra/shared/plugins/documents';
+import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
 
@@ -51,8 +51,8 @@ export interface ProgressWorkflowFileActionsHost {
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {
-  /** A run's output files, by round, as the session view holds them. */
-  outputFiles: (runId: RunId) => ReturnType<typeof documentsOf>['files'];
+  /** A run's rounds, as the session view holds its documents fact. */
+  rounds: (runId: RunId) => readonly RoundOutput[];
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
@@ -222,8 +222,9 @@ export class ProgressWorkflowFileActionsController {
    *  workspace path across rounds, so the first match would name an
    *  earlier round. */
   private latestOutput(stream: RunId, file: string) {
-    return Object.values(this.deps.outputFiles(stream))
-      .flat()
+    return this.deps
+      .rounds(stream)
+      .flatMap((round) => round.outputs)
       .filter((info) => info.location.absolutePath === file)
       .toSorted((a, b) => b.round - a.round)
       .at(0);

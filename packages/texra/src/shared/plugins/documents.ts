@@ -11,18 +11,14 @@
  */
 import { Effect, Record as Rec, Result, Schema, Struct } from 'effect';
 
-import { type FileLocation, type ToolFact } from '@texra-ai/harness/schemas';
+import { type ToolFact } from '@texra-ai/harness/schemas';
 import {
   DocumentDiffsSchema,
   RoundOutputSchema,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
   type DocumentDiffs,
-  type CompileFailure,
   type DocumentsResult,
-  type LatexdiffEntry,
-  type OutputFileInfo,
-  type ReadonlyRoundIndexed,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { AgentOptionDataSchema } from '@texra/shared/pickerOptions';
@@ -43,10 +39,12 @@ export const DOCUMENTS_OUTPUT_KIND = {
   plugin: 'documents',
   kind: 'output',
   // v2: a proposed task's fact carries its `diffs`. v3: each round holds
-  // its `latexdiffs` and its `reply`, which were log rows. An earlier
-  // version is an earlier build's row, and an earlier build reads a v3 one
-  // as a newer build's.
-  version: 3,
+  // its `latexdiffs` and its `reply`, which were log rows. v4: a round's
+  // compile check is its `compile` outcome, an output's lineage is its
+  // `base` and `document`, and a latexdiff records its math markup. An
+  // earlier version is an earlier build's row, and an earlier build reads a
+  // v4 one as a newer build's.
+  version: 4,
   schema: DocumentsOutputSchema,
   // A document task runs a recipe script, which is never forked.
   fork: 'drop',
@@ -134,37 +132,6 @@ export function documentsSummary(fact: ToolFact): DocumentsResult {
     compileFailures: roundOutputsToCompileFailureSummaries(rounds),
     diffs,
     ...(diffsUnavailable === undefined ? {} : { diffsUnavailable }),
-  };
-}
-
-/** The run's documents by round, from its latest documents row; empty for a
- *  run that is no document task. */
-export function documentsOf(run: Pick<RunView, 'facts'>): {
-  readonly files: ReadonlyRoundIndexed<OutputFileInfo>;
-  readonly missingOutputs: ReadonlyRoundIndexed<string>;
-  readonly compileFailures: ReadonlyRoundIndexed<CompileFailure>;
-  readonly latexdiffs: ReadonlyRoundIndexed<LatexdiffEntry>;
-  /** Each round's kept reply, for a round that wrote nothing or lacks
-   *  documents. */
-  readonly replies: { readonly [round: number]: FileLocation };
-} {
-  const rounds = documentRoundsOf(run);
-  const byRound = <T>(pick: (round: RoundOutput) => readonly T[]) =>
-    Object.fromEntries(
-      rounds.flatMap((round) =>
-        pick(round).length === 0 ? [] : [[round.round, [...pick(round)]]],
-      ),
-    );
-  return {
-    files: byRound((round) => round.outputs),
-    missingOutputs: byRound((round) => round.missingOutputs),
-    compileFailures: byRound((round) => round.compileFailures),
-    latexdiffs: byRound((round) => round.latexdiffs),
-    replies: Object.fromEntries(
-      rounds.flatMap((round) =>
-        round.reply ? [[round.round, round.reply]] : [],
-      ),
-    ),
   };
 }
 

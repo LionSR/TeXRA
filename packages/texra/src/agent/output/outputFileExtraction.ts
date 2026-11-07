@@ -25,16 +25,18 @@ import {
 
 import { replaceInputCommands } from './fileMapping';
 import { recoverOutputFailure } from './outputOperations';
-import type { XmlOutputManager } from './XmlOutputManager';
+import { extractReplyDocuments } from './replyDocuments';
+import type { ExpectedDocuments } from './extraction/filenameHeaders';
 import type { AgentTrace, RunFileService } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** What the output pipeline reads of the workflow run. */
 export interface OutputDependencies {
   readonly config: AgentConfig;
-  /** The documents the task starts from, where the launch named them: what
-   *  an unlabeled reply is matched against and its `\input`s are rewritten
-   *  from. */
+  /** The documents the launch expects a reply to name. */
+  readonly expected: ExpectedDocuments;
+  /** Those documents where the launch named them: what an unlabeled reply
+   *  is matched against and its `\input`s are rewritten from. */
   readonly sources: FileLocation[];
   readonly logger: AgentTrace;
   readonly fileService: RunFileService;
@@ -177,7 +179,6 @@ function withMissingExpected(
 export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
   function* (
     deps: OutputDependencies,
-    xmlManager: XmlOutputManager,
     outputLocation: FileLocation,
     currRound: number,
     /** The outputs of the revision before it, which this one revises. */
@@ -189,7 +190,8 @@ export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
     );
     const nothing: ExtractedRevision = { outputs: [], missing: [] };
     const extracted = yield* Effect.gen(function* () {
-      const split = yield* xmlManager.splitScratchpadMultipleOutputXml(
+      const split = yield* extractReplyDocuments(
+        deps,
         outputLocation,
         currRound,
         similarityBaseFiles(deps.sources, previousOutputs),

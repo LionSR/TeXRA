@@ -5,45 +5,45 @@ import { describe, expect, vi } from 'vitest';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { createExternalLocation } from '@texra-ai/harness/host';
 
-import { AgentConfigSchema, RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakePath } from '@test/support/FakePlatform';
 import { FakeHost } from '@test/support/testKernel';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
+import { extractReplyDocuments } from '@texra/agent/output/replyDocuments';
+import { expectedDocuments } from '@texra/agent/output/extraction/filenameHeaders';
 import { assignByContentSimilarity } from '@texra/agent/output/extraction/contentSimilarity';
 
 const RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('a0e1a0');
 
-interface XmlManagerOptions {
+interface LaunchFiles {
   outputFiles?: string[];
   /** Run-relative names of the files a similarity fallback may match against. */
   baseFiles?: string[];
 }
 
-function createXmlManager(
+/** What the extraction reads of a run launched with these files. */
+function replyContext(
   inputFiles: string[] = ['paper.tex'],
-  options: XmlManagerOptions = {},
-): XmlOutputManager {
-  const logger = spiedTrace(
-    {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      emit: vi.fn(),
-    },
-    { strict: true },
-  );
-  return new XmlOutputManager(
-    Schema.decodeUnknownSync(AgentConfigSchema)({
+  options: LaunchFiles = {},
+) {
+  return {
+    expected: expectedDocuments({
       inputFiles,
       outputFiles: options.outputFiles ?? [],
     }),
-    logger,
-    new RunFileService(RUN_ID, testWorkspaceRoots()),
-    testWorkspaceRoots().config,
-  );
+    logger: spiedTrace(
+      {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        emit: vi.fn(),
+      },
+      { strict: true },
+    ),
+    fileService: new RunFileService(RUN_ID, testWorkspaceRoots()),
+  };
 }
 
 /** Seed the run directory: the fake host roots every path in a real temp
@@ -58,18 +58,16 @@ const write = (target: string, content: string) =>
 const writeAndSplitDocuments = Effect.fn('writeAndSplitDocuments')(function* (
   output: readonly string[],
   inputFiles: string[] = ['paper.tex'],
-  options: XmlManagerOptions = {},
+  options: LaunchFiles = {},
 ) {
   yield* write(fakePath('tmp/run/output.xml'), output.join('\n'));
-  const { outputs } = yield* createXmlManager(
-    inputFiles,
-    options,
-  ).splitScratchpadMultipleOutputXml(
+  const { outputs } = yield* extractReplyDocuments(
+    replyContext(inputFiles, options),
     createExternalLocation(fakePath('tmp/run/output.xml')),
     0,
     options.baseFiles?.map((name) =>
       createExternalLocation(fakePath('tmp/run', name)),
-    ),
+    ) ?? [],
   );
   return outputs;
 });
@@ -192,7 +190,7 @@ layer(
     workspacePath: fakePath('workspace'),
   }),
   { buildPerTest: true, excludeTestServices: true },
-)('XmlOutputManager', (it) => {
+)('extractReplyDocuments', (it) => {
   for (const [name, output, inputFiles, files] of RECOVERY_CASES) {
     it.effect(name, () =>
       Effect.gen(function* () {

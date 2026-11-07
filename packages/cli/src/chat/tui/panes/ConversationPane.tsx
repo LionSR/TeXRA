@@ -1,7 +1,7 @@
 import { Box } from 'ink';
 
 import {
-  documentsOf,
+  documentRoundsOf,
   isDocumentTaskRun,
 } from '@texra/shared/plugins/documents';
 
@@ -64,17 +64,11 @@ export function ConversationPane(
       )
     : 0;
   const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
-  const documents =
-    stream && isDocumentTaskRun(stream) ? documentsOf(stream) : undefined;
   const workflowFacts =
-    stream && documents
+    stream && isDocumentTaskRun(stream)
       ? {
           taskGroups: stream.transcript.taskGroups,
-          outputFilesByRound: documents.files,
-          missingOutputsByRound: documents.missingOutputs,
-          compileFailuresByRound: documents.compileFailures,
-          latexdiffsByRound: documents.latexdiffs,
-          repliesByRound: documents.replies,
+          rounds: documentRoundsOf(stream),
         }
       : undefined;
   const visibleWorkflowDetails = selectWorkflowRunDetailLines(

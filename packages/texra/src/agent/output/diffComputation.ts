@@ -76,7 +76,7 @@ const computeDiffStats = Effect.fn('documents.computeDiffStats')(
 
 /** The +/- diff stats must be computed against the immutable pre-run
  *  snapshot (in-place workflows overwrite the live file, so the snapshot is
- *  the only surviving "before"). But the lineage `original` exposed to the
+ *  the only surviving "before"). But the lineage `document` exposed to the
  *  UI should point at the live workspace document so the "compare" action
  *  diffs — and lets the user edit — their real file rather than the
  *  read-only run-storage copy. Snapshot locations carry the workspace-relative
@@ -108,7 +108,8 @@ const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
 /** The diff stats and lineage of a round's outputs, against the
  *  snapshot-resolved `baseFiles` (the list `RunFileService.prepareRunWorkspace`
  *  returns): the live workspace path would collapse in-place diffs to 0/0. A
- *  task that writes new documents (it declares `outputs`) gets no lineage. */
+ *  task that writes new documents (it declares outputs) gets no lineage, and
+ *  neither does an output no base pairs with. */
 export const computeOutputDiffStats = Effect.fn(
   'documents.computeOutputDiffStats',
 )(function* (
@@ -152,20 +153,23 @@ export const computeOutputDiffStats = Effect.fn(
           }
         }
 
-        const effectiveOriginal = lineage
-          ? yield* toWorkspaceOrigin(workspace, originalLocation)
-          : null;
-        const effectiveDiffBase = lineage ? diffBaseLocation : null;
-        const stats = yield* computeDiffStats(effectiveDiffBase, location);
+        const base = lineage ? diffBaseLocation : null;
+        const stats = yield* computeDiffStats(base, location);
 
         return {
           source: output.source,
           round: output.round,
           location,
-          lineage: {
-            original: effectiveOriginal,
-            diffBase: effectiveDiffBase,
-          },
+          lineage:
+            base === null
+              ? null
+              : {
+                  base,
+                  document: yield* toWorkspaceOrigin(
+                    workspace,
+                    originalLocation,
+                  ),
+                },
           diff: stats,
         };
       }),

@@ -37,22 +37,17 @@ import {
   documentsSummary,
   documentTaskOptions,
 } from '@texra/shared/plugins/documents';
-import {
-  type CompileSkip,
-  runCompileCheck,
-  skippedCompileCheck,
-} from '@texra/agent/output/compileCheck';
+import { runCompileCheck } from '@texra/agent/output/compileCheck';
 import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
 import { recoverOutputFailure } from '@texra/agent/output/outputOperations';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { LatexDiffManager } from '@texra/agent/output/LatexDiffManager';
-import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
+import { ensureCorrectXmlStructure } from '@texra/agent/output/replyDocuments';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { revisionLayout } from '@texra/shared/constants/workflowOutput';
 import {
   keepReply,
   openDocuments,
-  rejectsOnCompileFailure,
   revisionPrompt,
   roundOf,
   withRound,
@@ -61,9 +56,11 @@ import {
 import { computeDocumentDiffs } from '@texra/tools/documents/documentResult';
 import { rejectOversizedBibAttachments } from '@texra/tools/documents/documentTask';
 import {
+  compileFailuresOf,
   latexdiffDisplayName,
   roundOutputsToOutputSummaries,
   OUTPUT_END_TAG,
+  type CompileOutcome,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 
@@ -280,12 +277,11 @@ export const DocumentExtractTool = defineTool({
       return yield* Effect.fail(
         new ToolError(`Run ${run} gave no reply to take documents from.`),
       );
-    const { logger, config, fileService, roots } = docs.deps;
+    const { logger, fileService, roots } = docs.deps;
     const location = yield* keepReply(docs, revision, reply);
-    const xml = new XmlOutputManager(config, logger, fileService, roots.config);
     // A broken structure costs the repair, not the revision: reported, and
     // extraction reads the reply as it is.
-    yield* xml.ensureCorrectXmlStructure(location).pipe(
+    yield* ensureCorrectXmlStructure(location, roots.config, logger).pipe(
       recoverOutputFailure({
         logger,
         level: 'warn',
@@ -295,7 +291,6 @@ export const DocumentExtractTool = defineTool({
     );
     const extracted = yield* extractFilesFromXml(
       docs.deps,
-      xml,
       location,
       revision,
       roundOf(docs.rounds, revision - 1)?.outputs ?? [],
@@ -305,7 +300,7 @@ export const DocumentExtractTool = defineTool({
       roots.workspace,
       docs.baseFiles,
       // A task that names no outputs rewrites its inputs: its outputs descend
-      // from them.
+      // from them, even when a launch names where they are written.
       docs.task.outputs.length === 0,
     );
     // Without the model's version, a later Accept cannot tell the model
@@ -334,7 +329,7 @@ export const DocumentExtractTool = defineTool({
       round: revision,
       outputs,
       missingOutputs: extracted.missing,
-      compileFailures: [],
+      compile: null,
       latexdiffs: [],
       reply: location,
     };
@@ -377,21 +372,13 @@ export const DocumentExtractTool = defineTool({
   }),
 });
 
-/** Why `document_compile` checked nothing, as its result says it. */
-const COMPILE_SKIPPED: Readonly<Record<CompileSkip, string>> = {
-  disabled: 'auto-compile is off',
-  'no-tex': 'the revision wrote no .tex output',
-  'no-compiler': 'no LaTeX compiler (latexmk or pdflatex) is installed',
-  errored: 'the check itself failed',
-};
-
 /** `document_compile`: the compile check over a revision's outputs. */
 export const DocumentCompileTool = defineTool({
   name: 'document_compile',
   description:
-    "Compile a revision's .tex outputs. Resolves to `{ failures, checked, skipped }`: the outputs that failed with their logs, whether a check ran, and why none did (`disabled`: auto-compile is off; `no-tex`: no .tex output; `no-compiler`: no LaTeX compiler is installed; `errored`: the check failed), else null. Run it before `document_diff`, not beside it: each call records the run's documents whole.",
+    "Compile a revision's .tex outputs. Resolves to `{ failures, skipped, rejected }`: the outputs that failed with their logs; why no check ran (auto-compile is off, no .tex output, no LaTeX compiler, or the check failed), else null; and whether the failures reject the revision, which the next revision's prompt and `document_propose` act on. Run it before `document_diff`, not beside it: each call records the run's documents whole.",
   scriptReturns:
-    "{ failures: { output: string; log: string }[]; checked: boolean; skipped: 'disabled' | 'no-tex' | 'no-compiler' | 'errored' | null }",
+    '{ failures: { output: string; log: string }[]; skipped: string | null; rejected: boolean }',
   replay: 'safe',
   schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_compile')(function* ({ revision }) {
@@ -408,10 +395,28 @@ export const DocumentCompileTool = defineTool({
         logger,
         level: 'warn',
         label: 'Compile check',
-        recover: () => Effect.succeed(skippedCompileCheck('errored')),
+        recover: () =>
+          Effect.succeed({
+            _tag: 'skipped' as const,
+            reason: 'the check itself failed',
+          }),
       }),
     );
-    const { failures } = check;
+    // What a failed compile means for the task is decided here, once, and
+    // recorded with the revision.
+    const rejects = yield* Settings.get<boolean>(
+      roots,
+      DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+    );
+    const compile: CompileOutcome =
+      check._tag === 'skipped'
+        ? check
+        : {
+            _tag: 'checked',
+            failures: check.failures,
+            rejected: rejects && check.failures.length > 0,
+          };
+    const failures = compileFailuresOf({ compile });
     // A revision with no record extracted nothing, so its check checked
     // nothing and records nothing.
     const facts =
@@ -419,16 +424,17 @@ export const DocumentCompileTool = defineTool({
         ? []
         : [
             documentsOutputFact(
-              withRound(docs.rounds, {
-                ...recorded,
-                compileFailures: failures,
-              }),
+              withRound(docs.rounds, { ...recorded, compile }),
             ),
           ];
     if (yield* autoOpensPdf(docs))
       yield* present(
         docs,
-        failures.length > 0 ? failures.map((f) => f.log) : check.artifacts,
+        check._tag === 'skipped'
+          ? []
+          : failures.length > 0
+            ? failures.map((f) => f.log)
+            : check.artifacts,
       );
     const summary = failures.map((failure) => ({
       output: failure.displayName,
@@ -436,19 +442,17 @@ export const DocumentCompileTool = defineTool({
     }));
     const value = {
       failures: summary,
-      checked: check.skipped === null,
-      skipped: check.skipped,
+      skipped: compile._tag === 'skipped' ? compile.reason : null,
+      rejected: compile._tag === 'checked' && compile.rejected,
     };
-    if (check.skipped !== null) {
+    if (compile._tag === 'skipped') {
       // The rejection gate sees no failures here, so it says what it skips.
-      const unverified =
-        check.skipped === 'no-compiler' &&
-        (yield* rejectsOnCompileFailure(docs))
-          ? ' Failed compiles are rejected, but this revision is unverified.'
-          : '';
+      const unverified = rejects
+        ? ' Failed compiles are rejected, but this revision is unverified.'
+        : '';
       return {
         ...executed(
-          `No compile check ran: ${COMPILE_SKIPPED[check.skipped]}.${unverified}`,
+          `No compile check ran: ${compile.reason}.${unverified}`,
           'Not checked',
         ),
         value,
@@ -540,8 +544,8 @@ export const DocumentDiffTool = defineTool({
 
 /**
  * `document_propose`: the task's result, the outputs of its latest revision
- * that wrote any. That revision failing its compile fails the task while
- * the setting rejects on compile failures.
+ * that wrote any. That revision failing its compile fails the task when its
+ * check recorded the failure as a rejection.
  */
 export const DocumentProposeTool = defineTool({
   name: 'document_propose',
@@ -557,13 +561,10 @@ export const DocumentProposeTool = defineTool({
       return yield* Effect.fail(
         new ToolError('The task produced no documents to propose.'),
       );
-    if (
-      last.compileFailures.length > 0 &&
-      (yield* rejectsOnCompileFailure(docs))
-    )
+    if (last.compile?._tag === 'checked' && last.compile.rejected)
       return yield* Effect.fail(
         new ToolError(
-          `The documents of the last revision did not compile: ${last.compileFailures.map((f) => `${f.displayName} (${f.logRelativePath})`).join(', ')}.`,
+          `The documents of the last revision did not compile: ${last.compile.failures.map((f) => `${f.displayName} (${f.logRelativePath})`).join(', ')}.`,
         ),
       );
     const files = last.outputs.map((output) =>

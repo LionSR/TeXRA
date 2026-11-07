@@ -32,7 +32,6 @@ import {
   AgentCatalog,
   pathToLocationIn,
   type AgentEntry,
-  Settings,
 } from '@texra-ai/harness/host';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
@@ -48,11 +47,11 @@ import {
 import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
 import { documentTaskKey } from '@texra/agent/output/documentRecipe';
 import type { OutputDependencies } from '@texra/agent/output/outputFileExtraction';
+import { expectedDocuments } from '@texra/agent/output/extraction/filenameHeaders';
 import {
   appendCompileFailureRoundContext,
   failureContextFromLogs,
 } from '@texra/agent/output/compileFailureRoundContext';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import {
   documentTaskOf,
   taskFileVars,
@@ -133,15 +132,6 @@ function revisionFiles(docs: Documents, revision: number): FileLocation[] {
 const replyLocation = (docs: Documents, revision: number) =>
   docs.deps.fileService.createLocation(revisionLayout(revision).reply);
 
-/** The rejection setting: a failed compile fails the task. */
-export const rejectsOnCompileFailure = (
-  docs: Documents,
-): ReturnType<typeof Settings.get<boolean>> =>
-  Settings.get<boolean>(
-    docs.deps.roots,
-    DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-  );
-
 /**
  * Open the documents of `run`, the document task the calling tool serves.
  * Fails for a run that is no document task's.
@@ -163,11 +153,11 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
       ),
     );
   const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
-  const sources: FileLocation[] = (
-    config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
-  ).map((file) => fileService.locateSource(file));
+  const expected = expectedDocuments(config);
+  const sources = expected.names.map((file) => fileService.locateSource(file));
   const deps: OutputDependencies = {
     config,
+    expected,
     sources,
     logger,
     fileService,
@@ -238,11 +228,11 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     );
   }
   // The compile failures that rejected the last revision, from the logs its
-  // check wrote, while the setting rejects on them.
-  const failures = roundOf(docs.rounds, revision - 1)?.compileFailures ?? [];
+  // check wrote.
+  const compiled = roundOf(docs.rounds, revision - 1)?.compile;
   const feedback =
-    failures.length > 0 && (yield* rejectsOnCompileFailure(docs))
-      ? yield* failureContextFromLogs(failures, deps.logger)
+    compiled?._tag === 'checked' && compiled.rejected
+      ? yield* failureContextFromLogs(compiled.failures, deps.logger)
       : undefined;
   const request = (yield* renderPrompt(
     task.requests[revision] ?? '',

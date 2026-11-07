@@ -97,11 +97,11 @@ layer(
           path.join(`r${round}`, folder, 'main.tex'),
         ),
         lineage: {
-          original: null,
-          diffBase: runStorageFile(
+          base: runStorageFile(
             runId,
             path.join('original', folder, 'main.tex'),
           ),
+          document: null,
         },
         diff: null,
       });

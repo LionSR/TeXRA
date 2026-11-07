@@ -31,6 +31,7 @@ import {
   revisionLayout,
 } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 
 import {
   publishCompiledPdfArtifact,
@@ -188,6 +189,11 @@ export class LatexDiffManager {
           'Skipping between-round latexdiff operations: disabled in settings',
         );
       }
+      // One markup for the whole pass, recorded with each diff.
+      const mathMarkup = yield* Settings.get<LatexdiffMathMarkupValue>(
+        this.roots,
+        DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
+      );
       const candidatePairs = latexdiffPairs(
         outputFiles,
         generateBetweenRoundDiffs ? previousOutputs : [],
@@ -228,7 +234,11 @@ export class LatexDiffManager {
       const entries: LatexdiffEntry[] = [];
       const artifacts: RunStorageFileLocation[] = [];
       for (const pair of pairs) {
-        const outcome = yield* this.runSingleDiff(pair, roundDiffDirectory);
+        const outcome = yield* this.runSingleDiff(
+          pair,
+          roundDiffDirectory,
+          mathMarkup,
+        );
         entries.push(outcome.entry);
         if (outcome.artifact) artifacts.push(outcome.artifact);
       }
@@ -259,6 +269,7 @@ export class LatexDiffManager {
   private runSingleDiff(
     { revised, document, base, baseRound, suffix }: LatexdiffPair,
     roundDiffDirectory: string,
+    mathMarkup: LatexdiffMathMarkupValue,
   ): Effect.Effect<SingleDiffOutcome, never, DiffServices> {
     const relativePath = path.join(roundDiffDirectory, path.dirname(document));
     const diffDirectory: DiffOutputDirectory = {
@@ -268,9 +279,10 @@ export class LatexDiffManager {
     };
     const pair = {
       revised: revised.location,
-      original: revised.lineage?.original ?? null,
+      document: revised.lineage?.document ?? null,
       base,
       baseRound,
+      mathMarkup,
     };
     const label = baseRound === null ? 'round-diff' : 'between-rounds-diff';
     // One pair's failure is that pair's entry, never the round's: the
@@ -285,6 +297,7 @@ export class LatexDiffManager {
         cwd,
         suffix,
         outputDirectory: diffDirectory.absolutePath,
+        mathMarkup,
       }).pipe(withLogChannel(this.runId));
       this.logger.debug('Successfully generated diff file', {
         data: { operation: label, diffPath },

@@ -20,10 +20,7 @@ import {
   documentsOfCall,
   RevisionSchema,
 } from '@texra/tools/documents/documentTools';
-import {
-  getEffectiveDiffBase,
-  type RoundOutput,
-} from '@texra/shared/plugins/documentOutputs';
+import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
 import { unifiedDiffOf } from '@texra/tools/documents/documentResult';
 
 /** The most diff a critic reads, across all outputs: a whole rewrite of a
@@ -54,10 +51,11 @@ const missingEvidence = (round: Round, revision: number): string | null => {
 const compileEvidence = Effect.fn('document_review.compile')(function* (
   round: Round,
   logger: Documents['deps']['logger'],
-  checked: boolean,
 ) {
-  if (!checked) return 'No compile check ran: the documents are unverified.';
-  const failed = round?.compileFailures ?? [];
+  const compile = round?.compile;
+  if (compile?._tag !== 'checked')
+    return `No compile check ran${compile ? `: ${compile.reason}` : ''}. The documents are unverified.`;
+  const failed = compile.failures;
   const context = yield* failureContextFromLogs(failed, logger);
   const listed = failed
     .map((f) => `${f.displayName} failed to compile (log ${f.logRelativePath})`)
@@ -76,14 +74,8 @@ export const DocumentReviewTool = defineTool({
     "The evidence a critic reviews for a revision: the user's instruction, the task's requests so far, the diff of each output against the document it started from, and the compile result. Resolves to `{ prompt }`, to pass to the `critic` agent.",
   scriptReturns: '{ prompt: string }',
   replay: 'safe',
-  schema: Schema.Struct({
-    revision: RevisionSchema,
-    checked: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-      description:
-        "Whether the revision's compile check ran (`document_compile`).",
-    }),
-  }),
-  execute: Effect.fn('document_review')(function* ({ revision, checked }) {
+  schema: Schema.Struct({ revision: RevisionSchema }),
+  execute: Effect.fn('document_review')(function* ({ revision }) {
     const docs = yield* documentsOfCall('document_review');
     const round = roundOf(docs.rounds, revision);
     const fs = yield* FileSystem.FileSystem;
@@ -107,9 +99,9 @@ export const DocumentReviewTool = defineTool({
       Effect.fnUntraced(function* (output) {
         // The base its extraction recorded; an output with none is new: all
         // of it is the change. A base that is gone reads as empty.
-        const base = getEffectiveDiffBase(output.lineage);
+        const base = output.lineage?.base;
         const before =
-          base === null
+          base === undefined
             ? ''
             : yield* fs
                 .readFileString(base.absolutePath)
@@ -129,7 +121,7 @@ export const DocumentReviewTool = defineTool({
       parts.push(`<diff path="${path}">\n${shown}\n</diff>`);
     }
     parts.push(
-      `<compile>\n${yield* compileEvidence(round, docs.deps.logger, checked !== false)}\n</compile>`,
+      `<compile>\n${yield* compileEvidence(round, docs.deps.logger)}\n</compile>`,
     );
     const prompt = parts.join('\n\n');
     return {
