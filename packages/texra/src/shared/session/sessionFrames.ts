@@ -8,8 +8,9 @@
  * whole, then each tail read; `cursor` is the commit the reader had
  * drained when it cut the batch and `generation` echoes the `Subscribe`
  * that started it. A `HostFrame` carries what the host renders but does
- * not own. A `Response` answers one request under its id, and a
- * `SurfaceAction` is the host acting on state the surface owns. Up:
+ * not own. A `runtime.response` or `host.response` answers one request of
+ * its kind under its id, and a `SurfaceAction` is the host acting on state
+ * the surface owns. Up:
  * `Subscribe`, `runtime.request`, and `host.request`.
  *
  * `SessionFrames` supplies one ordered queue of batches for the current
@@ -28,7 +29,6 @@ import {
 
 import {
   OutcomeSchema,
-  RequestErrorSchema,
   RuntimeRequestSchema,
   RunIdSchema,
   StoredMediaSchema,
@@ -40,6 +40,7 @@ import {
   TranscriptSubscriptionSchema,
   type SessionViewInput,
 } from '@texra-ai/harness/transcript';
+import { BridgeErrorSchema } from './bridgeErrors';
 import { HostRequestSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
 import { LaunchPatchSchema } from './surface';
@@ -113,26 +114,35 @@ const HostOutcomeSchema = Schema.Union([
 ]);
 export type HostOutcome = typeof HostOutcomeSchema.Type;
 
-const ResponseSchema = Schema.Struct({
-  kind: Schema.Literal('response'),
+/** A request's result: its outcome, or the error it failed with as the
+ *  class itself. The wire carries the class's fields (a `postMessage` keeps
+ *  no Error prototype); the one decode of the message makes it the class
+ *  again. `Internal` is a handler defect whose cause stays in the host log
+ *  under `ref`, the request id. */
+const resultOf = <Outcome extends Schema.Top>(outcome: Outcome) =>
+  Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true), outcome }),
+    Schema.Struct({ ok: Schema.Literal(false), error: BridgeErrorSchema }),
+  ]);
+
+/** The answer to one `runtime.request`, under its id. */
+const RuntimeResponseSchema = Schema.Struct({
+  kind: Schema.Literal('runtime.response'),
   session: SessionKeySchema,
   requestId: RequestIdSchema,
-  result: Schema.Union([
-    Schema.Struct({
-      ok: Schema.Literal(true),
-      outcome: Schema.Union([OutcomeSchema, HostOutcomeSchema]),
-    }),
-    /** The request error the session answered with, as its fields: a
-     *  `postMessage` keeps no Error prototype, so the surface decodes the
-     *  class back with `RequestErrorSchema`. `Internal` is a handler defect
-     *  whose cause stays in the host log under `ref`, the request id. */
-    Schema.Struct({
-      ok: Schema.Literal(false),
-      error: Schema.toEncoded(RequestErrorSchema),
-    }),
-  ]),
+  result: resultOf(OutcomeSchema),
 });
-export type Response = typeof ResponseSchema.Type;
+
+/** The answer to one `host.request`, under its id. */
+const HostResponseSchema = Schema.Struct({
+  kind: Schema.Literal('host.response'),
+  session: SessionKeySchema,
+  requestId: RequestIdSchema,
+  result: resultOf(HostOutcomeSchema),
+});
+export type RuntimeResponse = typeof RuntimeResponseSchema.Type;
+export type HostResponse = typeof HostResponseSchema.Type;
+export type Response = RuntimeResponse | HostResponse;
 
 /** The host-initiated surface actions, and only these. */
 const SurfaceActionMessageSchema = Schema.Struct({
@@ -199,10 +209,14 @@ export type UpMessage = typeof UpMessageSchema.Type;
 export const DownMessageSchema = Schema.Union([
   EventsFrameSchema,
   HostFrameSchema,
-  ResponseSchema,
+  RuntimeResponseSchema,
+  HostResponseSchema,
   SurfaceActionMessageSchema,
 ]);
+/** A down-message as the surface reads it, after its one decode. */
 export type DownMessage = typeof DownMessageSchema.Type;
+/** A down-message as a port posts it: a response's error as its fields. */
+export type DownWire = typeof DownMessageSchema.Encoded;
 
 /** One generation's ordered frames. */
 interface FrameRead {

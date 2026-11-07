@@ -1,28 +1,28 @@
 /**
  * The unseen record every host's run list reads: a top-level run that
  * finished after the surface last showed it. The surface keeps, per
- * top-level run, the `lastTimestamp` it showed (`Surface.seen`); the view
+ * top-level run, the `lastTimestamp` it showed (`RunSurface.seen`); the view
  * says when the run last changed.
  */
 import type { RunId, SessionView } from '@texra-ai/harness/schemas';
 
-import type { Surface } from './surface';
+import { runSurface, shownRun, updateRun, type Surface } from './surface';
 
 /** The surface with its shown top-level run recorded as seen as `view`
  *  states it; the same record when nothing moved. */
 export function markShownRunSeen(surface: Surface, view: SessionView): Surface {
-  const run =
-    surface.selected === null ? undefined : view.runs.get(surface.selected);
+  const shown = shownRun(surface);
+  const run = shown === null ? undefined : view.runs.get(shown);
   if (
     run === undefined ||
     run.parentId !== null ||
-    (surface.seen.get(run.id) ?? -Infinity) >= run.lastTimestamp
+    (runSurface(surface, run.id).seen ?? -Infinity) >= run.lastTimestamp
   )
     return surface;
-  return {
-    ...surface,
-    seen: new Map(surface.seen).set(run.id, run.lastTimestamp),
-  };
+  return updateRun(surface, run.id, (record) => ({
+    ...record,
+    seen: run.lastTimestamp,
+  }));
 }
 
 /**
@@ -36,7 +36,7 @@ export function unseenRuns(
 ): ReadonlySet<RunId> {
   const unseen = new Set<RunId>();
   for (const run of view.runs.values()) {
-    const seen = surface.seen.get(run.id);
+    const { seen } = runSurface(surface, run.id);
     if (
       run.parentId === null &&
       run.outcome !== null &&

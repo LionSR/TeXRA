@@ -115,7 +115,11 @@ function project(
   view: SessionView,
   selected: RunId | null = null,
 ): RailProject {
-  const surface: Surface = { ...emptySurface(displayRecord.key), selected };
+  const surface: Surface = {
+    ...emptySurface(displayRecord.key),
+    shown:
+      selected === null ? { _tag: 'New' } : { _tag: 'Run', runId: selected },
+  };
   return { display: displayRecord, view, surface };
 }
 

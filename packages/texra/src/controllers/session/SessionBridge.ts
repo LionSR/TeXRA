@@ -22,8 +22,8 @@
  * is gone is dropped.
  *
  * A `runtime.request` runs the session's `request` and posts one
- * `Response` under the request's id; a `host.request` runs the host's
- * handler the same way. A message the bridge cannot parse is answered
+ * `runtime.response` under the request's id; a `host.request` runs the
+ * host's handler the same way and posts a `host.response`. A message the bridge cannot parse is answered
  * `Invalid` when it names a request id, and reported otherwise: a silent
  * drop would leave the sender's latch pending forever. A handler that dies
  * is answered `Internal` under the request id the host log carries the
@@ -41,39 +41,44 @@ import {
   Stream,
 } from 'effect';
 
-import {
-  type HostRequestFailure,
-  Internal,
-  isRequestRefusal,
-  type Session,
-} from '@texra-ai/harness';
+import { type Session } from '@texra-ai/harness';
 import {
   SESSION_CLOSE_DEADLINE_MS,
   withLogChannel,
 } from '@texra-ai/harness/host';
-import {
-  Invalid,
-  RequestErrorSchema,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
+  DownMessageSchema,
   UpMessageSchema,
   type DownMessage,
+  type DownWire,
   type HostOutcome,
+  type HostResponse,
   type Response,
+  type RuntimeResponse,
   type Subscribe,
   type SurfaceActionMessage,
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { ProcessServices } from '@texra-ai/harness/host';
+import {
+  isRequestRefusal,
+  type HostRequestFailure,
+} from '@texra/controllers/session/hostCallFailure';
+import {
+  Internal,
+  Invalid,
+  type BridgeError,
+} from '@texra/shared/session/bridgeErrors';
 
 const CHANNEL = 'SessionBridge';
 
 /** Enough of any up message to answer it: a message that names a request
  *  id gets its `Invalid` response even when the rest did not parse. */
 const RequestEnvelopeSchema = Schema.Struct({
+  kind: Schema.Literals(['runtime.request', 'host.request']),
   session: Schema.String,
   requestId: Schema.String.check(Schema.isMinLength(1)),
 });
@@ -104,7 +109,7 @@ interface SessionBridgeOptions {
 /** One attached transport port: the host posts `send`'s messages to it. */
 interface SessionPort {
   readonly id: string;
-  readonly send: (message: DownMessage) => void;
+  readonly send: (message: DownWire) => void;
 }
 
 /** What the bridge gives a host per attached port. */
@@ -132,19 +137,19 @@ class SessionBridgeClosedError extends Schema.TaggedError<SessionBridgeClosedErr
   }
 }
 
-/** A request error as the wire carries it: the class's fields, which the
- *  surface decodes back (a `postMessage` keeps no Error prototype). */
-const wireError = Schema.encodeSync(RequestErrorSchema);
+/** A response as the wire carries it: its error as the class's fields,
+ *  which the surface's one decode makes the class again (a `postMessage`
+ *  keeps no Error prototype). */
+const encodeResponse: (response: Response) => DownWire =
+  Schema.encodeSync(DownMessageSchema);
 
-const refused = (
-  error: typeof RequestErrorSchema.Type,
-): Response['result'] => ({ ok: false, error: wireError(error) });
+const refused = (error: BridgeError) => ({ ok: false, error }) as const;
 
-const response = (
-  session: string,
-  requestId: string,
-  result: Response['result'],
-): DownMessage => ({ kind: 'response', session, requestId, result });
+/** The response kind that answers each request kind. */
+const RESPONSE_KIND = {
+  'runtime.request': 'runtime.response',
+  'host.request': 'host.response',
+} as const;
 
 /** One attached port: its transport, its scope, and the framer in flight. */
 interface PortEntry {
@@ -327,12 +332,14 @@ export class SessionBridge {
           Effect.andThen(
             Effect.sync(() => {
               if (!Result.isSuccess(envelope)) return;
+              const { kind, session, requestId } = envelope.success;
               port.send(
-                response(
-                  envelope.success.session,
-                  envelope.success.requestId,
-                  refused(new Invalid({ reason })),
-                ),
+                encodeResponse({
+                  kind: RESPONSE_KIND[kind],
+                  session,
+                  requestId,
+                  result: refused(new Invalid({ reason })),
+                }),
               );
             }),
           ),
@@ -354,31 +361,40 @@ export class SessionBridge {
           return this.subscribe(entry, up);
         }
         case 'runtime.request':
-          return this.answer(
+          return this.answer<RuntimeResponse>(
             entry,
             up.requestId,
+            (result) => ({
+              kind: 'runtime.response',
+              session: this.key,
+              requestId: up.requestId,
+              result,
+            }),
             this.options.session.request(up.request).pipe(
               Effect.match({
                 onFailure: refused,
-                onSuccess: (outcome): Response['result'] => ({
-                  ok: true,
-                  outcome,
-                }),
+                onSuccess: (outcome) => ({ ok: true, outcome }) as const,
               }),
             ),
           );
         case 'host.request':
-          return this.answer(
+          return this.answer<HostResponse>(
             entry,
             up.requestId,
+            (result) => ({
+              kind: 'host.response',
+              session: this.key,
+              requestId: up.requestId,
+              result,
+            }),
             this.options.handleHostRequest(up.request, port.id).pipe(
               Effect.matchEffect({
-                onFailure: (error): Effect.Effect<Response['result']> =>
+                onFailure: (error) =>
                   isRequestRefusal(error)
                     ? Effect.succeed(refused(error))
                     : Effect.die(error),
-                onSuccess: (outcome): Effect.Effect<Response['result']> =>
-                  Effect.succeed({ ok: true, outcome }),
+                onSuccess: (outcome) =>
+                  Effect.succeed({ ok: true, outcome } as const),
               }),
             ),
           );
@@ -391,10 +407,11 @@ export class SessionBridge {
    * under the request id. A handler that died has its cause logged here and the port
    * answered `Internal`, so the sender's latch clears.
    */
-  private answer(
+  private answer<R extends Response>(
     entry: PortEntry,
     requestId: string,
-    result: Effect.Effect<Response['result'], never, ProcessServices>,
+    respond: (result: R['result']) => R,
+    result: Effect.Effect<R['result'], never, ProcessServices>,
   ): Effect.Effect<void, never, ProcessServices> {
     return FiberSet.run(
       this.requests,
@@ -410,7 +427,7 @@ export class SessionBridge {
         Effect.flatMap((answer) =>
           Effect.sync(() => {
             if (this.ports.get(entry.port.id) !== entry) return;
-            entry.port.send(response(this.key, requestId, answer));
+            entry.port.send(encodeResponse(respond(answer)));
           }),
         ),
       ),

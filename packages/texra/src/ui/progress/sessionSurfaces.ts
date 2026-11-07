@@ -9,13 +9,16 @@
  * the host bridge for a session.
  */
 import { signal, type Signal } from '@lit-labs/signals';
-import { Effect, Schema } from 'effect';
+import { Effect, Result } from 'effect';
 
-import { RequestErrorSchema } from '@texra-ai/harness/schemas';
+import type { BridgeError } from '@texra/shared/session/bridgeErrors';
 
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import type { Response, UpMessage } from '@texra/shared/session/sessionFrames';
+import type {
+  HostOutcome,
+  UpMessage,
+} from '@texra/shared/session/sessionFrames';
 import {
   applySurfaceAction,
   canSendFollowUp,
@@ -25,6 +28,9 @@ import {
   PersistedSurfaceSchema,
   pruneSurface,
   reconcileLaunch,
+  runSurface,
+  shownRun,
+  type Draft,
   type Surface,
   type SurfaceAction,
 } from '@texra/shared/session/surface';
@@ -43,10 +49,15 @@ import {
   type WebviewTransport,
 } from './sessionTransport';
 import type {
+  OutcomeSchema,
   SessionView,
   RuntimeRequest,
   RunId,
 } from '@texra-ai/harness/schemas';
+
+type Outcome = typeof OutcomeSchema.Type;
+/** How a request ended: its outcome, or the error it failed with. */
+type Answer<A> = Result.Result<A, BridgeError>;
 
 /** A short beep for a run the host decided to chime for. Autoplay
  *  restrictions and a missing audio device are expected, not fatal, but the
@@ -87,7 +98,7 @@ export interface SessionSurfaces {
   runtimeRequest(key: string, request: RuntimeRequest): void;
   hostRequest(key: string, request: HostRequest): void;
   /** A host request answered to its caller, not presented on the surface. */
-  answer: WebviewTransport['answer'];
+  answer: WebviewTransport['hostRequest'];
   /** The composer's Send for the resolved selection: a follow-up to the
    *  selected run, else a launch from the launcher's instruction. The
    *  button and the run accelerator both land here. */
@@ -148,7 +159,7 @@ export function createSessionSurfaces(options: {
     const view = entry.view$.get();
     const aggregates = transcriptAggregates(
       view,
-      entry.surface$.get().selected,
+      shownRun(entry.surface$.get()),
     );
     return {
       transcript: aggregates.map((aggregate) => aggregate.id).join('/'),
@@ -227,7 +238,7 @@ export function createSessionSurfaces(options: {
     const surface = entry.surface$.get();
     return origin.runId === null
       ? surface.launch.instruction
-      : (surface.drafts.get(origin.runId)?.text ?? '');
+      : runSurface(surface, origin.runId).draft.text;
   }
 
   function setDraftText(entry: Held, origin: DraftOrigin, text: string): void {
@@ -240,16 +251,15 @@ export function createSessionSurfaces(options: {
     act(entry, { kind: 'launch', patch: { instruction: text } });
   }
 
-  /** A refused request's error as its class; null for success and for a
-   *  cancellation, which needs no notice. The message was decoded whole, so
-   *  the error's wire form always decodes: a failure here is a defect. */
-  function refusal(result: Response['result']): Surface['requestError'] {
-    if (result.ok) return null;
-    const error = Schema.decodeUnknownSync(RequestErrorSchema)(result.error);
+  /** A refused request's error; null for success and for a cancellation,
+   *  which needs no notice. */
+  function refusal(result: Answer<unknown>): Surface['requestError'] {
+    if (Result.isSuccess(result)) return null;
+    const error = result.failure;
     return error._tag === 'Cancelled' ? null : error;
   }
 
-  function presentResult(entry: Held, result: Response['result']): void {
+  function presentResult(entry: Held, result: Answer<unknown>): void {
     const error = refusal(result);
     if (error !== null) {
       setSurface(entry, { ...entry.surface$.get(), requestError: error });
@@ -261,10 +271,10 @@ export function createSessionSurfaces(options: {
     entry: Held,
     request: HostRequest,
     origin: DraftOrigin,
-    result: Response['result'],
+    result: Answer<HostOutcome>,
   ): void {
-    if (!result.ok) return;
-    const { outcome } = result;
+    if (Result.isFailure(result)) return;
+    const outcome = result.success;
     const { launch } = entry.surface$.get();
     switch (request.kind) {
       case 'pickFiles':
@@ -294,7 +304,7 @@ export function createSessionSurfaces(options: {
           });
           return;
         }
-        const draft = entry.surface$.get().drafts.get(origin.runId);
+        const draft = entry.surface$.get().runs.get(origin.runId)?.draft;
         if (!draft) return;
         act(entry, {
           kind: 'draft',
@@ -344,7 +354,7 @@ export function createSessionSurfaces(options: {
     entry: Held,
     request: HostRequest,
     origin: DraftOrigin,
-    result: Response['result'],
+    result: Answer<HostOutcome>,
   ): void {
     presentResult(entry, result);
     settleHost(entry, request, origin, result);
@@ -372,7 +382,7 @@ export function createSessionSurfaces(options: {
 
   function hostRequestFor(entry: Held, request: HostRequest): void {
     const surface = entry.surface$.get();
-    let runId = surface.selected;
+    let runId = shownRun(surface);
     if (request.kind === 'record' && request.action.kind === 'start') {
       runId = request.action.target === 'launch' ? null : request.action.target;
     }
@@ -381,12 +391,14 @@ export function createSessionSurfaces(options: {
     // Built when it runs: a click that finds the stream busy sends nothing.
     const exchange = Effect.flatMap(
       Effect.suspend(() =>
-        transport.request({
-          kind: 'host.request',
-          session: entry.key,
-          requestId: requestId(),
-          request,
-        }),
+        Effect.result(
+          transport.hostRequest({
+            kind: 'host.request',
+            session: entry.key,
+            requestId: requestId(),
+            request,
+          }),
+        ),
       ),
       (result) =>
         Effect.sync(() => settleHostResponse(entry, request, origin, result)),
@@ -425,24 +437,26 @@ export function createSessionSurfaces(options: {
     // no restoration, and a later edit remains independent of this send.
     const submitted =
       request.kind === 'followUp.send'
-        ? entry.surface$.get().drafts.get(request.runId)
+        ? entry.surface$.get().runs.get(request.runId)?.draft
         : undefined;
     // Read before the answer: the view may retire the request, and the
     // form's hold on it, before the response arrives.
     const fromForm =
       request.kind === 'request.decide' &&
-      entry.surface$.get().editing?.requestId === request.requestId;
-    const answered = (result: Response['result']) =>
+      isProposalForm(entry.surface$.get(), request.requestId);
+    const answered = (result: Answer<Outcome>) =>
       Effect.sync(() =>
         settleRuntimeResponse(entry, request, result, submitted, fromForm),
       );
     const exchange = Effect.flatMap(
-      transport.request({
-        kind: 'runtime.request',
-        session: key,
-        requestId: requestId(),
-        request,
-      }),
+      Effect.result(
+        transport.runtimeRequest({
+          kind: 'runtime.request',
+          session: key,
+          requestId: requestId(),
+          request,
+        }),
+      ),
       answered,
     );
     transport.run(
@@ -453,11 +467,18 @@ export function createSessionSurfaces(options: {
     );
   }
 
+  /** Whether the launch form is open on the proposal `requestId` asks. */
+  function isProposalForm(surface: Surface, requestId: string): boolean {
+    return (
+      surface.shown._tag === 'Proposal' && surface.shown.requestId === requestId
+    );
+  }
+
   function settleRuntimeResponse(
     entry: Held,
     request: RuntimeRequest,
-    result: Response['result'],
-    submitted: ReturnType<Surface['drafts']['get']>,
+    result: Answer<Outcome>,
+    submitted: Draft | undefined,
     fromForm: boolean,
   ): void {
     const runId = 'runId' in request ? request.runId : null;
@@ -475,14 +496,18 @@ export function createSessionSurfaces(options: {
     }
     // The form's approval went through: back to the run that asked, where
     // its child starts.
-    if (result.ok && fromForm && request.kind === 'request.decide') {
+    if (
+      Result.isSuccess(result) &&
+      fromForm &&
+      request.kind === 'request.decide'
+    ) {
       act(entry, { kind: 'launch', patch: { instruction: '' } });
       act(entry, { kind: 'select', runId: request.runId });
     }
-    if (request.kind !== 'followUp.send' || !result.ok) return;
+    if (request.kind !== 'followUp.send' || Result.isFailure(result)) return;
     if (
       submitted !== undefined &&
-      entry.surface$.get().drafts.get(request.runId) === submitted
+      entry.surface$.get().runs.get(request.runId)?.draft === submitted
     ) {
       act(entry, {
         kind: 'draft',
@@ -497,10 +522,10 @@ export function createSessionSurfaces(options: {
   function submit(entry: Held): void {
     const surface = entry.surface$.get();
     const view = entry.view$.get();
-    const runId = surface.selected;
+    const runId = shownRun(surface);
     if (runId !== null) {
       const run = view.runs.get(runId);
-      const draft = surface.drafts.get(runId) ?? EMPTY_DRAFT;
+      const { draft } = runSurface(surface, runId);
       // The same decision the composer's Send takes, from the same view
       // fields: a run that ended or that another process owns takes no
       // follow-up, however the send was reached.
@@ -567,8 +592,8 @@ export function createSessionSurfaces(options: {
     // Show Sessions opens the newest session only from the New-task state,
     // and not over a run the window just started that is still on its way.
     else if (
-      entry.surface$.get().selected === null &&
-      entry.surface$.get().pendingSelection === null
+      shownRun(entry.surface$.get()) === null &&
+      entry.surface$.get().arriving === null
     ) {
       act(entry, { kind: 'select', runId: action.runId });
     }
@@ -599,7 +624,7 @@ export function createSessionSurfaces(options: {
       const entry = held.get(key);
       if (entry) runtimeRequestFor(entry, request);
     },
-    answer: transport.answer,
+    answer: transport.hostRequest,
     hostRequest(key, hostRequest) {
       const entry = held.get(key);
       if (entry) hostRequestFor(entry, hostRequest);

@@ -8,16 +8,14 @@ import {
   providerDisplayName,
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
-import {
-  isRequestRefusal,
-  Rejected,
-  type RequestRefusal,
-  type Session,
-  Unavailable,
-} from '@texra-ai/harness';
+import { Rejected, type Session, Unavailable } from '@texra-ai/harness';
 import { Secrets } from '@texra-ai/harness/host';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
+import {
+  isRequestRefusal,
+  type RequestRefusal,
+} from '@texra/controllers/session/hostCallFailure';
 
 /**
  * The host could not ask the user for a provider key.

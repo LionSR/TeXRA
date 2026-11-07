@@ -236,33 +236,6 @@ rebuilt store renumbers it.
 const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call_position", "kind", "name", "model", "description", "started_at", "status", "outcome", "cost", "input_tokens", "output_tokens", "calls_unreadable"]; run_tree: readonly ["ancestor_id", "id", "depth"]; tool_calls: readonly ["position", "run_id", "call_id", "script_call_id", "tool", "input", "attempt", "status", "output", "value", "error", "issued_at", "started_at", "ended_at"]; model_calls: readonly ["position", "run_id", "invocation_id", "attempt", "model", "status", "output", "error", "input_tokens", "output_tokens", "cost", "started_at", "ended_at"]; }>
 ```
 
-## HostRequestFailure
-
-How a host's request handler fails: with a tagged error, always. Four tags are the refusals the bridge folds
-onto the wire ({@link RequestRefusal}); every other tag is a defect it
-logs and answers `Internal` — but it is a *named* defect, so the log says
-which capability produced it. The bound is structural because the tags a
-host raises are its own (its lifted capabilities, its preview host, its
-housekeeping); what every host owes this channel is that each of them is
-a tag, so a bare `new Error(...)` can no longer reach the fold.
-
-```ts
-interface HostRequestFailure extends Error {
-  readonly _tag: string;
-}
-```
-
-## Internal
-
-A handler died. The cause is in the host log under `ref` (the request
-id); the surface hears that the request failed, never the text.
-
-```ts
-class Internal extends Schema.TaggedError<Internal>()('Internal', {
-  ref: Schema.String,
-})
-```
-
 ## isOutcomeOf
 
 Whether `outcome` answers a request of `kind`: how a client reads an
@@ -270,14 +243,6 @@ answer that crossed a process boundary.
 
 ```ts
 const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
-```
-
-## isRequestRefusal
-
-Whether a failure is one of the four the bridge answers on the wire.
-
-```ts
-function isRequestRefusal(error: unknown): error is RequestRefusal
 ```
 
 ## ITool
@@ -631,16 +596,6 @@ How a runtime request fails: one of the tagged errors above.
 
 ```ts
 type RequestError = typeof RequestErrorSchema.Type;
-```
-
-## RequestRefusal
-
-A request's refusal, as opposed to its defect: the four a handler may
-answer the surface with. The bridge folds these onto the wire; every other
-tag is `Internal`.
-
-```ts
-type RequestRefusal = Cancelled | Unavailable | Rejected | Conflict;
 ```
 
 ## responseText

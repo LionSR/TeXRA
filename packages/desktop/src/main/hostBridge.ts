@@ -1,7 +1,7 @@
 import { Effect, type Scope } from 'effect';
 import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron';
 
-import type { DownMessage } from '@texra/shared/session/sessionFrames';
+import type { DownWire } from '@texra/shared/session/sessionFrames';
 import {
   ELECTRON_SESSION_MESSAGE_CHANNEL,
   ELECTRON_SESSION_PUSH_CHANNEL,
@@ -19,7 +19,7 @@ interface DesktopHostBridgeOptions {
 export interface DesktopHostBridge {
   /** A `desktop:*` or settings-view command push. */
   postToRenderer(message: unknown): void;
-  postSession(message: DownMessage): void;
+  postSession(message: DownWire): void;
 }
 
 /** The bridge listens until the caller's scope (the window's) closes. */
@@ -45,7 +45,7 @@ export const installDesktopHostBridge = Effect.fnUntraced(function* (
   return {
     // The renderer decodes each push against its own union.
     postToRenderer: (message) => push(ELECTRON_WEBVIEW_PUSH_CHANNEL, message),
-    // Typed `DownMessage`s the session bridge builds: nothing to check.
+    // Typed `DownWire` messages the session bridge builds: nothing to check.
     postSession: (message) => push(ELECTRON_SESSION_PUSH_CHANNEL, message),
   };
 });

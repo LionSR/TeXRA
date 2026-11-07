@@ -23,7 +23,6 @@ import {
   Cancelled,
   Rejected,
   Unavailable,
-  type HostRequestFailure,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -95,6 +94,7 @@ import { findLabelInWorkspace } from './workspaceFileOptions';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
+import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
 
 /** A window's runs: its project's session, wherever its runs run (here,
  *  or in the background service), and the link the window attaches

@@ -23,11 +23,11 @@ import {
   type RunId,
   acceptsFollowUp,
   Rejected,
-  type RequestError,
   type SessionView,
   type RunView,
   type StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
+import type { BridgeError } from './bridgeErrors';
 import {
   InquiryDraftSchema,
   type InquiryDraft,
@@ -124,6 +124,26 @@ interface ProposalRef {
   readonly requestId: string;
 }
 
+/**
+ * What the surface shows: the New-task form, a run, or the launch form open
+ * on an agent's proposal (a proposal card's Edit), whose Send approves that
+ * request with the form's changes.
+ */
+export type Shown =
+  | { readonly _tag: 'New' }
+  | { readonly _tag: 'Run'; readonly runId: RunId }
+  | ({ readonly _tag: 'Proposal' } & ProposalRef);
+
+const SHOWN_NEW: Shown = Object.freeze({ _tag: 'New' });
+
+const shownOf = (runId: RunId | null): Shown =>
+  runId === null ? SHOWN_NEW : { _tag: 'Run', runId };
+
+/** The run the surface shows; null on the New-task form or a proposal. */
+export function shownRun(surface: Pick<Surface, 'shown'>): RunId | null {
+  return surface.shown._tag === 'Run' ? surface.shown.runId : null;
+}
+
 /** An image of a follow-up: the `[fileName]` chip its text carries and
  *  what the send attaches: the file the host saved it to (null until
  *  then), or, in a fork's composer, the media the store already holds. */
@@ -143,6 +163,34 @@ export const EMPTY_DRAFT: Draft = Object.freeze({
   images: Object.freeze([]),
 });
 
+/** What this surface keeps for one run. */
+export interface RunSurface {
+  readonly draft: Draft;
+  /** The user's expansion choice in the tree, absent until they make one;
+   *  a run that needs the user (`needsUser`) outranks it. */
+  readonly expanded: boolean | undefined;
+  /** Task groups inside its transcript. */
+  readonly groups: ReadonlyMap<string, boolean>;
+  /** For a top-level run, the `lastTimestamp` this surface last showed. */
+  readonly seen: number | undefined;
+}
+
+/** What the surface keeps for `runId`, a fresh empty record when it keeps
+ *  nothing (a shared one would share its `groups` map). */
+export function runSurface(
+  surface: Pick<Surface, 'runs'>,
+  runId: RunId,
+): RunSurface {
+  return (
+    surface.runs.get(runId) ?? {
+      draft: EMPTY_DRAFT,
+      expanded: undefined,
+      groups: new Map(),
+      seen: undefined,
+    }
+  );
+}
+
 /**
  * The desktop workbench layout rides in the surface as the desktop's own
  * record: `packages/desktop` declares its shape and the shared record only
@@ -154,7 +202,7 @@ type WorkbenchLayout = Readonly<Record<string, unknown>>;
  * A failed request a surface paints. Cancellation is the user's own
  * doing, so it stays quiet and never reaches a surface field.
  */
-type SurfaceRejection = Exclude<RequestError, { _tag: 'Cancelled' }>;
+type SurfaceRejection = Exclude<BridgeError, { _tag: 'Cancelled' }>;
 
 export interface Surface {
   /** Which project this surface is for; the layer key. Never persisted. */
@@ -163,21 +211,24 @@ export interface Surface {
    *  components reports on the same notice (`reportError`). Never persisted. */
   readonly requestError: SurfaceRejection | null;
   /**
-   * The shown run, decided once: `pruneSurface` applies the surface's
-   * `SelectionRule`, so every reader takes the field as is. `null` is the
-   * New-task state on a project surface; a chat's rule maps it to its root.
+   * What the surface shows, decided once: `pruneSurface` applies the
+   * surface's `SelectionRule` to the shown run, so every reader takes the
+   * field as is. A chat's rule maps the New-task form to its root.
    */
-  readonly selected: RunId | null;
+  readonly shown: Shown;
   /** A run the host selected before this surface's view holds it (one its
    *  window just started), and `cursor`, a commit by which the session held
-   *  it. `pruneSurface` selects it once the view holds it, and drops it
-   *  once the view has reached `cursor` without it: the run was deleted.
-   *  Any selection made first replaces it. Never persisted. */
-  readonly pendingSelection: {
+   *  it; the surface keeps showing what it showed meanwhile. `pruneSurface`
+   *  shows it once the view holds it, and drops it once the view has
+   *  reached `cursor` without it: the run was deleted. Any selection made
+   *  first replaces it. Never persisted. */
+  readonly arriving: {
     readonly runId: RunId;
     readonly cursor: CommitOrdinal;
   } | null;
-  readonly drafts: ReadonlyMap<RunId, Draft>;
+  /** Per run: its draft, its expansion, its task groups, when it was last
+   *  shown. Text drafts persist; images do not. */
+  readonly runs: ReadonlyMap<RunId, RunSurface>;
   /** Foreground polish operations, keyed by stream id or `launch`. Never persisted. */
   readonly polishing: ReadonlySet<string>;
   /** Streams awaiting follow-up admission, and `launch` while the
@@ -187,20 +238,8 @@ export interface Surface {
    *  with, until the next request on that stream. Never persisted. */
   readonly rejected: ReadonlyMap<RunId, SurfaceRejection>;
   readonly launch: LaunchSurface;
-  /** The agent proposal the launch form is open on (a proposal card's
-   *  Edit): its Send approves that request with the form's changes. Cleared
-   *  by any selection, and once the request is no longer pending. Never
-   *  persisted. */
-  readonly editing: ProposalRef | null;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
-  /** The user's expansion choice per stream in the tree, absent until they
-   *  make one; a run that needs the user (`needsUser`) outranks it. */
-  readonly expanded: ReadonlyMap<RunId, boolean>;
-  /** Task groups inside a transcript, per stream. */
-  readonly groups: ReadonlyMap<RunId, ReadonlyMap<string, boolean>>;
-  /** Per top-level run, the `lastTimestamp` this surface last showed. */
-  readonly seen: ReadonlyMap<RunId, number>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
   /** The output list's "where files are stored" hint, dismissed once. */
@@ -230,12 +269,17 @@ export const PersistedSurfaceSchema = Schema.Struct({
   launch: LaunchSurfaceSchema.pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  /** Text only; image bytes are not persisted. */
-  drafts: entries(RunIdSchema, Schema.String),
+  runs: entries(
+    RunIdSchema,
+    Schema.Struct({
+      /** Text only; image bytes are not persisted. */
+      draft: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+      expanded: Schema.optionalKey(Schema.Boolean),
+      groups: entries(Schema.String, Schema.Boolean),
+      seen: Schema.optionalKey(Schema.Number),
+    }),
+  ),
   inquiryDrafts: entries(Schema.String, InquiryDraftSchema),
-  expanded: entries(RunIdSchema, Schema.Boolean),
-  groups: entries(RunIdSchema, entries(Schema.String, Schema.Boolean)),
-  seen: entries(RunIdSchema, Schema.Number),
   drawerOpen: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -263,22 +307,24 @@ export function loadSurface(
   return {
     session,
     requestError: null,
-    selected: persisted.selected,
-    pendingSelection: null,
-    drafts: new Map(
-      persisted.drafts.map(([id, text]) => [id, { ...EMPTY_DRAFT, text }]),
+    shown: shownOf(persisted.selected),
+    arriving: null,
+    runs: new Map(
+      persisted.runs.map(([id, run]) => [
+        id,
+        {
+          draft: { ...EMPTY_DRAFT, text: run.draft },
+          expanded: run.expanded,
+          groups: new Map(run.groups),
+          seen: run.seen,
+        },
+      ]),
     ),
     polishing: new Set(),
     sending: new Set(),
     rejected: new Map(),
     launch: persisted.launch,
-    editing: null,
     inquiryDrafts: new Map(persisted.inquiryDrafts),
-    expanded: new Map(persisted.expanded),
-    groups: new Map(
-      persisted.groups.map(([id, groups]) => [id, new Map(groups)]),
-    ),
-    seen: new Map(persisted.seen),
     drawerOpen: persisted.drawerOpen,
     toolsSheetOpen: false,
     storageHintDismissed: persisted.storageHintDismissed,
@@ -287,18 +333,22 @@ export function loadSurface(
   };
 }
 
-/** The persisted form of a surface: interaction state only, Maps as entries. */
+/** The persisted form of a surface: interaction state only, Maps as entries.
+ *  A proposal's form is not restored: it persists as the New-task form. */
 export function persistSurface(surface: Surface): PersistedSurface {
   return {
-    selected: surface.selected,
+    selected: shownRun(surface),
     launch: surface.launch,
-    drafts: [...surface.drafts]
-      .filter(([, draft]) => draft.text.length > 0)
-      .map(([id, draft]) => [id, draft.text]),
+    runs: [...surface.runs].map(([id, run]) => [
+      id,
+      {
+        draft: run.draft.text,
+        ...(run.expanded !== undefined && { expanded: run.expanded }),
+        groups: [...run.groups],
+        ...(run.seen !== undefined && { seen: run.seen }),
+      },
+    ]),
     inquiryDrafts: [...surface.inquiryDrafts],
-    expanded: [...surface.expanded],
-    groups: [...surface.groups].map(([id, groups]) => [id, [...groups]]),
-    seen: [...surface.seen],
     drawerOpen: surface.drawerOpen,
     storageHintDismissed: surface.storageHintDismissed,
     workbench: surface.workbench,
@@ -312,15 +362,6 @@ function retain<V>(
   const retained = [...map].filter(([id]) => view.runs.has(id));
   return retained.length === map.size ? map : new Map(retained);
 }
-
-/** The `Surface` fields that are stream-keyed maps, the only ones
- *  `pruneSurface` retains over; the branded `RunId` keeps `inquiryDrafts`
- *  (keyed by thread and turn, which no stream leaving retires) off it. */
-type RunKeyedMapField = {
-  [K in keyof Surface]: Surface[K] extends ReadonlyMap<RunId, unknown>
-    ? K
-    : never;
-}[keyof Surface];
 
 /**
  * Where a selection lands against the view, applied by `pruneSurface`. The
@@ -352,47 +393,39 @@ export function pruneSurface(
   select: SelectionRule = projectSelection(view),
 ): Surface {
   let surface = current;
-  const pending = current.pendingSelection;
-  if (pending !== null && view.runs.has(pending.runId)) {
+  const { arriving } = current;
+  if (arriving !== null && view.runs.has(arriving.runId)) {
     surface = applySurfaceAction(current, {
       kind: 'select',
-      runId: pending.runId,
+      runId: arriving.runId,
     });
-  } else if (pending !== null && view.cursor >= pending.cursor) {
+  } else if (arriving !== null && view.cursor >= arriving.cursor) {
     // The view has passed the commit that held the run: it was deleted.
-    surface = { ...current, pendingSelection: null };
+    surface = { ...current, arriving: null };
   }
-  // The annotation lists every stream-keyed map: a new one is a compile
-  // error here until it is pruned, rather than a silent leak of deleted
-  // streams' entries.
-  const maps: Pick<Surface, RunKeyedMapField> = {
-    drafts: retain(surface.drafts, view),
-    expanded: retain(surface.expanded, view),
-    groups: retain(surface.groups, view),
-    rejected: retain(surface.rejected, view),
-    seen: retain(surface.seen, view),
-  };
-  const selected = select(surface.selected);
-  const { editing } = surface;
-  const editingGone =
-    editing !== null &&
-    !view.requests.some(
-      (request) =>
-        request.runId === editing.runId &&
-        request.requestId === editing.requestId,
-    );
-  if (
-    selected === surface.selected &&
-    !editingGone &&
-    Struct.keys(maps).every((key) => maps[key] === surface[key])
-  )
+  // The two run-keyed records: an id is never reused, so a run's entry
+  // can never become valid again once it leaves the view.
+  const runs = retain(surface.runs, view);
+  const rejected = retain(surface.rejected, view);
+  const { shown } = surface;
+  let next: Shown = shown;
+  if (shown._tag === 'Proposal') {
+    // The form closes once the request is no longer pending.
+    if (
+      !view.requests.some(
+        (request) =>
+          request.runId === shown.runId &&
+          request.requestId === shown.requestId,
+      )
+    )
+      next = SHOWN_NEW;
+  } else {
+    const selected = select(shownRun(surface));
+    if (selected !== shownRun(surface)) next = shownOf(selected);
+  }
+  if (next === shown && runs === surface.runs && rejected === surface.rejected)
     return surface;
-  return {
-    ...surface,
-    ...maps,
-    selected,
-    ...(editingGone && { editing: null }),
-  };
+  return { ...surface, runs, rejected, shown: next };
 }
 
 /**
@@ -416,7 +449,7 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
     (option) => option.value === launch.model || option.value === ref,
   );
   if (
-    surface.editing === null &&
+    surface.shown._tag !== 'Proposal' &&
     host.modelOptions.length > 0 &&
     current === undefined
   ) {
@@ -456,7 +489,7 @@ export function canSendFollowUp(run: RunView, draft: Draft): boolean {
  */
 export type SurfaceAction =
   | { readonly kind: 'select'; readonly runId: RunId | null }
-  /** Select a run once the view holds it (`Surface.pendingSelection`). */
+  /** Select a run once the view holds it (`Surface.arriving`). */
   | {
       readonly kind: 'selectOnArrival';
       readonly runId: RunId;
@@ -511,6 +544,18 @@ function withEntry<K, V>(map: ReadonlyMap<K, V>, key: K, value: V | null) {
   return next;
 }
 
+/** `surface` with `runId`'s record changed by `change`. */
+export function updateRun(
+  surface: Surface,
+  runId: RunId,
+  change: (run: RunSurface) => RunSurface,
+): Surface {
+  return {
+    ...surface,
+    runs: new Map(surface.runs).set(runId, change(runSurface(surface, runId))),
+  };
+}
+
 export function applySurfaceAction(
   surface: Surface,
   action: SurfaceAction,
@@ -526,34 +571,31 @@ export function applySurfaceAction(
     case 'select':
       return {
         ...surface,
-        selected: action.runId,
-        pendingSelection: null,
+        shown: shownOf(action.runId),
+        arriving: null,
         drawerOpen: false,
-        editing: null,
       };
     case 'selectOnArrival':
       return {
         ...surface,
-        pendingSelection: { runId: action.runId, cursor: action.cursor },
+        arriving: { runId: action.runId, cursor: action.cursor },
       };
     case 'selectNew':
       return {
         ...surface,
-        selected: null,
-        pendingSelection: null,
+        shown: SHOWN_NEW,
+        arriving: null,
         drawerOpen: false,
         requestError: null,
-        editing: null,
         launch: { ...surface.launch, instruction: '' },
       };
     case 'editProposal':
       return {
         ...surface,
-        selected: null,
-        pendingSelection: null,
+        shown: { _tag: 'Proposal', ...action.proposal },
+        arriving: null,
         drawerOpen: false,
         requestError: null,
-        editing: action.proposal,
         launch: { ...surface.launch, ...action.patch, launchTarget: 'agent' },
       };
     case 'toggleDrawer':
@@ -567,13 +609,10 @@ export function applySurfaceAction(
     case 'search':
       return { ...surface, search: action.value };
     case 'draft':
-      return {
-        ...surface,
-        drafts: withEntry(surface.drafts, action.runId, {
-          ...(surface.drafts.get(action.runId) ?? EMPTY_DRAFT),
-          ...action.patch,
-        }),
-      };
+      return updateRun(surface, action.runId, (run) => ({
+        ...run,
+        draft: { ...run.draft, ...action.patch },
+      }));
     case 'launch': {
       const launch = { ...surface.launch, ...action.patch };
       // Naming an agent targets it.
@@ -595,23 +634,15 @@ export function applySurfaceAction(
         ),
       };
     case 'expand':
-      return {
-        ...surface,
-        expanded: withEntry(surface.expanded, action.runId, action.expanded),
-      };
+      return updateRun(surface, action.runId, (run) => ({
+        ...run,
+        expanded: action.expanded,
+      }));
     case 'group':
-      return {
-        ...surface,
-        groups: withEntry(
-          surface.groups,
-          action.runId,
-          withEntry(
-            surface.groups.get(action.runId) ?? new Map<string, boolean>(),
-            action.key,
-            action.expanded,
-          ),
-        ),
-      };
+      return updateRun(surface, action.runId, (run) => ({
+        ...run,
+        groups: withEntry(run.groups, action.key, action.expanded),
+      }));
     case 'workbench':
       return { ...surface, workbench: action.layout };
     case 'seen':

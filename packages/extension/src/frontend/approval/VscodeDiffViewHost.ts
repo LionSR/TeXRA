@@ -13,7 +13,7 @@ import {
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
-import type { RequestRefusal } from '@texra-ai/harness';
+import { type RequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 /** How long a reveal waits for the diff's proposed side to become visible. */
 const REVEAL_TIMEOUT_MS = 1500;

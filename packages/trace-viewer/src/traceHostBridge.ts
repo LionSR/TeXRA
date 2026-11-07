@@ -21,10 +21,9 @@
  */
 import { Result, Schema } from 'effect';
 
-import { Rejected } from '@texra-ai/harness/schemas';
 import {
   UpMessageSchema,
-  type DownMessage,
+  type DownWire,
 } from '@texra/shared/session/sessionFrames';
 import {
   HOST_BRIDGE_API_KEY,
@@ -57,7 +56,7 @@ async function loadTrace(): Promise<TraceDocument> {
   return parseTraceData(await res.json());
 }
 
-function deliver(message: DownMessage): void {
+function deliver(message: DownWire): void {
   window.dispatchEvent(new MessageEvent('message', { data: message }));
 }
 
@@ -111,14 +110,18 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
         case 'runtime.request':
         case 'host.request':
           deliver({
-            kind: 'response',
+            kind:
+              up.kind === 'runtime.request'
+                ? 'runtime.response'
+                : 'host.response',
             session: TRACE_SESSION,
             requestId: up.requestId,
             result: {
               ok: false,
-              error: new Rejected({
+              error: {
+                _tag: 'Rejected',
                 reason: 'An exported trace is read-only.',
-              }),
+              },
             },
           });
           return;
