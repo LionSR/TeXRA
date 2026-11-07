@@ -2,6 +2,7 @@
 
 import {
   appendFileSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -897,6 +898,39 @@ prompt: |
 }
 
 /**
+ * The rows `sql` selects from the store in `dir`, read from a copy of its
+ * `texra.db` and write-ahead log: the process that holds a project store (a
+ * service, a chat, a headless run) admits no other connection, so the
+ * validator reads what the holder has committed to the files. The log is
+ * copied first: a holder that closes after that has checkpointed it into
+ * the file the copy takes next, and a store with no log has it all there.
+ */
+function storeRows(dir, sql, ...params) {
+  const copy = mkdtempSync(path.join(tmpdir(), 'texra-validate-store-'));
+  try {
+    try {
+      copyFileSync(
+        path.join(dir, 'texra.db-wal'),
+        path.join(copy, 'texra.db-wal'),
+      );
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    copyFileSync(path.join(dir, 'texra.db'), path.join(copy, 'texra.db'));
+    const db = new DatabaseSync(path.join(copy, 'texra.db'), {
+      readOnly: true,
+    });
+    try {
+      return db.prepare(sql).all(...params);
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+}
+
+/**
  * A project for the view-edit validators: an agent with no tools whose
  * (validation) model answers with the user messages it was shown, so each
  * reply is what the run's view held, and every request is rebuilt from the
@@ -969,20 +1003,13 @@ prompt: |
       assertSuccess(first, 'texra run echo_validation');
       return parseJson(first.stdout, 'echo run').runId;
     },
-    /** One read of the project's store, closed again for the next writer. */
+    /** The rows `sql` selects from the project's store (`storeRows`). */
     readStore: (sql) => {
       // The project's store: a service also keeps a no-workspace one.
       const project = readdirSync(storage).find((name) =>
         name.startsWith('work-'),
       );
-      const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
-        readOnly: true,
-      });
-      try {
-        return db.prepare(sql).all();
-      } finally {
-        db.close();
-      }
+      return storeRows(path.join(storage, project), sql);
     },
     /**
      * `texra resume` with `args` under a PTY, then each exchange in turn:
@@ -1400,23 +1427,17 @@ async function validateSdkResumeApproval() {
       [storage, '-path', '*/workspace-storage/*', '-name', 'texra.db'],
       { encoding: 'utf8' },
     ).stdout.trim();
-    const db = new DatabaseSync(store, { readOnly: true });
-    let rows;
-    try {
-      rows = db
-        .prepare(
-          `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
-             json_extract(e.data, '$.decision.action') AS decision,
-             json_extract(e.data, '$.payload.callId') AS callId
-           FROM event e JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? AND e.type IN
-             ('request.opened', 'request.decided', 'tool.result', 'run.end')
-           ORDER BY e."commit"`,
-        )
-        .all(runId);
-    } finally {
-      db.close();
-    }
+    const rows = storeRows(
+      path.dirname(store),
+      `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
+         json_extract(e.data, '$.decision.action') AS decision,
+         json_extract(e.data, '$.payload.callId') AS callId
+       FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type IN
+         ('request.opened', 'request.decided', 'tool.result', 'run.end')
+       ORDER BY e."commit"`,
+      runId,
+    );
     const approvedPath = path.join(work, 'approved.txt');
     const approved = existsSync(approvedPath)
       ? readFileSync(approvedPath, 'utf8')
@@ -2073,22 +2094,14 @@ prompt: |
     const storage = path.join(storageRoot, 'v1', 'workspace-storage');
     const dir = readdirSync(storage).find((name) => name.startsWith('work-'));
     if (dir === undefined) return [];
-    const db = new DatabaseSync(path.join(storage, dir, 'texra.db'), {
-      readOnly: true,
-    });
-    try {
-      return db
-        .prepare(
-          `SELECT e.data FROM event e
-           JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? AND e.type = 'tool.result'
-           ORDER BY e."commit"`,
-        )
-        .all(runId)
-        .map((row) => String(row.data));
-    } finally {
-      db.close();
-    }
+    return storeRows(
+      path.join(storage, dir),
+      `SELECT e.data FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type = 'tool.result'
+       ORDER BY e."commit"`,
+      runId,
+    ).map((row) => String(row.data));
   };
   const windows = [];
   const attachWindow = async (mode) => {
@@ -2662,23 +2675,14 @@ prompt: |
       path.join(projectDir(), 'config.json'),
       `${JSON.stringify({ 'texra.approvalPolicy': policy })}\n`,
     );
-  const rowTypes = (runId) => {
-    const db = new DatabaseSync(path.join(projectDir(), 'texra.db'), {
-      readOnly: true,
-    });
-    try {
-      return db
-        .prepare(
-          `SELECT e.type FROM event e
-           JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? ORDER BY e."commit"`,
-        )
-        .all(runId)
-        .map((row) => row.type);
-    } finally {
-      db.close();
-    }
-  };
+  const rowTypes = (runId) =>
+    storeRows(
+      projectDir(),
+      `SELECT e.type FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? ORDER BY e."commit"`,
+      runId,
+    ).map((row) => row.type);
   let windowA;
   try {
     // A first task opens the project in the service, which makes its
@@ -2779,21 +2783,13 @@ prompt: |
     const narrowedRows = rowTypes(narrowed);
     // The limit is what holds it, recorded on its run.start; the project's
     // Auto-approve may land before or after that row.
-    const db = new DatabaseSync(path.join(projectDir(), 'texra.db'), {
-      readOnly: true,
-    });
-    let limit;
-    try {
-      limit = db
-        .prepare(
-          `SELECT json_extract(e.data, '$.approvalPolicy.limit') AS limit_ FROM event e
-           JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? AND e.type = 'run.start'`,
-        )
-        .get(narrowed)?.limit_;
-    } finally {
-      db.close();
-    }
+    const limit = storeRows(
+      projectDir(),
+      `SELECT json_extract(e.data, '$.approvalPolicy.limit') AS limit_ FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type = 'run.start'`,
+      narrowed,
+    )[0]?.limit_;
     writeArtifact('service-policy-narrowed.json', {
       limit,
       rows: narrowedRows,
@@ -2866,20 +2862,13 @@ prompt: |
       name.startsWith('work-'),
     );
     if (project === undefined) return [];
-    const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
-      readOnly: true,
-    });
-    try {
-      return db
-        .prepare(
-          `SELECT e.type, e.data LIKE '%Ping%' AS ping FROM event e
-           JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? ORDER BY e."commit"`,
-        )
-        .all(runId);
-    } finally {
-      db.close();
-    }
+    return storeRows(
+      path.join(storage, project),
+      `SELECT e.type, e.data LIKE '%Ping%' AS ping FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? ORDER BY e."commit"`,
+      runId,
+    );
   };
   try {
     const runId = texra(
