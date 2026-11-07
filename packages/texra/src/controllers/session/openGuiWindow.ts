@@ -102,6 +102,11 @@ import { type HostCommandFailure } from '@texra/controllers/session/hostCallFail
 export interface GuiSession {
   readonly session: Session;
   readonly link: ServiceLink<WindowClient>;
+  /** Where the runs run, decided once at open: in the service, or in this
+   *  process with why when the window has a folder the service would hold
+   *  (it was out of reach); null for a window with no folder, which the
+   *  service never holds. */
+  readonly where: 'service' | { readonly local: string | null };
 }
 
 /** The kinds a host answers its own way, and what the refusal of one a
@@ -310,14 +315,22 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   yield* Effect.forkScoped(
     attachWindowHost(runs.link, workspace, host.window, ports.focused),
   );
-  // While the link holds no service, the banner says why (reaching it
-  // again, or refused by a newer TeXRA), so the view never sits frozen
-  // without saying so; a link to this process is never away.
-  yield* Effect.forkScoped(
-    Stream.runForEach(linkOutage(runs.link), (reason) =>
-      snapshot.setServiceOffline(reason),
-    ),
-  );
+  // The banner says where the window's tasks run when it is not where the
+  // user expects: a folder's tasks running here, because the service was
+  // out of reach at open; or, while a service window's link holds no
+  // service, why (reaching it again, or refused by a newer TeXRA), so the
+  // view never sits frozen without saying so.
+  const { where } = runs;
+  if (where === 'service')
+    yield* Effect.forkScoped(
+      Stream.runForEach(linkOutage(runs.link), (reason) =>
+        snapshot.setServiceBanner(
+          reason === null ? null : { kind: 'offline', reason },
+        ),
+      ),
+    );
+  else if (where.local !== null)
+    yield* snapshot.setServiceBanner({ kind: 'local', reason: where.local });
 
   const toolEditApprovals = new ToolEditApprovalController({
     host: ports.toolEdits,

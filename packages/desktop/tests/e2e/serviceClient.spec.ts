@@ -23,7 +23,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { expect, test } from '@playwright/test';
 
-import { closeTexraApp, launchTexraApp } from './electronApp.js';
+import {
+  closeTexraApp,
+  dismissOnboarding,
+  launchTexraApp,
+  showLauncher,
+} from './electronApp.js';
 import {
   NEXT_BUILD,
   alive,
@@ -459,5 +464,21 @@ test('a tool edit the app changed keeps its changes when another window answers 
     for (const pid of pids) if (alive(pid)) process.kill(pid, 'SIGTERM');
     if (kept !== undefined) cleanupDirectory(dirname(kept));
     cleanupDirectory(root);
+  }
+});
+
+// An app that cannot reach the service runs a folder's tasks in its own
+// process; its window says so, with why. The default launch keeps its data
+// outside `~/.texra`, the one root a service serves.
+test('a window that never reached the service says its tasks run in this window only', async () => {
+  const launched = await launchTexraApp();
+  try {
+    await dismissOnboarding(launched.page);
+    await showLauncher(launched);
+    const banner = launched.page.locator('progress-app #serviceLocalBanner');
+    await expect(banner).toContainText('in this window only');
+    await expect(banner).toContainText('the app keeps its data in');
+  } finally {
+    await closeTexraApp(launched);
   }
 });
