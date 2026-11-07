@@ -73,6 +73,7 @@ import {
   failedNext,
   failuresBefore,
   nextAttempt,
+  sameRef,
   type Attempt,
   type Invocation,
   type NextAttempt,
@@ -211,9 +212,6 @@ export const modelInvokerLayer = (): Layer.Layer<
       const roots = yield* SessionRoots;
       const aggregateId = qualifyAggregateId('run', runId);
       const usageLog = yield* UsageLog;
-      /** When each attempt was sent, by its reference, for pricing a failure
-       *  the provider billed by the time it took. */
-      const attemptStarts = new WeakMap<InvocationRef, number>();
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
       const attribution = {
@@ -456,12 +454,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         });
         // The durable fact before the billed request, with the prepared
         // turn it sends, which the rows alone must rebuild.
+        const started = yield* Clock.currentTimeMillis;
         yield* cell.append((state) =>
-          attemptRows(run, state, invocation, bound.origin, resolved),
+          attemptRows(run, state, invocation, bound.origin, resolved, started),
         );
         yield* checkRecordedRequest(run, resolved);
-        const started = yield* Clock.currentTimeMillis;
-        attemptStarts.set(invocation, started);
         return yield* consume(
           cell,
           invocation,
@@ -646,8 +643,13 @@ export const modelInvokerLayer = (): Layer.Layer<
             { ...info, rawErrorBody: error.cause },
           );
         // A response the provider billed before refusing it is priced
-        // and reported like a turn's, on its `failed` row.
-        const started = attemptStarts.get(ref);
+        // and reported like a turn's, on its `failed` row, timed from when
+        // its attempt row says it was sent.
+        const attempt = (yield* cell.current).invocation?.current;
+        const started =
+          attempt !== undefined && sameRef(attempt.ref, ref)
+            ? attempt.sent?.atMs
+            : undefined;
         const usage =
           error instanceof ModelError &&
           error.usage !== undefined &&

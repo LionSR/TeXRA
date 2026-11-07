@@ -286,6 +286,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       payload: {
         kind: 'attempt',
         request: '0'.repeat(64),
+        sentAtMs: 0,
         invocation: INVOCATION,
         origin: ORIGIN,
       },

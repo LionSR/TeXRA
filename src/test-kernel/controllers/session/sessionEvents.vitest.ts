@@ -1394,6 +1394,7 @@ describe('RunHistory', () => {
           payload: {
             kind: 'attempt',
             request: '0'.repeat(64),
+            sentAtMs: 0,
             invocation: INVOCATION,
             origin: ORIGIN,
           },
@@ -1537,6 +1538,7 @@ describe('RunHistory', () => {
               payload: {
                 kind: 'attempt',
                 request: '0'.repeat(64),
+                sentAtMs: 0,
                 invocation: { ...INVOCATION, attempt: 2 },
                 origin: {
                   ...ORIGIN,

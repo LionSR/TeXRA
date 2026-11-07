@@ -39,6 +39,8 @@ export type Attempt = {
   readonly sent: {
     readonly request: string;
     readonly origin: ModelOrigin;
+    /** When it was sent, a `Clock` reading. */
+    readonly atMs: number;
   } | null;
   readonly providerResponseId: string | null;
   /** The background operation a resume observes; `cancelled` retires it. */
@@ -76,7 +78,7 @@ type InvocationRow = Extract<
   }
 >;
 
-const sameRef = (a: InvocationRef, b: InvocationRef): boolean =>
+export const sameRef = (a: InvocationRef, b: InvocationRef): boolean =>
   a.invocationId === b.invocationId && a.attempt === b.attempt;
 
 /**
@@ -133,7 +135,9 @@ function openedBy(
     current: {
       ref: p.invocation,
       sent:
-        p.kind === 'attempt' ? { request: p.request, origin: p.origin } : null,
+        p.kind === 'attempt'
+          ? { request: p.request, origin: p.origin, atMs: p.sentAtMs }
+          : null,
       providerResponseId: null,
       accepted: null,
       failed: p.kind === 'failed' ? { error: p.error, next: p.next } : null,
