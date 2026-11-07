@@ -19,7 +19,10 @@ import {
 import { Cause, Effect, FileSystem } from 'effect';
 
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
-import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
+import {
+  revisionLayout,
+  stripWorkflowRoundDir,
+} from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
 import {
@@ -131,7 +134,7 @@ export function resolveWorkspaceSourceDir(
 /**
  * Compile each .tex output of a round to verify the workflow produced a
  * buildable document. Success is silent; failures write the log tail to
- * `<runDir>/compile/r<round>_<safe>.log`. Non-root fragments are skipped;
+ * the revision's compile log (`revisionLayout(...).compileLog`). Non-root fragments are skipped;
  * a check that compiles nothing says why (`skipped`).
  */
 export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
@@ -153,10 +156,6 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     if (texOutputs.length === 0) return skippedCompileCheck('no-tex');
 
     const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(ctx.roots);
-    // compileRoot is created lazily on first failure so successful rounds
-    // leave no trace — the orchestrator can use "no compile/*.log entries" as
-    // proof the build succeeded.
-    const compileRoot = path.join(runDirectory, 'compile');
     const failures: CompileFailure[] = [];
     const artifacts: RunStorageFileLocation[] = [];
 
@@ -167,7 +166,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
         outputFile,
         currentRound,
         displayName,
-        { compileRoot, runDirectory, timeoutMs },
+        { runDirectory, timeoutMs },
       ).pipe(
         // compileOne handles its own read/compile failures internally and
         // reports them as failures, never as skips — this recovery is only a
@@ -226,7 +225,6 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
 );
 
 interface PerFileOptions {
-  compileRoot: string;
   runDirectory: string;
   timeoutMs: number;
 }
@@ -283,9 +281,8 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   // Full relative path keeps two outputs sharing a basename distinct
-  // (ch1/main.tex vs ch2/main.tex). Strip the leading r<N>/ segment because
-  // it is already added explicitly as `r${currentRound}_` below — without
-  // this, a location like `r0/main.tex` would produce `r0_r0_main.tex.log`.
+  // (ch1/main.tex vs ch2/main.tex). The revision's own folder is left out,
+  // since the log's name already carries the revision.
   const pathForSafeName = stripWorkflowRoundDir(
     normalizeFilePath(fileLocationDisplayPath(outputFile.location)),
     currentRound,
@@ -302,15 +299,10 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
   );
   const sanitizedStem = sanitizedName.slice(0, MAX_SANITIZED_STEM_LENGTH);
   const safeName = `${sanitizedStem}_${pathHash}`;
-  const buildDir = path.join(
-    opts.compileRoot,
-    'build',
-    `r${currentRound}`,
-    safeName,
-  );
-  const logFileName = `r${currentRound}_${safeName}.log`;
-  const logAbsolutePath = path.join(opts.compileRoot, logFileName);
-  const logRelativePath = path.join('compile', logFileName);
+  const layout = revisionLayout(currentRound);
+  const buildDir = path.join(opts.runDirectory, layout.compileBuild(safeName));
+  const logRelativePath = layout.compileLog(safeName);
+  const logAbsolutePath = path.join(opts.runDirectory, logRelativePath);
   const { runId } = ctx.fileService;
 
   const target: CompileTarget = {
@@ -466,7 +458,6 @@ interface WriteCompileFailureArgs extends CompileTarget {
 const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
   function* ({
     ctx,
-    opts,
     displayName,
     currentRound,
     outputFile,
@@ -477,7 +468,11 @@ const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
   }: WriteCompileFailureArgs) {
     const fs = yield* FileSystem.FileSystem;
     yield* Effect.gen(function* () {
-      yield* fs.makeDirectory(opts.compileRoot, { recursive: true });
+      // Created on the first failure, so a revision that compiles leaves
+      // no compile log behind.
+      yield* fs.makeDirectory(path.dirname(logAbsolutePath), {
+        recursive: true,
+      });
       yield* fs.writeFileString(logAbsolutePath, `${failureLogExcerpt}\n`);
     }).pipe(
       Effect.catch((writeErr) =>

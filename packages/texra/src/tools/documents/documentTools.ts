@@ -51,7 +51,7 @@ import {
 import { checkExpectedOutputs } from '@texra/agent/output/outputValidation';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { modelOutputCopyPath } from '@texra/shared/constants/workflowOutput';
+import { revisionLayout } from '@texra/shared/constants/workflowOutput';
 import {
   keepReply,
   openDocuments,
@@ -320,7 +320,7 @@ export const DocumentExtractTool = defineTool({
     yield* Effect.forEach(
       round.outputs,
       Effect.fnUntraced(function* ({ round: outputRound, location }) {
-        const copyPath = modelOutputCopyPath(outputRound, location);
+        const copyPath = revisionLayout(outputRound).modelCopy(location);
         if (copyPath === undefined) return;
         const fs = yield* FileSystem.FileSystem;
         const copy = join(docs.deps.fileService.runDirectory, copyPath);

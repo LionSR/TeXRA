@@ -5,7 +5,7 @@
  * reporting missing files for user notification.
  */
 
-import { workflowOutputRoundDir } from '@texra/shared/constants/workflowOutput';
+import { revisionLayout } from '@texra/shared/constants/workflowOutput';
 
 import {
   ensureRoundData,
@@ -36,7 +36,7 @@ export function checkExpectedOutputs(
     (file) =>
       !written.has(
         deps.fileService.createLocation(
-          `${workflowOutputRoundDir(currRound)}/${file}`,
+          `${revisionLayout(currRound).dir}/${file}`,
         ).absolutePath,
       ),
   );

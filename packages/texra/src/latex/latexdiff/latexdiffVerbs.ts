@@ -39,7 +39,10 @@ import type { MessageHost } from '@texra/hosts/uiHosts';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { documentsOf } from '@texra/shared/plugins/documents';
-import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
+import {
+  formatRoundLabel,
+  roundIndexedEntries,
+} from '@texra/shared/plugins/documentOutputs';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 
 // Local file imports
@@ -191,7 +194,8 @@ export function latexdiffVerbs(parts: {
       outputs
         .filter((info) => info.lineage === null)
         .map(
-          (info) => `${getSafeDocumentRelativePath(info.source)} (r${round})`,
+          (info) =>
+            `${getSafeDocumentRelativePath(info.source)} (${formatRoundLabel(round)})`,
         ),
     );
     for (const description of missingLineage) {
@@ -216,8 +220,8 @@ export function latexdiffVerbs(parts: {
         ({ revised, document, base, baseRound, suffix }) => {
           const description =
             baseRound === null
-              ? `${document} (r${revised.round})`
-              : `${document} (r${baseRound}→r${revised.round})`;
+              ? `${document} (${formatRoundLabel(revised.round)})`
+              : `${document} (${formatRoundLabel(baseRound)} → ${formatRoundLabel(revised.round)})`;
           progress.report({
             increment: 100 / pairs.length,
             message: `Running diff for ${description}`,

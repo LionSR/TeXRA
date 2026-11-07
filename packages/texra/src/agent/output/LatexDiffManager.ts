@@ -28,7 +28,7 @@ import type {
 } from '@texra/shared/plugins/documentOutputs';
 import {
   WORKFLOW_OUTPUT_BASENAME,
-  workflowOutputRoundDir,
+  revisionLayout,
 } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 
@@ -168,14 +168,14 @@ export class LatexDiffManager {
       // relative \input{} resolution works when its cwd is runDir/r{round}.
       // The round's sources resolve beside its output, never over it; the
       // latexdiff directory holds no output of that name.
-      yield* this.fileService.ensureMirroredInRunSubdir(
-        workflowOutputRoundDir(currRound),
-        { protectedStem: WORKFLOW_OUTPUT_BASENAME },
-      );
-      const roundDiffDirectory = `diff/${workflowOutputRoundDir(currRound)}`;
+      const layout = revisionLayout(currRound);
+      yield* this.fileService.ensureMirroredInRunSubdir(layout.dir, {
+        protectedStem: WORKFLOW_OUTPUT_BASENAME,
+      });
+      const roundDiffDirectory = layout.diffDir;
       yield* this.fileService.ensureMirroredInRunSubdir(roundDiffDirectory);
 
-      this.logger.debug(`r${currRound} output files`, {
+      this.logger.debug(`Revision ${currRound + 1} output files`, {
         data: outputFiles.map((f) => f.location.absolutePath),
       });
 

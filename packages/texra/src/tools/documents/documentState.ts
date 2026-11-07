@@ -39,7 +39,7 @@ import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
   WORKFLOW_OUTPUT_BASENAME,
-  workflowOutputRoundDir,
+  revisionLayout,
 } from '@texra/shared/constants/workflowOutput';
 import {
   DOCUMENTS_OUTPUT_KIND,
@@ -125,13 +125,11 @@ function revisionFiles(docs: Documents, revision: number): FileLocation[] {
   return config.outputFiles.map((file) => fileService.createLocation(file));
 }
 
-/** Where a revision's reply is kept, whole, beside its outputs:
- *  `r{revision}/output.xml` in the run's storage, whose per-run directory
- *  keeps the fixed name from colliding across runs. */
+/** Where a revision's reply is kept, whole, beside its outputs, in the
+ *  run's storage, whose per-run directory keeps the fixed name from
+ *  colliding across runs. */
 const replyLocation = (docs: Documents, revision: number) =>
-  docs.deps.fileService.createLocation(
-    `${workflowOutputRoundDir(revision)}/${WORKFLOW_OUTPUT_BASENAME}.xml`,
-  );
+  docs.deps.fileService.createLocation(revisionLayout(revision).reply);
 
 /** The rejection setting: a failed compile fails the task. */
 export const rejectsOnCompileFailure = (
@@ -343,7 +341,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
     Effect.gen(function* () {
       if (revision > 0)
         yield* deps.fileService.ensureMirroredInRunSubdir(
-          workflowOutputRoundDir(revision),
+          revisionLayout(revision).dir,
           { protectedStem: WORKFLOW_OUTPUT_BASENAME },
         );
       return yield* media.processInputFiles(

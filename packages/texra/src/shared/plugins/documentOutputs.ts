@@ -70,9 +70,9 @@ export function roundIndexedEntries<T>(
     .sort((a, b) => a[0] - b[0]);
 }
 
-/** Compact round label: `r2`. A zero-based round renders one-based. */
+/** A round's label: `Revision 2`. A zero-based round renders one-based. */
 export function formatRoundLabel(round: number): string {
-  return `r${round + 1}`;
+  return `Revision ${round + 1}`;
 }
 
 // Generic raw-wrapper stems are run-storage internals, not the meaningful
@@ -100,7 +100,7 @@ export function getEffectiveDiffBase(
  * from wins, because that is the file the user recognizes; failing that the
  * document name the model emitted, unless it is a generic raw-wrapper stem;
  * and only then the artifact's own path, which carries run-storage internals
- * such as the `r<round>/` prefix.
+ * such as the revision folder.
  */
 export function outputDisplayName(file: OutputFileInfo): string {
   const original = file.lineage?.original;

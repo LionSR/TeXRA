@@ -15,7 +15,7 @@ import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
-import { modelOutputCopyPath } from '@texra/shared/constants/workflowOutput';
+import { revisionLayout } from '@texra/shared/constants/workflowOutput';
 import type { AppSignals, ProcessServices } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
 import type { documentsOf } from '@texra/shared/plugins/documents';
@@ -180,7 +180,7 @@ export class ProgressWorkflowFileActionsController {
 
   /**
    * The note telling a task's launcher what the user changed of the model's
-   * version of `file` (`modelOutputCopyPath`) before accepting it; none
+   * version of `file` (`revisionLayout(...).modelCopy`) before accepting it; none
    * when they changed nothing or the run kept no model version (a run from
    * an earlier build, or an output outside the workspace and the run).
    */
@@ -190,7 +190,7 @@ export class ProgressWorkflowFileActionsController {
   ): Effect.Effect<string | undefined, never, FileSystem.FileSystem> {
     const output = this.latestOutput(stream, file);
     const copyPath =
-      output && modelOutputCopyPath(output.round, output.location);
+      output && revisionLayout(output.round).modelCopy(output.location);
     if (output === undefined || copyPath === undefined)
       return Effect.succeed(undefined);
     const { runDirectory } = new RunFileService(stream, {
