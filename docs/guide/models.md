@@ -14,11 +14,11 @@ TeXRA connects directly to models from Anthropic, OpenAI, Google, DeepSeek, Moon
 
 **Model references.** A model is named `provider/id`, where `id` is the provider's own API model ID: `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`. Wherever you type a model (an agent's `model`, `--model`, or `.texra/config.json`), you can add:
 
-- `@effort` to set the reasoning effort: `@low`, `@medium`, `@high`, `@xhigh`, or `@max` (for example `anthropic/claude-opus-5-5@high`)
+- `@effort` to set the reasoning effort: `@low`, `@medium`, `@high`, `@xhigh`, or `@max` (for example `anthropic/claude-opus-5-5@high`); Muse Spark also takes `@minimal`
 - `@none` to turn thinking off, on models that allow it (for example `deepseek/deepseek-v4-pro@none`)
 - `+pro` to run an OpenAI model in pro reasoning mode (for example `openai/gpt-6.1-sol+pro`)
 
-Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last saved for that model, otherwise **medium**, for every model. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. Old short names such as `opus55` or `sonnet5T` are still accepted when you type them, but the reference is the canonical name.
+Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last saved for that model, otherwise **medium**, for every model. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. The CLI's `--model` and `texra models show` also take a model's bare API ID or label when it names exactly one model (`claude-opus-5-5`, `Opus 5.5`, or `opus55`); agent files and `.texra/config.json` take the reference.
 
 ## Anthropic models
 
@@ -94,7 +94,9 @@ DeepSeek offers `low`, `high`, and `max` effort, so the medium default runs at `
 | Model                         | Use Case                    | Cost | Speed  |
 | :---------------------------- | :-------------------------- | :--- | :----- |
 | `dashscope/qwen-plus`         | Hybrid thinking, 1M context | $$   | Medium |
-| `dashscope/qwen-turbo-latest` | Fast with optional thinking | $    | Fast   |
+| `dashscope/qwen-turbo-latest` | Fast, 128K context          | $    | Fast   |
+
+TeXRA sends Qwen no reasoning setting: each model thinks or not by its own default, and an `@effort` suffix (other than `@none`) is rejected.
 
 ## MiniMax models
 
@@ -102,7 +104,7 @@ DeepSeek offers `low`, `high`, and `max` effort, so the medium default runs at `
 | :------------------- | :--------------------------------------------- | :--- | :----- |
 | `minimax/MiniMax-M3` | Flagship with interleaved thinking, 1M context | $    | Medium |
 
-MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific: international keys (api.minimax.io) and China keys (api.minimax.cn) are not interchangeable. Expand the MiniMax row in **Models → API keys** and toggle **MiniMax China region** (GLM, Kimi/Moonshot, and Qwen have matching toggles; GLM's is on by default).
+MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific: international keys (api.minimax.io) and China keys (api.minimax.cn) are not interchangeable. Expand the MiniMax row in **Models → API keys** and toggle **MiniMax China region** (GLM, Kimi/Moonshot, and Qwen have matching toggles; GLM's and Kimi/Moonshot's are on by default).
 
 - **International**: Get your API key at [platform.minimax.io](https://platform.minimax.io/)
 - **China**: Get your API key at [platform.minimaxi.com](https://platform.minimaxi.com/)
@@ -110,10 +112,10 @@ MiniMax uses interleaved thinking (chain-of-thought woven into responses). API k
 
 ## GLM (Zhipu AI / Z.AI) models
 
-| Model             | Use Case                                     | Cost | Speed  |
-| :---------------- | :------------------------------------------- | :--- | :----- |
-| `glm/glm-5.3`     | Flagship, 1M context, reasoning-effort tiers | $$   | Medium |
-| `glm/glm-5-turbo` | Fast inference, agent-optimized              | $$$  | Medium |
+| Model             | Use Case                                      | Cost | Speed  |
+| :---------------- | :-------------------------------------------- | :--- | :----- |
+| `glm/glm-5.3`     | Flagship, 1M context, reasoning-effort tiers  | $$   | Medium |
+| `glm/glm-5-turbo` | Fast inference, agent-optimized, 200K context | $$   | Medium |
 
 GLM models support thinking mode (reasoning is shown inline). TeXRA uses the
 Responses API each region serves at `/api/v1`.
@@ -124,10 +126,10 @@ Responses API each region serves at `/api/v1`.
 
 ## Meta (Muse Spark) models
 
-| Model                 | Use Case                                | Cost | Speed  |
-| :-------------------- | :-------------------------------------- | :--- | :----- |
-| `meta/muse-spark-1.3` | Flagship reasoning + vision, 1M context | $$   | Medium |
-| `meta/muse-spark-1.1` | Reasoning + vision + PDF, 1M context    | $$   | Medium |
+| Model                 | Use Case                                      | Cost | Speed  |
+| :-------------------- | :-------------------------------------------- | :--- | :----- |
+| `meta/muse-spark-1.3` | Flagship reasoning + vision + PDF, 1M context | $$   | Medium |
+| `meta/muse-spark-1.1` | Older release, now deprecated                 | $$   | Medium |
 
 Muse Spark always reasons (effort is adjustable, but it does not take `@none`). TeXRA
 uses the Meta Model API's Responses surface, which carries reasoning across
@@ -160,10 +162,10 @@ and Google's own APIs).
 Using your own provider API key? TeXRA stores keys in `~/.texra/secrets/`, a folder only your user can read, shared by the extension, the desktop app and the CLI; they are never written to settings files.
 
 1.  **Open Settings**: Select the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon in the TeXRA panel header, or run **TeXRA: Open Settings** from the Command Palette.
-2.  **Go to the Models page**: The **API keys** list shows every provider with its current key status (`Set`, `Env`, or `Not set`).
+2.  **Go to the Models page**: The **API keys** list shows every provider with its current key status (`Key set`, `Env`, or `Not set`).
 3.  **Set the key**: Find your provider's row and select the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. If you don't have a key yet, select the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> **Get** button to open the provider's API key page.
 
-The Status column shows `Set` once the key is stored. To replace a key, set it again; to remove one, select the <wa-icon library="texra" name="trash"></wa-icon> trash icon. Repeat for each provider you plan to use.
+The Status column shows `Key set` once the key is stored. To replace a key, set it again; to remove one, select the <wa-icon library="texra" name="trash"></wa-icon> trash icon. Repeat for each provider you plan to use.
 
 <ApiKeysHero />
 
@@ -190,7 +192,7 @@ above what your plan allows fails and triggers compaction recovery.
 
 ## Customizing the model list
 
-Choose which models appear in the extension picker from **Settings → Models → Models**: toggle them on or off per provider, no JSON required (the choice is saved in the extension).
+Choose which models appear in the model picker from **Settings → Models → Models**: toggle them on or off per provider, no JSON required (the choice is saved in TeXRA's user-wide state, not in a settings file).
 
 In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`. Before you send the first message, `/agent` chains straight into that same model picker, so choosing a root agent and its model stays one step.
 

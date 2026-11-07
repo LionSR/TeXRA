@@ -132,11 +132,11 @@ Every run gets an isolated run folder under TeXRA's workspace storage directory:
 executions/<executionId>/
 ```
 
-Document task outputs are listed in the ProgressBoard under **Generated Files** (select a filename to preview it in VS Code, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a run's artifacts:
+Document task outputs are listed in the ProgressBoard under **Generated files** (select a filename to preview it in VS Code, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a run's artifacts:
 
 - **Accept**: Copies the reviewed output file into your workspace.
-- **Pack / Archive outputs** (<wa-icon library="texra" name="box-archive"></wa-icon>): Copies the run's output files, logs, and mirrored dependencies into a timestamped folder under `History/`.
-- **Clean / Delete output files** (<wa-icon library="texra" name="trash"></wa-icon>): Removes the generated artifacts from the run folder while leaving your workspace input files untouched.
+- **Pack / Archive outputs to History** (<wa-icon library="texra" name="box-archive"></wa-icon>): Copies the run folder (its output files, logs, and mirrored dependencies) into a timestamped folder under `History/`.
+- **Clean / Delete output files** (<wa-icon library="texra" name="trash"></wa-icon>): Deletes the run folder and its generated artifacts while leaving your workspace input files untouched.
 
 <StorageLifecycleFlow />
 

@@ -11,7 +11,8 @@ CLI's settings; TeXRA does not contribute product settings to VS Code's Settings
 - **Desktop app:** open **Settings**.
 - **CLI:** run `texra config`, or enter `/config` during a chat.
 
-Settings has six pages along its top row. A page with more than one
+Settings has six pages, along its top row in VS Code and in a sidebar in the
+desktop app. A page with more than one
 section shows a second row of sub-tabs, and each sub-tab shows one section.
 The page remembers the sub-tab you last opened while Settings stays open.
 
@@ -20,20 +21,23 @@ The page remembers the sub-tab you last opened while Settings stays open.
   **Models** (which models appear, and the helper model).
 - **Agents**: the agent **Library**, **Teams**, **Skills**, and **Advanced**
   (compaction, retries, and team coordination).
-- **Tools**: **Approval** policy, **Tools** and their availability, and
-  **Integrations** such as Codex, Claude Code, Zotero, and GitHub activity.
+- **Memory**: the notes TeXRA keeps across tasks.
+- **Plugins**: everything that adds tools or agents: TeXRA's plugins (such as
+  Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
+  plugins, and your MCP servers. Each plugin can be made available to agents
+  or not.
 - **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
   Code, the recommended **VS Code settings**.
-- **Memory**: the notes TeXRA keeps across tasks.
-- **General**: **Privacy** (telemetry) and **Git** (the
-  GitHub token and Git commit attribution).
+- **General**: **Appearance** (desktop app only), **Approval** (the approval
+  policy, working-directory protection, and the goal spend cap), **Privacy**
+  (telemetry), and **Git** (the GitHub token and Git commit attribution).
 
 Commands such as **TeXRA: Agent Team Settings** or **TeXRA: Git Settings**
 open their page on the matching sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
-Provider transport knobs (OpenAI fast processing and Google background
-responses) keep their defaults unless you set them in `config.json`. File-handling rules and other internal
+A few provider transport knobs, such as Google background responses, keep
+their defaults unless you set them in the user-wide `config.json`. File-handling rules and other internal
 implementation constants are not exposed as configuration.
 
 ## Where settings live
@@ -76,11 +80,13 @@ The JSON files use flat `texra.*` keys. For example:
 Prefer the settings views for ordinary changes: they validate values and place
 them at the intended project or user scope.
 
-The approval policy is the exception to the project scope: a project file can
-be supplied by a repository you clone, so TeXRA never reads it from there. It
-is kept per workspace in your own storage, and a value in your user file
-applies to every workspace. A project file that sets it is ignored with a
-warning naming the key.
+The approval policy is the main exception to the project scope: a project
+file can be supplied by a repository you clone, so TeXRA never reads it from
+there. It is kept per workspace in your own storage, and a value in your user
+file applies to every workspace. The goal spend cap and the user-wide provider
+switches (such as OpenAI fast mode) are likewise read only from your user
+file. A project file that sets any of these is ignored with a warning naming
+the key.
 Usage logging (`texra.telemetry.enabled`) follows the same rule with one
 exception: a project file may switch it off but never on, so a `false` there
 is honoured and a `true` is ignored with the same warning.
@@ -112,8 +118,9 @@ The whole file goes into every prompt, so keep it short.
 
 ## Skills, tools, and privacy
 
-The **Tools** page contains tool availability and approval controls; the skills
-switch is on the **Agents** page. The CLI exposes the same skills switch from `/config` during a chat.
+The **Plugins** page controls which plugins, and so which tools, agents can
+use; approval controls are under **General → Approval**; the skills switch is
+on the **Agents** page. The CLI exposes the same skills switch from `/config` during a chat.
 Tools that are disabled globally are removed from an agent's available
 tool list even when its definition names them.
 
@@ -122,9 +129,10 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled, TeXRA records model and provider names, the agent
-name and category, token counts, response time, route, stream identifier,
-version, and host. Only a bundled agent's id is sent; a custom or plugin
+When telemetry is enabled, TeXRA records the model name, the provider API it
+was called through, the agent name, token counts, the cost at list prices,
+response time, the billing route (API key or subscription), the task
+identifier, version, and host. Only a bundled agent's id is sent; a custom or plugin
 agent is reported as `custom`. No account is
 involved: each install sends a random anonymous install ID (a UUID made the
 first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
@@ -166,7 +174,7 @@ script can also call itself; a script can equally run its own loop with
 [`self()`](./multi-agent-workflows.md), with a stopping rule of its own.
 
 On your own API key a goal has no natural end, so it carries a spend cap:
-`texra.goal.maxCostUsd`, on the **Tools** page and in `/config`, defaults to
+`texra.goal.maxCostUsd`, under **General → Approval** and in `/config`, defaults to
 $5 and is always a user-wide setting, never read from a project
 `.texra/config.json`. It counts everything the goal has spent: every round,
 failed ones too, and any agent a round left running. It is checked after
@@ -226,7 +234,7 @@ turn the option off after the investigation.
 ## Troubleshooting
 
 1. Open the relevant native settings view and confirm the displayed value.
-2. Run `texra doctor` in a project to inspect the CLI's resolved configuration.
+2. Run `texra config show` in a project to inspect the CLI's resolved configuration.
 3. Check `<project>/.texra/config.json` for a project override.
 4. Check `~/.texra/v1/global-storage/config.json` for a user-wide value.
 5. Remove a saved key to return that setting to its current default.

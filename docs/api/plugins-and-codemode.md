@@ -9,7 +9,7 @@ Pass [`harnessBuiltins`](./harness/plugins#harnessbuiltins) (or a subset) plus y
 | Export                                               | Plugin ID           | Contributions                                                                                                                           |
 | ---------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | [`codemode`](./harness/plugins#codemode)             | `'codemode'`        | `script` (sandboxed QuickJS execution) and `self()` (running the current agent for another round), plus `searchTools` / `describeTool`. |
-| [`fileOps`](./harness/plugins#fileops)               | `'file-ops'`        | `read_file`, `edit_file`, `write_file` (configurable with `WriteFilter`), `glob`, `grep`, and `bash`.                                   |
+| [`fileOps(options?)`](./harness/plugins#fileops)     | `'file-ops'`        | `read_file`, `edit_file`, `write_file` (configurable with `WriteFilter`), `glob`, `grep`, and `bash`.                                   |
 | [`multiAgent`](./harness/plugins#multiagent)         | `'multi-agent'`     | `agent` ([`AGENT_TOOL_NAME`](./harness/plugins#agent_tool_name)) for launching awaited or background specialist child runs.             |
 | [`web`](./harness/plugins#web)                       | `'web'`             | Local `web_search` and `web_fetch` tools.                                                                                               |
 | [`memoryWorkflow`](./harness/plugins#memoryworkflow) | `'memory-workflow'` | Persistent `memory` tool ([`MemoryStore`](./harness/plugins#memorystore)), `executions` history tool, and memory prompt section.        |
@@ -65,19 +65,18 @@ export const countEquationsTool = defineTool({
 - **`replay`**:
   - `'safe'`: read-only or idempotent tools that recovery re-executes automatically if the process crashed after `tool.intent` and before `tool.result`.
   - `'unsafe'` (default): side-effecting tools that recovery never re-runs automatically after an unclean crash.
-- **`guard` and `requiresApproval`**: declaring `guard: { writes, bash, cwd }` or `requiresApproval: true` checks writable workspace paths and prompts for human approval before `tool.intent` commits and before `execute` runs.
+- **`guard` and `requiresApproval`**: declaring `guard: { writes, command }` or `requiresApproval: true` checks writable workspace paths and prompts for human approval before `tool.intent` commits and before `execute` runs. A tool whose body opens its own request (an edit's review, a question) declares `requiresApproval: 'inBody'`.
 
 Pass run-scoped tools directly to `session.start({ tools: [countEquationsTool], ... })` (and pass the same `tools` array to `session.resume`), or register them process-wide in a plugin with [`definePlugin`](./harness/plugins#defineplugin).
 
 ## Packaging plugins (`definePlugin`)
 
 ```ts
-import { ALWAYS_AVAILABLE, definePlugin } from '@texra-ai/harness/plugins';
+import { definePlugin } from '@texra-ai/harness/plugins';
 
 export const latexMetricsPlugin = definePlugin({
   id: 'latex-metrics',
   toggle: 'on',
-  availability: ALWAYS_AVAILABLE,
   tools: [countEquationsTool],
 });
 ```
@@ -86,21 +85,22 @@ A [`PluginDefinition`](./harness/plugins#plugindefinition) can declare:
 
 - **`id`**: stable lowercase identifier (`[a-z0-9-]+`), persisted in settings and `tools.offered` rows.
 - **`tools`**: list of `ITool` values, registered by each tool's `definition.name`. Every tool name is unique across the process's [`ToolRegistry`](./harness/plugins#toolregistry).
-- **`availability` and `toggle`**: `availability` probes external dependencies ([`ALWAYS_AVAILABLE`](./harness/plugins#always_available) or [`probeTool`](./harness/node#probetool)); missing dependencies withhold the plugin's tools. `toggle: 'on' | 'off'` creates a user setting switch seeded on first install.
+- **`availability` and `toggle`**: `availability` ([`ToolAvailabilityChecks`](./harness/plugins#toolavailabilitychecks)) probes external dependencies, and missing dependencies withhold the plugin's tools; a plugin without it is always available. `toggle: 'on' | 'off'` creates a user setting switch seeded on first install.
 - **`injectedWhen`**: maps tool names to a boolean setting row (or `true`) to inject those tools into every tool-using agent while the plugin is enabled.
-- **`processLayer` and `sessionLayer`**: lazy Effect `Layer`s ([`ProcessPluginLayer`](./harness/plugins#processpluginlayer), [`SessionPluginLayer`](./harness/plugins#sessionpluginlayer)) built when a step first pins the plugin. Work that outlives a step keeps the session layer alive with [`PluginHold`](./harness/plugins#pluginhold).
+- **`processLayer` and `sessionLayer`**: lazy Effect `Layer`s ([`ProcessPluginLayer`](./harness/plugins#processpluginlayer), [`SessionPluginLayer`](./harness/plugins#sessionpluginlayer)) up while the plugin is switched on or a step pins it. Work that outlives a step keeps the session layer alive with [`PluginHold`](./harness/plugins#pluginhold).
 - **`prompt`**: [`PromptSection`](./harness/plugins#promptsection) appended to the system prompt while active.
 - **`decision`**: [`RequestDecisionHook`](./harness/plugins#requestdecisionhook) run when a request of the plugin's kind is decided.
 - **`factKinds`**: [`FactKind`](./harness/plugins#factkind) schemas and fork policy for versioned `plugin.fact` rows committed by the plugin (latest values appear on `RunView.facts`; `fork: 'copy'` carries a run's row into its forks).
 - **`agentBlock`**: [`AgentBlock`](./harness/plugins#agentblock) claiming a top-level YAML key in agent definitions (read via [`agentBlockOf`](./harness/plugins#agentblockof)) to run a structured recipe script.
+- **`scriptModules`** and **`requires`**: script module sources a `script` imports as `builtIn:<name>`, and the ids of the plugins this one runs on.
 
 An availability `check(inputs)` returns `{ available, statusLabel?, statusDetail? }` from one observation of the asking workspace. The check owns optional-detail failures: log the cause and retain an availability result already established. The harness owns the complete check's deadline, cached results and refresh.
 
 ### Runtime services inside a tool body
 
-Inside `execute`, yield services from [`@texra-ai/harness`](./harness/) and [`@texra-ai/harness/plugins`](./harness/plugins):
+Inside `execute`, yield services from [`@texra-ai/harness/plugins`](./harness/plugins):
 
-- **[`ToolContext`](./harness/#toolcontext)** (`requireRun`, `callerRun`): the calling run's identity, workspace roots (`env.roots`), working directory, and `CallRequests`.
+- **[`ToolContext`](./harness/plugins#toolcontext)** (`requireRun`, `callerRun`): the calling run's identity, workspace roots (`env.roots`), working directory, and `CallRequests`.
 - **[`ChildRuns`](./harness/plugins#childruns)**: launch awaited or detached child runs (`ChildRuns.launch`, `ChildRuns.launchProcess`).
 - **[`resolveToolPath`](./harness/plugins#resolvetoolpath)**: resolve a path against the call's workspace root and reject parent-traversal escapes.
 - **[`requestToolEditApproval`](./harness/plugins#requesttooleditapproval)** and **[`approvedWriteConflict`](./harness/plugins#approvedwriteconflict)**: open a `toolEdit` diff-approval request, await the user's decision (including manual edits in the diff view), and detect three-way write conflicts.

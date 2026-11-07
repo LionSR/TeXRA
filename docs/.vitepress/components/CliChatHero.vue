@@ -4,13 +4,15 @@
 // fact-checked against the real TUI sources so the figure shows what the
 // session actually renders (packages/cli/src/chat/tui/panes/
 // StaticConversationTranscript.tsx, toolRenderers.tsx, StatusBar.tsx):
-// the once-printed session header (`{ T } TeXRA` + version + access route over
-// a rule, then `agent: … · model: …`), a reverse-video user band prefixed `› `
-// (no speaker chips), plain assistant text, `● tool (preview)` call rows whose
-// status dot is dim while running and green when done, dim `⎿ ` output lines,
+// the once-printed session header (`{ T } TeXRA` + version over a rule, then
+// `agent: … · model: <model label>`, then the working directory), a
+// reverse-video user band prefixed `› ` (no speaker chips), plain assistant
+// text, `● tool (preview)` call rows whose status dot is dim while running and
+// green when done, dim `⎿ ` output lines,
 // and an edit rendered as full-width +/− diff bands (never strikethrough).
 // The bottom strip mirrors the status bar: ◆ status · access route · round
-// counter · token usage.
+// counter · token usage, then the key strip the status bar prints while a
+// turn runs (`Ctrl-T transcript · / commands · Ctrl-C stop`).
 //
 // .mockup-scoped, so the shared --mk-* tokens resolve here and the whole card
 // flips with the docs light / dark theme. Believable static strings only.
@@ -20,7 +22,7 @@ const calls = [
     tool: 'read_file',
     preview: 'sections/intro.tex',
     output: 'In this paper we present a novel approach to',
-    more: '… +41 lines (ctrl + t to view transcript)',
+    more: '… 41 lines hidden',
   },
   {
     state: 'running',
@@ -44,12 +46,12 @@ const calls = [
     <div class="cc-header">
       <div class="cc-brand-row">
         <span class="cc-brand">{ T } TeXRA</span>
-        <span class="cc-meta">v0.38.8</span>
-        <span class="cc-meta">API keys</span>
+        <span class="cc-meta">v0.41.0</span>
       </div>
       <div class="cc-identity">
-        agent: research · model: deepseek/deepseek-flash
+        agent: research · model: DeepSeek V4.1 Flash
       </div>
+      <div class="cc-meta">~/projects/spectral-gaps</div>
     </div>
 
     <!-- User turn: reverse-video band with the `› ` chevron, no name chip -->
@@ -112,7 +114,7 @@ const calls = [
       <span class="cc-seg">r1</span>
       <span class="cc-seg">12.3k/1M (1%)</span>
       <span class="cc-bindings"
-        >[/model]models&ensp;[/api]api&ensp;[Ctrl-C]stop</span
+        >Ctrl-T transcript · / commands · Ctrl-C stop</span
       >
     </template>
   </TermWindow>

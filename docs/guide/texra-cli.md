@@ -134,7 +134,7 @@ when `--output` or `--output-dir` is used, otherwise the final generated file in
 run storage.
 
 With `--output`, TeXRA also copies the final artifact to the requested
-filesystem destination. JSON and NDJSON output keep `outputs[]` as the
+filesystem destination. JSON and NDJSON output keep `output.documents.outputs[]` as the
 run-storage source of truth (`relativePath`, `absolutePath`, and `location`),
 include `runDirectory`, include `copiedOutput` or `copiedOutputs` when a
 filesystem copy was written, and report the completed run's canonical
@@ -271,6 +271,7 @@ Slash commands inside the session:
 - `/skills`: list available skills and apply one to your next request.
 - `/resume`: restore a stored execution (`/resume all` continues every interrupted task).
 - `/rename <title>`: rename the focused task.
+- `/help`: list every slash command, including `/agent`, `/models`, `/key`, `/status`, `/plan`, `/memory`, `/plugins`, `/compact`, `/fork`, `/clear`, and `/exit`.
 - `/tasks`: list tasks running in the [background service](#background-service) across every project. Picking one attaches to it live: Enter sends a follow-up, approval requests appear inline, and Esc detaches while the task keeps running.
 
 `texra chat` requires an interactive terminal. For scripts and CI, use `texra run <agent>` with `--print` or `--output-format json|ndjson`:
@@ -299,14 +300,16 @@ read-only context files are included in the instruction the team receives.
 When the work splits cleanly, the lead can fan it out as a scripted
 [multi-agent workflow](./multi-agent-workflows.md).
 
-`run` is the way to start a team from a terminal. For an interactive session,
-open a chat and use `/agent` to pick the team's lead by name, such as
-`engineer` or `orchestrator`; team scoping applies to `team run` and to
-resumed team sessions.
+`run` executes the team in the terminal and exits after the final response.
+For an interactive session, open a chat and pick the team in `/agent`, which
+lists teams beside agents: the team's lead becomes the root agent and
+delegation stays within the team, as with `team run`. Picking a lead such as
+`engineer` or `orchestrator` as a plain agent does not limit its delegation to
+the team.
 
 <CliTeamHero />
 
-<p class="hero-caption">The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
+<p class="hero-caption">A chat with the Software Engineer team picked in <code>/agent</code>. The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
 
 In an interactive team session, focusing a subagent shows only its own
 transcript. Scroll back through its earlier output with normal terminal
@@ -391,7 +394,7 @@ export TEXRA_COMPLETION_DYNAMIC=0
 
 ## Execution history
 
-TeXRA stores completed executions in the workspace run store. List recent runs:
+TeXRA stores every execution in the workspace run store. List recent runs:
 
 ```bash
 texra history list
@@ -407,8 +410,11 @@ Text output prints one tab-separated row per run:
 
 The NDJSON form is stable for scripts under the version-2 contract above.
 Each line has kind `history-entry` and contains the same run entry object used
-by JSON output, with the terminal outcome spelled as `completed`,
-`interrupted`, or `error`.
+by JSON output, with the terminal `outcome` spelled as `completed`,
+`cancelled`, or `failed` (`null` when none was recorded) and `resumable`
+saying whether `texra resume` continues it. The text form's status column
+reads the same outcome, or `no outcome`, followed by `(resumable)` when it
+applies.
 
 Inspect or delete one run:
 
@@ -426,9 +432,15 @@ texra --resume <id>
 
 A chat reopens in the interactive chat and waits for your next
 message, so without a terminal it exits with a usage error that points
-scripting at `texra run`. A document task run resumes headless under its original
+scripting at `texra run`. A task `texra run` started for an agent without a
+document task runs once and takes no messages: once it has ended, `texra resume`
+exits with code 2 and points you to `texra history show <id>` or
+`texra resume <id> --fork`; one stopped mid-turn resumes in the chat to finish
+that turn. A document task run resumes headless under its original
 execution id and honors the headless globals (`--print`, `--output-format`,
-`--no-input`). The interactive chat also accepts `/resume`: with no id it
+`--no-input`). A resumed task keeps the approval policy it was launched with:
+an `--approval-policy` you pass is reported as not applying (a chat's new
+messages take it). The interactive chat also accepts `/resume`: with no id it
 lists recent tasks by title, with an id it continues that task, and
 `/resume all` continues every interrupted one. `/rename <title>` gives the
 focused task your own title. A missing or malformed id exits with code 2.
@@ -443,7 +455,8 @@ Inside the chat, `/fork` continues a new task holding the conversation
 (the original stays in `/resume`).
 
 A fork holds the conversation as it stood at the end of its last turn and
-leaves the original task unchanged.
+leaves the original task unchanged. Forking continues in an interactive chat,
+so it needs a terminal, and a document task cannot be forked.
 
 When `texra chat` opens, nothing resumes on its own: the tasks a closed or
 crashed TeXRA stopped mid-way sit in the agent list (Tab) as interrupted.
@@ -497,8 +510,8 @@ same transcript; Ctrl-C detaches one terminal and leaves the task running.
 An id may be shortened to any prefix only one task has. `tasks start` runs
 the task under the project's approval policy; an approval policy it asks for
 (`--approval-policy`, `--no-input`, `TEXRA_APPROVAL_POLICY`) applies to that
-task alone: it narrows the project's, and `yolo` auto-approves the task. It
-never changes the project's policy. A service task that asks
+task alone: it narrows the project's, and `yolo` auto-approves the task
+unless the project's policy is `never`. It never changes the project's policy. A service task that asks
 for approval waits for an answer: `texra tasks attach` only watches, so
 answer it from the chat with `/tasks`. With
 `--output-format ndjson`, `attach` writes the task's own rows (not its
@@ -592,12 +605,13 @@ The CLI reads optional, non-secret defaults from `.texra/config.json` in the
 current workspace. Scaffold one with `texra init` (add `--yes` to accept
 defaults non-interactively, or `--gitignore` to add `.texra/` to `.gitignore`).
 Command-line flags override environment variables, environment variables
-override the workspace file, and the workspace file overrides built-in
-defaults.
+override the workspace file, the workspace file overrides your user
+configuration file (`~/.texra/v1/global-storage/config.json`), and that file
+overrides built-in defaults.
 
 <ConfigPrecedenceStack />
 
-<p class="hero-caption">Resolution order, highest priority on top: a CLI flag beats its <code>TEXRA_*</code> env var, which beats the <code>.texra/config.json</code> key, which beats the built-in default (<code>deepseek/deepseek-v4-pro</code>).</p>
+<p class="hero-caption">Resolution order, highest priority on top: a CLI flag beats its <code>TEXRA_*</code> env var, which beats the <code>.texra/config.json</code> key (and, below it, your user configuration file), which beats the built-in default (<code>deepseek/deepseek-v4-pro</code>).</p>
 
 ```json
 {
@@ -617,7 +631,8 @@ Supported top-level keys are `texra.agent`, `texra.model`, and
 `texra.outputFormat`; `texra.chat` may set command-specific `agent` and
 `model` defaults, and `texra.run` a `model` default (`texra run` takes its
 agent as an argument). Shared TeXRA settings
-the CLI honors, such as `texra.telemetry.enabled`, are also accepted. The
+the CLI honors, such as `texra.telemetry.enabled` (which a project file can
+only turn off), are also accepted. The
 built-in CLI model default is `deepseek/deepseek-v4-pro`.
 
 The approval policy (`texra.approvalPolicy`) is never read from
@@ -627,7 +642,11 @@ current workspace, and a value in your user configuration file is the default
 for every workspace. A project file that sets it is ignored and `texra doctor` reports the key.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
-`TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. Run
+`TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. The approval policy a
+command asks for (`--approval-policy`, `TEXRA_APPROVAL_POLICY`, or
+`--no-input`, which asks for `never`) does not replace the stored one: it can
+only narrow it for that command's tasks, and `yolo` auto-approves them unless
+the stored policy is `never`. Run
 `texra doctor` to see which workspace config file was loaded and whether any
 keys were ignored.
 

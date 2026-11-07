@@ -114,7 +114,7 @@ GitHub Actions OIDC token for a short-lived App installation token. Leave
 `github-token` unset unless you intentionally override App auth.
 
 ::: tip Pin the action version for reproducible CI
-`@v1` tracks the latest v1.x release. To change review behavior only when you
+`@v2` (what the scaffolded workflow uses) tracks the latest v2.x release. To change review behavior only when you
 decide, pin a reviewed release commit
 (`uses: texra-ai/texra-action/review@<full-commit-sha>`) and bump it
 deliberately.
@@ -199,7 +199,6 @@ they are merged.
 
    ```yaml
    - name: Checkout trusted review prompt
-     if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
      uses: actions/checkout@v6
      with:
        ref: ${{ github.event.pull_request.base.sha }}
@@ -230,8 +229,9 @@ a repository variable:
 texra-version: ${{ vars.TEXRA_CLI_VERSION }}
 ```
 
-Then set `TEXRA_CLI_VERSION` to the version you want: `0.40.3`, `latest`, or
-empty for latest. The action supports `@texra-ai/cli` 0.40.3 and newer.
+Then set `TEXRA_CLI_VERSION` to the version you want: a version number,
+`latest`, or empty for latest. `review@v2` runs `texra run`, so it needs
+`@texra-ai/cli` 0.41 or newer; don't pin an older version.
 
 ## Everyday controls
 
@@ -243,17 +243,16 @@ unset it) to resume.
 
 ### Letting TeXRA resolve its own threads
 
-With `resolve-threads: 'true'` on the review step (as in the richer examples
-under [`texra-ai/texra-action`](https://github.com/texra-ai/texra-action)),
-the TeXRA GitHub App can resolve fixed findings and reply to earlier threads
+With `resolve-threads: 'true'` on the review step (the scaffolded workflow
+sets it), the TeXRA GitHub App can resolve fixed findings and reply to earlier threads
 under the same bot identity. No personal access token is needed.
 
 ### Choosing whose PRs get reviewed
 
 `require-write-access: 'true'` limits reviews to PRs authored by users with
 write access, so outside accounts cannot spend your API budget. Allow-list
-trusted bots with `allow-bots` (comma-separated), for example
-`dependabot[bot]`.
+trusted bots with `allow-bots` (comma-separated). The scaffolded workflow sets
+both, allowing `dependabot[bot]`.
 
 ## Troubleshooting
 

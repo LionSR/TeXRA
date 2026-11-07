@@ -87,7 +87,7 @@ The lead reads the bundled `multi-agent-orchestration` skill for how to shape th
 
 ## What a run looks like
 
-1. **One approval for the script.** Before anything runs, the script is shown as a request with its title and full source. Approving it covers every `agent` and `document_task` call the script makes. **Approve** (`y`) runs it; the ▾ next to it offers **Approve all agent work in this run** (`a`), which also stops asking about later tasks, file edits, and commands in the run. **Reject** (`n`) declines in one click, and **Add a note…** lets you tell the lead what to change.
+1. **One approval for the script.** Before anything runs, the script is shown as a request with its title and full source. Approving it covers every `agent` and `document_task` call the script makes. **Approve** (`y`) runs it; the ▾ next to it offers **Approve all agent work in this task** (`a`), which also stops asking about later agent work, file edits, and shell commands in the task. **Reject** (`n`) declines in one click, and **Add a note…** lets you tell the lead what to change.
 2. **Calls grouped by phase.** The script's card holds one card per call, grouped by the `phase()` that was current when the call was made. Each shows the agent and model, the files it was handed, and its status: running, finished, reused (an identical call already finished, so nothing ran again), skipped, or failed. A finished call adds its elapsed time and cost. When a child is waiting on you, such as a file edit to approve, **Review** takes you to it.
 3. **Open a child run.** A call's card opens the child run it launched, with its own transcript.
 4. **Skip a call.** Stopping a child run skips its call: the call rejects with `Skipped` in the script, which then carries on or stops depending on how it handles failures. A skipped call is not retried for you; ask the lead if you want it redone.
@@ -103,7 +103,7 @@ A script normally runs as one of the lead's tool calls, and the lead waits for i
 
 ## Resume
 
-Every call a script makes is recorded in the run's history as it settles. If the app restarts or the run is interrupted, the script runs again from the top against those records: calls that finished are handed back from the run history and are not run or billed again, and only unfinished calls run.
+Every call a script makes is recorded in the run's history as it finishes. If the app restarts or the run is interrupted, the script runs again from the top against those records: calls that finished are handed back from the run history and are not run or billed again, and only unfinished calls run.
 
 A completed `agent` or `document_task` call is also reused by a later identical call in the same run, matched on its prompt, options, and the contents of its files. So when a script fails partway through, on a bug or a timeout, the lead fixes the code and sends it again: everything that already finished comes back as **Reused** at no cost. Editing one of a call's files makes that call run again.
 
@@ -115,7 +115,7 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 - The session's child-run budget sets how many agents run at once.
 - The script's own code gets 30 seconds of CPU and 64 MB of memory. Time spent waiting on agents does not count, so this only stops a loop that never waits.
 - The wall clock defaults to 60 minutes and can be set from 1 second to 24 hours with `timeoutMs`.
-- There are no timers, no `Date.now()`, no `Math.random()`, and no imports, so a resumed script makes the same calls in the same order.
+- There are no timers, no `Date.now()`, no `Math.random()`, and no imports beyond the modules TeXRA provides (such as `builtIn:documents`), so a resumed script makes the same calls in the same order.
 
 ## Where it is available
 
@@ -131,9 +131,9 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 **The script stopped with a wall-clock timeout.** The default limit is 60 minutes, which a large fan-out on a slow model can exceed. Ask the lead to send the script again with a larger `timeoutMs` (up to 24 hours), or with `run_in_background: true`; the calls that finished are reused.
 
-**"used its 30000ms guest CPU budget".** The script's own code, not an agent, ran for 30 seconds in total. That almost always means a loop that never waits on a call. Ask the lead to fix the loop and send the script again.
+**"The script used its 30000ms CPU budget".** The script's own code, not an agent, ran for 30 seconds in total. That almost always means a loop that never waits on a call. Ask the lead to fix the loop and send the script again.
 
-**"'...' revises files: pass the files it revises as `inputFiles`".** A document task was called without input files. A document task rewrites documents, so each call needs `inputFiles`. Analysis that returns a value rather than a file belongs in an `agent` call with `schema`.
+**"'...' needs files: pass `inputFiles` or `mediaFiles`".** A document task was called without files. A document task works on files, so each call needs `inputFiles` (or, for a task such as `ocr` or `transcribe_audio`, `mediaFiles`). Analysis that returns a value rather than a file belongs in an `agent` call with `schema`.
 
 **"'...' has no document task: call `agent` to run it with a prompt".** `document_task` named an agent without a `task` block. Call it with `agent` instead.
 

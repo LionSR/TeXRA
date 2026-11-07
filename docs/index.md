@@ -215,7 +215,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>Is my data private?</summary>
-    <p>Yes. Model calls go directly from your machine to the provider, whether you use your own API key or a provider subscription. TeXRA does not sit between you and the model.</p>
+    <p>Yes. Model calls go directly from your machine to the provider, whether you use your own API key or a provider subscription. TeXRA does not sit between you and the model. TeXRA sends anonymous usage metadata (agent, model, token counts), never prompts or document content, and you can turn it off; read <a href="/guide/configuration#usage-logging">Usage logging</a>.</p>
   </details>
 
   <details>

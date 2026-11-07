@@ -38,7 +38,7 @@ _(Read the [file management guide](./file-management.md) for general UI controls
 
 ## How it works: agent input
 
-When you provide multiple input files, TeXRA typically combines their content (often wrapping each in `<document name=\"...\">` tags within a parent `<documents>` tag) and includes it in the prompt sent to the selected agent. The agent receives the combined context to inform its processing.
+When you provide multiple input files, TeXRA typically combines their content (often wrapping each in `<document name="...">` tags within a parent `<documents>` tag) and includes it in the prompt sent to the selected agent. The agent receives the combined context to inform its processing.
 
 ## How it works: agent output & extraction
 
