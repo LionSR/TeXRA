@@ -27,7 +27,7 @@ export interface StageOptions {
 export interface StageHandle {
   /** Stage id. */
   readonly id: string | undefined;
-  /** Emit `stage.end` with the given outcome. Idempotent. */
+  /** Emit `stage.end` with the given outcome; its one owner calls it once. */
   end(status?: RunOutcome): void;
 }
 

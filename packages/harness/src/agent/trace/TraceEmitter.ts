@@ -207,8 +207,6 @@ class ToolCardHandleImpl implements ToolCardHandle {
 }
 
 class StageHandleImpl implements StageHandle {
-  private ended = false;
-
   private readonly trace: TraceEmitter;
   readonly id: string;
   constructor(trace: TraceEmitter, id: string) {
@@ -217,8 +215,6 @@ class StageHandleImpl implements StageHandle {
   }
 
   end(status?: RunOutcome): void {
-    if (this.ended) return;
-    this.ended = true;
     this.trace.emit({
       type: 'stage.end',
       id: this.id,

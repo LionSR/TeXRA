@@ -17,7 +17,6 @@ import {
   aggregateTarget,
   TOOL_CALL_STATUS,
   type RunId,
-  type RunOutcome,
   type CommitOrdinal,
   type DisplayRow,
   type SessionRow,
@@ -30,7 +29,6 @@ import { boundsLifecycle, recordsOf } from '@shared/session/runFacts';
 import { closesRunWindow } from '@shared/session/runRowReads';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type {
-  ClosureFact,
   SessionLogShape,
   StreamClosure,
 } from '@shared/session/sessionLog';
@@ -104,27 +102,15 @@ export function makeRunTrace({
       });
       return new Map(held).set(runId, rows);
     });
-  function closure(runId: RunId): StreamClosure[];
-  function closure(runId: RunId, outcome: RunOutcome): ClosureFact[];
-  function closure(runId: RunId, outcome?: RunOutcome): ClosureFact[] {
+  const closure = (runId: RunId): StreamClosure[] => {
     const aggregateId = qualifyAggregateId('run', runId);
-    return events
-      .openWork(aggregateId)
-      .flatMap(({ kind, id }): ClosureFact[] => {
-        if (kind === 'stream')
-          return [
-            {
-              type: 'stream.end',
-              aggregateId,
-              id,
-              finalText: readText(runId, id),
-            },
-          ];
-        return outcome === undefined
-          ? []
-          : [{ type: 'stage.end', aggregateId, id, status: outcome }];
-      });
-  }
+    return events.openWork(aggregateId).map(({ id }) => ({
+      type: 'stream.end',
+      aggregateId,
+      id,
+      finalText: readText(runId, id),
+    }));
+  };
   return {
     publish: (runId, event) => {
       if (refusedAfterClose()) return;
