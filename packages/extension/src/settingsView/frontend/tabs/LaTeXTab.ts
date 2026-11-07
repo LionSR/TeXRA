@@ -372,6 +372,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
         <div class="settings-row-control">
           ${renderSetStatusIcon({
             status: isSet ? 'set' : 'not-set',
+            success: 'set',
             title: 'Set',
             fallbacks: { 'not-set': { label: 'Not set' } },
           })}
