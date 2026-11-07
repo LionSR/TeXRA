@@ -322,7 +322,10 @@ export const attemptOf = (status: CallStatus): number =>
   status.kind === 'issued' ? 0 : status.attempt;
 
 /** A call's attempt; 0 holds what its attempts share (a script's `agent` ask). */
-type CallAttempt = Pick<ToolResultPayload, 'responseId' | 'callId' | 'attempt'>;
+export type CallAttempt = Pick<
+  ToolResultPayload,
+  'responseId' | 'callId' | 'attempt'
+>;
 
 /** The id of the `ordinal`-th request (from 1) `at` raises: derived, never
  *  drawn, so a resumed attempt joins the request it left standing. */

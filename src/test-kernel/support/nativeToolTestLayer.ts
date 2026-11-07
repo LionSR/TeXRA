@@ -158,16 +158,15 @@ export function nativeToolTestLayer(
                       .open(runCall.run.runId)
                       .pipe(Effect.orDie),
                     (cell) =>
-                      callRequests(
-                        runCall.run,
-                        runCall.session,
+                      callRequests({
+                        run: runCall.run,
+                        session: runCall.session,
                         cell,
-                        cell.append,
-                        { responseId: runCall.responseId, callId, attempt: 1 },
-                        0,
-                        null,
-                        'The test call ended.',
-                      ).requests,
+                        commit: cell.append,
+                        at: { responseId: runCall.responseId, callId },
+                        entered: { attempt: 1, raised: 0, own: null },
+                        retireCause: 'The test call ended.',
+                      }).requests,
                   );
             return {
               callId,
