@@ -1,9 +1,12 @@
 # Round 7: fallbacks, by the design decision behind them
 
-Read at `main` commit `b4b0132` (`simplify: package E format batch
-(section(), Y3 gap row, event_blob.inline, Q1, Q8 b) (#14843)`). Read-only:
-no production code changed. Rules and scope: [`BRIEF.md`](BRIEF.md). Every
-`path:line` is on that commit.
+Read at `main` commit `d7c0c45` (`simplify(cli): package A's TUI lifecycle
+(F1, F5, J1, S18; F2 and K11's bell refused) (#14837)`). The sweep ran at
+`b4b0132`, one commit earlier. Of the files cited here, #14837 rewrote three
+(`chatSessionController.ts`, `runChatTui.tsx`, `executeCli.ts`), and their
+citations were re-checked at `d7c0c45`. Read-only: no production code
+changed. Rules and scope: [`BRIEF.md`](BRIEF.md). Every `path:line` is on
+`d7c0c45`.
 
 The owner asked for the fallbacks to be read as symptoms. So each finding
 below is a **design cause**: the decision the design refused upstream. Its
@@ -21,7 +24,7 @@ live in `packages/*/test` and `src/`, so none are in the counts.
 | Shape                                                             | harness | texra | llm | extension | desktop | cli | Total |
 | ----------------------------------------------------------------- | ------: | ----: | --: | --------: | ------: | --: | ----: |
 | bare `catch {`                                                    |       7 |     2 |   2 |         0 |       5 |   6 |    22 |
-| `Effect.ignore` / `ignoreCause`                                   |       9 |     8 |   0 |         3 |       0 |   3 |    23 |
+| `Effect.ignore` / `ignoreCause`                                   |       9 |     8 |   0 |         3 |       0 |   2 |    22 |
 | `orElseSucceed`                                                   |       5 |     2 |   1 |         0 |       0 |   0 |     8 |
 | `catchDecoding`                                                   |       0 |     1 |  10 |         0 |       0 |   1 |    12 |
 | `catchTag(s)` lines                                               |      22 |    45 |   5 |         5 |       2 |   7 |    86 |
@@ -32,7 +35,7 @@ live in `packages/*/test` and `src/`, so none are in the counts.
 | `Option.getOrElse`                                                |       5 |     2 |   1 |         0 |       0 |   1 |     9 |
 | `?? []`                                                           |      95 |    50 |   6 |        14 |       1 |  35 |   201 |
 | `?? ''`                                                           |      47 |    56 |   6 |        10 |      12 |  29 |   160 |
-| `?? null`                                                         |      76 |    33 |  25 |         8 |       7 |   8 |   157 |
+| `?? null`                                                         |      77 |    33 |  25 |         8 |       7 |   8 |   158 |
 | `?? undefined`                                                    |      21 |    23 |  11 |         2 |       1 |  17 |    75 |
 | `default:` lines                                                  |      30 |    27 |   5 |         3 |       3 |  33 |   101 |
 | `Promise.allSettled`                                              |       0 |     0 |   0 |         0 |       0 |   2 |     2 |
@@ -46,8 +49,8 @@ ends in a default and does not fail again, about ±10%. Most of the 80 that
 neither warn nor check absence turn the failure into a visible value: a
 doctor row, an `issue(...)`, an `errorResult`, a `Rejected`.
 
-The `default:` count is higher than the brief's 61 because it counts every
-line. About 40 of the 101 are CLI argument `default:` keys or comments. Of
+The `default:` count is higher than the orchestrator's charter count (61, a
+grep on an earlier `main`) because it counts every line. About 40 of the 101 are CLI argument `default:` keys or comments. Of
 the switch defaults in harness, texra and cli, 23 are exhaustive (`absurd`,
 `satisfies never`, throw or fail), 22 are deliberate subset selectors or
 generic renderers, and 5 drop an unknown case silently (FB3). The `Promise.allSettled`
@@ -70,12 +73,13 @@ decodes.
 
 **How many log at warn before degrading?** 63 of 184 default-returning
 handlers (34%) log at warn or error first. Another 41 (22%) default only on
-absence (`absentReason`). Of the 23 `Effect.ignore`, 17 carry
-`{ log: 'Warn' }` or `'Error'`. The six without are `resumeRun.ts:187`,
+absence (`absentReason`). Of the 22 `Effect.ignore`, 17 carry
+`{ log: 'Warn' }` or `'Error'`. The five without are `resumeRun.ts:187`,
 documented, where the launch reports the failure; `mcpServer.ts:262,291` and
-`leanServer.ts:255`, waits on a process exit or a stderr tail; and the two
-CLI `ignoreCause` on a run's own outcome
-(`sessionExitController.ts:218`, `chatSessionController.ts:912`). The 22 bare
+`leanServer.ts:255`, waits on a process exit or a stderr tail; and
+`chatSessionController.ts:419`, a race whose ignored side is the run's
+result, which `handOver` then returns to its caller. #14837 deleted the two
+CLI `ignoreCause` sites this count held at `b4b0132`. The 22 bare
 `catch {` all carry a comment but two: `cliContext.ts:263`, which has its
 comment above the `try`, and `CopyButtonController.ts:15`, which returns
 `false` to its caller.
@@ -146,7 +150,7 @@ then never records the choice.
 - Extension: the same text goes through `warn`, a VS Code notice
   (`packages/extension/src/extension.ts:425-433`).
 - CLI: the same text goes to stderr or into a transcript notice
-  (`packages/cli/src/chat/tui/runChatTui.tsx:175-200`). The ternary at `:199`
+  (`packages/cli/src/chat/tui/runChatTui.tsx:171-196`). The ternary at `:195`
   inside `if (!served)` can never take its first branch.
 - Shared: `openProjectSession` (`openProjectSession.ts:34-42`) takes
   `service | undefined`.
@@ -307,12 +311,13 @@ the fact required.
 **Evidence (6 sites):**
 
 - a. `packages/harness/src/agent/runtime/loop/toolUseDispatch.ts:1000`:
-  `base64: bytes.get(part.digest) ?? ''` uploads an empty file when a blob is
-  missing, so the model sees an empty attachment. The same invariant throws in
-  `storedTurn.ts:361`, in
-  `packages/harness/src/shared/schemas/requestPayloads.ts:93-95` and in
-  `rowReader.ts`'s `blobs` (`packages/harness/src/controllers/session/rowReader.ts:262-267`).
-  That is two policies for one miss.
+  `base64: bytes.get(part.digest) ?? ''`. Not reachable: the map comes from
+  `SessionLog.blobs` (`toolUseDispatch.ts:989-991`), which reaches
+  `rowReader.ts`'s `blobs`
+  (`packages/harness/src/controllers/session/rowReader.ts:262-267`). That
+  `blobs` throws on any missing or unreadable digest before `uploadFile`
+  runs. The `?? ''` restates an invariant the reader already enforces:
+  redundant defensive code (review-checklist §15, M6). Delete the default.
 - b. `toolUseDispatch.ts:590`: `dispatch.pluginOf.get(fact.toolName) ?? ''`.
   An unmapped tool reaches `checkOwnFacts` with no entry. With facts, it throws
   a misleading "fact is not its plugin's"
@@ -320,9 +325,17 @@ the fact required.
 - c. `packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts:163`:
   `args[index] ?? ''` joins persisted calls to parts by position. A count
   mismatch in stored data gives rows with empty arguments instead of an error.
-- d. `packages/cli/src/chat/chatSessionController.ts:727-731`: a root run
-  missing from the view, or one with no outcome, maps to `CliExitCode.Success`.
-  A script that drives the CLI gets exit 0 for a lost run.
+- d. The chat's exit code. #14837 fixed the lost-run case FB4 d named at
+  `b4b0132`: a root whose end was lost now fails
+  (`rootFailed`, `packages/cli/src/chat/tui/state/sessionRunState.ts:105-119,172`).
+  One `?? Success` remains. In `resume`, a missing record reports
+  `Task not found` and returns
+  (`packages/cli/src/chat/chatSessionController.ts:527-530`). So does a
+  one-shot run that already ended (`:556-561`). The launch is then ended by
+  `Effect.ensuring(endWithout(CliExitCode.Success))` (`:609`), so a chat asked
+  to resume a task that does not exist prints an error and exits 0. Its
+  sibling, a refused resume, ends with `CliExitCode.Usage` (`:572-573`):
+  two policies for one "nothing to resume".
 - e. `packages/cli/src/chat/tui/state/cliState.ts:177` and
   `sessionViewUpdate.ts:441`: an id in `order` or `childIds` with no run.
   The first drops the run from the list. The second undercounts `treeUsage`
@@ -331,8 +344,10 @@ the fact required.
 **The shape.** One reader per structure that fails by name on a miss: a
 `requireRun(view, id)` beside `view.runs`, and `blobs()` (which already throws)
 for the upload's bytes. Where the join is positional (c), carry the pair
-as one value at write time. For d, an absent outcome after `settledHere`
-is a defect, so take the outcome from the run's own `run.end` instead.
+as one value at write time. For d, every early return in `resume` ends
+the launch with its own code (`Usage`, as a refusal does), and the
+`ensuring` default becomes a defect path, not `Success`. For a, delete the
+`?? ''`.
 
 **Size.** 6 sites and 2 small helpers, ~40 lines. Owner **E** for a, b, c
 and the view half of e; **A** for d and `cliState.ts`.
@@ -533,7 +548,7 @@ FB9 (one PR each, by the file owners).
 | ---- | ---- | --------------- | --------------------------------------------------------- | --------------------------------------- | ---------- |
 | 1    | FB1  | G (B copy)      | yes: desktop never tells; e2e on the fallback             | 9 sites, 1 false comment                | ~6 files   |
 | 2    | FB2  | E (C, A follow) | yes: delegation and compile fixer swap the model silently | 2 dropped notices, 1 dead row, 1 column | ~5 files   |
-| 3    | FB4  | E (A)           | yes: CLI exit 0 for a lost run; empty upload              | 6                                       | ~40 lines  |
+| 3    | FB4  | E (A)           | yes: CLI exit 0 for a missing resume target               | 6                                       | ~40 lines  |
 | 4    | FB3  | E (B, C)        | latent: privacy in trace export                           | 7                                       | ~40 lines  |
 | 5    | FB6  | E (F, C)        | yes: sign-out skips revocation silently                   | 6                                       | ~30 lines  |
 | 6    | FB5  | E               | yes: a skill vanishes on resume                           | 2 policies → 1                          | ~25 lines  |
