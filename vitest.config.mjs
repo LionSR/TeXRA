@@ -27,7 +27,7 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // A suite's cost is its import closure evaluated once per file, so every
 // suite a module registry shared between files can serve gets one: the fake
 // platform, the session runtime and everything behind them are evaluated once
-// per worker, not once per file. Three projects:
+// per worker, not once per file. Four projects:
 //
 // - `pure`: suites of host-free modules. Nothing in them installs or
 //   replaces anything, so nothing can leak. Measured on 136 suites: 28s
