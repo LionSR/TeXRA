@@ -1,23 +1,8 @@
 /**
- * Canonical GitHub reference paths and polling URL/cursor helpers.
- *
- * `prRef`/`issueRef` build the reference paths used by both the event
- * formatters (PR / repo / issue) and the subscription pollers; `withSince`
- * and `getNewestTimestamp` are the polling URL-param and cursor-advance
- * plumbing. Kept together so the reference-path shape, the query-string
- * separator choice, and the cursor semantics stay consistent across every
- * subscription path.
+ * Polling URL and cursor helpers: `withSince` adds the `since=` parameter a
+ * comment list is polled with, and `getNewestTimestamp` reads the cursor a
+ * list advances it to.
  */
-
-/** Canonical PR reference path, e.g. `owner/repo/pulls/42`. */
-export function prRef(slug: string, prNumber: number): string {
-  return `${slug}/pulls/${prNumber}`;
-}
-
-/** Canonical issue reference path, e.g. `owner/repo/issues/42`. */
-export function issueRef(slug: string, issueNumber: number): string {
-  return `${slug}/issues/${issueNumber}`;
-}
 
 /**
  * Append a `since=` query param to a poll URL, choosing `?` or `&` based on

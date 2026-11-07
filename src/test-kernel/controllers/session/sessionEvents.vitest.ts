@@ -109,7 +109,7 @@ vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
   platform: vi.fn(() => process.platform),
 }));
-vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
+vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
   const { Layer } = await import('effect');
   const { LeanLanguageServices } =
     await import('@texra/tools/lean/leanLanguageServices');

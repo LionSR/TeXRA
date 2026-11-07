@@ -3,17 +3,15 @@ import { Cause, Effect, Result, Schema, Scope, Struct } from 'effect';
 
 import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
-import { withLogChannel } from '@texra-ai/harness/host';
 import {
   callerRun,
-  type ToolRun,
   resolveToolPath,
   errorResult,
   executed,
   nullishWithDefault,
   ToolError,
 } from '@texra-ai/harness/plugins';
-import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   countBySeverity,
   formatCounts,
@@ -122,24 +120,13 @@ const LeanInspectInputSchema = Schema.Struct({
 
 type LeanInspectInput = typeof LeanInspectInputSchema.Type;
 
-/**
- * The tool's answer when Lean cannot serve a call: the adapter's message,
- * with setup guidance only when the toolchain is the cause. A missing project
- * names its lakefile and a stopped or crashed server is not a setup problem.
- */
+/** The tool's answer when Lean cannot serve a call: the adapter's message,
+ *  which carries the setup advice where the toolchain is the cause. */
 const leanUnavailableResult = (
   failed: string,
   failure: LeanUnavailable,
   summary: string,
-): ToolResult =>
-  errorResult(
-    `${failed}: ${failure.message}${
-      failure.reason === 'toolchain'
-        ? '\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that `lake` is on PATH.'
-        : ''
-    }`,
-    { summary },
-  );
+): ToolResult => errorResult(`${failed}: ${failure.message}`, { summary });
 
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 
@@ -180,7 +167,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
   const services = yield* LeanLanguageServices;
   const absoluteFile = yield* leanFilePath(file, call);
   const fetched = yield* Effect.result(
-    services.fetchDiagnosticsForFile(absoluteFile, yield* leanRunId(services)),
+    forCallerRun(services.fetchDiagnosticsForFile(absoluteFile)),
   );
   if (Result.isFailure(fetched)) {
     // Only a file that could not be opened is a "could not open file".
@@ -198,13 +185,6 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
   }
   const result = fetched.success;
   const diagnostics = result.diagnostics;
-
-  // Host capability: VS Code moves the editor cursor to the first error;
-  // CLI/desktop adapters omit it and this is a no-op rather than a pretend
-  // navigation. The tool result below still carries the diagnostic list.
-  yield* (
-    services.navigateToFirstError?.(absoluteFile, diagnostics) ?? Effect.void
-  );
 
   if (!result.complete) {
     // Diagnostics so far are not the file's verdict: an empty list must not
@@ -279,34 +259,29 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
     return Effect.gen(function* () {
       const call = yield* ToolContext;
       const services = yield* LeanLanguageServices;
-      return yield* services
-        .executeFileCommand(
-          command,
-          yield* leanFilePath(file, call),
-          yield* leanRunId(services),
-        )
-        .pipe(
-          Effect.as(executed(`Executed "${command}" on ${file}`, description)),
-          // The adapter's cause is the answer; setup guidance only when the
-          // cause is the setup.
-          Effect.catchTags({
-            LeanFileCommandFailed: (failure) =>
-              Effect.succeed(
-                errorResult(
-                  `Could not execute "${command}" on ${file}: ${failure.message}`,
-                  { summary: 'Command failed' },
-                ),
+      return yield* forCallerRun(
+        services.executeFileCommand(command, yield* leanFilePath(file, call)),
+      ).pipe(
+        Effect.as(executed(`Executed "${command}" on ${file}`, description)),
+        // The adapter's cause is the answer.
+        Effect.catchTags({
+          LeanFileCommandFailed: (failure) =>
+            Effect.succeed(
+              errorResult(
+                `Could not execute "${command}" on ${file}: ${failure.message}`,
+                { summary: 'Command failed' },
               ),
-            LeanUnavailable: (failure) =>
-              Effect.succeed(
-                leanUnavailableResult(
-                  `Could not execute "${command}" on ${file}`,
-                  failure,
-                  'Command failed',
-                ),
+            ),
+          LeanUnavailable: (failure) =>
+            Effect.succeed(
+              leanUnavailableResult(
+                `Could not execute "${command}" on ${file}`,
+                failure,
+                'Command failed',
               ),
-          }),
-        );
+            ),
+        }),
+      );
     }).pipe(
       catchLeanFailure(
         (cause) => `Error: ${toErrorMessage(cause)}`,
@@ -331,10 +306,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
     const { description } = LEAN_PROJECT_COMMANDS[command];
     return Effect.gen(function* () {
       const services = yield* LeanLanguageServices;
-      yield* services.executeProjectCommand(
-        command,
-        yield* leanRunId(services),
-      );
+      yield* forCallerRun(services.executeProjectCommand(command));
 
       if (command === 'build') {
         return executed(
@@ -370,17 +342,14 @@ function executeLeanInspectTool(
     request: (
       services: LeanLanguageServicesShape,
       filePath: string,
-      runId: RunId | undefined,
-    ) => Effect.Effect<LspResult<T>>,
+    ) => Effect.Effect<LspResult<T>, never, Scope.Scope>,
     empty: { readonly message: string; readonly summary: string },
     render: (data: T) => ToolResult,
   ): Effect.fn.Return<ToolResult, Error, ToolContext | LeanLanguageServices> {
     const call = yield* ToolContext;
     const services = yield* LeanLanguageServices;
-    const { data, error } = yield* request(
-      services,
-      yield* leanFilePath(file, call),
-      yield* leanRunId(services),
+    const { data, error } = yield* forCallerRun(
+      request(services, yield* leanFilePath(file, call)),
     );
     if (!data)
       return noPositionData(empty.message, location, empty.summary, error);
@@ -398,8 +367,7 @@ function executeLeanInspectTool(
   switch (type) {
     case 'goal':
       program = inspect(
-        (services, filePath, runId) =>
-          services.getGoalState(filePath, line0, col0, runId),
+        (services, filePath) => services.getGoalState(filePath, line0, col0),
         { message: 'Could not get goal state', summary: 'No goal state' },
         (goal) =>
           goal.goals.length === 0
@@ -415,16 +383,14 @@ function executeLeanInspectTool(
       break;
     case 'term_goal':
       program = inspect(
-        (services, filePath, runId) =>
-          services.getTermGoal(filePath, line0, col0, runId),
+        (services, filePath) => services.getTermGoal(filePath, line0, col0),
         { message: 'No expected type', summary: 'No term goal' },
         (termGoal) => executed(termGoal.goal, 'Term goal'),
       );
       break;
     case 'hover':
       program = inspect(
-        (services, filePath, runId) =>
-          services.getHoverInfo(filePath, line0, col0, runId),
+        (services, filePath) => services.getHoverInfo(filePath, line0, col0),
         { message: 'No information', summary: 'No hover info' },
         (hover) => {
           const text = extractHoverText(hover.contents);
@@ -492,44 +458,15 @@ function leanFilePath(file: string, call: ToolContextShape) {
   );
 }
 
-/** The runs whose end already stops the Lean servers they started, by
- *  their scope: one per run, whatever object a call sees the run through. */
-const stopRegistered = new WeakSet<ToolRun['scope']>();
-
 /**
- * The run a Lean request is attributed to. The first request of a run also
- * ties the servers it starts to the run's lifetime: the host's stop is a
- * finalizer on the run's scope, so the run's end stops them. A host whose
- * Lean integration owns server lifetime (the VS Code bridge) has no stop.
+ * Run a port call with the scope the resources it starts stay held in: the
+ * run's, so a Lean server it starts for the run stays up until the run ends,
+ * or, outside a run, the call's own.
  */
-function leanRunId(
-  services: LeanLanguageServicesShape,
-): Effect.Effect<RunId | undefined, never, ToolContext> {
-  return Effect.flatMap(callerRun, (run) => {
-    if (!run) return Effect.succeed(undefined);
-    const { runId } = run;
-    if (!services.stopSessionsForRun || stopRegistered.has(run.scope)) {
-      return Effect.succeed(runId);
-    }
-    stopRegistered.add(run.scope);
-    return Scope.addFinalizer(
-      run.scope,
-      // A finalizer on the run's scope: a failure here must not replace the
-      // run's exit, so it is logged and the scope still closes.
-      Effect.suspend(
-        () => services.stopSessionsForRun?.(runId) ?? Effect.void,
-      ).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : Effect.logWarning(
-                'Failed to stop the Lean servers of an ended run',
-              ).pipe(
-                Effect.annotateLogs({ runId, error: Cause.squash(cause) }),
-                withLogChannel('LeanTools'),
-              ),
-        ),
-      ),
-    ).pipe(Effect.as(runId));
-  });
+function forCallerRun<A, E>(
+  call: Effect.Effect<A, E, Scope.Scope>,
+): Effect.Effect<A, E, ToolContext> {
+  return Effect.flatMap(callerRun, (run) =>
+    run ? call.pipe(Scope.provide(run.scope)) : Effect.scoped(call),
+  );
 }

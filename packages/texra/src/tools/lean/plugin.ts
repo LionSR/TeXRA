@@ -3,7 +3,7 @@
 
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Effect, Option } from 'effect';
+import { Clock, Effect, Option } from 'effect';
 
 // Local imports
 import {
@@ -13,9 +13,9 @@ import {
 import type { TexraPlugin } from '@texra/tools/registry';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { findCommand } from '@texra/utils/system/binaryResolver';
-import { directLeanLanguageServices } from './direct/directLspAdapter';
+import { directLeanLanguageServices } from './direct/leanServerPool';
 import { LeanLanguageServices } from './leanLanguageServices';
-import { isLeanServerActive, summarizeLeanServers } from './leanServerRegistry';
+import { isLeanServerActive, summarizeLeanServers } from './leanServerInfo';
 import { LEAN4_EXTENSION_ID } from './leanTypes';
 import {
   LeanDiagnosticsTool,
@@ -43,10 +43,12 @@ export const lean4 = (host: {
     ],
     availability: {
       check: Effect.fn('lean4.availability')(function* () {
-        // A probe reads the plugin's roster while its layer is up; it never
+        // A probe reads the plugin's servers while its layer is up; it never
         // brings that layer up itself.
         const lean = yield* Effect.serviceOption(LeanLanguageServices);
-        const servers = Option.isSome(lean) ? lean.value.listServers() : [];
+        const servers = Option.isSome(lean)
+          ? yield* lean.value.listServers
+          : [];
         const { extensions } = host.setup;
         const extensionAvailable =
           extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
@@ -72,7 +74,10 @@ export const lean4 = (host: {
               ? 'The VS Code build drives Lean through the leanprover.lean4 extension; install it to enable Lean tools. `lake` on PATH alone is not enough here.'
               : 'No `lake` binary was detected. Install elan and make sure `lake` is on PATH to enable Lean tools.',
           );
-        lines.push('', summarizeLeanServers(servers));
+        lines.push(
+          '',
+          summarizeLeanServers(servers, yield* Clock.currentTimeMillis),
+        );
         return {
           available,
           statusLabel,
@@ -80,7 +85,9 @@ export const lean4 = (host: {
         };
       }),
     },
-    processLayer: { layer: host.services ?? directLeanLanguageServices() },
+    processLayer: {
+      layer: host.services ?? directLeanLanguageServices('lake'),
+    },
   }),
   icons: {
     lean_diagnostics: 'triangle-exclamation',
@@ -98,8 +105,8 @@ export const lean4 = (host: {
         '  • VS Code build: uses the "lean4" extension\n' +
         '    (leanprover.lean4) and its running language server.\n' +
         '  • CLI / desktop build: spawns `lake env lean --server`\n' +
-        '    directly (one process per Lake project; idle ones stop\n' +
-        '    after thirty minutes). Requires `lake` (from elan/Lean) on\n' +
+        '    directly (one process per Lake project, stopped when the\n' +
+        '    last run using it ends). Requires `lake` (from elan/Lean) on\n' +
         '    PATH; install via\n' +
         '    https://leanprover-community.github.io/install/.\n\n' +
         'Setup (VS Code):\n' +
@@ -115,7 +122,7 @@ export const lean4 = (host: {
       installExtensionId: LEAN4_EXTENSION_ID,
       configNotes:
         'VS Code build: requires the leanprover.lean4 extension. ' +
-        'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, and idle ones stop after thirty minutes, surfaced below.',
+        'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, which stops when the last run using it ends, surfaced below.',
     },
   },
 });

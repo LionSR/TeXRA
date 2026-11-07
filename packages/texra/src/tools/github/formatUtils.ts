@@ -4,11 +4,16 @@
  * Trivial enough to inline at each call site — but having one canonical
  * version means the truncation cap and the webhook-activity wrapper tag stay
  * consistent across all subscription paths (PR / repo / issue). Reference
- * paths and polling URL/cursor helpers live in `./githubPaths`.
+ * paths are `targetPath` (`./subscriptionTarget`).
  */
 
 import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import type { GhIssueComment } from './prTypes';
+import {
+  TARGET_LABEL,
+  targetPath,
+  type SubscriptionTarget,
+} from './subscriptionTarget';
 
 /** An activity report's tag (`<family>-activity`), which the harness's
  *  render surfaces recognize by that shape. */
@@ -111,5 +116,20 @@ export function formatCommentEvent(
       truncate(c.body, maxBody),
       c.html_url,
     ),
+  );
+}
+
+/**
+ * The event a run receives when its subscription stops on its own (token
+ * rejected, target gone, unreachable for a day). Same envelope as every other
+ * event, so an adversarial GitHub error payload cannot inject tag-shaped
+ * content and agents cannot mistake it for direct user input.
+ */
+export function formatSubscriptionHalted(
+  target: SubscriptionTarget,
+  detail: string,
+): string {
+  return wrapWebhookEvent(
+    `${TARGET_LABEL[target._tag]} subscription to ${targetPath(target)} halted: ${detail}`,
   );
 }

@@ -8,14 +8,14 @@
  * {@link LeanStartError}, keeping the errno for the pool's file-table
  * retry), and handles `textDocument/didOpen` lazily on the first request
  * that touches a file. Diagnostics arrive via `publishDiagnostics` and are
- * buffered per file; Lean's `$/lean/fileProgress` says when the file's
- * current version is elaborated, which diagnostics and position requests
- * wait for first.
+ * kept in the file's state; Lean's `$/lean/fileProgress` says when the
+ * file's current version is elaborated, which diagnostics and position
+ * requests wait for first.
  *
  * Release is the scope's finalizers, in order: the shutdown protocol
  * (`shutdown` request under its bound, `exit`, SIGTERM, wait, SIGKILL, wait),
- * the JSON-RPC close, the process stop (a no-op once the protocol ran), the
- * roster entry. Every wait is on the runtime clock.
+ * the JSON-RPC close, the process stop (a no-op once the protocol ran).
+ * Every wait is on the runtime clock.
  *
  * Lives under `packages/texra/src/tools/lean/direct/` (host-neutral): Node-only, no `vscode`
  * imports, suitable for both the CLI and the desktop main process.
@@ -33,12 +33,14 @@ import {
   Fiber,
   FileSystem,
   Layer,
+  Option,
   type PlatformError,
   Ref,
   Result,
   Schema,
   type Scope,
   Stream,
+  SubscriptionRef,
 } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
@@ -55,7 +57,7 @@ import {
   type JsonRpcRequestError,
 } from '@texra-ai/harness/plugins';
 import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticFormatting';
-import type { LeanServerRoster } from '../leanServerRegistry';
+import type { LeanServerInfo } from '../leanServerInfo';
 import {
   LeanFileUnreadable,
   type LeanDiagnostic,
@@ -112,16 +114,8 @@ const LEAN_LANGUAGE_ID = 'lean4';
 const HANDSHAKE_TIMEOUT = Duration.millis(15_000);
 const SHUTDOWN_TIMEOUT = Duration.millis(2_000);
 const DIAGNOSTICS_WAIT = Duration.millis(10_000);
-const DIAGNOSTICS_QUIET_WINDOW_MS = 400;
+const DIAGNOSTICS_QUIET_WINDOW = Duration.millis(400);
 const STDERR_TAIL_LIMIT = 4096;
-
-/** The server was disposed, or the file state a wait was pinned to is gone. */
-class LeanSessionDisposed extends Schema.TaggedError<LeanSessionDisposed>()(
-  'LeanSessionDisposed',
-  {},
-) {
-  override readonly message = 'Lean session has been disposed.';
-}
 
 /** No live server: already exited, or shut down. */
 class LeanSessionNotRunning extends Schema.TaggedError<LeanSessionNotRunning>()(
@@ -141,7 +135,6 @@ export class LeanStartError extends Schema.TaggedError<LeanStartError>()(
 ) {}
 
 type LeanSessionError =
-  | LeanSessionDisposed
   | LeanSessionNotRunning
   | LeanFileUnreadable
   | JsonRpcRequestError
@@ -150,15 +143,13 @@ type LeanSessionError =
 interface LeanServerOptions {
   readonly workspaceRoot: string;
   readonly lakeCommand: string;
-  /** The owning pool's roster: registered here, dropped by this scope. */
-  readonly roster: LeanServerRoster;
 }
 
 export class LeanServer extends Context.Service<
   LeanServer,
   {
-    /** Finishes once the scope has fully released the process. */
-    readonly closed: Deferred.Deferred<void>;
+    /** The server's line on the Tools dashboard. */
+    readonly info: Effect.Effect<LeanServerInfo>;
     /**
      * Run the shutdown protocol now, ahead of the scope's release (which
      * then finds nothing left to do). Idempotent; concurrent callers join.
@@ -201,17 +192,13 @@ export class LeanServer extends Context.Service<
   > => Layer.effect(LeanServer)(make(options));
 }
 
-interface OpenedFile {
-  version: number;
-  diagnostics: LeanDiagnostic[];
-  lastDiagnosticsAt: number;
+/** What Lean has said about the open version of a file. */
+interface FileState {
+  readonly version: number;
+  /** Absent until Lean publishes diagnostics for this version. */
+  readonly diagnostics?: LeanDiagnostic[];
   /** Lean's last `$/lean/fileProgress` for this version, if it sent one. */
-  progress: 'unreported' | 'processing' | 'elaborated';
-  /**
-   * Completed by the next `publishDiagnostics` or `$/lean/fileProgress`;
-   * failed when the state is abandoned.
-   */
-  next: Deferred.Deferred<void, LeanSessionDisposed>;
+  readonly progress: 'unreported' | 'processing' | 'elaborated';
 }
 
 interface ServerEnd {
@@ -220,9 +207,6 @@ interface ServerEnd {
   /** The errno the exit carried, when that is what ended it. */
   readonly cause?: unknown;
 }
-
-/** Registry ids are per instance: an old server closing must not clobber its replacement's entry. */
-let serverSequence = 0;
 
 function spawnFailure(error: PlatformError.PlatformError): LeanStartError {
   const cause = error.reason.cause ?? error;
@@ -279,7 +263,6 @@ const stopProcess = Effect.fn('LeanServer.stopProcess')(function* (
 const make = ({
   workspaceRoot: root,
   lakeCommand,
-  roster,
 }: LeanServerOptions): Effect.Effect<
   LeanServer['Service'],
   LeanStartError,
@@ -287,23 +270,12 @@ const make = ({
 > =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    serverSequence += 1;
-    const id = `direct:${root}#${serverSequence}`;
-    const closed = yield* Deferred.make<void>();
+    const startedAt = yield* Clock.currentTimeMillis;
     const ended = yield* Deferred.make<ServerEnd>();
-    const openFiles = new Map<string, OpenedFile>();
-
-    roster.register({
-      id,
-      workspaceRoot: root,
-      mode: 'direct-lsp',
-      status: 'starting',
-    });
-    yield* Effect.addFinalizer(() =>
-      Effect.sync(() => roster.unregister(id)).pipe(
-        Effect.andThen(Deferred.succeed(closed, undefined)),
-      ),
-    );
+    const openFiles = new Map<
+      string,
+      SubscriptionRef.SubscriptionRef<FileState>
+    >();
 
     const handle = yield* ChildProcess.make(lakeCommand, [
       'env',
@@ -329,30 +301,16 @@ const make = ({
       ),
     );
 
-    /** Fail every pending diagnostics wait and forget the open files. */
-    const abandonFiles = Effect.gen(function* () {
-      for (const state of openFiles.values()) {
-        yield* Deferred.fail(state.next, new LeanSessionDisposed());
-      }
-      openFiles.clear();
-    });
-
-    /** Wake the file's waiters; each re-arms on the fresh deferred. */
-    const wakeWaiters = (state: OpenedFile) => {
-      const arrived = state.next;
-      state.next = Deferred.makeUnsafe();
-      return Deferred.succeed(arrived, undefined);
-    };
-
     const handlePublishDiagnostics = Effect.fn('handlePublishDiagnostics')(
       function* (params: LspPublishDiagnosticsParams) {
         const absolute = yield* fileUriToPath(params.uri);
-        if (!absolute) return;
-        const state = openFiles.get(absolute);
-        if (!state) return;
-        state.diagnostics = params.diagnostics.map(toLeanDiagnostic);
-        state.lastDiagnosticsAt = yield* Clock.currentTimeMillis;
-        yield* wakeWaiters(state);
+        const file = absolute && openFiles.get(absolute);
+        if (!file) return;
+        const diagnostics = params.diagnostics.map(toLeanDiagnostic);
+        yield* SubscriptionRef.update(file, (state) => ({
+          ...state,
+          diagnostics,
+        }));
       },
     );
 
@@ -360,16 +318,19 @@ const make = ({
       params: LeanFileProgressParams,
     ) {
       const absolute = yield* fileUriToPath(params.textDocument.uri);
-      if (!absolute) return;
-      const state = openFiles.get(absolute);
-      // A report on a version since replaced says nothing about this one.
-      if (state?.version !== params.textDocument.version) return;
-      state.progress = params.processing.some(
+      const file = absolute && openFiles.get(absolute);
+      if (!file) return;
+      const progress: FileState['progress'] = params.processing.some(
         (range) => (range.kind ?? 1) === 1,
       )
         ? 'processing'
         : 'elaborated';
-      yield* wakeWaiters(state);
+      yield* SubscriptionRef.update(file, (state) =>
+        // A report on a version since replaced says nothing about this one.
+        state.version === params.textDocument.version
+          ? { ...state, progress }
+          : state,
+      );
     });
 
     /** A notification the server sent in a shape LSP does not define. */
@@ -409,8 +370,7 @@ const make = ({
       },
     });
 
-    // The server is gone: record its end, drop file state, close the
-    // connection with the end as the reason. The exit can precede the end of
+    // The server is gone: record its end and close the connection with the end as the reason. The exit can precede the end of
     // its output, so the close waits for stdout and stderr to drain (bounded:
     // a grandchild may hold the pipes): a reply already written still
     // reaches its request instead of failing as disposed.
@@ -424,8 +384,6 @@ const make = ({
         yield* Effect.logInfo(
           `lake env lean --server ended (${end.message ?? 'exit code 0'}) at ${root}${tail ? `\n${tail}` : ''}`,
         ).pipe(withLogChannel(LOG_CHANNEL));
-        roster.update(id, { status: end.status, errorMessage: end.message });
-        yield* abandonFiles;
         yield* rpc.close(end.message ?? 'Lean server stopped');
         yield* Deferred.succeed(ended, end);
       }),
@@ -476,7 +434,6 @@ const make = ({
         ),
       );
     yield* rpc.notify('initialized', {});
-    roster.update(id, { status: 'running' });
 
     const shutdown = yield* Effect.cached(
       Effect.gen(function* () {
@@ -520,22 +477,23 @@ const make = ({
     /**
      * One writer per file for `openFiles` and the server's document stream.
      * Every run on this Lake root shares the server, so two of them opening
-     * or restarting one file at once would both read it, both send `didOpen`
-     * at version 1, and the one whose state the other replaced would fail
-     * `LeanSessionDisposed` on a healthy server. `ensureFileOpen` and
-     * `restartFile` are entered on the file's lane; `restartFile` reaches
-     * `ensureFileOpen` from inside it.
+     * or restarting one file at once would both read it and both send
+     * `didOpen` at the same version.
      */
     const fileLanes = new Map<string, PerKeyLane>();
     const onFileLane = (absolute: string) =>
       withPerKeyLane(fileLanes, absolute);
 
-    const ensureFileOpen = Effect.fn('LeanServer.ensureFileOpen')(function* (
+    /**
+     * Read the file and send `didOpen`: at version 1, or, reopening a file
+     * this server closed, one past its last version, so a progress report on
+     * the old version is not read as the new one's. Entered on the file's
+     * lane.
+     */
+    const openFile = Effect.fn('LeanServer.openFile')(function* (
       absolute: string,
-      forceReload: boolean,
     ) {
       yield* requireRpc;
-      if (openFiles.has(absolute) && !forceReload) return;
       // The process FileSystem is unrooted: it reads the bytes lean sees.
       const text = yield* fs.readFileString(absolute).pipe(
         Effect.mapError(
@@ -546,92 +504,90 @@ const make = ({
             }),
         ),
       );
-      const existing = openFiles.get(absolute);
-      if (existing && !forceReload) return;
       // Re-check after the read: the server may have ended meanwhile.
       const live = yield* requireRpc;
-      const version = (existing?.version ?? 0) + 1;
-      if (existing) {
-        existing.version = version;
-        existing.diagnostics = [];
-        existing.lastDiagnosticsAt = 0;
-        existing.progress = 'unreported';
-        yield* live.notify('textDocument/didChange', {
-          textDocument: { uri: pathToUri(absolute), version },
-          contentChanges: [{ text }],
-        });
-      } else {
-        openFiles.set(absolute, {
+      const reopened = openFiles.get(absolute);
+      const version = reopened
+        ? (yield* SubscriptionRef.get(reopened)).version + 1
+        : 1;
+      const state: FileState = { version, progress: 'unreported' };
+      const file = reopened ?? (yield* SubscriptionRef.make(state));
+      if (reopened) yield* SubscriptionRef.set(reopened, state);
+      else openFiles.set(absolute, file);
+      yield* live.notify('textDocument/didOpen', {
+        textDocument: {
+          uri: pathToUri(absolute),
+          languageId: LEAN_LANGUAGE_ID,
           version,
-          diagnostics: [],
-          lastDiagnosticsAt: 0,
-          progress: 'unreported',
-          next: Deferred.makeUnsafe(),
-        });
-        yield* live.notify('textDocument/didOpen', {
-          textDocument: {
-            uri: pathToUri(absolute),
-            languageId: LEAN_LANGUAGE_ID,
-            version,
-            text,
-          },
-        });
-      }
+          text,
+        },
+      });
+      return file;
     });
+
+    const ensureFileOpen = (absolute: string) =>
+      Effect.suspend(() => {
+        const file = openFiles.get(absolute);
+        return file ? Effect.succeed(file) : openFile(absolute);
+      }).pipe(onFileLane(absolute));
+
+    /** Fails with `LeanSessionNotRunning` once the server has ended. */
+    const serverEnded = Deferred.await(ended).pipe(
+      Effect.andThen(Effect.fail(new LeanSessionNotRunning())),
+    );
 
     /**
      * Wait until Lean reports the file's current version elaborated, and say
      * whether it did. A server that has reported no progress for the version
-     * finishes on a diagnostics quiet window instead, and the overall wait
-     * bounds both; either of those ends the wait unelaborated (`false`).
+     * finishes once its diagnostics have been quiet for a window instead, and
+     * the overall wait bounds both; either of those ends the wait
+     * unelaborated (`false`). A reopen sets the state to the new version, so
+     * a wait already running waits for that one.
      */
-    const waitForElaboration = Effect.fn('LeanServer.waitForElaboration')(
-      function* (absolute: string) {
-        const state = openFiles.get(absolute);
-        if (!state) return false;
-        for (;;) {
-          if (openFiles.get(absolute) !== state) {
-            return yield* new LeanSessionDisposed();
-          }
-          if (state.progress === 'elaborated') return true;
-          // The ambient clock, the one `handlePublishDiagnostics` stamps
-          // `lastDiagnosticsAt` with: a handle captured at layer build would
-          // compare this window against another fiber's timeline.
-          const now = yield* Clock.currentTimeMillis;
-          if (
-            state.progress === 'unreported' &&
-            state.lastDiagnosticsAt &&
-            now - state.lastDiagnosticsAt >= DIAGNOSTICS_QUIET_WINDOW_MS
-          ) {
-            return false;
-          }
-          yield* Deferred.await(state.next).pipe(
-            Effect.timeoutOption(Duration.millis(DIAGNOSTICS_QUIET_WINDOW_MS)),
-          );
-        }
-      },
-      Effect.timeoutOrElse({
-        duration: DIAGNOSTICS_WAIT,
-        orElse: () => Effect.succeed(false),
-      }),
-    );
+    const waitForElaboration = (
+      file: SubscriptionRef.SubscriptionRef<FileState>,
+    ) => {
+      const elaborated = SubscriptionRef.changes(file).pipe(
+        Stream.filter((state) => state.progress === 'elaborated'),
+        Stream.take(1),
+        Stream.runDrain,
+        Effect.as(true),
+      );
+      const quiet = SubscriptionRef.changes(file).pipe(
+        Stream.debounce(DIAGNOSTICS_QUIET_WINDOW),
+        Stream.filter(
+          (state) =>
+            state.progress === 'unreported' && state.diagnostics !== undefined,
+        ),
+        Stream.take(1),
+        Stream.runDrain,
+        Effect.as(false),
+      );
+      return Effect.race(elaborated, quiet).pipe(
+        Effect.raceFirst(serverEnded),
+        Effect.timeoutOrElse({
+          duration: DIAGNOSTICS_WAIT,
+          orElse: () => Effect.succeed(false),
+        }),
+        Effect.withSpan('LeanServer.waitForElaboration'),
+      );
+    };
 
     const openAndSettle = Effect.fn('LeanServer.openAndSettle')(function* (
       filePath: string,
     ) {
       const absolute = path.resolve(filePath);
-      yield* ensureFileOpen(absolute, false).pipe(onFileLane(absolute));
-      const complete = yield* waitForElaboration(absolute);
-      return { absolute, complete };
+      const file = yield* ensureFileOpen(absolute);
+      const complete = yield* waitForElaboration(file);
+      return { absolute, file, complete };
     });
 
     const diagnostics = Effect.fn('LeanServer.diagnostics')(function* (
       filePath: string,
     ) {
-      const { absolute, complete } = yield* openAndSettle(filePath);
-      const state = openFiles.get(absolute);
-      if (!state) return yield* new LeanSessionDisposed();
-      return { diagnostics: state.diagnostics, complete };
+      const { file, complete } = yield* openAndSettle(filePath);
+      const state = yield* SubscriptionRef.get(file);
+      return { diagnostics: state.diagnostics ?? [], complete };
     });
 
     const requestSettled = Effect.fn('LeanServer.requestSettled')(function* (
@@ -654,20 +610,38 @@ const make = ({
       const absolute = path.resolve(filePath);
       yield* Effect.gen(function* () {
         const live = yield* requireRpc;
-        const state = openFiles.get(absolute);
-        if (state) {
+        if (openFiles.has(absolute)) {
           yield* live.notify('textDocument/didClose', {
             textDocument: { uri: pathToUri(absolute) },
           });
-          yield* Deferred.fail(state.next, new LeanSessionDisposed());
-          openFiles.delete(absolute);
         }
-        yield* ensureFileOpen(absolute, true);
+        // A reopen that fails leaves the file closed at the server, so the
+        // next request opens it afresh.
+        yield* openFile(absolute).pipe(
+          Effect.tapError(() => Effect.sync(() => openFiles.delete(absolute))),
+        );
       }).pipe(onFileLane(absolute));
     });
 
+    const base = { workspaceRoot: root, mode: 'direct-lsp' } as const;
+    const info = Effect.flatMap(
+      Deferred.poll(ended),
+      (end): Effect.Effect<LeanServerInfo> =>
+        Option.isNone(end)
+          ? Effect.succeed({ ...base, status: 'running', startedAt })
+          : Effect.map(end.value, ({ status, message }) =>
+              status === 'error'
+                ? {
+                    ...base,
+                    status,
+                    errorMessage: message ?? 'Lean server stopped',
+                  }
+                : { ...base, status },
+            ),
+    );
+
     return LeanServer.of({
-      closed,
+      info,
       shutdown,
       diagnostics,
       requestSettled,

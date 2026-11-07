@@ -1,9 +1,13 @@
 // Third-party imports
-import { Context, Effect, Option } from 'effect';
+import { Context, Effect, Option, Result, Schema } from 'effect';
 
 // Local imports - GitHub subscriptions
-import { ToolCatalog } from '@texra-ai/harness/host';
+import { ToolCatalog, type AppSignals } from '@texra-ai/harness/host';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
+import {
+  SubscriptionTargetPath,
+  targetPath,
+} from '@texra/tools/github/subscriptionTarget';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 interface GitHubSubscriptionOwner {
@@ -22,8 +26,8 @@ interface GitHubSubscriptionEntry {
  */
 const whileUp = <A>(
   none: A,
-  read: Effect.Effect<A, never, GitHubSubscriptions>,
-): Effect.Effect<A, never, ToolCatalog> =>
+  read: Effect.Effect<A, never, GitHubSubscriptions | AppSignals>,
+): Effect.Effect<A, never, ToolCatalog | AppSignals> =>
   Effect.scoped(
     Effect.gen(function* () {
       const services = yield* (yield* ToolCatalog).processServices(
@@ -46,40 +50,31 @@ export const listGitHubSubscriptionEntries = (
 ) =>
   whileUp(
     [],
-    Effect.map(GitHubSubscriptions, (subscriptions) => {
-      const toEntry = (binding: {
-        key: string;
-        runIds: readonly RunId[];
-      }): GitHubSubscriptionEntry => ({
-        key: binding.key,
-        owners: binding.runIds.map((runId) => ({
-          runId,
-          label: getRunLabel(runId) ?? runId,
+    Effect.flatMap(GitHubSubscriptions, (subscriptions) =>
+      Effect.map(subscriptions.list, (entries) =>
+        entries.map((entry): GitHubSubscriptionEntry => ({
+          key: targetPath(entry.target),
+          owners: entry.runIds.map((runId) => ({
+            runId,
+            label: getRunLabel(runId) ?? runId,
+          })),
         })),
-      });
-      return [
-        ...subscriptions.pr.list().map(toEntry),
-        ...subscriptions.repo.list().map(toEntry),
-        ...subscriptions.issue.list().map(toEntry),
-      ];
-    }),
+      ),
+    ),
   ).pipe(Effect.withSpan('githubSubscriptions.listEntries'));
 
 /**
- * Removes every binding for a GitHub URL-shaped subscription key.
- * Repo keys are exactly `owner/repo`; a malformed, legacy, or future key
- * shape must not silently default to the repo registry (a destructive unbind),
- * so it is treated as an explicit no-match instead.
+ * Removes every binding for a subscription key, a target's path. A key that
+ * is not one names no subscription.
  */
-export const unsubscribeGitHubKey = (key: string) =>
-  whileUp(
+export const unsubscribeGitHubKey = (key: string) => {
+  const target = Schema.decodeUnknownResult(SubscriptionTargetPath)(key);
+  return whileUp(
     0,
-    Effect.map(GitHubSubscriptions, (subscriptions) => {
-      if (key.includes('/pulls/')) return subscriptions.pr.unbindAll(key);
-      if (key.includes('/issues/')) return subscriptions.issue.unbindAll(key);
-      if (/^[^/\s]+\/[^/\s]+$/.test(key)) {
-        return subscriptions.repo.unbindAll(key);
-      }
-      return 0;
-    }),
+    Result.isSuccess(target)
+      ? Effect.flatMap(GitHubSubscriptions, (subscriptions) =>
+          subscriptions.unbindAll(target.success),
+        )
+      : Effect.succeed(0),
   ).pipe(Effect.withSpan('githubSubscriptions.unsubscribeKey'));
+};

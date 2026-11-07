@@ -1,63 +1,20 @@
 /**
- * Host-neutral orchestration for a full latexdiff run, and the one pairing
- * every latexdiff of a document task's outputs follows ({@link latexdiffPairs}),
- * which the run's own `document_diff` shares.
- *
- * Takes the run's recorded round outputs (its documents, as the host's view
- * of the session applies them), builds one diff operation per pair each round's
- * outputs call for, and runs them. That view is the only source: run storage
- * is never rescanned and no workspace filename is parsed, so a run with no
- * recorded outputs has no diff operations. The GUI hosts reach it through
- * `latexdiffVerbs`, with a {@link DiffProgressReporter} of their own.
+ * The one pairing every latexdiff of a document task's outputs follows: the
+ * run's own `document_diff` pass and the hosts' "latexdiff this run" verb,
+ * for a round that recorded no diffs, both diff the pairs
+ * {@link latexdiffPairs} names, under the file names it gives them.
  */
 
-// Node imports
-import * as path from 'node:path';
-
-// Third-party imports
-import { Effect, type FileSystem, type Path } from 'effect';
-
 // Local imports
-import { withLogChannel, Settings } from '@texra-ai/harness/host';
-import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import {
   getEffectiveDiffBase,
-  roundIndexedEntries,
-  type ReadonlyRoundIndexed,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
+import type { FileLocation } from '@texra-ai/harness/schemas';
 
 // Local file imports
-import { LaTeXdiffService } from '../latexdiff';
 import { buildBetweenRoundDiffSuffix } from './diffFileNameManager';
-import type { FileLocation, RunId } from '@texra-ai/harness/schemas';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-/**
- * Minimal progress sink for long-running diff runs. Host-neutral so the core
- * latexdiff logic stays free of `vscode`: the extension passes its
- * `vscode.Progress<…>`, which structurally satisfies this interface.
- */
-export interface DiffProgressReporter {
-  report(value: { message?: string; increment?: number }): void;
-}
-
-export type DiffRunResult =
-  | {
-      success: true;
-      /** Absolute path of the generated diff, as reported by the diff service. */
-      diffPath: string;
-      message: string;
-      description: string;
-    }
-  | {
-      success: false;
-      message: string;
-      description: string;
-    };
 
 /** One latexdiff a round's recorded outputs call for. */
 export interface LatexdiffPair {
@@ -70,6 +27,8 @@ export interface LatexdiffPair {
   /** The round `base` came from; null for the document the task started
    *  from. */
   readonly baseRound: number | null;
+  /** What the diff file's name adds to the revised file's stem. */
+  readonly suffix: string;
 }
 
 /**
@@ -91,7 +50,9 @@ export function latexdiffPairs(
   const fromBase = documents.flatMap(
     ({ revised, document }): LatexdiffPair[] => {
       const base = getEffectiveDiffBase(revised.lineage);
-      return base ? [{ revised, document, base, baseRound: null }] : [];
+      return base
+        ? [{ revised, document, base, baseRound: null, suffix: '_diff' }]
+        : [];
     },
   );
   const previousByDocument = new Map(
@@ -101,125 +62,17 @@ export function latexdiffPairs(
     ({ revised, document }): LatexdiffPair[] => {
       const prior = previousByDocument.get(document);
       return prior
-        ? [{ revised, document, base: prior.location, baseRound: prior.round }]
+        ? [
+            {
+              revised,
+              document,
+              base: prior.location,
+              baseRound: prior.round,
+              suffix: buildBetweenRoundDiffSuffix(revised.round, prior.round),
+            },
+          ]
         : [];
     },
   );
   return [...fromBase, ...fromPrevious];
 }
-
-/** One latexdiff call: `suffix` names the diff file it writes. */
-interface DiffOperation {
-  base: FileLocation;
-  revised: FileLocation;
-  description: string;
-  cwd: string;
-  suffix: string;
-}
-
-export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
-  function* (params: {
-    /** The run whose recorded outputs are diffed. */
-    readonly runId: RunId;
-    /** The run's recorded output files by round (`runOutputFiles`). */
-    readonly rounds: ReadonlyRoundIndexed<OutputFileInfo>;
-    /**
-     * The calling session's roots: the between-rounds setting is read from
-     * them, the diff service is bound to them, and their workspace folder is
-     * the cwd every diff operation runs in (a diff falls back to its base
-     * file's folder when no folder is open).
-     */
-    readonly roots: WorkspaceRoots;
-    readonly mathMarkup?: LatexdiffMathMarkupValue;
-    /** Logger channel the diff run reports under (host-specific). */
-    readonly channel: string;
-    readonly progress: DiffProgressReporter;
-  }): Effect.fn.Return<
-    { results: DiffRunResult[] },
-    Error,
-    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
-  > {
-    const { runId, rounds, roots, mathMarkup, progress } = params;
-
-    // Hosts report an empty outcome as "no diff operations for this run".
-    if (!Object.values(rounds).some((files) => files.length > 0)) {
-      yield* Effect.logWarning(
-        `No recorded outputs for run ${runId}; nothing to diff`,
-      );
-      return { results: [] };
-    }
-
-    const generateBetweenRoundDiffs = yield* Settings.get<boolean>(
-      roots,
-      DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-    );
-    yield* Effect.logDebug(`Between rounds: ${generateBetweenRoundDiffs}`);
-
-    const results: DiffRunResult[] = [];
-    const operations: DiffOperation[] = [];
-
-    for (const [round, infos] of roundIndexedEntries(rounds)) {
-      for (const info of infos) {
-        // Extraction records every output's lineage; one with no base in it
-        // is a new document (a task that declares `outputs`), not a failure.
-        // Only an output whose lineage was never recorded lacks a base the
-        // run could have named.
-        if (info.lineage !== null) continue;
-        results.push({
-          success: false,
-          message: 'Missing base file path',
-          description: `${getSafeDocumentRelativePath(info.source)} (r${round})`,
-        });
-      }
-      const previous = generateBetweenRoundDiffs
-        ? (rounds[round - 1] ?? [])
-        : [];
-      for (const { revised, document, base, baseRound } of latexdiffPairs(
-        infos,
-        previous,
-      )) {
-        operations.push({
-          base,
-          revised: revised.location,
-          description:
-            baseRound === null
-              ? `${document} (r${round})`
-              : `${document} (r${baseRound}→r${round})`,
-          cwd: roots.workspace ?? path.dirname(base.absolutePath),
-          suffix:
-            baseRound === null
-              ? '_diff'
-              : buildBetweenRoundDiffSuffix(round, baseRound),
-        });
-      }
-    }
-
-    const service = new LaTeXdiffService(params.channel, roots);
-    // Zero operations never enter the loop, so the bare division is safe.
-    const incrementPct = 100 / operations.length;
-
-    // Sequential by design: each latexdiff is a whole TeX run, and the
-    // progress reporter narrates them one at a time.
-    for (const operation of operations) {
-      progress.report({
-        increment: incrementPct,
-        message: `Running diff for ${operation.description}`,
-      });
-
-      const diffResult = yield* service.runDiff(
-        operation.base,
-        operation.revised,
-        operation.suffix,
-        mathMarkup,
-        { cwd: operation.cwd },
-      );
-
-      results.push({ ...diffResult, description: operation.description });
-    }
-
-    return { results };
-  },
-  // One channel for the whole run, so the read and the diff engine below
-  // both land on the caller's channel.
-  (effect, params) => withLogChannel(params.channel)(effect),
-);

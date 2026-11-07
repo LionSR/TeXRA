@@ -20,8 +20,9 @@ import {
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
-  getInstallGuide,
+  installAdvice,
   LATEX_TOOL_ENTRIES,
+  normalizePlatform,
   SYSTEM_PACKAGE_MANAGERS,
   type LatexToolName,
   type SystemPackageManager,
@@ -143,7 +144,11 @@ export const runTool = Effect.fn('toolChecks.runTool')(function* (
   ) {
     return yield* new ToolMissing({
       tool,
-      guide: getInstallGuide(LATEX_TOOL_ENTRIES[tool].guide, process.platform),
+      guide: installAdvice(
+        LATEX_TOOL_ENTRIES[tool].label ?? tool,
+        [tool],
+        normalizePlatform(process.platform),
+      ).guide,
     });
   }
   return result;
@@ -151,7 +156,7 @@ export const runTool = Effect.fn('toolChecks.runTool')(function* (
 
 // Platform-aware probe order: check the platform's native PM first so that
 // cross-platform installs (e.g. Linuxbrew on Linux) don't shadow the PM that
-// DEPENDENCY_INSTALL_COMMANDS actually uses for that platform.
+// the install advice uses for that platform.
 const PREFERRED_PACKAGE_MANAGER: Readonly<
   Partial<Record<NodeJS.Platform, SystemPackageManager>>
 > = Object.freeze({ darwin: 'brew', linux: 'apt', win32: 'scoop' });

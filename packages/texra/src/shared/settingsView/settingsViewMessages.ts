@@ -20,7 +20,11 @@ import {
 } from '@texra-ai/harness/schemas';
 import { API_KEY_PROVIDER_IDS, ReasoningEffortSchema } from '@texra-ai/llm';
 import { AgentModePresetSchema } from '@texra/shared/agentTeams';
-import { SYSTEM_PACKAGE_MANAGERS } from '@texra/shared/constants/latexToolchain';
+import {
+  LATEX_DEPENDENCIES,
+  OS_PLATFORMS,
+  SYSTEM_PACKAGE_MANAGERS,
+} from '@texra/shared/constants/latexToolchain';
 import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
 import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
 import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
@@ -383,13 +387,13 @@ const PRSubscriptionsPageSchema = Schema.Struct({
 const LatexSettingsStatusSchema = Schema.Struct({
   outDir: Schema.Boolean,
   autoRevealExclude: Schema.Boolean,
-  texDistributionInstalled: Schema.Boolean,
+  /** Whether each dependency the LaTeX tab reports is installed. */
+  installed: Schema.Record(
+    Schema.Literals(Struct.keys(LATEX_DEPENDENCIES)),
+    Schema.Boolean,
+  ),
   latexWorkshopInstalled: Schema.Boolean,
-  latexdiffInstalled: Schema.Boolean,
-  latexindentInstalled: Schema.Boolean,
-  texcountInstalled: Schema.Boolean,
-  imageProcessingInstalled: Schema.Boolean,
-  platform: Schema.Literals(['darwin', 'win32', 'linux']),
+  platform: Schema.Literals(OS_PLATFORMS),
   pdflatexPath: Schema.NullOr(Schema.String),
   latexmkPath: Schema.NullOr(Schema.String),
   latexdiffPath: Schema.NullOr(Schema.String),
@@ -406,12 +410,14 @@ export type LatexSettingsStatus = typeof LatexSettingsStatusSchema.Type;
 export const DEFAULT_LATEX_SETTINGS_STATUS: LatexSettingsStatus = {
   outDir: false,
   autoRevealExclude: false,
-  texDistributionInstalled: false,
+  installed: {
+    compiler: false,
+    latexdiff: false,
+    latexindent: false,
+    texcount: false,
+    image: false,
+  },
   latexWorkshopInstalled: false,
-  latexdiffInstalled: false,
-  latexindentInstalled: false,
-  texcountInstalled: false,
-  imageProcessingInstalled: false,
   platform: 'linux',
   pdflatexPath: null,
   latexmkPath: null,
