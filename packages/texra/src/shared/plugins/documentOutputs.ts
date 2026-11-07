@@ -7,7 +7,7 @@
  * harness holds none of it. Browser-safe: it imports only schemas and
  * browser-safe path helpers.
  */
-import { Effect, Result, Schema, Struct } from 'effect';
+import { Result, Schema, Struct } from 'effect';
 import {
   getBasename,
   DiffStatsSchema,
@@ -16,22 +16,27 @@ import {
   fileLocationShortDisplayPath,
   LineCountSchema,
   type DiffStats,
-  type FileLocation,
 } from '@texra-ai/harness/schemas';
+import { LATEXDIFF_MATH_MARKUP_VALUES } from '@texra/shared/constants/latexConfig';
 
 /** A zero-based round (a document task's revision) number. */
 const RoundNumberSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
+/** What an output revises: the file it is diffed against, as the run holds
+ *  it (the pre-run snapshot of a workspace document), and the workspace
+ *  document that is, which the user compares with and accepts into; none
+ *  when the base names no workspace document. */
 const FileLineageSchema = Schema.Struct({
-  original: Schema.NullOr(FileLocationSchema),
-  diffBase: Schema.NullOr(FileLocationSchema),
+  base: FileLocationSchema,
+  document: Schema.NullOr(FileLocationSchema),
 });
 
-/** A file a document task wrote, with its lineage and diff stats. */
+/** A file a document task wrote, with its lineage (null for a new document)
+ *  and diff stats. */
 const OutputFileInfoSchema = Schema.Struct({
   source: Schema.String,
   location: FileLocationSchema,
-  round: RoundNumberSchema.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
+  round: RoundNumberSchema,
   lineage: Schema.NullOr(FileLineageSchema),
   diff: Schema.NullOr(DiffStatsSchema),
 });
@@ -53,26 +58,9 @@ export const OUTPUT_END_TAG = `</${OUTPUT_DOCUMENTS_TAG}>`;
 /** The tag a model wraps its thinking in, before the documents container. */
 export const SCRATCHPAD_TAG = 'scratchpad';
 
-/**
- * Round number → items for that round, read-only. Runtime keys are strings
- * (JSON); index it with a number.
- */
-export type ReadonlyRoundIndexed<T> = {
-  readonly [round: number]: readonly T[];
-};
-
-/** A round-indexed record's `[round, items]` pairs, ascending by round. */
-export function roundIndexedEntries<T>(
-  rounds: ReadonlyRoundIndexed<T>,
-): [number, readonly T[]][] {
-  return Object.entries(rounds)
-    .map(([round, items]): [number, readonly T[]] => [Number(round), items])
-    .sort((a, b) => a[0] - b[0]);
-}
-
-/** Compact round label: `r2`. A zero-based round renders one-based. */
+/** A round's label: `Revision 2`. A zero-based round renders one-based. */
 export function formatRoundLabel(round: number): string {
-  return `r${round + 1}`;
+  return `Revision ${round + 1}`;
 }
 
 // Generic raw-wrapper stems are run-storage internals, not the meaningful
@@ -85,26 +73,15 @@ export function isGenericOutputStem(name: string): boolean {
 }
 
 /**
- * The file location a diff should render against: the explicit `diffBase`
- * when the file was rewritten in place (so a diff against the current path
- * would show no change), falling back to `original`.
- */
-export function getEffectiveDiffBase(
-  lineage: OutputFileInfo['lineage'] | undefined,
-): FileLocation | null {
-  return lineage?.diffBase ?? lineage?.original ?? null;
-}
-
-/**
  * The name an output artifact reads by. The workspace document it descends
  * from wins, because that is the file the user recognizes; failing that the
  * document name the model emitted, unless it is a generic raw-wrapper stem;
  * and only then the artifact's own path, which carries run-storage internals
- * such as the `r<round>/` prefix.
+ * such as the revision folder.
  */
 export function outputDisplayName(file: OutputFileInfo): string {
-  const original = file.lineage?.original;
-  if (original) return fileLocationShortDisplayPath(original);
+  const document = file.lineage?.document;
+  if (document) return fileLocationShortDisplayPath(document);
 
   const { source } = file;
   if (source && !isGenericOutputStem(source)) {
@@ -187,10 +164,13 @@ const LatexdiffPairSchema = Schema.Struct({
   /** The round's output the diff marks up. */
   revised: FileLocationSchema,
   /** The workspace document the output descends from, which names it. */
-  original: Schema.NullOr(FileLocationSchema),
+  document: Schema.NullOr(FileLocationSchema),
   base: FileLocationSchema,
   /** The round the base came from; null for the task's starting document. */
   baseRound: Schema.NullOr(RoundNumberSchema),
+  /** The math markup latexdiff ran with, so a host can tell a diff made
+   *  under another setting. */
+  mathMarkup: Schema.Literals(LATEXDIFF_MATH_MARKUP_VALUES),
 });
 
 /** One latexdiff of a round's output against a base: its marked-up file,
@@ -215,24 +195,41 @@ export type LatexdiffEntry = typeof LatexdiffEntrySchema.Type;
 /** The name a latexdiff entry reads by: its workspace document's file name,
  *  else its base's path. */
 export function latexdiffDisplayName(entry: LatexdiffEntry): string {
-  return entry.original
-    ? getBasename(fileLocationShortDisplayPath(entry.original))
+  return entry.document
+    ? getBasename(fileLocationShortDisplayPath(entry.document))
     : fileLocationShortDisplayPath(entry.base);
+}
+
+/** What a round's compile check found: why it checked nothing, or the
+ *  outputs that failed and whether that rejects the revision (the setting
+ *  as the check read it). */
+const CompileOutcomeSchema = Schema.TaggedUnion({
+  skipped: { reason: Schema.String },
+  checked: {
+    failures: Schema.Array(CompileFailureSchema),
+    rejected: Schema.Boolean,
+  },
+});
+export type CompileOutcome = typeof CompileOutcomeSchema.Type;
+
+/** The outputs of a round that failed to compile; none when it was not
+ *  checked. */
+export function compileFailuresOf(
+  round: Pick<RoundOutput, 'compile'>,
+): readonly CompileFailure[] {
+  return round.compile?._tag === 'checked' ? round.compile.failures : [];
 }
 
 export const RoundOutputSchema = Schema.Struct({
   round: RoundNumberSchema,
   outputs: Schema.Array(OutputFileInfoSchema),
-  compileFailures: Schema.Array(CompileFailureSchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  /** The round's compile check; null until `document_compile` ran. */
+  compile: Schema.NullOr(CompileOutcomeSchema),
   /** What this round should have written and did not: the expected output
    *  files it lacks (the disk check owns those) and the documents its reply
    *  held that did not extract. Persisted with all round outputs in the
    *  documents plugin's output fact. */
-  missingOutputs: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  missingOutputs: Schema.Array(Schema.String),
   /** The round's latexdiffs, as its last `document_diff` wrote them. */
   latexdiffs: Schema.Array(LatexdiffEntrySchema),
   /** Where the round's reply is kept, which a reader opens to check the
@@ -251,7 +248,7 @@ export function roundOutputsToOutputSummaries(
       relativePath: fileLocationDisplayPath(output.location),
       absolutePath: output.location.absolutePath,
       location: output.location.kind,
-      originalPath: getEffectiveDiffBase(output.lineage)?.absolutePath ?? null,
+      originalPath: output.lineage?.base.absolutePath ?? null,
       added: output.diff?.added ?? null,
       removed: output.diff?.removed ?? null,
     })),
@@ -262,7 +259,7 @@ export function roundOutputsToCompileFailureSummaries(
   roundOutputs: readonly RoundOutput[],
 ): CompileFailureSummary[] {
   return roundOutputs.flatMap((roundOutput) =>
-    roundOutput.compileFailures.map((failure): CompileFailureSummary => ({
+    compileFailuresOf(roundOutput).map((failure): CompileFailureSummary => ({
       round: failure.round,
       displayName: failure.displayName,
       outputPath: fileLocationDisplayPath(failure.output),
@@ -300,12 +297,8 @@ export type DocumentDiffs = typeof DocumentDiffsSchema.Type;
  */
 export const DocumentsResultSchema = Schema.Struct({
   outputs: Schema.Array(OutputFileSummarySchema),
-  compileFailures: Schema.Array(CompileFailureSummarySchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  diffs: Schema.Array(ResultDiffSummarySchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  compileFailures: Schema.Array(CompileFailureSummarySchema),
+  diffs: Schema.Array(ResultDiffSummarySchema),
   diffsUnavailable: Schema.optional(Schema.String),
 });
 export type DocumentsResult = typeof DocumentsResultSchema.Type;

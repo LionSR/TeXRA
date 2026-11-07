@@ -15,9 +15,10 @@ import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
-import { modelOutputCopyPath } from '@texra/shared/constants/workflowOutput';
+import { revisionLayout } from '@texra/shared/constants/workflowOutput';
 import type { AppSignals, ProcessServices } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
+import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
 
@@ -38,7 +39,8 @@ type FileAction<A> = Effect.Effect<
 
 type FileActionRequest = Extract<HostRequest, { kind: 'fileAction' }>;
 
-interface ProgressWorkflowFileActionsHost {
+/** The workflow toolbar's file verbs a host performs. */
+export interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): FileAction<void>;
   acceptEditedFile(
     baseFile: string,
@@ -49,7 +51,8 @@ interface ProgressWorkflowFileActionsHost {
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {
-  state: HostRunActions['runOutputs'];
+  /** A run's rounds, as the session view holds its documents fact. */
+  rounds: (runId: RunId) => readonly RoundOutput[];
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
@@ -177,7 +180,7 @@ export class ProgressWorkflowFileActionsController {
 
   /**
    * The note telling a task's launcher what the user changed of the model's
-   * version of `file` (`modelOutputCopyPath`) before accepting it; none
+   * version of `file` (`revisionLayout(...).modelCopy`) before accepting it; none
    * when they changed nothing or the run kept no model version (a run from
    * an earlier build, or an output outside the workspace and the run).
    */
@@ -187,7 +190,7 @@ export class ProgressWorkflowFileActionsController {
   ): Effect.Effect<string | undefined, never, FileSystem.FileSystem> {
     const output = this.latestOutput(stream, file);
     const copyPath =
-      output && modelOutputCopyPath(output.round, output.location);
+      output && revisionLayout(output.round).modelCopy(output.location);
     if (output === undefined || copyPath === undefined)
       return Effect.succeed(undefined);
     const { runDirectory } = new RunFileService(stream, {
@@ -219,8 +222,9 @@ export class ProgressWorkflowFileActionsController {
    *  workspace path across rounds, so the first match would name an
    *  earlier round. */
   private latestOutput(stream: RunId, file: string) {
-    return Object.values(this.deps.state.getOutputFiles(stream))
-      .flat()
+    return this.deps
+      .rounds(stream)
+      .flatMap((round) => round.outputs)
       .filter((info) => info.location.absolutePath === file)
       .toSorted((a, b) => b.round - a.round)
       .at(0);

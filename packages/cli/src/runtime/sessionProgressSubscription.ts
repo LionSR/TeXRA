@@ -1,16 +1,10 @@
-import {
-  Deferred,
-  Effect,
-  Fiber,
-  LogLevel,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Fiber, LogLevel, Stream, SubscriptionRef } from 'effect';
 
 import {
   type RunView,
   runIdentityName,
   type RunId,
+  type SessionView,
 } from '@texra-ai/harness/schemas';
 import { writeNdjsonStdout } from './logSinks';
 import type { LocalSession } from '@texra-ai/harness';
@@ -58,7 +52,7 @@ function childRow(child: RunView) {
  * from the drained view. The drain waits on the tail's own coordinate
  * (`view.events`'s `drained`), not on the events: a transcript row the
  * store no longer holds emits nothing, and the ordinal captured at detach may
- * be exactly that row's.
+ * be exactly that row's. A second detach waits on the first.
  *
  * The tail, its coordinate and the child list are child fibers of the fiber that
  * attaches: the projection lives for the length of one headless run, so the
@@ -82,26 +76,23 @@ export const attachCliSessionProgressProjection = Effect.fn(
     });
   }
 
-  /** The last commit the tail passed. */
-  let delivered = session.view.head();
-  /** The ordinal detach cut at; nothing above it is written. */
-  let stopAt: number | undefined;
-  const drained = Deferred.makeUnsafe<void>();
-
+  /** The tail's coordinate: the commit each forward read covered, set once
+   *  that read's events have all been written below, so it never runs ahead
+   *  of an event this fiber has yet to write. */
+  const drainedTo = yield* SubscriptionRef.make(session.view.head());
   /** The ordinal the projection attached at: the tail's own boundary. */
-  const attachedAt = delivered;
+  const attachedAt = SubscriptionRef.getUnsafe(drainedTo);
+  /** The ordinal detach cut at; nothing above it is written. */
+  let stopAt = Infinity;
   /** The child list last derived per parent, so an unchanged one writes no line.
    *  A session view level at or below `attachedAt` only seeds it: a resumed session's
    *  earlier parents, finished or not, are history the tail does not replay
    *  either, so only a child list a post-attach row changes is written. */
   const writtenChildren = new Map<RunId, string>();
-  /** A view level ahead of the tail: its child list waits for the lines that produced
-   *  it, so a child list never precedes the row it reports. */
-  let childrenPending = false;
-  const emitChildren = (): void => {
-    const view = session.view.current();
-    childrenPending = view.cursor > delivered;
-    if (childrenPending) return;
+  /** The child lists of `view`, once the tail has written every line up to
+   *  its cursor (`to`), so a child list never precedes the row it reports. */
+  const emitChildren = (view: SessionView, to: number): void => {
+    if (view.cursor > to) return;
     for (const [parentRunId, run] of view.runs) {
       // A parent whose child list emptied still owes its closing line; one that
       // never had a child owes nothing.
@@ -124,57 +115,48 @@ export const attachCliSessionProgressProjection = Effect.fn(
   };
   // Seed from the session view as it stands at attach, before any fiber can see a
   // later level: the store's head bounds the session view, so this writes nothing.
-  emitChildren();
+  emitChildren(session.view.current(), attachedAt);
 
-  const settleIfDrained = (): void => {
-    if (stopAt === undefined || delivered < stopAt) return;
-    // `stopAt` is the store's head, which no view level can be past, so the
-    // child list gate is open here and the last one goes out with the drain.
-    emitChildren();
-    Deferred.doneUnsafe(drained, Effect.void);
-  };
-  const passed = (commit: number): void => {
-    delivered = Math.max(delivered, commit);
-    if (childrenPending) emitChildren();
-    settleIfDrained();
-  };
-
-  // The tail's coordinate: set to the commit each forward read covered once
-  // that read's events have all been handled below, so a value here never
-  // runs ahead of an event this fiber has yet to write.
-  const drainedTo = yield* SubscriptionRef.make(delivered);
   const fork = Effect.forkChild({ startImmediately: true });
   const fibers = [
     yield* fork(
-      Stream.runForEach(session.view.events(delivered, drainedTo), (event) =>
+      Stream.runForEach(session.view.events(attachedAt, drainedTo), (event) =>
         Effect.sync(() => {
-          if (stopAt !== undefined && event.commit > stopAt) return;
+          if (event.commit > stopAt) return;
           const { type, ...payload } = event;
           if (includeDebugLogs || type !== 'log' || event.level !== 'debug') {
             emit(type, payload);
           }
-          passed(event.commit);
         }),
       ),
     ),
+    // The child list's source: every view level, against the tail's
+    // coordinate, so a level ahead of the tail waits for its lines.
     yield* fork(
-      Stream.runForEach(SubscriptionRef.changes(drainedTo), (commit) =>
-        Effect.sync(() => passed(commit)),
+      Stream.runForEach(
+        Stream.zipLatest(
+          session.view.changes,
+          SubscriptionRef.changes(drainedTo),
+        ),
+        ([view, to]) => Effect.sync(() => emitChildren(view, to)),
       ),
-    ),
-    // The child list's own source: the session view, whose every level is a candidate.
-    yield* fork(
-      Stream.runForEach(session.view.changes, () => Effect.sync(emitChildren)),
     ),
   ];
 
-  return Effect.gen(function* () {
-    const first = stopAt === undefined;
-    if (first) {
-      stopAt = session.view.head();
-      settleIfDrained();
-    }
-    yield* Deferred.await(drained);
-    if (first) yield* Fiber.interruptAll(fibers);
+  // The detach: cut at the store's head, wait for the tail's coordinate to
+  // reach it (at once when it already has), derive the child list once more
+  // from the drained view, and stop. A cut that names a pruned row, or a tail
+  // already past the head, is reached through the coordinate, not an event.
+  const detach = Effect.gen(function* () {
+    stopAt = session.view.head();
+    yield* SubscriptionRef.changes(drainedTo).pipe(
+      Stream.takeUntil((to) => to >= stopAt),
+      Stream.runDrain,
+    );
+    // `stopAt` is the store's head, which no view level can be past, so the
+    // child list gate is open here and the last one goes out with the drain.
+    emitChildren(session.view.current(), stopAt);
+    yield* Fiber.interruptAll(fibers);
   });
+  return yield* Effect.cached(detach);
 });

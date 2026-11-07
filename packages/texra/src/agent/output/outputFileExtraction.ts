@@ -12,21 +12,45 @@
 import {
   normalizeFilePath,
   fileLocationDisplayPath,
+  type AgentConfig,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 import { Effect, FileSystem } from 'effect';
 
-import { OUTPUT_DOCUMENTS_TAG } from '@texra/shared/plugins/documentOutputs';
+import { revisionLayout } from '@texra/shared/constants/workflowOutput';
+import {
+  OUTPUT_DOCUMENTS_TAG,
+  type OutputFileInfo,
+} from '@texra/shared/plugins/documentOutputs';
 
 import { replaceInputCommands } from './fileMapping';
 import { recoverOutputFailure } from './outputOperations';
-import {
-  ensureRoundData,
-  type OutputState,
-  type OutputDependencies,
-} from './outputState';
+import { extractReplyDocuments } from './replyDocuments';
+import type { ExpectedDocuments } from './extraction/filenameHeaders';
+import type { AgentTrace, RunFileService } from '@texra-ai/harness/plugins';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
-import type { XmlOutputManager } from './XmlOutputManager';
+/** What the output pipeline reads of the workflow run. */
+export interface OutputDependencies {
+  readonly config: AgentConfig;
+  /** The documents the launch expects a reply to name. */
+  readonly expected: ExpectedDocuments;
+  /** Those documents where the launch named them: what an unlabeled reply
+   *  is matched against and its `\input`s are rewritten from. */
+  readonly sources: FileLocation[];
+  readonly logger: AgentTrace;
+  readonly fileService: RunFileService;
+  /** The run's session roots, held as data: the pipeline runs on the run's
+   *  fiber, and nothing about a fiber names the project it works on. */
+  readonly roots: WorkspaceRoots;
+}
+
+/** What a revision's reply held: the outputs it wrote, and what it should
+ *  have written and did not. */
+interface ExtractedRevision {
+  readonly outputs: OutputFileInfo[];
+  readonly missing: string[];
+}
 
 /**
  * Base files for the unlabeled-fence similarity fallback. Rounds after the
@@ -37,13 +61,9 @@ import type { XmlOutputManager } from './XmlOutputManager';
  * location.
  */
 function similarityBaseFiles(
-  state: OutputState,
-  deps: OutputDependencies,
-  currRound: number,
+  baseFiles: FileLocation[],
+  previousOutputs: readonly OutputFileInfo[],
 ): FileLocation[] {
-  const { baseFiles } = deps;
-  if (currRound === 0) return baseFiles;
-  const previousOutputs = ensureRoundData(state, currRound - 1).outputs;
   if (previousOutputs.length === 0) return baseFiles;
 
   // An output's source is the workspace-relative document name; a base
@@ -72,11 +92,10 @@ function similarityBaseFiles(
 }
 
 /**
- * Warn of a round that wrote nothing, then persist its empty outputs (its
- * kept reply, which hosts offer to open, is the round's `reply`).
+ * Warn of a round that wrote nothing (its kept reply, which hosts offer to
+ * open, is the round's `reply`).
  */
-const handleNoOutputs = Effect.fn('documents.handleNoOutputs')(function* (
-  state: OutputState,
+const warnNoOutputs = Effect.fn('documents.warnNoOutputs')(function* (
   deps: OutputDependencies,
   currRound: number,
   outputLocation: FileLocation,
@@ -112,55 +131,96 @@ const handleNoOutputs = Effect.fn('documents.handleNoOutputs')(function* (
       },
     );
   }
-  ensureRoundData(state, currRound).outputs = [];
 });
 
 /**
- * Extracts files from XML output for a round: the unified protocol emits
+ * The expected output files the revision lacks, with what extraction found
+ * missing. The outputs are the authority on the expected files alone, never
+ * the revision folder, which still holds an earlier attempt's files: every
+ * other entry (a document the reply held that did not extract) is kept.
+ */
+function withMissingExpected(
+  deps: OutputDependencies,
+  currRound: number,
+  { outputs, missing }: ExtractedRevision,
+): string[] {
+  const expected = deps.config.outputFiles;
+  // The round writes its outputs into its own directory; the run-root entry
+  // of the same name is the workspace file, delivered only later.
+  const written = new Set(
+    outputs.map((output) => output.location.absolutePath),
+  );
+  const { dir } = revisionLayout(currRound);
+  const lacking = expected.filter(
+    (file) =>
+      !written.has(
+        deps.fileService.createLocation(`${dir}/${file}`).absolutePath,
+      ),
+  );
+  if (expected.length > 0)
+    deps.logger.debug(
+      lacking.length > 0
+        ? `Missing expected outputs for round ${currRound}`
+        : `All ${expected.length} expected outputs written in round ${currRound}`,
+      { data: lacking },
+    );
+  return [
+    ...new Set(missing.filter((entry) => !expected.includes(entry))),
+    ...lacking,
+  ];
+}
+
+/**
+ * The files a revision's reply holds: the unified protocol emits
  * <documents><document name="..."> containers (N >= 1), so every agent
- * unpacks that container into per-document output files.
+ * unpacks that container into per-document output files. A reply that could
+ * not be read or unpacked is a revision that wrote nothing, and says so.
  */
 export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
   function* (
-    state: OutputState,
     deps: OutputDependencies,
-    xmlManager: XmlOutputManager,
     outputLocation: FileLocation,
     currRound: number,
+    /** The outputs of the revision before it, which this one revises. */
+    previousOutputs: readonly OutputFileInfo[],
   ) {
     const { logger } = deps;
-    const data = ensureRoundData(state, currRound);
-
     logger.debug(
       `Processing multiple outputs for ${outputLocation.absolutePath}`,
     );
-
-    yield* Effect.gen(function* () {
-      const processedPairs = yield* xmlManager.splitScratchpadMultipleOutputXml(
+    const nothing: ExtractedRevision = { outputs: [], missing: [] };
+    const extracted = yield* Effect.gen(function* () {
+      const split = yield* extractReplyDocuments(
+        deps,
         outputLocation,
         currRound,
-        similarityBaseFiles(state, deps, currRound),
+        similarityBaseFiles(deps.sources, previousOutputs),
       );
-
-      if (processedPairs.length === 0) {
+      if (split.outputs.length === 0) {
         logger.debug(
           `No processed files were generated from ${outputLocation.absolutePath}`,
         );
-        yield* handleNoOutputs(state, deps, currRound, outputLocation);
-        return;
+        yield* warnNoOutputs(deps, currRound, outputLocation);
+        return split;
       }
-
-      if (deps.baseFiles.length > 0) {
-        yield* replaceInputCommands(deps.baseFiles, processedPairs, logger);
+      if (deps.sources.length > 0) {
+        yield* replaceInputCommands(deps.sources, split.outputs, logger);
       }
-      data.outputs = processedPairs;
+      return split;
     }).pipe(
       recoverOutputFailure({
         logger,
         level: 'warn',
         label: 'Error processing output file',
-        recover: () => handleNoOutputs(state, deps, currRound, outputLocation),
+        recover: () =>
+          warnNoOutputs(deps, currRound, outputLocation).pipe(
+            Effect.as(nothing),
+          ),
       }),
     );
+    return {
+      outputs: extracted.outputs,
+      missing: withMissingExpected(deps, currRound, extracted),
+    };
   },
 );

@@ -8,7 +8,7 @@
 import path from 'node:path';
 
 import { Effect, Schema } from 'effect';
-import { Cancelled, type RunEnd } from '@texra-ai/harness';
+import { Cancelled } from '@texra-ai/harness';
 import {
   AppSignals,
   withProcessServices,
@@ -20,7 +20,7 @@ import {
   type RuntimePresentationEventPayloads,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
-import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
@@ -37,10 +37,8 @@ import type {
 } from '@texra/controllers/session/openGuiWindow';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
-import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import { instructionActions } from '@ui/copy/instructionActions';
 import { modelFailureText } from '@ui/copy/modelAccess';
-import { texraGuideUrl } from '@ui/copy/guide';
 
 import {
   DESKTOP_DOCS_URL,
@@ -135,8 +133,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         findLabelInWorkspace(roots.workspace, label, (absolutePath) =>
           host.openPath(absolutePath),
         ).pipe(Effect.mapError((cause) => hostFailure('openLabel', cause))),
-      // The window's project is its one workspace: any launch runs as asked.
-      admitLaunch: () => Effect.void,
       latexdiff: {
         // Each diff opens in the PDF tab through the build display, as a
         // run's outputs do.
@@ -165,8 +161,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         Effect.sync(() =>
           postDesktopSettingsView(options.postToRenderer, 'models/keys'),
         ),
-      openGuide: (page, anchor) =>
-        options.openExternalUrl(texraGuideUrl(page, anchor)),
+      openExternal: (url) => options.openExternalUrl(url),
       recheckDependencies: Effect.suspend(() => options.recheckTools()),
       openInstallGuide: Effect.sync(() =>
         postDesktopSettingsView(options.postToRenderer, 'plugins'),
@@ -222,12 +217,9 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       runs: {
         // Desktop has no editor integration to preview through, so the
         // output goes to the preview-with-fallback host directly.
-        openFinalOutput: (config: AgentConfig, result: RunEnd) =>
-          selectAutoOpenFinalOutput(roots, config, result).pipe(
-            Effect.flatMap((output) =>
-              output ? host.openPath(output.absolutePath) : Effect.void,
-            ),
-          ),
+        openFinalOutput: (absolutePath: string) => host.openPath(absolutePath),
+        // The progress surface is always on screen in the desktop window.
+        revealProgress: () => Effect.void,
       },
       files: {
         compareFiles: (baseFile: string, editedFile: string) =>
