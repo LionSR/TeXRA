@@ -1,7 +1,11 @@
 import { Effect, FileSystem, Option } from 'effect';
 import * as vscode from 'vscode';
 
-import { type DiffSource, type DiffViewHost } from '@texra/hosts/uiHosts';
+import {
+  type DiffLabel,
+  type DiffSource,
+  type DiffViewHost,
+} from '@texra/hosts/uiHosts';
 import {
   fromHost,
   hostFailure,
@@ -39,14 +43,14 @@ function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
 export interface DiffSession {
   original: DiffSource;
   proposed: DiffSource;
-  title: string;
+  label: DiffLabel;
 }
 
 export class VscodeDiffViewHost implements DiffViewHost {
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
-    title: string,
+    { title }: DiffLabel,
   ): Effect.Effect<void, EditorCallFailed> {
     return fromHost('vscode.diff', () =>
       vscode.commands.executeCommand(

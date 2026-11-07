@@ -18,11 +18,12 @@ import type {
   DesktopCommandRoutes,
   DesktopRenderer,
 } from './desktopIpcTypes.js';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 interface DesktopShellActionFactoryOptions {
-  openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
+  openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
   openLogFolder(): Effect.Effect<void, PreviewUnavailable>;
   openWorkspaceFolder(): Effect.Effect<
     void,

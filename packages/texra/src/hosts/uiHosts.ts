@@ -5,6 +5,13 @@ export interface DiffSource {
   filePath: string;
 }
 
+/** How a diff is named: the title its view shows, and the path the
+ *  desktop's Review pane files it under. */
+export interface DiffLabel {
+  readonly title: string;
+  readonly displayPath: string;
+}
+
 /**
  * The host's diff surface: showing a diff, the one verb the two windowed
  * hosts answer. The terminal has no second surface to show one in — its
@@ -29,7 +36,7 @@ export interface DiffViewHost {
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
-    title: string,
+    label: DiffLabel,
   ): Effect.Effect<void, Error>;
 }
 
