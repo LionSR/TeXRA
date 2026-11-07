@@ -31,7 +31,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   `@texra/shared/constants/latexToolchain`, which catches a removed tool but
   not a missing new one); `latexLogging.ts` (the shared channel for
   `texcount.ts`, `formatter/` and the GUI hosts' latexdiff verbs; other
-  `LaTeXdiffService` callers pass their own).
+  `latexdiff` callers name their own with `withLogChannel`).
 - **Extraction**: `extractFigure.ts` (figure paths); `extractBibliography.ts`
   (bibliography references and citation keys from source, then entries from
   the `.bib` files: two stages with different inputs);
@@ -42,9 +42,11 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   `labelSearch.ts` (`\label{}` lookup); `criticismParser.ts` (`\criticize{}`
   annotations; `replacement/advanced.ts` strips them with the same macro
   scanner).
-- **Output**: `texcount.ts` (word counts); `latexdiff.ts`
-  (`LaTeXdiffService`: one diff in its direct, VC, per-round or between-round
-  form).
+- **Output**: `texcount.ts` (word counts); `latexdiff.ts` (`latexdiff` and
+  `latexdiffAgainstCommit`: one run of the tool, its `--flatten` fallback and
+  the clean-up of its output, which restores bibliography directives and
+  sanitizes `\DIFadd`/`\DIFdel`; it succeeds with the diff's path or fails
+  with a typed error).
 - **Media and files**: `LatexMediaManager.ts` (compiles PDFs and mirrors
   figure dependencies into run storage; stateless); `TikzPictureManager.ts`
   (standalone TikZ rendering); `acceptedFileTarget.ts` (where an accepted file
@@ -60,13 +62,12 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
 - **`formatter/`**: `latexindentpt.ts` (`latexindent`) and `texfmt.ts`
   (`tex-fmt`) backends, `texFormatter.ts` (picks one from the workspace
   setting), `indentDirectory.ts` (a whole directory).
-- **`latexdiff/`**: whole-run diffing around `LaTeXdiffService`.
+- **`latexdiff/`**: the diffs of a document task's rounds around
+  `latexdiff`. `diffOperations.ts` (`latexdiffPairs`) is the one pairing of a
+  round's outputs, which the run's `document_diff` pass
+  (`agent/output/LatexDiffManager.ts`) and the hosts' verb share.
   `latexdiffVerbs.ts` is the one body of the GUI hosts' latexdiff verbs (two
-  files, against a commit, a whole run), with the guards, refusals and notices;
-  a host supplies only how a diff opens and how progress shows.
-  `diffOperations.ts` (`runLatexdiffForRun`) diffs a run's rounds
-  (`runOutputFiles`); the CLI goes through the agent's `LatexDiffManager`
-  instead. `diffCommandExecutor.ts` runs the operations,
-  `diffFileNameManager.ts` names outputs, and `diffFileProcessor.ts`
-  post-processes a direct or VC diff (restores bibliography directives,
-  sanitizes `\DIFadd`/`\DIFdel`).
+  files, against a commit, a whole run), with the guards, refusals and
+  notices; a whole run opens the diffs its rounds recorded and diffs only a
+  round that recorded none. A host supplies only how a diff opens and how
+  progress shows. `diffFileNameManager.ts` names outputs.

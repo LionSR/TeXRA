@@ -11,7 +11,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { Cause, Effect, Fiber, Result, Schema } from 'effect';
+import { Cause, Clock, Effect, Fiber, Result, Schema } from 'effect';
 
 import { withLogChannel, isStrictlyWithin } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
@@ -34,10 +34,6 @@ import {
   PlainGoalSchema,
   PlainTermGoalSchema,
 } from '@texra/tools/lean/leanTypes';
-import {
-  createLeanServerRoster,
-  type LeanServerRoster,
-} from '@texra/tools/lean/leanServerRegistry';
 import type { LeanLanguageServicesShape } from '@texra/tools/lean/leanLanguageServices';
 import type { StateStore } from '@texra-ai/harness/host';
 
@@ -97,45 +93,21 @@ const PROJECT_COMMAND_VSCODE_IDS: Record<LeanProjectCommand, string> = {
   clean: 'lean4.project.clean',
   fetch_cache: 'lean4.project.fetchCache',
   fetch_file_cache: 'lean4.project.fetchFileCache',
-  install_elan: 'lean4.setup.installElan',
-  install_deps: 'lean4.setup.installDeps',
-  update_elan: 'lean4.setup.updateElan',
-  select_toolchain: 'lean4.setup.selectDefaultToolchain',
 };
 
-const LEAN_FEATURE_PROJECT_COMMANDS = new Set<LeanProjectCommand>([
-  'restart_server',
-  'stop_server',
-  'build',
-  'clean',
-  'fetch_cache',
-  'fetch_file_cache',
-]);
-
 /**
- * Record a workspace folder as having an active VS Code-mediated Lean
- * server. Idempotent — called from every code path that successfully
- * reaches the leanprover.lean4 client provider, so the dashboard reflects
- * actual usage rather than a one-shot snapshot. The adapter's roster is the
- * one store of which servers exist: an entry already there is refreshed
- * rather than registered again (registering restarts its uptime clock).
+ * The workspace folders this adapter has reached the Lean 4 extension's
+ * client for, each with when it first did: what the Tools dashboard lists
+ * for this host. The extension owns the servers themselves.
  */
-function noteVscodeLeanServer(
-  roster: LeanServerRoster,
-  workspaceRoot: string,
-): void {
-  const id = `vscode:${workspaceRoot}`;
-  if (roster.list().some((server) => server.id === id)) {
-    roster.update(id, { status: 'running' });
-    return;
-  }
-  roster.register({
-    id,
-    workspaceRoot,
-    mode: 'vscode-extension',
-    status: 'running',
+type ReachedFolders = Map<string, number>;
+
+/** Record the file's workspace folder as reached, keeping its first time. */
+const noteReached = (reached: ReachedFolders, absolutePath: string) =>
+  Effect.map(Clock.currentTimeMillis, (now) => {
+    const root = workspaceRootForFile(absolutePath);
+    if (!reached.has(root)) reached.set(root, now);
   });
-}
 
 function workspaceRootForFile(absolutePath: string): string {
   const folder = vscode.workspace.getWorkspaceFolder(
@@ -277,7 +249,6 @@ const executeFileCommand: (
     failure._tag === 'LeanExtensionUnavailable' &&
     failure.reason === 'not-installed'
       ? new LeanUnavailable({
-          reason: 'toolchain',
           message: failure.message,
           cause: failure,
         })
@@ -341,7 +312,7 @@ const getClientProvider = Effect.fn('getClientProvider')(function* (
  */
 const sendPositionRequest = Effect.fn('sendPositionRequest')(function* <T>(
   globalState: StateStore,
-  roster: LeanServerRoster,
+  reached: ReachedFolders,
   absolutePath: string,
   line: number,
   column: number,
@@ -391,7 +362,7 @@ const sendPositionRequest = Effect.fn('sendPositionRequest')(function* <T>(
     };
   }
 
-  noteVscodeLeanServer(roster, workspaceRootForFile(absolutePath));
+  yield* noteReached(reached, absolutePath);
 
   const params = {
     textDocument: { uri: leanUri.toString() },
@@ -427,11 +398,12 @@ const sendPositionRequest = Effect.fn('sendPositionRequest')(function* <T>(
 });
 
 /**
- * Open a Lean file, wait for diagnostics, and return them.
- * The file that could not be opened fails with `LeanFileUnreadable`.
+ * Open a Lean file, wait for diagnostics, return them, and move the editor
+ * to the first error. The file that could not be opened fails with
+ * `LeanFileUnreadable`.
  */
 const fetchDiagnosticsForFile = Effect.fn('fetchDiagnosticsForFile')(function* (
-  roster: LeanServerRoster,
+  reached: ReachedFolders,
   absolutePath: string,
 ): Effect.fn.Return<FetchDiagnosticsResult, LeanFileUnreadable> {
   // Subscribed on this frame, before the file is opened, so an update the
@@ -454,50 +426,42 @@ const fetchDiagnosticsForFile = Effect.fn('fetchDiagnosticsForFile')(function* (
     });
   }
 
-  noteVscodeLeanServer(roster, workspaceRootForFile(absolutePath));
+  yield* noteReached(reached, absolutePath);
 
   yield* Fiber.join(diagnosticsWait);
+  const diagnostics = getDiagnostics(opened.success.absolutePath);
+  const firstError = diagnostics.find(
+    (d) => d.severity === vscode.DiagnosticSeverity.Error,
+  );
+  if (firstError) {
+    // The diagnostics are already the caller's answer, so a refusal to
+    // navigate is logged here rather than failing the read that produced them.
+    yield* openFileInEditor(absolutePath, {
+      line: firstError.range.start.line + 1,
+    }).pipe(
+      Effect.catch((failure) =>
+        Effect.logWarning(failure.message).pipe(withLogChannel(CHANNEL)),
+      ),
+    );
+  }
   return {
-    diagnostics: getDiagnostics(opened.success.absolutePath),
+    diagnostics,
     // VS Code's diagnostics collection carries no elaboration progress,
     // so this adapter cannot tell a still-elaborating file apart.
     complete: true,
   } satisfies FetchDiagnosticsResult;
 });
 
-/** Navigate editor to first error location if present. */
-function navigateToFirstError(
-  filePath: string,
-  diagnostics: LeanDiagnostic[],
-): Effect.Effect<void> {
-  const firstError = diagnostics.find(
-    (d) => d.severity === vscode.DiagnosticSeverity.Error,
-  );
-  if (!firstError) return Effect.void;
-  // The diagnostics are already the caller's answer, so a refusal to
-  // navigate is logged here rather than failing the read that produced them.
-  return openFileInEditor(filePath, {
-    line: firstError.range.start.line + 1,
-  }).pipe(
-    Effect.catch((failure) =>
-      Effect.logWarning(failure.message).pipe(withLogChannel(CHANNEL)),
-    ),
-    Effect.asVoid,
-  );
-}
-
 const executeProjectCommand = Effect.fn('executeProjectCommand')(function* (
   globalState: StateStore,
   command: LeanProjectCommand,
 ): Effect.fn.Return<void, LeanExtensionUnavailable | VscodeCommandFailed> {
-  if (LEAN_FEATURE_PROJECT_COMMANDS.has(command)) {
-    // vscode-lean4 registers these commands in activateLean4Features(), not
-    // during its initial extension activation. Awaiting the exported feature
-    // promise prevents a race with command registration after a Lean file opens.
-    // Its failure is already the "extension cannot answer" report the tool
-    // shows, told apart by reason instead of by one message for both.
-    yield* getClientProvider(globalState);
-  }
+  // vscode-lean4 registers these commands in activateLean4Features(), not
+  // during its initial extension activation. Awaiting the exported feature
+  // promise prevents a race with command registration after a Lean file opens.
+  // Its failure is already the "extension cannot answer" report the tool
+  // shows, told apart by reason instead of by one message for both.
+  yield* getClientProvider(globalState);
   yield* executeLeanCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
 });
 
@@ -513,10 +477,17 @@ const executeProjectCommand = Effect.fn('executeProjectCommand')(function* (
 export function createVscodeLeanLanguageServices(
   globalState: StateStore,
 ): LeanLanguageServicesShape {
-  // This adapter's own roster; a reactivation builds an empty one.
-  const roster = createLeanServerRoster();
+  // This adapter's own record; a reactivation builds an empty one.
+  const reached: ReachedFolders = new Map();
   return Object.freeze({
-    listServers: () => roster.list(),
+    listServers: Effect.sync(() =>
+      [...reached].map(([workspaceRoot, startedAt]) => ({
+        workspaceRoot,
+        mode: 'vscode-extension' as const,
+        status: 'running' as const,
+        startedAt,
+      })),
+    ),
     executeFileCommand: (command, filePath) =>
       executeFileCommand(globalState, command, filePath),
     // Positions are 0-indexed line and column; each of the three position
@@ -524,7 +495,7 @@ export function createVscodeLeanLanguageServices(
     getGoalState: (filePath, line, column) =>
       sendPositionRequest(
         globalState,
-        roster,
+        reached,
         filePath,
         line,
         column,
@@ -534,7 +505,7 @@ export function createVscodeLeanLanguageServices(
     getTermGoal: (filePath, line, column) =>
       sendPositionRequest(
         globalState,
-        roster,
+        reached,
         filePath,
         line,
         column,
@@ -544,7 +515,7 @@ export function createVscodeLeanLanguageServices(
     getHoverInfo: (filePath, line, column) =>
       sendPositionRequest(
         globalState,
-        roster,
+        reached,
         filePath,
         line,
         column,
@@ -552,8 +523,7 @@ export function createVscodeLeanLanguageServices(
         LspHoverSchema,
       ),
     fetchDiagnosticsForFile: (filePath) =>
-      fetchDiagnosticsForFile(roster, filePath),
-    navigateToFirstError,
+      fetchDiagnosticsForFile(reached, filePath),
     executeProjectCommand: (command) =>
       executeProjectCommand(globalState, command),
   } satisfies LeanLanguageServicesShape);
