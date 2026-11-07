@@ -45,7 +45,6 @@ import {
 } from '@texra/shared/session/webviewSessionLayer';
 import type { SessionView } from '@texra-ai/harness/schemas';
 import { Invalid, type BridgeError } from '@texra/shared/session/bridgeErrors';
-import { requestErrorText } from '@ui/copy/requestErrors';
 
 /** One session's graph as `WebviewSessions.open` hands it out. */
 type WebviewGraph = Effect.Success<ReturnType<typeof WebviewSessions.open>>;
@@ -91,13 +90,6 @@ export interface WebviewTransport {
   /** Run `program` as a fiber of the session's scope, so closing the session
    *  interrupts it; a session that is not open runs nothing. */
   run(session: string, program: Effect.Effect<void>): void;
-  /** A `host.request` finished with the host's outcome, or failed with its
-   *  refusal (a session that closes first, or `timeoutMs` passing, is a
-   *  refusal too). */
-  answer(
-    message: Extract<UpMessage, { kind: 'host.request' }>,
-    timeoutMs?: number,
-  ): Promise<HostOutcome>;
   onSurfaceAction(
     listener: (session: string, action: WireSurfaceAction) => void,
   ): void;
@@ -374,14 +366,6 @@ export function installWebviewTransport(
       const session = sessions.get(key);
       if (session) runtime.runFork(Effect.forkIn(program, session.scope));
     },
-    // The desktop editor's file I/O awaits its answer as a promise; the
-    // session's close rejects it as interrupted.
-    answer: (message, timeoutMs) =>
-      runtime.runPromise(
-        hostRequest(message, timeoutMs).pipe(
-          Effect.mapError((error) => new Error(requestErrorText(error))),
-        ),
-      ),
     onSurfaceAction(listener) {
       surfaceListener = listener;
     },

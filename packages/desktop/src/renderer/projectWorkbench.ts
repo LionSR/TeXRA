@@ -1,7 +1,7 @@
 // The document resources of one project. Selection changes which owner is visible;
 // only tab closure, project closure, or document disposal releases its resources.
 
-import { Result, Schema, Struct } from 'effect';
+import { Effect, Result, Schema, Struct } from 'effect';
 
 import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
@@ -10,6 +10,7 @@ import { postMessage } from '@texra/shared/hostBridge';
 import type { Theme } from '@texra/shared/ipc';
 import type { SessionSurfaces } from '@ui/progress/sessionSurfaces';
 import type { ProgressApp } from '@ui/progress/ProgressApp';
+import { requestErrorText } from '@ui/copy/requestErrors';
 
 import {
   DesktopShellStateSchema,
@@ -86,51 +87,61 @@ export function createProjectWorkbench(options: {
   }
   const send = (message: DesktopWorkspaceRequest) =>
     postMessage(message.command, { ...message, session });
-  // The editor's file I/O is a host request answered to the pane; the
-  // session's close fails whatever is still pending.
+  // The editor's file I/O is a host request answered to the pane, its
+  // refusal worded as the progress view words one; closing the pane
+  // interrupts whatever is still pending.
   const unexpected = (outcome: HostOutcome) =>
-    new Error(`The host answered a file request with ${outcome.kind}.`);
+    Effect.fail(
+      new Error(`The host answered a file request with ${outcome.kind}.`),
+    );
   // A read or a list on a hung mount would otherwise leave the pane's refresh
   // pending until the project closes. A write is never abandoned: the host
   // cannot cancel it, and a retry must not race a write still in flight.
   const workspaceFile = (
     action: Extract<HostRequest, { kind: 'workspaceFile' }>['action'],
   ) =>
-    surfaces.answer(
-      {
-        kind: 'host.request',
-        session,
-        requestId: crypto.randomUUID(),
-        request: { kind: 'workspaceFile', action },
-      },
-      action.kind === 'write' ? undefined : FILE_REQUEST_TIMEOUT_MS,
-    );
+    surfaces
+      .answer(
+        {
+          kind: 'host.request',
+          session,
+          requestId: crypto.randomUUID(),
+          request: { kind: 'workspaceFile', action },
+        },
+        action.kind === 'write' ? undefined : FILE_REQUEST_TIMEOUT_MS,
+      )
+      .pipe(Effect.mapError((error) => new Error(requestErrorText(error))));
   const editorCallbacks = {
     isReadOnly: (path: string) => {
       const identity = agentDocumentIdentity(path);
       return identity ? isPackagedAgentSource(identity.source) : false;
     },
-    listFiles: async (directory) => {
-      const outcome = await workspaceFile({ kind: 'list', directory });
-      if (outcome.kind !== 'entries') throw unexpected(outcome);
-      return outcome.entries;
-    },
-    readFile: async (path) => {
-      const outcome = await workspaceFile({ kind: 'read', path });
-      if (outcome.kind !== 'contents') throw unexpected(outcome);
-      return outcome.contents;
-    },
-    writeFile: async (path, contents, base) => {
-      const outcome = await workspaceFile({
-        kind: 'write',
-        path,
-        contents,
-        base,
-      });
-      if (outcome.kind === 'changedOnDisk') return 'changedOnDisk';
-      if (outcome.kind !== 'done') throw unexpected(outcome);
-      return 'saved';
-    },
+    listFiles: (directory) =>
+      Effect.flatMap(workspaceFile({ kind: 'list', directory }), (outcome) =>
+        outcome.kind === 'entries'
+          ? Effect.succeed(outcome.entries)
+          : unexpected(outcome),
+      ),
+    readFile: (path) =>
+      Effect.flatMap(workspaceFile({ kind: 'read', path }), (outcome) =>
+        outcome.kind === 'contents'
+          ? Effect.succeed(outcome.contents)
+          : unexpected(outcome),
+      ),
+    writeFile: (path, contents, base) =>
+      Effect.flatMap(
+        workspaceFile({ kind: 'write', path, contents, base }),
+        (outcome) => {
+          switch (outcome.kind) {
+            case 'changedOnDisk':
+              return Effect.succeed('changedOnDisk' as const);
+            case 'done':
+              return Effect.succeed('saved' as const);
+            default:
+              return unexpected(outcome);
+          }
+        },
+      ),
     onRequestOpen: openDocument,
     onDirtyChange: (path, dirty) =>
       updateState(

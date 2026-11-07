@@ -98,7 +98,7 @@ export interface SessionSurfaces {
   runtimeRequest(key: string, request: RuntimeRequest): void;
   hostRequest(key: string, request: HostRequest): void;
   /** A host request answered to its caller, not presented on the surface. */
-  answer: WebviewTransport['answer'];
+  answer: WebviewTransport['hostRequest'];
   /** The composer's Send for the resolved selection: a follow-up to the
    *  selected run, else a launch from the launcher's instruction. The
    *  button and the run accelerator both land here. */
@@ -624,7 +624,7 @@ export function createSessionSurfaces(options: {
       const entry = held.get(key);
       if (entry) runtimeRequestFor(entry, request);
     },
-    answer: transport.answer,
+    answer: transport.hostRequest,
     hostRequest(key, hostRequest) {
       const entry = held.get(key);
       if (entry) hostRequestFor(entry, hostRequest);
