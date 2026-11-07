@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { installDesktopBeforeQuitWiring } from '@desktop/main/desktopWindowLifecycle';
-import { createDeferred } from '@test/support/asyncTestUtils';
 
 describe('desktop window lifecycle', () => {
   it('continues a closed-window quit through one shutdown sequence', async () => {
@@ -18,7 +17,7 @@ describe('desktop window lifecycle', () => {
       close,
       isDestroyed: () => false,
     };
-    const shutdownRan = createDeferred();
+    const shutdownRan = Promise.withResolvers<void>();
     const ranShutdown = vi.fn(() => {
       shutdownRan.resolve();
     });

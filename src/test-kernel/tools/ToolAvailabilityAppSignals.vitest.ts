@@ -26,7 +26,7 @@ import {
   ToolAvailability,
   ToolCatalog,
 } from '@texra-ai/harness/host';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
@@ -69,7 +69,7 @@ const probeServices = Layer.mergeAll(
   AppSignals.layer,
   // The mocked plugins declare no Lean plugin, so nothing here reads the port.
   Layer.mock(LeanLanguageServices, { listServers: Effect.succeed([]) }),
-  testHttpClientLayer,
+  noHttpClientLayer,
   nodeSpawnerLayer,
   NodeFileSystem.layer,
 );

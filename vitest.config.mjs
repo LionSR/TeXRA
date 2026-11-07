@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 
 import { globSync } from 'glob';
@@ -27,26 +27,30 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // A suite's cost is its import closure evaluated once per file, so every
 // suite a module registry shared between files can serve gets one: the fake
 // platform, the session runtime and everything behind them are evaluated once
-// per worker, not once per file. Three projects:
+// per worker, not once per file. Four projects:
 //
-// - `pure`: suites of host-free modules. No setup file, and nothing in them
-//   installs or replaces anything, so nothing can leak. Measured on 136
-//   suites: 28s against 1m55s isolated.
+// - `pure`: suites of host-free modules. Nothing in them installs or
+//   replaces anything, so nothing can leak. Measured on 136 suites: 28s
+//   against 1m55s isolated.
 // - `kernel`: the other suites a shared registry can serve. Each states the
 //   host it runs over as a layer its blocks build, and a block's scope
 //   releases what it built (`support/testKernel.ts`), so nothing a file
 //   installs outlives it.
 // - `isolated`: what a shared registry cannot serve, each file in its own
 //   registry and its own worker.
+// - `crash`: the crash conformance replays (`crashConformance*.vitest.ts`),
+//   a run replayed from every commit point, half a second of CPU each: the
+//   `kernel` setup, apart so the edit loops leave them out by name
+//   (`--project '!crash'`).
 //
 // Membership is computed from the suite's source, not declared. A suite is
 // `isolated` when it needs its own registry (`NEEDS_OWN_REGISTRY`,
 // `DOM_DIRS`): add a `vi.mock` and it moves there on its own, remove it and
 // the suite moves back. Otherwise a suite under one of these directories is
-// `pure` unless it reaches a host (`@platform/*`, or the support modules that
-// install or read one), and every other suite is `kernel`. A directory earns
-// a place in this list by holding suites of host-free modules; the scan
-// decides file by file.
+// `pure` unless it reaches a host (its imports, followed through `@test/*`
+// and relative paths, reach the kernel's host, `support/setupPlatform.ts`),
+// and every other suite is `kernel`. A directory earns a place in this list
+// by holding suites of host-free modules; the scan decides file by file.
 const PURE_DIRS = [
   'agent',
   'api',
@@ -70,10 +74,33 @@ const PURE_DIRS = [
   'transcript',
   'utils',
 ];
-const REACHES_A_HOST = [
-  /from\s+['"]@platform\//,
-  /from\s+['"]@test\/support\/(?:setupPlatform|FakePlatform|texraApp|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|crashConformance|testWorkspaceRoots|testKernel|logSinkCapture)['"]/,
-];
+const HOST = resolve(rootDir, 'src/test-kernel/support/setupPlatform.ts');
+const TEST_ROOT = resolve(rootDir, 'src/test-kernel');
+const SPECIFIER = /(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g;
+/** Whether `file`'s imports through `@test/*` and relative paths reach the
+ *  host module; other imports are packages, which install no host. */
+const reached = new Map();
+function reachesAHost(file) {
+  if (file === HOST) return true;
+  if (reached.has(file)) return reached.get(file);
+  reached.set(file, false);
+  const found = [...readFileSync(file, 'utf8').matchAll(SPECIFIER)].some(
+    ([, specifier]) => {
+      const base = specifier.startsWith('@test/')
+        ? resolve(TEST_ROOT, specifier.slice('@test/'.length))
+        : specifier.startsWith('.')
+          ? resolve(dirname(file), specifier)
+          : null;
+      if (base === null) return false;
+      const target = [base, `${base}.ts`, `${base}/index.ts`].find(
+        (path) => path.endsWith('.ts') && existsSync(path),
+      );
+      return target !== undefined && reachesAHost(target);
+    },
+  );
+  reached.set(file, found);
+  return found;
+}
 // What a shared registry cannot serve: a `vi.mock` / `vi.doMock` factory (the
 // module it built stays in the registry, and a partial factory is what the
 // next suite imports); `vi.resetModules` (it empties the registry the next
@@ -101,7 +128,7 @@ const DOM_DIRS = ['desktop', 'progressView', 'settings'];
 // Resolved to file lists rather than left as globs: Vitest applies a
 // project's `exclude` after its `include`, so `isolated` must exclude exactly
 // the files the other two run, not the directories they came from.
-const sharedSuites = { pure: [], kernel: [] };
+const sharedSuites = { pure: [], kernel: [], crash: [] };
 // A suite lives with the package it tests (packages/<name>/test/) or, when it
 // composes several packages, in src/test-kernel/; either way its tier
 // directory is the first one under that test root.
@@ -112,17 +139,21 @@ const SUITES = [
 for (const file of globSync(SUITES, { cwd: rootDir, posix: true }).sort()) {
   const parts = file.split('/');
   const dir = parts[0] === 'packages' ? parts[3] : parts[2];
-  const source = readFileSync(resolve(rootDir, file), 'utf8');
+  const path = resolve(rootDir, file);
+  const source = readFileSync(path, 'utf8');
   if (DOM_DIRS.includes(dir) || NEEDS_OWN_REGISTRY.some((p) => p.test(source)))
     continue;
-  const reachesAHost =
-    !PURE_DIRS.includes(dir) || REACHES_A_HOST.some((p) => p.test(source));
-  sharedSuites[reachesAHost ? 'kernel' : 'pure'].push(file);
+  if (/\/crashConformance[^/]*\.vitest\.ts$/.test(file))
+    sharedSuites.crash.push(file);
+  else if (!PURE_DIRS.includes(dir) || reachesAHost(path))
+    sharedSuites.kernel.push(file);
+  else sharedSuites.pure.push(file);
 }
 // The temp home first, then the check that nothing still reaches the real
 // one: setup files run in order, so no module of the repository loads before
-// the real home is gone. They run before every file; a worker swaps its home
-// once, for its first file, and keeps it for every file it runs after.
+// the real home is gone. They run before every file of every project; a
+// worker swaps its home once, for its first file, and keeps it for every
+// file it runs after.
 const HOME_SETUP_FILES = [
   'src/test-kernel/support/isolateHome.ts',
   'src/test-kernel/support/homeIsolationCheck.ts',
@@ -170,6 +201,7 @@ export default defineConfig({
           name: 'pure',
           isolate: false,
           include: sharedSuites.pure,
+          setupFiles: HOME_SETUP_FILES,
         },
       },
       {
@@ -184,12 +216,25 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: 'crash',
+          isolate: false,
+          include: sharedSuites.crash,
+          setupFiles: HOME_SETUP_FILES,
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: 'isolated',
           isolate: true,
           // Every suite the other two do not run, so one the scan has not
           // seen yet (a file added while a watcher runs) runs isolated.
           include: SUITES,
-          exclude: [...sharedSuites.pure, ...sharedSuites.kernel],
+          exclude: [
+            ...sharedSuites.pure,
+            ...sharedSuites.kernel,
+            ...sharedSuites.crash,
+          ],
           setupFiles: HOME_SETUP_FILES,
         },
       },

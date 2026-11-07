@@ -294,15 +294,17 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         mocks.rootLaunch.mockImplementationOnce(
           async (request: LaunchInput) => {
             if (request.approval === 'autoApprove') {
-              publishTestRows(session, [
-                {
-                  ...runStartRow(request.runId),
-                  approvalPolicy: humanGrant(
-                    APPROVAL_BYPASS_KINDS,
-                    true,
-                  )(NO_APPROVAL_GRANTS),
-                },
-              ]);
+              await Effect.runPromise(
+                publishTestRows(session, [
+                  {
+                    ...runStartRow(request.runId),
+                    approvalPolicy: humanGrant(
+                      APPROVAL_BYPASS_KINDS,
+                      true,
+                    )(NO_APPROVAL_GRANTS),
+                  },
+                ]),
+              );
               await Effect.runPromise(Context.get(session, SessionLog).settled);
             }
             seen = (

@@ -60,6 +60,12 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { validationModelLayer } from '@cli/runtime/validationModel';
+import {
+  VALIDATION_FLAG,
+  VALIDATION_FLAG_CONTENT,
+  VALIDATION_SCENARIOS,
+  VALIDATION_SWITCH,
+} from '@cli/runtime/validationSwitch';
 import { databaseLayer } from '@controllers/session/Database';
 import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
 import { rowReader } from '@controllers/session/rowReader';
@@ -555,8 +561,8 @@ describe('the golden run killed after its effect', () => {
   );
   const tempDirs = useTempDirs();
   const VALIDATION = {
-    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
-    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    [VALIDATION_SWITCH]: '1',
+    [VALIDATION_SCENARIOS.golden]: '1',
   };
   /** The test's host as the kill left it: the golden store and the effect on
    *  a temp-dir host whose agents are the fixtures', loaded into the block's
@@ -571,7 +577,7 @@ describe('the golden run killed after its effect', () => {
         Effect.sync(() => {
           for (const [name, value] of Object.entries({
             ...VALIDATION,
-            TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
+            [VALIDATION_FLAG]: flag,
           }))
             vi.stubEnv(name, value);
         }),
@@ -589,7 +595,7 @@ describe('the golden run killed after its effect', () => {
            (SELECT id FROM event_sequence WHERE logical_id = ?)`,
         ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
       });
-      writeFileSync(flag, 'texra-cli-run-validation\n');
+      writeFileSync(flag, VALIDATION_FLAG_CONTENT);
       yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
     }),
   ).pipe(

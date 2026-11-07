@@ -11,7 +11,6 @@ import {
   type SubscriptionCoordinator,
   type SubscriptionTokenResponse,
 } from '@texra-ai/llm/node';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import type { CredentialStore } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
@@ -123,7 +122,7 @@ const forkNow = <A>(
  * posted, so the test's next step is ordered after it.
  */
 function parkedRefresh() {
-  const pending = createDeferred<Response>();
+  const pending = Promise.withResolvers<Response>();
   const started = Deferred.makeUnsafe<void>();
   const refreshTokens = vi.fn(() => {
     Deferred.doneUnsafe(started, Effect.void);

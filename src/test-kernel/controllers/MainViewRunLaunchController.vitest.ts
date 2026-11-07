@@ -13,7 +13,7 @@ import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { BUNDLED_AGENTS } from '@test/support/storeFaults';
 import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
@@ -43,7 +43,7 @@ function onGlobalStorage<A, E>(
           unusedGlobalStorageFs(),
           storePluginsLayer,
           nodePlatformLayer,
-          testHttpClientLayer,
+          noHttpClientLayer,
           Layer.succeed(AgentDirectories)({
             ...fakeHostAgentDirectories,
             builtIn: () => Effect.succeed(BUNDLED_AGENTS),

@@ -97,9 +97,11 @@ import {
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
-import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 import { REPO_ROOT } from '@test/support/repoScan';
-import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
+import {
+  inquiryThreadFact,
+  type InquiryThreadSummary,
+} from '@texra/shared/plugins/externalInquiry';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import type { ProcessProbe } from '@texra-ai/harness/node';
@@ -993,8 +995,19 @@ describe('the session event table and its one publisher', () => {
         lastActivityIso: '2026-09-06T12:00:00.000Z',
         turnCount: 1,
       } as const;
-      const thread = (patch: Partial<InquiryThreadSummary> = {}) =>
-        inquiryThreadRow({ ...base, ...patch });
+      // The thread's row as a decision commits it, under the run that asked.
+      const thread = (
+        patch: Partial<InquiryThreadSummary> = {},
+      ): Extract<SessionRowDraft, { type: 'plugin.fact' }> => {
+        const summary = { ...base, ...patch };
+        const { aggregate, ...fact } = inquiryThreadFact(summary);
+        return {
+          type: 'plugin.fact',
+          aggregateId: qualifyAggregateId('plugin', aggregate),
+          ...fact,
+          parent: summary.parentRunId,
+        };
+      };
       // Every aggregate this case writes, the unrelated run's among them.
       const stored = rowsOf(
         first,

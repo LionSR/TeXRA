@@ -42,12 +42,13 @@ leaves a consequential contract or reproduced defect unprotected.
 
 ## Test tiers
 
-`vitest.config.mjs` runs suites in three projects, and a suite's cost is
-decided by what it reaches, not by how many tests it has:
+`vitest.config.mjs` runs suites in four projects, and a suite's cost is
+decided by what it reaches, not by how many tests it has. Every project runs
+the home-isolation setup files, so no suite sees the developer's home:
 
-- **`pure`** — suites that reach no host: no setup file, no fake platform, no
-  DOM, one module registry shared between files. Deterministic, because
-  nothing in it installs or replaces anything.
+- **`pure`** — suites that reach no host: no fake host installed, no DOM,
+  one module registry shared between files. Deterministic, because nothing
+  in it installs or replaces anything.
 - **`kernel`** — suites over a host, one module registry shared between the
   files a worker runs. A suite states what it runs over as layers its blocks
   build with `@effect/vitest`'s `layer(...)` and `it.layer(...)`
@@ -66,13 +67,16 @@ decided by what it reaches, not by how many tests it has:
   and every suite under `desktop`, `progressView` and `settings`, where
   helpers a scan of the suite does not see bring a window or load modules
   afresh. A Lit element class is bound to the window that first loaded it.
+- **`crash`** — the crash conformance replays, on the `kernel` setup, apart
+  so the edit loops can leave them out by name (see "Scoping the test run").
 
 Membership is computed from the suite's source, not declared: a suite that
 needs its own registry is `isolated`; otherwise a suite under a `pure`
-directory is `pure` unless it imports `@platform/*` or a support module that
-installs or reads a host, and every other suite is `kernel`. There is no list
-of exempt suites. A shared worker runs file after file, so process-wide state
-a source scan cannot see (the environment chalk takes its color level from, a
+directory is `pure` unless its imports, followed through `@test/*` and
+relative paths, reach the kernel's host (`support/setupPlatform.ts`), and
+every other suite is `kernel`. There is no list of exempt suites or
+modules. A shared worker runs file after file, so process-wide state a
+source scan cannot see (the environment chalk takes its color level from, a
 stubbed global, a host left installed) is found by file-order shuffles
 (`--sequence.shuffle --sequence.seed=<n>`) and fixed in the suite: set the
 state on the instance it lives on and restore it after. The worker's fake
@@ -96,7 +100,7 @@ only by hand, never in CI or `npm test`, and skips a model whose key is not set.
 
 ## Scoping the test run
 
-The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in root `AGENTS.md` "Commands". Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for. The crash conformance suites (`packages/harness/test/controllers/session/crashConformance*.vitest.ts`) replay a run from every commit point, half a second of CPU each, so `test:watch` and `test:changed` leave them out and `npm test` runs them, sharded over files.
+The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in root `AGENTS.md` "Commands". Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for. The crash conformance suites (`packages/harness/test/controllers/session/crashConformance*.vitest.ts`) replay a run from every commit point, half a second of CPU each, so they are their own project (`crash`), which `test:watch` and `test:changed` leave out (`--project '!crash'`) and `npm test` runs, sharded over files.
 
 ## Writing tests that earn a place
 

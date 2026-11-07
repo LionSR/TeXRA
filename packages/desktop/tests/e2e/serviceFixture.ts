@@ -9,6 +9,13 @@ import { existsSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  VALIDATION_FLAG,
+  VALIDATION_FLAG_CONTENT,
+  VALIDATION_SCENARIOS,
+  VALIDATION_SWITCH,
+} from '../../../cli/src/runtime/validationSwitch';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..', '..', '..');
 const CLI_ROOT = join(REPO_ROOT, 'packages', 'cli');
@@ -105,11 +112,11 @@ export function alive(pid: number): boolean {
  *  release file goes beside it. */
 export function scriptedModel(dir: string): Record<string, string> {
   const flag = join(dir, 'texra-validation.flag');
-  writeFileSync(flag, 'texra-cli-run-validation\n');
+  writeFileSync(flag, VALIDATION_FLAG_CONTENT);
   return {
-    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
-    TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
-    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    [VALIDATION_SWITCH]: '1',
+    [VALIDATION_FLAG]: flag,
+    [VALIDATION_SCENARIOS.golden]: '1',
     OPENAI_API_KEY: 'texra-validation-fake-key',
   };
 }

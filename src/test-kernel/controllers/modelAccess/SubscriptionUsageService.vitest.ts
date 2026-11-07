@@ -4,7 +4,6 @@ import { FetchHttpClient } from 'effect/http';
 import { afterEach, expect, vi } from 'vitest';
 
 import { Secrets } from '@texra-ai/harness/host';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { SessionGraph } from '@test/support/testKernel';
@@ -89,8 +88,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.effect('keeps an invalidated in-flight snapshot out of the cache', () =>
       Effect.gen(function* () {
         const responses: Array<(response: Response) => void> = [];
-        const firstRequest = createDeferred<void>();
-        const secondRequest = createDeferred<void>();
+        const firstRequest = Promise.withResolvers<void>();
+        const secondRequest = Promise.withResolvers<void>();
         const http = vi.fn<UsageFetch>(
           () =>
             new Promise<Response>((resolve) => {

@@ -3,7 +3,8 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import { Effect, FileSystem } from 'effect';
 import { afterEach } from 'vitest';
 
 // Local imports
@@ -83,19 +84,19 @@ export async function cleanupTempDirs(tempDirs: string[]): Promise<void> {
   );
 }
 
-/** A real temporary directory owned for the duration of an Effect test operation. */
+/** A real temporary directory, canonical as `makeTempDir`'s, owned for the
+ *  duration of an Effect test operation. */
 export function withTempDirEffect<A, E, R>(
   prefix: string,
   run: (directory: string) => Effect.Effect<A, E, R>,
 ) {
-  return Effect.acquireUseRelease(
-    Effect.promise(() =>
-      mkdtemp(path.join(os.tmpdir(), prefix)).then((directory) =>
-        realpath(directory),
-      ),
-    ),
-    run,
-    (directory) =>
-      Effect.promise(() => rm(directory, { recursive: true, force: true })),
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* fs.realPath(yield* fs.makeTempDirectoryScoped({ prefix }));
+  }).pipe(
+    Effect.provide(NodeFileSystem.layer),
+    Effect.orDie,
+    Effect.flatMap(run),
+    Effect.scoped,
   );
 }

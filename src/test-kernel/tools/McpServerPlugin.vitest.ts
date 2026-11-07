@@ -18,21 +18,31 @@ import {
   FileSystem,
   Layer,
   Scope,
+  ScopedRef,
   Context,
   Schema,
 } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { declaredToolNames } from '@agent/runtime/agentToolResolution';
+import { ProjectTools, stepFor } from '@agent/runtime/loop/step';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog } from '@shared/session/runHistory';
+import { freshRunState } from '@shared/session/runState';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { noopTrace } from '@test/support/noopTrace';
+import {
+  scriptedModel,
+  testAgentRun,
+  testBinding,
+  textTurn,
+} from '@test/support/scriptedRunLayers';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { installedHost } from '@test/support/setupPlatform';
-import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
-import { toolCatalogLayer } from '@tools/liveTools';
+import { ToolCatalogOwner, toolCatalogLayer } from '@tools/liveTools';
 import { mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { toolTable } from '@tools/toolTable';
 import {
@@ -109,6 +119,42 @@ const mcpToolTableLayer = (dir: string) =>
     ),
   ).pipe(Layer.provide(nodePlatformLayer));
 
+/** The tools a run declaring the fixture server is offered: its first step
+ *  opened in `session` over a session catalog of the MCP tool table, held in
+ *  the caller's scope as a run holds its step, with the warnings it raised. */
+const openFixtureStep = (session: Context.Context<SessionServices>) =>
+  Effect.gen(function* () {
+    const tools = yield* (yield* ToolCatalogOwner).session;
+    const declared = [{ name: 'mcp__fixture__*' }];
+    const held = yield* tools.hold(declaredToolNames(declared), true);
+    const warnings = [...held.warnings];
+    const run = testAgentRun(
+      {
+        runId: Schema.decodeSync(RunIdSchema)(crypto.randomUUID()),
+        session,
+        logger: { ...noopTrace, warn: (message) => warnings.push(message) },
+        model: yield* ScopedRef.make(() =>
+          testBinding(scriptedModel([textTurn('')]).model),
+        ),
+        scope: yield* Effect.scope,
+      },
+      {
+        toolInputs: {
+          tools: declared,
+          runTools: [],
+          injectTools: false,
+          injectInstalled: false,
+          held,
+        },
+      },
+    );
+    const step = yield* stepFor(run, freshRunState(0), false).pipe(
+      Effect.provideService(ProjectTools, tools),
+      Effect.provide(session),
+    );
+    return { tools: step.tools, warnings };
+  });
+
 /** A temporary directory, removed when the test's scope closes. */
 const tempDir = Effect.acquireRelease(
   Effect.sync(() => mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'))),
@@ -163,17 +209,14 @@ describe('MCP server plugins', () => {
 
             const services = yield* Layer.build(mcpToolTableLayer(dir));
             const open = (pin: Scope.Scope) =>
-              resolveTestStep({
-                tools: [{ name: 'mcp__fixture__*' }],
-                injectTools: false,
-                roots: installedHost().roots,
-              }).pipe(Scope.provide(pin), Effect.provideContext(services));
+              openFixtureStep(session).pipe(
+                Scope.provide(pin),
+                Effect.provideContext(services),
+              );
             const pin = yield* Scope.make();
             const resolved = yield* open(pin);
-            expect([...resolved.held.warnings, ...resolved.warnings]).toEqual(
-              [],
-            );
-            expect(resolved.definitions).toEqual([
+            expect(resolved.warnings).toEqual([]);
+            expect(resolved.tools.definitions).toEqual([
               expect.objectContaining({
                 name: 'mcp__fixture__echo',
                 parameters: expect.objectContaining({ required: ['text'] }),
@@ -195,14 +238,14 @@ describe('MCP server plugins', () => {
             // The call goes through the loop's guard: a bash request the
             // session's approval authority opens, answered here.
             const runId = Schema.decodeSync(RunIdSchema)('a99f0000c0d1');
-            publishTestRunStart(session, runId);
+            yield* publishTestRunStart(session, runId);
             yield* Context.get(session, SessionLog).settled;
             const requestOpened = yield* Deferred.make<void>();
             const requests = yield* autoDecideRequests(session, () => {
               Deferred.doneUnsafe(requestOpened, Effect.void);
               return null;
             });
-            const tool = resolved.registry.get('mcp__fixture__echo');
+            const tool = resolved.tools.registry.get('mcp__fixture__echo');
             assert.exists(tool);
             const call = yield* Effect.forkChild(
               guardedToolCall(tool, { text: 'hi' }).pipe(
@@ -219,7 +262,7 @@ describe('MCP server plugins', () => {
               kind: 'bash',
               data: { command: 'mcp fixture echo {"text":"hi"}' },
             });
-            decideRequest(
+            yield* decideRequest(
               session,
               { runId, requestId: opened.requestId },
               { action: 'approve' },
@@ -263,13 +306,12 @@ describe('MCP server plugins', () => {
               },
             }),
           );
+          const session = yield* isolatedTestSession();
           const services = yield* Layer.build(mcpToolTableLayer(dir));
-          const resolved = yield* resolveTestStep({
-            tools: [{ name: 'mcp__fixture__*' }],
-            injectTools: false,
-            roots: installedHost().roots,
-          }).pipe(Effect.provideContext(services));
-          const tool = resolved.registry.get('mcp__fixture__echo');
+          const { tools } = yield* openFixtureStep(session).pipe(
+            Effect.provideContext(services),
+          );
+          const tool = tools.registry.get('mcp__fixture__echo');
           assert.exists(tool);
 
           const call = yield* Effect.forkChild(tool.call({ text: 'hi' }));

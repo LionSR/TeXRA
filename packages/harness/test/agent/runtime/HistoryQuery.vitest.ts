@@ -54,7 +54,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       () =>
         withSession((session) =>
           Effect.gen(function* () {
-            publishTestRunStart(session);
+            yield* publishTestRunStart(session);
             // The store is open and fed, so the runaway's only wait is its
             // deadline, which the test clock steps through.
             yield* query(session, 'SELECT count(*) FROM runs');
@@ -85,7 +85,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.effect('refuses a write and a second statement', () =>
       withSession((session) =>
         Effect.gen(function* () {
-          publishTestRunStart(session);
+          yield* publishTestRunStart(session);
           const write = yield* query(
             session,
             'WITH gone AS (SELECT 1) DELETE FROM tool_calls',
@@ -112,7 +112,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           const before = SubscriptionRef.getUnsafe(
             Context.get(session, SessionViewAccess).ref,
           );
-          publishTestRunStart(session);
+          yield* publishTestRunStart(session);
           yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
           // A view whose current snapshot predates the run, and whose next
           // one has applied it.

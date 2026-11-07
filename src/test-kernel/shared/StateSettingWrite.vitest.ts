@@ -4,10 +4,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import {
-  isStored,
-  makeFakeSettingsStores,
-} from '@test/support/settingsStoresFake';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 import { LATEX_FORMATTER_SETTING } from '@texra/shared/settingsView/texraSettings';
 
@@ -23,8 +20,8 @@ describe('applyStateSettingUpdate', () => {
         ports,
       );
       expect(
-        yield* isStored(fake.workspaceState, LATEX_FORMATTER_SETTING.key),
-      ).toBe(true);
+        yield* fake.workspaceState.get(LATEX_FORMATTER_SETTING.key),
+      ).toBeDefined();
 
       expect(
         yield* applyStateSettingUpdate(
@@ -34,8 +31,8 @@ describe('applyStateSettingUpdate', () => {
         ),
       ).toMatchObject({ kind: 'applied' });
       expect(
-        yield* isStored(fake.workspaceState, LATEX_FORMATTER_SETTING.key),
-      ).toBe(false);
+        yield* fake.workspaceState.get(LATEX_FORMATTER_SETTING.key),
+      ).toBeUndefined();
 
       // A value-less message is a no-op: the catalog schemas carry a decoding
       // default, so parsing `undefined` would silently write a default.

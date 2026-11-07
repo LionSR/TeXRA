@@ -18,7 +18,7 @@ import {
   type EditorCapabilities,
 } from '@texra/tools/editorHost';
 import { OpenPdfTool } from '@texra/tools/OpenPdfTool';
-import type { RunId } from '@texra-ai/harness/schemas';
+import { generateRunId } from '@texra-ai/harness/schemas';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
 type OpenPdfRequest = Parameters<NonNullable<EditorCapabilities['openPdf']>>[0];
@@ -69,7 +69,7 @@ layer(perTest, { buildPerTest: true, excludeTestServices: true })(
               nativeToolTestLayer({
                 workingDirectory: fakePath('workspace'),
                 // cast: a fixture run id; no stored run is read under it.
-                run: { session, runId: 'tool-test' as RunId, toolPolicy: {} },
+                run: { session, runId: generateRunId(), toolPolicy: {} },
               }),
             ),
           );
