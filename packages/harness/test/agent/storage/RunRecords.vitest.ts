@@ -11,6 +11,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
+import { runStart } from '@test/support/sessionRows';
 import {
   FakeHost,
   isolatedTestSession,
@@ -43,14 +44,7 @@ const withStartedSession = <A, E>(
   Effect.gen(function* () {
     const session = yield* isolatedTestSession();
     yield* Context.get(session, SessionLog).transact([
-      {
-        type: 'run.start',
-        aggregateId: qualifyAggregateId('run', runId),
-        identity: { kind: 'agent', agent: 'worker' },
-        takesFollowUps: false,
-        parent: null,
-        provenance: null,
-      },
+      runStart(runId, { identity: { kind: 'agent', agent: 'worker' } }),
     ]);
     return yield* body(session).pipe(Effect.provide(session));
   });

@@ -95,6 +95,7 @@ import {
   scriptedSpawnerLayer,
 } from '@test/support/childProcessTestLayer';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { runStart, toolUseTurn } from '@test/support/sessionRows';
 import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -206,14 +207,7 @@ const rowsOf = (
     Effect.map((rows) => rows.flat().toSorted((x, y) => x.commit - y.commit)),
   );
 
-const runStart: SessionRowDraft = {
-  type: 'run.start',
-  aggregateId: qualifyAggregateId('run', RUN),
-  identity: { kind: 'agent', agent: 'chat' },
-  takesFollowUps: false,
-  parent: null,
-  provenance: null,
-};
+const runStartRow = runStart(RUN);
 
 /** The loop parked on the request below: the phase the fold reads. */
 const waiting: SessionRowDraft = {
@@ -378,7 +372,7 @@ describe('session events and view', () => {
         { cursor: 0, status: 'waiting', requests: ['req-1'] },
         { cursor: 5, status: 'running', requests: [] },
       ]);
-    }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
+    }).pipe(Effect.provide(graph([runStartRow, waiting, requested]))),
   );
 });
 
@@ -403,7 +397,7 @@ describe('Sessions owner', () => {
       yield* Effect.gen(function* () {
         const db = yield* Database;
         yield* db.appendAll([
-          runStart,
+          runStartRow,
           waiting,
           {
             type: 'request.opened',
@@ -489,10 +483,7 @@ describe('the session event table and its one publisher', () => {
       Layer.fresh,
     );
 
-  const olderStart: SessionRowDraft = {
-    ...runStart,
-    aggregateId: qualifyAggregateId('run', OLDER),
-  };
+  const olderStart = runStart(OLDER);
 
   /** A connection of the kind another host process would open, on the file
    *  name a session root gives its database. */
@@ -523,7 +514,7 @@ describe('the session event table and its one publisher', () => {
   /** A store holding one run row, then re-stamped as another build's. */
   const storeOfFormat = (storage: string, format: number) =>
     Database.pipe(
-      Effect.flatMap((database) => database.appendAll([runStart])),
+      Effect.flatMap((database) => database.appendAll([runStartRow])),
       Effect.provide(substrate(storage)),
       Effect.andThen(
         Effect.sync(() => {
@@ -707,14 +698,14 @@ describe('the session event table and its one publisher', () => {
         // Any undecodable row of a run damages it, not only its start. The
         // store is held while open, so the row is damaged between opens.
         yield* Effect.flatMap(Database, (db) =>
-          db.appendAll([runStart, olderStart, waiting]),
+          db.appendAll([runStartRow, olderStart, waiting]),
         ).pipe(Effect.provide(substrate(storage)));
         yield* corrupt(3);
         yield* Effect.gen(function* () {
           const db = yield* Database;
           expect(
             yield* Effect.flip(
-              db.readAggregate(runStart.aggregateId, 0, ROW_TYPES),
+              db.readAggregate(runStartRow.aggregateId, 0, ROW_TYPES),
             ),
           ).toMatchObject({
             _tag: 'DatabaseReadFailed',
@@ -752,7 +743,7 @@ describe('the session event table and its one publisher', () => {
         expect(
           yield* Effect.flip(
             Effect.flatMap(Database, (db) =>
-              db.readRunRecords(runStart.aggregateId),
+              db.readRunRecords(runStartRow.aggregateId),
             ).pipe(Effect.provide(substrate(storage))),
           ),
         ).toMatchObject({
@@ -794,7 +785,7 @@ describe('the session event table and its one publisher', () => {
       return Effect.gen(function* () {
         const db = yield* Database;
         const now = yield* Clock.currentTimeMillis;
-        const first = yield* db.appendAll([runStart, olderStart, waiting]);
+        const first = yield* db.appendAll([runStartRow, olderStart, waiting]);
         const second = yield* db.appendAll([requested]);
 
         expect(
@@ -816,7 +807,7 @@ describe('the session event table and its one publisher', () => {
         // A run begins with exactly one `run.start` (decision 9): a second
         // creation of a live run is refused, and the sequence it allocated
         // rolls back with it.
-        expect((yield* Effect.flip(db.appendAll([runStart])))._tag).toBe(
+        expect((yield* Effect.flip(db.appendAll([runStartRow])))._tag).toBe(
           'DatabaseWriteFailed',
         );
         expect((yield* db.appendAll([waiting]))[0]?.seq).toBe(4);
@@ -830,7 +821,7 @@ describe('the session event table and its one publisher', () => {
     const storage = workspace();
     const append = Effect.gen(function* () {
       const db = yield* Database;
-      return yield* db.appendAll([runStart, waiting]);
+      return yield* db.appendAll([runStartRow, waiting]);
     }).pipe(Effect.provide(substrate(storage)));
     return Effect.gen(function* () {
       yield* append;
@@ -858,7 +849,7 @@ describe('the session event table and its one publisher', () => {
         const db = yield* Database;
         return {
           commit: yield* db.currentCommit,
-          next: yield* db.appendAll([runStart]),
+          next: yield* db.appendAll([runStartRow]),
         };
       }).pipe(Effect.provide(substrate(storage)));
 
@@ -891,7 +882,7 @@ describe('the session event table and its one publisher', () => {
         input: { script: shared, args: { ...args, $b: 'mine', $$b: [shared] } },
       });
       const drafts = [
-        runStart,
+        runStartRow,
         olderStart,
         card(RUN, { solo }),
         card(OLDER, {}),
@@ -921,7 +912,7 @@ describe('the session event table and its one publisher', () => {
           yield* db.appendAll(drafts);
           const cards = (yield* rowsOf(
             db,
-            runStart.aggregateId,
+            runStartRow.aggregateId,
             olderStart.aggregateId,
           )).filter((event) => event.type === 'tool.start');
           expect(cards.map(({ input }) => JSON.stringify(input))).toEqual(
@@ -982,7 +973,7 @@ describe('the session event table and its one publisher', () => {
     const storage = workspace();
     return Effect.gen(function* () {
       const first = yield* Database;
-      const root = runStart.aggregateId;
+      const root = runStartRow.aggregateId;
       const inquiry = qualifyAggregateId(
         'plugin',
         'external-inquiry:ei_012345abcdef',
@@ -1017,7 +1008,7 @@ describe('the session event table and its one publisher', () => {
         qualifyAggregateId('run', NEWER),
       );
       const initial = yield* first.appendAll([
-        runStart,
+        runStartRow,
         olderStart,
         thread({ status: 'answered' }),
         thread({ parentRunId: OLDER, turnCount: 2 }),
@@ -1099,10 +1090,7 @@ describe('the session event table and its one publisher', () => {
       expect((yield* first.readAggregate(root, 0, ROW_TYPES)).at(-1)).toEqual(
         tombstone,
       );
-      const unrelated: SessionRowDraft = {
-        ...runStart,
-        aggregateId: qualifyAggregateId('run', NEWER),
-      };
+      const unrelated = runStart(NEWER);
       yield* first.deletions.collect(tombstone, (ids) =>
         Effect.gen(function* () {
           expect(ids).toEqual([RUN]);
@@ -1120,7 +1108,7 @@ describe('the session event table and its one publisher', () => {
         olderStart.aggregateId,
         unrelated.aggregateId,
       ]);
-      const replacement = yield* first.appendAll([runStart]);
+      const replacement = yield* first.appendAll([runStartRow]);
       expect(
         (yield* Effect.flip(first.runRemoval(root, initialCommit)))._tag,
       ).toBe('DatabaseWriteFailed');
@@ -1201,7 +1189,7 @@ describe('the session event table and its one publisher', () => {
       return Effect.gen(function* () {
         const refused = yield* Effect.gen(function* () {
           const db = yield* Database;
-          yield* db.appendAll([runStart]);
+          yield* db.appendAll([runStartRow]);
           const refused = yield* writer();
           expect(yield* db.appendAll([waiting])).toMatchObject([{ commit: 2 }]);
           expect(yield* db.aggregateState([theirs])).toEqual([]);
@@ -1237,67 +1225,7 @@ describe('RunHistory', () => {
     runHistoryOverStore.pipe(Layer.provideMerge(graph([])));
   const AGGREGATE = qualifyAggregateId('run', RUN);
   const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';
-  const ORIGIN = {
-    protocol: 'openai-responses',
-    requestedModel: 'deepseek-test',
-    deployment: {
-      endpoint: 'https://api.example.test/v1',
-      credentialScope: 'deepseek',
-    },
-    codecVersion: 1,
-  } as const;
-  const INVOCATION = {
-    invocationId: '0f1e2d3c-4b5a-4a9b-8c7d-6e5f4a3b2c1d',
-    attempt: 1,
-  } as const;
-  const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
-  const TURN = {
-    kind: 'http',
-    providerResponseId: 'resp-1',
-    requestedOrigin: ORIGIN,
-    returnedModel: null,
-    modelFingerprint: null,
-    content: [
-      {
-        kind: 'reasoning',
-        summary: [],
-        content: [{ kind: 'text', text: `the key is ${SECRET}` }],
-        evidence: { kind: 'openai-responses-reasoning', itemId: 'rs-1' },
-      },
-      {
-        kind: 'local-call',
-        providerCallId: 'call-a',
-        name: 'bash',
-        argumentsText: `{"command":"echo ${SECRET}"}`,
-      },
-      {
-        kind: 'local-call',
-        providerCallId: 'call-b',
-        name: 'bash',
-        argumentsText: '{"command":"ls"}',
-      },
-    ],
-    finishReason: 'tool-calls',
-    usage: null,
-  } as const;
-  const CALLS = [
-    {
-      callId: 'call-a',
-      toolName: 'bash',
-      lane: 'barrier',
-      replay: 'unsafe',
-      duplicateOf: null,
-      logId: 'card-a',
-    },
-    {
-      callId: 'call-b',
-      toolName: 'bash',
-      lane: 'barrier',
-      replay: 'unsafe',
-      duplicateOf: 'call-a',
-      logId: 'card-b',
-    },
-  ] as const;
+  const turn = toolUseTurn(RUN);
   const snapshot = (): RunHistoryDraft => ({
     type: 'run.position',
     aggregateId: AGGREGATE,
@@ -1326,113 +1254,13 @@ describe('RunHistory', () => {
     logId: callId,
     status: 'completed',
   });
-  const settled = (
-    callId: string,
-    body: Partial<
-      Extract<RunHistoryDraft, { type: 'tool.result' }>['payload']
-    > = {},
-  ): RunHistoryDraft => ({
-    type: 'tool.result',
-    aggregateId: AGGREGATE,
-    payload: {
-      responseId: RESPONSE_ID,
-      callId,
-      attempt: 1,
-      disposition: 'executed',
-      duplicateOf: null,
-      result: { status: 'executed', output: 'ok' },
-      attachments: [],
-      ...body,
-    },
-  });
-  const group: RunHistoryDraft = {
-    type: 'model.message',
-    aggregateId: AGGREGATE,
-    payload: {
-      kind: 'append',
-      sourceResponse: RESPONSE_ID,
-      messages: [
-        {
-          role: 'tool',
-          results: [
-            {
-              callOrdinal: 0,
-              status: 'success',
-              content: [{ kind: 'text', text: 'ok' }],
-            },
-            {
-              callOrdinal: 1,
-              status: 'success',
-              content: [{ kind: 'text', text: 'ok' }],
-            },
-          ],
-        },
-      ],
-    },
-  };
   /** The batches of one turn, in order, up to and excluding the delivery. */
   const openTurn = (cell: RunCell) =>
     Effect.gen(function* () {
-      yield* cell.append([
-        {
-          type: 'model.message',
-          aggregateId: AGGREGATE,
-          payload: {
-            kind: 'append',
-            sourceResponse: null,
-            messages: [
-              { role: 'user', content: [{ kind: 'text', text: 'ls' }] },
-            ],
-          },
-        },
-        snapshot(),
-      ]);
-      yield* cell.append([
-        {
-          type: 'model.message',
-          aggregateId: AGGREGATE,
-          payload: {
-            kind: 'attempt',
-            request: '0'.repeat(64),
-            invocation: INVOCATION,
-            origin: ORIGIN,
-          },
-        },
-      ]);
-      yield* cell.append([
-        {
-          type: 'model.message',
-          aggregateId: AGGREGATE,
-          payload: {
-            kind: 'identified',
-            invocation: INVOCATION,
-            providerResponseId: 'resp-1',
-          },
-        },
-      ]);
-      return yield* cell.append([
-        {
-          type: 'model.message',
-          aggregateId: AGGREGATE,
-          payload: {
-            kind: 'response',
-            responseId: RESPONSE_ID,
-            invocation: INVOCATION,
-            turn: TURN,
-            calls: CALLS,
-            usage: null,
-          },
-        },
-        {
-          type: 'tool.intent',
-          aggregateId: AGGREGATE,
-          payload: {
-            origin: { kind: 'response', responseId: RESPONSE_ID },
-            callId: 'call-a',
-            attempt: 1,
-          },
-        },
-      ]);
+      yield* cell.append([turn.append, snapshot()]);
+      yield* cell.append([turn.attempt]);
+      yield* cell.append([turn.identified]);
+      return yield* cell.append([turn.response, turn.intent]);
     });
 
   it.effect(
@@ -1442,18 +1270,18 @@ describe('RunHistory', () => {
         const events = yield* SessionEvents;
         const run = yield* RunHistory;
         const log = yield* Database;
-        yield* events.transact((append) => append([runStart]));
+        yield* events.transact((append) => append([runStartRow]));
         const cell = yield* run.open(RUN);
         let state = yield* openTurn(cell);
         // Delivering before the settlements committed is a caller defect.
-        const early = yield* cell.append([group]).pipe(Effect.exit);
+        const early = yield* cell.append([turn.delivery]).pipe(Effect.exit);
         expect(Exit.isFailure(early) && Cause.hasDies(early.cause)).toBe(true);
         // A batch the fold rejects commits nothing: the refusal has to mean
         // "not written", or every later `load` meets the orphan row.
         const written = (yield* log.readAggregate(AGGREGATE, 1, ROW_TYPES))
           .length;
         const orphan = yield* cell
-          .append([settled('call-z'), toolEnd('call-z')])
+          .append([turn.result('call-z'), toolEnd('call-z')])
           .pipe(Effect.flip);
         expect(refusalOf(orphan)?.reason).toBe('inconsistent');
         expect((yield* log.readAggregate(AGGREGATE, 1, ROW_TYPES)).length).toBe(
@@ -1500,7 +1328,7 @@ describe('RunHistory', () => {
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* cell.append([
-          settled('call-a', {
+          turn.result('call-a', {
             result: {
               status: 'executed',
               output: 'ok',
@@ -1537,11 +1365,11 @@ describe('RunHistory', () => {
               payload: {
                 kind: 'attempt',
                 request: '0'.repeat(64),
-                invocation: { ...INVOCATION, attempt: 2 },
+                invocation: { ...turn.invocation, attempt: 2 },
                 origin: {
-                  ...ORIGIN,
+                  ...turn.origin,
                   deployment: {
-                    ...ORIGIN.deployment,
+                    ...turn.origin.deployment,
                     endpoint: `https://api.example.test/v1?api-key=${SECRET}`,
                   },
                 },

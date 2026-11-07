@@ -117,6 +117,7 @@ import {
   validationHost,
 } from '@test/support/storeFaults';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
+import { runStart } from '@test/support/sessionRows';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { DETACH_SUBAGENTS_ON_STOP_SETTING } from '@texra-ai/harness/schemas';
 
@@ -1369,7 +1370,8 @@ export function crashConformanceSuite(
               Effect.gen(function* () {
                 const { roots } = yield* FakeHost;
                 const session = yield* persistentTestSession(roots);
-                const run = qualifyAggregateId('run', generateRunId());
+                const runId = generateRunId();
+                const run = qualifyAggregateId('run', runId);
                 const titled = (description: string) => [
                   {
                     type: 'run.description' as const,
@@ -1379,14 +1381,7 @@ export function crashConformanceSuite(
                   },
                 ];
                 yield* Context.get(session, SessionLog).transact([
-                  {
-                    type: 'run.start',
-                    aggregateId: run,
-                    identity: { kind: 'agent', agent: 'chat' },
-                    takesFollowUps: false,
-                    parent: null,
-                    provenance: null,
-                  },
+                  runStart(runId),
                 ]);
                 const cut = join(roots.storage, 'cut');
                 yield* Context.get(session, SessionLog).transact((tx) =>

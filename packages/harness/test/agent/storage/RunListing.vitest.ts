@@ -7,7 +7,6 @@ import {
   RunIdSchema,
   type AgentConfig,
   AgentConfigSchema,
-  qualifyAggregateId,
   type RunId,
   type RunIdentity,
 } from '@texra-ai/harness/schemas';
@@ -15,6 +14,7 @@ import { listRuns } from '@agent/storage/runListing';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog } from '@shared/session/runHistory';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
+import { runStart } from '@test/support/sessionRows';
 import {
   FakeHost,
   SessionGraph,
@@ -38,16 +38,7 @@ const processSession = Effect.flatMap(TestSession.open(), sessionHandleOf);
 
 /** Commit the run's `run.start`, the fact its listing row is built from. */
 const startRun = (session: Session, id: RunId, identity: RunIdentity) =>
-  Context.get(session, SessionLog).transact([
-    {
-      type: 'run.start',
-      aggregateId: qualifyAggregateId('run', id),
-      identity,
-      takesFollowUps: false,
-      parent: null,
-      provenance: null,
-    },
-  ]);
+  Context.get(session, SessionLog).transact([runStart(id, { identity })]);
 
 /** An agent run: its start and its configuration record. */
 const writeRun = (session: Session, id: RunId, agent: string) =>
