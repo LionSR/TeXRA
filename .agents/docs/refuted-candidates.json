@@ -404,6 +404,19 @@
           "signature": "export const openDesktopProjectRegistry: ( options: DesktopProjectRegistryOptions, ) => Effect.Effect< DesktopProjectRegistry, Error, DesktopProjectRecords | StateStores | Sessions | HostWindows > = Effect.fn('openDesktopProjectRegistry')(…);"
         }
       ]
+    },
+    {
+      "id": "G11d-launch-config-schema-without-defaults",
+      "candidate": "a LaunchConfigSchema without defaults for the launcher's launches, deleting prepareSurfaceLaunch's missing agent/model pre-check",
+      "why": "The pre-check does not exist because AgentConfigSchema fills agent and model: buildLaunchConfig always passes both, so the row schema's withDecodingDefault (which fills an absent key only) never applies to a launch. What it rejects is the empty string the form sends while nothing is selected, which Schema.String accepts. A schema without defaults would still accept it; one with isMinLength(1) would turn \"Choose an agent and a model first.\" into decodeLaunchConfig's generic first-issue rejection. The launch surface's own defaults (LaunchSurfaceSchema's agent and model) fill an absent key at the wire boundary, a separate fact. The false comment that named the row schema was corrected, and the hand-made Result in buildLaunchConfig's catalog lookup removed, in the same change.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/G-app-controllers.md#finding-11-smaller-items-batched",
+      "symbols": [
+        {
+          "file": "packages/texra/src/controllers/mainView/backend/MainViewRunLaunchController.ts",
+          "symbol": "prepareSurfaceLaunch",
+          "signature": "export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')( function* ( { launch, instruction }: LaunchRequest, roots: LaunchRoots, ): Effect.fn.Return<AgentConfig, Rejected | StateReadFailed, AgentCatalog> {…}, );"
+        }
+      ]
     }
   ]
 }
