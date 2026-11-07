@@ -94,4 +94,27 @@ describe('check-run annotation pagination', () => {
       ]);
     }).pipe(Effect.provide(secretsLayer)),
   );
+  // Failure mode: GitHub answers a page with a 200 whose body is not an
+  // annotation list. That one optional response must not end the PR's
+  // subscription; the walk keeps what it read and stops.
+  it.effect('keeps earlier pages when a later page body is malformed', () =>
+    Effect.gen(function* () {
+      mocks.ghGet
+        .mockReturnValueOnce(
+          Effect.succeed({ status: 200, data: fullWarningPage() }),
+        )
+        .mockReturnValueOnce(
+          Effect.succeed({ status: 200, data: { message: 'not a list' } }),
+        );
+
+      const annotations = yield* fetchAnnotations(
+        'owner',
+        'repo',
+        42,
+        Effect.void,
+      );
+
+      expect(annotations).toHaveLength(100);
+    }).pipe(Effect.provide(secretsLayer)),
+  );
 });

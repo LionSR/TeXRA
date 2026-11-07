@@ -17,7 +17,12 @@ import {
   type GitHubServices,
 } from './githubClient';
 import type { RateLimiterError } from 'effect/persistence/RateLimiter';
-import type { GhCheckAnnotation, GhCheckRun } from './prTypes';
+import { validateOrSkip } from './poller';
+import {
+  GhCheckAnnotationArraySchema,
+  type GhCheckAnnotation,
+  type GhCheckRun,
+} from './prTypes';
 
 // GitHub caps the check-runs endpoint at 100 per page.
 const CHECK_RUNS_PAGE_SIZE = 100;
@@ -328,8 +333,14 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(function* (
   for (let page = 1; page <= MAX_ANNOTATION_PAGES_PER_RUN; page += 1) {
     yield* claim;
     const path = `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations?per_page=${ANNOTATIONS_PAGE_SIZE}&page=${page}`;
-    const res = yield* ghGet<GhCheckAnnotation[]>(path);
-    if (res.status !== 200) return annotations;
+    // A malformed page ends the walk with what was read, so one bad optional
+    // response cannot stop the PR's subscription.
+    const res = yield* validateOrSkip(
+      yield* ghGet<unknown>(path),
+      GhCheckAnnotationArraySchema,
+      `Malformed annotations page ${page} for check ${checkRunId}`,
+    );
+    if (res === undefined || res.status !== 200) return annotations;
     annotations.push(...res.data);
     if (res.data.length < ANNOTATIONS_PAGE_SIZE) return annotations;
   }
