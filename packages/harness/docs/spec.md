@@ -651,7 +651,8 @@ A rejected subscription token MAY be renewed once per execution of the loop
 in a row, so a resume may renew the same invocation again. On a send, the
 renewal records a `failed` row with `next: retry` (a call off the rows records
 none) and the attempt is resent; while observing an accepted operation, the
-renewed observation repeats with no row and is never a resend.
+renewed observation repeats with no row and is never a resend. In both loops the
+renewed resend spends one automatic retry and waits as any resend does.
 
 ## 7. One process per project store
 

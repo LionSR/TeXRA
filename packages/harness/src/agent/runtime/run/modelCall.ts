@@ -94,9 +94,11 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     return { turn, usage };
   });
   return yield* Effect.flatMap(call.binding, (bound) =>
-    gate.withRoutes(bound.routes, { baseBackoffMs: RETRY_BACKOFF_MS })(
-      attempt(bound),
-    ),
+    gate.withRoutes(bound.routes, {
+      baseBackoffMs: RETRY_BACKOFF_MS,
+      onWait: (delayMs) =>
+        call.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
+    })(attempt(bound)),
   ).pipe(
     Effect.retry({
       while: (error: CallFailure | Error) =>
@@ -108,11 +110,11 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
             error.kind === 'authentication' &&
             bound.subscriptionToken !== undefined
           ) {
+            // A renewed token's resend pauses and spends a retry, as a
+            // turn's does.
             renewed = true;
             yield* call.renew(bound);
-            return true;
-          }
-          if (!error.retryable || resent >= retries) return false;
+          } else if (!error.retryable || resent >= retries) return false;
           resent += 1;
           const delayMs = pauseOf(error);
           yield* call.debug(

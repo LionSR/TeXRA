@@ -70,7 +70,7 @@ export interface RoutePolicy {
 /** How a call waits on its routes: the base backoff, and who hears a wait. */
 export interface RouteOptions {
   readonly baseBackoffMs: number;
-  readonly onWait?: (delayMs: number) => void;
+  readonly onWait?: (delayMs: number) => Effect.Effect<void>;
 }
 
 interface AcquiredRoute extends RoutePolicy {
@@ -249,7 +249,8 @@ export class ModelRetryGate {
         }
 
         const now = yield* Clock.currentTimeMillis;
-        onWait?.(Math.max(0, state.retryAt - now));
+        if (onWait !== undefined)
+          yield* onWait(Math.max(0, state.retryAt - now));
         const waiter: Waiter = {
           permit: Deferred.makeUnsafe<RetryPermit>(),
           granted: undefined,

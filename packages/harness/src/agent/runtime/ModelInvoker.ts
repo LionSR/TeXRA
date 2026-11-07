@@ -759,8 +759,10 @@ export const modelInvokerLayer = (): Layer.Layer<
             ? gate.withRoutes(bound.routes, {
                 baseBackoffMs: RETRY_BACKOFF_MS,
                 onWait: (delayMs) =>
-                  logger.debug(
-                    `Waiting ${delayMs}ms for the model recovery probe.`,
+                  Effect.sync(() =>
+                    logger.debug(
+                      `Waiting ${delayMs}ms for the model recovery probe.`,
+                    ),
                   ),
               })(attemptOnce(cell, ref, request, bound))
             : observeAccepted(cell, ref, bound, move.attempt.accepted),

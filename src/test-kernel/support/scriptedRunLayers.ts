@@ -227,7 +227,6 @@ function scriptedInvoker(
                     payload: {
                       kind: 'failed',
                       invocation: { invocationId: randomUUID(), attempt: 1 },
-
                       error: scripted.failWith,
                       next: { kind: 'stop' },
                     },
