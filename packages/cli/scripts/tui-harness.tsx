@@ -502,6 +502,14 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
 // run's transcript tier the way `runChat` does.
 HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 {
+  // The harness's set, held until it disposes.
+  const scope = Scope.makeUnsafe();
+  HARNESS_DISPOSERS.push(() =>
+    harnessRuntime.runFork(Scope.close(scope, Exit.void)),
+  );
+  const interest = harnessRuntime.runSync(
+    session().view.subscribe([]).pipe(Scope.provide(scope)),
+  );
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
     const ids = [...currentView().runs.keys()];
@@ -509,8 +517,7 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
     if (key === subscribed) return;
     subscribed = key;
     harnessRuntime.runFork(
-      session().view.subscribe(
-        'tui-harness',
+      interest.set(
         ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
       ),
     );

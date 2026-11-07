@@ -21,7 +21,7 @@ leave when the hosts stop needing them.
 it: the levels from the first that holds the activation, the run and its
 transcript, to the first that holds the activation's durable outcome, or
 shows the run gone. The transcript tier folds only for subscribed
-aggregates: while the view is read, on a port of its own, the run and its
+aggregates: while the view is read, on a subscription of its own, the run and its
 descendants are subscribed, taken before the first level is, so even an
 ended run's one level holds its transcript; descendants join as the view
 gains them.
@@ -37,18 +37,17 @@ function activationView(
 ## ActivationViewSource
 
 What an activation's view is read over: a session view's levels, and
-the port its reader keeps the run's transcripts subscribed on (`set`
-empty: the port's subscriptions end). A session handle's own view, or a
-window's view of a session elsewhere.
+the subscription its reader keeps the run's transcripts on, for the
+reader's scope. A session handle's own view, or a window's view of a
+session elsewhere.
 
 ```ts
 interface ActivationViewSource {
   readonly current: () => SessionView;
   readonly changes: Stream.Stream<SessionView>;
   readonly subscribe: (
-    port: string,
     set: readonly TranscriptSubscription[],
-  ) => Effect.Effect<void>;
+  ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
 }
 ```
 

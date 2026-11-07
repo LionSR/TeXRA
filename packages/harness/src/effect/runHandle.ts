@@ -6,7 +6,7 @@
  * (`sessionPrograms.ts`), so a reader that leaves, or a handle nobody reads,
  * changes nothing about the run.
  */
-import { Context, Effect, Stream, SubscriptionRef } from 'effect';
+import { Context, Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -22,21 +22,21 @@ import { boundsLifecycle } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { descendantRuns } from '@shared/session/sessionView';
 import type { SessionView } from '@shared/session/readonlyViews';
+import type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 
 import { RunFailure } from './errors.js';
 import type { Run } from './sessions.js';
 
 /** What an activation's view is read over: a session view's levels, and
- *  the port its reader keeps the run's transcripts subscribed on (`set`
- *  empty: the port's subscriptions end). A session handle's own view, or a
- *  window's view of a session elsewhere. */
+ *  the subscription its reader keeps the run's transcripts on, for the
+ *  reader's scope. A session handle's own view, or a window's view of a
+ *  session elsewhere. */
 export interface ActivationViewSource {
   readonly current: () => SessionView;
   readonly changes: Stream.Stream<SessionView>;
   readonly subscribe: (
-    port: string,
     set: readonly TranscriptSubscription[],
-  ) => Effect.Effect<void>;
+  ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
 }
 
 /**
@@ -44,7 +44,7 @@ export interface ActivationViewSource {
  * it: the levels from the first that holds the activation, the run and its
  * transcript, to the first that holds the activation's durable outcome, or
  * shows the run gone. The transcript tier folds only for subscribed
- * aggregates: while the view is read, on a port of its own, the run and its
+ * aggregates: while the view is read, on a subscription of its own, the run and its
  * descendants are subscribed, taken before the first level is, so even an
  * ended run's one level holds its transcript; descendants join as the view
  * gains them.
@@ -56,27 +56,23 @@ export function activationView(
 ): Stream.Stream<SessionView> {
   return Stream.unwrap(
     Effect.gen(function* () {
-      const port = `sdk/${runId}/${crypto.randomUUID()}`;
-      let subscribed = '';
+      // The run itself even before the view holds it.
+      const idsOf = (level: SessionView) => [
+        runId,
+        ...descendantRuns(level, runId, { includeRoot: false }),
+      ];
+      const setOf = (ids: readonly RunId[]) =>
+        ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 }));
+      let subscribed = idsOf(source.current());
+      const held = yield* source.subscribe(setOf(subscribed));
+      // A level that names the same runs changes nothing, so the union is
+      // not republished for every level the view emits.
       const interest = (level: SessionView) => {
-        // The run itself even before the view holds it.
-        const ids = [
-          runId,
-          ...descendantRuns(level, runId, { includeRoot: false }),
-        ];
-        if (ids.join('\0') === subscribed) return Effect.void;
-        subscribed = ids.join('\0');
-        return source.subscribe(
-          port,
-          ids.map((id) => ({
-            id: qualifyAggregateId('run', id),
-            fromSeq: 0,
-          })),
-        );
+        const ids = idsOf(level);
+        if (ids.join('\0') === subscribed.join('\0')) return Effect.void;
+        subscribed = ids;
+        return held.set(setOf(ids));
       };
-      yield* Effect.acquireRelease(interest(source.current()), () =>
-        source.subscribe(port, []),
-      );
       const replayed = qualifyAggregateId('run', runId);
       return source.changes.pipe(
         // The level replays on subscribe, and the fold lands the

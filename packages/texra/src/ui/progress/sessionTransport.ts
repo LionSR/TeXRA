@@ -26,6 +26,7 @@ import {
   qualifyAggregateId,
   type RunId,
 } from '@texra-ai/harness/schemas';
+import type { TranscriptInterest } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   DownMessageSchema,
@@ -53,9 +54,6 @@ type WebviewGraph = Effect.Success<ReturnType<typeof WebviewSessions.open>>;
 type WireSurfaceAction =
   | Extract<DownMessage, { kind: 'surface.action' }>['action']
   | Extract<SurfaceAction, { kind: 'reportError' }>;
-
-/** The shell is the one port of a webview graph. */
-const SHELL_PORT = 'shell';
 
 /** One open session: its two levels as signals and its `Subscribe`. */
 export interface WebviewSession {
@@ -103,6 +101,8 @@ export interface WebviewTransport {
 interface OpenSession extends WebviewSession {
   readonly graph: WebviewGraph;
   readonly scope: Scope.Closeable;
+  /** The shell's transcript set, held for the session's scope. */
+  readonly shell: TranscriptInterest;
   /** This session's requests awaiting their `response`, by request id. Each
    *  waits in a fiber of the session's scope and removes its own entry. */
   readonly pending: Map<string, Deferred.Deferred<Response['result']>>;
@@ -266,24 +266,28 @@ export function installWebviewTransport(
       // The graph lives under this scope: closing it releases the LayerMap
       // entry once the last holder leaves.
       const pending = new Map<string, Deferred.Deferred<Response['result']>>();
-      const { scope, graph, inbox } = runtime.runSync(
+      const { scope, graph, shell, inbox } = runtime.runSync(
         Effect.gen(function* () {
           const scope = yield* Scope.make();
           const graph = yield* WebviewSessions.open(key).pipe(
             Effect.provideService(Scope.Scope, scope),
           );
+          const shell = yield* graph.view
+            .subscribe([])
+            .pipe(Effect.provideService(Scope.Scope, scope));
           const inbox = yield* Queue.unbounded<EventsFrame | HostFrame>();
           yield* Effect.forkIn(
             Stream.runForEach(Stream.fromQueue(inbox), graph.frames.feed),
             scope,
           );
-          return { scope, graph, inbox };
+          return { scope, graph, shell, inbox };
         }),
       );
       const session: OpenSession = {
         key,
         graph,
         scope,
+        shell,
         pending,
         inbox,
         view$: toSignal(runtime, graph.view.changes, graph.view.current()),
@@ -311,11 +315,10 @@ export function installWebviewTransport(
       // the host answers: the session view reopens its reads on the set.
       const open = sessions.get(session.key);
       if (!open) throw new Error(`Session ${session.key} is not open`);
-      const { graph } = open;
       runtime.runSync(
-        graph.frames
+        open.graph.frames
           .begin(message.generation)
-          .pipe(Effect.andThen(graph.view.subscribe(SHELL_PORT, aggregates))),
+          .pipe(Effect.andThen(open.shell.set(aggregates))),
       );
       post(message);
     },

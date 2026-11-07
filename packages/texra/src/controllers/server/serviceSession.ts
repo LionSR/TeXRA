@@ -57,11 +57,9 @@ import {
 import type { ProjectStateFailed, TaskFailed } from './protocol';
 import type {
   CommitOrdinal,
+  TranscriptInterest,
   TranscriptSubscription,
 } from '@texra-ai/harness/transcript';
-
-/** The transcript port of the window's own view. */
-const WINDOW_PORT = 'window';
 
 /** The service's client now; `offline` words a call made while the link
  *  holds none, with why it holds none (`ServiceLink.away`). A reconnect
@@ -279,10 +277,11 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     Effect.provideContext(sessions),
   );
   // The window's own view: the listing, plus the transcripts its readers
-  // name, each on a port of its own. A change of that set is a new
-  // generation of one watch, from the cursor and history the view already
-  // holds, as a webview resubscribes.
-  const watches = new Map<string, readonly TranscriptSubscription[]>();
+  // name, each reader's set held for its scope. A change of that set is a
+  // new generation of one watch, from the cursor and history the view
+  // already holds, as a webview resubscribes.
+  const window = yield* graph.view.subscribe([]);
+  const watches = new Map<object, readonly TranscriptSubscription[]>();
   const feed = yield* FiberHandle.make<void, never>();
   const lane = Semaphore.makeUnsafe(1);
   let generation = 0;
@@ -298,7 +297,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         fromSeq: view.transcriptSeq.get(id) ?? 0,
       }));
       yield* graph.frames.begin(generation);
-      yield* graph.view.subscribe(WINDOW_PORT, aggregates);
+      yield* window.set(aggregates);
       const client = yield* link.client.get;
       // Offline: the link's return resubscribes.
       if (client === null) return yield* FiberHandle.clear(feed);
@@ -324,15 +323,23 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       );
     }),
   );
-  /** Name `set`'s transcripts to the view on `port` (empty: the port's
-   *  subscriptions end). */
-  const subscribe = (port: string, set: readonly TranscriptSubscription[]) =>
+  /** Name `set`'s transcripts to the view for the caller's scope; the
+   *  handle replaces the set. */
+  const write = (key: object, set: readonly TranscriptSubscription[] | null) =>
     Effect.suspend(() => {
-      if (set.length === 0) watches.delete(port);
-      else watches.set(port, set);
+      if (set === null) watches.delete(key);
+      else watches.set(key, set);
       return resubscribe;
     });
-  let watchPorts = 0;
+  const subscribe = (set: readonly TranscriptSubscription[]) =>
+    Effect.acquireRelease(
+      Effect.sync(() => ({})).pipe(Effect.tap((key) => write(key, set))),
+      (key) => write(key, null),
+    ).pipe(
+      Effect.map((key): TranscriptInterest => ({
+        set: (next) => write(key, next),
+      })),
+    );
   yield* resubscribe;
   // The service went (offline: the feed stops) or the link reached it
   // again (the view resubscribes from where it is). The window tells it
@@ -415,10 +422,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   const watch: Session['view']['watch'] = (set, from) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const port = `watch/${(watchPorts += 1)}`;
-        yield* Effect.acquireRelease(subscribe(port, set), () =>
-          subscribe(port, []),
-        );
+        yield* subscribe(set);
         const cursor = yield* Ref.make(from.cursor);
         return link.client.changes.pipe(
           Stream.switchMap((client) =>

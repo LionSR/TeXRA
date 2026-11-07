@@ -432,10 +432,11 @@ class RemoteSessionView extends Context.Service<
     /** The current view, then every later one; as
      *  `SessionViewService.changes`, it ends, or dies, with the updates. */
     readonly changes: Stream.Stream<ReadonlySessionView>;
+    /** Subscribe `set`'s transcripts for the caller's scope; the handle
+     *  replaces the set. */
     readonly subscribe: (
-      port: string,
       set: readonly TranscriptSubscription[],
-    ) => Effect.Effect<void>;
+    ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
   }
 >()('@texra-ai/harness/session/RemoteSessionView')
 ```
@@ -857,6 +858,19 @@ interface ToolStatusSection extends ToolSectionBase {
 interface ToolTextSection extends ToolSectionBase {
   readonly kind: 'text';
   readonly text: TranscriptText;
+}
+```
+
+## TranscriptInterest
+
+One subscriber's transcript set, held for the scope that subscribed it.
+
+```ts
+interface TranscriptInterest {
+  /** Replace the set. */
+  readonly set: (
+    next: readonly TranscriptSubscription[],
+  ) => Effect.Effect<void>;
 }
 ```
 

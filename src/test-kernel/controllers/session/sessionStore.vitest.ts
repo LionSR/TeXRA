@@ -132,7 +132,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
               approval: { delegated: true },
             }).pipe(Effect.provide(session));
             // A reader keeps the running run's transcript in the view.
-            yield* Context.get(session, SessionViewAccess).subscribe('reader', [
+            yield* Context.get(session, SessionViewAccess).subscribe([
               { id: qualifyAggregateId('run', runId), fromSeq: 0 },
             ]);
             yield* untilStored(roots.storage, (rows) =>
