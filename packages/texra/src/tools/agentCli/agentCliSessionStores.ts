@@ -36,18 +36,18 @@ const claimThread = Effect.gen(function* () {
   const busy = new Set<string>();
   return (threadId: string) =>
     Effect.gen(function* () {
+      // Reserve before any yield: interruption is masked by the caller,
+      // but another fiber can still run while the scope is being built.
       if (busy.has(threadId)) return undefined;
+      busy.add(threadId);
       const claim = yield* Scope.make();
       const ended = yield* Deferred.make<void>();
-      // The release is in place before the thread reads as busy, so a claim
-      // closed at any point after this frees it.
       yield* Scope.addFinalizer(
         claim,
         Effect.sync(() => busy.delete(threadId)).pipe(
           Effect.andThen(Deferred.succeed(ended, undefined)),
         ),
       );
-      busy.add(threadId);
       yield* hold(Deferred.await(ended));
       return claim;
     });
