@@ -459,5 +459,69 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           expect(rootRunId.get()).toBe('a11111');
         }),
     );
+
+    it.effect(
+      "keeps a resume's run as the root when an earlier message's reply resumes the old one",
+      () =>
+        Effect.gen(function* () {
+          // A message to the stopped root is still on its way when the user
+          // resumes another conversation. The reply that the session resumed
+          // the old root lands while the resume is launching: the resume is
+          // newer, so its run stays the chat's root.
+          const old = decodeRunId('a11111');
+          const picked = decodeRunId('b22222');
+          seedView(viewWith([{ id: old }]));
+          seedView(endedView(old, RUN_OUTCOME.CANCELLED));
+          installSession(installableViewRef());
+          rootRunId.set(old);
+          const session = new TuiSession();
+          const ctrl = createChatSessionController(
+            yield* makeInit({
+              session,
+              served: true,
+              // cast: this plain message matches no slash command, so only
+              // the empty table is read.
+              getSlashCommandContext: () =>
+                ({ commands: slashCommands([]) }) as SlashCommandContext,
+            }),
+          );
+          const reply = Promise.withResolvers<void>();
+          mocks.request.mockImplementation((req: RuntimeCommand) =>
+            req.kind === 'followUp.send'
+              ? Effect.promise(async (): Promise<Outcome> => {
+                  await reply.promise;
+                  return {
+                    kind: 'followUp',
+                    id: 'sent-1',
+                    status: 'queued',
+                    receipt: { state: 'accepted' },
+                  };
+                })
+              : Effect.succeed<Outcome>({ kind: 'done' }),
+          );
+          const resumed = Promise.withResolvers<void>();
+          mocks.resumeRun.mockImplementationOnce((id: RunId) =>
+            Effect.andThen(
+              Effect.promise(() => resumed.promise),
+              Effect.succeed(resumedRun(id)),
+            ),
+          );
+
+          const sending = yield* Effect.forkChild(
+            ctrl.submit({ ...EMPTY_DRAFT, text: 'Carry on.' }),
+            { startImmediately: true },
+          );
+          const resuming = yield* Effect.forkChild(ctrl.resume(picked), {
+            startImmediately: true,
+          });
+          expect(session.launched).toBeDefined();
+          reply.resolve();
+          yield* Fiber.join(sending);
+          resumed.resolve();
+          yield* Fiber.join(resuming);
+
+          expect(rootRunId.get()).toBe(picked);
+        }),
+    );
   });
 });

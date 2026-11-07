@@ -608,7 +608,7 @@ export function createChatSessionController(
    * resume itself is the session's; the chat only reacts.
    */
   const adoptRoot = (runId: RunId): void => {
-    session.takeUpRoot(runId);
+    if (!session.takeUpRoot(runId)) return;
     focusRun(runId);
     runtime.runSync(Effect.forkIn(adoptRunRecord(runId), shutdownScope));
   };

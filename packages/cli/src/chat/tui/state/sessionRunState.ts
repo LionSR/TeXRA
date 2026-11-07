@@ -165,11 +165,19 @@ export class TuiSession {
     );
   }
 
-  /** A root the session resumed on its own becomes the chat's: it replaces
-   *  the latest launch, whose end no longer decides the exit. */
-  takeUpRoot(runId: RunId): void {
+  /** A root the session resumed on its own becomes the chat's, unless a
+   *  launch is on its way or another root of the chat is live here: either
+   *  is newer than the resume and keeps the chat. Taken up, it replaces the
+   *  latest launch, whose end no longer decides the exit. Answers whether it
+   *  was taken up. */
+  takeUpRoot(runId: RunId): boolean {
+    if (launchInFlight() !== undefined) return false;
+    const root = rootRun();
+    if (root !== undefined && root.id !== runId && root.holder === 'here')
+      return false;
     rootLaunch.set(undefined);
     rootRunId.set(runId);
+    return true;
   }
 
   /** Model selection is open with no root in flight, or while the root
