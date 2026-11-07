@@ -129,19 +129,9 @@ export const runDailyUpdateCheck = Effect.fn('updateCheck.runDailyUpdateCheck')(
         yield* notify(latest);
       }
     }
-    if (refreshed) {
-      const stamp = records.recordChecked(host, nowMs);
-      // A stamp that is not saved re-checks on every launch: said, not
-      // hidden. The CLI's check runs before a command, which a stamp it
-      // cannot save must not fail; the desktop reports it as a background
-      // error.
-      yield* host === 'cli'
-        ? Effect.ignore(stamp, {
-            log: 'Warn',
-            message: 'The update check time was not saved',
-          }).pipe(withLogChannel('updateCheck'))
-        : stamp;
-    }
+    // A stamp that is not saved fails the check; how that is reported is the
+    // host's (its `UpdateCheckRecords`).
+    if (refreshed) yield* records.recordChecked(host, nowMs);
     return latest;
   },
 );
