@@ -13,7 +13,7 @@ import { Effect } from 'effect';
 // Local imports - export presentation
 import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { ExternalOpenFailed, MessageHost } from '@texra/hosts/uiHosts';
+import type { HostFailed, MessageHost } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from './transcriptExportFailure';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { writeTranscript } from './ChatExportController';
@@ -55,7 +55,7 @@ export interface TranscriptExportHost {
   openPath(
     filePath: string,
     kind: TranscriptExportOpenKind,
-  ): Effect.Effect<void, ExternalOpenFailed>;
+  ): Effect.Effect<void, HostFailed>;
 }
 
 type TranscriptExportPorts = Parameters<typeof writeTranscript>[2] &

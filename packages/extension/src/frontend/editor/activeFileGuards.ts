@@ -11,7 +11,7 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import type { NotificationFailed } from '@texra/hosts/uiHosts';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'ActiveFileGuards';
@@ -63,7 +63,7 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
   function* (
     roots: WorkspaceRoots,
     saveDocument: boolean,
-  ): Effect.fn.Return<ActiveFileGuardResult, NotificationFailed> {
+  ): Effect.fn.Return<ActiveFileGuardResult, HostFailed> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       yield* vscodeUi.showWarningMessage(GUARD_FAILURE_MESSAGES.noEditor.user);

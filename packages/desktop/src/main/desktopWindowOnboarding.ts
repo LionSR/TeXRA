@@ -14,10 +14,8 @@ import {
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
-import {
-  hostFailure,
-  type HostCallFailed,
-} from '@texra/controllers/session/hostCallFailure';
+import { hostFailure } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import type { RequestRefusal } from '@texra-ai/harness';
 import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness/host';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
@@ -33,7 +31,7 @@ export interface WindowOnboarding {
   runSetup(): Effect.Effect<void>;
   signInWithChatGpt(): Effect.Effect<
     void,
-    StateWriteFailed | StateReadFailed | HostCallFailed | RequestRefusal,
+    StateWriteFailed | StateReadFailed | HostFailed | RequestRefusal,
     ProcessServices
   >;
 }

@@ -46,7 +46,7 @@ import {
   DOCUMENT_TASK_BLOCK,
   documentsOf,
 } from '@texra/shared/plugins/documents';
-import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
+import type { MessageHost, HostFailed } from '@texra/hosts/uiHosts';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 
@@ -89,7 +89,7 @@ export interface HostRunActionPorts {
   /** Show a finished run's final output, the file at `absolutePath`. */
   openFinalOutput(absolutePath: string): Effect.Effect<void, Error>;
   /** The notification surface, shared with {@link MessageHost}: a host that
-   *  could not present fails with `NotificationFailed`, and a user who
+   *  could not present fails with `HostFailed`, and a user who
    *  ignores the notice is not a failure. */
   showInfo: MessageHost['showInfoMessage'];
   showWarning: MessageHost['showWarningMessage'];
@@ -127,7 +127,7 @@ export interface HostRunActions {
     | CompileFixerPlanFailed
     | ModelHostFactUnreadable
     | StateReadFailed
-    | NotificationFailed
+    | HostFailed
     | RequestRefusal
     | RunFailure,
     ProcessServices

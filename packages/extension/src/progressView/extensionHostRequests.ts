@@ -68,7 +68,7 @@ import type {
   HostRequest,
 } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
+import { HostFailed } from '@texra/hosts/uiHosts';
 
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
@@ -79,7 +79,6 @@ import { TranscriptExportFailed } from '@texra/controllers/progressView/transcri
 import {
   fromHost,
   hostFailure,
-  type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -136,7 +135,7 @@ const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 function runHandler<A, E, R>(
   command: string,
   handler: Effect.Effect<A, E, R>,
-): Effect.Effect<A, HostCallFailed | RequestRefusal, R> {
+): Effect.Effect<A, HostFailed | RequestRefusal, R> {
   const log = (failure: unknown) =>
     Effect.logError(
       `Command ${command} failed: ${toErrorMessage(failure)}`,
@@ -164,10 +163,10 @@ function revealFileInOS(fsPath: string) {
 const openExportPath = (
   filePath: string,
   kind: TranscriptExportOpenKind,
-): Effect.Effect<void, ExternalOpenFailed> => {
+): Effect.Effect<void, HostFailed> => {
   const failed = (cause: unknown) =>
-    new ExternalOpenFailed({
-      target: filePath,
+    new HostFailed({
+      member: 'openPath',
       message: toErrorMessage(cause),
       cause,
     });

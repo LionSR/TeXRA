@@ -7,7 +7,7 @@
 
 import path from 'node:path';
 
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import { Cancelled } from '@texra-ai/harness';
 import {
   AppSignals,
@@ -21,7 +21,7 @@ import {
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
+import { HostFailed } from '@texra/hosts/uiHosts';
 
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -68,20 +68,6 @@ interface DesktopHostRequestsOptions {
    *  on it. */
   runtime: ProcessRuntime;
 }
-
-/**
- * The diff window would not open. The desktop's diff surface fails with what
- * it hit (a side that would not read, a patch the OS editor refused), and the
- * file-actions port takes tags, never a bare value, so the compare action
- * words that failure as this one.
- */
-class DiffViewUnavailable extends Schema.TaggedError<DiffViewUnavailable>()(
-  'DiffViewUnavailable',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
 
 /** The desktop's half of a project's window, for the window's scope. */
 export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
@@ -226,7 +212,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
             .pipe(
               Effect.mapError(
                 (cause) =>
-                  new DiffViewUnavailable({
+                  new HostFailed({
+                    member: 'openDiff',
                     message: toErrorMessage(cause),
                     cause,
                   }),
@@ -243,8 +230,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
           host.openPath(filePath).pipe(
             Effect.mapError(
               (cause) =>
-                new ExternalOpenFailed({
-                  target: filePath,
+                new HostFailed({
+                  member: 'openPath',
                   message: toErrorMessage(cause),
                   cause,
                 }),
