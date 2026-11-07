@@ -17,7 +17,7 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import {
-  RUN_GRANT_CLI_ACTION,
+  runGrantCliAction,
   RUN_GRANT_ORDER,
 } from '@ui/copy/delegationApproval';
 import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
@@ -102,7 +102,7 @@ export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
       : [
           {
             key: 'a',
-            action: RUN_GRANT_CLI_ACTION(grant).full,
+            action: runGrantCliAction(grant).full,
             // Surface-only (ruling A9-6): `approvalDecisionArm` sends it as
             // a plain approve that grants the request's own session bypass.
             decision: { action: APPROVE_SESSION_ACTION },
@@ -147,7 +147,7 @@ const COMPACT_HINT_ACTIONS: Readonly<Record<string, string>> = {
   'reject & note': 'reject',
   ...Object.fromEntries(
     RUN_GRANT_ORDER.map((kind) => {
-      const { full, compact } = RUN_GRANT_CLI_ACTION(kind);
+      const { full, compact } = runGrantCliAction(kind);
       return [full, compact];
     }),
   ),

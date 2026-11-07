@@ -8,10 +8,9 @@ import type {
 /**
  * What each run-scoped grant approves, one noun per approval kind: edits,
  * commands, agent work. The approval cards' Approve ▾ menu, the header's
- * grant chips and the CLI's `/status` name the same grant with the same noun.
+ * grant chips and the CLI's `/status` name the same grant with the same
+ * noun. Declared in the one order grants are listed in on every surface.
  */
-/** Each grant's noun, declared in the one order grants are listed in on
- *  every surface. */
 export const RUN_GRANT_NOUN = Object.freeze({
   toolEdit: 'edits',
   bash: 'commands',
@@ -25,15 +24,12 @@ export const RUN_GRANT_ORDER: readonly ApprovalBypassKind[] = Object.freeze(
 );
 
 /** The approval card's grant item, e.g. "Approve all edits in this task". */
-export const RUN_GRANT_LABEL = Object.freeze({
-  toolEdit: `Approve all ${RUN_GRANT_NOUN.toolEdit} in this task`,
-  bash: `Approve all ${RUN_GRANT_NOUN.bash} in this task`,
-  superYolo: `Approve all ${RUN_GRANT_NOUN.superYolo} in this task`,
-} as const satisfies Record<ApprovalBypassKind, string>);
+export const runGrantLabel = (kind: ApprovalBypassKind): string =>
+  `Approve all ${RUN_GRANT_NOUN[kind]} in this task`;
 
 /** The CLI card's `a` row for a grant, in full and where the card is
  *  compact. */
-export const RUN_GRANT_CLI_ACTION = (kind: ApprovalBypassKind) => ({
+export const runGrantCliAction = (kind: ApprovalBypassKind) => ({
   full: `approve ${RUN_GRANT_NOUN[kind]} for this task`,
   compact: `all ${RUN_GRANT_NOUN[kind]}`,
 });
