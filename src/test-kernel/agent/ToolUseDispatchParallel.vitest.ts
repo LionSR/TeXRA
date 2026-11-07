@@ -265,7 +265,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const session = yield* isolatedTestSession();
   const runId = dispatchRunId();
   const tools = new Map(Object.entries(options.tools));
-  publishTestRunStart(session, runId);
+  yield* publishTestRunStart(session, runId);
   yield* Context.get(session, SessionLog).settled;
   const cell = yield* Context.get(session, RunHistory).open(runId, {
     activation: () => Effect.succeed([]),

@@ -10,7 +10,7 @@ import {
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
+import { seedRunRecord } from '@test/support/runRecordSeeds';
 import {
   FakeHost,
   isolatedTestSession,
@@ -18,6 +18,21 @@ import {
 } from '@test/support/testKernel';
 
 const runId = Schema.decodeUnknownSync(RunIdSchema)('abcdef');
+
+/** The run's report as child delivery commits it. */
+const seedReport = (
+  session: Context.Context<SessionServices>,
+  report: string,
+) =>
+  Context.get(session, SessionLog)
+    .transact([
+      {
+        type: 'run.report',
+        aggregateId: qualifyAggregateId('run', runId),
+        report,
+      },
+    ])
+    .pipe(Effect.asVoid);
 
 /** `body` over the test's session, with the run `runId` started on it. */
 const withStartedSession = <A, E>(
@@ -57,7 +72,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 instruction: 'private instruction',
               });
               yield* seedRunRecord(session, runId, config);
-              yield* seedReport(session, runId, 'private report');
+              yield* seedReport(session, 'private report');
               expect(yield* records.readConfig()).toEqual(config);
               expect(yield* records.readReport()).toBe('private report');
               const visible = yield* Context.get(session, SessionLog).display(
@@ -89,7 +104,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 agent: 'worker',
               }),
             );
-            yield* seedReport(session, runId, 'retained report bytes');
+            yield* seedReport(session, 'retained report bytes');
             yield* Context.get(session, SessionLog).transact([
               {
                 type: 'process.exit',

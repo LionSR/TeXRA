@@ -4,8 +4,8 @@
  */
 
 // Third-party imports
-import { Layer } from 'effect';
-import { FetchHttpClient } from 'effect/http';
+import { Effect, Layer } from 'effect';
+import { FetchHttpClient, HttpClient } from 'effect/http';
 
 /**
  * Builds a fetch-compatible `Response` from a JSON-serializable body, for
@@ -23,6 +23,16 @@ export const testHttpClientLayer = FetchHttpClient.layer.pipe(
   Layer.provide(
     Layer.succeed(FetchHttpClient.Fetch)((input, init) =>
       globalThis.fetch(input, init),
+    ),
+  ),
+);
+
+/** The HTTP client of a suite that answers no HTTP: any request dies, so an
+ *  unexpected one fails the test instead of reaching the network. */
+export const noHttpClientLayer = Layer.succeed(HttpClient.HttpClient)(
+  HttpClient.make((request) =>
+    Effect.die(
+      new Error(`unexpected HTTP request: ${request.method} ${request.url}`),
     ),
   ),
 );

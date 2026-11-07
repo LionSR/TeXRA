@@ -29,7 +29,7 @@ import {
 } from '@test/support/setupPlatform';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
@@ -58,7 +58,7 @@ const loadCatalog = Effect.provide(
         Layer.succeed(AgentDirectories)(fakeHostAgentDirectories),
         AppState.layer(new FakeStateStore()),
         nodePlatformLayer,
-        testHttpClientLayer,
+        noHttpClientLayer,
         storePluginsLayer,
       ),
     ),

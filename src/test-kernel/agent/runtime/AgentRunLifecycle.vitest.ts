@@ -50,7 +50,7 @@ let lifecycleFixtureCounter = 0;
 
 /** A run of the file's session, with its launch context. */
 const lifecycleFixture = (agent = 'test-agent') =>
-  Effect.map(Effect.flatMap(TestSession, sessionHandleOf), (session) => {
+  Effect.flatMap(Effect.flatMap(TestSession, sessionHandleOf), (session) => {
     const runId = Schema.decodeUnknownSync(RunIdSchema)(
       `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}`,
     );
@@ -62,8 +62,11 @@ const lifecycleFixture = (agent = 'test-agent') =>
     });
     // A run is registered before its lifecycle runs: an activation commits
     // onto the run's rows.
-    publishTestRunStart(session, runId);
-    return { runId, ctx, session };
+    return Effect.as(publishTestRunStart(session, runId), {
+      runId,
+      ctx,
+      session,
+    });
   });
 
 /** The launching run a subagent fixture names as its parent edge. */

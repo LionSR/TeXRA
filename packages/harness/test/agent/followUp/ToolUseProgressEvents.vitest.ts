@@ -72,7 +72,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const session = yield* quietSession();
 
             const { result } = yield* runScript({
-              runId: startedRun(session),
+              runId: yield* startedRun(session),
               session,
               tools: {
                 probe: {
@@ -110,7 +110,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.effect('compacts and asks again after the window overflowed', () =>
         Effect.gen(function* () {
           const session = yield* quietSession();
-          const runId = startedRun(session);
+          const runId = yield* startedRun(session);
           const { result } = yield* runScript({
             runId,
             session,
@@ -155,7 +155,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.effect('names the limit that ended an answer early', () =>
         Effect.gen(function* () {
           const session = yield* quietSession();
-          const runId = startedRun(session);
+          const runId = yield* startedRun(session);
           const { result } = yield* runScript({
             runId,
             session,

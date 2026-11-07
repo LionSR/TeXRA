@@ -27,7 +27,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { validationModel } from '@cli/runtime/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { fakeHostAppState } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -98,7 +98,7 @@ function runLayer(
       }),
     ),
     Layer.provideMerge(Layer.succeedContext(session)),
-    Layer.provideMerge(testHttpClientLayer),
+    Layer.provideMerge(noHttpClientLayer),
     // No key is read: every launch here binds the validation model.
     Layer.provideMerge(Secrets.layer(new FakeSecrets())),
     Layer.provideMerge(
@@ -147,7 +147,7 @@ layer(
       Effect.gen(function* () {
         const session = yield* isolatedTestSession({ emit: () => {} });
         const runId = generateRunId();
-        publishTestRunStart(session, runId);
+        yield* publishTestRunStart(session, runId);
         const config = Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'chat',
           model: 'test-model',

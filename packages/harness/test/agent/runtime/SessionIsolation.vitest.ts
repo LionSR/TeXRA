@@ -55,8 +55,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             [sessionB, Schema.decodeUnknownSync(RunIdSchema)('b0db01')],
           ] as const;
           for (const [session, runId] of live) {
-            publishTestRunStart(session, runId);
-            publishTestRows(session, [
+            yield* publishTestRunStart(session, runId);
+            yield* publishTestRows(session, [
               {
                 type: 'stage.start',
                 aggregateId: qualifyAggregateId('run', runId),

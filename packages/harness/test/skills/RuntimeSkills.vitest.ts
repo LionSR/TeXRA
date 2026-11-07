@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import { layer } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { expect } from 'vitest';
 
 import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
@@ -12,12 +12,13 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   activatedSkillNames,
+  HostSkillSources,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeHost } from '@test/support/testKernel';
-import { testSkillRoots, writeSkill } from '@test/support/skillFixtures';
+import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempRoots = useTempDirs();
@@ -26,6 +27,24 @@ const runCatalog = (workspacePath: string) => ({
   roots: { ...testWorkspaceRoots(), workspace: workspacePath },
   plugins: { loadable: [], withheld: [] },
 });
+
+/** The process's skill sources as one contribution per fixture root, each
+ *  in its own tier, labelled with the tier id. */
+const testSkillRoots = (
+  roots: readonly {
+    readonly tier: 'project' | 'user';
+    readonly path: string;
+  }[],
+) =>
+  Layer.succeed(HostSkillSources)({
+    resourcesPath: '',
+    options: {},
+    contributions: roots.map((root, index) => ({
+      id: `test:${index}`,
+      tier: root.tier,
+      roots: () => [{ path: root.path, label: root.tier }],
+    })),
+  });
 
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-runtime-skills-', tempRoots);

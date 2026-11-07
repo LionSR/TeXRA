@@ -22,7 +22,7 @@ layer(
     () =>
       Effect.gen(function* () {
         const session = yield* isolatedTestSession();
-        publishTestRunStart(
+        yield* publishTestRunStart(
           session,
           Schema.decodeUnknownSync(RunIdSchema)('aaa0ff'),
         );

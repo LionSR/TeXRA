@@ -20,16 +20,10 @@ import {
   isTranscriptEvent,
   type AggregateId,
   type RunId,
-  type RunOutcome,
   type SessionRow,
   type SessionRowDraft,
 } from '@shared/schemas';
-import type { TranscriptView } from '@shared/session/sessionView';
-import { applyTranscriptEvent } from '@shared/session/transcriptUpdate';
-import {
-  emptyTranscript,
-  emptyTranscriptIndexes,
-} from '@shared/session/transcriptState';
+import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
@@ -38,16 +32,17 @@ import { generateRunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 /**
- * Enqueue rows on the session's publisher and return at once, as a detached
- * producer does: they commit in call order, and a reader waits on
- * `session.log.settled` before reading them.
+ * Commit rows on the session's log, in the caller's fiber: a batch the
+ * store rejects fails the test where it was published.
  */
-export function publishTestRows(
+export const publishTestRows = (
   session: Context.Context<SessionServices>,
   rows: readonly SessionRowDraft[],
-): void {
-  Effect.runFork(seedRows(Context.get(session, SessionLog))(rows));
-}
+): Effect.Effect<void> =>
+  seedRows(Context.get(session, SessionLog))(rows).pipe(
+    Effect.asVoid,
+    Effect.orDie,
+  );
 
 /** A fixture's rows committed as the store holds them, every kind
  *  admitted: a seeded history stands in for what a run's cell wrote. */
@@ -64,8 +59,8 @@ export function publishTestRunStart(
   session: Context.Context<SessionServices>,
   runId: RunId = generateRunId(),
   options: { parent?: RunId | null } = {},
-): RunId {
-  publishTestRows(session, [
+): Effect.Effect<RunId> {
+  return publishTestRows(session, [
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', runId),
@@ -76,8 +71,7 @@ export function publishTestRunStart(
         options.parent == null ? null : { id: options.parent, call: null },
       provenance: null,
     },
-  ]);
-  return runId;
+  ]).pipe(Effect.as(runId));
 }
 
 /**
@@ -120,46 +114,37 @@ export const queuedFollowUps = (
   });
 
 /**
- * A standalone run trace whose events go straight into a transcript with
- * deterministic source coordinates, for tests that exercise the transcript
- * reducer without a session. Each event is its own update call, as a
- * session frame of one.
+ * A standalone run trace whose transcript events are recorded as one plain
+ * agent run's rows, read the way a stored run is (`buildRunTranscript`), for
+ * tests that exercise the transcript reducer without a session.
  */
 export function createTestRunTrace(runId: RunId) {
   // Fixture run ids need not be well-formed; the reducer only stamps them.
   // cast: the key's shape is canonical, only its run id may be a fixture's.
-  const aggregate = JSON.stringify(['run', runId]) as AggregateId;
-  const ctx = { debug: false, lifecycleToTaskGroups: true };
-  const ix = emptyTranscriptIndexes();
-  let transcript: TranscriptView = emptyTranscript();
-  let seq = 1;
-  const apply = (fact: object) => {
-    seq += 1;
-    transcript = applyTranscriptEvent(
-      transcript,
-      { ix, owned: new WeakSet() },
-      // cast: the trace's transcript events are session event payloads.
-      { ...fact, aggregateId: aggregate, seq, at: seq } as SessionRow,
-      ctx,
-    );
-  };
+  const aggregateId = JSON.stringify(['run', runId]) as AggregateId;
+  const rows: object[] = [
+    { type: 'run.start', identity: { kind: 'agent', agent: 'test' } },
+  ];
+  const record = (fact: object) => rows.push(fact);
   const trace = new TraceEmitter((event) => {
-    if (isTranscriptEvent(event)) apply(event);
+    if (isTranscriptEvent(event)) record(event);
   });
   return {
     trace,
-    /** The phase the run reached; the reducer closes its open rows on it. */
-    settlePhase: (phase: RunOutcome | 'running' | 'waiting') => {
-      if (phase === 'running') apply({ type: 'run.activate' });
-      else if (phase === 'waiting') {
-        apply({ type: 'run.position', payload: { at: 'waiting' } });
-      } else apply({ type: 'run.end', outcome: phase });
-    },
-    /** The run history's final-answer row (`response.finalized`), applied
+    /** The run history's final-answer row (`response.finalized`), recorded
      *  in its place beside the trace. */
-    finalize: (text: string) => apply({ type: 'response.finalized', text }),
-    transcript: () => transcript,
-    rows: () => transcript.rows,
+    finalize: (text: string) => record({ type: 'response.finalized', text }),
+    rows: () =>
+      buildRunTranscript(
+        rows.map((fact, index) => ({
+          ...fact,
+          aggregateId,
+          seq: index + 1,
+          at: index + 1,
+          // cast: the trace's transcript events are session event payloads.
+        })) as SessionRow[],
+        false,
+      ).rows,
     dispose: () => trace.close(),
   };
 }

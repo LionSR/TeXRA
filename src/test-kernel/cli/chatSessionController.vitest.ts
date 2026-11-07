@@ -83,7 +83,6 @@ import {
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -338,7 +337,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           // The early slot claim makes this resume() interruptible as soon as
           // the session admits the run: a Ctrl-C in that window lands on the
           // resumed run, which ends cancelled, rather than leaving it running.
-          const rehydrated = createDeferred<void>();
+          const rehydrated = Promise.withResolvers<void>();
           const session = makeSession({ runCompleted: true });
           // A resumed run the chat stopped through its session ends cancelled.
           const stops: RunId[] = [];
@@ -409,7 +408,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           mocks.request.mockImplementation(() =>
             Effect.sync((): Outcome => ({ kind: 'done' })),
           );
-          const failing = createDeferred<void>();
+          const failing = Promise.withResolvers<void>();
           mocks.resumeRun.mockImplementationOnce((id: RunId) =>
             Effect.succeed({
               runId: id,

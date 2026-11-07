@@ -8,7 +8,7 @@ import { Secrets } from '@texra-ai/harness/host';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
 import { GitHubRateLimitError } from '@texra/tools/github/githubClient';
@@ -38,7 +38,7 @@ vi.mock('@texra/tools/github/githubClient', async (importOriginal) => ({
 /** The services the GitHub client requires; the client itself is mocked. */
 const githubServices = Layer.merge(
   Secrets.layer(new FakeSecrets()),
-  testHttpClientLayer,
+  noHttpClientLayer,
 );
 
 function createCheckRun(id: number): GhCheckRun {

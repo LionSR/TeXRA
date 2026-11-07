@@ -37,7 +37,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // The parent's `run.start` is published and left uncommitted,
             // which is what a record read sees: without the barrier ahead of
             // it, this child is refused as if its parent did not exist.
-            const parentRunId = publishTestRunStart(session);
+            const parentRunId = yield* publishTestRunStart(session);
             yield* registerRun(runId, baseConfig, {
               ...options,
               parentRunId,

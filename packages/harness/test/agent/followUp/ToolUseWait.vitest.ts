@@ -121,7 +121,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             const session = yield* quietSession();
             const parentRunId = generateRunId();
-            const runId = startedRun(session, parentRunId);
+            const runId = yield* startedRun(session, parentRunId);
             const asked = 'state where finiteness is used';
 
             const first = yield* forkLoop({
@@ -140,7 +140,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               followUpId: 'follow-up-1',
               content: { text: asked, from: { kind: 'user' as const } },
             };
-            publishTestRows(session, [queued]);
+            yield* publishTestRows(session, [queued]);
             yield* Context.get(session, SessionLog).settled;
 
             const resumed = yield* forkLoop({
@@ -162,7 +162,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
 
             // A producer that replays the delivery after a restart writes the
             // same id again; it names a follow-up already consumed.
-            publishTestRows(session, [queued]);
+            yield* publishTestRows(session, [queued]);
             yield* Context.get(session, SessionLog).settled;
             const again = yield* forkLoop({
               runId,
@@ -188,7 +188,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             const session = yield* quietSession();
             const parentRunId = generateRunId();
-            const runId = startedRun(session, parentRunId);
+            const runId = yield* startedRun(session, parentRunId);
             const first = yield* forkLoop({
               runId,
               session,
@@ -201,7 +201,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // Its parent's message, queued once the child ended: the resume
             // that delivers it runs the turn it asks for, not the end alone.
             const asked = 'now check the boundary case';
-            publishTestRows(session, [
+            yield* publishTestRows(session, [
               {
                 type: 'followup.queued' as const,
                 aggregateId: qualifyAggregateId('run', runId),
@@ -243,7 +243,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* quietSession();
-            const runId = startedRun(session);
+            const runId = yield* startedRun(session);
             const first = yield* forkLoop({
               runId,
               session,
@@ -289,7 +289,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.effect('reaches the model from the store once its file is gone', () =>
         Effect.gen(function* () {
           const session = yield* quietSession();
-          const runId = startedRun(session);
+          const runId = yield* startedRun(session);
           yield* Context.get(session, SessionLog).settled;
           const file = path.join(os.tmpdir(), `texra-${generateRunId()}.png`);
           writeFileSync(file, Buffer.from(PIXEL, 'base64'));

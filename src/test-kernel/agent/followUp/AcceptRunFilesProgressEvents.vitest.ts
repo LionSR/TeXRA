@@ -41,7 +41,7 @@ layer(
     () =>
       Effect.flatMap(Effect.flatMap(TestSession, sessionHandleOf), (session) =>
         Effect.gen(function* () {
-          publishTestRunStart(session, runId);
+          yield* publishTestRunStart(session, runId);
           const requests = yield* autoDecideRequests(session, () => ({
             action: 'approve',
           }));

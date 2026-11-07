@@ -100,10 +100,10 @@ layer(texraHosted, { excludeTestServices: true })(
                 host: {},
               }),
             );
-            publishTestRunStart(session, runId);
+            yield* publishTestRunStart(session, runId);
             yield* Context.get(session, SessionLog).settled;
             yield* seedRunRecord(session, runId, config);
-            publishTestRows(session, [
+            yield* publishTestRows(session, [
               {
                 type: 'log',
                 aggregateId: qualifyAggregateId('run', runId),
@@ -129,7 +129,7 @@ layer(texraHosted, { excludeTestServices: true })(
             ]);
 
             // The second turn, as a run that continued would have left it.
-            publishTestRows(session, [
+            yield* publishTestRows(session, [
               {
                 type: 'log',
                 aggregateId: qualifyAggregateId('run', runId),

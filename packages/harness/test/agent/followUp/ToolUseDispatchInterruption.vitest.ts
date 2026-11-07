@@ -92,7 +92,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         Effect.gen(function* () {
           const session = yield* isolatedTestSession({ emit: () => {} });
           const runId = generateRunId();
-          publishTestRunStart(session, runId);
+          yield* publishTestRunStart(session, runId);
           const toolA = executedTool('toolA');
           const toolB = blockingTool('toolB');
           const toolC = executedTool('toolC');
@@ -184,7 +184,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       Effect.gen(function* () {
         const session = yield* isolatedTestSession({ emit: () => {} });
         const runId = generateRunId();
-        publishTestRunStart(session, runId);
+        yield* publishTestRunStart(session, runId);
         const starts = yield* Queue.unbounded<void>();
         // The first three starts never finish; a fourth would.
         let started = 0;

@@ -73,7 +73,7 @@ function launchBackgroundRun(
       .spyOn(toolUseFollowUp, 'wakeIfOwed')
       .mockReturnValue(Effect.succeed(true));
 
-    publishTestRunStart(session, PARENT_RUN_ID);
+    yield* publishTestRunStart(session, PARENT_RUN_ID);
     // No settle before the launch. `registerRun` opens the parent check with an
     // empty batch on the session's publisher, so the child's admission read
     // runs after the parent's queued `run.start`. Settling here instead would
@@ -186,8 +186,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* sessionHandle;
-            publishTestRunStart(session, PARENT_RUN_ID);
-            const childId = publishTestRunStart(session, undefined, {
+            yield* publishTestRunStart(session, PARENT_RUN_ID);
+            const childId = yield* publishTestRunStart(session, undefined, {
               parent: PARENT_RUN_ID,
             });
             yield* Context.get(session, SessionLog).settled;

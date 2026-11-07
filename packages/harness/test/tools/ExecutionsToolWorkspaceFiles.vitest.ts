@@ -80,7 +80,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               // A stored run in this workspace whose settled calls edited
               // only `review.md`.
               const runId = Schema.decodeSync(RunIdSchema)('abc123');
-              publishTestRunStart(session, runId);
+              yield* publishTestRunStart(session, runId);
               yield* Context.get(session, SessionLog).settled;
               yield* seedRunRecord(
                 session,

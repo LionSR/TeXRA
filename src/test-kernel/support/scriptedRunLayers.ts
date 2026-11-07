@@ -382,12 +382,14 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
 
 /** A run id whose start is already on the session's log; with
  *  `parentRunId`, a child of that run, whose start goes first. */
-export function startedRun(
+export const startedRun = (
   session: Context.Context<SessionServices>,
   parentRunId?: RunId,
-): RunId {
-  const runId = generateRunId();
-  if (parentRunId !== undefined) publishTestRunStart(session, parentRunId);
-  publishTestRunStart(session, runId, { parent: parentRunId ?? null });
-  return runId;
-}
+): Effect.Effect<RunId> =>
+  Effect.gen(function* () {
+    if (parentRunId !== undefined)
+      yield* publishTestRunStart(session, parentRunId);
+    return yield* publishTestRunStart(session, generateRunId(), {
+      parent: parentRunId ?? null,
+    });
+  });

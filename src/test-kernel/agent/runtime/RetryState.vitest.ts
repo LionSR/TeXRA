@@ -78,7 +78,7 @@ import {
 import { scriptedModel, testAgentRun } from '@test/support/scriptedRunLayers';
 import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { noHttpClientLayer } from '@test/support/fetchTestUtils';
 import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
 import {
   FakeHost,
@@ -261,7 +261,7 @@ const openRun = Effect.fn('openRun')(function* (
   RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
 > {
   const runId = retryRunId();
-  publishTestRunStart(session, runId);
+  yield* publishTestRunStart(session, runId);
   yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
   const cell = yield* Context.get(session, RunHistory).open(runId, {
     activation: () => Effect.succeed([]),
@@ -295,7 +295,7 @@ const openRun = Effect.fn('openRun')(function* (
     Layer.provide(
       modelAccessLayer(installedHost().roots).pipe(
         Layer.provide(
-          Layer.merge(testHttpClientLayer, Secrets.layer(fakeHostSecrets)),
+          Layer.merge(noHttpClientLayer, Secrets.layer(fakeHostSecrets)),
         ),
       ),
     ),
@@ -327,7 +327,7 @@ const invokeOn = ({ layer, cell }: InvokerKit) =>
     // the Node layer rather than the installed platform.
     Effect.provide(layer),
     Effect.provide(nodePlatformLayer),
-    Effect.provide(testHttpClientLayer),
+    Effect.provide(noHttpClientLayer),
   );
 
 /** A failure as the package's binding raises it: judged against its reply. */

@@ -238,7 +238,7 @@ describe('MCP server plugins', () => {
             // The call goes through the loop's guard: a bash request the
             // session's approval authority opens, answered here.
             const runId = Schema.decodeSync(RunIdSchema)('a99f0000c0d1');
-            publishTestRunStart(session, runId);
+            yield* publishTestRunStart(session, runId);
             yield* Context.get(session, SessionLog).settled;
             const requestOpened = yield* Deferred.make<void>();
             const requests = yield* autoDecideRequests(session, () => {
@@ -262,7 +262,7 @@ describe('MCP server plugins', () => {
               kind: 'bash',
               data: { command: 'mcp fixture echo {"text":"hi"}' },
             });
-            decideRequest(
+            yield* decideRequest(
               session,
               { runId, requestId: opened.requestId },
               { action: 'approve' },

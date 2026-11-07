@@ -53,11 +53,8 @@ function inToolContext<A, E, R>(
 }
 
 /** A run whose existence fact the request rows below hang off. */
-function startedRun(session: Session): RunId {
-  const runId = generateRunId();
-  publishTestRunStart(session, runId);
-  return runId;
-}
+const startedRun = (session: Session) =>
+  publishTestRunStart(session, generateRunId());
 
 // The file's session over a fresh host's roots, opened as a host whose
 // person answers from the view: its runs' requests wait for a decision.
@@ -72,7 +69,7 @@ layer(
     Effect.flatMap(Effect.flatMap(TestSession, sessionHandleOf), (session) =>
       Effect.gen(function* () {
         const explicit = createRecordingHost();
-        const runId = startedRun(session);
+        const runId = yield* startedRun(session);
         const decided = yield* autoDecideRequests(session, () => ({
           action: 'approve',
         }));
