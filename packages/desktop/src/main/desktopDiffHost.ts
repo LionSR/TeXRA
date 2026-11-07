@@ -7,7 +7,7 @@ import {
   withLogChannel,
   withProcessServices,
 } from '@texra-ai/harness/host';
-import type { DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
+import type { DiffLabel, DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '../shared/monacoLanguage';
 
 import {
@@ -38,7 +38,7 @@ interface ProjectDiffHost extends DiffViewHost {
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
-    title: string,
+    label: DiffLabel,
     previewId?: string,
   ): Effect.Effect<void, Error>;
   /**
@@ -74,7 +74,7 @@ export function createDesktopDiffHost(
     reviewSession: string,
     original: DiffSource,
     proposed: DiffSource,
-    title: string,
+    { title, displayPath }: DiffLabel,
     previewId: string = nanoid(),
   ): Effect.Effect<void, Error> {
     return withProcessServices(
@@ -105,7 +105,7 @@ export function createDesktopDiffHost(
           session: reviewSession,
           previewId,
           title,
-          displayPath: title.replace(/^Tool edit:\s*/, ''),
+          displayPath,
           originalText: originalContent,
           proposedText: proposedContent,
           additions: changed.filter((line) => line.startsWith('+')).length,
@@ -132,8 +132,8 @@ export function createDesktopDiffHost(
 
   return {
     inProject: (roots) => ({
-      openDiff: (original, proposed, title, previewId) =>
-        openDiff(roots.storage, original, proposed, title, previewId),
+      openDiff: (original, proposed, label, previewId) =>
+        openDiff(roots.storage, original, proposed, label, previewId),
       closeDiff: (previewId) => closeDiff(roots.storage, previewId),
     }),
   };

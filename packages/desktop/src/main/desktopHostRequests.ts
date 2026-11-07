@@ -227,7 +227,11 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
             .openDiff(
               { filePath: baseFile },
               { filePath: editedFile },
-              `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
+              {
+                title: `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
+                // Each compared pair is a review of its own.
+                displayPath: `${editedFile} <-> ${baseFile}`,
+              },
             )
             .pipe(
               Effect.mapError(

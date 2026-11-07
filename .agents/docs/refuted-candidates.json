@@ -216,7 +216,7 @@
     {
       "id": "RT-tool-edit-staging-one-owner",
       "candidate": "the tool-edit approval's staging in the controller, with each host reduced to its diff verbs",
-      "why": "The hosts differ where the flow matters: where the two copies live (a per-request temp directory, the extension's storage directory), where the user's edits are read from (the saved file, the unsaved editor buffer) and what survives an unapplied edit (the proposed file on disk, an untitled editor). Writing the copies is already one function, writeApprovalTempFiles; a controller-owned staging would have to know which files each host removes. What remains duplicated is two path getters and two spellings of the diff title.",
+      "why": "The hosts differ where the flow matters: where the two copies live (a per-request temp directory, the extension's storage directory), where the user's edits are read from (the saved file, the unsaved editor buffer) and what survives an unapplied edit (the proposed file on disk, an untitled editor). Writing the copies is already one function, writeApprovalTempFiles; a controller-owned staging would have to know which files each host removes. What remains duplicated is two path getters; the diff's title is one label in ui/copy/toolEditPreview.ts.",
       "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#lanes-that-run-in-parallel",
       "symbols": [
         {
