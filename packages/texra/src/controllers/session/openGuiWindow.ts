@@ -15,7 +15,7 @@
  */
 import { formatResultCount } from '@texra-ai/harness/transcript';
 
-import { Effect, Exit, FiberSet, Layer, Scope, Stream } from 'effect';
+import { Effect, Exit, Layer, Scope, Stream, SubscriptionRef } from 'effect';
 
 import {
   Cancelled,
@@ -344,10 +344,12 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     root: roots.workspace,
     stores: roots,
   });
-  // Recorder notifications can arrive outside a request fiber.
-  const fork = yield* FiberSet.makeRuntime<never>();
-  const draftRequests = yield* ports.draftRequests.attach(roots, (recording) =>
-    fork(snapshot.setRecording(recording)),
+  const draftRequests = yield* ports.draftRequests.attach(roots);
+  yield* Effect.forkScoped(
+    Stream.runForEach(
+      SubscriptionRef.changes(ports.draftRequests.recording),
+      snapshot.setRecording,
+    ),
   );
   const bridge = yield* SessionBridge.make({
     session,

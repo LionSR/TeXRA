@@ -82,11 +82,19 @@ class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>(
   },
 ) {}
 
-/** One transport port: a VS Code webview attached to the bridge. */
-interface Port {
+/** One surface: a VS Code webview attached to the bridge as a port. */
+interface Surface<View extends vscode.WebviewView | vscode.WebviewPanel> {
+  readonly view: View;
   readonly attached: AttachedPort;
-  /** The webview's listeners and its page render, closed with the port. */
+  /** The port's lifetime: its listeners, its page render and its entry in
+   *  the provider's surfaces end when this closes. */
   readonly scope: Scope.Closeable;
+}
+
+/** The two surfaces by placement, each present while attached. */
+interface Surfaces {
+  sidebar?: Surface<vscode.WebviewView>;
+  editor?: Surface<vscode.WebviewPanel>;
 }
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
@@ -100,11 +108,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly scope = Scope.makeUnsafe();
   private readonly contentProvider: BundledViewContentProvider;
 
-  /** The sidebar's `WebviewView` while VS Code holds one resolved. */
-  private sidebarView: vscode.WebviewView | undefined;
-  private sidebarPort: Port | undefined;
-  /** The popped-out tab and its port, attached and released together. */
-  private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
+  /** The sidebar while VS Code holds one resolved, and the popped-out tab;
+   *  an entry leaves when its surface's scope closes. */
+  private readonly surfaces: Surfaces = {};
   /** Whether a usable credential exists, as each check answers: the setup
    *  pill follows the answer the "Connect a model" card reads. */
   public readonly credentialUsable: Stream.Stream<boolean>;
@@ -119,8 +125,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   );
 
   private readonly attention = new RequestAttention({
-    sidebar: () => this.sidebarView,
-    panel: () => this.editor?.panel,
+    sidebar: () => this.surfaces.sidebar?.view,
+    panel: () => this.surfaces.editor?.view,
     isViewVisible: () => this.isViewVisible(),
     showInSidebar: () => this.showInSidebar(),
     showSessions: (runId) =>
@@ -128,7 +134,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     chime: () => this.chime(),
   });
 
-  private readonly draftRequests = new HostDraftRequests();
+  private readonly draftRequests: HostDraftRequests;
 
   private readonly globalState: StateStore;
   private readonly runtime: ProcessRuntime;
@@ -152,6 +158,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.globalState = globalState;
     this.runtime = runtime;
     this.roots = roots;
+    this.draftRequests = runtime.runSync(
+      HostDraftRequests.make.pipe(Scope.provide(this.scope)),
+    );
     this.contentProvider = new BundledViewContentProvider(
       context,
       'ProgressView',
@@ -442,28 +451,21 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       enableCommandUris: true,
       localResourceRoots: this.contentProvider.localResourceRoots,
     };
-    this.closeSidebarPort();
-    this.sidebarView = webviewView;
     this.attention.paint(webviewView);
     // The slot is VS Code's own synchronous entry: it hands back a resolved
     // view, so the attachment settles here.
-    this.sidebarPort = this.runtime.runSync(
-      this.attach('sidebar', webviewView, () => {
-        this.sidebarPort = undefined;
-        this.sidebarView = undefined;
-      }),
-    );
+    this.runtime.runSync(this.attach('sidebar', webviewView));
   }
 
-  /** Attach `view` as a port; when VS Code disposes the view, the port
-   *  closes and `onDisposed` runs. */
+  /** Attach `view` as the `id` surface, replacing one attached there; when
+   *  VS Code disposes the view, its scope closes. */
   private readonly attach = Effect.fn('ProgressViewProvider.attach')(
     { self: this },
     function* (
-      id: 'sidebar' | 'editor',
+      id: keyof Surfaces,
       view: vscode.WebviewView | vscode.WebviewPanel,
-      onDisposed: () => void,
-    ): Effect.fn.Return<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
+    ): Effect.fn.Return<void, SurfacePlacementFailed, FileSystem.FileSystem> {
+      this.closeSurface(this.surfaces[id]);
       // The post starts synchronously inside runFork, so sends keep their order.
       const send = (message: DownMessage): void => {
         this.runtime.runFork(
@@ -497,11 +499,23 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             }),
         ),
       );
+      const surface = { view, attached, scope: yield* Scope.make() };
+      // cast: each caller passes the view its placement holds (the sidebar's
+      // `WebviewView`, the tab's `WebviewPanel`).
+      Object.assign(this.surfaces, { [id]: surface } as Surfaces);
+      yield* Scope.addFinalizer(
+        surface.scope,
+        Effect.andThen(
+          Effect.sync(() => {
+            if (this.surfaces[id] === surface) delete this.surfaces[id];
+          }),
+          attached.close,
+        ),
+      );
       // The template is read off this tick (it never fails: a failed render
       // is a logged error page); a port closed before it lands paints nothing,
       // because closing the port interrupts the render. The listeners are
       // registered after the render, so closing removes them first.
-      const port: Port = { attached, scope: yield* Scope.make() };
       yield* Effect.forkIn(
         this.contentProvider
           .getHtmlContent(view.webview, {
@@ -515,34 +529,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               }),
             ),
           ),
-        port.scope,
+        surface.scope,
       );
       for (const listener of [
-        view.onDidDispose(() => {
-          this.closePort(port);
-          onDisposed();
-        }),
+        view.onDidDispose(() => this.closeSurface(surface)),
         view.webview.onDidReceiveMessage((message) => {
           this.runtime.runFork(attached.receive(message));
         }),
       ])
         yield* Scope.addFinalizer(
-          port.scope,
+          surface.scope,
           Effect.sync(() => listener.dispose()),
         );
-      return port;
     },
   );
 
-  private closePort(port: Port | undefined): void {
-    if (!port) return;
-    this.runtime.runFork(Scope.close(port.scope, Exit.void));
-    this.runtime.runFork(port.attached.close);
-  }
-
-  private closeSidebarPort(): void {
-    this.closePort(this.sidebarPort);
-    this.sidebarPort = undefined;
+  private closeSurface(
+    surface: Surface<vscode.WebviewView | vscode.WebviewPanel> | undefined,
+  ): void {
+    if (surface) this.runtime.runFork(Scope.close(surface.scope, Exit.void));
   }
 
   /**
@@ -553,11 +558,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * (`retainContextWhenHidden`), so a hidden sidebar must not outrank the
    * tab on screen. `undefined` when no surface is showing.
    */
-  private visibleSurfacePort(): Port | undefined {
-    const editor = this.editor;
-    if (editor?.panel.active === true) return editor.port;
-    if (this.sidebarView?.visible === true) return this.sidebarPort;
-    if (editor?.panel.visible === true) return editor.port;
+  private visibleSurface(): AttachedPort | undefined {
+    const { sidebar, editor } = this.surfaces;
+    if (editor?.view.active === true) return editor.attached;
+    if (sidebar?.view.visible === true) return sidebar.attached;
+    if (editor?.view.visible === true) return editor.attached;
     return undefined;
   }
 
@@ -567,8 +572,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    *  away from. No port means no renderer to play it. */
   private chime(): void {
     const port =
-      this.visibleSurfacePort() ?? this.sidebarPort ?? this.editor?.port;
-    port?.attached.surfaceAction({ kind: 'chime' });
+      this.visibleSurface() ??
+      this.surfaces.sidebar?.attached ??
+      this.surfaces.editor?.attached;
+    port?.surfaceAction({ kind: 'chime' });
   }
 
   /** `texra.execute` with no configuration (Cmd+Alt+E): the composer's
@@ -578,20 +585,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly submit = Effect.fn('ProgressViewProvider.submit')(
     { self: this },
     function* () {
-      const port = this.visibleSurfacePort();
-      if (port !== undefined && port === this.editor?.port) {
-        port.attached.surfaceAction({ kind: 'submit' });
+      const port = this.visibleSurface();
+      if (port !== undefined && port === this.surfaces.editor?.attached) {
+        port.surfaceAction({ kind: 'submit' });
         return;
       }
       yield* this.showInSidebar();
-      this.sidebarPort?.attached.surfaceAction({ kind: 'submit' });
+      this.surfaces.sidebar?.attached.surfaceAction({ kind: 'submit' });
     },
   );
 
   public isViewVisible(): boolean {
-    return (
-      this.sidebarView?.visible === true || this.editor?.panel.visible === true
-    );
+    const { sidebar, editor } = this.surfaces;
+    return sidebar?.view.visible === true || editor?.view.visible === true;
   }
 
   public showInSidebar(): Effect.Effect<void, SurfacePlacementFailed> {
@@ -633,8 +639,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly showProgressView = Effect.fn(
     'ProgressViewProvider.showProgressView',
   )({ self: this }, function* (options?: { inPlace?: boolean }) {
-    if (this.editor) {
-      this.editor.panel.reveal(vscode.ViewColumn.One);
+    if (this.surfaces.editor) {
+      this.surfaces.editor.view.reveal(vscode.ViewColumn.One);
       return;
     }
     if (!options?.inPlace) yield* this.showInSidebar();
@@ -665,8 +671,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly popOutToEditor = Effect.fn(
     'ProgressViewProvider.popOutToEditor',
   )({ self: this }, function* () {
-    if (this.editor) {
-      this.editor.panel.reveal(vscode.ViewColumn.One);
+    if (this.surfaces.editor) {
+      this.surfaces.editor.view.reveal(vscode.ViewColumn.One);
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -681,10 +687,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       },
     );
     panel.iconPath = new vscode.ThemeIcon('pulse');
-    const port = yield* this.attach('editor', panel, () => {
-      this.editor = undefined;
-    });
-    this.editor = { panel, port };
+    yield* this.attach('editor', panel);
   });
 
   /** Awaits the preview files' removal (the scope's close) and the
@@ -693,10 +696,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly dispose = Effect.fn('ProgressViewProvider.dispose')(
     { self: this },
     function* (): Effect.fn.Return<void, never, ProcessServices> {
-      this.closeSidebarPort();
-      this.closePort(this.editor?.port);
-      this.editor?.panel.dispose();
-      this.editor = undefined;
+      const { sidebar, editor } = this.surfaces;
+      if (sidebar) yield* Scope.close(sidebar.scope, Exit.void);
+      if (editor) {
+        yield* Scope.close(editor.scope, Exit.void);
+        editor.view.dispose();
+      }
       yield* Scope.close(this.scope, Exit.void);
       yield* this.draftRequests.shutdown;
     },

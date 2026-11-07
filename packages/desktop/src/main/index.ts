@@ -89,7 +89,9 @@ void Effect.runPromise(
     const { runtime, processScope, initialize } =
       yield* initializeElectronPlatform(moduleDirname);
     // Recording has one process owner, shared by every project and window.
-    const draftRequests = new HostDraftRequests();
+    const draftRequests = yield* HostDraftRequests.make.pipe(
+      Scope.provide(processScope),
+    );
     // The process's shutdown is this scope's close. Its finalizers run in
     // the reverse of their registration: the window releases everything it
     // held (awaited), every session closes (its runs stopped and settled,

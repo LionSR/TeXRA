@@ -1,7 +1,16 @@
 /** Shared draft operations and the process recorder's originating request. */
 import { Buffer } from 'node:buffer';
 
-import { Deferred, Effect, Fiber, FileSystem } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  FiberHandle,
+  FileSystem,
+  Latch,
+  SubscriptionRef,
+} from 'effect';
 import { MODEL_CONFIGS } from '@texra-ai/llm';
 
 import { Cancelled, Rejected, type WorkspaceRoots } from '@texra-ai/harness';
@@ -37,53 +46,49 @@ type DraftRequest = Extract<
 >;
 type Recording = NonNullable<HostSnapshot['recording']>;
 
+/** Who started the take running now, and the latch its Stop opens. */
 interface Take {
   readonly roots: WorkspaceRoots;
   readonly port: string;
-  readonly descriptor: Recording;
-  /** Start's answer: the transcription, or why the take ended without one. */
-  readonly result: Deferred.Deferred<HostOutcome, Rejected | Cancelled>;
-  /** Finished by the first Stop or Cancel. The take fiber waits on it once
-   *  the microphone is up, then reads `cancelled` to decide what to do. */
-  readonly settled: Deferred.Deferred<void>;
-  stopping: boolean;
-  cancelled: boolean;
+  readonly stopped: Latch.Latch;
 }
 
-/** One instance per host process, shared by its session request handlers. */
+/** One instance per host process, shared by its session request handlers.
+ *  The take runs in one fiber of the process's scope; `recording` is what
+ *  every open project shows of it. */
 export class HostDraftRequests {
-  private take: Take | null = null;
-  /** The detached fiber of the latest take; {@link shutdown} interrupts it. */
-  private takeFiber: Fiber.Fiber<void> | null = null;
-  private readonly listeners = new Set<(recording: Recording | null) => void>();
+  /** The recorder in the caller's (the process's) scope: closing it stops a
+   *  take still running. */
+  static readonly make = Effect.gen(function* () {
+    return new HostDraftRequests(
+      yield* SubscriptionRef.make<Recording | null>(null),
+      yield* FiberHandle.make<HostOutcome, Rejected>(),
+    );
+  });
 
-  /** Bind one session's requests and recorder level for the caller's scope;
-   *  closing it stops observing and discards the session's take. */
-  attach(
-    roots: WorkspaceRoots,
-    onRecording: (recording: Recording | null) => void,
+  /** The take recording now and where it is going; null once it stopped. */
+  readonly recording: SubscriptionRef.SubscriptionRef<Recording | null>;
+  private readonly takes: FiberHandle.FiberHandle<HostOutcome, Rejected>;
+  /** The running take's owner; undefined while none runs. */
+  private take: Take | undefined;
+  private constructor(
+    recording: SubscriptionRef.SubscriptionRef<Recording | null>,
+    takes: FiberHandle.FiberHandle<HostOutcome, Rejected>,
   ) {
-    return Effect.acquireRelease(
-      Effect.sync(() => this.subscribe(onRecording)),
-      (stopObserving) =>
-        Effect.sync(() => {
-          stopObserving();
-          this.cancel(roots);
-        }),
-    ).pipe(
+    this.recording = recording;
+    this.takes = takes;
+  }
+
+  /** Bind one session's requests for the caller's scope; closing it
+   *  discards the session's take. */
+  attach(roots: WorkspaceRoots) {
+    return Effect.acquireRelease(Effect.void, () => this.cancel(roots)).pipe(
       Effect.as({
         handle: (request: DraftRequest, port: string) =>
           this.handle(roots, request, port),
         closePort: (port: string) => this.cancel(roots, port),
       }),
     );
-  }
-
-  /** Every open project observes the same recorder and its destination. */
-  subscribe(listener: (recording: Recording | null) => void): () => void {
-    this.listeners.add(listener);
-    listener(this.recording());
-    return () => this.listeners.delete(listener);
   }
 
   /** Answer one draft request of the session at `roots`, on `port`. The host
@@ -123,32 +128,31 @@ export class HostDraftRequests {
         if (request.action.kind === 'start') {
           return yield* this.start(roots, port, request.action.target);
         }
-        this.stop();
+        yield* this.stop;
         return { kind: 'done' };
     }
   });
 
-  /** Closing the originating session discards its take without transcription. */
-  cancel(roots: WorkspaceRoots, port?: string): void {
-    const take = this.take;
-    if (
-      !take ||
-      take.roots !== roots ||
-      (port !== undefined && take.port !== port)
-    )
-      return;
-    take.cancelled = true;
-    Deferred.doneUnsafe(take.result, Effect.fail(new Cancelled()));
-    this.notify();
-    Deferred.doneUnsafe(take.settled, Effect.void);
+  /** Closing the originating session discards its take without
+   *  transcription: the take is interrupted, which stops sox through its
+   *  scope, or the upload when Stop came first. */
+  cancel(roots: WorkspaceRoots, port?: string): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      const take = this.take;
+      if (
+        !take ||
+        take.roots !== roots ||
+        (port !== undefined && take.port !== port)
+      )
+        return Effect.void;
+      return FiberHandle.clear(this.takes);
+    });
   }
 
-  /** Host shutdown: answer the current take as cancelled and interrupt its
-   *  fiber, whose scope stops sox and joins its exit before this returns. */
-  readonly shutdown: Effect.Effect<void> = Effect.suspend(() => {
-    if (this.take) this.cancel(this.take.roots);
-    return this.takeFiber ? Fiber.interrupt(this.takeFiber) : Effect.void;
-  });
+  /** Host shutdown: interrupt the current take and wait for sox to exit. */
+  readonly shutdown: Effect.Effect<void> = Effect.suspend(() =>
+    FiberHandle.clear(this.takes),
+  );
 
   private readonly start = Effect.fn('HostDraftRequests.start')(function* (
     this: HostDraftRequests,
@@ -156,6 +160,7 @@ export class HostDraftRequests {
     port: string,
     target: string,
   ) {
+    const stopped = yield* Latch.make(false);
     if (this.take) {
       return yield* new Rejected({
         reason: 'A recording is already in progress.',
@@ -164,23 +169,33 @@ export class HostDraftRequests {
     // The check above and this reservation are one synchronous step: a
     // `yield*` between them would let a second Start pass the check too and
     // put two recorders on the microphone.
-    const take: Take = {
-      roots,
-      port,
-      descriptor: { session: roots.storage, target },
-      result: Deferred.makeUnsafe<HostOutcome, Rejected | Cancelled>(),
-      settled: Deferred.makeUnsafe<void>(),
-      stopping: false,
-      cancelled: false,
-    };
-    // Reserve the process recorder before asynchronous microphone startup.
+    const take: Take = { roots, port, stopped };
     this.take = take;
-    this.notify();
-    // Detached on purpose: the take belongs to this recorder, not to the
-    // Start request. Start can be answered early (Cancel) while the take
-    // still has to wait for the microphone and kill it; `release` ends it.
-    this.takeFiber = yield* Effect.forkDetach(this.runTake(take));
-    return yield* Deferred.await(take.result);
+    yield* SubscriptionRef.set(this.recording, {
+      session: roots.storage,
+      target,
+    });
+    // The take runs in the recorder's own fiber, not the Start request's:
+    // Start can be interrupted (its window closing) while the take still has
+    // to wait for the microphone and kill it.
+    const fiber = yield* FiberHandle.run(
+      this.takes,
+      this.runTake(take).pipe(
+        Effect.ensuring(
+          Effect.andThen(
+            Effect.sync(() => {
+              if (this.take === take) this.take = undefined;
+            }),
+            SubscriptionRef.set(this.recording, null),
+          ),
+        ),
+      ),
+    );
+    // An interrupted take is a cancelled one.
+    const exit = yield* Fiber.await(fiber);
+    return yield* Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)
+      ? Effect.fail(new Cancelled())
+      : exit;
   });
 
   /** The take from microphone startup to its answer. Completion belongs to
@@ -191,7 +206,7 @@ export class HostDraftRequests {
   ) {
     const takeProgram: Effect.Effect<
       HostOutcome,
-      Rejected | Cancelled,
+      Rejected,
       Secrets | FileSystem.FileSystem | ChildProcessSpawner
     > = Effect.gen(function* () {
       // sox lives in this block's scope. Its close (SIGTERM, then a join on
@@ -203,10 +218,10 @@ export class HostDraftRequests {
           const recorder = yield* startRecording(take.roots).pipe(
             Effect.mapError((error) => new Rejected({ reason: error.message })),
           );
-          // sox exiting before Stop or Cancel ends the take, a clean exit
-          // included: the microphone is no longer recording.
+          // sox exiting before Stop ends the take, a clean exit included:
+          // the microphone is no longer recording. Cancel interrupts.
           yield* Effect.raceFirst(
-            Deferred.await(take.settled),
+            take.stopped.await,
             recorder.handle.exitCode.pipe(
               Effect.mapError((error) => error.message),
               Effect.flatMap((code) =>
@@ -221,11 +236,6 @@ export class HostDraftRequests {
               Effect.tapError((error) => Effect.logWarning(error.reason)),
             ),
           );
-          if (take.cancelled) {
-            return yield* new Rejected({
-              reason: 'The recording was cancelled.',
-            });
-          }
           return recorder.path;
         }),
       );
@@ -257,43 +267,21 @@ export class HostDraftRequests {
         );
         return { kind: 'text', text } satisfies HostOutcome;
       });
-      // A Cancel after Stop answers Start and interrupts the upload here.
-      // raceFirst starts both arms, so postStop may begin before a cancel that
-      // already landed is observed; the cancel still wins and interrupts it.
-      return yield* Effect.raceFirst(Deferred.await(take.result), postStop);
+      // A Cancel after Stop interrupts the upload.
+      return yield* postStop;
     });
-    // A cancelled take already has its answer; `into` leaves it in place.
     // The take's warnings (an unexpected sox exit, the stale-take sweep)
     // stay on this channel.
-    yield* takeProgram.pipe(
-      withLogChannel(CHANNEL),
-      Deferred.into(take.result),
-      Effect.ensuring(Effect.sync(() => this.release(take))),
-    );
+    return yield* takeProgram.pipe(withLogChannel(CHANNEL));
   });
 
-  private stop(): void {
+  /** Stop acknowledges its own request; the take transcribes. */
+  private readonly stop = Effect.suspend(() => {
     const take = this.take;
-    if (!take || take.stopping || take.cancelled) return;
-    take.stopping = true;
-    this.notify();
-    // Stop acknowledges its own request; the take fiber transcribes.
-    Deferred.doneUnsafe(take.settled, Effect.void);
-  }
-
-  private recording(): Recording | null {
-    const take = this.take;
-    return take && !take.stopping && !take.cancelled ? take.descriptor : null;
-  }
-
-  private notify(): void {
-    const recording = this.recording();
-    for (const listener of this.listeners) listener(recording);
-  }
-
-  private release(take: Take): void {
-    if (this.take !== take) return;
-    this.take = null;
-    this.notify();
-  }
+    if (!take) return Effect.void;
+    return Effect.andThen(
+      SubscriptionRef.set(this.recording, null),
+      take.stopped.open,
+    );
+  });
 }
