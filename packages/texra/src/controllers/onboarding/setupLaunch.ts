@@ -26,10 +26,9 @@ class SetupAlreadyRunning extends Schema.TaggedError<SetupAlreadyRunning>()(
 ) {}
 
 /** The user's credentials can call no setup model. */
-class NoSetupModel extends Schema.TaggedError<NoSetupModel>()(
-  'NoSetupModel',
-  { message: Schema.String },
-) {}
+class NoSetupModel extends Schema.TaggedError<NoSetupModel>()('NoSetupModel', {
+  message: Schema.String,
+}) {}
 
 /**
  * Launch the setup conversation in `session` and wait for it to end. Every

@@ -580,7 +580,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         case 'fileAction':
           yield* request.action === 'latexdiff'
-            ? latexdiff.file(request.base ?? '', request.file)
+            ? latexdiff.file(request.base, request.file)
             : workflowFileActions.handle({
                 ...request,
                 action: request.action,
