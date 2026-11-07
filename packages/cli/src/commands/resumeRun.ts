@@ -15,7 +15,10 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { executeCliWorkflowConfig } from './workflow';
-import { formatResumeCommand } from '../chat/tui/state/resumeHint';
+import {
+  formatResumeCommand,
+  oneShotResumeNotice,
+} from '../chat/tui/state/resumeHint';
 import { isLinked } from '../runtime/platform/cliService';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
@@ -142,6 +145,15 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       return CliExitCode.AgentError;
     }
     return { chat: { initialResume: { id: forkId, config: forkConfig } } };
+  }
+  // A run launched to run once reads no messages, so a chat over it would
+  // refuse every one; it continues as a fork.
+  if (
+    !documentTask &&
+    runSession.view.current().runs.get(id)?.takesFollowUps === false
+  ) {
+    writeTextStderr(oneShotResumeNotice(context.commandName, id));
+    return CliExitCode.Usage;
   }
   // A resumed task continues under the approval it was launched with: a
   // requested policy is said not to apply, never dropped silently. A

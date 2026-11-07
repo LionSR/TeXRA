@@ -18,6 +18,7 @@ import {
   CliPlatform,
   type CliPlatformServices,
 } from '@cli/runtime/platform/initPlatform';
+import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
@@ -51,7 +52,7 @@ const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 /** Seed the real (fake-platform-backed) run records and run aggregate into
  *  the test's session, which the command resolves off its platform; the
  *  seeded session's handle comes back. */
-const seedRunRecord = (config: AgentConfig | null) =>
+const seedRunRecord = (config: AgentConfig | null, takesFollowUps = true) =>
   Effect.gen(function* () {
     const handle = yield* sessionHandleOf(yield* TestSession);
     yield* Context.get(handle, SessionLog).transact([
@@ -59,7 +60,7 @@ const seedRunRecord = (config: AgentConfig | null) =>
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', RUN_ID),
         identity: { kind: 'agent', agent: 'planner' },
-        takesFollowUps: false,
+        takesFollowUps,
         parent: null,
         provenance: null,
       },
@@ -130,6 +131,19 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(yield* run(cliContext())).toEqual({
               chat: { initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG } },
             });
+          }),
+      );
+
+      it.effect(
+        'does not reopen the chat for a run that takes no messages',
+        () =>
+          Effect.gen(function* () {
+            // A headless `texra run` root: it ran once and reads no input.
+            yield* seedRunRecord(TOOL_USE_CONFIG, false);
+            expect(yield* run(cliContext())).toBe(CliExitCode.Usage);
+            expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+              expect.stringContaining(`resume ${RUN_ID} --fork`),
+            );
           }),
       );
     });

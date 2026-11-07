@@ -76,6 +76,7 @@ import {
   type RootRunSettled,
   type TuiSession,
 } from './tui/state/sessionRunState';
+import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf } from './tui/state/sessionView';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import {
@@ -583,6 +584,14 @@ export function createChatSessionController(
                 ),
               ),
             ),
+          );
+          return;
+        }
+        // A run launched to run once reads no messages: a chat over it would
+        // refuse every one, so it continues as a fork.
+        if (runViewOf(currentView(), id)?.takesFollowUps === false) {
+          refuseResume(
+            oneShotResumeNotice(init.sessionContext.commandName, id),
           );
           return;
         }
