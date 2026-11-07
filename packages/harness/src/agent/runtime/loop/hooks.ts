@@ -16,6 +16,7 @@ import {
   FileSystem,
   Result,
   Schema,
+  ScopedRef,
   SynchronizedRef,
 } from 'effect';
 
@@ -301,7 +302,7 @@ export const openingHooks = Effect.fn('Hooks.opening')(function* (
   if ((yield* rootOf(run)) !== run.runId) return { rows: [], parts: [] };
   const hooks = yield* currentHooks(run);
   const base = yield* inputBase(run);
-  const model = (yield* SynchronizedRef.get(run.model)).modelId;
+  const model = (yield* ScopedRef.get(run.model)).modelId;
   const start = yield* hooksAt(
     run,
     state,

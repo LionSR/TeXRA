@@ -15,7 +15,7 @@ import {
   Effect,
   Schema,
   type Scope,
-  type SynchronizedRef,
+  type ScopedRef,
 } from 'effect';
 
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
@@ -168,7 +168,7 @@ declare module '../core/tools/ToolTypes.js' {
     /** The provider API-key variables the run's launch brought
      *  (`StartOptions.apiKeys`), which a child it launches takes too. */
     readonly apiKeys?: Readonly<Record<string, string>>;
-    readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
+    readonly model: ScopedRef.ScopedRef<BoundModel>;
     readonly scope: Scope.Scope;
     readonly opening: TemplateOpening | null;
     readonly logger: AgentTrace;
@@ -337,7 +337,6 @@ export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
       {
         // Not "Read …": the card would read as a read_file call.
         summary: `Not edited: ${path} was not read first`,
-        diagnostics: { reason: 'unread-file', path },
       },
     );
   },

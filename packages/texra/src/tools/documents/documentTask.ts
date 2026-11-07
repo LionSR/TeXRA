@@ -189,12 +189,6 @@ export const rejectOversizedBibAttachments = Effect.fn(
     const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
     return errorResult(message, {
       summary: `Rejected oversized BibTeX attachment`,
-      diagnostics: {
-        type: 'oversized_bib_attachment',
-        path: bibFile,
-        sizeBytes,
-        limitBytes: LARGE_BIB_LIMIT_BYTES,
-      },
     });
   }
 

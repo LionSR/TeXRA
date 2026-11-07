@@ -35,7 +35,7 @@ import { Interactions } from './HostInteractions';
 import { ProjectTools } from './loop/step';
 import { SessionRequests, workAutoApproved } from './requests';
 import type { RunCallShape } from './RunCall';
-import type { RouteRetries } from './run/invocation';
+import type { RouteRetries } from './ModelRetryGate';
 import type { SessionServices } from './rootLaunch';
 
 /**

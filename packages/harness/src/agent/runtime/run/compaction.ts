@@ -6,7 +6,7 @@
  * replacing the history it summarized. A threshold compaction runs in the
  * background ({@link backgroundCompaction}); the others wait for their own.
  * The replacement, a summary the bound model produces through the invoker's
- * priced `call` (its attempts on the run's history), is one user message.
+ * priced `call` (no row records its attempts), is one user message.
  * Every skip and failure is logged and shown as a compaction activity.
  */
 import { Cause, Effect, Exit, Fiber, type Scope } from 'effect';
@@ -63,7 +63,8 @@ interface CompactionInput {
   readonly bound: BoundModel;
   /** The run's invoker, which makes the summary call. */
   readonly invoker: ModelInvoker['Service'];
-  /** The run's cell, which the summary's attempt rows commit through. */
+  /** The run's cell: a token renewal reads its declined routes, and the
+   *  summary lands on it. */
   readonly cell: RunCell;
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
@@ -86,7 +87,7 @@ interface Summary {
   readonly to: number;
   readonly contextWindow: number;
   readonly activity: ReturnType<typeof startCompactionActivity>;
-  readonly cell: RunCell; // its attempts committed through it; it lands here
+  readonly cell: RunCell; // the summary lands on it
 }
 
 /** Whether the history has reached the threshold share of the window. */
@@ -213,7 +214,7 @@ const land = Effect.fn('compaction.land')(function* (
   base: number | null,
   reason: Reason,
 ) {
-  // Onto the cell's state, which holds the summary's own attempt rows.
+  // Onto the cell's state as it is now: the loop may have appended since.
   const state = yield* summary.cell.current;
   const compacted = yield* summary.cell.append([
     ...answers,
@@ -405,7 +406,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
         { ...input, cell, bound },
         reason,
       );
-      if (summary === null) return yield* cell.current; // its attempts
+      if (summary === null) return yield* cell.current; // nothing landed
       return yield* land(input, answers, summary, settled.lastEdit, reason);
     });
 

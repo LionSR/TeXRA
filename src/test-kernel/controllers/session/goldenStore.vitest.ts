@@ -112,13 +112,13 @@ const PARENT = Schema.decodeUnknownSync(RunIdSchema)('a00000000001');
 const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000008');
 /** The goal script the chat's plan launched, named by the plan call, and
  *  its one round, named by the script's `self()` call. */
-const GOAL = Schema.decodeUnknownSync(RunIdSchema)('fbac3220eaad42244610d06c');
-const ROUND = 'b4ff6b884ebe3a7e584d82de';
+const GOAL = Schema.decodeUnknownSync(RunIdSchema)('644d1e4fe35654071fa5afb7');
+const ROUND = '38638341d36bf19292935f83';
 /** The chat's Codex child, detached by the user's stop. */
 const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
 const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
 /** The agent the script defined (`persona`), named by its `agent()` call. */
-const DEFINED = '2ab12f4e87a094845c2be452';
+const DEFINED = '58828038326e436881c70921';
 /** A headless run, and the fork `texra resume --fork` made of it. */
 const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
@@ -131,7 +131,7 @@ const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
-const REVISIONS = ['c7f87768952686e0f3507090', '07786de16152981e0bb228d2'];
+const REVISIONS = ['14528522ea16213a4126fb3d', '7a442cb2049485ed76de69bc'];
 
 const roots: string[] = [];
 afterAll(() => {
@@ -463,7 +463,8 @@ describe('the golden 1.0 store', () => {
           openAttempt: state?.invocation != null,
         }));
       // The stop kept where the loop stood: a halt records only the outcome.
-      // The child's note to its parent joined the cycle at its next request.
+      // The child's note to its parent was refused (a one-shot parent reads
+      // no message), so no user message joined the cycle.
       expect(yield* stateOf(PARENT)).toEqual({
         at: 'waiting',
         phase: 'waiting',
@@ -471,7 +472,7 @@ describe('the golden 1.0 store', () => {
         messages: [
           'user',
           ...['assistant', 'tool', 'assistant', 'tool'],
-          ...['assistant', 'tool', 'user'],
+          ...['assistant', 'tool'],
           'assistant',
         ],
         openAttempt: false,
@@ -708,7 +709,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
     return { sent, process: SessionGraph.with([], model) };
   };
   /** The chat's last model response. */
-  const RESPONSE = 589;
+  const RESPONSE = 582;
   /** The golden store, with `rewrite` applied, and a session over it. */
   const goldenSession = (rewrite?: string) =>
     Effect.gen(function* () {

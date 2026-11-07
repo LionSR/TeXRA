@@ -984,21 +984,15 @@ const memoryWorkflow: Plugin
 
 ## ModelRetryGate
 
-Coordinates retries for model calls sharing one provider route.
-
-Healthy routes remain fully concurrent. After a shared-route failure, calls
-on the affected route wait through one shared backoff and exactly one
-becomes the recovery probe. A successful probe releases the other calls;
-another route failure increases the shared backoff. The gate does not decide
-how many times a node retries—that remains the node retry loop's concern.
-
-Route state is mutated only from within Effect steps on one runtime, so a
-plain map is atomic here; the probe timer is a fiber in the gate's scope
-that sleeps on the runtime `Clock`, and a waiting call is a `Deferred` the
-probe fiber or a healthy success completes.
+Gate `attempt` on every route in `routes`, narrowest first. The tuple is
+non-empty because an empty list would run the attempt ungated.
 
 ```ts
-class ModelRetryGate
+interface ModelRetryGate {
+  readonly withRoutes: (
+    routes: readonly [RoutePolicy, ...RoutePolicy[]],
+  ) => <A, E, R>(attempt: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
+}
 ```
 
 ## multiAgent
@@ -1444,34 +1438,15 @@ interface RetryTransientFetchOptions<E> {
 }
 ```
 
-## RouteFailure
-
-A failure a route classifies as its own, with the wait it asks for.
-
-```ts
-interface RouteFailure {
-  readonly retryAfterMs?: number;
-}
-```
-
-## RouteOptions
-
-How a call waits on its routes: the base backoff, and who hears a wait.
-
-```ts
-interface RouteOptions {
-  readonly baseBackoffMs: number;
-  readonly onWait?: (delayMs: number) => void;
-}
-```
-
 ## RoutePolicy
+
+One route a binding's calls go through: its key, and the scope of the
+failures that cool it (llm's `ModelError.scope`).
 
 ```ts
 interface RoutePolicy {
   readonly key: string;
-  readonly classifyFailure: (error: Error) => RouteFailure | undefined;
-  readonly isReachableFailure?: (error: Error) => boolean;
+  readonly scope: 'model' | 'route';
 }
 ```
 

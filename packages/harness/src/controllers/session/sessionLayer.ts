@@ -19,8 +19,7 @@ import {
 } from 'effect';
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import { RouteRetries } from '@agent/runtime/run/invocation';
+import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
   SESSION_CLOSE_DEADLINE_MS,
@@ -389,7 +388,7 @@ export function ownerProcessLayer({
     ),
     catalog,
     // One retry gate per process: a 429 cools a credential for every project.
-    Layer.effect(RouteRetries, ModelRetryGate.make),
+    Layer.sync(RouteRetries, makeRetryGate),
   ).pipe(
     Layer.provideMerge(appState.pipe(Layer.orDie)),
     Layer.provideMerge(Layer.merge(identity, AppSignals.layer)),

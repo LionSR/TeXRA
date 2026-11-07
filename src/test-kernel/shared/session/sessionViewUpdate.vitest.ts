@@ -306,7 +306,6 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     request: '0'.repeat(64),
     invocation: INVOCATION,
     origin: ORIGIN,
-    purpose: 'turn',
   }),
   message({
     kind: 'identified',

@@ -4,9 +4,10 @@ import { Predicate } from 'effect';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 /** `err` followed by its `cause` chain, outermost first; an
- *  `AggregateError`'s `errors` follow it before its cause. Shared traversal
- *  for messages and for predicates whose fact may sit at any depth of a
- *  wrapped error. */
+ *  `AggregateError`'s `errors` follow it before its cause, and an error
+ *  whose `reason` carries the cause (a `PlatformError`, a `SqlError`) is
+ *  followed by that cause. Shared traversal for messages and for
+ *  predicates whose fact may sit at any depth of a wrapped error. */
 export function causeChain(err: unknown): unknown[] {
   // Ad-hoc wrapping can produce circular causes (err.cause === err); guard so
   // a lookup in an error path cannot itself hang the process.
@@ -19,6 +20,12 @@ export function causeChain(err: unknown): unknown[] {
     if (current instanceof AggregateError)
       for (const error of current.errors) visit(error);
     if ('cause' in current) visit(current.cause);
+    if (
+      'reason' in current &&
+      Predicate.isObjectOrArray(current.reason) &&
+      'cause' in current.reason
+    )
+      visit(current.reason.cause);
   };
   visit(err);
   return chain;

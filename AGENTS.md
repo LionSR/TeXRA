@@ -140,8 +140,8 @@ are no baseline files and no architecture tests. `.agents/docs/refuted-candidate
 investigated and refused; landing one on new evidence rewrites its entry in
 the same PR. The open work is the public surface in
 `.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`,
-not another lint rule. Publishing the harness and llm packages is the owner's
-manual step (`releasing` skill).
+not another lint rule. The harness and llm packages publish together, on
+their own version, from an `sdk-v` release (`releasing` skill).
 
 Where things go:
 

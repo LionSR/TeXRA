@@ -273,7 +273,8 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // accepted operation is its origin and response id alone, with no stream
   // position (an earlier build's operation would have its position silently
   // dropped).
-  'model.message': { version: 13, listing: 'none' },
+  // v14: no `purpose`; a compaction's summary records no attempt.
+  'model.message': { version: 14, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).
@@ -293,7 +294,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // edit of an existing file requires; an earlier build's row would read as a
   // call that read nothing, and the run's edits would be refused (nothing
   // records what that build's calls read).
-  'tool.result': { version: 3, listing: 'none' },
+  // v4: no `diagnostics`; an earlier build's row holding them would have
+  // them silently dropped.
+  'tool.result': { version: 4, listing: 'none' },
   // v2: no `continuation`: goal mode is a script, and a waiting run never
   // continues itself (an earlier build's row names a plugin continuation this
   // build has none of).

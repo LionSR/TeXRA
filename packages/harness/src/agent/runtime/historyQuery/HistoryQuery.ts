@@ -119,9 +119,7 @@ function modelWrites(
     case 'attempt': {
       const { invocationId, attempt } = p.invocation;
       const model = p.origin.requestedModel;
-      return [
-        ['modelAttempt', runId, invocationId, attempt, p.purpose, model, at],
-      ];
+      return [['modelAttempt', runId, invocationId, attempt, model, at]];
     }
     case 'failed': {
       const { message } = p.error;
@@ -203,17 +201,8 @@ function callWrites(
       ],
     ];
   }
-  if (row.type === 'context.edit' && row.payload.cause === 'compaction') {
-    // The summary's reply is what replaced the history it summarized.
-    const text = row.payload.messages
-      .flatMap((message) => (message.role === 'user' ? message.content : []))
-      .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
-      .join('\n');
-    const { usage } = row.payload;
-    return [['summaryEnd', cutText(text), ...spend(usage), at, runId]];
-  }
   // A run's other history rows (positions, requests, offered tools, blobs,
-  // hook outcomes, a fork's seed) record no call fact.
+  // hook outcomes, a compaction's edit, a fork's seed) record no call fact.
   return [];
 }
 

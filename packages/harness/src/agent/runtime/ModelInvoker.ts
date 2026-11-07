@@ -1,16 +1,17 @@
 /**
- * The one service that touches the llm `Model`; every call carries a purpose
- * (`run/invocation.ts`). One `invoke` is one turn with its billed attempts: the
- * `TurnRequest` assembled from the folded `RunState`, `prepareTurn`, the
- * `attempt` row committed before the request leaves the process,
- * `identified` when the provider names the response, the stream bridged into
- * the trace, and the `response` row with its dispatch facts and priced usage
- * committed before any tool runs. `call` is a compaction summary on the same
- * binding, gate and pricing, its attempts recorded on the run's history and
- * landed by its caller.
+ * The one service that touches the llm `Model` for a run. One `invoke` is
+ * one turn with its billed attempts: the `TurnRequest` assembled from the
+ * folded `RunState`, `prepareTurn`, the `attempt` row committed before the
+ * request leaves the process, `identified` when the provider names the
+ * response, the stream bridged into the trace, and the `response` row with
+ * its dispatch facts and priced usage committed before any tool runs.
+ * `call` is a compaction summary on the same binding, gate and pricing, off
+ * the rows (`run/modelCall.ts`): its usage rides the edit its caller lands.
  *
- * Retry is the one loop (`run/invocation.ts`) over the invocation's rows:
- * each failed attempt commits a `failed` row with the move after it, an
+ * A turn's retry loop is `invoke` over the invocation's rows: `nextAttempt`
+ * reads the next move off them, so the loop keeps no count and no permit of
+ * its own and a resume continues the same series under the same budget.
+ * Each failed attempt commits a `failed` row with the move after it, an
  * automatic resend under the process's `ModelRetryGate` while the budget the
  * rows count lasts, then a person's answer to a `request.opened` the same
  * batch opens. The answer is the `request.decided` row, and the attempt
@@ -28,6 +29,8 @@ import {
   type FileSystem,
   Layer,
   Result,
+  ScopedRef,
+  Semaphore,
   Stream,
   SynchronizedRef,
 } from 'effect';
@@ -45,11 +48,15 @@ import {
   logContextManagementEvent,
   logProviderError,
 } from '@agent/trace/helpers';
-import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
+import {
+  failureInfo,
+  type CallFailure,
+} from '@agent/runtime/modelAccess/failureInfo';
 import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
+import { RouteUnavailable } from '@common/errors/agentErrors';
 import { quotaFallbackMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { SessionRoots } from '@platform/rootedFs';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
@@ -63,7 +70,15 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HistoryMessage } from '@shared/session/historyTurns';
-import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
+import {
+  failedNext,
+  failuresBefore,
+  nextAttempt,
+  type Attempt,
+  type Invocation,
+  type NextAttempt,
+  type RetryCredentials,
+} from '@shared/session/inFlight';
 import { turnText } from '@shared/session/runFacts';
 import {
   findStorageRefusal,
@@ -76,16 +91,15 @@ import type { StateReadFailed } from '@shared/config/settings';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 
+import { resendDelayMs, RouteRetries } from './ModelRetryGate';
 import { decisionOf, policyDecidedRows } from './requests';
 import { AgentRun } from './run/AgentRun';
-import { runInvocation, RouteRetries } from './run/invocation';
 import { callModel, type CallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens, outputBudget } from './run/contextTokens';
 import { priceTurnUsage, reportUsage } from './run/pricing';
 import {
   admittedTurn,
-  attemptRequest,
   attemptRows,
   chainedContinuation,
   checkRecordedRequest,
@@ -135,11 +149,31 @@ type InvocationOutcome =
  */
 export type InvokeError = CellError | StateReadFailed | DatabaseReadFailed;
 
-/** What an invocation reads from its run's context. */
-type InvokeServices = FileSystem.FileSystem | RouteRetries | SessionServices;
-
 /** What one attempt reads: its files, and its run's session. */
 type AttemptServices = FileSystem.FileSystem | SessionServices;
+
+/** A failed attempt: llm's verdict, or no route to send it on. */
+const isCallFailure = (error: unknown): error is CallFailure =>
+  error instanceof ModelError || error instanceof RouteUnavailable;
+
+/**
+ * One failure of an attempt. `unsent` marks a binding that could not be
+ * replaced (a renewal or a rebind that failed): nothing was sent, and no
+ * retry repeats it.
+ */
+interface AttemptFailure {
+  readonly error: CallFailure;
+  readonly unsent: boolean;
+}
+
+/** The next attempt's reference: the invocation's next, or a new one. */
+const nextRef = (invocation: Invocation | null): InvocationRef =>
+  invocation === null
+    ? { invocationId: randomUUID(), attempt: 1 }
+    : {
+        invocationId: invocation.current.ref.invocationId,
+        attempt: invocation.current.ref.attempt + 1,
+      };
 
 export class ModelInvoker extends Context.Service<
   ModelInvoker,
@@ -147,10 +181,10 @@ export class ModelInvoker extends Context.Service<
     readonly invoke: (
       cell: RunCell,
       request: InvokeRequest,
-    ) => Effect.Effect<InvocationOutcome, InvokeError, InvokeServices>;
-    /** A compaction summary: one call outside a turn, on the run's binding,
-     *  its attempts recorded on the run's history. Its messages are the
-     *  history's, media by address; the call resolves them. */
+    ) => Effect.Effect<InvocationOutcome, InvokeError, AttemptServices>;
+    /** A compaction summary: one call off the rows, on the run's binding.
+     *  Its messages are the history's, media by address; the call resolves
+     *  them. */
     readonly call: (
       cell: RunCell,
       request: Omit<TurnRequest, 'messages'> & {
@@ -183,6 +217,9 @@ export const modelInvokerLayer = (): Layer.Layer<
       const attemptStarts = new WeakMap<InvocationRef, number>();
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
+      /** Held across a rebind's check and its replacement: a turn's retry
+       *  and a background compaction's renewal may both rebind the run. */
+      const rebinding = Semaphore.makeUnsafe(1);
       const attribution = {
         agentName: usageAgentName(run.config.agent, run.config.agentSource),
         runId,
@@ -440,7 +477,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         // The durable fact before the billed request, with the prepared
         // turn it sends, which the rows alone must rebuild.
         yield* cell.append((state) =>
-          attemptRows(run, state, invocation, 'turn', bound.origin, resolved),
+          attemptRows(run, state, invocation, bound.origin, resolved),
         );
         yield* checkRecordedRequest(run, resolved);
         const trace = openTrace();
@@ -525,31 +562,44 @@ export const modelInvokerLayer = (): Layer.Layer<
 
       /** Rebind on `selection`, retiring the failed binding, on the routes
        *  the run declines as its rows now stand; a failure keeps it, loudly.
-       *  A renew names the token the provider rejected. */
-      const rebind =
-        (cell: RunCell) =>
-        (selection: RetryCredentials | 'renewed', failed: BoundModel) =>
-          Effect.flatMap(cell.current, ({ declinedRoutes }) =>
-            run.swapModel((current) =>
-              // A switch may have landed while the panel waited; never undo it.
-              current !== failed
-                ? Effect.succeed(current)
-                : access.bind({
-                    modelId: failed.modelId,
-                    // A personal-key retry drops the route's overlay (window,
-                    // prices, PDF admission, Kimi endpoint) for the catalog's.
-                    config:
-                      selection === 'personal' ? undefined : failed.config,
-                    backend: failed.backend,
-                    declinedRoutes,
-                    textOnly: failed.textOnly,
-                    temperature: run.persona.temperature,
-                    ...(selection === 'renewed' && {
-                      rejected: failed.subscriptionToken,
-                    }),
-                  }),
+       *  A renew names the token the provider rejected. A binding that
+       *  already replaced `failed` (a switch, another call's rebind onto a
+       *  personal key) stands: rebinding from `failed` would bring back its
+       *  route's overlay. */
+      const rebind = (
+        cell: RunCell,
+        selection: RetryCredentials | 'renewed',
+        failed: BoundModel,
+      ): Effect.Effect<void, CallFailure> =>
+        rebinding
+          .withPermit(
+            Effect.flatMap(cell.current, ({ declinedRoutes }) =>
+              ScopedRef.getUnsafe(run.model) !== failed
+                ? Effect.void
+                : ScopedRef.set(
+                    run.model,
+                    access
+                      .bind({
+                        modelId: failed.modelId,
+                        // A personal-key retry drops the route's overlay (window,
+                        // prices, PDF admission, Kimi endpoint) for the catalog's.
+                        config:
+                          selection === 'personal' ? undefined : failed.config,
+                        backend: failed.backend,
+                        declinedRoutes,
+                        textOnly: failed.textOnly,
+                        temperature: run.persona.temperature,
+                        ...(selection === 'renewed' && {
+                          rejected: failed.subscriptionToken,
+                        }),
+                      })
+                      // The ref masks its acquisition; a stop must still cut
+                      // a bind in progress.
+                      .pipe(Effect.interruptible),
+                  ),
             ),
-          ).pipe(
+          )
+          .pipe(
             Effect.tapError((error) =>
               Effect.sync(() =>
                 logger.warn('Failed to refresh the model binding', {
@@ -557,7 +607,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 }),
               ),
             ),
-            Effect.result,
           );
 
       /**
@@ -581,7 +630,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           payload: {
             kind: 'failed',
             invocation: ref,
-            purpose: 'turn',
             error,
             next,
             ...(usage === null ? {} : { usage }),
@@ -631,110 +679,283 @@ export const modelInvokerLayer = (): Layer.Layer<
         ];
       });
 
+      /** Record the failure of attempt `ref` and the move after it. */
+      const recordFailure = Effect.fn('ModelInvoker.failed')(function* (
+        cell: RunCell,
+        ref: InvocationRef,
+        { error }: AttemptFailure,
+        next: FailedNext,
+        bound: BoundModel,
+      ): Effect.fn.Return<void, InvokeError, SessionServices> {
+        const info = failureInfo(error, bound.config.provider);
+        const quota = error instanceof ModelError ? error.quota : undefined;
+        if (next.kind === 'ask' || next.kind === 'stop')
+          yield* logProviderError(
+            logger,
+            next.kind === 'ask'
+              ? 'Model request failed'
+              : 'Model request failed (no retry available)',
+            { ...info, rawErrorBody: error.cause },
+          );
+        // A response the provider billed before refusing it is priced
+        // and reported like a turn's, on its `failed` row.
+        const started = attemptStarts.get(ref);
+        const usage =
+          error instanceof ModelError &&
+          error.usage !== undefined &&
+          started !== undefined
+            ? priceTurnUsage(
+                bound,
+                error.usage,
+                (yield* Clock.currentTimeMillis) - started,
+              )
+            : null;
+        yield* reportUsage(usageLog, bound, usage, attribution, roots);
+        yield* cell.append(
+          yield* failedRows(cell, ref, info, next, bound, usage, quota),
+        );
+      });
+
+      /** The move after `failure` of attempt `ref`, read off the attempts
+       *  before it, llm's verdict and the budget. */
+      const moveAfter = (
+        cell: RunCell,
+        { error, unsent }: AttemptFailure,
+        ref: InvocationRef,
+        observed: boolean,
+        retries: number,
+      ): Effect.Effect<FailedNext> =>
+        Effect.map(cell.current, ({ invocation }) =>
+          failedNext(
+            failuresBefore(invocation, ref),
+            {
+              // A failed observation is never resubmitted unasked: the work
+              // it watched was already billed.
+              unchain:
+                !observed &&
+                error instanceof ModelError &&
+                error.kind === 'continuation-gone',
+              automatic:
+                !observed &&
+                !unsent &&
+                error instanceof ModelError &&
+                error.retryable,
+              // A person is offered a retry whenever llm says the same
+              // request can succeed, and after a used-up quota, whose retry
+              // carries the switch onto their own credential; a missing
+              // route is fixed outside the run.
+              offered:
+                !unsent &&
+                error instanceof ModelError &&
+                (error.retryable || error.quota !== undefined),
+            },
+            retries,
+            `retry-${randomUUID()}`,
+          ),
+        );
+
+      /**
+       * Make the attempt `move` names on `bound`: a send under the process's
+       * route gate, so every run on one credential shares cooling, or an
+       * observation, unbilled, outside it. An interruption stays the run's
+       * and a refused write its own; anything else is a defect.
+       */
+      const tryAttempt = (
+        cell: RunCell,
+        request: InvokeRequest,
+        move: Extract<NextAttempt, { kind: 'send' | 'observe' }>,
+        ref: InvocationRef,
+        bound: BoundModel,
+      ): Effect.Effect<
+        { readonly ok: InvocationResponse } | AttemptFailure,
+        InvokeError,
+        AttemptServices
+      > =>
+        Effect.exit(
+          move.kind === 'send'
+            ? gate.withRoutes(bound.routes)(
+                attemptOnce(cell, ref, request, bound),
+              )
+            : observeAccepted(cell, ref, bound, move.attempt.accepted),
+        ).pipe(
+          Effect.flatMap(
+            (
+              exit,
+            ): Effect.Effect<
+              { readonly ok: InvocationResponse } | AttemptFailure,
+              InvokeError
+            > => {
+              if (Exit.isSuccess(exit))
+                return Effect.succeed({ ok: exit.value });
+              if (Cause.hasInterrupts(exit.cause)) return Effect.interrupt;
+              const found = Cause.findError(exit.cause);
+              if (Result.isFailure(found))
+                return Effect.die(Cause.squash(exit.cause));
+              const error = found.success;
+              return isCallFailure(error)
+                ? Effect.succeed({ error, unsent: false })
+                : Effect.fail(error);
+            },
+          ),
+        );
+
+      /** Wait for the answer to the open retry request: the
+       *  `request.decided` row the decide command lands; false when nobody
+       *  will answer it (the session closed first). */
+      const awaitDecision = Effect.fn('ModelInvoker.await')(function* (
+        cell: RunCell,
+        requestId: string,
+      ): Effect.fn.Return<boolean, InvokeError> {
+        logger.debug('Waiting for manual retry');
+        const row = yield* decisionOf(
+          runId,
+          requestId,
+          (yield* cell.current).commit,
+        ).pipe(
+          Effect.provideService(SessionLog, log),
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              logger.warn('The retry prompt closed before a decision', {
+                data: error,
+              });
+              return null;
+            }),
+          ),
+        );
+        if (row === null) return false;
+        yield* cell.refresh;
+        return true;
+      });
+
+      /** Ask again about `attempt`, whose outcome no row records: one a
+       *  person allowed, or one past the automatic retries. */
+      const reask = Effect.fn('ModelInvoker.reask')(function* (
+        cell: RunCell,
+        attempt: Attempt,
+      ): Effect.fn.Return<void, InvokeError, SessionServices> {
+        const bound = yield* ScopedRef.get(run.model);
+        yield* cell.append(
+          yield* failedRows(
+            cell,
+            attempt.ref,
+            {
+              message: INTERRUPTED_RETRY_MESSAGE,
+              provider: bound.config.provider,
+            },
+            { kind: 'ask', requestId: `retry-${randomUUID()}` },
+            bound,
+            null,
+            undefined,
+          ),
+        );
+      });
+
+      /** The turn as it ends without a response: the state its rows left. */
+      const endedAs = (
+        cell: RunCell,
+        kind: 'failed' | 'cancelled',
+      ): Effect.Effect<InvocationOutcome> =>
+        Effect.map(cell.current, (state) => {
+          if (kind === 'cancelled')
+            logger.info('Retry cancelled by user', {
+              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            });
+          return { kind, state };
+        });
+
+      /**
+       * Drive one turn's invocation to its response or its end: read the
+       * next move off its rows, make it, and, when an attempt fails, record
+       * why and what follows.
+       */
       const invoke = Effect.fn('ModelInvoker.invoke')(function* (
         cell: RunCell,
         request: InvokeRequest,
-      ): Effect.fn.Return<InvocationOutcome, InvokeError, InvokeServices> {
-        const ended = yield* runInvocation<
-          InvocationResponse,
-          InvokeError,
-          AttemptServices
-        >({
-          read: cell.current,
-          binding: SynchronizedRef.get(run.model),
-          rebind: rebind(cell),
-          attempt: (bound, ref, accepted) =>
-            accepted === null
-              ? attemptOnce(cell, ref, request, bound)
-              : observeAccepted(cell, ref, bound, accepted),
-          failed: Effect.fn('ModelInvoker.failed')(function* (
-            ref,
-            { error },
-            next,
-            bound,
-          ) {
-            const info = failureInfo(error, bound.config.provider);
-            const quota = error instanceof ModelError ? error.quota : undefined;
-            if (next.kind === 'ask' || next.kind === 'stop')
-              yield* logProviderError(
-                logger,
-                next.kind === 'ask'
-                  ? 'Model request failed'
-                  : 'Model request failed (no retry available)',
-                { ...info, rawErrorBody: error.cause },
-              );
-            // A response the provider billed before refusing it is priced
-            // and reported like a turn's, on its `failed` row.
-            const started = attemptStarts.get(ref);
-            const usage =
-              error instanceof ModelError &&
-              error.usage !== undefined &&
-              started !== undefined
-                ? priceTurnUsage(
-                    bound,
-                    error.usage,
-                    (yield* Clock.currentTimeMillis) - started,
-                  )
-                : null;
-            yield* reportUsage(usageLog, bound, usage, attribution, roots);
-            yield* cell.append(
-              yield* failedRows(cell, ref, info, next, bound, usage, quota),
+      ): Effect.fn.Return<InvocationOutcome, InvokeError, AttemptServices> {
+        const retries = (yield* ScopedRef.get(run.model)).automaticRetries;
+        // Once per invocation, a subscription access token the provider
+        // rejects before its stored expiry (revoked, or expired server-side)
+        // is renewed: the binding rebound on a refreshed session and the
+        // attempt made again on it, an observation unrecorded. A renewal
+        // that fails takes the rejection's place as an unsent failure, so
+        // the user reads the "sign in again" instruction rather than "token
+        // is expired", and no retry resends the rejected token.
+        let renewed = false;
+        let again: NextAttempt | null = null;
+        for (;;) {
+          const { invocation, requests } = yield* cell.current;
+          const move: NextAttempt =
+            again ?? nextAttempt(invocation, requests, retries);
+          again = null;
+          if (move.kind === 'fail') return yield* endedAs(cell, 'failed');
+          if (move.kind === 'cancel') return yield* endedAs(cell, 'cancelled');
+          if (move.kind === 'await') {
+            if (!(yield* awaitDecision(cell, move.requestId)))
+              return yield* endedAs(cell, 'cancelled');
+            continue;
+          }
+          if (move.kind === 'reask') {
+            yield* reask(cell, move.attempt);
+            continue;
+          }
+          const ref =
+            move.kind === 'observe' ? move.attempt.ref : nextRef(invocation);
+          if (move.kind === 'send' && move.retry !== null) {
+            // Rebind before sending `ref` on a person's retry answer. A
+            // failed rebind is `ref`'s failure, recorded unsent, so nothing
+            // goes out on the binding it meant to leave.
+            const bound = yield* ScopedRef.get(run.model);
+            const rebound = yield* Effect.result(
+              rebind(cell, move.retry, bound),
             );
-            return info;
-          }),
-          asker: {
-            requestId: () => `retry-${randomUUID()}`,
-            await: Effect.fn('ModelInvoker.await')(function* (requestId) {
-              logger.debug('Waiting for manual retry');
-              // The answer is the `request.decided` row the decide
-              // command lands; a session that closes first cancels.
-              const row = yield* decisionOf(
-                runId,
-                requestId,
-                (yield* cell.current).commit,
-              ).pipe(
-                Effect.provideService(SessionLog, log),
-                Effect.catch((error) =>
-                  Effect.sync(() => {
-                    logger.warn('The retry prompt closed before a decision', {
-                      data: error,
-                    });
-                    return null;
-                  }),
-                ),
-              );
-              if (row === null) return false;
-              yield* cell.refresh;
-              return true;
-            }),
-            reask: Effect.fn('ModelInvoker.reask')(function* (attempt) {
-              const bound = yield* SynchronizedRef.get(run.model);
-              yield* cell.append(
-                yield* failedRows(
-                  cell,
-                  attempt.ref,
-                  {
-                    message: INTERRUPTED_RETRY_MESSAGE,
-                    provider: bound.config.provider,
-                  },
-                  { kind: 'ask', requestId: `retry-${randomUUID()}` },
-                  bound,
-                  null,
-                  undefined,
-                ),
-              );
-            }),
-          },
-          retries: (yield* SynchronizedRef.get(run.model)).automaticRetries,
-          logger,
-        });
-        if (ended.kind === 'response') return ended;
-        const state = yield* cell.current;
-        if (ended.kind === 'failed') return { kind: 'failed', state };
-        logger.info('Retry cancelled by user', {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        });
-        return { kind: 'cancelled', state };
+            if (Result.isFailure(rebound)) {
+              const failure = { error: rebound.failure, unsent: true };
+              const next = yield* moveAfter(cell, failure, ref, false, retries);
+              yield* recordFailure(cell, ref, failure, next, bound);
+              continue;
+            }
+          }
+          const bound = yield* ScopedRef.get(run.model);
+          const tried = yield* tryAttempt(cell, request, move, ref, bound);
+          if ('ok' in tried) return tried.ok;
+          const observed = move.kind === 'observe';
+          let failure: AttemptFailure = tried;
+          let next: FailedNext | null = null;
+          if (
+            !renewed &&
+            tried.error instanceof ModelError &&
+            tried.error.kind === 'authentication' &&
+            bound.subscriptionToken !== undefined
+          ) {
+            renewed = true;
+            const rebound = yield* Effect.result(
+              rebind(cell, 'renewed', bound),
+            );
+            if (Result.isSuccess(rebound)) {
+              if (observed) {
+                again = move;
+                continue;
+              }
+              next = { kind: 'retry' };
+            } else failure = { error: rebound.failure, unsent: true };
+          }
+          next ??= yield* moveAfter(cell, failure, ref, observed, retries);
+          yield* recordFailure(cell, ref, failure, next, bound);
+          if (next.kind === 'stop') return yield* endedAs(cell, 'failed');
+          if (next.kind !== 'retry' && next.kind !== 'unchain') continue;
+          // The pause before an automatic resend, unchained or not.
+          const delayMs = resendDelayMs(failure.error);
+          if (next.kind === 'unchain')
+            logger.warn(
+              `Chained response gone (${failure.error.message}); retrying once with the full transcript.`,
+            );
+          else
+            logger.debug(
+              `Model request failed; automatic retry in ${delayMs}ms.`,
+              { data: failure.error.message },
+            );
+          if (delayMs > 0) yield* Effect.sleep(delayMs);
+        }
       });
 
       /** A compaction summary on the run's binding; its caller lands it. */
@@ -743,45 +964,12 @@ export const modelInvokerLayer = (): Layer.Layer<
           providerMessages(request.messages, log.blobs),
           (messages) =>
             callModel({
-              purpose: 'compaction',
-              binding: SynchronizedRef.get(run.model),
-              reacquire: (failed, renew) =>
-                rebind(cell)(renew ? 'renewed' : 'configured', failed),
+              binding: ScopedRef.get(run.model),
+              renew: (failed) => rebind(cell, 'renewed', failed),
               request: { ...request, messages },
               settings: roots,
               attribution,
-              logger,
-              record: {
-                attempt: (ref, bound, resolved) =>
-                  cell
-                    .append((state) =>
-                      attemptRows(
-                        run,
-                        state,
-                        ref,
-                        'summary',
-                        bound.origin,
-                        resolved,
-                      ),
-                    )
-                    .pipe(Effect.as(attemptRequest(run, resolved))),
-                failed: (ref, error, next) =>
-                  Effect.asVoid(
-                    cell.append([
-                      {
-                        type: 'model.message',
-                        aggregateId,
-                        payload: {
-                          kind: 'failed',
-                          invocation: ref,
-                          purpose: 'summary',
-                          error,
-                          next,
-                        },
-                      },
-                    ]),
-                  ),
-              },
+              debug: (message) => Effect.sync(() => logger.debug(message)),
             }).pipe(
               Effect.provideService(UsageLog, usageLog),
               Effect.provideService(RouteRetries, gate),

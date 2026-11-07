@@ -57,45 +57,21 @@ const EditRecordSchema = Schema.Struct({
 export type EditRecord = typeof EditRecordSchema.Type;
 
 // ============================================================================
-// Diagnostics
+// Schema issues
 // ============================================================================
 
-/**
- * Diagnostic type identifier for tool parameter validation errors.
- * Used when a tool's input fails its schema.
- */
-export const DIAGNOSTIC_TYPE_VALIDATION_ERROR = 'validation_error' as const;
-
-/**
- * One schema issue formatted for model consumption: the dotted path of the
- * field and the issue's message. Every field is JSON by construction: the
- * settled tool result is stored as a JSON value, and a present-but-undefined
- * key there is a refused row, not a dropped key.
- */
-const FormattedIssueSchema = Schema.Struct({
-  path: Schema.String,
-  message: Schema.String,
-});
-type FormattedIssue = typeof FormattedIssueSchema.Type;
-
-/**
- * Structured validation error diagnostics. One of several shapes a tool's
- * `ToolResult.diagnostics` may carry (see that field's own comment) — this is
- * the one produced for input-validation failures, used to provide rich
- * error information to models for self-correction.
- */
-export const ValidationErrorDiagnosticsSchema = Schema.Struct({
-  type: Schema.Literal(DIAGNOSTIC_TYPE_VALIDATION_ERROR),
-  formatted: Schema.Array(FormattedIssueSchema),
-});
-export type ValidationErrorDiagnostics =
-  (typeof ValidationErrorDiagnosticsSchema)['Type'];
+/** One schema issue: the dotted path of the field and the issue's message. */
+interface FormattedIssue {
+  readonly path: string;
+  readonly message: string;
+}
 
 const flattenIssue = SchemaIssue.makeFormatterStandardSchemaV1();
 
 /**
- * Flatten a schema failure's issue tree into one row per leaf issue, for
- * model consumption: the dotted path of the field and the message.
+ * Flatten a schema failure's issue tree into one row per leaf issue: the
+ * dotted path of the field and the message, which a malformed-payload
+ * diagnostic names the fields by.
  */
 export function formatIssuesForDiagnostics(
   error: Schema.SchemaError,
@@ -123,14 +99,6 @@ export function formatIssuesForDiagnostics(
 const ToolResultSharedFields = {
   /** User instruction that was processed */
   userInstruction: Schema.optional(Schema.String),
-  /**
-   * Additional diagnostic information. Deliberately `Schema.Unknown`: every tool
-   * shapes its own payload here (validation issues, severity counts, an
-   * unread-file reason, an error name, …), so there is no single schema to
-   * validate against. Consumers that care about one specific shape — e.g.
-   * {@link ValidationErrorDiagnosticsSchema} — parse it themselves.
-   */
-  diagnostics: Schema.optional(Schema.Unknown),
   /** Summary added by handlers when attachments are available */
   attachmentSummary: Schema.optional(Schema.String),
 };
@@ -252,17 +220,16 @@ export const SettledAttachmentSchema = Schema.Struct({
 
 /**
  * The follow-up builder's input. Derived from the exported members, never
- * re-declared: `files` loses its binary payload and `diagnostics` is narrowed
- * from `Schema.Unknown` to JSON, because an arbitrary value in a durable
- * payload is a `JSON.stringify` throw waiting for a cycle or a BigInt.
+ * re-declared: `files` loses its binary payload.
  *
  * A settled file is the attachment a tool produced, decoded as such, with
  * `base64Data` and `bytes` dropped: real attachments carry them plus whatever
  * extra keys a tool attached, and those extra keys stay. What the drop leaves
- * is then validated as JSON, exactly as `diagnostics` is: a third byte buffer
- * or a cyclic object among the extra keys is the same `JSON.stringify` throw,
- * on a row that is already committed. Encoding is the identity: a settled
- * file is an attachment without its bytes.
+ * is then validated as JSON, because an arbitrary value in a durable payload
+ * is a `JSON.stringify` throw waiting for a cycle or a BigInt: a third byte
+ * buffer or a cyclic object among the extra keys is that throw, on a row
+ * that is already committed. Encoding is the identity: a settled file is an
+ * attachment without its bytes.
  */
 const SettledFileMetadataSchema = Schema.StructWithRest(
   ToolFileAttachmentFieldsSchema.mapFields(
@@ -293,11 +260,7 @@ export const SettledToolResultSchema = Schema.Union([
   ).mapFields(
     Struct.assign({
       files: Schema.optional(Schema.Array(SettledFileSchema)),
-      diagnostics: Schema.optional(JsonValueSchema),
     }),
   ),
-
-  ErrorToolResultSchema.mapFields(
-    Struct.assign({ diagnostics: Schema.optional(JsonValueSchema) }),
-  ),
+  ErrorToolResultSchema,
 ]);

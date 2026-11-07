@@ -17,8 +17,8 @@ import {
   Layer,
   Schema,
   Scope,
+  ScopedRef,
   Stream,
-  SynchronizedRef,
 } from 'effect';
 import { layer } from '@effect/vitest';
 
@@ -208,7 +208,7 @@ const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
 function agentRun(
   runId: RunId,
   session: Context.Context<SessionServices>,
-  model: SynchronizedRef.SynchronizedRef<BoundModel>,
+  model: ScopedRef.ScopedRef<BoundModel>,
 ): AgentRunShape {
   return testAgentRun(
     { runId, session, logger: noopTrace, model, scope: Scope.makeUnsafe() },
@@ -281,7 +281,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         request: '0'.repeat(64),
         invocation: INVOCATION,
         origin: ORIGIN,
-        purpose: 'turn',
       },
     },
     {
@@ -297,7 +296,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       },
     },
   ]);
-  const model = yield* SynchronizedRef.make(boundModel());
+  const model = yield* ScopedRef.make(() => boundModel());
   const layer = Layer.mergeAll(
     nativeToolTestLayer(),
     Layer.succeed(AgentRun, agentRun(runId, session, model)),

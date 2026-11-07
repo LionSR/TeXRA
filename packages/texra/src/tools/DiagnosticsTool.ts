@@ -124,29 +124,12 @@ const readDiagnostics = Effect.fn('DiagnosticsTool.readDiagnostics')(function* (
   const header = `${diagnosticsPath}: ${formatCounts(counts)}`;
   const summary = `Diagnostics ${command} for ${diagnosticsPath}`;
 
-  const baseDiagnostics = {
-    path: diagnosticsPath,
-    command,
-    severity: counts,
-  };
-
-  if (command === 'count') {
-    return {
-      status: 'executed',
-      summary,
-      output: header,
-      diagnostics: baseDiagnostics,
-    };
-  }
+  if (command === 'count')
+    return { status: 'executed', summary, output: header };
 
   const messageDetails =
     messages.length > 0 ? `\n\n${formatMessageList(messages)}` : '';
-  return {
-    status: 'executed',
-    summary,
-    output: `${header}${messageDetails}`,
-    diagnostics: { ...baseDiagnostics, messages },
-  };
+  return { status: 'executed', summary, output: `${header}${messageDetails}` };
 });
 
 const addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(function* (

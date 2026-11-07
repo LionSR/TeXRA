@@ -52,7 +52,7 @@ import {
 } from '@texra-ai/harness/host';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
-import { RouteRetries } from '@agent/runtime/run/invocation';
+import { RouteRetries } from '@agent/runtime/ModelRetryGate';
 import { validationModelLayer } from '@cli/runtime/validationModel';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';

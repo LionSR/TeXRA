@@ -684,9 +684,10 @@ type CallFailure = ModelError | RouteUnavailable;
 ## causeChain
 
 `err` followed by its `cause` chain, outermost first; an
-`AggregateError`'s `errors` follow it before its cause. Shared traversal
-for messages and for predicates whose fact may sit at any depth of a
-wrapped error.
+`AggregateError`'s `errors` follow it before its cause, and an error
+whose `reason` carries the cause (a `PlatformError`, a `SqlError`) is
+followed by that cause. Shared traversal for messages and for
+predicates whose fact may sit at any depth of a wrapped error.
 
 ```ts
 function causeChain(err: unknown): unknown[]
@@ -1126,9 +1127,9 @@ function hasExtension(filePath: string, extension: string): boolean
 ## helperCall
 
 One helper call: bind the configured helper model (else `runModel`) for
-this call alone and run one completion through the one retry loop
-(`run/invocation.ts`), gated on the process's retry gate, priced and
-reported to the usage log as `attribution`. No row is written. Returns the
+this call alone and run one completion off the rows (`run/modelCall.ts`),
+gated on the process's retry gate, priced and reported to the usage log
+as `attribution`. No row is written. Returns the
 turn's assistant text and its priced usage (`null`: the provider reported
 none), for a caller whose row records what the call cost. `stores` are the
 asking session's setting slots: the binding, the retry limit and the usage

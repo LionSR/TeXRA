@@ -31,7 +31,7 @@
  * - `state.get` / `state.set`: the project's state store, which a window
  *   reads and writes here rather than opening the project's store itself.
  */
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 
 import { Schema, Struct } from 'effect';
 import { Rpc, RpcGroup, RpcSchema } from 'effect/rpc';
@@ -366,6 +366,10 @@ export const TexraRpcs = RpcGroup.make(
   }),
 );
 
+/** First 12 hex digits of the sha256 of a value's JSON text. */
+const digest12 = (value: unknown): string =>
+  hash('sha256', JSON.stringify(value), 'hex').slice(0, 12);
+
 /** A procedure's shape: its payload, success and error schemas as JSON
  *  Schema, digested. A stream's success is its element and its error. What
  *  JSON Schema does not show (an opaque `Schema.declare`, a `Schema.Json`
@@ -375,14 +379,7 @@ const shapeOf = (rpc: Rpc.AnyWithProps): string => {
   const schemas = RpcSchema.isStreamSchema(success)
     ? [rpc.payloadSchema, success.success, success.error, rpc.errorSchema]
     : [rpc.payloadSchema, success, rpc.errorSchema];
-  return createHash('sha256')
-    .update(
-      JSON.stringify(
-        schemas.map((schema) => Schema.toJsonSchemaDocument(schema)),
-      ),
-    )
-    .digest('hex')
-    .slice(0, 12);
+  return digest12(schemas.map((schema) => Schema.toJsonSchemaDocument(schema)));
 };
 
 const shapes: Readonly<Record<string, string>> = Object.freeze(
@@ -404,13 +401,8 @@ export const PROTOCOL: {
   readonly digest: string;
   readonly shapes: Readonly<Record<string, string>>;
 } = Object.freeze({
-  digest: createHash('sha256')
-    .update(
-      JSON.stringify(
-        Object.entries(shapes).toSorted(([a], [b]) => a.localeCompare(b)),
-      ),
-    )
-    .digest('hex')
-    .slice(0, 12),
+  digest: digest12(
+    Object.entries(shapes).toSorted(([a], [b]) => a.localeCompare(b)),
+  ),
   shapes,
 });
