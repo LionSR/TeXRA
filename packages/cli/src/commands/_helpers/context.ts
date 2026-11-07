@@ -14,8 +14,7 @@ import { pickGlobalArgs, type ParsedGlobalArgs } from './globalArgs';
  * which it provides itself: the Node file services (the `--cwd` check) and the
  * same env ConfigProvider the process runtime serves, so the context's env
  * tier reads the live process environment. A citty action runs it once
- * (`defineCliCommand`, and `texra doctor` inside its own program); pinned in
- * `BARE_EFFECT_RUN_SITES`.
+ * (`defineCliCommand`, and `texra doctor` inside its own program).
  */
 export const contextFromArgs = Effect.fn('contextFromArgs')(function* (
   args: ParsedGlobalArgs,

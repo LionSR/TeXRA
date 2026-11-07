@@ -365,8 +365,8 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
     // disposed. The run starts only inside the region whose exit is the
     // terminal, so no stop lands between the two: a started run is always
     // finalized. The host's stop is this run fiber's interruption
-    // (`RunRegistry.stop`); the requests this run left open close with the
-    // fibers waiting on them (`SessionRequests.ask`). The backstop wait is
+    // (`RunRegistry.stop`); the requests this run left open are cancelled in
+    // its end's transaction (`cancelRequestRows`). The backstop wait is
     // `ensuring`, not a generator `finally`: the driver skips a `finally`
     // after a failed `yield*`, ending the run early.
     // A background child runs under the session's child-run budget; an

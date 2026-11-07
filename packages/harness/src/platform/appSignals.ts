@@ -53,7 +53,7 @@ export interface AppSignalPayloads {
    * and direct the user to token settings.
    *
    * Consumed by: extension (modal error + jump to Git settings), desktop
-   * (error dialog + re-post of the Git tab's token status). Not the CLI: a
+   * (an error dialog). Not the CLI: a
    * poller rejection arrives with no chat turn to attach it to, and the TUI
    * has no out-of-band notice surface — the rejection is logged instead.
    */
@@ -114,15 +114,14 @@ export interface AppSignalPayloads {
    *
    * Emitted, in every process sharing the global store, when the default
    * team changes (`apply_team`, which the setup agent runs mid-conversation,
-   * even in a background service task; `agentCatalogFollower`); and by the tool
-   * registry (`pluginCatalogLayer`) once it has reloaded the agent catalog
-   * after a tool switch or the plugin install record changed, in this
-   * process or another.
-   * Settings-originated changes repaint through their own handler and do not
-   * emit.
+   * even in a background service task), and when the agent catalog is
+   * reloaded after a tool switch, a plugin install or an agent file's edit:
+   * `agentCatalogFollower` emits both, in this process or another. A team
+   * change from the settings view emits too, through the same follower.
    *
    * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list and team presets. Not the CLI: it reads the agent list per command
+   * agent list and team presets, and the extension's launcher. Not the CLI:
+   * it reads the agent list per command
    * and has no persistent panel that could go stale.
    */
   workspaceAgentsChanged: undefined;

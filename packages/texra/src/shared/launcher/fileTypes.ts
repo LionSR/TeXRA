@@ -8,8 +8,8 @@ export const DocumentFileTypeSchema = Schema.Literals([
 export type DocumentFileType = typeof DocumentFileTypeSchema.Type;
 
 /**
- * Values accepted by the "get/set current editor file" round trip
- * (`GET_CURRENT_FILE` / `SET_CURRENT_FILE`): a document file type, or the
+ * Values accepted by the current-editor-file host request
+ * (`useCurrentFile`, `shared/session/hostRequest.ts`): a document file type, or the
  * diff-view pseudo-types 'base'/'edited', which aren't real file lists.
  */
 export const CurrentFileTypeSchema = Schema.Union([

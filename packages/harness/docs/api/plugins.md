@@ -554,11 +554,10 @@ type EditRecord = typeof EditRecordSchema.Type;
 ## errorResult
 
 Build a `status: 'error'` result literal. Reserved for call sites that
-cannot use the dominant `throw new ToolError(...)` convention (caught
-centrally by `defineTool`'s `call`) — typically because the caller must keep
-running after emitting a partial per-item error, or because a nested try/catch
-would otherwise reformat the thrown message. Prefer `throw new ToolError(...)`
-over this helper whenever the call site can support it.
+cannot fail the tool's Effect with a `ToolError` (the usual way, which
+`defineTool` turns into the call's error): typically a caller that must keep
+running after reporting a partial per-item error. Prefer failing with
+`ToolError` whenever the call site can.
 
 ```ts
 function errorResult(
@@ -1887,8 +1886,9 @@ type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
 The guard the run loop applies before a tool's body runs, declared on the
 tool instead of called inside it: the paths the call writes and the command
 it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
-either is asked for, so no tool body opens its own approval prompt or
-re-checks its own roots.
+either is checked, so no tool body re-checks its own roots or asks for the
+command's approval; a tool whose body asks its own question declares
+`requiresApproval: 'inBody'` (below).
 
 ```ts
 interface ToolGuard<T> {

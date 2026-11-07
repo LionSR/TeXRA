@@ -25,7 +25,7 @@ Read the nested guide before working in its subtree:
 corepack pnpm install
 npm run compile:fast      # build (esbuild + Vite); watch:fast, package:fast, build:fast
 npm run typecheck         # builds do NOT type check, see below
-npm run gate              # the static CI jobs: lint + invariants, typecheck + format
+npm run gate              # the static CI jobs: lint + invariants, docs, typecheck + format
 npm run test:watch        # while editing: reruns what a save reaches
 npm run test:changed      # before a commit: suites reachable from uncommitted edits
 npm run test:pure         # before a push (~30s): the host-free tier
@@ -211,8 +211,9 @@ from the `RunState` each append returns; resume is the same function over the
 same rows. There is no flow engine: do not add a node, a cursor, a services
 bag, or a second writer of the run history. Every model call goes through
 `runtime/ModelInvoker.ts` and the `packages/llm` `Model` bound by
-`runtime/modelAccess/ModelAccess.ts`, and retries in the one loop in
-`runtime/run/invocation.ts`.
+`runtime/modelAccess/ModelAccess.ts`. A turn retries in `ModelInvoker.invoke`
+over its rows, a call off the rows in `runtime/run/modelCall.ts`
+(`packages/harness/AGENTS.md` "Run loop architecture").
 
 Hosts and the app start a run with `session.start(...)` and continue a
 stored one with `session.resume(runId, ...)` on the `LocalSession`
@@ -454,7 +455,7 @@ directories are excluded by `docs/.vitepress/publicDocs.js`. A new file at the
 `docs/` root can silently freeze the deploy: check that allowlist and
 `docs/scripts/check-root-docs.mjs` first. PRDs and proposals live under
 `.agents/docs/` (`.agents/docs/README.md`). Every repo path cited in guidance
-must exist (`npm run check:guidance-refs`). Changelog rules: the `releasing`
+must exist (`npm run gate:docs`). Changelog rules: the `releasing`
 skill.
 
 ## Skills

@@ -166,15 +166,15 @@ export class Sessions extends Context.Service<
  *
  * A plugin list the harness cannot compose (the defects `toolTable`
  * refuses: an id that is not lowercase letters, digits and dashes, an id or
- * tool name listed twice, a second plugin continuing waiting runs or
- * recording one request kind's decisions, a switch on a plugin with no
- * availability probe) fails the build with {@link PluginsRefused} before
+ * tool name listed twice, a switch on a plugin with no availability probe,
+ * a `requires` naming a plugin not listed, an agent-file block owned twice or keyed by a persona key,
+ * two script modules of one name) fails the build with {@link PluginsRefused} before
  * anything is built, so the refusal names the plugin rather than failing
  * the first session open. A global store the process builds itself is
  * seeded with the first-install tool switches; a store handed in is left as
  * it is. Every root run is labelled with a short title from the helper model
- * (its `run.description`): an extra model request per root run, outside the
- * run's usage, which every host's run list shows.
+ * (its `run.description`): an extra model request per root run, counted in
+ * the run's usage, which every host's run list shows.
  */
 export function processLayer(
   options: ProcessLayerOptions,

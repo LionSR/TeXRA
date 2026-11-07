@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      checks: read
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
