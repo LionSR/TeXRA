@@ -443,7 +443,7 @@ export const createHostRunActions = Effect.fn(
               operation === 'pack'
                 ? {
                     op: 'copy',
-                    to: packDestination({
+                    to: yield* packDestination({
                       runId,
                       inputFile,
                       agent: config.agent,
