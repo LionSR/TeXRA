@@ -15,6 +15,7 @@ import { scopedClient } from '@texra-ai/harness/plugins';
 
 import { getGitHubToken } from './githubAuth';
 import type { SecretsFailed } from '@texra-ai/llm';
+import { HttpClientResponse } from 'effect/http';
 import type { Headers, HttpClient } from 'effect/http';
 
 const API_ORIGIN = 'https://api.github.com';
@@ -148,8 +149,14 @@ function classifyFailure(
   });
 }
 
+/**
+ * GET `path`, decoding a 200 body with `schema` (the shape GitHub documents
+ * for it); a body that fails it is a transient failure naming the issue. A
+ * caller that skips a malformed body itself passes `Schema.Unknown`.
+ */
 export const ghGet = Effect.fn('ghGet')(function* <T>(
   path: string,
+  schema: Schema.Codec<T, unknown>,
   etag?: string,
 ): Effect.fn.Return<ConditionalResponse<T>, GitHubFailure, GitHubServices> {
   const secrets = yield* Secrets;
@@ -182,12 +189,19 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
         ),
       );
     }
-    return {
-      status: 200,
-      // cast: `T` is the caller's name for the GitHub REST shape at `path`.
-      data: (yield* response.json) as T,
-      etag: response.headers.etag,
-    } as const;
+    const data = yield* HttpClientResponse.schemaBodyJson(schema)(
+      response,
+    ).pipe(
+      Effect.catchTag('SchemaError', (error) =>
+        Effect.fail(
+          new GitHubTransientError({
+            message: `GitHub returned a malformed body for ${path}: ${error.message}`,
+            cause: error,
+          }),
+        ),
+      ),
+    );
+    return { status: 200, data, etag: response.headers.etag } as const;
   }).pipe(
     Effect.scoped,
     // A transport failure carries its cause's message; SDK internals stay out.

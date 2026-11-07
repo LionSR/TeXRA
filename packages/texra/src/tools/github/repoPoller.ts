@@ -64,7 +64,6 @@ import {
   GhReviewCommentArraySchema,
   isDefiniteMergeableState,
   type GhIssueComment,
-  type GhPullRequest,
   type GhPullsListEntry,
   type GhReviewComment,
 } from './prTypes';
@@ -160,9 +159,9 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
 
   const [rawIssueRes, rawReviewRes, rawPullsRes] = yield* Effect.all(
     [
-      ghGet<unknown>(issuePath),
-      ghGet<unknown>(reviewPath),
-      ghGet<unknown>(pullsPath),
+      ghGet(issuePath, Schema.Unknown),
+      ghGet(reviewPath, Schema.Unknown),
+      ghGet(pullsPath, Schema.Unknown),
     ],
     { concurrency: 3 },
   );
@@ -384,8 +383,9 @@ const probeOne = Effect.fn('github.probeOne')(function* (
   repo: RepoTarget,
   pr: GhPullsListEntry,
 ) {
-  const res = yield* ghGet<GhPullRequest>(
+  const res = yield* ghGet(
     `/repos/${repo.owner}/${repo.repo}/pulls/${pr.number}`,
+    Schema.Unknown,
   );
   if (res.status !== 200) return undefined;
   const parsed = Schema.decodeUnknownResult(GhPullRequestSchema)(res.data);

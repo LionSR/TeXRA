@@ -7,7 +7,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import type { RateLimiterError } from 'effect/persistence/RateLimiter';
 
 // Local imports
@@ -49,7 +49,10 @@ import {
 } from './poller';
 import { dedupeComments, DedupedResource, MAX_SEEN_IDS } from './pollingDedup';
 import {
+  GhIssueCommentArraySchema,
   GhPullRequestSchema,
+  GhReviewArraySchema,
+  GhReviewCommentArraySchema,
   isDefiniteMergeableState,
   type GhCheckAnnotation,
   type GhCheckRun,
@@ -136,7 +139,7 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
   let head = prior?.head;
   let mergeableState = prior?.mergeableState;
   let prEtag = prior?.etags.pr;
-  const prRes = yield* ghGet<unknown>(prPath, prEtag);
+  const prRes = yield* ghGet(prPath, Schema.Unknown, prEtag);
   if (prRes.status === 200) {
     // A malformed body skips the whole poll and keeps the ETag, so the next
     // poll fetches and validates the same resource again.
@@ -187,22 +190,25 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
   const [commentsRes, reviewCommentsRes, reviewsRes, checks] =
     yield* Effect.all(
       [
-        ghGet<GhIssueComment[]>(
+        ghGet(
           withSince(
             `${issuePath}/comments?per_page=100`,
             prior?.issueComments?.sinceCursor,
           ),
+          GhIssueCommentArraySchema,
           prior?.etags.issueComments,
         ),
-        ghGet<GhReviewComment[]>(
+        ghGet(
           withSince(
             `${prPath}/comments?per_page=100`,
             prior?.reviewComments?.sinceCursor,
           ),
+          GhReviewCommentArraySchema,
           prior?.etags.reviewComments,
         ),
-        ghGet<GhReview[]>(
+        ghGet(
           `${prPath}/reviews?per_page=100`,
+          GhReviewArraySchema,
           prior?.etags.reviews,
         ),
         head
