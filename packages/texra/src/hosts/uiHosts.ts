@@ -41,16 +41,13 @@ export interface DiffViewHost {
  * `xdg-open`).
  *
  * This is the tag {@link ExternalOpener.openExternal} fails with. The
- * desktop's sibling `openPath` is an Effect as well (owner ruling 2026-09-18,
- * which retires the earlier "permanent Promise face" for that fan-out), so a
- * caller wording its own report raises this tag by mapping that member's
- * failure rather than by lifting a promise. `kind` says whether a URL or a
- * local path was refused.
+ * desktop's sibling `openPath` is an Effect as well, so a caller wording its
+ * own report raises this tag by mapping that member's failure rather than by
+ * lifting a promise; `target` names the URL or path that was refused.
  */
 export class ExternalOpenFailed extends Schema.TaggedError<ExternalOpenFailed>()(
   'ExternalOpenFailed',
   {
-    kind: Schema.Literals(['url', 'path']),
     target: Schema.String,
     message: Schema.String,
     cause: Schema.Defect(),
@@ -64,8 +61,8 @@ export class ExternalOpenFailed extends Schema.TaggedError<ExternalOpenFailed>()
  * Electron's `shell.openExternal` has a cancellation channel, so an
  * interrupted fiber detaches from the wait — the foreign-API limitation the
  * port retains. The desktop's shell-facing fan-out behind this port is
- * Effect-typed too (ruling 2026-09-18); the composition root only words the
- * failure, it no longer crosses a promise to reach it.
+ * Effect-typed too, so the composition root only words the failure and
+ * crosses no promise to reach it.
  */
 export interface ExternalOpener {
   openExternal(url: string): Effect.Effect<void, ExternalOpenFailed>;
@@ -95,8 +92,6 @@ export interface ExternalOpener {
 export class PromptFailed extends Schema.TaggedError<PromptFailed>()(
   'PromptFailed',
   {
-    /** The port member that could not present, for the caller's own report. */
-    member: Schema.Literals(['confirm', 'input']),
     message: Schema.String,
     cause: Schema.optional(Schema.Defect()),
   },

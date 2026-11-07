@@ -181,7 +181,6 @@ const openExportPath = (
 ): Effect.Effect<void, ExternalOpenFailed> => {
   const failed = (cause: unknown) =>
     new ExternalOpenFailed({
-      kind: 'path',
       target: filePath,
       message: toErrorMessage(cause),
       cause,
@@ -530,7 +529,6 @@ export const createExtensionHostRequests = Effect.fn(
         Effect.mapError(
           (error) =>
             new TranscriptExportFailed({
-              step: 'pickFormat',
               message: error.message,
               cause: error.cause,
             }),

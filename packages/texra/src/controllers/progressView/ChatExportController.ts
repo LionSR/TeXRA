@@ -32,7 +32,6 @@ function bundleFailure(
 ): Effect.Effect<never, TranscriptExportFailed> {
   return Effect.fail(
     new TranscriptExportFailed({
-      step: 'traceViewerBundle',
       message,
       cause: new Error(message),
     }),
@@ -81,7 +80,6 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
         Effect.mapError(
           (cause) =>
             new TranscriptExportFailed({
-              step: 'assembleTrace',
               message: toErrorMessage(cause),
               cause,
             }),
@@ -102,7 +100,6 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     if (firstEvent === undefined) {
       const cause = new Error(`The assembled trace of run ${runId} is empty.`);
       return yield* new TranscriptExportFailed({
-        step: 'assembleTrace',
         message: cause.message,
         cause,
       });

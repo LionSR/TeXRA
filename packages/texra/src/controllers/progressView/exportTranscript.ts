@@ -69,7 +69,6 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
     try: () => import('@texra/controllers/progressView/ChatExportController'),
     catch: (cause) =>
       new TranscriptExportFailed({
-        step: 'openController',
         message: toErrorMessage(cause),
         cause,
       }),
