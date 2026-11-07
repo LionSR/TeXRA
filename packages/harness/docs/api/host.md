@@ -2639,37 +2639,25 @@ class UsageLog extends Context.Service<
 
 ## UsageLogEntry
 
-One entry of the usage log's wire: a body of the `log-usage-v2` edge
-function, which is its boundary and decodes it
-(`supabase/functions/log-usage-v2/usageBatch.ts`); this side only builds
-it. Field names are the wire's, not `NormalizedUsage`'s.
+```ts
+type UsageLogEntry = typeof UsageLogEntrySchema.Type;
+```
+
+## UsageLogEntrySchema
+
+One entry of the usage log's wire, a body of the `log-usage-v2` edge
+function. The sender checks each entry against it before queueing, so
+nothing goes out that the edge would reject. Field names are the wire's,
+not `NormalizedUsage`'s.
+
+The edge decodes the same entry (`supabase/functions/log-usage-v2/usageBatch.ts`)
+and the two must match: everything this schema accepts, that one accepts.
+There the counts are non-negative ints, `listCost` a non-negative finite
+number, `timestamp` a UTC ISO 8601 date-time and every string non-empty,
+`provider` and `usageRoute` included.
 
 ```ts
-interface UsageLogEntry {
-  /** A UTC ISO 8601 date-time. */
-  readonly timestamp: string;
-  /** The catalog id, before any route's rewrite. */
-  readonly model: string;
-  /** Wire surface of the turn (`openai-responses`, `anthropic-messages`,
-   *  ...), stored in the `provider` column. */
-  readonly provider: ModelOrigin['protocol'];
-  readonly agentName?: string;
-  /** The route the call was billed through. */
-  readonly usageRoute?: UsageRoute;
-  /** The run id, stored as `stream_id`: the edge function's name for it. */
-  readonly streamId?: string;
-  /** Cache-miss input tokens; the cache reads are `cachedInputTokens`. */
-  readonly inputTokens: number;
-  readonly outputTokens: number;
-  /** What the call costs at the catalog's list prices, in USD, whatever
-   *  the route billed: a plan's call is covered by its subscription. */
-  readonly listCost: number;
-  readonly responseTimeMs?: number;
-  readonly cachedInputTokens?: number;
-  readonly reasoningTokens?: number;
-  readonly extensionVersion?: string | undefined;
-  readonly editorType?: string | undefined;
-}
+const UsageLogEntrySchema: Struct<{ readonly timestamp: String; readonly model: String; readonly provider: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly agentName: optional<String>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly streamId: optional<String>; readonly inputTokens: Int; readonly outputTokens: Int; readonly listCost: Finite; readonly responseTimeMs: optional<Int>; readonly cachedInputTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly extensionVersion: optional<String>; readonly editorType: optional<String>; }>
 ```
 
 ## ValidationModel

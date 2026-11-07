@@ -10,6 +10,7 @@ import {
   Layer,
   Predicate,
   Queue,
+  Result,
   Schedule,
   Schema,
 } from 'effect';
@@ -17,6 +18,7 @@ import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
 
 import {
   UsageLog,
+  UsageLogEntrySchema,
   withLogChannel,
   type UsageLogEntry,
 } from '@texra-ai/harness/host';
@@ -48,6 +50,8 @@ const UsageLogResponseSchema = Schema.Union([
     error: Schema.optional(Schema.String),
     /** The edge's stable rejection code (`BATCH_REJECTED`, `INVALID_JSON`). */
     errorCode: Schema.optional(Schema.String),
+    /** Only an explicit false: the endpoint will never accept this batch. */
+    retryable: Schema.optional(Schema.Boolean),
     /** The fields a rejected batch failed on, without their values. */
     issues: Schema.optional(
       Schema.Array(
@@ -59,6 +63,27 @@ const UsageLogResponseSchema = Schema.Union([
     ),
   }),
 ]);
+
+type UsageLogRejection = Extract<
+  typeof UsageLogResponseSchema.Type,
+  { success: false }
+>;
+
+/** The endpoint's reason for refusing a batch: its code, its message and
+ *  the fields it named. */
+const rejectionReason = (rejection: UsageLogRejection): string => {
+  const cause =
+    [rejection.errorCode, rejection.error]
+      .filter(Predicate.isNotUndefined)
+      .join(': ') || 'no reason given';
+  const issues = (rejection.issues ?? []).map(
+    ({ path, message }) => `${path.join('.')}: ${message}`,
+  );
+  return issues.length > 0 ? `${cause} (${issues.join('; ')})` : cause;
+};
+
+const decodeEntry = Schema.decodeUnknownResult(UsageLogEntrySchema);
+
 const MAX_QUEUE_SIZE = 1000;
 /** A queue this long asks for a flush before the periodic one. */
 const BATCH_SIZE = 10;
@@ -172,12 +197,10 @@ interface RetryBatch {
 
 /**
  * The batch could not be delivered or acknowledged and must be sent again:
- * the install-ID read, the request, its body, its parse, an acknowledgement
- * that does not cover the batch, or the endpoint's rejection. The endpoint
- * decodes exactly what this client sends, so a rejection means the deployed
- * endpoint and this build disagree, and the batch goes through once they
- * agree. The sender keeps the batch for the retry (`retryBatch`) before
- * failing with this.
+ * the install-ID read, the request, its body, its parse, a refusal the
+ * endpoint does not call permanent (a 5xx, a 401), or an acknowledgement
+ * that does not cover the batch. The sender keeps the batch for the retry
+ * (`retryBatch`) before failing with this.
  */
 class UsageBatchUndelivered extends Schema.TaggedError<UsageBatchUndelivered>()(
   'UsageBatchUndelivered',
@@ -185,8 +208,10 @@ class UsageBatchUndelivered extends Schema.TaggedError<UsageBatchUndelivered>()(
 ) {}
 
 /**
- * Deliver one batch. Succeeds with the acknowledgement; everything else is
- * {@link UsageBatchUndelivered} with the batch to keep.
+ * Deliver one batch. Succeeds with the acknowledgement, or with the
+ * endpoint's permanent rejection (`retryable: false`) for the caller to
+ * drop; everything else is {@link UsageBatchUndelivered} with the batch to
+ * keep.
  */
 const sendBatch = Effect.fn('UsageLogService.sendBatch')(function* (
   batch: RetryBatch,
@@ -249,15 +274,9 @@ const sendBatch = Effect.fn('UsageLogService.sendBatch')(function* (
     data,
   ).pipe(Effect.mapError((error) => undelivered(error.message)));
   if (!response.success) {
-    const cause = [response.errorCode, response.error]
-      .filter(Predicate.isNotUndefined)
-      .join(': ');
-    const issues = (response.issues ?? []).map(
-      ({ path, message }) => `${path.join('.')}: ${message}`,
-    );
+    if (response.retryable === false) return response;
     return yield* undelivered(
-      `Usage endpoint rejected the batch (${cause || 'no reason given'})` +
-        (issues.length > 0 ? `: ${issues.join('; ')}` : ''),
+      `Usage endpoint refused the batch: ${rejectionReason(response)}`,
     );
   }
   if (status < 200 || status >= 300) {
@@ -328,7 +347,7 @@ export const usageLogLayer = (
         Queue.offerUnsafe(triggers, undefined);
       };
 
-      /** Finish the next batch: sent, or failed with it kept. */
+      /** Finish the next batch: sent, dropped, or failed with it kept. */
       const sendNextBatch = Effect.fn('UsageLogService.sendNextBatch')(
         function* () {
           let batch = retryBatch;
@@ -387,7 +406,28 @@ export const usageLogLayer = (
           const response = yield* sendBatch(batch, installId).pipe(
             keepForRetry,
           );
+          // The endpoint answered: a run of delivery failures is over.
           warnedUndelivered = false;
+          if (!response.success) {
+            // Every entry passed the endpoint's schema before it was
+            // queued, so a permanent rejection means the deployed endpoint
+            // and this build disagree. A retry cannot change that and would
+            // hold back every entry behind it, so the batch is dropped.
+            yield* Effect.logWarning(
+              `Usage endpoint rejected batch ${batch.batchId} for good (${rejectionReason(response)}); dropped ${batch.entries.length} entries`,
+            ).pipe(
+              Effect.annotateLogs({
+                data: {
+                  batchId: batch.batchId,
+                  entryCount: batch.entries.length,
+                  errorCode: response.errorCode,
+                  error: response.error,
+                },
+              }),
+              withLogChannel(CHANNEL),
+            );
+            return;
+          }
           yield* Effect.logDebug(
             `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
           ).pipe(withLogChannel(CHANNEL));
@@ -409,7 +449,7 @@ export const usageLogLayer = (
                 const requeuedMessage =
                   requeued > 0 ? `; requeued ${requeued} entries` : '';
                 // Say so at warn when failures start, then at debug until
-                // a batch is delivered again.
+                // the endpoint answers again.
                 const log = warnedUndelivered
                   ? Effect.logDebug
                   : Effect.logWarning;
@@ -469,14 +509,27 @@ export const usageLogLayer = (
       ) {
         if (!(yield* allowed(config, env))) return;
 
-        const full = yield* Queue.isFull(queue);
-        const queued = yield* Queue.offer(queue, {
-          entry: {
+        // An entry the endpoint would reject would take its whole batch with
+        // it: it is dropped here instead, naming the fields.
+        const checked = decodeEntry(
+          {
             ...entry,
             timestamp: DateTime.formatIso(yield* DateTime.now),
             extensionVersion: version,
             editorType,
           },
+          { errors: 'all' },
+        );
+        if (Result.isFailure(checked)) {
+          yield* Effect.logWarning(
+            `Dropped a usage entry the endpoint would reject: ${checked.failure.message}`,
+          );
+          return;
+        }
+
+        const full = yield* Queue.isFull(queue);
+        const queued = yield* Queue.offer(queue, {
+          entry: checked.success,
           config,
           ...(env !== undefined && { env }),
         });

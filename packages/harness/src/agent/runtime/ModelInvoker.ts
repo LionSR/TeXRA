@@ -130,6 +130,13 @@ const INTERRUPTED_RETRY_MESSAGE =
  */
 const PARTIAL_TEXT_TAIL_MAX = 4096;
 
+/** The monotonic clock in milliseconds. A response time is the difference
+ *  of two readings, which a wall-clock step cannot make negative. */
+const monotonicMillis = Effect.map(
+  Clock.monotonicTimeNanos,
+  (nanos) => Number(nanos) / 1e6,
+);
+
 interface InvocationResponse {
   readonly kind: 'response';
   readonly state: RunState;
@@ -245,7 +252,8 @@ export const modelInvokerLayer = (): Layer.Layer<
        * completed result is kept. Then the handles close, a failed stream
        * classifies, an empty one is a malformed output, and a completed
        * turn is priced and committed as the `response` row before any
-       * local tool runs. `started` is when the request went out.
+       * local tool runs. `started` is when the request went out, on
+       * {@link monotonicMillis}.
        */
       const consume = Effect.fn('ModelInvoker.consume')(function* (
         cell: RunCell,
@@ -331,7 +339,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               )
             : Effect.fail(found.success);
         }
-        const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
+        const responseTimeMs = (yield* monotonicMillis) - started;
         const turn = completed.value;
         if (turn === null) {
           trace.thinking.finalize(undefined);
@@ -467,7 +475,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           attemptRows(run, state, invocation, bound.origin, resolved),
         );
         yield* checkRecordedRequest(run, resolved);
-        const started = yield* Clock.currentTimeMillis;
+        const started = yield* monotonicMillis;
         attemptStarts.set(invocation, started);
         return yield* consume(
           cell,
@@ -509,7 +517,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             cell,
             invocation,
             bound,
-            yield* Clock.currentTimeMillis,
+            yield* monotonicMillis,
             observeBackground(
               run,
               cell,
@@ -661,7 +669,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           started !== undefined
             ? {
                 usage: error.usage,
-                responseTimeMs: (yield* Clock.currentTimeMillis) - started,
+                responseTimeMs: (yield* monotonicMillis) - started,
               }
             : null;
         const usage =

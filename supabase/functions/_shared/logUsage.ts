@@ -13,9 +13,10 @@
  *   `success: false`, `accepted: 0`, `retryable: false`, and a stable
  *   `errorCode`; HTTP 200 lets clients predating the retry marker read the
  *   body during rolling deploys. Sanitized validation issues identify the
- *   rejected fields without echoing request values. The marker is for
- *   released clients: the current client keeps and resends any rejected
- *   batch, since its schema is the one `log-usage-v2` decodes.
+ *   rejected fields without echoing request values. The current client
+ *   checks each entry against the schema `log-usage-v2` decodes before
+ *   sending, so a rejection there means the two versions disagree; it drops
+ *   that batch at warn and retries only the failures without the marker.
  *   Restore HTTP 422 after clients predating #8267 age out under #6981.
  * - Malformed JSON uses the same permanent-rejection body with HTTP 400.
  * - Authentication and operational failures omit the permanent-rejection

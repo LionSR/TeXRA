@@ -1,11 +1,11 @@
-import { Context, Effect, Layer } from 'effect';
+import { Context, Effect, Layer, Schema } from 'effect';
 
-import type { ModelOrigin } from '@texra-ai/llm';
+import { TurnProtocolSchema } from '@texra-ai/llm';
 import type { ConfigProvider } from '@shared/config/settings';
 import {
   AGENT_SOURCE,
+  UsageRouteSchema,
   type AgentSource,
-  type UsageRoute,
 } from '@shared/schemas';
 
 /**
@@ -20,37 +20,51 @@ export function usageAgentName(
   return source === AGENT_SOURCE.BUILT_IN ? name : 'custom';
 }
 
+const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const Text = Schema.String.check(Schema.isMinLength(1));
+
 /**
- * One entry of the usage log's wire: a body of the `log-usage-v2` edge
- * function, which is its boundary and decodes it
- * (`supabase/functions/log-usage-v2/usageBatch.ts`); this side only builds
- * it. Field names are the wire's, not `NormalizedUsage`'s.
+ * One entry of the usage log's wire, a body of the `log-usage-v2` edge
+ * function. The sender checks each entry against it before queueing, so
+ * nothing goes out that the edge would reject. Field names are the wire's,
+ * not `NormalizedUsage`'s.
+ *
+ * The edge decodes the same entry (`supabase/functions/log-usage-v2/usageBatch.ts`)
+ * and the two must match: everything this schema accepts, that one accepts.
+ * There the counts are non-negative ints, `listCost` a non-negative finite
+ * number, `timestamp` a UTC ISO 8601 date-time and every string non-empty,
+ * `provider` and `usageRoute` included.
  */
-export interface UsageLogEntry {
-  /** A UTC ISO 8601 date-time. */
-  readonly timestamp: string;
+export const UsageLogEntrySchema = Schema.Struct({
+  timestamp: Schema.String.check(
+    Schema.isPattern(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/, {
+      expected: 'a UTC ISO 8601 date-time',
+    }),
+  ),
   /** The catalog id, before any route's rewrite. */
-  readonly model: string;
+  model: Text,
   /** Wire surface of the turn (`openai-responses`, `anthropic-messages`,
    *  ...), stored in the `provider` column. */
-  readonly provider: ModelOrigin['protocol'];
-  readonly agentName?: string;
+  provider: TurnProtocolSchema,
+  agentName: Schema.optional(Text),
   /** The route the call was billed through. */
-  readonly usageRoute?: UsageRoute;
+  usageRoute: Schema.optional(UsageRouteSchema),
   /** The run id, stored as `stream_id`: the edge function's name for it. */
-  readonly streamId?: string;
+  streamId: Schema.optional(Text),
   /** Cache-miss input tokens; the cache reads are `cachedInputTokens`. */
-  readonly inputTokens: number;
-  readonly outputTokens: number;
+  inputTokens: Count,
+  outputTokens: Count,
   /** What the call costs at the catalog's list prices, in USD, whatever
    *  the route billed: a plan's call is covered by its subscription. */
-  readonly listCost: number;
-  readonly responseTimeMs?: number;
-  readonly cachedInputTokens?: number;
-  readonly reasoningTokens?: number;
-  readonly extensionVersion?: string | undefined;
-  readonly editorType?: string | undefined;
-}
+  listCost: Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)),
+  responseTimeMs: Schema.optional(Count),
+  cachedInputTokens: Schema.optional(Count),
+  reasoningTokens: Schema.optional(Count),
+  extensionVersion: Schema.optional(Text),
+  editorType: Schema.optional(Text),
+});
+
+export type UsageLogEntry = typeof UsageLogEntrySchema.Type;
 
 /** The process-owned producer; telemetry supplies its scoped sender implementation. */
 export class UsageLog extends Context.Service<

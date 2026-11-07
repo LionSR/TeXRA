@@ -182,43 +182,45 @@ describe('UsageLogService', () => {
     ),
     { buildPerTest: true, excludeTestServices: true },
   )('delivery', (it) => {
-    // The edge decodes exactly what this client sends, so a rejection means
-    // the deployed edge and the client disagree: the batch waits for them to
-    // agree instead of being dropped.
-    it.effect('keeps a rejected batch and sends it again', () =>
+    // The client checks every entry against the schema the edge decodes, so
+    // the edge rejecting a batch means the two versions disagree: that batch
+    // is dropped, and the entries after it still go out.
+    it.effect('a rejected batch does not block the next good entry', () =>
       Effect.gen(function* () {
-        const fetchMock = vi
-          .fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-            jsonResponse({ success: true, accepted: 1 }),
-          )
-          .mockResolvedValueOnce(
-            jsonResponse({
-              success: false,
-              accepted: 0,
-              error: 'Invalid batch format or entry data',
-              retryable: false,
-              errorCode: 'BATCH_REJECTED',
-              issueCount: 1,
-              issues: [{ path: ['entries', '0', 'listCost'], message: 'x' }],
-            }),
-          );
-        vi.stubGlobal('fetch', fetchMock);
+        const bodies: { entries: { model: string }[] }[] = [];
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+            const body = (await new Response(init?.body).json()) as {
+              entries: { model: string }[];
+            };
+            bodies.push(body);
+            return body.entries.some(({ model }) => model === 'skewed')
+              ? jsonResponse({
+                  success: false,
+                  accepted: 0,
+                  error: 'Invalid batch format or entry data',
+                  retryable: false,
+                  errorCode: 'BATCH_REJECTED',
+                  issueCount: 1,
+                  issues: [{ path: ['entries', '0', 'model'], message: 'x' }],
+                })
+              : jsonResponse({ success: true, accepted: body.entries.length });
+          }),
+        );
 
-        logUsage(usageEntry('rejected'), testWorkspaceRoots().config);
-        // The first flush, then the first retry one interval later.
+        logUsage(usageEntry('skewed'), testWorkspaceRoots().config);
         yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(2 * FLUSH_INTERVAL_MS),
+          vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS),
+        );
+        logUsage(usageEntry('good'), testWorkspaceRoots().config);
+        yield* Effect.promise(() =>
+          vi.advanceTimersByTimeAsync(4 * FLUSH_INTERVAL_MS),
         );
 
-        const bodies = yield* Effect.promise(() =>
-          Promise.all(
-            fetchMock.mock.calls.map(([, init]) =>
-              new Response(init?.body).json(),
-            ),
-          ),
-        );
-        expect(bodies).toHaveLength(2);
-        expect(bodies[1]).toEqual(bodies[0]);
+        expect(
+          bodies.map(({ entries }) => entries.map(({ model }) => model)),
+        ).toEqual([['skewed'], ['good']]);
       }),
     );
   });
