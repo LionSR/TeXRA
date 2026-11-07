@@ -162,7 +162,7 @@ export class LatexMediaManager {
 
   /**
    * Compile one LaTeX file to PDF, returning the PDF's location or `undefined`
-   * when the compile, the write, or the size check disqualifies it.
+   * when the compile fails (which includes writing no PDF, or an empty one).
    */
   private readonly compileOnePdf = Effect.fn('LatexMediaManager.compileOnePdf')(
     { self: this },
@@ -197,44 +197,6 @@ export class LatexMediaManager {
         this.roots.workspace,
         compiled.pdfPath,
       );
-      const written = yield* fs.exists(pdfLocation.absolutePath);
-      if (!written) {
-        this.logger.warn(
-          'LaTeX reported success but no PDF was written; skipping',
-          {
-            data: {
-              sourceFile: file.absolutePath,
-              pdfFile: pdfLocation.absolutePath,
-            },
-          },
-        );
-        return undefined;
-      }
-
-      // Stat failures are noisier than other compile failures because an
-      // existing-but-unreadable PDF likely indicates a permissions/IO bug.
-      const stats = yield* fs.stat(pdfLocation.absolutePath).pipe(
-        Effect.catch((err) =>
-          Effect.sync(() => {
-            this.logger.error(
-              `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
-              { data: { path: pdfLocation.absolutePath, error: err } },
-            );
-            return undefined;
-          }),
-        ),
-      );
-      if (!stats) return undefined;
-      if (Number(stats.size) === 0) {
-        this.logger.warn('Compiled PDF is empty', {
-          data: {
-            sourceFile: file.absolutePath,
-            pdfFile: pdfLocation.absolutePath,
-          },
-        });
-        return undefined;
-      }
-
       this.logger.info('Compiled PDF', {
         data: {
           sourceFile: file.absolutePath,
