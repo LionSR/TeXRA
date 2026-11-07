@@ -147,13 +147,18 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     return { chat: { initialResume: { id: forkId, config: forkConfig } } };
   }
   // A run launched to run once reads no messages, so a chat over it would
-  // refuse every one; it continues as a fork.
-  if (
-    !documentTask &&
-    runSession.view.current().runs.get(id)?.takesFollowUps === false
-  ) {
-    writeTextStderr(oneShotResumeNotice(context.commandName, id));
-    return CliExitCode.Usage;
+  // refuse every one; it continues as a fork. Read from the log: a service
+  // window's own view fills after it opens.
+  if (!documentTask) {
+    const stored = yield* Effect.result(runSession.view.read([id]));
+    if (Result.isFailure(stored)) {
+      writeTextStderr(loadFailureMessage(id, stored.failure));
+      return CliExitCode.AgentError;
+    }
+    if (stored.success.runs.get(id)?.takesFollowUps === false) {
+      writeTextStderr(oneShotResumeNotice(context.commandName, id));
+      return CliExitCode.Usage;
+    }
   }
   // A resumed task continues under the approval it was launched with: a
   // requested policy is said not to apply, never dropped silently. A

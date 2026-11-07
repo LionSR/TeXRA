@@ -588,8 +588,10 @@ export function createChatSessionController(
           return;
         }
         // A run launched to run once reads no messages: a chat over it would
-        // refuse every one, so it continues as a fork.
-        if (runViewOf(currentView(), id)?.takesFollowUps === false) {
+        // refuse every one, so it continues as a fork. Read from the log: at
+        // startup a service window's own view has not filled yet.
+        const stored = yield* runSession.view.read([id]);
+        if (stored.runs.get(id)?.takesFollowUps === false) {
           refuseResume(
             oneShotResumeNotice(init.sessionContext.commandName, id),
           );

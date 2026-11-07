@@ -259,6 +259,7 @@ function installSession(
       changes:
         installed === undefined ? Stream.empty : SubscriptionRef.changes(ref),
       watch: () => Stream.empty,
+      read: () => Effect.sync(() => SubscriptionRef.getUnsafe(ref)),
     },
   });
 }

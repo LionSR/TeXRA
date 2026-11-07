@@ -230,8 +230,6 @@ const scanInto = Effect.fn('agentCatalog.scanInto')(function* (
   ).pipe(withLogChannel(CHANNEL));
 });
 
-/** Why a launch found nothing: the load's failure and the agent files it
- *  skipped. */
 /** No agent answers to `agent` in the settled catalog, rescanned once:
  *  the catalog's own answer, which a launch turns into its refusal
  *  ({@link missingAgentRefusal}) and every other reader reads as "not found". */
@@ -245,17 +243,18 @@ export class AgentNotFound extends Schema.TaggedError<AgentNotFound>()(
 export const missingAgentRefusal = ({
   agent,
   message,
-}: AgentNotFound): LaunchRefused =>
+}: Pick<AgentNotFound, 'agent' | 'message'>): LaunchRefused =>
   new LaunchRefused({
     message,
     notice: { event: 'agentNotFound', payload: { agentName: agent } },
   });
 
-/** Why `identifier` is missing: the base sentence a launch by name also
- *  uses, then what kept the catalog from listing it. */
+/** The sentence every reader of a missing agent starts with. */
 export const agentMissMessage = (identifier: string): string =>
   `Could not find agent: ${identifier}`;
 
+/** Why a launch found nothing: that sentence, then the load's failure and
+ *  the agent files it skipped. */
 const missMessage = (state: CatalogState, identifier: string): string =>
   agentMissMessage(identifier) +
   (state.loadFailure === undefined

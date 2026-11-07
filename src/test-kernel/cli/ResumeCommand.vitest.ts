@@ -19,6 +19,7 @@ import {
   type CliPlatformServices,
 } from '@cli/runtime/platform/initPlatform';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import type { Session } from '@texra-ai/harness';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
@@ -93,10 +94,11 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 }
 
 /** The command's program, run the way `defineCliCommand` runs it, over a
- *  platform that is the test's session and links no service. */
-const run = (context: CliContext, id: RunId = RUN_ID) =>
+ *  platform that is the test's session and links no service. A `session`
+ *  given stands in for the test's (a service window's, say). */
+const run = (context: CliContext, id: RunId = RUN_ID, given?: Session) =>
   Effect.gen(function* () {
-    const session = yield* TestSession;
+    const session = given ?? (yield* TestSession);
     const { runResumeCommand } = yield* Effect.promise(
       () => import('@cli/commands/resumeRun'),
     );
@@ -138,9 +140,19 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         'does not reopen the chat for a run that takes no messages',
         () =>
           Effect.gen(function* () {
+            // A service window's view fills after it opens, so the one the
+            // command first sees lacks the run its log already holds.
+            const session = yield* TestSession;
+            const opened = session.view.current();
             // A headless `texra run` root: it ran once and reads no input.
             yield* seedRunRecord(TOOL_USE_CONFIG, false);
-            expect(yield* run(cliContext())).toBe(CliExitCode.Usage);
+            const lagging: Session = {
+              ...session,
+              view: { ...session.view, current: () => opened },
+            };
+            expect(yield* run(cliContext(), RUN_ID, lagging)).toBe(
+              CliExitCode.Usage,
+            );
             expect(mocks.writeTextStderr).toHaveBeenCalledWith(
               expect.stringContaining(`resume ${RUN_ID} --fork`),
             );

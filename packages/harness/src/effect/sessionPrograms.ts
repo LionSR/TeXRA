@@ -19,7 +19,6 @@ import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 
 // Each runtime value comes from the module that defines it.
 import {
-  AgentNotFound,
   agentMissMessage,
   missingAgentRefusal,
   type AgentCatalog,
@@ -130,12 +129,11 @@ const admitInput = Effect.fn('admitInput')(function* (
       ? catalog.get(agent)
       : { name: null, source: 'inline' as const };
   if (!resolved) {
-    return yield* missingAgentRefusal(
-      new AgentNotFound({
-        agent: String(agent),
-        message: agentMissMessage(String(agent)),
-      }),
-    );
+    // The same wording as the catalog's miss, so every host says one thing.
+    return yield* missingAgentRefusal({
+      agent: String(agent),
+      message: agentMissMessage(String(agent)),
+    });
   }
   // The schema is the launch's last refusal, and it is a refusal rather
   // than a defect: an input this surface will not accept is the caller's,
