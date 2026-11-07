@@ -19,12 +19,12 @@ import type { RunView, SessionView } from '@shared/session/sessionView';
 export type RunDisplayCategory = 'task' | RunIdentity['kind'];
 
 /** Every display category, for a path every run serves. */
-export const ALL_KINDS: readonly RunDisplayCategory[] = [
+export const ALL_KINDS: readonly RunDisplayCategory[] = Object.freeze([
   'agent',
   'task',
   'process',
   'script',
-];
+]);
 
 export function runDisplayCategory(run: RunView): RunDisplayCategory {
   return run.identity.kind === 'agent' && run.recipe
