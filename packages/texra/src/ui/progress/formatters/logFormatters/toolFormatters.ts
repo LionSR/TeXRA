@@ -8,10 +8,6 @@
  * a call the run's end cut short (`ToolRow.cutByRunEnd`), which is the app's
  * copy. This file paints that model with Lit and applies the webview's own
  * widths, icons, and live controls.
- *
- * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates
- * with indentation will render with unwanted spaces in the output. Always use
- * single-line templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
 // Third-party imports - Lit template utilities
@@ -28,11 +24,7 @@ import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
 import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers
-import {
-  buildToolUseSection,
-  wrapInPre,
-  SPINNER_ICON_NAME,
-} from '../htmlBuilders';
+import { buildToolUseSection, wrapInPre } from '../htmlBuilders';
 
 import {
   buildTerminalSection,
@@ -74,11 +66,9 @@ export function formatToolUseTemplate(
   const displayKind = toolDisplayKind(toolName);
   const showAsError = model.isError && !model.isUserFeedback;
 
-  let iconName: IconName | typeof SPINNER_ICON_NAME;
+  let iconName: IconName;
   if (model.isUserFeedback) {
     iconName = 'comment';
-  } else if (running) {
-    iconName = SPINNER_ICON_NAME;
   } else if (stopped || showAsError) {
     iconName = 'circle-exclamation';
   } else {
@@ -161,6 +151,7 @@ export function formatToolUseTemplate(
   return buildToolUseDetails({
     row,
     iconName,
+    running: running && !model.isUserFeedback,
     label: titleText,
     isError: showAsError,
     content: html`${sections}`,
