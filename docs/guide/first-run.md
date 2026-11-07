@@ -64,12 +64,12 @@ EOF
 
 1. Open `draft.tex`.
 2. Select the TeXRA icon in the Secondary Side Bar.
-3. In the **Input** section, select <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick `draft.tex` from the file picker.
-4. Pick **polish** under Agent. Pick **anthropic/claude-sonnet-5-5** under Model (or any
-   available model).
+3. Pick **polish** from the **Agent** menu and **anthropic/claude-sonnet-5-5** from the
+   **Model** menu (or any available model).
+4. Open **Documents and attachments**, select <wa-icon library="texra" name="add"></wa-icon> **Add input files** under **Input**, and pick `draft.tex` from the file picker.
 5. Type an instruction:
    > Tighten the prose. Preserve all math and citations.
-6. Press **Execute**.
+6. Select **Start task** (the arrow button).
 
 The ProgressBoard opens and streams the run. When it finishes, a
 **diff** icon appears on the completed stream. Select it to see what
