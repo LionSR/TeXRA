@@ -17,7 +17,7 @@
 
 // Node imports
 import console from 'node:console';
-import { existsSync, readFileSync } from 'node:fs';
+import { globSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -35,27 +35,19 @@ const rootDir = path.resolve(
   '..',
 );
 
-/** Every package's source. */
-const SOURCE_DIRS = [
-  'packages/harness/src',
-  'packages/llm/src',
-  'packages/texra/src',
-  'packages/extension/src',
-  'packages/desktop/src',
-  'packages/cli/src',
-  'packages/trace-viewer/src',
-];
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 
-/** The repo-relative source files of `tree`, sorted. A directory a change
- *  adds is absent from the merge base's tree and has no files there. */
+/** The repo-relative source files of every package's `src` in `tree`,
+ *  sorted. A package a change adds is absent from the merge base's tree. */
 const sourceFiles = (tree) =>
-  SOURCE_DIRS.filter((dir) => existsSync(path.join(tree, dir)))
+  globSync('packages/*/src', { cwd: tree })
     .flatMap((dir) =>
       walkFiles(path.join(tree, dir), {
-        include: (file) => SOURCE_FILE.test(file) && !NOT_SOURCE.test(file),
-        prune: (dir) => dir.endsWith('node_modules'),
+        include: (file) =>
+          SOURCE_FILE.test(file) &&
+          !NOT_SOURCE.test(file) &&
+          !file.includes('node_modules/'),
       }).map(({ relativePath }) => `${dir}/${relativePath}`),
     )
     .toSorted();
