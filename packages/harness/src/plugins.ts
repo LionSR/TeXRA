@@ -205,8 +205,6 @@ export type {
 export type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 export type {
   ModelRetryGate,
-  RouteFailure,
-  RouteOptions,
   RoutePolicy,
 } from '@agent/runtime/ModelRetryGate';
 // A run's files under its session storage: its directory, the pre-run

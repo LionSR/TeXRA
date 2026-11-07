@@ -626,14 +626,18 @@ provider, credential route, endpoint and key fingerprint for a credential-backed
 HTTP route; provider for the validation model
 (`agent/runtime/modelAccess/binding.ts#routePolicies`,
 `agent/runtime/modelAccess/failureInfo.ts#routePolicies`). An observation runs
-outside it (`agent/runtime/ModelInvoker.ts#tryAttempt`). Before a `retry` or
+outside it (`agent/runtime/ModelInvoker.ts#tryAttempt`). A cooling route lets
+one call through at a time as its recovery probe, after a backoff that doubles
+from 1,000 ms with each failure the route owns (up to five minutes, and never
+less than the provider's `retryAfterMs`); the probe's end opens the route
+unless it failed the same way, and a success admitted while the route was
+healthy ends the failure count
+(`agent/runtime/ModelRetryGate.ts#admit`, `#settle`). Before a `retry` or
 `unchain` that follows a recorded failure the loop pauses as long as the
 provider asked (`retryAfterMs`), else 1,000 ms, and not at all after a failure
 llm scoped to a route, which the gate cools and waits out
-(`agent/runtime/run/modelCall.ts#RETRY_BACKOFF_MS`,
-`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`,
-`agent/runtime/run/modelCall.ts#pauseOf`); a resend after a crash, of an
-attempt no row recorded an outcome for, goes out without it.
+(`agent/runtime/ModelRetryGate.ts#resendDelayMs`); a resend after a crash, of
+an attempt no row recorded an outcome for, goes out without it.
 
 An attempt of an invocation a person admitted, whose outcome no row recorded and
 which holds no accepted operation, MUST be asked about again and MUST NOT be

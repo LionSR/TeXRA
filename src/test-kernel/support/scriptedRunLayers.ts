@@ -12,6 +12,7 @@ import {
   Layer,
   Schema,
   type Scope,
+  ScopedRef,
   Semaphore,
   SynchronizedRef,
 } from 'effect';
@@ -236,7 +237,7 @@ function scriptedInvoker(
                 error: scripted.failWith,
               };
             }
-            const bound = yield* SynchronizedRef.get(run.model);
+            const bound = yield* ScopedRef.get(run.model);
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
             const turn = 'compactTo' in scripted ? scripted.turn : scripted;
@@ -307,7 +308,7 @@ export function testAgentRun(
   over: Partial<AgentRunShape> = {},
 ): AgentRunShape {
   const { session, ...run } = base;
-  const { runId, logger, model } = run;
+  const { runId, logger } = run;
   return {
     startedAt: 0,
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -335,10 +336,6 @@ export function testAgentRun(
     fileService: new RunFileService(runId, Context.get(session, SessionRoots)),
     ...testRunTools(),
     finalToolName: null,
-    swapModel: (next) =>
-      SynchronizedRef.updateAndGetEffect(model, (current) =>
-        Effect.scoped(next(current)),
-      ),
     callbacks: {},
     awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
     ...run,
@@ -369,7 +366,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
   return Layer.effect(
     AgentRun,
     Effect.gen(function* () {
-      const model = yield* SynchronizedRef.make(testBoundModel(init.bound));
+      const model = yield* ScopedRef.make(() => testBoundModel(init.bound));
       const logger = init.logger ?? new TraceEmitter();
       const scope: Scope.Scope = yield* Effect.scope;
       const tools = init.tools ?? {};

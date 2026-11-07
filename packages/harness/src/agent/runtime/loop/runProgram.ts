@@ -6,7 +6,7 @@
  * `Effect.acquireUseRelease`.
  */
 
-import { Cause, Context, Effect, Exit, SynchronizedRef } from 'effect';
+import { Cause, Context, Effect, Exit, ScopedRef } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
@@ -103,7 +103,7 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
               const refused = foreignProtocol(
                 runId,
                 state,
-                yield* SynchronizedRef.get(run.model),
+                yield* ScopedRef.get(run.model),
               );
               if (refused !== null) return yield* refused;
               return yield* activationRows(runId, run.config).pipe(

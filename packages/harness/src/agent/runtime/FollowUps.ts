@@ -20,13 +20,7 @@
  * its parent's tool-call fiber, so a context service would hand the child
  * its parent's input.
  */
-import {
-  Effect,
-  type FileSystem,
-  Result,
-  type Scope,
-  SynchronizedRef,
-} from 'effect';
+import { Effect, type FileSystem, Result, type Scope, ScopedRef } from 'effect';
 
 import {
   followUpDisplay,
@@ -125,7 +119,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
     followUps: readonly QueuedFollowUp[],
   ) {
-    const { capabilities } = (yield* SynchronizedRef.get(run.model)).config;
+    const { capabilities } = (yield* ScopedRef.get(run.model)).config;
     const parts: (InputPart | StoredInputPart)[] = [];
     const kinds: (readonly MediaAttachmentKind[])[] = [];
     for (const { content } of followUps) {

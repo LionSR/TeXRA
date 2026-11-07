@@ -10,15 +10,15 @@
 
 // Third-party imports
 import {
+  Context,
   Deferred,
   Effect,
   Fiber,
   Layer,
   Schema,
   Scope,
+  ScopedRef,
   Stream,
-  SynchronizedRef,
-  Context,
 } from 'effect';
 import { TestClock } from 'effect/testing';
 import { layer } from '@effect/vitest';
@@ -53,13 +53,15 @@ import {
   UsageLog,
 } from '@texra-ai/harness/host';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import { RouteRetries } from '@agent/runtime/ModelRetryGate';
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
+import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
+import {
+  ModelAccess,
+  modelAccessLayer,
+} from '@agent/runtime/modelAccess/ModelAccess';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
 import {
@@ -275,22 +277,15 @@ const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   model: GPT54,
 });
 
-/**
- * The run service the invoker reads: identity, session, trace, binding. A
- * rebind keeps the stub (a fresh copy of the binding).
- */
+/** The run service the invoker reads: identity, session, trace, binding. */
 function agentRun(
   runId: RunId,
   session: Context.Context<SessionServices>,
-  model: SynchronizedRef.SynchronizedRef<BoundModel>,
+  model: ScopedRef.ScopedRef<BoundModel>,
 ): AgentRunShape {
   return testAgentRun(
     { runId, session, logger: noopTrace, model, scope: Scope.makeUnsafe() },
-    {
-      config: CONFIG,
-      swapModel: () =>
-        SynchronizedRef.updateAndGet(model, (current) => ({ ...current })),
-    },
+    { config: CONFIG },
   );
 }
 
@@ -343,24 +338,41 @@ const openRun = Effect.fn('openRun')(function* (
     Context.get(session, SessionRoots),
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
   ).pipe(Effect.orDie);
-  const bound = yield* SynchronizedRef.make(
+  const bound = yield* ScopedRef.make(() =>
     boundModel(model, { automaticRetries, ...binding }),
+  ).pipe(Scope.provide(Scope.makeUnsafe()));
+  // Model access as the host serves it, but a rebind keeps the stub (a
+  // fresh copy of the binding).
+  const access = Layer.effect(
+    ModelAccess,
+    Effect.gen(function* () {
+      const served = yield* ModelAccess;
+      return {
+        ...served,
+        bind: () =>
+          Effect.map(ScopedRef.get(bound), (current) => ({ ...current })),
+      };
+    }),
+  ).pipe(
+    Layer.provide(
+      modelAccessLayer(installedHost().roots).pipe(
+        Layer.provide(
+          Layer.merge(testHttpClientLayer, Secrets.layer(fakeHostSecrets)),
+        ),
+      ),
+    ),
   );
   const layer = modelInvokerLayer().pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(AgentRun, agentRun(runId, session, bound)),
         UsageLog.disabled,
-        modelAccessLayer(installedHost().roots).pipe(
-          Layer.provide(
-            Layer.merge(testHttpClientLayer, Secrets.layer(fakeHostSecrets)),
-          ),
-        ),
+        access,
       ),
     ),
     Layer.merge(Layer.succeed(RunHistory, Context.get(session, RunHistory))),
     // The process's route gate, as `processLayer` serves it.
-    Layer.provideMerge(Layer.effect(RouteRetries, ModelRetryGate.make)),
+    Layer.provideMerge(Layer.sync(RouteRetries, makeRetryGate)),
     Layer.provideMerge(Layer.succeedContext(session)),
   );
   return { runId, cell, layer };

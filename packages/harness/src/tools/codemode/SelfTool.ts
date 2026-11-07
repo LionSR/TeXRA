@@ -9,7 +9,7 @@
  * the same tools, so nothing is proposed: the user approved the script.
  * The default goal strategy is this function in a loop (`builtIn:goal`).
  */
-import { Effect, Result, Schema, SynchronizedRef } from 'effect';
+import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 import { forkSeed } from '@agent/runtime/forkRun';
 import {
@@ -163,7 +163,7 @@ const runSelf = Effect.fn('self.call')(function* (
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
           ...(forked?.record ?? {
             ...launch,
-            model: (yield* SynchronizedRef.get(run.model)).modelId,
+            model: (yield* ScopedRef.get(run.model)).modelId,
             instruction: task,
             displayInstruction: input.prompt,
             outputFiles: [],

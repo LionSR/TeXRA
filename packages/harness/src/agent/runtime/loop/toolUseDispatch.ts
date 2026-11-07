@@ -34,8 +34,8 @@ import {
   Fiber,
   FiberMap,
   Schema,
+  ScopedRef,
   Semaphore,
-  SynchronizedRef,
 } from 'effect';
 
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
@@ -932,7 +932,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
     settledPending.calls.some(({ callId }) =>
       endsTurn(callSettlementOf(settledPending, callId)),
     );
-  const bound = yield* SynchronizedRef.get(run.model);
+  const bound = yield* ScopedRef.get(run.model);
   const media: { readonly path: string; readonly part: StoredMediaPart }[] = [];
   const results = settledPending.calls.map((fact, ordinal) => {
     const recorded = callSettlementOf(settledPending, fact.callId);

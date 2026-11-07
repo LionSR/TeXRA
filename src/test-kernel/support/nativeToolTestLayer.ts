@@ -5,6 +5,7 @@ import {
   Layer,
   Schema,
   Scope,
+  ScopedRef,
   Semaphore,
   SynchronizedRef,
 } from 'effect';
@@ -56,8 +57,12 @@ type TestCallRun = Pick<RunCallShape['run'], 'runId' | 'toolPolicy'> &
 
 /** A run's live model cell holding only the id a tool reads off it. */
 export const testModelCell = (modelId: string) =>
-  // cast: a tool reads only the id off the run's model cell.
-  SynchronizedRef.makeUnsafe({ modelId } as BoundModel);
+  Effect.runSync(
+    // cast: a tool reads only the id off the run's model cell.
+    ScopedRef.make(() => ({ modelId }) as BoundModel).pipe(
+      Scope.provide(Scope.makeUnsafe()),
+    ),
+  );
 
 /** A run that has opened no step yet. */
 const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
