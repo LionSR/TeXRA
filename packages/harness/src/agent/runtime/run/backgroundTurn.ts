@@ -4,7 +4,7 @@
  * `ModelInvoker` owns the attempt around it; this is the part that talks to
  * `Model.background`.
  */
-import { Cause, Clock, Effect, Stream } from 'effect';
+import { Cause, Clock, Effect, Exit, Stream } from 'effect';
 
 import {
   ModelError,
@@ -12,7 +12,6 @@ import {
   type RemoteOperation,
   type ResolvedTurn,
   type TurnEvent,
-  type TurnResult,
 } from '@texra-ai/llm';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { qualifyAggregateId, type InvocationRef } from '@shared/schemas';
@@ -43,7 +42,7 @@ const BACKGROUND_CANCEL_TIMEOUT_MS = 15_000;
  * that fails, or that outlasts its budget is logged loudly and leaves no
  * row, so the operation stays observable; the stop proceeds either way.
  */
-export const observeBackground = <E>(
+export const observeBackground = (
   run: AgentRunShape,
   cell: RunCell,
   background: Background,
@@ -53,8 +52,7 @@ export const observeBackground = <E>(
     readonly operation: RemoteOperation;
     readonly deadlineAtMs: number;
   },
-  onEvent: (event: TurnEvent) => Effect.Effect<void, E>,
-) => {
+): Stream.Stream<TurnEvent, ModelError, SessionLog> => {
   const { operation, deadlineAtMs } = accepted;
   const id = operation.providerResponseId;
   // Each step's failure is its own fact: a cancel that failed may still be
@@ -91,34 +89,46 @@ export const observeBackground = <E>(
         ),
     }),
   );
-  return Stream.runForEach(
-    background.observe(resolved, operation, { deadlineAtMs }),
-    onEvent,
-  ).pipe(
-    Effect.onInterrupt(() =>
-      Effect.flatMap(
-        Effect.flatMap(SessionLog, (log) => log.facts(run.runId)),
-        (facts) => (facts?.stop?.reason === 'user' ? cancel : Effect.void),
-      ).pipe(Effect.orDie),
+  return background.observe(resolved, operation, { deadlineAtMs }).pipe(
+    Stream.onExit((exit) =>
+      Exit.hasInterrupts(exit)
+        ? Effect.flatMap(
+            Effect.flatMap(SessionLog, (log) => log.facts(run.runId)),
+            (facts) => (facts?.stop?.reason === 'user' ? cancel : Effect.void),
+          ).pipe(Effect.orDie)
+        : Effect.void,
     ),
   );
 };
 
 /**
- * Background work: submit, and if the provider accepted it rather than
- * completing at once, commit the `accepted` row with its deadline before
- * `observe` is called (the commit barrier, row 4). A progress callback is no
- * substitute: nothing observes an operation the run history does not hold.
+ * Background work as the attempt's events: submit, and if the provider
+ * accepted it rather than completing at once, commit the `accepted` row with
+ * its deadline before `observe` is called (the commit barrier, row 4). A
+ * progress callback is no substitute: nothing observes an operation the run
+ * history does not hold. A submission that completed at once is its one
+ * `completed` event.
  */
-export const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
+export const submitAndObserve = (
   run: AgentRunShape,
   cell: RunCell,
   resolved: BackgroundTurn,
   invocation: InvocationRef,
   bound: BoundModel,
-  onEvent: (event: TurnEvent) => Effect.Effect<void, InvokeError>,
-  completed: { value: TurnResult | null },
-): Effect.fn.Return<void, ModelError | InvokeError, SessionLog> {
+): Stream.Stream<TurnEvent, ModelError | InvokeError, SessionLog> =>
+  Stream.unwrap(submitted(run, cell, resolved, invocation, bound));
+
+const submitted = Effect.fn('ModelInvoker.background')(function* (
+  run: AgentRunShape,
+  cell: RunCell,
+  resolved: BackgroundTurn,
+  invocation: InvocationRef,
+  bound: BoundModel,
+): Effect.fn.Return<
+  Stream.Stream<TurnEvent, ModelError, SessionLog>,
+  ModelError | InvokeError,
+  SessionLog
+> {
   const background = bound.model.background;
   if (background === undefined) {
     return yield* new ModelError({
@@ -127,10 +137,11 @@ export const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
     });
   }
   const submission = yield* background.submit(resolved);
-  if (submission.kind === 'completed') {
-    completed.value = submission.result;
-    return;
-  }
+  if (submission.kind === 'completed')
+    return Stream.succeed<TurnEvent>({
+      kind: 'completed',
+      result: submission.result,
+    });
   const deadlineAtMs =
     (yield* Clock.currentTimeMillis) + BACKGROUND_MAX_DURATION_MS;
   const aggregateId = qualifyAggregateId('run', run.runId);
@@ -151,13 +162,8 @@ export const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
       payload: { kind: 'accepted', invocation, operation, deadlineAtMs },
     },
   ]);
-  yield* observeBackground(
-    run,
-    cell,
-    background,
-    resolved,
-    invocation,
-    { operation, deadlineAtMs },
-    onEvent,
-  );
+  return observeBackground(run, cell, background, resolved, invocation, {
+    operation,
+    deadlineAtMs,
+  });
 });

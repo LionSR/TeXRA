@@ -383,7 +383,7 @@ write points are normative:
   (`agent/runtime/ModelInvoker.ts#'ModelInvoker.attempt'`).
 - **W2**, `model.message` `response`: commits, with `run.position`
   `response.ready`, before any tool call dispatches
-  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.finish'`;
+  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`;
   `agent/runtime/loop/toolUse.ts#dispatchPendingResponse`).
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
@@ -418,7 +418,7 @@ a loop turn may hold none, or several as the loop calls the model again after
 tool results) MUST commit once, as one `response` row with a fresh `responseId`,
 in the batch that moves the position to `response.ready`. It carries one
 dispatch fact per local call (`agent/runtime/run/tools.ts#dispatchFactsFor`)
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.finish'`,
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`,
 `shared/schemas/runHistoryEvent.ts#DispatchFactsSchema`). The loop MUST dispatch
 only the pending response its fold holds
 (`agent/runtime/loop/toolUse.ts#dispatchPendingResponse`). W2 does not cover a
