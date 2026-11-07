@@ -44,7 +44,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                         ],
                       },
                     ],
-                    allowBypass: false,
+                    offersGrant: false,
                   },
                 },
               },

@@ -1,5 +1,5 @@
 name: paper2slide
-description: Converts a research paper into a LaTeX Beamer slide deck using a provided template.
+description: Converts a research paper into a LaTeX Beamer slide deck using TeXRA's bundled template.
 
 prompt: |
   Create a LaTeX Beamer presentation from the research paper. Write for a scientific audience. Present the paper's key points, methods, results, and conclusions.
@@ -14,7 +14,7 @@ prompt: |
   - Write slide text plainly: every sentence and bullet states a specific fact, method, or result in plain words. Prefer concrete verbs and takeaways the audience can follow without the paper.
   - Use appropriate notation and terminology consistently
   - Prioritize visual representations and concrete takeaways over verbose descriptions
-  - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
+  - Cite key papers with \cite, using only keys present in the provided bibliography; never invent a key
   - Output a complete, self-contained LaTeX file that can be compiled directly
   - The document must be self-contained: write as if the reader is a third party who has never read and will never read our conversations, so they should be able to understand and follow the presentation on its own. Define all notations, abbreviations, and terminology before first use.
 

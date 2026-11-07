@@ -35,7 +35,7 @@ const readHostModelOptions = (
   models: readonly string[],
 ) =>
   readModelOptions(host.roots, models).pipe(
-    Effect.provideService(Secrets, host.secrets),
+    Effect.provide(Secrets.layer(host.secrets)),
   );
 
 /** Build, for the test, a host with the access state the case needs. */

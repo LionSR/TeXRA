@@ -207,8 +207,8 @@ task:
       Following your analysis, output the FULLY EXPANDED version with all derivations shown explicitly.
       Add \criticize{comment}{severity}{confidence} annotations where the expanded LaTeX document exposes issues.
       Also add specific verification comments for areas checked and found correct:
-      - For verified sections: \criticize{Verified: Rederived the It\^o correction term and obtained the same factor $1/2$ from $\partial_x^2 D/2$.}{0}{2}
-      - For verified sections: \criticize{Verified: Calculated entropy production $\dot{S} = k_B\int J^2/(D\rho) \dd x$ and obtained positive value as required.}{0}{1}
+      - For verified sections: \criticize{Verified: Rederived the It\^o correction term and obtained the same factor $1/2$ from $\partial_x^2 D/2$.}{0}{4}
+      - For verified sections: \criticize{Verified: Calculated entropy production $\dot{S} = k_B\int J^2/(D\rho) \,\mathrm{d}x$ and obtained positive value as required.}{0}{5}
       - Be specific about what calculation you performed and what result you obtained
       This helps track both problems and verified sections during the expansion phase.
     - |
@@ -307,7 +307,7 @@ task:
           \item SEVERITY 3: \criticize{This approximation needs error bounds. Under what conditions is $O(\epsilon^2) \ll 1$?}{3}{2}
           \item SEVERITY 2: \criticize{The intermediate steps are shown in Appendix~\ref{app:integration}. Consider adding a reference here for clarity.}{2}{5}
           \item SEVERITY 1: \criticize{Typo: should be $\partial_t$ not $\partial t$.}{1}{5}
-          \item SEVERITY 0: \criticize{Verified: Jarzynski equality $\eE[\exp(-\beta W)] = \exp(-\beta \Delta F)$ confirmed using path integral over protocol $\lambda(t)$.}{0}{3}
+          \item SEVERITY 0: \criticize{Verified: Jarzynski equality $\mathbb{E}[\exp(-\beta W)] = \exp(-\beta \Delta F)$ confirmed using path integral over protocol $\lambda(t)$.}{0}{3}
 
           \item CROSS-DOC SEVERITY 5: \criticize{This contradicts the result in Appendix~\ref{sec:dissipative}, \cref{thm:main}. Either this derivation or that theorem is wrong.}{5}{4}
           \item CROSS-DOC SEVERITY 4: \criticize{The definition of $\mathcal{H}$ differs from Appendix~\ref{sec:dissipative}. This inconsistency affects all subsequent results.}{4}{5}

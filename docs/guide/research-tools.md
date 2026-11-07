@@ -59,7 +59,7 @@ The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model pr
 If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status and switch it on under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 
 ```
-Search my Zotero library for papers by Vaswani on attention mechanisms.
+Search my Zotero library for papers on attention mechanisms.
 ```
 
 ```
@@ -80,7 +80,7 @@ Add this arXiv paper to my Zotero library.
   ]"
 />
 
-<p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls surface in the Sessions view.</p>
+<p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls appear in the task.</p>
 
 ::: tip Default bibliography path
 Set a default location for Zotero exports so agents always know where to save bibliography entries. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.

@@ -221,7 +221,7 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(
         kind: 'proposal',
         data: {
           requestId: callRequestId(shared, raised + 1),
-          allowBypass: (yield* RunCall)?.hook !== 'ask',
+          offersGrant: (yield* RunCall)?.hook !== 'ask',
           runId,
           ...proposal,
           script: {

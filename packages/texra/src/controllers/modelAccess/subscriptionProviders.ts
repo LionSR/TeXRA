@@ -17,26 +17,21 @@
 import { Effect } from 'effect';
 
 import {
-  chatgptCoordinator,
   chatgptLoginWithLoopback,
-  getChatgptStatus,
-  getXaiStatus,
   LoopbackTransportUnavailableError,
+  SubscriptionAccounts,
   type SubscriptionDeviceCodePrompt,
   type SubscriptionOAuthError,
   type SubscriptionSessionStatus,
-  xaiCoordinator,
   xaiLoginWithDeviceCode,
   xaiLoginWithLoopback,
 } from '@texra-ai/llm/node';
 import {
   ConfigWriteFailed,
-  type PlatformSecrets,
-  Secrets,
   SubscriptionPreference,
   withLogChannel,
 } from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { SUBSCRIPTION_ROUTES, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   codexAccountLabel,
   type SubscriptionAuthStatus,
@@ -119,7 +114,11 @@ export interface SubscriptionProvider {
    */
   signIn(
     options: SubscriptionSignInOptions,
-  ): Effect.Effect<SubscriptionAccount, Error, HttpClient.HttpClient | Secrets>;
+  ): Effect.Effect<
+    SubscriptionAccount,
+    Error,
+    HttpClient.HttpClient | SubscriptionAccounts
+  >;
   /**
    * The sign-out program. A host runs it at its own edge; a failure is the
    * provider's own auth error or the secret store's rejection.
@@ -127,7 +126,7 @@ export interface SubscriptionProvider {
   signOut(): Effect.Effect<
     void,
     SubscriptionStatusError,
-    Secrets | HttpClient.HttpClient
+    SubscriptionAccounts | HttpClient.HttpClient
   >;
   /**
    * The signed-in status. A store that cannot be read, or a stored session
@@ -136,7 +135,7 @@ export interface SubscriptionProvider {
   getStatus(): Effect.Effect<
     SubscriptionAccount,
     SubscriptionStatusError,
-    Secrets
+    SubscriptionAccounts
   >;
   isPreferSubscription(stores: SettingsStores): boolean;
   /**
@@ -156,31 +155,28 @@ interface SubscriptionSessionFields {
   readonly accountId?: string;
 }
 
+/** The account a provider's session is held in, named by its route. */
+type AccountOf<Id extends SubscriptionProviderId> =
+  SubscriptionAccounts['Service'][(typeof SUBSCRIPTION_ROUTES)[Id]];
+
 /** A row's descriptor fields pass through to the provider unchanged; the
  *  rest bind its transports to the shared flow. */
-interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
+interface SubscriptionProviderBindings<
+  Id extends SubscriptionProviderId,
+> extends Pick<
   SubscriptionProvider,
-  'id' | 'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
+  'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
 > {
-  readonly coordinator: (secrets: PlatformSecrets) => Coordinator & {
-    signOut(): Effect.Effect<
-      void,
-      SubscriptionStatusError,
-      HttpClient.HttpClient
-    >;
-  };
-  readonly getStatus: (
-    secrets: PlatformSecrets,
-  ) => Effect.Effect<SubscriptionSessionStatus, SubscriptionStatusError>;
+  readonly id: Id;
   /** Absent where the provider offers no device-code sign-in. */
   readonly loginWithDeviceCode?: (options: {
-    coordinator: Coordinator;
+    coordinator: AccountOf<Id>;
     onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
-  }) => Effect.Effect<Session, Error, HttpClient.HttpClient>;
+  }) => Effect.Effect<SubscriptionSessionFields, Error, HttpClient.HttpClient>;
   readonly loginWithLoopback: (options: {
-    coordinator: Coordinator;
+    coordinator: AccountOf<Id>;
     openBrowser: (url: string) => Effect.Effect<void, Error>;
-  }) => Effect.Effect<Session, Error, HttpClient.HttpClient>;
+  }) => Effect.Effect<SubscriptionSessionFields, Error, HttpClient.HttpClient>;
   readonly accountLabel: (
     account:
       | { readonly email?: string | null; readonly accountId?: string | null }
@@ -193,21 +189,24 @@ interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
  * Bind one provider's transports to the shared sign-in flow. Two callers (the
  * catalog rows below); the flow it closes over is the whole point.
  */
-function defineSubscriptionProvider<
-  Coordinator,
-  Session extends SubscriptionSessionFields,
->({
-  coordinator: bindCoordinator,
-  getStatus,
+function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
   loginWithDeviceCode,
   loginWithLoopback,
   accountLabel,
   ...descriptor
-}: SubscriptionProviderBindings<Coordinator, Session>): SubscriptionProvider {
+}: SubscriptionProviderBindings<Id>): SubscriptionProvider {
+  const account: Effect.Effect<
+    AccountOf<Id>,
+    never,
+    SubscriptionAccounts
+  > = Effect.map(
+    SubscriptionAccounts,
+    (accounts) => accounts[SUBSCRIPTION_ROUTES[descriptor.id]],
+  );
   const deviceCodeLogin = (
-    coordinator: Coordinator,
+    coordinator: AccountOf<Id>,
     options: SubscriptionSignInOptions,
-  ): Effect.Effect<Session, Error, HttpClient.HttpClient> =>
+  ): Effect.Effect<SubscriptionSessionFields, Error, HttpClient.HttpClient> =>
     loginWithDeviceCode === undefined
       ? Effect.fail(
           new Error(
@@ -227,7 +226,7 @@ function defineSubscriptionProvider<
 
   const signIn = Effect.fn(`subscriptionProviders.${descriptor.id}.signIn`)(
     function* (options: SubscriptionSignInOptions) {
-      const coordinator = bindCoordinator(yield* Secrets);
+      const coordinator = yield* account;
       // A provider without a device code signs in through the browser even
       // when the host asked for one: on a remote host whose callback port is
       // forwarded, that still completes.
@@ -273,12 +272,14 @@ function defineSubscriptionProvider<
       SubscriptionPreference.set(descriptor.id, stores, enabled),
     signIn,
     signOut: () =>
-      Effect.flatMap(Secrets, (secrets) => bindCoordinator(secrets).signOut()),
+      Effect.flatMap(account, (coordinator) => coordinator.signOut()),
     getStatus: () =>
-      Effect.map(Effect.flatMap(Secrets, getStatus), (status) => ({
-        ...status,
-        label: accountLabel(status),
-      })),
+      Effect.flatMap(account, (coordinator) =>
+        Effect.map(coordinator.getStatus(), (status) => ({
+          ...status,
+          label: accountLabel(status),
+        })),
+      ),
   });
 }
 
@@ -288,8 +289,8 @@ function defineSubscriptionProvider<
  * The sign-in is browser-only: OpenAI's flow has no device code.
  *
  * Each binding calls through rather than capturing the imported function, so
- * a host suite that swaps `@texra-ai/llm/node` or `@model/subscriptionAccess`
- * still intercepts the row — the catalog is built once at module load.
+ * a host suite that swaps `@texra-ai/llm/node` still intercepts the row —
+ * the catalog is built once at module load.
  */
 const CHATGPT_PROVIDER = defineSubscriptionProvider({
   id: 'chatgpt',
@@ -297,8 +298,6 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   sessionName: 'ChatGPT',
   copyTarget: 'ChatGPT',
   modelFamily: 'OpenAI models',
-  coordinator: (secrets) => chatgptCoordinator(secrets),
-  getStatus: (secrets) => getChatgptStatus(secrets),
   loginWithLoopback: (options) => chatgptLoginWithLoopback(options),
   accountLabel: (account) => codexAccountLabel(account),
 });
@@ -313,8 +312,6 @@ const GROK_PROVIDER = defineSubscriptionProvider({
   sessionName: 'xAI',
   copyTarget: 'Grok / xAI',
   modelFamily: 'xAI models',
-  coordinator: (secrets) => xaiCoordinator(secrets),
-  getStatus: (secrets) => getXaiStatus(secrets),
   loginWithDeviceCode: (options) => xaiLoginWithDeviceCode(options),
   loginWithLoopback: (options) => xaiLoginWithLoopback(options),
   accountLabel: (account) => xaiAccountLabel(account),
@@ -345,7 +342,11 @@ export function subscriptionProvider(
 export function subscriptionAuthStatus(
   providerId: SubscriptionProviderId,
   stores: SettingsStores,
-): Effect.Effect<SubscriptionAuthStatus, SubscriptionStatusError, Secrets> {
+): Effect.Effect<
+  SubscriptionAuthStatus,
+  SubscriptionStatusError,
+  SubscriptionAccounts
+> {
   const provider = subscriptionProvider(providerId);
   return Effect.map(provider.getStatus(), (status) => ({
     provider: providerId,

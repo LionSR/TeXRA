@@ -20,15 +20,15 @@ const actions = [
     hint: 'Describe the change in plain language',
   },
   {
-    icon: 'play',
-    label: 'Execute',
+    icon: 'arrow-up',
+    label: 'Start task',
     hint: 'Run the agent on your selection',
     accent: true,
   },
   {
     icon: 'eye',
     label: 'Review outputs',
-    hint: 'Inspect r0/output.tex from run storage',
+    hint: 'Inspect the r0/ revision in run storage',
   },
   {
     icon: 'diff-single',

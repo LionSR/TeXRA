@@ -77,8 +77,9 @@ For the structure and execution flow common to all agents, read the [agent archi
 ### `assistant`
 
 ::: tip Opt-in
-`assistant` is not included in any of the [built-in teams](#built-in-teams).
-Enable it from the **Agents** tab to use it.
+`assistant` is not a member of the discipline [teams](#built-in-teams); only the
+starter set the `setup` agent applies includes it. While your workspace runs
+one of those teams, enable it from the **Agents** tab to use it.
 :::
 
 A general-purpose scientific assistant with the broadest toolset of any built-in agent. It can read your project, edit files, run shell commands, search the literature (arXiv, web), manage Zotero references, run Wolfram computations, work on Lean 4 proofs, and delegate to specialist agents or external AI coding agents (Codex, Claude Code), all in a back-and-forth conversation.
@@ -185,9 +186,12 @@ diagrams for the architecture.
 
 ## Research writing agents
 
-These document tasks drive the Physicist, Mathematician, and Computer
-Scientist teams. Three of them review a paper and leave inline comments; the
-others rewrite it, and `apply` works through the comments the reviewers left.
+These are document tasks; `generic`, `devise`, `criticize` and `apply` are
+members of the Physicist, Mathematician, and Computer Scientist teams.
+`criticize` and `firstread` only leave inline comments; `logic`, `notation`
+and `enhance` revise the paper and mark their changes and suggestions with
+inline comments; `generic` and `devise` rewrite it, and `apply` works through
+the comments the reviewers left.
 
 | Agent       | What it does                                                                                                   |
 | :---------- | :------------------------------------------------------------------------------------------------------------- |
@@ -283,14 +287,14 @@ Use bullet points for clarity and add slide titles. Include the key figures and 
 
 ### `paper2poster`
 
-Converts a paper into an academic conference poster.
+Converts a paper into an A5 Beamer conference poster built on a bundled template, in a two-pass document task (draft, then review and fix).
 
 **Best for:** Conference posters and visual research summaries
 
 **Example instruction:**
 
 ```
-Convert this paper into an academic poster using the baposter template.
+Convert this paper into an academic poster using the bundled Beamer poster template.
 Include sections for Introduction, Methodology, Results, and Conclusions.
 Highlight key figures and tables. Make it visually appealing with appropriate columns.
 ```
@@ -343,30 +347,29 @@ Convert the handwritten derivation in [notes.png] into LaTeX, matching the notat
 
 ### `transcribe_audio`
 
-Transcribes audio recordings (lectures, talks, voice notes) into text. Requires a model with native audio support; read [Working with figures](./working-with-figures.md).
+Transcribes audio recordings (lectures, talks, voice notes) into a LaTeX transcript with timestamps, speaker labels, and equations typeset as math. Requires a model with native audio support; read [Working with figures](./working-with-figures.md).
 
 **Best for:** Recorded lectures, seminar talks, voice memos
 
 **Example instruction:**
 
 ```
-Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as plain text, identifying different speakers if possible (e.g., Lecturer, Questioner 1).
+Transcribe the provided lecture audio file [lecture.mp3], identifying different speakers if possible (e.g., Lecturer, Questioner 1).
 ```
 
 ## Merge agent
 
 ### `merge`
 
-Takes an AI-edited document and merges the improvements back into your original, keeping the best of both. It understands context, so it does not overwrite your careful phrasing with generic rewrites.
+Takes a partially edited document (one that shows only the changed parts and marks the rest "unchanged") and rebuilds the complete document: it applies every edit as written and copies the unchanged parts from your original verbatim, preserving the structure so latexdiff can compare the versions.
 
-**Best for:** Applying AI-suggested edits from output files, incorporating reviewer suggestions, combining different drafts
+**Best for:** Turning an abbreviated AI edit into a complete document, applying edits from output files
 
 **Example instruction:**
 
 ```
-Merge changes from the edited file into the original document. Prioritize substantive
-improvements in clarity while maintaining the original's technical precision.
-Preserve mathematical notation and citations from the original.
+Merge the edited file into the original document. Copy every section marked
+"unchanged" from the original and keep its notation and citations.
 ```
 
 Read [Intelligent merge](./intelligent-merge.md) for details on the merge workflow.
@@ -489,7 +492,7 @@ An end-of-session reviewer. It looks at what was just done and, when the session
 ## Built-in teams
 
 Teams are predefined collections of agents for a discipline. Pick one from the
-**Teams** tab in Settings, or run one from the CLI with
+**Teams** section of the **Agents** tab in Settings, or run one from the CLI with
 `texra team run <team>`:
 
 | Team               | For                                                                                                                   | Lead agent         |

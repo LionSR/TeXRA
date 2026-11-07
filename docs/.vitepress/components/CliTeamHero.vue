@@ -1,10 +1,16 @@
 <script setup>
-// Terminal card for `texra team run` — the Teams section of
-// guide/texra-cli.md. Shows the orchestrator-and-delegates shape the TUI
+// Terminal card for a team session in `texra chat` — the Teams section of
+// guide/texra-cli.md and the multi-agent-workflows guide. The team is picked in
+// `/agent`, so the session header reads `team: … · root: … · model: …`
+// (packages/cli/src/chat/tui/panes/staticTranscriptRing.ts). Headless
+// `texra team run` prints only a one-line stderr status instead, so it is not
+// what this card shows. Shows the orchestrator-and-delegates shape the TUI
 // actually renders: the team's lead agent at work, then the subagent panel's
 // numbered child rows (status marker colored by child state, agent label,
-// status, elapsed, one dim output tail line — packages/cli/src/chat/tui's
-// subagent panel), with the stream-focus bindings in the bottom strip. Team id
+// status, elapsed and tool calls, one dim output tail line —
+// packages/cli/src/chat/tui/panes/SubagentListDisplay.ts), with the status
+// bar's key strip at the bottom (packages/cli/src/chat/tui/panes/
+// statusBarDisplay.ts: `Tab agents · Ctrl-T transcript · / commands · …`). Team id
 // and agent names match the built-in Software Engineer preset (lead `engineer`
 // delegating to `coder`, `testEngineer`, …) quoted in the surrounding prose.
 //
@@ -15,14 +21,14 @@ const children = [
     n: 1,
     agent: 'coder',
     status: 'completed',
-    elapsed: '48s',
+    elapsed: '48s · 6 tool calls',
     tail: 'optimized the inner loop in scripts/simulate.py',
   },
   {
     n: 2,
     agent: 'testEngineer',
     status: 'running',
-    elapsed: '21s',
+    elapsed: '21s · 2 tool calls',
     tail: 'pytest -q  ·  17 passed, 3 to go',
   },
 ];
@@ -30,17 +36,22 @@ const children = [
 
 <template>
   <TermWindow
-    title="texra team"
-    aria-label="texra team run with delegating subagents"
+    title="texra chat"
+    aria-label="texra chat team session with delegating subagents"
   >
     <!-- Prompt line -->
     <div class="mk-term-prompt cma-prompt">
       <span class="mk-term-sigil">$</span>
-      <span class="mk-term-cmd"
-        >texra team run software-engineer
-        <span class="mk-term-flag">--instruction</span> "Profile and speed up
-        scripts/simulate.py"</span
-      >
+      <span class="mk-term-cmd">texra chat</span>
+    </div>
+    <!-- Session header after picking the team in /agent -->
+    <div class="cma-identity">
+      team: Software Engineer · root: engineer · model: DeepSeek V4 Pro
+    </div>
+    <!-- The user's request -->
+    <div class="cma-user">
+      <span class="cma-chevron">›</span>
+      <span>Profile and speed up scripts/simulate.py</span>
     </div>
 
     <!-- Orchestrator row: the team's lead plans and delegates -->
@@ -67,10 +78,10 @@ const children = [
       </li>
     </ul>
 
-    <!-- Stream-focus bindings: each child is a focusable scoped transcript -->
+    <!-- Status-bar key strip; Alt-1..9 focuses a child by number -->
     <template #hint>
       <span class="cma-bindings"
-        >[Tab]streams&ensp;[Esc 1..9]focus&ensp;[Esc s]subagents</span
+        >Tab agents · Ctrl-T transcript · / commands · Ctrl-C stop</span
       >
       <span class="cma-hint-note">each subagent keeps its own transcript</span>
     </template>
@@ -82,6 +93,23 @@ const children = [
    .mk-term-* classes in theme/mockup.css. */
 .cma-prompt {
   flex-wrap: wrap;
+}
+.cma-identity {
+  margin-top: var(--mk-space-7);
+  color: var(--mk-text-dim);
+  font-size: var(--mk-fs-74);
+}
+.cma-user {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mk-space-7);
+  margin-top: var(--mk-space-9);
+  padding: var(--mk-space-4) var(--mk-space-8);
+  border-radius: var(--mk-radius-sm);
+  background: var(--mk-bg-raised);
+}
+.cma-chevron {
+  color: var(--mk-accent);
 }
 
 .cma-root {

@@ -13,11 +13,11 @@
  *   load only the requested protocol (`anthropic-messages`, `openai-responses`,
  *   `google-interactions`), manage scoped connections and file uploads in the
  *   caller's `Scope`, and classify provider failures into `ModelError`.
- * - **Subscription sign-in (`chatgpt`, `xai`)**: ChatGPT
- *   ([`chatgptCoordinator`](#chatgptcoordinator),
- *   [`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
- *   ([`xaiCoordinator`](#xaicoordinator),
- *   [`xaiLoginWithLoopback`](#xailoginwithloopback),
+ * - **Subscription sign-in (`chatgpt`, `xai`)**: each subscription's
+ *   account, keyed by its route
+ *   ([`SubscriptionAccounts`](#subscriptionaccounts)), and the ChatGPT
+ *   ([`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
+ *   ([`xaiLoginWithLoopback`](#xailoginwithloopback),
  *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows.
  */
 import { Effect, type Scope } from 'effect';
@@ -234,15 +234,12 @@ export type {
   SubscriptionTokenResponse,
 } from './oauth/subscriptionCoordinator.js';
 export {
-  chatgptCoordinator,
   chatgptLoginWithLoopback,
-  getChatgptStatus,
   type ChatgptSession,
 } from './oauth/chatgpt/chatgptProvider.js';
 export {
-  getXaiStatus,
-  xaiCoordinator,
   xaiLoginWithLoopback,
   type XaiSession,
 } from './oauth/xai/xaiProvider.js';
+export { SubscriptionAccounts } from './oauth/subscriptionAccounts.js';
 export { xaiLoginWithDeviceCode } from './oauth/xai/xaiDeviceLogin.js';

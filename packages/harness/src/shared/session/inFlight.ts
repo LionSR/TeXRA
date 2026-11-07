@@ -9,6 +9,7 @@
  */
 import type {
   CommitOrdinal,
+  DeclinableUsageRoute,
   DispatchFacts,
   FailedNext,
   InvocationRef,
@@ -181,14 +182,19 @@ function movedBy(
   }
 }
 
-/** The credentials a person's retry answer picked. */
-export type RetryCredentials = NonNullable<
-  Extract<RequestDecision, { action: 'retry' }>['credentials']
->;
+/** The credentials a retry is sent on, and the route it declines: a
+ *  person's answer (personal credentials decline the route its request
+ *  offered to switch off), or an automatic decline. */
+export interface RetryCredentials {
+  readonly credentials: NonNullable<
+    Extract<RequestDecision, { action: 'retry' }>['credentials']
+  >;
+  readonly declines: DeclinableUsageRoute | null;
+}
 
 /**
  * What an invocation does next: `send` a new attempt (`retry`: after a
- * person's answer, which rebinds first), `observe` the accepted background
+ * person's answer or a declined route, which rebinds first), `observe` the accepted background
  * operation, ask again (`reask`) about an attempt whose outcome no row
  * recorded, `await` the answer to the open retry request, or end it
  * (`fail`, `cancel`).
@@ -245,12 +251,33 @@ export function nextAttempt(
       return SEND;
     case 'stop':
       return { kind: 'fail', error: failed.error };
+    case 'decline':
+      return {
+        kind: 'send',
+        retry: { credentials: 'personal', declines: failed.next.route },
+      };
     case 'ask': {
       const { requestId } = failed.next;
-      const decision = requests[requestId]?.decision ?? null;
+      const request = requests[requestId];
+      const decision = request?.decision ?? null;
       if (decision === null) return { kind: 'await', requestId };
-      if (decision.action === 'retry')
-        return { kind: 'send', retry: decision.credentials ?? 'configured' };
+      if (decision.action === 'retry') {
+        const credentials = decision.credentials ?? 'configured';
+        const offer =
+          request?.payload.kind === 'retry'
+            ? request.payload.data.credentialSwitch
+            : null;
+        return {
+          kind: 'send',
+          retry: {
+            credentials,
+            declines:
+              credentials === 'personal' && offer?.kind === 'decline-route'
+                ? offer.route
+                : null,
+          },
+        };
+      }
       return decision.action === 'deny'
         ? { kind: 'fail', error: failed.error }
         : { kind: 'cancel' };
@@ -322,7 +349,10 @@ export const attemptOf = (status: CallStatus): number =>
   status.kind === 'issued' ? 0 : status.attempt;
 
 /** A call's attempt; 0 holds what its attempts share (a script's `agent` ask). */
-type CallAttempt = Pick<ToolResultPayload, 'responseId' | 'callId' | 'attempt'>;
+export type CallAttempt = Pick<
+  ToolResultPayload,
+  'responseId' | 'callId' | 'attempt'
+>;
 
 /** The id of the `ordinal`-th request (from 1) `at` raises: derived, never
  *  drawn, so a resumed attempt joins the request it left standing. */

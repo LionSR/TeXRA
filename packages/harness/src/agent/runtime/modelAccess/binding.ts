@@ -21,6 +21,7 @@ import { decideReasoning, PROTOCOL_BY_BACKEND } from '@model/reasoningLevel';
 import type { ModelSettings } from '@model/modelSettings';
 import { runModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { Secrets } from '@platform/secrets';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import { routeCredential } from './credentials';
 import { routePolicies, type CallFailure } from './failureInfo';
@@ -95,7 +96,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
-  Scope.Scope | HttpClient.HttpClient | Secrets
+  Scope.Scope | HttpClient.HttpClient | Secrets | SubscriptionAccounts
 > {
   const { request, requested, settings } = plan;
   const { route, backend } = plan.decision;

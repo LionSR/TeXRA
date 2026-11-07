@@ -52,6 +52,7 @@ import type { Alongside } from '@shared/session/sessionEvents';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { ProjectTools, type OpenStep } from '../loop/step';
 import type { ModelConfig } from '@texra-ai/llm';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 
 /** Model access over the session's roots. */
@@ -201,7 +202,12 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun | ModelAccess,
   Error,
-  RunHistory | ProjectTools | SessionRoots | HttpClient.HttpClient | Secrets
+  | RunHistory
+  | ProjectTools
+  | SessionRoots
+  | HttpClient.HttpClient
+  | Secrets
+  | SubscriptionAccounts
 > =>
   Layer.effect(
     AgentRun,

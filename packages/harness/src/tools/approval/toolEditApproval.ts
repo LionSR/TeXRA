@@ -115,7 +115,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       relativePath: workspaceRelativePath(call.env.roots.workspace, path),
       sourceTool,
       // The policy asked, so the edit grant is off.
-      allowBypass: hook !== 'ask',
+      offersGrant: hook !== 'ask',
       runId,
       addedLines: lines.added,
       removedLines: lines.removed,

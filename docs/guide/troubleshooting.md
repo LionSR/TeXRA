@@ -49,7 +49,7 @@ integration's state.
 **Problem**: Error messages about missing dependencies like LaTeX, Perl, or GraphicsMagick.
 
 One command checks them all. `texra doctor` probes the LaTeX toolchain (plus
-Node, auth, and model access) and says exactly what is missing and how to fix
+Node, model access, and usage logging) and says exactly what is missing and how to fix
 it:
 
 <DoctorSliceHero
@@ -103,15 +103,17 @@ it:
 3. `C:\Program Files\MiKTeX 2.9\miktex\bin\x64` and `C:\Program Files\MiKTeX 2.9\miktex\bin` (legacy MiKTeX 2.9)
 4. `C:\Program Files (x86)\MiKTeX\miktex\bin` and `C:\Program Files (x86)\MiKTeX 2.9\miktex\bin` (32-bit on 64-bit Windows)
 5. `C:\Strawberry\perl\bin` (Strawberry Perl)
-6. Ghostscript in `C:\Program Files\gs\*\bin` and `C:\Program Files (x86)\gs\*\bin` (newest version first)
-7. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin\x64` and `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin` (user MiKTeX installation)
-8. `%LOCALAPPDATA%\Programs\MiKTeX 2.9\miktex\bin\x64` and `%LOCALAPPDATA%\Programs\MiKTeX 2.9\miktex\bin` (legacy user MiKTeX 2.9)
-9. `%LOCALAPPDATA%\MiKTeX\miktex\bin\x64` and `%LOCALAPPDATA%\MiKTeX\miktex\bin` (user MiKTeX without Programs subfolder)
-10. Scoop `shims` and `apps\*\current` directories (when Scoop is installed)
-11. MSYS2 `usr\bin`, `mingw64\bin`, and `mingw32\bin` under `C:\msys64`, `C:\msys32`, or `%MSYS2_HOME%` (when `perl.exe` exists there)
-12. TeX Live's bundled Perl in `C:\texlive\*\tlpkg\tlperl\bin` (and under `%USERPROFILE%\texlive`)
-13. Versioned TeX Live directories (e.g., `C:\texlive\2024\bin\windows`)
-14. User-specific installations in `%USERPROFILE%\texlive\*\bin\*` and `%USERPROFILE%\TinyTeX\bin\*`
+6. `C:\Program Files\Git\cmd` and `C:\Program Files (x86)\Git\cmd` (Git for Windows)
+7. Ghostscript in `C:\Program Files\gs\*\bin` and `C:\Program Files (x86)\gs\*\bin` (newest version first)
+8. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin\x64` and `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin` (user MiKTeX installation)
+9. `%LOCALAPPDATA%\Programs\MiKTeX 2.9\miktex\bin\x64` and `%LOCALAPPDATA%\Programs\MiKTeX 2.9\miktex\bin` (legacy user MiKTeX 2.9)
+10. `%LOCALAPPDATA%\MiKTeX\miktex\bin\x64` and `%LOCALAPPDATA%\MiKTeX\miktex\bin` (user MiKTeX without Programs subfolder)
+11. `%LOCALAPPDATA%\Programs\Git\cmd` (Git for Windows installed per user)
+12. Scoop `shims` and `apps\*\current` directories (when Scoop is installed)
+13. MSYS2 `usr\bin`, `mingw64\bin`, and `mingw32\bin` under `C:\msys64`, `C:\msys32`, or `%MSYS2_HOME%` (when `perl.exe` exists there)
+14. TeX Live's bundled Perl in `C:\texlive\*\tlpkg\tlperl\bin` (and under `%USERPROFILE%\texlive`)
+15. Versioned TeX Live directories (e.g., `C:\texlive\2024\bin\windows`)
+16. User-specific installations in `%USERPROFILE%\texlive\*\bin\*` and `%USERPROFILE%\TinyTeX\bin\*`
 
 **Linux:**
 
@@ -166,7 +168,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 - **Check the toolchain**: Run `texra doctor` to confirm `latexmk`, `pdflatex`, `bibtex`, `biber`, `latexdiff`, and `latexindent` are found on `PATH`.
 - **Verify standalone compilation**: Make sure the original `.tex` document compiles cleanly outside of TeXRA before running a diff or extraction task.
 - **Missing LaTeX packages**: Install missing style files with `tlmgr install <pkg>` (TeX Live) or the MiKTeX Console.
-- **Diff fails to compile**: Complex custom macros or unclosed math environments can conflict with `latexdiff` markup. Format both files first (`latexindent` or `tex-fmt`), or lower **Math markup in diffs** on **Settings → LaTeX → Compile and diff**.
+- **Diff fails to compile**: Complex custom macros or unclosed math environments can conflict with `latexdiff` markup. Format both files first (`latexindent` or `tex-fmt`), or lower **Math markup in diffs** on **Settings → LaTeX → Compile & diff**.
 
 ### TikZ and image processing errors
 
@@ -185,15 +187,15 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 ### Missing or truncated output files
 
 1. **Locate the run folder**:
-   - In VS Code, check **Generated Files** in the ProgressBoard or click **Open in run storage** (<wa-icon library="texra" name="folder-open"></wa-icon>) to open `executions/<run-id>/`.
+   - In VS Code, check **Generated files** in the ProgressBoard or choose **Open task folder** (<wa-icon library="texra" name="folder-open"></wa-icon>) from the task's `⋯` menu to open `executions/<run-id>/`.
    - Each revision writes its extracted file under its input filename (e.g., `r0/draft.tex`, `r1/draft.tex`), alongside the raw model response `r0/output.xml`.
 2. **Repair malformed XML**:
    - Document tasks wrap their output in `<documents><document name="...">...</document></documents>`.
-   - If the model hits its output token limit or drops the closing `</document>` / `</documents>` tag, extraction fails. Open `r0/output.xml` in the run folder and restore the missing closing tag to recover the text:
+   - TeXRA closes an unclosed `<document>` tag itself and tries to recover files that have no tags. If the model hit its output token limit or the reply is malformed in another way and a file still fails to extract, open `r0/output.xml` in the run folder and repair the tags to recover the text:
 
 <XmlRepairCard />
 
-<p class="hero-caption">A dropped <code>&lt;/documents&gt;</code> breaks extraction. Open <code>r0/output.xml</code> and restore the closing tag to recover the run.</p>
+<p class="hero-caption">When a file still fails to extract, open <code>r0/output.xml</code> and repair the tags to recover the text.</p>
 
 ### High memory use in long CLI sessions
 

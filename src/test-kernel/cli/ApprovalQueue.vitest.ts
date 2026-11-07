@@ -31,7 +31,7 @@ const RUN_B = Schema.decodeUnknownSync(RunIdSchema)('b0000b');
 function bashPayload(runId: RunId, requestId = `bash-${runId}`) {
   return {
     kind: 'bash',
-    data: { requestId, allowBypass: true, runId, command: 'echo ok' },
+    data: { requestId, offersGrant: true, runId, command: 'echo ok' },
   } satisfies TuiRequest;
 }
 

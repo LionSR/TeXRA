@@ -19,7 +19,8 @@ import {
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import type { Secrets, SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/host';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
@@ -135,7 +136,7 @@ function vscodePresenter(
 export function signInWithSubscription(
   stores: SettingsStores,
   providerId: SubscriptionProviderId,
-): Effect.Effect<boolean, never, HttpClient.HttpClient | Secrets> {
+): Effect.Effect<boolean, never, HttpClient.HttpClient | SubscriptionAccounts> {
   const provider = subscriptionProvider(providerId);
   const { displayName, modelFamily } = provider;
 

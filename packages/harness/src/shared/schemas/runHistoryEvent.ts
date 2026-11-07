@@ -21,7 +21,7 @@ import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
 import { RunInputSchema } from './runInput';
-import { NormalizedUsageSchema } from './usage';
+import { DeclinableUsageRouteSchema, NormalizedUsageSchema } from './usage';
 import {
   StoredMessageSchema,
   StoredOperationSchema,
@@ -68,6 +68,12 @@ const FailedNextSchema = Schema.Union([
     requestId: Schema.String.check(Schema.isMinLength(1)),
   }),
   Schema.Struct({ kind: Schema.Literal('stop') }),
+  /** The plan the attempt billed ran out and the run declines its `route`:
+   *  the next attempt is sent at once on the user's own key, nobody asked. */
+  Schema.Struct({
+    kind: Schema.Literal('decline'),
+    route: DeclinableUsageRouteSchema,
+  }),
 ]);
 /** The move a `failed` row records after its attempt. */
 export type FailedNext = typeof FailedNextSchema.Type;

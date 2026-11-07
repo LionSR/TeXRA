@@ -4,7 +4,7 @@ import FlowSteps from '../.vitepress/components/FlowSteps.vue';
 
 # Desktop App
 
-The TeXRA desktop app is the standalone Electron host for TeXRA, built for researchers who want the TeXRA agent workflow without installing VS Code. It shares the same agent runtime, model providers, LaTeX tools, settings UI, Sessions view, configuration locations (`.texra/config.json` and `~/.texra`), and credential store (`~/.texra/secrets/`) as the extension and CLI.
+The TeXRA desktop app is the standalone Electron host for TeXRA, built for researchers who want the TeXRA agent workflow without installing VS Code. It shares the same agent runtime, model providers, LaTeX tools, settings UI, task list, configuration locations (`.texra/config.json` and `~/.texra`), and credential store (`~/.texra/secrets/`) as the extension and CLI.
 
 ## Availability
 
@@ -34,7 +34,7 @@ When a desktop installer is available:
    page.
 2. Install TeXRA using the normal operating-system flow.
 3. Launch TeXRA and open the project folder that contains your manuscript.
-4. Complete first-run setup in the Models, Agents, Tools, and LaTeX settings.
+4. Complete first-run setup in the Models, Agents, Plugins, LaTeX and General settings.
 
 For the system dependencies TeXRA needs, follow the same setup as the extension:
 [Installation](/guide/installation).
@@ -46,11 +46,11 @@ On first launch, point the app at your project and verify your setup:
 <FlowSteps :steps="[
   { n: 1, icon: 'folder-open', title: 'Open your project', desc: 'Point the desktop app at the same folder or Git repository you already use for your project.', chips: [{ text: 'folder or repo', variant: 'info', icon: 'folder-tree' }] },
   { n: 2, icon: 'key', title: 'Add API keys', desc: 'Add model provider keys in the Models tab, or set workspace-local .env variables.', chips: [{ text: 'Models tab', variant: 'accent' }, { text: '.env', variant: 'info', icon: 'file-code' }] },
-  { n: 3, icon: 'gear', title: 'Review settings', desc: 'Check agent visibility, tool approval, Git integration and LaTeX tool paths.', chips: [{ text: 'Agents', variant: 'accent' }, { text: 'Tools', variant: 'accent' }, { text: 'LaTeX', variant: 'accent' }] },
-  { n: 4, icon: 'play', title: 'Run a small task', desc: 'Run a LaTeX or polish task and confirm the output appears in the Sessions view.', chips: [{ text: 'Sessions view', variant: 'success', icon: 'list-check' }] }
+  { n: 3, icon: 'gear', title: 'Review settings', desc: 'Check agent visibility, plugins, LaTeX tool paths, and approval and Git under General.', chips: [{ text: 'Agents', variant: 'accent' }, { text: 'Plugins', variant: 'accent' }, { text: 'LaTeX', variant: 'accent' }, { text: 'General', variant: 'accent' }] },
+  { n: 4, icon: 'play', title: 'Run a small task', desc: 'Run a LaTeX or polish task and confirm the output appears in the task list.', chips: [{ text: 'Tasks', variant: 'success', icon: 'list-check' }] }
 ]" />
 
-<p class="hero-caption">First-run setup is explicit: open your project, add keys, review settings, then confirm a small task lands in the Sessions view.</p>
+<p class="hero-caption">First-run setup is explicit: open your project, add keys, review settings, then confirm a small task lands in the task list.</p>
 
 ### What carries over from the extension and CLI
 
@@ -65,10 +65,11 @@ shares:
 - history and execution records; and
 - project files, custom instructions, and checked-in agent definitions.
 
-Enabled agents, default team, tool enablement and availability, model visibility, and
-host-specific LaTeX compile and formatter preferences stay in each host's
-state. Provider API keys and sign-ins are shared: every TeXRA app keeps them in
-one folder, `~/.texra/secrets/`, readable by your user alone.
+TeXRA's own stored state (enabled agents, the default team, disabled tools,
+model selection and similar choices) also lives under `~/.texra`, in stores
+every host reads, so it carries over too. Provider API keys and sign-ins are
+shared: every TeXRA app keeps them in one folder, `~/.texra/secrets/`,
+readable by your user alone.
 
 ### Tasks run in the background service
 
@@ -82,8 +83,9 @@ for review. When the service cannot start, the app runs its tasks itself.
 ## Logs
 
 The desktop app writes a local session log named `texra-desktop.log`. Choose
-**Show Logs** from the application menu or from Commands to read it in the
-app, or **Open Logs Folder** to open the folder in your operating system.
+**Show Logs** from the **View** menu or from Commands to read it in the
+app, or **Open Logs Folder** from the **Help** menu to open the folder in your
+operating system.
 
 Include relevant log excerpts when reporting beta desktop issues. Avoid sharing
 API keys, unpublished manuscript text, or private file paths.
@@ -92,16 +94,12 @@ API keys, unpublished manuscript text, or private file paths.
 
 Automatic desktop updates are not available during beta. Beta users should install newer builds manually.
 
-The intended update model is:
+A packaged build checks the public desktop release repository's latest
+release, without a GitHub token, and when a newer version exists shows a
+dialog that links to its download page. It never downloads or installs an
+update itself. Set `TEXRA_NO_UPDATE_CHECK=1` to turn the check off.
 
-- signed installers are built in CI for macOS, Windows, and Linux;
-- release artifacts and update manifests are published to a public desktop
-  release repository;
-- the installed app checks that public release location without embedding or
-  asking for a GitHub token;
-- update downloads require user consent for v1.
-
-Docs will be updated when signed installers and auto-update manifests are live.
+Docs will be updated when signed installers are live.
 
 ## Related Docs
 

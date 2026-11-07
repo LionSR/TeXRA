@@ -10,7 +10,7 @@ On a fresh install, the **setup assistant** walks you through connecting a model
 
 <QuickStartHero />
 
-<p class="hero-caption">The New task view: point it at your file, pick an agent and a model, write one sentence, and press Execute.</p>
+<p class="hero-caption">The New task view: point it at your file, pick an agent and a model, write one sentence, and select Start task.</p>
 
 ## Overview
 
@@ -19,7 +19,7 @@ A typical document task takes five steps:
 1. Select your file
 2. Pick an agent and model
 3. Write a short instruction
-4. Select **Execute**
+4. Select **Start task**
 5. Review the diff
 
 > 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
@@ -37,15 +37,15 @@ available.
 ## Add a key or connect a subscription
 
 A credential is the one step no agent can do for you. On a fresh install, the **Connect a model** card in the
-TeXRA panel offers the main access choices:
+TeXRA panel offers the two main access choices; other subscriptions connect from Settings:
 
-1. **Use your own provider API key**: Anthropic, OpenAI, Google, and more. Open the **Models** page
+1. **Use your own API keys**: Anthropic, OpenAI, Google, and more. Open the **Models** page
    (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
    set your provider's key in the **API keys** list, or place a `.env` file in your workspace with
    variables like `OPENAI_API_KEY`.
 2. **Use ChatGPT subscription**: OpenAI models through your ChatGPT plan. Open the Settings **Models**
-   page and use the **ChatGPT subscription** sign-in section.
-3. **Use another provider subscription**: Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
+   page and use the **Subscriptions** sign-in section.
+3. **Another provider subscription** (from Settings, not the card): Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
    already pay for. Connect them from the same **Models** page.
 
 The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
@@ -70,7 +70,7 @@ environment, agents, and first task. Read the
 
 ## The New task view in detail
 
-Open the TeXRA panel from the brain icon in the sidebar, or run **TeXRA: New Task**
+Open the TeXRA panel from the TeXRA icon in the Secondary Side Bar, or run **TeXRA: New Task**
 (`Ctrl+Alt+M`, `Cmd+Option+M` on macOS).
 
 ### Select files
@@ -134,9 +134,9 @@ The selected agent controls how many revisions run; most writing agents already 
 For advanced debugging, enable the `texra.debug.saveModelIO` setting in `.texra/config.json` to store the generated prompt alongside other debug artifacts.
 :::
 
-### Execute and watch the run
+### Start the task and watch it
 
-Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The ProgressBoard opens in the TeXRA view and streams the run live. Read the [ProgressBoard guide](./progress-board.md) for help interpreting the logs.
+Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The ProgressBoard opens in the TeXRA view and streams the run live. Read the [ProgressBoard guide](./progress-board.md) for help interpreting the logs.
 
 <GuideIntroHero />
 
@@ -146,7 +146,7 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
 1. When the run completes, VS Code opens the generated output file from the run folder (e.g., `r0/draft.tex`, keeping your input filename).
 2. Inspect the proposed edits; the scientific judgment stays yours. Compare the original and modified versions with either tool:
-   - **ProgressBoard Diff**: Select the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated run-storage output.
+   - **ProgressBoard Diff**: Under **Generated files**, select a file's <wa-icon library="texra" name="code-compare"></wa-icon> **Compare with base** button to compare the original file against the generated run-storage output.
 
      <CompareHero />
 
@@ -154,7 +154,7 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
      You can accept reviewed outputs from the ProgressBoard after comparing the changes.
 
-   - **TeXRA's LaTeXdiff feature**: Use the LaTeXDiffs section in the TeXRA panel for a compiled, visual comparison. It creates a PDF with additions highlighted in blue and deletions in red.
+   - **TeXRA's LaTeXdiff feature**: Use a file's latexdiff button, or **LaTeXDiffs…** in the panel's **⋯** menu, for a compiled, visual comparison. It creates a PDF with additions highlighted in blue and deletions in red.
 
 <div class="quick-pdf-viewer">
   <div class="pdf-tabs">
@@ -187,7 +187,7 @@ texra auth chatgpt login
 # Or let the guided setup handle credentials, environment, and your first task:
 texra setup
 
-# One-shot run (prints the revised file's path; --output copies it next to the input):
+# One-shot run (prints the revised file's path; --output copies it to a file you name):
 texra run polish --input draft.tex \
   --instruction "Improve clarity; preserve math and citations."
 
@@ -314,12 +314,14 @@ Some common tasks to try with TeXRA. Each is an agent, a model, and a one-line i
 ## Understanding the output
 
 A completed run writes everything into the run folder under run storage, one
-folder per revision. Each revision holds three artifacts, and the document keeps your
-**input filename** (`draft.tex`, not `output.tex`):
+folder per revision (`r0/`, `r1/`, …). Each revision folder holds the revised document,
+which keeps your **input filename** (`draft.tex`, not `output.tex`), and the model's raw
+reply (`output.xml`); the run's latexdiff PDFs go under `diff/r{revision}/` and compile
+logs under `compile/`:
 
 <OutputArtifactsTree />
 
-<p class="hero-caption">One folder per revision under <code>r{round}/&lt;input-filename&gt;</code>: the revised <strong>Output</strong>, a <strong>Log</strong> of the run, and the <strong>Diff</strong> PDF. The second revision (and any further one) repeats the same trio in <code>r1/</code>, <code>r2/</code>, …</p>
+<p class="hero-caption">One folder per revision: the revised document at <code>r{revision}/&lt;input-filename&gt;</code> with the model's reply; latexdiff PDFs under <code>diff/</code> and compile logs under <code>compile/</code> sit beside the revision folders. Each further revision repeats the layout in <code>r1/</code>, <code>r2/</code>, …</p>
 
 The CLI writes the same per-revision tree under `executions/<run-id>/` in the
 workspace store. Read [First run](./first-run.md) for the terminal walkthrough.

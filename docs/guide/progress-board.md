@@ -43,18 +43,18 @@ The ProgressBoard shares the **TeXRA view** with the New task screen. Select the
 
 ## Layout overview
 
-The ProgressBoard is split into two main sections (usually side by side, but configurable):
+The ProgressBoard has two parts:
 
-1.  **Stream Tabs**: A list on the side (often right) showing different agent runs (streams).
-2.  **Content Area**: The main area (often left) displaying the header and log details for the selected stream.
+1.  **Task list**: In the sidebar, the **Tasks** button opens it as a drawer; in the editor tab it is docked beside the task.
+2.  **Content Area**: The header and log details for the selected task.
 
 ## Stream tabs section
 
 This section lists the stored tasks for the workspace, including tasks started earlier and from other TeXRA hosts; their conversations load from the workspace's SQLite database.
 
-- **Switching streams**: Select a stream name (e.g., `polish: paper.tex`) to view its logs and status in the Content Area.
-- **Removing a stream**: Each tab has an <wa-icon library="texra" name="xmark"></wa-icon> button that removes that stream and its logs from the ProgressBoard view.
-- **Metadata**: Tabs display the model and when the stream was last active on a second line. Icons indicate the agent type and whether multiple output files were generated.
+- **Switching tasks**: Select a task's title to view its logs and status in the Content Area.
+- **Renaming or deleting a task**: Each row's <wa-icon library="texra" name="ellipsis"></wa-icon> menu offers **Rename…** and **Delete task**; deleting removes the stored task and its run folder, not just the row. Double-clicking a title also renames it.
+- **Metadata**: A row's second line shows the agent, when the task was last active, and the model, with an icon for the kind of task.
 
 ## Content area
 
@@ -64,35 +64,34 @@ This area shows the details for the stream selected in the Stream Tabs section.
 
 The header provides a summary and actions for the selected stream:
 
-- **Stream name**: Displays the identifier of the current run.
-  Tabs show the agent name (with `#executionId` when parallel runs would
-  otherwise collide). Input files stay on the files panel, not on the tab chip.
-  The model appears on the second line of the tab.
+- **Task title**: Displays the title of the current task (select it to
+  rename). Input files stay on the files panel, not on the task row.
 - **Status indicator**: A colored circle shows the current status. The four states read at a glance:
 
 <StatusDotLegend />
 
-<p class="hero-caption">The status dot: green while running, blue while waiting for input, gray once finished, red on error.</p>
+<p class="hero-caption">The status dot: green while running, yellow while waiting on you or interrupted, gray once finished or stopped, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed revisions (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Pass 2 of 3** for multi-pass document tasks), **Stop** while running (aborts the active request immediately for providers supporting `AbortController`, or stops after the current API call finishes), **New task**, and the **More** menu (`⋯`).
-- **More menu (`⋯`)**:
+- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Pass 2 of 3** for multi-pass document tasks), **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
+- **Task actions menu (`⋯`)**:
   - **All tasks**:
-    - **Rename**: Change the task title.
+    - **Rename…**: Change the task title.
+    - **Fork**: Branch the conversation into a new task (when the task can be forked), plus a link to each fork already made from it.
     - **Open task folder**: Reveal the run folder in run storage (`executions/<run-id>/`) to inspect generated files, compile logs, mirrored dependencies, and intermediate artifacts.
-    - **Export**: Save the transcript as Markdown, HTML, or PDF.
+    - **Export conversation…**: Save the transcript as Markdown, HTML, or PDF.
     - **Copy diagnostics**: Copy the task's title, agent, model, status, task ID, output paths, and compile failures as plain text for bug reports or follow-up tasks.
     - **Delete task**: Remove the task once stopped.
   - **Document tasks**:
     - **Run again…**: Pre-fill the New task form with the same agent, model, files, and instruction to start a fresh run.
-    - **latexdiff**: Compare the original input `.tex` file(s) with the generated output `.tex` file(s) using `latexdiff` (read the [LaTeX Diff guide](./latex-diff.md)).
-    - **Archive outputs**: Move the run's output files and log into the `History` folder (read the [file management guide](./file-management.md)).
-    - **Delete output files**: Remove the run folder's generated files.
-  - **Chat tasks**: **Fork** (branch the conversation into a new task), **Compact** (summarize earlier turns), and links to any forks created from the conversation.
-  - **Global**: **Open tasks in editor** (or **Back to sidebar**) and **LaTeXDiffs**.
+    - **Run latexdiff on the outputs**: Compare the original input `.tex` file(s) with the generated output `.tex` file(s) using `latexdiff` (read the [LaTeX Diff guide](./latex-diff.md)).
+    - **Archive outputs to History**: Copy the run folder (outputs, logs, mirrored dependencies) into a timestamped folder under `History/` (read the [file management guide](./file-management.md)).
+    - **Delete output files**: Remove the task's run folder.
+  - **Chat tasks**: **Compact conversation** (summarize earlier turns).
+  - **Global**: **Open tasks in editor** (or **Back to sidebar**) and **LaTeXDiffs…**.
 - **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks or workflows with saved outputs, **Resume** (continues from saved outputs instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 
-Reviewed outputs are accepted per file: each row under **Generated Files** has
+Reviewed outputs are accepted per file: each row under **Generated files** has
 an **Accept** action that copies the edited version into your workspace.
 
 ### Checking an agent's launch
@@ -107,7 +106,7 @@ leaves the proposal waiting.
 
 ### Auto-approval
 
-An approval card's ▾ menu (**Approve all … in this run**) is where you let a
+An approval card's ▾ menu (**Approve all … in this task**) is where you let a
 task approve a kind of request on its own: **edits**, **commands** or
 **agent work**. Later requests of that kind in the task are approved without
 asking. Edits and commands are independent. Agent work also covers the other
@@ -117,8 +116,8 @@ While a grant is on, the task's header shows an amber chip for it
 (**Auto: edits**, **Auto: commands**, **Auto: agent work**); its × turns the
 grant off. In the narrow sidebar one **Auto** chip stands for all of them,
 and its × turns them all off. The composer's **Approval** chip sets the
-policy a new task starts with. The CLI shows the same grants as AUTO-EDIT,
-AUTO-BASH and AUTO-TASK badges.
+policy a new task starts with. In the CLI, `/status` lists the same grants
+(`auto-approvals: edits, commands`) and `/approval` turns them off.
 
 ### Context utilization
 
@@ -132,7 +131,7 @@ clipboard, then start a chat from the **New** view and paste that text
 into the instruction box.
 
 When a run recorded a compile failure, **Fix compile errors** still appears under
-**Generated Files** and starts a repair chat from those logs.
+**Generated files** and starts a repair chat from those logs.
 
 ### Memory
 
@@ -142,9 +141,9 @@ Agents can remember things between sessions. When memory is enabled (toggle in t
 
 This scrollable area displays the detailed, timestamped logs for the selected agent run.
 
-- **Structure**: Logs are organized into expandable groups (e.g., `Initialization`, `Revision 1`, `Model Operation`). Response cycles are logged within the corresponding revision group. Select the arrow next to a group name to expand or collapse it.
-- **Log levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown when `texra.logger.debugMode` is set to `true` in `<project>/.texra/config.json` or `~/.texra/v1/global-storage/config.json`; TeXRA does not read VS Code settings.
-- **Agent thinking**: The log highlights model reasoning in purple **Thinking** blocks. These sections are flagged internally with a `thinking` type so you can spot when the model is exploring ideas.
+- **Structure**: Logs are organized into expandable groups (e.g., `Revision 1`). Response cycles are logged within the corresponding revision group. Select the arrow next to a group name to expand or collapse it.
+- **Log levels**: Each line carries an icon for its severity. Debug-level lines, with timestamps and `INFO`, `DEBUG`, `WARN`, `ERROR` level prefixes, are only shown when `texra.logger.debugMode` is set to `true` in `<project>/.texra/config.json` or `~/.texra/v1/global-storage/config.json`; TeXRA does not read VS Code settings.
+- **Agent thinking**: Model reasoning appears in shaded **Thinking** blocks, so you can spot when the model is exploring ideas.
 - **Errors**: Errors are highlighted and often show what went wrong.
 
 <ProgressLogHero />

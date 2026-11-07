@@ -23,7 +23,7 @@ describe('bash-request-panel', () => {
   it('rejects on one "n", sends an opened note with it, and never answers on Escape', async () => {
     const permission: BashRequest = {
       requestId: 'bash-request-1',
-      allowBypass: false,
+      offersGrant: false,
       // cast: a fixture run id; the panel only echoes it in its answer.
       runId: 'run-1' as RunId,
       command: 'echo hi',

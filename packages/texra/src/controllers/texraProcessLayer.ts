@@ -21,12 +21,10 @@ import {
   type ProcessServices,
   Secrets,
   type SkillSourceOptions,
-  type StateStore,
 } from '@texra-ai/harness/host';
 import {
   CommandDirs,
   FileSecrets,
-  type GlobalDatabase,
   secretsDirectory,
 } from '@texra-ai/harness/node';
 import {
@@ -68,16 +66,6 @@ export interface TexraProcessHost extends Omit<
     message: string,
     docsId: 'custom-agents',
   ) => Effect.Effect<void>;
-  /**
-   * The global stores served in place of the storage root's own, for a
-   * process that must create nothing under that root (the platform-less CLI
-   * entries' refusals). The first-install tool switches are not seeded
-   * into them.
-   */
-  readonly globalStores?: {
-    readonly appState: StateStore;
-    readonly globalDatabase: Layer.Layer<GlobalDatabase>;
-  };
 }
 
 /** The process services, sessions and windows of one TeXRA host process. */
@@ -89,7 +77,6 @@ export const texraProcessLayer = ({
   minimumLogLevel,
   workspace,
   agentIssues,
-  globalStores,
   ...pluginHost
 }: TexraProcessHost): Layer.Layer<ProcessServices | Sessions | HostWindows> => {
   const editors = makeEditorHost();
@@ -126,10 +113,6 @@ export const texraProcessLayer = ({
     usageLog: usageLogLayer(usageLog),
     minimumLogLevel,
     workspace,
-    ...(globalStores && {
-      appState: AppState.layer(globalStores.appState),
-      globalDatabase: globalStores.globalDatabase,
-    }),
     // TeXRA's plugin list is fixed in this build, so a list the harness
     // refuses is a defect of the build, not a failure a host can recover.
   }).pipe(

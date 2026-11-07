@@ -17,11 +17,7 @@ import {
   OWN_KEY_ROUTE_FACTS,
   PLAN_ROUTES,
 } from '@texra-ai/llm';
-import {
-  chatgptCoordinator,
-  type SessionToken,
-  xaiCoordinator,
-} from '@texra-ai/llm/node';
+import { type SessionToken, SubscriptionAccounts } from '@texra-ai/llm/node';
 import { HttpClient } from 'effect/http';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
@@ -66,62 +62,45 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
 ): Effect.fn.Return<
   RouteCredential,
   RouteUnavailable,
-  HttpClient.HttpClient | Secrets
+  HttpClient.HttpClient | SubscriptionAccounts
 > {
-  const secrets = yield* Secrets;
+  const accounts = yield* SubscriptionAccounts;
+  const account = accounts[route];
   const http = yield* HttpClient.HttpClient;
   const { provider } = PLAN_ROUTES[route];
   const unavailable = (error: Error) =>
     RouteUnavailable.ofSession(route, error);
-  /** A session's token for the transport, its failures llm's
+  /** A read of the session inside a request: its failures llm's
    *  `authentication`, caused by this route's own. */
-  const tokenOf = (session: {
-    readonly getFreshSession: () => Effect.Effect<
-      { readonly accessToken: string },
-      Error,
-      HttpClient.HttpClient
-    >;
-    readonly refreshRejected: (
-      token: string,
-    ) => Effect.Effect<void, Error, HttpClient.HttpClient>;
-  }): SessionToken => {
-    const inRequest = <A>(
-      effect: Effect.Effect<A, Error, HttpClient.HttpClient>,
-    ): Effect.Effect<A, ModelError> =>
-      effect.pipe(
-        Effect.provideService(HttpClient.HttpClient, http),
-        Effect.mapError((error) => {
-          const cause = unavailable(error);
-          return new ModelError({
-            kind: 'authentication',
-            message: cause.message,
-            cause,
-          });
-        }),
-      );
-    return {
-      current: inRequest(
-        Effect.map(session.getFreshSession(), (fresh) => fresh.accessToken),
-      ),
-      rejected: (token) => inRequest(session.refreshRejected(token)),
-    };
+  const inRequest = <A>(
+    effect: Effect.Effect<A, Error, HttpClient.HttpClient>,
+  ): Effect.Effect<A, ModelError> =>
+    effect.pipe(
+      Effect.provideService(HttpClient.HttpClient, http),
+      Effect.mapError((error) => {
+        const cause = unavailable(error);
+        return new ModelError({
+          kind: 'authentication',
+          message: cause.message,
+          cause,
+        });
+      }),
+    );
+  const bearer: SessionToken = {
+    current: inRequest(
+      Effect.map(account.getFreshSession(), (fresh) => fresh.accessToken),
+    ),
+    rejected: (token) => inRequest(account.refreshRejected(token)),
   };
   if (route === 'chatgpt-subscription') {
-    const coordinator = chatgptCoordinator(secrets);
     const fresh = yield* Effect.mapError(
-      coordinator.getFreshSession(),
+      accounts[route].getFreshSession(),
       unavailable,
     );
-    return {
-      route,
-      provider,
-      bearer: tokenOf(coordinator),
-      plan: fresh.planType,
-    };
+    return { route, provider, bearer, plan: fresh.planType };
   }
-  const coordinator = xaiCoordinator(secrets);
-  yield* Effect.mapError(coordinator.getFreshSession(), unavailable);
-  return { route, provider, bearer: tokenOf(coordinator) };
+  yield* Effect.mapError(account.getFreshSession(), unavailable);
+  return { route, provider, bearer };
 });
 
 /**
@@ -157,7 +136,7 @@ export function routeCredential(
 ): Effect.Effect<
   RouteCredential,
   RouteUnavailable,
-  HttpClient.HttpClient | Secrets
+  HttpClient.HttpClient | Secrets | SubscriptionAccounts
 > {
   return route.kind === 'api-key'
     ? apiKeyCredential(route)

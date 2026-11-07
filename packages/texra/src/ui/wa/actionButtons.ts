@@ -34,10 +34,16 @@ const KIND_CLASS = {
   danger: 'btn-ghost is-danger',
 } as const satisfies Record<ActionButtonKind, string>;
 
-export interface IconActionButtonOptions {
-  readonly id?: string;
-  readonly icon: IconName;
-  readonly label: string;
+/**
+ * A hover hint is a `<wa-tooltip>`, which anchors to its button by `for`, so
+ * it needs the button's `id`. A button with no `id` names a native `title`
+ * instead.
+ */
+type ActionButtonTooltip =
+  | { readonly id: string; readonly tooltip?: string }
+  | { readonly id?: undefined; readonly tooltip?: undefined };
+
+interface ActionButtonCommon {
   readonly title?: string;
   readonly action?: string;
   readonly className?: string;
@@ -51,48 +57,46 @@ export interface IconActionButtonOptions {
   readonly variant?: ActionButtonVariant;
   /** Semantic skin. Prefer this over choosing appearance/variant directly. */
   readonly kind?: ActionButtonKind;
-  /** Icon-button geometry off the `--control-size` scale. Defaults to `s`. */
-  readonly size?: ActionButtonSize;
   readonly disabled?: boolean;
   /** Selected state for toggle buttons. Reflected as `aria-pressed`. */
   readonly pressed?: boolean;
-  /**
-   * Icon-only. When defined, the button renders inside an overlay wrapper:
-   * while `true` a spinner covers the (hidden, disabled) button so the toolbar
-   * layout does not shift. Styled by `busyIconButtonStyles` in commonViewStyles.
-   * Omitted from the labeled variant — the centered icon-sized spinner only
-   * makes sense over a square icon button.
-   */
-  readonly busy?: boolean;
-  /**
-   * Native Web Awesome tooltip text. When `id` is present, the `<wa-tooltip>`
-   * anchors via `for` within the same shadow root. Without an anchor, this
-   * falls back to the native `title` attribute so the hint is still visible.
-   */
-  readonly tooltip?: string;
   readonly onClick?: (event: MouseEvent) => void;
 }
 
-export interface LabeledActionButtonOptions extends Omit<
-  IconActionButtonOptions,
-  'label' | 'busy' | 'icon' | 'size'
-> {
-  readonly icon?: IconName;
-  readonly text: string;
-  readonly label?: string;
-  /** Let a containing Web Awesome primitive own the button's native chrome. */
-  readonly nativeChrome?: boolean;
-}
+export type IconActionButtonOptions = ActionButtonCommon &
+  ActionButtonTooltip & {
+    readonly icon: IconName;
+    readonly label: string;
+    /** Icon-button geometry off the `--control-size` scale. Defaults to `s`. */
+    readonly size?: ActionButtonSize;
+    /**
+     * When defined, the button renders inside an overlay wrapper: while
+     * `true` a spinner covers the (hidden, disabled) button so the toolbar
+     * layout does not shift. Styled by `busyIconButtonStyles` in
+     * commonViewStyles. Icon-only: the centered icon-sized spinner only makes
+     * sense over a square icon button.
+     */
+    readonly busy?: boolean;
+  };
 
-interface ActionButtonBaseOptions extends Omit<
-  IconActionButtonOptions,
-  'icon' | 'label'
-> {
-  readonly icon?: IconName;
-  readonly label?: string;
-  readonly text?: string;
-  readonly nativeChrome?: boolean;
-}
+export type LabeledActionButtonOptions = ActionButtonCommon &
+  ActionButtonTooltip & {
+    readonly icon?: IconName;
+    readonly text: string;
+    readonly label?: string;
+    /** Let a containing Web Awesome primitive own the button's native chrome. */
+    readonly nativeChrome?: boolean;
+  };
+
+type ActionButtonBaseOptions = ActionButtonCommon &
+  ActionButtonTooltip & {
+    readonly icon?: IconName;
+    readonly label?: string;
+    readonly text?: string;
+    readonly size?: ActionButtonSize;
+    readonly busy?: boolean;
+    readonly nativeChrome?: boolean;
+  };
 
 /** The button and its (optional) sibling `<wa-tooltip>`, kept apart so a
  * `<wa-button-group>` caller can slot every button first and every tooltip
@@ -138,17 +142,15 @@ function renderActionButtonParts({
     .filter(Boolean)
     .join(' ');
   const ariaLabel = label ?? text ?? '';
-  const useWebAwesomeTooltip = Boolean(tooltip && id);
   // wa-tooltip is position:absolute, so the sibling never affects flex flow.
-  const tooltipTemplate = useWebAwesomeTooltip
-    ? html`<wa-tooltip for=${id}>${tooltip}</wa-tooltip>`
-    : nothing;
-  // `aria-label` (below) already names the button unconditionally, so `title`
-  // is only needed as a fallback hint when there's no `wa-tooltip` sibling to
-  // show one — setting both here would double up the hover hint (native
-  // tooltip + wa-tooltip) for every id+tooltip icon button.
-  const nativeTitle =
-    tooltip && !id ? tooltip : (title ?? (text ? undefined : ariaLabel));
+  const tooltipTemplate =
+    tooltip === undefined
+      ? nothing
+      : html`<wa-tooltip for=${id}>${tooltip}</wa-tooltip>`;
+  // `aria-label` (below) already names the button, so a native `title` is
+  // the hover hint only where no `wa-tooltip` shows one: both would double
+  // it.
+  const nativeTitle = title ?? (text ? undefined : ariaLabel);
   let content: TemplateResult | typeof nothing = nothing;
   if (text) {
     content = html`${icon ? waIcon(icon, { slot: 'start' }) : nothing}${text}`;
@@ -171,7 +173,7 @@ function renderActionButtonParts({
       aria-pressed=${ifDefined(
         pressed === undefined ? undefined : String(pressed),
       )}
-      title=${ifDefined(useWebAwesomeTooltip ? undefined : nativeTitle)}
+      title=${ifDefined(tooltip === undefined ? nativeTitle : undefined)}
       data-action=${ifDefined(action)}
       ?disabled=${disabled || busy}
       @click=${onClick}

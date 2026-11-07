@@ -26,7 +26,7 @@ Before creating a custom agent, it helps to understand the underlying concepts:
 Custom agents live in a dedicated directory that TeXRA prepares for you.
 
 1. **Find the default folder**: TeXRA seeds a `custom_agents` directory inside its global storage. Open the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings to see its location.
-2. **Override (optional)**: to manage agents elsewhere, open the **Agents** tab and select **Change** (<wa-icon library="texra" name="edit"></wa-icon>) in the directory info bar to pick a new folder. TeXRA creates that directory if needed and uses it instead of the default.
+2. **Override (optional)**: to manage agents elsewhere, open the **Agents** tab and select **Change folder** in the directory info bar to pick a new folder (**Use default folder** switches back). TeXRA creates that directory if needed and uses it instead of the default.
 
 ### <wa-icon library="texra" name="wand"></wa-icon> Automatic creation
 
@@ -34,9 +34,9 @@ To have TeXRA draft an agent for you, chat with the built-in [`creator`](./built
 
 ### <wa-icon library="texra" name="file-add"></wa-icon> Step 2: create a new YAML file
 
-1. In the **Agents** tab, select **New chat agent** or **New document task** (<wa-icon library="texra" name="file-circle-plus"></wa-icon>) to create a new agent YAML file from a template in your custom agents directory.
+1. In the **Agents** tab, open **New agent** and pick **Chat agent** or **Document task agent** to create a new agent YAML file from a template in your custom agents directory.
 2. Alternatively, select the folder icon (<wa-icon library="texra" name="folder-open"></wa-icon>, **Open custom agents folder**) in the directory info bar to open the directory and create a `.yaml` file manually.
-3. Choose a descriptive name using underscores and ending with `.yaml` (for example `literature_review_generator.yaml`).
+3. Choose a descriptive file name ending with `.yaml` (for example `literature_review_generator.yaml`).
 
 ### <wa-icon library="texra" name="edit"></wa-icon> Step 3: define the agent
 
@@ -49,7 +49,7 @@ Open the new `.yaml` file. A starter template is already inserted. An agent is t
 Customize it to define your agent's structure. These are the key fields:
 
 ```yaml
-name: notation_checker # Lowercase letters, underscores, or dashes.
+name: notation_checker # Letters, digits, underscores, or dashes; starts with a letter or digit.
 description: Standardizes notation across the selected documents.
 
 # --- Persona ---
@@ -79,7 +79,7 @@ task:
   requests:
     - |
       # The prompt for the AI's first revision.
-      # Often includes guidance for thinking (<scratchpad>) and the fixed <documents> output structure.
+      # Often includes guidance for thinking (<scratchpad>). TeXRA appends the <documents> reply format itself.
       [Define the initial task prompt, potentially including scratchpad guidance]
     - |
       # Optional follow-up prompt for a reflection revision.
@@ -110,9 +110,9 @@ inlined as text (read [Working with figures](./working-with-figures.md)).
 
 **Multiple document output:**
 
-- &#123;&#123; INPUT_FILES &#125;&#125;: Array of input filenames. Editing agents
-  should iterate over this list and emit one `<document name="...">` block per
-  input filename, preserving the input order and names. Use
+- &#123;&#123; INPUT_FILES &#125;&#125;: Array of input filenames. An editing
+  task's reply holds one `<document name="...">` block per input filename, in
+  input order; TeXRA appends that reply format to each request. Use
   `{{ INPUT_FILES | join(", ") }}` for a human-readable list. Read
   [Handling multiple files](./multiple-output.md).
 - &#123;&#123; OUTPUT_FILES &#125;&#125;: Array of declared generated output filenames.
@@ -221,10 +221,10 @@ Verify the agent registered, then smoke-test it in one go:
 
 Built-in agents ship with TeXRA and update when TeXRA does. A custom agent with the same name as a built-in overrides it. **Customize** in the Agents tab (or `texra agents customize <name>`) copies the built-in into your custom agents folder and records which version it copied in a `basedOn:` line at the end of the file.
 
-When an update changes that built-in, the Agents tab marks your copy and offers **View built-in**, **Reset to built-in** (deletes your copy so the new version is used), and **Keep mine** (keeps your copy and dismisses the notice). In the terminal, `texra agents list` and `texra agents show` print the same notice, and `texra agents reset <name>` or `texra agents keep <name>` settle it. An agent you wrote yourself under a built-in's name has no `basedOn:` line and is never flagged.
+When an update changes that built-in, the Agents tab marks your copy and offers **View built-in**, **Reset to built-in** (deletes your copy so the new version is used), and **Keep mine** (keeps your copy and dismisses the notice). In the terminal, `texra agents list` and `texra agents show` print the same notice, and `texra agents reset <name>` or `texra agents keep <name>` resolve it. An agent you wrote yourself under a built-in's name has no `basedOn:` line and is never flagged.
 
 ### <wa-icon library="texra" name="shield"></wa-icon> Strict XML extraction
 
-TeXRA expects the model's output to use properly closed XML tags. For agents producing multiple files, each `<document>` block must include a `name` attribute matching one of the filenames from the UI. If tags are mismatched or a filename does not match, extraction fails and no files are saved. Check the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs for details.
+TeXRA expects the model to wrap each file in a `<document name="...">` block whose `name` is one of the files the task writes. When a reply lacks those tags, TeXRA tries to recover the expected files from filename headers or `latex` code fences, and reports each expected file the reply did not deliver. A reply from which nothing can be extracted writes no files; its raw text is kept for recovery. Check the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs for details.
 
 For more examples and advanced options, browse the built-in agent definitions through the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.

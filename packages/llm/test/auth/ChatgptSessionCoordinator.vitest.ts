@@ -6,8 +6,8 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import {
-  chatgptCoordinator,
   type ChatgptSession,
+  SubscriptionAccounts,
   type SubscriptionCoordinator,
   type SubscriptionTokenResponse,
 } from '@texra-ai/llm/node';
@@ -142,9 +142,12 @@ const joinFailure = <A>(fiber: Fiber.Fiber<A, unknown>) =>
 function makeCoordinator(
   storage: CredentialStore,
   endpointGrants: typeof grants = {},
-): SubscriptionCoordinator<ChatgptSession> {
+): Effect.Effect<SubscriptionCoordinator<ChatgptSession>> {
   grants = endpointGrants;
-  return chatgptCoordinator(storage);
+  return Effect.map(
+    SubscriptionAccounts.make(storage),
+    (accounts) => accounts['chatgpt-subscription'],
+  );
 }
 
 const freshToken = (coordinator: SubscriptionCoordinator<ChatgptSession>) =>
@@ -155,7 +158,7 @@ describe('ChatGPT session coordinator', () => {
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
       const { pending, refreshTokens, refreshStarted } = parkedRefresh();
-      const coordinator = makeCoordinator(storage, { refreshTokens });
+      const coordinator = yield* makeCoordinator(storage, { refreshTokens });
 
       const a = yield* forkNow(freshToken(coordinator));
       const b = yield* forkNow(freshToken(coordinator));
@@ -178,7 +181,7 @@ describe('ChatGPT session coordinator', () => {
         session({ expiresAtMs: NOW + FIVE_MIN + 60_000 }),
       );
       const refreshTokens = vi.fn(async () => jsonResponse(tokenResponse()));
-      const coordinator = makeCoordinator(storage, { refreshTokens });
+      const coordinator = yield* makeCoordinator(storage, { refreshTokens });
 
       // Two calls sent access-0 and both got a 401, one after the other:
       // the second finds the token already replaced and leaves it.
@@ -194,7 +197,7 @@ describe('ChatGPT session coordinator', () => {
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
       const { pending, refreshTokens, refreshStarted } = parkedRefresh();
-      const coordinator = makeCoordinator(storage, { refreshTokens });
+      const coordinator = yield* makeCoordinator(storage, { refreshTokens });
 
       const token = yield* forkNow(freshToken(coordinator));
       yield* refreshStarted;
@@ -216,7 +219,7 @@ describe('ChatGPT session coordinator', () => {
       Effect.gen(function* () {
         const storage = memoryStorage(expiredSession());
         const { pending, refreshTokens, refreshStarted } = parkedRefresh();
-        const coordinator = makeCoordinator(storage, { refreshTokens });
+        const coordinator = yield* makeCoordinator(storage, { refreshTokens });
 
         const token = yield* forkNow(freshToken(coordinator));
         yield* refreshStarted;
@@ -250,7 +253,7 @@ describe('ChatGPT session coordinator', () => {
         const storage = memoryStorage(expiredSession());
         const refreshTokens = async () =>
           jsonResponse(tokenResponse({ refresh_token: undefined }));
-        const coordinator = makeCoordinator(storage, { refreshTokens });
+        const coordinator = yield* makeCoordinator(storage, { refreshTokens });
         yield* withHttp(freshToken(coordinator));
         expect(storage.peek()?.refreshToken).toBe('refresh-0');
       }),
@@ -261,7 +264,7 @@ describe('ChatGPT session coordinator', () => {
       const storage = memoryStorage(expiredSession());
       const refreshTokens = async () =>
         jsonResponse({ error: 'upstream' }, 502);
-      const coordinator = makeCoordinator(storage, { refreshTokens });
+      const coordinator = yield* makeCoordinator(storage, { refreshTokens });
 
       const error = yield* Effect.flip(withHttp(freshToken(coordinator)));
       expect(error).toMatchObject({

@@ -14,7 +14,7 @@
 | Entry                                  | Environment  | Exports                                                                                                                                                                                                         |
 | -------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **[`@texra-ai/llm`](./llm/)**          | Browser-safe | `Model`, `TurnRequest`, `ResolvedTurn`, `TurnEvent`, `TurnResult`, `completedTurn`, `ModelError`, `selectModel`, `MODEL_PROVIDER_PLUGINS`, `decideModelRoute`, `chooseReasoning`, `turnCost`, `CredentialStore` |
-| **[`@texra-ai/llm/node`](./llm/node)** | Node.js      | `bindModel(spec)`, `BindSpec`, `Binding`, `ModelCredential`, ChatGPT (`codex`) and Grok (`xai`) OAuth sign-in flows and `SubscriptionCoordinator`s, `SharedAttempt`                                             |
+| **[`@texra-ai/llm/node`](./llm/node)** | Node.js      | `bindModel(spec)`, `BindSpec`, `Binding`, `ModelCredential`, ChatGPT (`codex`) and Grok (`xai`) OAuth sign-in flows and `SubscriptionCoordinator`s                                                              |
 
 `bindModel` loads its protocol module on demand (`import('./api/<protocol>.js')`), so a process only loads the SDK of the provider it binds, and the published `.d.ts` files never expose vendor SDK types.
 
@@ -74,8 +74,8 @@ const program = Effect.gen(function* () {
 - **`prepareTurn(request) -> ResolvedTurn`**: freezes the binding and validates `request` (messages, tool definitions, tool choice, reasoning controls, and media parts) before network I/O.
 - **`streamTurn(turn) -> Stream<TurnEvent, ModelError>`**: streams part deltas and a terminal `completed` event assembled by a single turn reducer across all protocols. Callers that want only the final [`TurnResult`](./llm/#turnresult) reduce the stream with [`completedTurn`](./llm/#completedturn).
 - **Optional members on `Model`**:
-  - `uploadFile` / `releaseUploads`: digest-keyed, model-scoped provider file upload cache, released when the binding's `Scope` closes.
-  - `background` (`submit`, `observe`, `cancel`): remote execution for protocols that support detached turns (`openai-responses`, `google-interactions`). `cancel` claims cancellation only when the provider replies `cancelled`.
+  - `uploadFile`: digest-keyed, model-scoped provider file upload cache, present where the binding serves a files endpoint; the uploaded files are deleted when the binding's `Scope` closes.
+  - `background` (`submit`, `observe`, `cancel`): remote execution for protocols that support detached turns (`openai-responses`, `google-interactions`). `cancel` fails unless the provider confirms the work stopped.
 
 ## `ModelError` fields
 
@@ -87,7 +87,7 @@ Every failure from `bindModel`, `prepareTurn`, or `streamTurn` is a [`ModelError
 | `retryable`                                  | Whether repeating the request unchanged can succeed (derived from `kind`, `status`, and vendor reply metadata).                                                                             |
 | `scope`                                      | `'model'` (limit on this model) or `'route'` (provider, credential, or endpoint).                                                                                                           |
 | `retryAfterMs`                               | Provider-reported retry delay in milliseconds, when present.                                                                                                                                |
-| `quota`                                      | For a failure that used up a quota: the exhausted `plan` (`PlanRoute` or `null` for account credit) and reset timestamp.                                                                    |
+| `quota`                                      | For a failure that used up a quota: the exhausted `plan` (`PlanRoute` or `null` for account credit), the provider's `planType`, and `resetsInMs` until it resets.                           |
 | `status`, `requestId`, `responseId`, `model` | HTTP status and provider trace identifiers when a reply was received.                                                                                                                       |
 
 [`ModelErrorFields`](./llm/#modelerrorfields) types these fields as plain data for persistence and IPC.

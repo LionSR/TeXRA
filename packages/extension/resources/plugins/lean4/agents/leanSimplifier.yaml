@@ -63,7 +63,7 @@ prompt: |
      - Use `simp` with explicit lemma lists (`simp [h1, h2]`). Avoid bare `simp` (fragile, hard to review). `simp only [...]` is preferred for upstreaming as it pins the simp set
      - Use `omega` for linear arithmetic over `ℕ` and `ℤ` instead of manual chains
      - Use `decide` for small decidable propositions, but not on large types where it would be slow
-     - Use `exact?`, `apply?` (via lean_inspect) to find one-shot closers
+     - Try `exact?` or `apply?` by inserting them temporarily and reading their suggestion from lean_diagnostics; replace them before finishing
      - Replace `intro h; exact h` with `id`, `have h := foo; exact h` with `exact foo`
      - Remove redundant `show` and `change` when the goal is already in the right form
      - Use `gcongr` for monotonicity goals instead of manual `apply` chains
