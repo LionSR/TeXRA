@@ -4,39 +4,26 @@
  * of window startup. File opening and notices belong to the caller.
  */
 
-// Node imports
-import * as path from 'node:path';
-
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 
 // Local imports - export data and storage
 import { Rejected } from '@texra-ai/harness';
 import { StorageFs, pathToLocationIn } from '@texra-ai/harness/host';
-import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
 import { generateExportFilename } from '@texra/agent/export/chatExport/filenames';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
-import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
+import {
+  traceHtml,
+  TraceUnavailable,
+  TraceViewerMissing,
+} from '@texra/agent/export/standaloneTraceHtml';
 import { TranscriptExportFailed } from './transcriptExportFailure';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
-
-/** The host-supplied trace-viewer bundle is unusable. Preserve its own
- *  message as the cause a host presents. */
-function bundleFailure(
-  message: string,
-): Effect.Effect<never, TranscriptExportFailed> {
-  return Effect.fail(
-    new TranscriptExportFailed({
-      message,
-      cause: new Error(message),
-    }),
-  );
-}
 
 /** Write one export beneath its run's storage directory. */
 const writeExport = Effect.fn('writeTranscript.writeExport')(function* (
@@ -66,34 +53,49 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     readonly roots: WorkspaceRoots;
     /** The preamble is a host asset, independent of its installation path. */
     readonly latexPreamble: string;
-    readonly templatePath: string;
+    /** The host's resources directory, which holds the trace-viewer bundle. */
+    readonly resourcesPath: string;
     /** The run's session, whose records the export reads: this process's
      *  own, or the service's. */
     readonly session: Session;
   },
 ) {
   if (format === 'html') {
-    const traceResult = yield* options.session
-      .records(runId)
-      .readTrace()
-      .pipe(
-        Effect.mapError(
-          (cause) =>
+    const { html, trace, record } = yield* traceHtml(
+      options.session,
+      runId,
+      options.resourcesPath,
+    ).pipe(
+      Effect.catch(
+        (error): Effect.Effect<never, Rejected | TranscriptExportFailed> => {
+          if (error instanceof TraceUnavailable)
+            return Effect.fail(
+              new Rejected({
+                reason: {
+                  config_missing: 'This run has no saved data to export.',
+                  streamLogs_missing:
+                    'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.',
+                }[error.status],
+              }),
+            );
+          if (error instanceof TraceViewerMissing) {
+            const cause = new Error(
+              `Trace-viewer standalone bundle missing at ${error.path}: ` +
+                'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
+            );
+            return Effect.fail(
+              new TranscriptExportFailed({ message: cause.message, cause }),
+            );
+          }
+          return Effect.fail(
             new TranscriptExportFailed({
-              message: toErrorMessage(cause),
-              cause,
+              message: toErrorMessage(error),
+              cause: error,
             }),
-        ),
-      );
-    if (traceResult.status !== 'ok')
-      return yield* new Rejected({
-        reason: {
-          config_missing: 'This run has no saved data to export.',
-          streamLogs_missing:
-            'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.',
-        }[traceResult.status],
-      });
-    const { trace, record } = traceResult;
+          );
+        },
+      ),
+    );
     // The first row, the creation row when the run has one, carries the
     // launch time the filename is stamped with.
     const firstEvent = trace.events.at(0);
@@ -104,23 +106,6 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
         cause,
       });
     }
-
-    // The bundle path is absolute and host-supplied, so the process
-    // filesystem reads it. Missing bundles give the host a rebuild hint.
-    const fs = yield* FileSystem.FileSystem;
-    if (!path.isAbsolute(options.templatePath))
-      return yield* bundleFailure(
-        `Trace-viewer standalone bundle path must be absolute: ${options.templatePath}`,
-      );
-    const template = yield* readNormalizedFile(fs, options.templatePath).pipe(
-      Effect.catchIf(absentReason, () =>
-        bundleFailure(
-          `Trace-viewer standalone bundle missing at ${options.templatePath}: ` +
-            'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
-        ),
-      ),
-    );
-    const html = injectStandaloneTrace(template, trace);
     const filename = generateExportFilename(
       {
         timestamp: new Date(firstEvent.at).toISOString(),

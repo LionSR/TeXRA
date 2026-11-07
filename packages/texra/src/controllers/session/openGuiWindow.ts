@@ -60,7 +60,6 @@ import {
   exportRunTranscript,
   type TranscriptExportHost,
 } from '@texra/controllers/progressView/exportTranscript';
-import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import {
   ProgressWorkflowFileActionsController,
   type ProgressWorkflowFileActionsHost,
@@ -393,7 +392,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       roots,
       session,
       latexPreamble: host.export.latexPreamble,
-      templatePath: traceViewerTemplatePath(host.export.resourcesPath),
+      resourcesPath: host.export.resourcesPath,
     });
   /**
    * One program per shared request, as a host's own arms are: it runs on the

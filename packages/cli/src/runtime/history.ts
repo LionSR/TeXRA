@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect } from 'effect';
 
 import {
   toErrorMessage,
@@ -19,9 +19,7 @@ import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@texra-ai/harness/host';
-import { absentReason } from '@texra-ai/harness/node';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import {
@@ -30,8 +28,6 @@ import {
   type RunStatusKey,
 } from '@ui/copy/runStatus';
 
-import { CliUsageError } from './cliContext';
-import { cliErrorMessage } from './logSinks';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -292,35 +288,6 @@ export const readCliHistoryExportInput = Effect.fn(
   }
   return { status: 'incomplete' } satisfies CliHistoryExportInputResult;
 });
-
-/**
- * Read the trace-viewer's single-file default bundle — one self-contained
- * `index.html` with no external `assets/` (JS/CSS/fonts all inlined) so the
- * default export opens correctly via `file://` with no server. Succeeds with
- * `null` only when the template is absent — e.g. a dev checkout where
- * `packages/trace-viewer` hasn't been built — so the caller can report a clear
- * error instead of an ENOENT stack trace. Any other read failure (EACCES, a
- * transient I/O error) is not "rebuild the CLI", so it fails as a usage error
- * naming the real cause.
- */
-export function readCliHistoryStandaloneTemplate(
-  resourcesPath: string,
-): Effect.Effect<string | null, CliUsageError, FileSystem.FileSystem> {
-  const templatePath = traceViewerTemplatePath(resourcesPath);
-  return FileSystem.FileSystem.use((fs) =>
-    fs.readFileString(templatePath),
-  ).pipe(
-    Effect.catch((error: PlatformError.PlatformError) =>
-      absentReason(error)
-        ? Effect.succeed(null)
-        : Effect.fail(
-            new CliUsageError({
-              message: `history export: cannot read ${templatePath}: ${cliErrorMessage(error)}`,
-            }),
-          ),
-    ),
-  );
-}
 
 /** Delete what `target` names among the stored runs, where they are held. */
 export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
