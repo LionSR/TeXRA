@@ -6,7 +6,8 @@ import {
   writeTextStdout,
 } from '@cli/runtime/logSinks';
 import { pageStdout } from '@cli/runtime/pager';
-import type { CliContext } from '@cli/runtime/cliContext';
+import { CliInvocation } from '@cli/runtime/cliContext';
+import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -14,11 +15,10 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
  * Sink for human-facing progress during a long command: stdout in text mode,
  * stderr otherwise, so `--output-format json|ndjson` keeps stdout parseable.
  */
-export function cliProgressWriter(
-  context: Pick<CliContext, 'outputFormat'>,
-): (text: string) => void {
-  return context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
-}
+export const cliProgressWriter = CliInvocation.useSync(
+  ({ context }): ((text: string) => void) =>
+    context.outputFormat === 'text' ? writeTextStdout : writeTextStderr,
+);
 
 interface CliResult {
   readonly json: unknown;
@@ -36,15 +36,22 @@ interface CliResult {
  * Values are eager: a one-shot command renders a single result, so formatting
  * the unused branches is negligible and keeps call sites flat.
  */
-export function emitCliResult(
-  context: Pick<CliContext, 'outputFormat'>,
+export const emitCliResult = (result: CliResult) =>
+  CliInvocation.useSync(({ context }) =>
+    writeCliResult(context.outputFormat, result),
+  );
+
+/** {@link emitCliResult} for `texra version`, which runs no program and
+ *  reads its format itself. */
+export function writeCliResult(
+  outputFormat: CliOutputFormat,
   result: CliResult,
 ): void {
-  if (context.outputFormat === 'json') {
+  if (outputFormat === 'json') {
     writeTextStdout(JSON.stringify(result.json, null, 2));
     return;
   }
-  if (context.outputFormat === 'ndjson') {
+  if (outputFormat === 'ndjson') {
     const ts = new Date().toISOString();
     const records = Array.isArray(result.ndjson)
       ? result.ndjson
@@ -72,13 +79,13 @@ export function emitCliResult(
  * paged.
  */
 export const emitPagedCliResult = (
-  context: Pick<CliContext, 'outputFormat'> &
-    Partial<Pick<CliContext, 'stdoutIsTty' | 'mode'>>,
   result: CliResult,
-): Effect.Effect<void, never, ChildProcessSpawner> =>
-  context.outputFormat !== 'text' || !result.text
-    ? Effect.sync(() => emitCliResult(context, result))
-    : pageStdout(result.text, {
-        stdoutIsTty: context.stdoutIsTty,
-        headless: context.mode === 'headless',
-      });
+): Effect.Effect<void, never, ChildProcessSpawner | CliInvocation> =>
+  CliInvocation.use(({ context }) =>
+    context.outputFormat !== 'text' || !result.text
+      ? Effect.sync(() => writeCliResult(context.outputFormat, result))
+      : pageStdout(result.text, {
+          stdoutIsTty: context.stdoutIsTty,
+          headless: context.mode === 'headless',
+        }),
+  );

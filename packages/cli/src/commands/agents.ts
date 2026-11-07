@@ -25,7 +25,7 @@ import { writeTextStderr } from '../runtime/logSinks';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
-import type { CliContext } from '../runtime/cliContext';
+import { CliInvocation, type CliContext } from '../runtime/cliContext';
 
 const listAgents = Effect.fn('listAgents')(function* (
   context: CliContext,
@@ -51,7 +51,7 @@ const listAgents = Effect.fn('listAgents')(function* (
     }
   }
 
-  yield* emitPagedCliResult(context, {
+  yield* emitPagedCliResult({
     json: result.agents,
     ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
     text: formatCliAgentList(result.agents, {
@@ -80,7 +80,7 @@ const showAgent = Effect.fn('showAgent')(function* (
     writeTextStderr(formatCliNewerBuiltInNotice(entry.name));
   }
 
-  emitCliResult(context, {
+  yield* emitCliResult({
     json: entry,
     ndjson: { kind: 'agent', agent: entry },
     text: formatCliAgentDetails(entry),
@@ -95,17 +95,14 @@ const bundledAgentNamed = (name: string) =>
   );
 
 /** One result shape for customize, reset and keep. */
-function emitCopyResult(
-  context: CliContext,
-  result: {
-    readonly action: 'customized' | 'reset' | 'kept';
-    readonly name: string;
-    readonly path: string;
-    readonly text: string;
-  },
-) {
+function emitCopyResult(result: {
+  readonly action: 'customized' | 'reset' | 'kept';
+  readonly name: string;
+  readonly path: string;
+  readonly text: string;
+}) {
   const { text, ...copy } = result;
-  emitCliResult(context, {
+  return emitCliResult({
     json: copy,
     ndjson: { kind: 'agent-copy', copy },
     text,
@@ -118,23 +115,19 @@ function refuse(message: string) {
 }
 
 /** Copy a bundled agent into the custom agents directory, stamped `basedOn`. */
-const customizeAgent = Effect.fn('customizeAgent')(function* (
-  context: CliContext,
-  name: string,
-) {
-  yield* initCliPlatform(context);
+const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
+  yield* initCliPlatform((yield* CliInvocation).context);
   const builtIn = yield* bundledAgentNamed(name);
   if (!builtIn) return refuse(`No built-in agent named ${name}.`);
   return yield* (yield* AgentCatalog).customize(builtIn, 'copy').pipe(
-    Effect.map((target) => {
-      emitCopyResult(context, {
+    Effect.flatMap((target) =>
+      emitCopyResult({
         action: 'customized',
         name: builtIn.name,
         path: target,
         text: `Created custom copy of ${builtIn.name}: ${target}`,
-      });
-      return CliExitCode.Success;
-    }),
+      }).pipe(Effect.as(CliExitCode.Success)),
+    ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
       Effect.succeed(refuse(refused.message)),
     ),
@@ -142,11 +135,8 @@ const customizeAgent = Effect.fn('customizeAgent')(function* (
 });
 
 /** Delete the custom copy that overrides a bundled agent. */
-const resetAgent = Effect.fn('resetAgent')(function* (
-  context: CliContext,
-  name: string,
-) {
-  const services = yield* initCliPlatform(context);
+const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
+  const services = yield* initCliPlatform((yield* CliInvocation).context);
   const catalog = yield* AgentCatalog;
   const custom = catalog.get(agentKey('custom', name));
   if (!custom || !(yield* bundledAgentNamed(name))) {
@@ -162,7 +152,7 @@ const resetAgent = Effect.fn('resetAgent')(function* (
     fs.remove(custom.path, { force: true }),
   );
   yield* catalog.workspaceAgents(services).forgetDeletedAgent(name);
-  emitCopyResult(context, {
+  yield* emitCopyResult({
     action: 'reset',
     name,
     path: custom.path,
@@ -172,11 +162,8 @@ const resetAgent = Effect.fn('resetAgent')(function* (
 });
 
 /** Keep the custom copy and dismiss its newer-built-in notice. */
-const keepAgent = Effect.fn('keepAgent')(function* (
-  context: CliContext,
-  name: string,
-) {
-  yield* initCliPlatform(context);
+const keepAgent = Effect.fn('keepAgent')(function* (name: string) {
+  yield* initCliPlatform((yield* CliInvocation).context);
   const catalog = yield* AgentCatalog;
   const custom = catalog.get(agentKey('custom', name));
   const kept =
@@ -191,7 +178,7 @@ const keepAgent = Effect.fn('keepAgent')(function* (
   if (!custom || kept === undefined) {
     return refuse(`${name} has no newer built-in version to dismiss.`);
   }
-  emitCopyResult(context, {
+  yield* emitCopyResult({
     action: 'kept',
     name,
     path: custom.path,
@@ -213,7 +200,7 @@ const agentsCustomizeCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS, name: NAME_ARG },
   catchExitCode: CliExitCode.AgentError,
-  run: (context, ctx) => customizeAgent(context, ctx.args.name),
+  run: (_, ctx) => customizeAgent(ctx.args.name),
 });
 
 const agentsResetCommand = defineCliCommand({
@@ -223,7 +210,7 @@ const agentsResetCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS, name: NAME_ARG },
   catchExitCode: CliExitCode.AgentError,
-  run: (context, ctx) => resetAgent(context, ctx.args.name),
+  run: (_, ctx) => resetAgent(ctx.args.name),
 });
 
 const agentsKeepCommand = defineCliCommand({
@@ -234,7 +221,7 @@ const agentsKeepCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS, name: NAME_ARG },
   catchExitCode: CliExitCode.AgentError,
-  run: (context, ctx) => keepAgent(context, ctx.args.name),
+  run: (_, ctx) => keepAgent(ctx.args.name),
 });
 
 const agentsListCommand = defineCliCommand({

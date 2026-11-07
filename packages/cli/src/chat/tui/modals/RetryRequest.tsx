@@ -13,11 +13,11 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import { type RetryApprovalPayload } from '../state/approvalQueue';
+import { type RetryTuiRequest } from '../state/approvalQueue';
 
 interface RetryRequestProps {
   readonly availableRows?: number;
-  readonly payload: RetryApprovalPayload;
+  readonly payload: RetryTuiRequest;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 

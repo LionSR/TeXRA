@@ -2,9 +2,9 @@
  * The failures the Effect surface names (`@texra-ai/harness`). Five are
  * defined here — the plugin list the package refuses, the tools a launch
  * refuses, the resume refusal, a trace no reader can take, and the run's own
- * failure. The other launch refusal, an unknown agent, is the agent
- * catalog's (`AgentNotFound`), and three more reach the surface from the
- * session store (`DatabaseOpenFailed`, `DatabaseReadFailed`,
+ * failure. The other launch refusal, an input the launch will not run
+ * (`LaunchRefused`), is the agent layer's, which raises it, and three more
+ * reach the surface from the session store (`DatabaseOpenFailed`, `DatabaseReadFailed`,
  * `SessionOptionsConflict`: the `SessionOpenError` union in
  * `@shared/session/database`), for nine in the session lifecycle. The entry
  * exports other tagged errors too; `config/api-reports/harness.api.md` lists
@@ -17,7 +17,7 @@
  */
 import { Schema } from 'effect';
 
-import type { AgentNotFound } from '@agent/index/agentCatalog';
+import type { LaunchRefused } from '@common/errors/agentErrors';
 import { ResumeRefusalSchema } from '@shared/schemas';
 
 /**
@@ -46,8 +46,8 @@ export class ToolsRefused extends Schema.TaggedError<ToolsRefused>()(
   },
 ) {}
 
-/** A run that failed on its own. `cause` is exactly what the launch path
- *  threw. */
+/** A run that failed on its own: an activation with no readable end.
+ *  `cause` is exactly what the launch path threw. */
 export class RunFailure extends Schema.TaggedError<RunFailure>()('RunFailure', {
   cause: Schema.Defect(),
   message: Schema.String,
@@ -67,4 +67,4 @@ export class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
 /** What a launch refuses before any model work: the two an embedder
  *  branches on. A run that fails after admission fails with
  *  {@link RunFailure} instead. */
-export type LaunchError = AgentNotFound | ToolsRefused;
+export type LaunchError = LaunchRefused | ToolsRefused;

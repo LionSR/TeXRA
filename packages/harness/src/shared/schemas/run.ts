@@ -1,4 +1,4 @@
-import { Schema } from 'effect';
+import { Cause, Schema } from 'effect';
 
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
@@ -17,6 +17,18 @@ export const RUN_OUTCOME = {
 
 export const RunOutcomeSchema = Schema.Enum(RUN_OUTCOME);
 export type RunOutcome = typeof RunOutcomeSchema.Type;
+
+/**
+ * The one verdict of how a run that did not return ended, from its failure
+ * cause: a stop outranks a failure, and any interrupt in the cause is a
+ * stop, even when a finalizer then failed (`Interrupt` + `Die`), so every
+ * terminal row agrees.
+ */
+export function outcomeFromCause(cause: Cause.Cause<unknown>): RunOutcome {
+  return Cause.hasInterrupts(cause)
+    ? RUN_OUTCOME.CANCELLED
+    : RUN_OUTCOME.FAILED;
+}
 
 /**
  * Where a run's loop stands: `ready` takes an activation (none yet, or its

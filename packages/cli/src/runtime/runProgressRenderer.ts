@@ -12,8 +12,7 @@ import {
   type SessionView,
   type RunView,
   type RunId,
-  type RunOutcome,
-  type RunPosition,
+  type RunStanding,
 } from '@texra-ai/harness/schemas';
 import { formatLoopPositionLabel, runStatus } from '@ui/copy/runStatus';
 
@@ -93,8 +92,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   /** The run this line describes, once the view holds it. */
   private rootRunId: RunId | undefined;
   private wantedRunId: RunId | undefined;
-  /** The last root phase the renderer painted; a repeat is not a change. */
-  private paintedPhase: RunPosition | RunOutcome | undefined;
+  /** Where the root stood when the renderer last painted; a repeat is not
+   *  a change. */
+  private painted: RunStanding | undefined;
   private heartbeat: Fiber.Fiber<number> | undefined;
   /** Open prompts holding the line ({@link suspend}). */
   private suspended = 0;
@@ -201,12 +201,14 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       (previous && this.rootRunId
         ? previous.runs.get(this.rootRunId)?.outcome
         : null) != null;
-    const phase = root.outcome ?? root.position;
-    const phaseChanged = phase !== 'ready' && phase !== this.paintedPhase;
-    if (phaseChanged) this.paintedPhase = phase;
+    const standingChanged =
+      (root.position !== 'ready' || root.outcome !== null) &&
+      (root.position !== this.painted?.position ||
+        root.outcome !== this.painted?.outcome);
+    if (standingChanged) this.painted = root;
     // A terminal root freezes the line: the final status is its last paint.
-    if (wasTerminal && !phaseChanged) return;
-    this.render(phaseChanged || this.rootRunTerminal);
+    if (wasTerminal && !standingChanged) return;
+    this.render(standingChanged || this.rootRunTerminal);
   }
 
   private liveChildren(): readonly RunView[] {

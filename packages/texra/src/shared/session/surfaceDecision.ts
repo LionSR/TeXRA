@@ -9,12 +9,13 @@
  * protocols, and nothing else.
  */
 
-import type {
-  ApprovalBypassKind,
-  PermissionPayload,
-  RequestDecision,
-  PendingRequest,
-  RuntimeRequest,
+import {
+  offeredGrant,
+  type ApprovalBypassKind,
+  type RequestPayload,
+  type RequestDecision,
+  type PendingRequest,
+  type RuntimeRequest,
 } from '@texra-ai/harness/schemas';
 
 import type { HostRequest } from './hostRequest';
@@ -80,7 +81,7 @@ export const REQUEST_ACTIONS = Object.freeze({
   userQuestion: Object.freeze({ n: 'skip' }),
   plugin: Object.freeze({ n: 'skip' }),
 }) satisfies {
-  readonly [K in PermissionPayload['kind']]: {
+  readonly [K in RequestPayload['kind']]: {
     readonly n: RequestDecline;
     readonly [key: string]: SurfaceDecision | RequestDecline;
   };
@@ -89,7 +90,7 @@ export const REQUEST_ACTIONS = Object.freeze({
 /** The decision a `kind` request's decline sends, with the user's note on
  *  it when there is one. */
 export function declineDecision(
-  kind: PermissionPayload['kind'],
+  kind: RequestPayload['kind'],
   note?: string,
 ): RequestDecision {
   const decline: RequestDecline = REQUEST_ACTIONS[kind].n;
@@ -112,14 +113,6 @@ export function declineDecision(
 type ApprovalArm =
   | { readonly runtime: RuntimeRequest }
   | { readonly host: HostRequest };
-
-const BYPASS_OF_KIND: Partial<
-  Record<PermissionPayload['kind'], ApprovalBypassKind>
-> = {
-  toolEdit: 'toolEdit',
-  bash: 'bash',
-  proposal: 'superYolo',
-};
 
 /**
  * The case one decision names: a session-wide approval is the approval with
@@ -146,14 +139,10 @@ export function approvalDecisionArm(
   });
   switch (decision.action) {
     case APPROVE_SESSION_ACTION: {
-      const bypass = BYPASS_OF_KIND[permission.kind];
-      // A command prompt for another tool's call (an MCP tool, codex) does
-      // not offer the grant: the only bypass a bash request names is the
-      // shell's, and enabling it for that call would approve every command.
-      if (
-        bypass === undefined ||
-        (permission.kind === 'bash' && !permission.data.allowBypass)
-      ) {
+      // The grant the request offers, or none: a hook asked, or a command
+      // prompt for another tool's call, whose grant is not the shell's.
+      const bypass = offeredGrant(permission);
+      if (bypass === null) {
         throw new Error(
           `A ${permission.kind} request has no session bypass to enable.`,
         );

@@ -4,8 +4,8 @@
  * read of {@link RUN_ROW_READS} names the kinds it selects and folds those
  * rows, typed as them, into what it answers (`foldRunRows`); a run's record
  * rows fold into its `RunRows` (`runRowsFrom`). Beside them: a row as the
- * decision of a request (`isRequestDecision`), the phase a row moves its run
- * to (`phaseMoveOf`, `closesRunWindow`), and what became of one input
+ * decision of a request (`isRequestDecision`), where a row leaves its run
+ * (`standingAfter`, `closesRunWindow`), and what became of one input
  * (`followUpReceipt`).
  *
  * Pure: no IO, no clock, no platform, no synthetic id.
@@ -236,8 +236,9 @@ export const isRequestDecision = <R extends Pick<SessionEvent, 'type'>>(
 ): row is Extract<R, { type: 'request.decided' }> =>
   row.type === 'request.decided';
 
-/** Where a lifecycle row leaves its run: its loop position and outcome. */
-export interface PhaseMove {
+/** Where a run stands: its loop position, and its outcome once it ended
+ *  (`RunView` carries both). */
+export interface RunStanding {
   readonly position: RunPosition;
   readonly outcome: RunOutcome | null;
 }
@@ -250,7 +251,7 @@ export interface PhaseMove {
  * view's position and outcome, the transcript boundary, the held chunk text
  * and the publisher's open streams all follow it.
  */
-export function phaseMoveOf(row: SessionEvent): PhaseMove | null {
+export function standingAfter(row: SessionEvent): RunStanding | null {
   switch (row.type) {
     case 'run.activate':
       return { position: 'running', outcome: null };
@@ -269,8 +270,8 @@ export function phaseMoveOf(row: SessionEvent): PhaseMove | null {
 /** Whether the row rests or ends the run: the change that closes its run
  *  window, every open stream and every held chunk with it. */
 export function closesRunWindow(row: SessionEvent): boolean {
-  const move = phaseMoveOf(row);
-  return move !== null && move.position !== 'running';
+  const standing = standingAfter(row);
+  return standing !== null && standing.position !== 'running';
 }
 
 /** The row kinds a follow-up's receipt reads ({@link followUpReceipt}). */

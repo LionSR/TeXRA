@@ -36,7 +36,7 @@ import {
   SETTINGS_VIEW_COMMANDS,
   WebviewReadyMessageSchema,
 } from '@texra/shared/ipc';
-import { ToolDependencyStatusSchema } from '@texra/shared/tools/toolPlugin';
+import { ToolDependencyStatusSchema } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { SettingsTargetSchema } from './settingsTarget';
 import { ProfilePageSchema } from './profileViewMessages';

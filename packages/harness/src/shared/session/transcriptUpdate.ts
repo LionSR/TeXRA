@@ -47,7 +47,7 @@ import {
   type TranscriptContext,
   type TranscriptWork,
 } from './transcriptState';
-import { phaseMoveOf, type PhaseMove } from './runRowReads';
+import { standingAfter, type RunStanding } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
 /** A stage start opens its task group whole; a stage end closes the group
@@ -283,15 +283,15 @@ function closeText(
   write(d, slot);
 }
 
-/** A phase move ({@link phaseMoveOf}) moves the transcript boundary: a
- *  waiting or ended run closes every open stream, fails every open card as
- *  cut by the run's end (`ToolRow.cutByRunEnd`) and finishes every open
- *  compaction as interrupted; an ended one also closes every open task
- *  group on its outcome, as the drain that ends a run no driver holds
- *  does. */
-function moveBoundary(d: Draft, move: PhaseMove): void {
+/** Where a lifecycle row leaves its run ({@link standingAfter}) moves the
+ *  transcript boundary: a waiting or ended run closes every open stream,
+ *  fails every open card as cut by the run's end (`ToolRow.cutByRunEnd`)
+ *  and finishes every open compaction as interrupted; an ended one also
+ *  closes every open task group on its outcome, as the drain that ends a
+ *  run no driver holds does. */
+function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
   const { ix } = d;
-  if (move.position === 'running') {
+  if (standing.position === 'running') {
     ix.closed = false;
     return;
   }
@@ -316,7 +316,7 @@ function moveBoundary(d: Draft, move: PhaseMove): void {
     upsertCompactionRows(d, d.next, compactions);
     d.touched = true;
   }
-  const { outcome } = move;
+  const { outcome } = standing;
   if (outcome === null || !d.next.taskGroups.some(isOpenGroup)) return;
   d.next.taskGroups = d.next.taskGroups.map((group) =>
     isOpenGroup(group) ? { ...group, status: outcome, endTime: d.at } : group,
@@ -348,8 +348,8 @@ export function applyTranscriptEvent(
   };
   if (event.type === 'run.position' && event.payload.at === 'waiting')
     d.ix.lastWait = event.seq;
-  const phase = phaseMoveOf(event);
-  if (phase !== null) moveBoundary(d, phase);
+  const standing = standingAfter(event);
+  if (standing !== null) applyStandingToTranscript(d, standing);
   else if (isTranscriptEvent(event)) {
     record(d, event);
     // A transcript event writes at most one slot; its position is the row's
