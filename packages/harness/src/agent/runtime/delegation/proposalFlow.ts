@@ -15,6 +15,7 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
 import { RunCall, type RunToolCall } from '@agent/runtime/RunCall';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { recordedDecision } from '@agent/runtime/requests';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type {
@@ -154,11 +155,11 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   function* (
     proposal: AgentProposal,
     parent: RunToolCall,
-    ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
+    ask?: Effect.Effect<RequestDecision, ProposalRequestError, SessionServices>,
   ): Effect.fn.Return<
     DelegationProposalDecision,
     ProposalRequestError,
-    Approvals
+    SessionServices
   > {
     const { runId, config } = parent.run;
     const approvals = yield* Approvals;
@@ -246,7 +247,7 @@ interface ApprovedDelegation {
 export const decideDelegation = Effect.fn('decideDelegation')(function* (
   parent: RunToolCall,
   proposal: AgentProposal,
-  ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
+  ask?: Effect.Effect<RequestDecision, ProposalRequestError, SessionServices>,
 ) {
   const decision = yield* requestDelegationProposal(proposal, parent, ask);
   if (decision.childApproval !== 'inherit') {

@@ -9,14 +9,7 @@
  */
 
 // Third-party imports
-import {
-  Context,
-  Duration,
-  Effect,
-  FileSystem,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
 import { isDeliveryOf } from '@agent/storage/runLifecycle';
@@ -25,7 +18,8 @@ import {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
 } from '@agent/storage/runWorkspaceFiles';
-import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
+import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
@@ -76,7 +70,7 @@ import { scriptCallsView } from './executions/scriptCallsView';
 
 interface RunToolContext {
   readonly runId: RunId;
-  /** The session's runs, off its call's session (`RunCallShape.session`). */
+  /** The session's runs. */
   readonly runs: Runs['Service'];
 }
 
@@ -157,16 +151,12 @@ interface RouteRequest<A extends ExecutionsAction> {
   /** The `{path}` segment, `/`-joined. */
   readonly rest: string;
 }
-/** What the routes read of the calling run's session: its owners, which
- *  the call's run carries (`RunCallShape.session`). */
-type SessionReads =
-  RunToolCall['session'] extends Context.Context<infer S> ? S : never;
 type RouteHandler<A extends ExecutionsAction> = (
   request: RouteRequest<A>,
 ) => Effect.Effect<
   ToolResult,
   Error,
-  FileSystem.FileSystem | StorageFs | SessionReads
+  FileSystem.FileSystem | StorageFs | SessionServices
 >;
 type RouteActions = {
   readonly [A in ExecutionsAction]?: RouteHandler<A>;
@@ -326,10 +316,10 @@ const EXECUTION_PATH_LIST = EXECUTION_ROUTES.map(
  * and the tool runner surfaces the collaborator's own error.
  */
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
+  { run }: RunToolCall,
   input: ExecutionsToolInput,
 ) {
-  const { run, session } = yield* requireToolRun('executions');
-  const context = { runId: run.runId, runs: Context.get(session, Runs) };
+  const context = { runId: run.runId, runs: yield* Runs };
   const segments = getPathSegments(input.path);
   const route = EXECUTION_ROUTES.find(({ path }) => {
     const parts = path.split('/').slice(1);
@@ -364,7 +354,7 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
     input,
     runId: yield* resolveRunId(context, segments[1] ?? 'current'),
     rest: segments.slice(3).join('/'),
-  }).pipe(Effect.provide(session));
+  });
 });
 
 function resolveRunId(
@@ -736,7 +726,8 @@ Use action: "query" with sql on /executions to ask any question of this project'
 ${HISTORY_VIEW_SUMMARY}
 Delegated subagent and document task results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,
-  execute: executeExecutionsTool,
+  execute: (input: ExecutionsToolInput) =>
+    inRunSession('executions', (call) => executeExecutionsTool(call, input)),
 });
 
 /**

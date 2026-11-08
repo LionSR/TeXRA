@@ -13,7 +13,7 @@ import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 import { forkSeed } from '@agent/runtime/forkRun';
 import {
-  requireToolRun,
+  inRunSession,
   type RunToolCall,
   type ScriptScope,
 } from '@agent/runtime/RunCall';
@@ -216,13 +216,10 @@ export const SelfTool = defineTool({
 Forked (the default), the child continues this conversation as it stood when the script started (the message of the turn that started it, not that turn's work so far), with \`prompt\` added to that message; with \`fork: false\` it starts with no earlier conversation. Either way the child is told \`prompt\` is the one part of the script's work it does, and not to take on the rest. It is you with your tools and model: nothing is proposed or approved again. It rejects with an Error named \`AgentFailed\` or \`Skipped\` (the user stopped it). Call it from a script; called directly, it runs nothing.`,
   schema: SelfInputSchema,
   execute: Effect.fn('SelfTool.execute')(function* (input: SelfInput) {
-    const call = yield* requireToolRun('self');
-    const { script } = call;
-    if (script === null)
-      return errorResult('self() runs only inside a script.');
-    // The child launches under the session's runs the engine door holds.
-    return yield* runSelf(call, input, script).pipe(
-      Effect.provide(call.session),
+    return yield* inRunSession('self', (call) =>
+      call.script === null
+        ? Effect.succeed(errorResult('self() runs only inside a script.'))
+        : runSelf(call, input, call.script),
     );
   }),
 });

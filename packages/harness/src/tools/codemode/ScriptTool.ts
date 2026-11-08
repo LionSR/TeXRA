@@ -19,7 +19,7 @@ import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   noLaterTurn,
-  requireToolRun,
+  inRunSession,
   RunCall,
   type ScriptDoor,
   callerRun,
@@ -176,17 +176,15 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     run !== undefined &&
     !noLaterTurn(run)
   )
-    return yield* Effect.flatMap(
-      requireToolRun('script run_in_background'),
-      (call) =>
-        launchBackgroundScript(
-          call,
-          {
-            code: input.code,
-            ...(input.timeoutMs != null && { timeoutMs: input.timeoutMs }),
-          },
-          input.title ?? 'Script',
-        ).pipe(Effect.provide(call.session)),
+    return yield* inRunSession('script run_in_background', (call) =>
+      launchBackgroundScript(
+        call,
+        {
+          code: input.code,
+          ...(input.timeoutMs != null && { timeoutMs: input.timeoutMs }),
+        },
+        input.title ?? 'Script',
+      ),
     );
   const runCall = yield* RunCall;
   const issued = runCall?.scriptCalls;
@@ -194,7 +192,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     return yield* Effect.fail(
       new ToolError('A script runs only as a call of an agent run.'),
     );
-  const scriptCalls = yield* issued.pipe(Effect.provide(runCall.session));
+  const scriptCalls = yield* inRunSession('script', () => issued);
   const sandbox = yield* CodeSandbox;
   // The last `RUN_LOG_MAX_LINES` lines the guest logged, for the result.
   const tail: string[] = [];

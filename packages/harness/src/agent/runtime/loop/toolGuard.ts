@@ -158,7 +158,11 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   input: unknown,
   hook: HookAnswer,
   rewritten: boolean,
-): Effect.fn.Return<ToolResult | undefined, Error, PluginToolServices> {
+): Effect.fn.Return<
+  ToolResult | undefined,
+  Error,
+  PluginToolServices | SessionServices
+> {
   const { guard, definition } = tool;
   // The loop asks about a command, a tool that requires approval, and a call
   // a hook asked about. A tool whose body opens its own request (`'inBody'`)
@@ -231,10 +235,8 @@ const rejection = Effect.fn('toolUse.guard')(function* (
       : undefined;
 
   const operation = guard?.command?.grant ?? 'call';
-  const { run, requests, session } = yield* requireToolRun(
-    'A call the loop asks about',
-  );
-  const approvals = Context.get(session, Approvals);
+  const { run, requests } = yield* requireToolRun('A call the loop asks about');
+  const approvals = yield* Approvals;
   const answer = approvals.permission(run.runId, operation, hook);
   if (answer === 'allow') return undefined;
   const decision =
@@ -259,7 +261,7 @@ export const guardedToolCall = (
   hooks: CallHooks = { outcomes: [], fromHook: (input) => input },
   bodyStarts: (input: unknown) => Effect.Effect<void, Error> = () =>
     Effect.void,
-): ReturnType<ITool<Error, PluginToolServices>['call']> => {
+): ReturnType<ITool<Error, PluginToolServices | SessionServices>['call']> => {
   const { deny, hook, rewritten } = answerOf(hooks.outcomes);
   if (deny !== null)
     return Effect.succeed(hookDenied(tool.definition.name, deny));

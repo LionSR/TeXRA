@@ -206,11 +206,6 @@ type BuiltinRun = ToolRun &
 export interface RunCallShape {
   /** The run the call works for, as the built-ins read it. */
   readonly run: BuiltinRun;
-  /** The session's services, picked where the loop dispatched the call: a
-   *  built-in runs over them, and so do the doors a plugin's tool calls
-   *  through (its child runs, an edit's review); no plugin tool is served
-   *  them, a plugin's reaches the session's runs through `ChildRuns`. */
-  readonly session: Context.Context<SessionServices>;
   /** The response whose call this is; a script's calls are its script's.
    *  A provider's call ids are unique within one response only. */
   readonly responseId: string;
@@ -294,6 +289,28 @@ export const requireRun = Effect.fn('RunCall.requireRun')(function* (
     );
   return { ...call, run, requests };
 });
+
+/**
+ * `body` over the current call's run, with the session's own services
+ * (`SessionServices`): the one place a requirement on them is dropped from
+ * a type, so no tool's type (`PluginToolServices`) and no public entry
+ * names a session service. It is sound because the run loop dispatches a
+ * run's every call in its session's fiber, which holds them, and only
+ * there provides the call's place in its run; the shared refusal runs
+ * first, so a call outside a run fails with it before `body` can reach a
+ * session service the fiber lacks.
+ */
+export const inRunSession = <A, E, R>(
+  toolName: string,
+  body: (call: RunToolCall) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | ToolError, Exclude<R, SessionServices> | ToolContext> =>
+  // cast: past `requireToolRun` the fiber is the dispatch's, which serves
+  // every `SessionServices` tag `R` names.
+  Effect.flatMap(requireToolRun(toolName), body) as Effect.Effect<
+    A,
+    E | ToolError,
+    Exclude<R, SessionServices> | ToolContext
+  >;
 
 /** A built-in's call made under a run: the call, the run, where its
  *  requests open, and its place in the run. */
