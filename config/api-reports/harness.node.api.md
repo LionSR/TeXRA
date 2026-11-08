@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 51
+Exports: 53
 
 - `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `canonicalizeWorkspaceRoot` — `function canonicalizeWorkspaceRoot: (workspaceRoot: string) => string`
@@ -47,6 +47,8 @@ Exports: 51
 - `relativeToRoot` — `function relativeToRoot: (root: string, filePath: string) => string | undefined`
 - `resolveGlobalStoragePath` — `function resolveGlobalStoragePath: (storageRoot: string) => string`
 - `resolveWorkspaceStoragePath` — `function resolveWorkspaceStoragePath: (storageRoot: string, workspaceRoot: string | undefined) => string`
+- `RowOf` — `type RowOf<T extends SessionRow['type']> = Extract<SessionRow, { type: T; }>; ≡ RowOf<T>`
+- `RunRows` — `type RunRows = { readonly start: RowOf<'run.start'> | null; readonly parent: RowOf<'run.start'>['parent']; readonly activation: RowOf<'run.activate'> | null; readonly end: RowOf<'run.end'> | null; readonly stop: RowOf<'run.stop'> | null; readonly inputClosed: boolean; readonly report: string | null; readonly exit: RowOf<'process.exit'> | null; readonly config: RowOf<'run.config'>['config'] | null; readonly position: RowOf<'run.position'> | null; readonly title: RowOf<'run.description'> | null; readonly label: RowOf<'run.description'> | null; readonly grants: ApprovalGrants | null; readonly facts: Readonly<Record<FactName, RowOf<'plugin.fact'>>>; }; ≡ RunRows`
 - `runsInWsl` — `function runsInWsl: () => boolean`
 - `secretsDirectory` — `function secretsDirectory: (storageRoot: string) => string`
 - `setLogSink` — `function setLogSink: (next: LogSink | null, options?: { readonly trusted?: boolean | undefined; }) => void`
