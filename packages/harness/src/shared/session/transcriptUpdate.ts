@@ -7,17 +7,19 @@
  *
  * The caller supplies each event's clock and id, and the reducer owns no
  * clock, timer, IO, or durable write. Each event type writes the value the
- * event means: a stage its entry in `stages`, a tool card its row from
- * one decode, a stream its text row, a `log` row its decoded payload
+ * event means: a plugin's stage its entry in `stages`, a tool card its row
+ * from one decode (and the stage of a script card the cards under it name), a stream its text row, a `log` row its decoded payload
  * (`transcriptLogRows.ts`). The working state lives in `transcriptState.ts`.
  */
 import { Predicate } from 'effect';
 import {
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   TOOL_CALL_STATUS,
   isTranscriptEvent,
   type SessionRow,
   type Stage,
+  type ToolCallStatus,
   type ToolUseLog,
   type TraceRowFields,
 } from '@shared/schemas';
@@ -49,8 +51,8 @@ import {
 import { standingAfter, type RunStanding } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
-/** A stage start opens its stage whole; a stage end closes the group
- *  its start opened and writes nothing for a group no start opened. */
+/** A plugin's section: its start opens the stage whole; its end closes the
+ *  stage its start opened and writes nothing for one no start opened. */
 function applyStage(
   d: Draft,
   event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
@@ -75,6 +77,50 @@ function applyStage(
   const groups = writableArray(d, d.next, 'stages');
   if (at !== undefined) groups[at] = group;
   else d.ix.stageIndex.set(event.id, groups.push(group) - 1);
+  d.touched = true;
+}
+
+/**
+ * A script's stage, projected from cards: a card opening under another card
+ * (`stageId`, the `script` card that issued it) opens that card's stage,
+ * labelled by its title, or reopens it when the run's end closed it and a
+ * resume issues more calls; the script card's own close closes it on its
+ * result.
+ */
+function openCardStage(d: Draft, card: string): void {
+  const heading = d.ix.slots.get(card);
+  if (heading?.kind !== 'tool') return;
+  const at = d.ix.stageIndex.get(card);
+  const stages = writableArray(d, d.next, 'stages');
+  if (at === undefined) {
+    const input = Predicate.isObject(heading.log.input)
+      ? heading.log.input
+      : {};
+    const name =
+      typeof input.title === 'string' && input.title.length > 0
+        ? input.title
+        : 'Script';
+    const stage: Stage = { id: card, name, startTime: d.at, outcome: null };
+    d.ix.stageIndex.set(card, stages.push(stage) - 1);
+  } else if (stages[at].outcome !== null) {
+    const { endTime: _end, ...open } = stages[at];
+    stages[at] = { ...open, outcome: null };
+  } else return;
+  d.touched = true;
+}
+
+function closeCardStage(d: Draft, card: string, status: ToolCallStatus): void {
+  const at = d.ix.stageIndex.get(card);
+  if (at === undefined) return;
+  const stages = writableArray(d, d.next, 'stages');
+  stages[at] = {
+    ...stages[at],
+    outcome:
+      status === TOOL_CALL_STATUS.COMPLETED
+        ? RUN_OUTCOME.COMPLETED
+        : RUN_OUTCOME.FAILED,
+    endTime: d.at,
+  };
   d.touched = true;
 }
 
@@ -123,6 +169,7 @@ function record(d: Draft, event: TraceRowFields): void {
         }
         return;
       }
+      if (event.stageId !== undefined) openCardStage(d, event.stageId);
       write(d, {
         kind: 'tool',
         base: open(
@@ -166,6 +213,7 @@ function record(d: Draft, event: TraceRowFields): void {
       if (!inProgress) {
         slot.base = settle(ix, slot.base);
         ix.activeTools.delete(event.logId);
+        closeCardStage(d, event.logId, event.status);
       }
       write(d, slot);
       return;

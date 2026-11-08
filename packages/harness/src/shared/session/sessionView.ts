@@ -59,7 +59,9 @@ const TranscriptViewSchema = Schema.Struct({
   /** The transcript rows (`transcriptUpdate.ts`) plus the compaction rows,
    *  in first-appearance order. */
   rows: Schema.Array(Schema.declare((_u): _u is TranscriptRow => true)),
-  /** One group per stage: opened by `stage.start`, closed by `stage.end`. */
+  /** One entry per stage: a plugin's section, opened by `stage.start` and
+   *  closed by `stage.end`, or a script's, projected from its `script` card
+   *  and the cards under it. */
   stages: Schema.Array(StageSchema),
   /** The contiguous leading prefix of rows whose finalizing event has been
    *  applied: what an append-only scrollback may print. */

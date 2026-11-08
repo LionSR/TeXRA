@@ -12,7 +12,9 @@ All notable changes to this project will be documented in this file.
   progress records are gone: read a run's bounds from `run.activate` and
   `run.end`, and its turns from `run.position`. A stage left open when its
   run ends gets no `stage.end` of its own; its run's `run.end` closes it.
-  `stage.start` carries no `kind` or `parentId`. SDK: a `Stage` states
+  A script writes no stage either: its calls are the `tool.start` records
+  whose `stageId` is the `logId` of its `script` card, which its own
+  `tool.end` closes. `stage.start` carries no `kind` or `parentId`. SDK: a `Stage` states
   `outcome` (null while open) in place of `status`, and has no `kind` or
   `parentStageId`; `StageStatus` and `StageOptions` are gone, and
   `isScriptCall` from `@texra-ai/harness/transcript` tells a script's call.
