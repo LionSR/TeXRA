@@ -491,7 +491,10 @@ export class StageList extends LitElement {
       }
       ${repeat(
         visibleTimeline,
-        (item) => (item.kind === 'row' ? item.row.id : item.stage.id),
+        // A script's stage has its `script` card's id, and the card is a
+        // row of the same list: the key names the kind too.
+        (item) =>
+          item.kind === 'row' ? `row:${item.row.id}` : `stage:${item.stage.id}`,
         (item) =>
           item.kind === 'row'
             ? this.renderLogEntry(item.row)
