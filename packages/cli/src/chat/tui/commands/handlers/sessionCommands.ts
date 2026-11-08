@@ -33,7 +33,7 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
-import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
+import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatus } from '@ui/copy/runStatus';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
@@ -45,7 +45,6 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
-import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 export function showCliSlashCommandHelp(commands: SlashCommands): void {
   openInfoPane(
@@ -148,13 +147,13 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
 }
 
 /**
- * `/resume all`: every interrupted task resumes on the session beside this
- * chat and joins the agent list (Tab); one a resume refuses says why on its
- * own line.
+ * `/resume all`: every interrupted task resumes beside this chat
+ * (`resumeTask`) and joins the agent list (Tab); one a resume refuses says
+ * why on its own line, and the rest still resume.
  */
 export function resumeInterruptedTasks(
-  runSession: Session,
-): Effect.Effect<void> {
+  resumeTask: SlashCommandContext['resumeTask'],
+): SlashCommandEffect {
   return Effect.suspend(() => {
     const tasks = interruptedTasks(currentView());
     if (tasks.length === 0) {
@@ -168,26 +167,18 @@ export function resumeInterruptedTasks(
     );
     return Effect.forEach(
       tasks,
-      // A refusal is the task's own transcript line, as the single-task
-      // `/resume` reports one; the rest still resume.
-      (task) => {
-        const notResumed = (reason: string) =>
-          Effect.sync(() =>
-            appendLocalErrorTranscript(
-              `Could not resume ${task.title}: ${reason}`,
-              task.runId,
-            ),
-          );
-        return resumeRun(runSession, task.runId).pipe(
-          Effect.catch((refused) =>
-            notResumed(
-              isRequestRefusal(refused)
-                ? requestErrorText(refused)
-                : refused.message,
-            ),
+      (task) =>
+        resumeTask(task.runId).pipe(
+          Effect.catch((refusal) =>
+            Effect.sync(() => {
+              if (refusal._tag === 'Cancelled') return;
+              appendLocalErrorTranscript(
+                `Could not resume ${task.title}: ${requestErrorText(refusal)}`,
+                task.runId,
+              );
+            }),
           ),
-        );
-      },
+        ),
       { concurrency: 'unbounded', discard: true },
     ).pipe(Effect.forkDetach, Effect.asVoid);
   });

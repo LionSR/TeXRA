@@ -390,6 +390,7 @@ export async function runChat(
     setApprovalPolicy,
     resetSession: resetSessionForClear,
     resumeRun: chatController.resume,
+    resumeTask: chatController.resumeTask,
   });
 
   // From here on `chatScope` owns everything the session holds: what is

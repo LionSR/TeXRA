@@ -73,6 +73,7 @@ function createContext(
       }),
     resetSession: vi.fn(),
     resumeRun: (_id: RunId) => Effect.void,
+    resumeTask: (_id: RunId) => Effect.void,
   };
 }
 
