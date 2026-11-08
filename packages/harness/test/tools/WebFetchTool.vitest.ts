@@ -1,5 +1,5 @@
 // Node imports
-import { createServer, type Server } from 'node:http';
+import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { layer } from '@effect/vitest';
@@ -109,19 +109,14 @@ layer(SessionGraph.hosted)('WebFetchTool', (it) => {
   );
 
   // A project's `.env` proxy carries its `web_fetch` traffic as it carries
-  // its model traffic. The proxy answers every request itself, a tunnelled
-  // one included, so the page reaches the tool only through it.
+  // its model traffic. undici sends a plain http:// URL to an HTTP proxy in
+  // absolute form (`GET http://host/`), and the proxy answers it itself, so
+  // the page reaches the tool only through it.
   it.effect('fetches through the proxy a project .env names', () =>
     Effect.gen(function* () {
-      const page = (server: Server) =>
-        server.on('request', (_request, response) => {
-          response.setHeader('content-type', 'text/plain');
-          response.end('served by the project proxy');
-        });
-      const tunnelled = page(createServer());
-      const proxy = page(createServer()).on('connect', (_request, socket) => {
-        socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        tunnelled.emit('connection', socket);
+      const proxy = createServer((_request, response) => {
+        response.setHeader('content-type', 'text/plain');
+        response.end('served by the project proxy');
       });
       yield* Effect.acquireRelease(
         Effect.callback<void>((resume) => {
