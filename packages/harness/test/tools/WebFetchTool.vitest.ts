@@ -1,3 +1,7 @@
+// Node imports
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterAll, beforeAll, expect, vi } from 'vitest';
@@ -7,6 +11,7 @@ import { fetch as undiciFetch } from 'undici';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { SessionGraph } from '@test/support/testKernel';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
+import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 // The tool connects through undici's own `fetch`; the real one stays the
 // default, and a test stubs one response.
@@ -101,5 +106,41 @@ layer(SessionGraph.hosted)('WebFetchTool', (it) => {
       expect(result).toMatchObject({ status: 'error' });
       expect(result.error).toMatch(/cannot fetch/i);
     }).pipe(Effect.ensuring(Effect.sync(clearProxyEnv))),
+  );
+
+  // A project's `.env` proxy carries its `web_fetch` traffic as it carries
+  // its model traffic. The proxy answers every request itself, a tunnelled
+  // one included, so the page reaches the tool only through it.
+  it.effect('fetches through the proxy a project .env names', () =>
+    Effect.gen(function* () {
+      const page = (server: Server) =>
+        server.on('request', (_request, response) => {
+          response.setHeader('content-type', 'text/plain');
+          response.end('served by the project proxy');
+        });
+      const tunnelled = page(createServer());
+      const proxy = page(createServer()).on('connect', (_request, socket) => {
+        socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        tunnelled.emit('connection', socket);
+      });
+      yield* Effect.acquireRelease(
+        Effect.callback<void>((resume) => {
+          proxy.listen(0, '127.0.0.1', () => resume(Effect.void));
+        }),
+        () => Effect.sync(() => proxy.close()),
+      );
+      const { port } = proxy.address() as AddressInfo;
+
+      const result = yield* WebFetchTool.call({
+        url: 'http://93.184.216.34/',
+      }).pipe(
+        Effect.provideService(ProjectEnvironment, {
+          HTTP_PROXY: `http://127.0.0.1:${port}`,
+        }),
+        Effect.provide(nativeToolTestLayer()),
+      );
+
+      expect(JSON.stringify(result)).toContain('served by the project proxy');
+    }).pipe(Effect.scoped),
   );
 });

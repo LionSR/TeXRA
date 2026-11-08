@@ -5,7 +5,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Context, Effect, Ref } from 'effect';
 
 // Local file imports
 import { executeCommand } from './execUtils';
@@ -36,7 +36,12 @@ const answers = (command: readonly string[]) =>
 /** The image processor found, kept for the process: every image resize and
  *  PDF conversion asks, and each probe spawns two processes. A miss is not
  *  kept, so a tool installed mid-session is found on the next ask. */
-let foundImageTool: 'magick' | 'gm' | undefined;
+const FoundImageTool = Context.Reference<Ref.Ref<'magick' | 'gm' | undefined>>(
+  '@texra-ai/harness/FoundImageTool',
+  {
+    defaultValue: () => Ref.makeUnsafe<'magick' | 'gm' | undefined>(undefined),
+  },
+);
 
 /**
  * Which of the two interchangeable image processors is installed, preferring
@@ -50,15 +55,17 @@ export const detectImageTool = Effect.fn('toolUtils.detectImageTool')(
     never,
     ChildProcessSpawner
   > {
-    if (foundImageTool !== undefined) return foundImageTool;
+    const found = yield* FoundImageTool;
+    const kept = yield* Ref.get(found);
+    if (kept !== undefined) return kept;
     const [hasMagick, hasGm] = yield* Effect.all(
       (['magick', 'gm'] as const).map((tool) =>
         answers(IMAGE_TOOL_COMMANDS[tool]),
       ),
       { concurrency: 'unbounded' },
     );
-    if (hasMagick) foundImageTool = 'magick';
-    else if (hasGm) foundImageTool = 'gm';
-    return foundImageTool ?? null;
+    const tool = hasMagick ? 'magick' : hasGm ? 'gm' : undefined;
+    yield* Ref.set(found, tool);
+    return tool ?? null;
   },
 );

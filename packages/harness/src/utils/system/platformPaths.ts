@@ -4,7 +4,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { LRUCache } from 'lru-cache';
 import which from 'which';
 import { Context, Effect } from 'effect';
 
@@ -63,51 +62,24 @@ export const homeDirectory: Effect.Effect<string | undefined> = Effect.try({
   withLogChannel('platformPaths'),
 );
 
-// Cache for extended PATH strings. Bounded so a process that mutates PATH many
-// times over its lifetime can't grow this unbounded; in practice only a handful
-// of distinct base paths are ever seen.
-interface ExtendedPathEntry {
-  /** The extended PATH as it stood when every `absent` directory was absent. */
-  readonly result: string;
-  /** Candidate directories that did not exist when `result` was computed. */
-  readonly absent: readonly string[];
-}
-
-const cachedExtendedPaths = new LRUCache<string, ExtendedPathEntry>({
-  max: 16,
-});
-
 /**
- * Extend PATH with the `appDirs` (`CommandDirs`) that are missing.
- *
- * The result is cached per input PATH, but a cached answer that *skipped* a
- * directory is only reused while that directory is still absent. A miss must
- * not be memoized for the process lifetime: the user installs git on the
- * advice of our own "Git not found in PATH" message, and on Windows the new
- * machine PATH never reaches this already-running process — so the install is
- * invisible unless this recomputes. Re-checking only the previously absent
- * candidates keeps the steady state to a handful of `stat`s.
+ * Extend PATH with the `appDirs` (`CommandDirs`) that are missing, checked
+ * on every call: a directory the user creates mid-session (installing git on
+ * the advice of our own "Git not found in PATH" message) is on the next
+ * command's PATH. The check is a few `stat`s, microseconds beside the spawn
+ * it precedes.
  */
 function extendEnvPath(
   basePath: string | undefined,
   appDirs: readonly string[],
 ): string {
-  const base = basePath ?? (process.env.PATH || '');
-  const cacheKey = [base, ...appDirs].join('\0');
-  const cached = cachedExtendedPaths.get(cacheKey);
-  if (cached && !cached.absent.some(existsAtAbsolute)) {
-    return cached.result;
-  }
-  const segments = base.split(path.delimiter).filter(Boolean);
-  const absent: string[] = [];
+  const segments = (basePath ?? (process.env.PATH || ''))
+    .split(path.delimiter)
+    .filter(Boolean);
   for (const dir of appDirs) {
-    if (segments.includes(dir)) continue;
-    if (existsAtAbsolute(dir)) segments.push(dir);
-    else absent.push(dir);
+    if (!segments.includes(dir) && existsAtAbsolute(dir)) segments.push(dir);
   }
-  const result = segments.join(path.delimiter);
-  cachedExtendedPaths.set(cacheKey, { result, absent });
-  return result;
+  return segments.join(path.delimiter);
 }
 
 /**
