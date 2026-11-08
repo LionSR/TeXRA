@@ -665,6 +665,19 @@
       ]
     },
     {
+      "id": "RUN-trusted-script-launch-grants",
+      "candidate": "a task's recipe run's trust (isTrustedScript, five reads in four files: fixed tools and offered approval tools in step.ts, catalog agents and approved delegation in proposalFlow.ts, verbatim files and prompt in AgentTool.ts, no activated skills in templateInputs.ts) recorded as launch grants, either (a) stored on the run's run.start or run.config or (b) derived once into a grants record each site reads (E4's trust half)",
+      "why": "(a) stores a second copy of a fact run.config already stores as script.kind, which the documents plugin, recipeResult and isTaskConfig read: two owners that a resume or a fork could see disagree, for a run.config/run.start row-version bump and no deleted branch. A goal grant on the run's approval.policy is not that record either: goal grants pass down the run's ancestry (resolveBypass), so a recipe's children would start auto-approving their own delegations, and only one of the four grants is an approval. (b) is a table with two rows (task's recipe, anything else) whose four or five columns are always equal: a column derivable across its rows is the special case written as data (root AGENTS.md 'No option for a special case'), and every site keeps its branch. Resume and fork need no stored grant: a resume re-reads the run's run.config, and forkRun refuses a script run. What did hold is one fact under two names: isTrustedScript (agent/core/definition/RunRecord.ts) and the public isTaskConfig (shared/schemas/runRecords.ts) both test script.kind === 'recipe'. simplify/e4-launch-grants deletes isTrustedScript; the five reads call isTaskConfig, whose doc lists what a task's launch grants. Re-verified on main at 80a0153.",
+      "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/E-loop-tools.md#finding-4-a-script-run-is-a-model-less-run-dressed-as-a-tool-use-run-and-the-costume-shows-in-five-loop-branches",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/schemas/runRecords.ts",
+          "symbol": "isTaskConfig",
+          "signature": "export const isTaskConfig = ( config: typeof RunRecordFieldsSchema.Encoded, ): boolean => recipeBlockOf(config) !== null;"
+        }
+      ]
+    },
+    {
       "id": "ROW-followup-closed-as-run-removed",
       "candidate": "the followup.closed row deleted, a run's closed input read from run.removed alone (C11 d)",
       "why": "Its one writer on main is openResume's records-gone branch (Inbox.closeInput from resumeRun.ts): a run whose rows hold queued input but no run.config, so no run.removed was ever written and none should be (nothing was deleted, and run.removed starts a collection). Without the row, owesResume reads that input as owed a wake at every inbox notice and each wake is refused again; the queued messages are never dropped with reason 'closed'. Deleting it needs the send path to refuse a run that has no records first, which is a send-path change, not a storage-format one. Re-verified on main at 157f775 by the storage-format batch.",

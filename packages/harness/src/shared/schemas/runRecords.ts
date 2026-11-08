@@ -26,7 +26,11 @@ export const RunRecordFieldsSchema = Schema.Union([
 
 /** Whether the run is a task (an agent carrying a plugin's block, run on
  *  its recipe): its value and its children's spend are its output, its end
- *  its record; it resumes from its checkpoint, its opening rebuilt. */
+ *  its record; it resumes from its checkpoint, its opening rebuilt. The app
+ *  wrote its recipe, not a model, so the launch that chose the task granted
+ *  it: tools fixed past any switch, the catalog's agents under the launch's
+ *  approval, its prompts and files passed as written, and no skill
+ *  activated by its instruction. */
 export const isTaskConfig = (
   config: typeof RunRecordFieldsSchema.Encoded,
 ): boolean => recipeBlockOf(config) !== null;
