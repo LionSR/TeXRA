@@ -61,6 +61,7 @@ import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner, type ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
+import type { ToolTable } from '@tools/toolTable';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -351,24 +352,24 @@ export interface ProcessServicesOptions {
 
 /** The process services and the {@link SessionOwner} over the session map
  *  (one session per storage root), which the public `processLayer` serves
- *  its `Sessions` over. */
-export function ownerProcessLayer({
-  storageRoot,
-  settings,
-  plugins,
-  secrets,
-  appState,
-  agentDirectories,
-  toolAvailability = toolAvailabilityLayer,
-  usageLog = UsageLog.disabled,
-  globalDatabase: globalDatabaseOption,
-  minimumLogLevel,
-  workspace,
-}: ProcessServicesOptions): Layer.Layer<
-  RunServices | ToolCatalog | SessionOwner
-> {
+ *  its `Sessions` over. The table is the one that composition validated. */
+export function ownerProcessLayer(
+  {
+    storageRoot,
+    settings,
+    secrets,
+    appState,
+    agentDirectories,
+    toolAvailability = toolAvailabilityLayer,
+    usageLog = UsageLog.disabled,
+    globalDatabase: globalDatabaseOption,
+    minimumLogLevel,
+    workspace,
+  }: Omit<ProcessServicesOptions, 'plugins'>,
+  table: ToolTable,
+): Layer.Layer<RunServices | ToolCatalog | SessionOwner> {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
-  const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
+  const catalog = pluginCatalogLayer(table, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.unwrap(
     Effect.map(nodeProcesses.selfIdentity(), (s) =>

@@ -41,6 +41,7 @@ import {
 } from '@test/support/testKernel';
 import { texraPlugins } from '@texra/tools/registry';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
+import { toolTable } from '@tools/toolTable';
 
 import { testLaunch } from '@test/support/scriptedRunLayers';
 import { noopTrace } from '@test/support/noopTrace';
@@ -101,7 +102,7 @@ function runLayer(
     Layer.provideMerge(Secrets.layer(new FakeSecrets())),
     Layer.provideMerge(
       pluginCatalogLayer(
-        texraPlugins({ name: 'vscode' }),
+        toolTable(texraPlugins({ name: 'vscode' })),
         mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
       ).pipe(
         Layer.provide(
