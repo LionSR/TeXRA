@@ -11,7 +11,7 @@ import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import {
   Deferred,
-  Duration,
+  Schedule,
   Effect,
   Exit,
   Fiber,
@@ -163,10 +163,14 @@ const tempDir = Effect.acquireRelease(
 
 /** The text of `file` once the fixture server has written it. */
 const writtenText = (file: string) =>
-  Effect.gen(function* () {
-    while (!existsSync(file)) yield* Effect.sleep(Duration.millis(20));
-    return readFileSync(file, 'utf8');
-  }).pipe(Effect.timeout(Duration.seconds(5)));
+  Effect.sync(() => existsSync(file)).pipe(
+    Effect.repeat({
+      schedule: Schedule.spaced('20 millis'),
+      until: (done) => done,
+    }),
+    Effect.timeout('5 seconds'),
+    Effect.map(() => readFileSync(file, 'utf8')),
+  );
 
 describe('MCP server plugins', () => {
   // Live clock: a real child process answers over stdio, and the approval's
@@ -275,10 +279,13 @@ describe('MCP server plugins', () => {
             // The run's pin was the server's last holder: closing it stops the
             // server.
             yield* Scope.close(pin, Exit.void);
-            yield* Effect.gen(function* () {
-              while (isAlive(pid) || isAlive(editedPid))
-                yield* Effect.sleep(Duration.millis(20));
-            }).pipe(Effect.timeout(Duration.seconds(5)));
+            yield* Effect.sync(() => isAlive(pid) || isAlive(editedPid)).pipe(
+              Effect.repeat({
+                schedule: Schedule.spaced('20 millis'),
+                while: (alive) => alive,
+              }),
+              Effect.timeout('5 seconds'),
+            );
             expect([isAlive(pid), isAlive(editedPid)]).toEqual([false, false]);
           }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer()));
         }),
