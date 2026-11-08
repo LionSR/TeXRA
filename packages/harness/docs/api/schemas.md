@@ -547,6 +547,19 @@ const DEBUG_MODE_SETTING: { readonly key: "logger.debugMode"; readonly slot: "co
 type DeclinableUsageRoute = typeof DeclinableUsageRouteSchema.Type;
 ```
 
+## DeclinableUsageRouteSchema
+
+The subscription routes a run can decline: storage's spelling of llm's
+`PLAN_ROUTES`, which the route decision converts both ways, so a plan in
+one list only fails to compile. A retry the user answered with their own
+API key declines the route that ran out of quota, for that run only: the
+choice is a fact of the run, not of the user's settings, so no preference
+is rewritten and two concurrent runs cannot cancel each other's fallback.
+
+```ts
+const DeclinableUsageRouteSchema: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>
+```
+
 ## DEFAULT_AGENT_MODEL
 
 Default model used when a new agent run / proposal omits one. Single source of
@@ -1343,8 +1356,8 @@ const MINIMAX_REGION_SETTING: { readonly provider: "minimax"; readonly key: "min
 
 ## MODEL_AVAILABILITY_STATUS
 
-What a kind means: whether a run can use the model, and whether the block is
-a missing key (a surface's words for each kind are the app's). Declared once
+What a kind means: whether a run can use the model (a surface's words for
+each kind are the app's). Declared once
 here, next to the kind, so the answer is carried on the wire as the kind
 alone and every host reads the same table instead of pre-fanned fields.
 
@@ -1355,7 +1368,7 @@ read at: the table crosses into every host that decides whether a model can
 run, and `readonly` is compile-time only.
 
 ```ts
-const MODEL_AVAILABILITY_STATUS: { readonly 'provider-key': { readonly available: true; readonly requiresKey: false; }; readonly 'missing-key': { readonly available: false; readonly requiresKey: true; }; readonly 'key-unreadable': { readonly available: false; readonly requiresKey: false; }; readonly 'subscription-access': { readonly available: true; readonly requiresKey: false; }; readonly 'xai-subscription-access': { readonly available: true; readonly requiresKey: false; }; readonly retired: { readonly available: false; readonly requiresKey: false; }; readonly unserved: { readonly available: false; readonly requiresKey: false; }; readonly 'unknown-model': { readonly available: false; readonly requiresKey: false; }; }
+const MODEL_AVAILABILITY_STATUS: { readonly 'provider-key': { readonly available: true; }; readonly 'missing-key': { readonly available: false; }; readonly 'key-unreadable': { readonly available: false; }; readonly 'subscription-access': { readonly available: true; }; readonly retired: { readonly available: false; }; readonly unserved: { readonly available: false; }; readonly 'unknown-model': { readonly available: false; }; }
 ```
 
 ## MODEL_COMPACTION_THRESHOLD_SETTING
@@ -1391,7 +1404,7 @@ type ModelAvailabilityKind = typeof ModelAvailabilityKindSchema.Type;
 Why a model option can or cannot run, as it travels on the wire.
 
 ```ts
-const ModelAvailabilityKindSchema: Literals<readonly ["provider-key", "missing-key", "key-unreadable", "retired", "unserved", "subscription-access", "xai-subscription-access", "unknown-model"]>
+const ModelAvailabilityKindSchema: Literals<readonly ["provider-key", "missing-key", "key-unreadable", "retired", "unserved", "subscription-access", "unknown-model"]>
 ```
 
 ## ModelBackend

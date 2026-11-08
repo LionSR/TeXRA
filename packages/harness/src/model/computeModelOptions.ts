@@ -27,7 +27,7 @@ import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
-  type UsageRoute,
+  type DeclinableUsageRoute,
 } from '@shared/schemas';
 import type { StateKey } from '@shared/state/stateSettings';
 
@@ -38,11 +38,12 @@ import {
   type RouteReasoning,
 } from './reasoningLevel';
 
-/** Availability verdict; its wording reads the route it was decided over. */
+/** A routed model's verdict; its wording reads the route it was decided
+ *  over. `unknown-model` is the verdict on a model no route was decided for. */
 interface ModelAvailabilityStatus {
-  kind: ModelAvailabilityKind;
+  kind: Exclude<ModelAvailabilityKind, 'unknown-model'>;
   /** The subscription paying for the next request; absent means own keys. */
-  usageRoute?: UsageRoute;
+  usageRoute?: DeclinableUsageRoute;
 }
 
 /**
@@ -64,14 +65,13 @@ interface UnavailableReasonContext {
  */
 const UNAVAILABLE_REASON_BUILDERS: {
   readonly [
-    K in ModelAvailabilityKind
+    K in ModelAvailabilityStatus['kind']
   ]: (typeof MODEL_AVAILABILITY_STATUS)[K]['available'] extends true
     ? undefined
     : (reasonCtx: UnavailableReasonContext) => string;
 } = {
   'provider-key': undefined,
   'subscription-access': undefined,
-  'xai-subscription-access': undefined,
   retired: ({ model }) =>
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
   unserved: ({ model }) =>
@@ -80,9 +80,6 @@ const UNAVAILABLE_REASON_BUILDERS: {
     `Model "${model}" requires your ${providerDisplayName(source)} API key. Provide it to continue.`,
   'key-unreadable': ({ model, source }) =>
     `Model "${model}" needs your ${providerDisplayName(source)} API key, which could not be read from secret storage. Check that the store is unlocked and readable, then retry.`,
-  // Unreachable from `optionOf` (it answers "not recognized"
-  // first), but an `available: false` kind the table must still cover.
-  'unknown-model': ({ model }) => `Model "${model}" is not recognized.`,
 };
 
 /** A provider's key as read: usable, absent, or a store that could not be
@@ -132,17 +129,14 @@ function routeVerdict({ rawConfig, route }: RoutedModel):
   | { readonly verdict: ModelAvailabilityStatus }
   | {
       readonly keyOf: ApiKeyProviderId;
-      readonly usageRoute: UsageRoute | undefined;
+      readonly usageRoute: DeclinableUsageRoute | undefined;
     } {
   if (rawConfig.retired) return { verdict: { kind: 'retired' } };
   switch (route.kind) {
     case 'chatgpt-subscription':
-      return {
-        verdict: { kind: 'subscription-access', usageRoute: route.kind },
-      };
     case 'xai-subscription':
       return {
-        verdict: { kind: 'xai-subscription-access', usageRoute: route.kind },
+        verdict: { kind: 'subscription-access', usageRoute: route.kind },
       };
     case 'no-api-key':
       return { verdict: { kind: 'missing-key' } };
@@ -160,7 +154,7 @@ function routeVerdict({ rawConfig, route }: RoutedModel):
 /** The verdict of a route that bills a key, over that key's status. */
 function keyVerdict(
   status: KeyStatus,
-  usageRoute: UsageRoute | undefined,
+  usageRoute: DeclinableUsageRoute | undefined,
 ): ModelAvailabilityStatus {
   if (status === 'unreadable') return { kind: 'key-unreadable' };
   if (!status) return { kind: 'missing-key' };
@@ -458,7 +452,7 @@ export type ModelOption =
       /** Why it cannot run now, worded as a run would fail; absent when it can. */
       readonly unavailableReason?: string;
       /** The subscription paying for the next request; absent means own keys. */
-      readonly usageRoute?: UsageRoute;
+      readonly usageRoute?: DeclinableUsageRoute;
       /** The registry config as published: what the model is. */
       readonly published: ModelConfig;
       /** The config it runs with on its route. */

@@ -19,22 +19,11 @@ import { formatResetDuration } from '@ui/copy/format';
 import type {
   DeclinableUsageRoute,
   ErrorLogData,
+  ModelAvailabilityKind,
   TokenUsageStats,
   UsageRoute,
 } from '@texra-ai/harness/schemas';
 import { formatCostUsd } from '@texra-ai/harness/schemas';
-
-/** The words for each `ModelOptionData.availability` kind. */
-export const MODEL_AVAILABILITY_LABEL = {
-  'provider-key': 'API key set',
-  'missing-key': 'Missing API key',
-  'key-unreadable': 'API key unreadable',
-  'subscription-access': CHATGPT_AUTH.subscriptionLabel,
-  'xai-subscription-access': GROK_AUTH.subscriptionLabel,
-  retired: 'Retired',
-  unserved: 'Unavailable',
-  'unknown-model': 'Unknown model',
-} as const;
 
 /**
  * Each plan a model call can bill through, as a person knows it: the name of
@@ -74,6 +63,36 @@ const SESSION_ACCOUNTS = Object.freeze({
   'chatgpt-subscription': CHATGPT_AUTH,
   'xai-subscription': GROK_AUTH,
 });
+
+/** The words for each availability kind but a subscription's, which its
+ *  plan names. */
+const AVAILABILITY_LABEL = Object.freeze({
+  'provider-key': 'API key set',
+  'missing-key': 'Missing API key',
+  'key-unreadable': 'API key unreadable',
+  retired: 'Retired',
+  unserved: 'Unavailable',
+  'unknown-model': 'Unknown model',
+} satisfies Record<
+  Exclude<ModelAvailabilityKind, 'subscription-access'>,
+  string
+>);
+
+/** A model option's availability as a person reads it: the kind, or for a
+ *  model a subscription serves, that subscription's plan. */
+export function modelAvailabilityLabel({
+  availability,
+  usageRoute,
+}: {
+  readonly availability: ModelAvailabilityKind;
+  readonly usageRoute?: DeclinableUsageRoute;
+}): string {
+  if (availability !== 'subscription-access')
+    return AVAILABILITY_LABEL[availability];
+  return usageRoute === undefined
+    ? 'Subscription'
+    : PLAN_NAMES[usageRoute].plan;
+}
 
 /**
  * A model call's failure as a person reads it, from the facts the run

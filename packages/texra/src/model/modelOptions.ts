@@ -81,15 +81,15 @@ function optionRow(verdict: ModelOption): ModelOptionData {
   if (!('config' in verdict)) {
     return { value: model, label: model, availability };
   }
-  const { config, source } = verdict;
+  const { config, source, usageRoute } = verdict;
   const reasoning = reasoningLevelLabel(verdict);
   // The row's identity stays the base model; the badge names the route.
   const routeLabel =
     isKimiSubscriptionEligible(config) && !isKimiCodeExclusiveModel(config)
       ? `Via ${providerDisplayName(source)}`
       : undefined;
-  // The row ships the verdict's kind alone; `MODEL_AVAILABILITY_STATUS`
-  // words it for whichever surface renders it.
+  // The row ships the verdict (its kind, and the subscription that pays);
+  // each surface words it (`modelAvailabilityLabel`).
   return {
     value: model,
     label: config.label,
@@ -102,6 +102,7 @@ function optionRow(verdict: ModelOption): ModelOptionData {
     ...(reasoning ? { reasoning } : {}),
     ...(routeLabel ? { routeLabel } : {}),
     availability,
+    ...(usageRoute === undefined ? {} : { usageRoute }),
   };
 }
 

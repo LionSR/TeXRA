@@ -1313,7 +1313,7 @@ type ModelOption =
       /** Why it cannot run now, worded as a run would fail; absent when it can. */
       readonly unavailableReason?: string;
       /** The subscription paying for the next request; absent means own keys. */
-      readonly usageRoute?: UsageRoute;
+      readonly usageRoute?: DeclinableUsageRoute;
       /** The registry config as published: what the model is. */
       readonly published: ModelConfig;
       /** The config it runs with on its route. */
