@@ -404,11 +404,19 @@ export async function setSettingsTab(
   await launched.page.evaluate(() => {
     window.postMessage({ command: 'desktop:openSettings' }, '*');
   });
+  // The dialog is open once it holds focus: a wa-dialog focuses itself on
+  // the animation frame after it opens, so a key pressed before then goes to
+  // whatever it moves focus away from.
   await launched.page.waitForFunction(
-    () =>
-      document.querySelector(
-        'wa-dialog.desktop-settings-overlay settings-app',
-      ) != null,
+    () => {
+      const dialog = document.querySelector(
+        'wa-dialog.desktop-settings-overlay',
+      );
+      return (
+        dialog?.querySelector('settings-app') != null &&
+        dialog.contains(document.activeElement)
+      );
+    },
     undefined,
     { timeout: 5000 },
   );
