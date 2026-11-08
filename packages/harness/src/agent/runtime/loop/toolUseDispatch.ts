@@ -260,7 +260,7 @@ const commit = (
   { dispatch, fact, stage }: Call,
   rows: readonly RunHistoryDraft[],
   result?: Pick<ToolResult, 'status'>,
-  alongside?: ReturnType<typeof factRows>['alongside'],
+  alongside?: ReturnType<typeof factRows>,
 ) =>
   dispatch.cell.append((state) => {
     const { runId } = dispatch.run;
@@ -663,10 +663,9 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
       ...cards,
       ...post,
       ...answered.map((id) => consumedRow(runId, id, { kind: 'answered' })),
-      ...facts.run,
     ],
     sanitized,
-    facts.alongside,
+    facts,
   );
 });
 

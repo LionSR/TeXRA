@@ -49,7 +49,7 @@ import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { runActionRefusal } from '@shared/session/runActions';
 import { descriptionRow } from '@shared/session/runFacts';
-import { ownFactRow, ownFactsChecked } from '@tools/plugins';
+import { factRow, ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -218,7 +218,7 @@ const decideSurfaceRequest = (
               log.transact((tx) =>
                 Effect.gen(function* () {
                   const { kept, rejected } = yield* ownFactsChecked(
-                    own.map((f) => ownFactRow(f, req.runId)),
+                    own.map((f) => factRow(f, req.runId)),
                     plugin,
                     log,
                   );

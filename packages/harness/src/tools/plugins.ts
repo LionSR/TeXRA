@@ -37,7 +37,6 @@ import {
   type FactName,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
-import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import {
   decodeDisabledTools,
@@ -308,24 +307,33 @@ export function checkOwnFacts(
   }
 }
 
-type OwnFactRow = Extract<SessionRowDraft, { type: 'plugin.fact' }>;
+type FactRow = Extract<SessionRowDraft, { type: 'plugin.fact' }>;
 
-/** A fact about its plugin's own aggregate, as its row hung under
- *  `runId`: a call's (`factRows`) or a decision's (`Plugin.decision`). */
-export const ownFactRow = (
-  { aggregate, ...fact }: ToolFact & { readonly aggregate: string },
+/** A fact stated under run `runId` (a call's, a decision's or a fork's), as
+ *  its row: one about the run on the run's aggregate, one about its plugin's
+ *  own aggregate (`aggregate`) hung under the run. */
+export const factRow = (
+  { aggregate, ...fact }: ToolFact,
   runId: RunId,
-): OwnFactRow => ({
-  type: 'plugin.fact',
-  ...fact,
-  aggregateId: qualifyAggregateId('plugin', aggregate),
-  parent: runId,
-});
+): FactRow =>
+  aggregate === undefined
+    ? {
+        type: 'plugin.fact',
+        ...fact,
+        aggregateId: qualifyAggregateId('run', runId),
+        parent: null,
+      }
+    : {
+        type: 'plugin.fact',
+        ...fact,
+        aggregateId: qualifyAggregateId('plugin', aggregate),
+        parent: runId,
+      };
 
-/** A fact about its plugin's own aggregate that its writer refused in the
- *  job: its kind's rule (`FactKind.accepts`) rejected it against the
- *  aggregate's latest row, or it moves the aggregate under a run the store
- *  no longer holds open. Nothing was written. */
+/** A plugin fact its writer refused in the job: its kind's rule
+ *  (`FactKind.accepts`) rejected it against the aggregate's latest row, or
+ *  it moves a plugin's aggregate under a run the store no longer holds
+ *  open. Nothing was written. */
 export class PluginFactRejected extends Schema.TaggedError<PluginFactRejected>()(
   'PluginFactRejected',
   { aggregateId: Schema.String, reason: Schema.String },
@@ -334,8 +342,9 @@ export class PluginFactRejected extends Schema.TaggedError<PluginFactRejected>()
 }
 
 /**
- * Facts about their plugin's own aggregates, checked in the job that
- * appends them: each against its aggregate's latest row of the kind, read
+ * A plugin's facts (about a run, or about the plugin's own aggregate),
+ * checked in the job that appends them: each against its aggregate's
+ * latest row of the kind, read
  * in the job's transaction (an earlier draft of the same batch counts), so
  * the read and the append are one. A row the latest already supersedes
  * (`FactKind.supersedes`: a call that lagged behind a later writer) is
@@ -343,12 +352,12 @@ export class PluginFactRejected extends Schema.TaggedError<PluginFactRejected>()
  * that moves the aggregate under a run that is not open, is rejected.
  */
 export const ownFactsChecked = Effect.fn('ownFactsChecked')(function* (
-  drafts: readonly OwnFactRow[],
+  drafts: readonly FactRow[],
   plugin: Plugin | undefined,
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
 ) {
   const written = new Map<string, PluginRow>();
-  const kept: OwnFactRow[] = [];
+  const kept: FactRow[] = [];
   const rejected: PluginFactRejected[] = [];
   for (const draft of drafts) {
     const key = `${draft.aggregateId}/${factName(draft)}`;
@@ -383,51 +392,35 @@ export const ownFactsChecked = Effect.fn('ownFactsChecked')(function* (
 
 /**
  * The rows the facts of a call of `runId` commit in its `tool.result`
- * batch: a fact about the run on the run's history, and one about its
- * plugin's own aggregate (`aggregate`), hung under the run, appended
- * beside the batch (`alongside`, checked by `ownFactsChecked`), so each
- * commits with the result or not at all.
+ * batch, appended beside it (`alongside`) after `ownFactsChecked`, so each
+ * commits with the result or not at all. The call's result is the run's
+ * record and stands: a fact its plugin's rule rejects is the plugin's row
+ * alone, left out and logged.
  */
-export function factRows(
+export const factRows = (
   facts: readonly ToolFact[],
   runId: RunId,
   plugin: Plugin | undefined,
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
-): {
-  readonly run: readonly RunHistoryDraft[];
-  readonly alongside: Alongside<DatabaseWriteFailed>;
-} {
-  const run: RunHistoryDraft[] = [];
-  const own: OwnFactRow[] = [];
-  for (const { aggregate, ...fact } of facts)
-    if (aggregate === undefined)
-      run.push({
-        type: 'plugin.fact',
-        ...fact,
-        aggregateId: qualifyAggregateId('run', runId),
-        parent: null,
-      });
-    else own.push(ownFactRow({ ...fact, aggregate }, runId));
-  return {
-    run,
-    // The call's result is the run's record and stands: a fact its plugin's
-    // rule rejects is the plugin's row alone, left out and logged.
-    alongside: ownFactsChecked(own, plugin, log).pipe(
-      Effect.tap(({ rejected }) =>
-        Effect.forEach(rejected, (error) =>
-          Effect.logWarning(
-            `A plugin fact of a call of ${runId} was not written`,
-          ).pipe(
-            Effect.annotateLogs({ data: error.message }),
-            withLogChannel('plugins'),
-          ),
+): Alongside<DatabaseWriteFailed> =>
+  ownFactsChecked(
+    facts.map((fact) => factRow(fact, runId)),
+    plugin,
+    log,
+  ).pipe(
+    Effect.tap(({ rejected }) =>
+      Effect.forEach(rejected, (error) =>
+        Effect.logWarning(
+          `A plugin fact of a call of ${runId} was not written`,
+        ).pipe(
+          Effect.annotateLogs({ data: error.message }),
+          withLogChannel('plugins'),
         ),
       ),
-      Effect.map(({ kept }) => kept),
-      // A read in the writing transaction that fails fails the write.
-      Effect.mapError(
-        (error) => new DatabaseWriteFailed({ path: error.path, cause: error }),
-      ),
     ),
-  };
-}
+    Effect.map(({ kept }) => kept),
+    // A read in the writing transaction that fails fails the write.
+    Effect.mapError(
+      (error) => new DatabaseWriteFailed({ path: error.path, cause: error }),
+    ),
+  );
