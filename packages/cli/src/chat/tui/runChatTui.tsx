@@ -26,11 +26,7 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
-import { FileSecrets, secretsDirectory } from '@texra-ai/harness/node';
-import {
-  SESSION_CLOSE_DEADLINE_MS,
-  emitAppSignal,
-} from '@texra-ai/harness/plugins';
+import { SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness/plugins';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -442,17 +438,6 @@ export async function runChat(
     title: installTerminalTitleUpdates(context.cwd),
   });
   onChatClose(announceForegroundApprovals());
-  runtime.runSync(
-    Effect.gen(function* () {
-      // Keys another TeXRA window or the service saves reach this chat too.
-      yield* Effect.forkIn(
-        FileSecrets.watch(secretsDirectory(context.storageRoot), (key) =>
-          emitAppSignal('credentialChanged', { key }),
-        ),
-        chatScope,
-      );
-    }),
-  );
   // The runs this terminal paints, watched on the session for as long as
   // the set holds: the watch keeps their transcripts in the view, and a
   // new set replaces the watch. The chat's scope ends it.
