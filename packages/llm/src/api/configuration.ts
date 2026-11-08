@@ -175,10 +175,12 @@ export function configurationFor(spec: BindSpec): {
     !(
       config.provider === ModelProvider.OPENAI && config.reasoning !== undefined
     );
-  const credentialProvider =
+  // A session's scope is named by its plan, a key's by its kind: the name a
+  // stored turn's deployment carries, so a continuation still matches it.
+  const [credentialProvider, credentialName] =
     route.kind === 'api-key'
-      ? route.provider
-      : PLAN_ROUTES[route.kind].provider;
+      ? [route.provider, route.kind]
+      : [PLAN_ROUTES[route.plan].provider, route.plan];
   const configuration = CONFIGURE[protocol]({
     spec: { ...spec, model: config, options },
     config,
@@ -187,7 +189,7 @@ export function configurationFor(spec: BindSpec): {
       deployment: {
         endpoint: spec.route.endpoint,
         // A non-secret name of the credential route.
-        credentialScope: `${credentialProvider}:${route.kind}`,
+        credentialScope: `${credentialProvider}:${credentialName}`,
       },
     },
     controls: {

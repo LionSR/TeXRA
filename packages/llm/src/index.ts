@@ -145,7 +145,7 @@ export {
   routeConfig,
 } from './models/modelRoute.js';
 export type {
-  ApiKeyUsageRoute,
+  KeyPlanRoute,
   CredentialRoute,
   ModelRoute,
   RouteFacts,

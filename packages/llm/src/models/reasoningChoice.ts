@@ -45,7 +45,7 @@ const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
  */
 function routeControls(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route: Pick<ModelRoute, 'kind'> | undefined,
+  route: ModelRoute | undefined,
 ): ModelConfig['reasoning'] {
   const { reasoning } = config;
   if (route === undefined || reasoning === undefined) return reasoning;
@@ -58,7 +58,7 @@ function routeControls(
     case ModelProvider.MINIMAX:
       return { ...reasoning, efforts: [ReasoningEffort.HIGH] };
     default:
-      return route.kind === 'chatgpt-subscription'
+      return route.kind === 'session' && route.plan === 'chatgpt-subscription'
         ? {
             ...reasoning,
             efforts: reasoning.efforts.filter((effort) =>
@@ -147,7 +147,7 @@ export interface ChooseReasoningOptions {
   /** The user's saved level for this model, used when the selection names none. */
   readonly userEffort?: ReasoningEffort;
   /** The route the request is bound on, which may carry fewer controls than the model has. */
-  readonly route?: Pick<ModelRoute, 'kind'>;
+  readonly route?: ModelRoute;
   /** The caller's own ceiling on the levels it can serve (e.g. an installed Codex CLI's). */
   readonly routeEfforts?: readonly ReasoningEffort[];
 }
@@ -263,7 +263,7 @@ export function chooseReasoning(
  */
 export function acceptedEfforts(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route?: Pick<ModelRoute, 'kind'>,
+  route?: ModelRoute,
 ): ReasoningEffort[] {
   const reasoning = routeControls(config, route);
   if (reasoning === undefined) return [];
@@ -279,7 +279,7 @@ export function acceptedEfforts(
  */
 export function wireEffort(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route: Pick<ModelRoute, 'kind'> | undefined,
+  route: ModelRoute | undefined,
   reasoning: ReasoningChoice,
 ): ReasoningEffort | null {
   if (reasoning.thinking || routeControls(config, route)?.off === undefined) {

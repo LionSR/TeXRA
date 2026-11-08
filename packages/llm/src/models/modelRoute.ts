@@ -42,14 +42,12 @@ import {
   XAI_DEFAULT_ENDPOINT,
 } from '../providers/providerPlugins.js';
 
-/** What a direct provider key pays through: a `key` plan, or nothing. */
-export type ApiKeyUsageRoute =
-  | 'api-key'
-  | {
-      [P in PlanRoute]: (typeof PLAN_ROUTES)[P]['credential'] extends 'key'
-        ? P
-        : never;
-    }[PlanRoute];
+/** A plan a direct provider key pays through (its credential is a `key`). */
+export type KeyPlanRoute = {
+  [P in PlanRoute]: (typeof PLAN_ROUTES)[P]['credential'] extends 'key'
+    ? P
+    : never;
+}[PlanRoute];
 
 /** The facts a route reads, and nothing else. */
 export interface RouteFacts {
@@ -84,20 +82,30 @@ export const OWN_KEY_ROUTE_FACTS: RouteFacts = Object.freeze({
   endpoints: Object.freeze({}),
 });
 
-/** The route a model's next request takes, decided by {@link decideModelRoute}. */
+/**
+ * The route a model's next request takes, decided by {@link decideModelRoute}.
+ * A route that bills a credential names its kind (a signed-in `session`, or
+ * an `api-key`) and the plan it pays through (`plan`; none for a key paid
+ * per token), so the billing route is `plan ?? 'api-key'` on either.
+ */
 export type ModelRoute =
   | {
-      readonly kind: 'chatgpt-subscription';
+      readonly kind: 'session';
+      readonly plan: 'chatgpt-subscription';
       readonly endpoint: string;
       /** The input window: the user's override, else what the Codex backend grants. */
       readonly contextWindow: number;
     }
-  | { readonly kind: 'xai-subscription'; readonly endpoint: string }
+  | {
+      readonly kind: 'session';
+      readonly plan: Exclude<PlanRoute, KeyPlanRoute | 'chatgpt-subscription'>;
+      readonly endpoint: string;
+    }
   | {
       readonly kind: 'api-key';
       readonly endpoint: string;
       readonly provider: ApiKeyProviderId;
-      readonly usageRoute: ApiKeyUsageRoute;
+      readonly plan: KeyPlanRoute | null;
     }
   /** No provider key can serve the model directly. */
   | { readonly kind: 'no-api-key' }
@@ -233,7 +241,8 @@ export function decideModelRoute(
     codex !== undefined
   ) {
     return {
-      kind: 'chatgpt-subscription',
+      kind: 'session',
+      plan: 'chatgpt-subscription',
       endpoint: OPENAI_DEFAULT_ENDPOINT,
       contextWindow: facts.chatgptContextWindow ?? codex.contextWindow,
     };
@@ -242,7 +251,11 @@ export function decideModelRoute(
     plans.includes('xai-subscription') &&
     config.provider === ModelProvider.XAI
   ) {
-    return { kind: 'xai-subscription', endpoint: XAI_DEFAULT_ENDPOINT };
+    return {
+      kind: 'session',
+      plan: 'xai-subscription',
+      endpoint: XAI_DEFAULT_ENDPOINT,
+    };
   }
   if (
     isKimiCodeExclusiveModel(config) ||
@@ -253,7 +266,7 @@ export function decideModelRoute(
       kind: 'api-key',
       endpoint: config.baseUrl ?? KIMI_CODE_BASE_URL,
       provider: PLAN_ROUTES['kimi-code-subscription'].provider,
-      usageRoute: 'kimi-code-subscription',
+      plan: 'kimi-code-subscription',
     };
   }
   // A provider with no HTTP route of its own has no key route either.
@@ -272,7 +285,7 @@ export function decideModelRoute(
     kind: 'api-key',
     endpoint,
     provider: config.provider,
-    usageRoute: onCodingPlan ? 'glm-coding-plan-subscription' : 'api-key',
+    plan: onCodingPlan ? 'glm-coding-plan-subscription' : null,
   };
 }
 
@@ -303,7 +316,9 @@ export function routeConfig(
   route: ModelRoute,
 ): ModelConfig {
   switch (route.kind) {
-    case 'chatgpt-subscription': {
+    case 'session': {
+      if (route.plan !== 'chatgpt-subscription')
+        return { ...config, ...zeroCostAccessOverrides(config.contextWindow) };
       const inputTokenLimit = Math.min(
         route.contextWindow,
         config.contextWindow,
@@ -318,8 +333,6 @@ export function routeConfig(
         ),
       };
     }
-    case 'xai-subscription':
-      return { ...config, ...zeroCostAccessOverrides(config.contextWindow) };
     case 'api-key': {
       if (route.provider !== 'kimiCode' || isKimiCodeExclusiveModel(config)) {
         return config;

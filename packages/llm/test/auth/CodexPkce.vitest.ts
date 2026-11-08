@@ -71,11 +71,12 @@ describe('codex model eligibility', () => {
       eligible: false,
     },
   ])('$name', ({ overrides, eligible }) => {
+    const route = decideModelRoute(openAIModel(overrides), {
+      ...OWN_KEY_ROUTE_FACTS,
+      plans: ['chatgpt-subscription'],
+    });
     expect(
-      decideModelRoute(openAIModel(overrides), {
-        ...OWN_KEY_ROUTE_FACTS,
-        plans: ['chatgpt-subscription'],
-      }).kind === 'chatgpt-subscription',
+      route.kind === 'session' && route.plan === 'chatgpt-subscription',
     ).toBe(eligible);
   });
 
@@ -88,9 +89,12 @@ describe('codex model eligibility', () => {
       ...OWN_KEY_ROUTE_FACTS,
       plans: ['chatgpt-subscription'],
     };
-    expect(decideModelRoute(model, facts).kind).toBe('chatgpt-subscription');
-    expect(decideModelRoute(model, { ...facts, mode: 'pro' }).kind).not.toBe(
-      'chatgpt-subscription',
+    expect(decideModelRoute(model, facts)).toMatchObject({
+      kind: 'session',
+      plan: 'chatgpt-subscription',
+    });
+    expect(decideModelRoute(model, { ...facts, mode: 'pro' }).kind).toBe(
+      'api-key',
     );
   });
 });
