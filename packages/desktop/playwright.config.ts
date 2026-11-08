@@ -29,6 +29,12 @@ export default defineConfig({
     { name: 'appearance', testMatch: '**/screenshots.spec.ts' },
     { name: 'development', testMatch: '**/devStartup.spec.ts' },
   ],
+  // The session-database fixture is a ~10 MB esbuild bundle of production
+  // modules (scripts/desktop-package-smoke-environment.mjs), built once per
+  // worker. Playwright's loader transpiles every imported file outside
+  // node_modules: on that bundle it turned a sub-second import into ten
+  // seconds or more, charged to the timeout of the first test to load it.
+  build: { external: ['**/session-database-fixture.mjs'] },
   // Generous timeout: cold Electron launch + IPC bring-up can take a while.
   timeout: 60_000,
   expect: { timeout: 10_000 },
