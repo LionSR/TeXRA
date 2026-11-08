@@ -151,16 +151,6 @@ function routeVerdict({ rawConfig, route }: RoutedModel):
   }
 }
 
-/** The verdict of a route that bills a key, over that key's status. */
-function keyVerdict(
-  status: KeyStatus,
-  usageRoute: DeclinableUsageRoute | undefined,
-): ModelAvailabilityStatus {
-  if (status === 'unreadable') return { kind: 'key-unreadable' };
-  if (!status) return { kind: 'missing-key' };
-  return { kind: 'provider-key', usageRoute };
-}
-
 /**
  * Stage 0: every host fact the routes are decided over, resolved once per
  * call. The Kimi Code key status is a route fact (`readModelSettings` reads it),
@@ -260,7 +250,11 @@ const decideVerdicts = Effect.fn('decideVerdicts')(function* (
     verdicts.push([
       model,
       decision,
-      Effect.map(read, (status) => keyVerdict(status, decided.usageRoute)),
+      Effect.map(read, (status): ModelAvailabilityStatus => {
+        if (status === 'unreadable') return { kind: 'key-unreadable' };
+        if (!status) return { kind: 'missing-key' };
+        return { kind: 'provider-key', usageRoute: decided.usageRoute };
+      }),
     ]);
   }
   const decided = yield* Effect.forEach(
