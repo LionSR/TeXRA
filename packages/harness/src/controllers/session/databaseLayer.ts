@@ -735,6 +735,7 @@ export const databaseLayer = (
           execOne,
           transact,
           query,
+          afterCommit: sql.afterCommit,
           written: valuesWritten,
           valueWritten: Effect.asVoid(
             exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),

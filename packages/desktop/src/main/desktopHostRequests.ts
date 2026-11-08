@@ -27,7 +27,7 @@ import type {
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import { instructionActions } from '@ui/copy/instructionActions';
-import { modelFailureText } from '@ui/copy/modelAccess';
+import { shownFailureText } from '@ui/copy/modelAccess';
 
 import {
   DESKTOP_DOCS_URL,
@@ -78,7 +78,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       HostPresentation
     > = {
       requestShowError: (failure) =>
-        host.showErrorDialog(modelFailureText(failure), failure.docsPage),
+        host.showErrorDialog(shownFailureText(failure), failure.docsPage),
       // An instruction is actionable guidance, not a failure, so it uses
       // the info-style dialog with each action token as a real button.
       requestShowInstruction: (instruction) =>

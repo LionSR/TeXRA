@@ -11,6 +11,7 @@ import { Inbox } from '@agent/followUp/Inbox';
 import { consumedRows } from '@agent/runtime/loop/rows';
 import { SessionRoots } from '@platform/rootedFs';
 import {
+  runEndErrorMessage,
   RUN_OUTCOME,
   RunRecordFieldsSchema,
   qualifyAggregateId,
@@ -273,7 +274,9 @@ export const endIn = Effect.fn('endIn')(function* (
   const ahead = [...leading, ...(input.leading ?? [])];
   if (facts.end !== null) {
     if (error !== undefined)
-      yield* Effect.logWarning(`Run ${runId} had ended: ${error.message}`);
+      yield* Effect.logWarning(
+        `Run ${runId} had ended: ${runEndErrorMessage(error)}`,
+      );
     if (ahead.length > 0) yield* append(ahead);
     return { end: endOf(facts.end), wrote: false };
   }

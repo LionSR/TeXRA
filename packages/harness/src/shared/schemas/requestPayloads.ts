@@ -1,6 +1,6 @@
 import { Effect, Schema, Struct } from 'effect';
 
-import { RetryErrorInfoSchema } from './errors';
+import { ModelFailureSchema } from './errors';
 import { RunIdSchema, Sha256Schema } from './identifiers';
 import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
@@ -145,9 +145,8 @@ export const RetryRequestSchema = Schema.Struct({
   runId: RunIdSchema,
   operation: Schema.String,
   model: Schema.optional(Schema.String),
-  /** The failure as the run recorded it: the harness's plain message and
-   *  the facts a host words it from (its classification). */
-  errorDetails: RetryErrorInfoSchema,
+  /** The failure as the run recorded it: its verdict, which a host words. */
+  failure: ModelFailureSchema,
   /** Null or absent when the failure offers no credential move. */
   credentialSwitch: Schema.optional(Schema.NullOr(CredentialSwitchSchema)),
 });

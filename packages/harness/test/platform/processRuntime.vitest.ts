@@ -1,14 +1,11 @@
 import { it } from '@effect/vitest';
-import { Effect, ManagedRuntime } from 'effect';
+import { Effect, ManagedRuntime, Schedule } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
 
-import {
-  captureLogEntries,
-  type LogCapture,
-} from '@test/support/logSinkCapture';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 
 const REPORT_MESSAGE = 'Unhandled failure in forked fiber';
 
@@ -23,15 +20,6 @@ function makeReportingRuntime() {
   );
 }
 
-/** The reporter fiber logs on a later microtask than the exit it observes. */
-function waitForErrorEntry(capture: LogCapture) {
-  return Effect.gen(function* () {
-    for (let i = 0; i < 100 && capture.at('ERROR').length === 0; i++) {
-      yield* Effect.sleep(10);
-    }
-  });
-}
-
 describe('withForkFailureReporting', () => {
   it.live.each([
     ['an unhandled typed failure', Effect.fail('refused')],
@@ -41,7 +29,15 @@ describe('withForkFailureReporting', () => {
       const runtime = yield* makeReportingRuntime();
 
       runtime.runFork(program);
-      yield* waitForErrorEntry(capture);
+      // The reporter fiber logs on a later microtask than the exit it
+      // observes.
+      yield* Effect.sync(() => capture.at('ERROR').length).pipe(
+        Effect.repeat({
+          schedule: Schedule.spaced('10 millis'),
+          until: (errors) => errors > 0,
+        }),
+        Effect.timeout('1 second'),
+      );
 
       expect(capture.at('ERROR')).toHaveLength(1);
       expect(capture.at('ERROR')[0]?.message).toBe(REPORT_MESSAGE);

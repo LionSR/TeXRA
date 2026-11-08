@@ -1,6 +1,6 @@
 import {
   HARNESS_INSTRUCTION_KEY,
-  toRetryErrorInfo,
+  runEndErrorMessage,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
   type RunEnd,
@@ -21,7 +21,7 @@ export function primaryAgentError(err: unknown): unknown {
 export function classifyAgentError(err: unknown): NonNullable<RunEnd['error']> {
   const failure = failureIn(primaryAgentError(err));
   return failure.kind === 'model'
-    ? { kind: 'model', ...toRetryErrorInfo(failure.failure) }
+    ? { kind: 'model', failure: failure.failure }
     : failure;
 }
 
@@ -41,15 +41,16 @@ const MISSING_API_KEY_MESSAGE =
 
 /**
  * Map a run's failure to host guidance: the missing-key instruction, or an
- * error with the failure's classification beside its message, which a host
- * may word in its place.
+ * error with a model failure's verdict beside its message, which a host may
+ * word in its place.
  */
 export function agentErrorPresentation(
   error: NonNullable<RunEnd['error']>,
 ): AgentErrorPresentation {
   if (
     error.kind === 'model' &&
-    error.classification?.kind === 'missing-api-key'
+    error.failure.source === 'route' &&
+    error.failure.missingApiKey === true
   )
     return {
       type: 'instruction',
@@ -62,10 +63,8 @@ export function agentErrorPresentation(
   return {
     type: 'error',
     payload: {
-      message: error.message,
-      ...(error.kind === 'model' && error.classification !== undefined
-        ? { classification: error.classification }
-        : {}),
+      message: runEndErrorMessage(error),
+      ...(error.kind === 'model' && { failure: error.failure }),
     },
   };
 }

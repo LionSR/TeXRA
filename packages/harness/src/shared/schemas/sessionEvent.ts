@@ -398,8 +398,7 @@ export function referencedAggregates(event: SessionRow): AggregateId[] {
  * The aggregate-graph edges one draft declares, applied by the store in the
  * transaction that appends it: the parent a `run.start` stamps, the
  * aggregate a row hangs its target under (a plugin's aggregate under its
- * `parent` run, or none), the claim a plugin's aggregate borrows for that
- * transaction alone, and the closure a deletion marker makes.
+ * `parent` run, or none), and the closure a deletion marker makes.
  * {@link referencedAggregates} reads the same edges off committed rows.
  * Every kind has a case, so a new kind does not compile until its edges are
  * decided here.
@@ -408,7 +407,6 @@ interface AggregateEdges {
   readonly parent: AggregateId | null;
   /** Absent: the target keeps its parent. */
   readonly reparent?: AggregateId | null;
-  readonly borrowsClaim: boolean;
   readonly closes: boolean;
 }
 
@@ -417,18 +415,17 @@ export function edgesOf(draft: SessionRowDraft): AggregateEdges {
     case 'run.start':
       return {
         parent: draft.parent && qualifyAggregateId('run', draft.parent.id),
-        borrowsClaim: false,
         closes: false,
       };
     case 'plugin.fact': {
       if (aggregateTarget(draft.aggregateId).kind === 'run')
-        return { parent: null, borrowsClaim: false, closes: false };
+        return { parent: null, closes: false };
       const reparent =
         draft.parent === null ? null : qualifyAggregateId('run', draft.parent);
-      return { parent: null, reparent, borrowsClaim: true, closes: false };
+      return { parent: null, reparent, closes: false };
     }
     case 'run.removed':
-      return { parent: null, borrowsClaim: false, closes: true };
+      return { parent: null, closes: true };
     case 'run.activate':
     case 'run.config':
     case 'run.detach':
@@ -463,7 +460,7 @@ export function edgesOf(draft: SessionRowDraft): AggregateEdges {
     case 'tools.offered':
     case 'context.blob':
     case 'hook.outcome':
-      return { parent: null, borrowsClaim: false, closes: false };
+      return { parent: null, closes: false };
   }
 }
 

@@ -34,7 +34,10 @@ import { EditFileTool } from '@tools/EditTool';
 import { writeFileTool } from '@tools/WriteTool';
 
 // Local file imports
-import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';
+import {
+  autoDecideRequests,
+  decideRequest,
+} from '@test/agent/progressTestUtils';
 
 /**
  * Every case's start, for the test's scope: a host over a real workspace
