@@ -589,3 +589,43 @@ Format: `stage.start` v3, the CLI NDJSON contract 3, the golden store
 regenerated. Left for PR 2: findings 4 (`Stage.card`, `script.call.stageId`,
 the `script-` id grammar), 6, 7, 8 (`StageHandle`, `LogOptions.stageId`)
 and 10.
+
+### Landed (PR 2, `simplify/s-stages-part-2`)
+
+Re-read on `main` `0a10f44`, after PR 1 and #14848. In order:
+
+- **Finding 4.** `script.call.stageId` and the `script-<card>` id grammar
+  are deleted (`script.call` v3): a script's stage is the id of its own
+  `script` card, which the dispatch holds per call (`Call.stage`). A member
+  row keeps its one edge, now named `stageId`. `Stage.card` was not added:
+  once the script stage's id is its card's, the plugin section's card was
+  the only value it would carry, and nothing reads it.
+- **Finding 6.** The dispatch writes no stage row and keeps no
+  `stageOpened` flag. The transcript fold opens a script's stage when the
+  first card naming the `script` card opens (`openCardStage`, labelled by
+  the script's `title`), reopens it when a resume issues more calls after
+  the run's end closed it, and closes it with the `script` card's own
+  `tool.end`. The headless stream and the TUI's popup read the same
+  projection through `scriptStages`; the NDJSON stream has no script
+  `stage.*` lines (contract 3, unreleased).
+- **Finding 8.** `StageHandle`, `openStage` and `LogOptions.stageId` are
+  replaced by `AgentTrace.stage(label, use)`, an `acquireUseRelease` whose
+  inner trace stamps the stage on what `use` logs. The documents plugin's
+  oversized-bib check fails the call instead of returning an error result,
+  so its stage reads the exit alone; `outcomeFromCause` left the
+  `/schemas` surface with its one app caller.
+- **Finding 7.** A `Stage` carries its `seqNo` from the sequence that
+  numbers its run's rows; `transcriptTimeline` (`shared/transcript/`) is
+  the one layout the progress list and `scriptStages` read. The list's
+  tree, wall-clock merge, `compareGroups` and the second partition are
+  gone, with the `data-run-id` and `data-group-id` attributes nothing read.
+  The duration (`endTime - startTime`) is still computed by its two hosts.
+- **Finding 10.** `groupId` is `stageId` on rows; `groupStyles.ts` is
+  `stageStyles.ts` and its classes say `stage`; `RunSurface.groups` is
+  `RunSurface.disclosures` (it also holds the dispatch card's and the
+  plan's open state, so "stage" would be wrong), toggled by
+  `dispatchDisclosureToggle`; the CLI's document task details say
+  "document task". The persisted surface key `groups` and the surface
+  action kind `'group'` keep their spelling.
+
+Format: `script.call` v3, the golden store regenerated.
