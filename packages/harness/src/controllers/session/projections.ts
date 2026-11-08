@@ -142,68 +142,53 @@ const EMPTY_RUN_RECORD: RunRecord = {
   inputClosed: false,
 };
 
+/** What one row of kind `T` changes on its run's record. */
+type RecordStep<T extends SessionRow['type']> = (
+  record: RunRecord,
+  row: RowOf<T>,
+) => RunRecord;
+
+/** What each kind a run's record reads changes on it; every other kind
+ *  changes nothing. Its keys are the projector's inputs. */
+const RECORD_STEPS: { readonly [T in SessionRow['type']]?: RecordStep<T> } = {
+  'run.start': (record, row) => ({ ...record, start: row.commit }),
+  'approval.policy': (record, row) => ({ ...record, policy: row.commit }),
+  'run.detach': (record) => ({ ...record, detached: true }),
+  // A resumed run never carries the previous lifecycle's end or stop.
+  'run.activate': (record, row) => ({
+    ...record,
+    activation: row.commit,
+    end: null,
+    stop: null,
+    inputClosed: false,
+  }),
+  'run.stop': (record, row) => ({ ...record, stop: row.commit }),
+  'run.end': (record, row) => ({ ...record, end: row.commit }),
+  'followup.closed': (record) => ({ ...record, inputClosed: true }),
+  'run.removed': (record) => ({ ...record, inputClosed: true }),
+  'run.report': (record, row) => ({ ...record, report: row.commit }),
+  'process.exit': (record, row) => ({ ...record, exit: row.commit }),
+  'run.config': (record, row) => ({ ...record, config: row.commit }),
+  'run.position': (record, row) => ({ ...record, position: row.commit }),
+  'plugin.fact': (record, row) => ({
+    ...record,
+    facts: { ...record.facts, [factName(row)]: row.commit },
+  }),
+  'run.description': (record, row) =>
+    row.by === 'user'
+      ? { ...record, userTitle: row.commit }
+      : { ...record, label: row.commit },
+};
+
 /** What one row of a run changes on its record. */
 function recordAfter(record: RunRecord, row: SessionRow): RunRecord {
-  const at = row.commit;
-  switch (row.type) {
-    case 'run.start':
-      return { ...record, start: at };
-    case 'approval.policy':
-      return { ...record, policy: at };
-    case 'run.detach':
-      return { ...record, detached: true };
-    case 'run.activate':
-      // A resumed run never carries the previous lifecycle's end or stop.
-      return {
-        ...record,
-        activation: at,
-        end: null,
-        stop: null,
-        inputClosed: false,
-      };
-    case 'run.stop':
-      return { ...record, stop: at };
-    case 'run.end':
-      return { ...record, end: at };
-    case 'followup.closed':
-    case 'run.removed':
-      return { ...record, inputClosed: true };
-    case 'run.report':
-      return { ...record, report: at };
-    case 'process.exit':
-      return { ...record, exit: at };
-    case 'run.config':
-      return { ...record, config: at };
-    case 'run.position':
-      return { ...record, position: at };
-    case 'plugin.fact':
-      return { ...record, facts: { ...record.facts, [factName(row)]: at } };
-    case 'run.description':
-      return row.by === 'user'
-        ? { ...record, userTitle: at }
-        : { ...record, label: at };
-    default:
-      return record;
-  }
+  // cast: the step under `row.type` takes rows of that type; TypeScript
+  // cannot tie a union-keyed lookup to its own key's row.
+  const step = RECORD_STEPS[row.type] as
+    | RecordStep<SessionRow['type']>
+    | undefined;
+  return step === undefined ? record : step(record, row);
 }
-
-/** The kinds a run's record reads (`recordAfter`). */
-const RUN_RECORD_INPUTS = [
-  'run.start',
-  'approval.policy',
-  'run.detach',
-  'run.activate',
-  'run.stop',
-  'run.end',
-  'followup.closed',
-  'run.removed',
-  'run.report',
-  'process.exit',
-  'run.config',
-  'run.position',
-  'plugin.fact',
-  'run.description',
-] as const satisfies readonly SessionRow['type'][];
 
 /** The commits a stored run record names: the rows `runRowsOf` reads. */
 export const runRecordCommits = (stored: string): number[] => {
@@ -369,7 +354,7 @@ const PROJECTORS = {
   },
   run_record: {
     version: 1,
-    inputs: RUN_RECORD_INPUTS,
+    inputs: Object.keys(RECORD_STEPS),
     prior: 'run_record',
     table: 'run_record',
     projects: [],
