@@ -1549,17 +1549,28 @@ async function validateTuiFork() {
   const cwd = makeScratch('texra-cli-tui-fork-');
   try {
     const project = echoProject(cwd);
-    const source = project.firstRun('First message');
-    const replies = ['Forked from', 'First message | Second message'];
+    const seed = project.firstRun('First message');
+    // A finished headless task continues as a fork, never as a chat over it.
+    const replies = [
+      'The model holds that conversation; the original is in /resume.',
+      'First message | Second message',
+    ];
     const exitId = await project.chat(
-      [source],
+      [seed, '--fork'],
       [
         { message: '/fork', reply: replies[0] },
         { message: 'Second message', reply: replies[1] },
       ],
     );
     const rows = project.readStore(VIEW_ROWS);
+    const opened = rows.find(
+      (row) =>
+        row.type === 'run.start' &&
+        JSON.parse(row.provenance ?? 'null')?.from?.id === seed,
+    );
+    const source = opened?.run;
     const artifactPath = writeArtifact('tui-fork.json', {
+      seed,
       source,
       exitId,
       replies,
@@ -1576,7 +1587,10 @@ async function validateTuiFork() {
       )
       .map((row) => row.cause);
     assert(
-      forkStart !== undefined && exitId === forkStart.run,
+      source !== undefined &&
+        forkStart !== undefined &&
+        exitId === forkStart.run &&
+        exitId !== source,
       `/fork should continue a new task forked from ${source} (artifact: ${artifactPath})`,
     );
     assert(
@@ -3133,15 +3147,10 @@ async function validateOpenTimePrompt() {
     // The chat is its task's writer here, so killing it is the crash this
     // recovers from: a service would keep the task running past the kill.
     project.ptyEnv.TEXRA_NO_SERVICE = '1';
-    const source = project.firstRun('First message');
-    const activations = () =>
-      project.readStore(
-        `SELECT count(*) AS n FROM event e JOIN event_sequence s ON s.id = e.aggregate
-         WHERE s.logical_id = '${source}' AND e.type = 'run.activate'`,
-      )[0].n;
+    const seed = project.firstRun('First message');
     let killed = false;
-    await runTexraPty(['resume', source], {
-      label: 'texra resume, then SIGKILL',
+    const opening = await runTexraPty(['resume', seed, '--fork'], {
+      label: 'texra resume --fork, then SIGKILL',
       cwd: project.work,
       cols: 160,
       rows: 40,
@@ -3154,6 +3163,22 @@ async function validateOpenTimePrompt() {
         }
       },
     });
+    const source = project
+      .readStore(VIEW_ROWS)
+      .find(
+        (row) =>
+          row.type === 'run.start' &&
+          JSON.parse(row.provenance ?? 'null')?.from?.id === seed,
+      )?.run;
+    assert(
+      killed && opening.exit.signal === 9 && source !== undefined,
+      `the forked chat should reach idle and be killed before testing resume (exit ${JSON.stringify(opening.exit)})\noutput:\n${stripVTControlCharacters(opening.output).slice(-3000)}`,
+    );
+    const activations = () =>
+      project.readStore(
+        `SELECT count(*) AS n FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = '${source}' AND e.type = 'run.activate'`,
+      )[0].n;
     const interrupted = activations();
 
     let phase = 'opening';
@@ -3228,7 +3253,9 @@ async function validateOpenTimePrompt() {
         ORDER BY e."commit"`,
     );
     const artifactPath = writeArtifact('open-time-prompt.json', {
+      seed,
       source,
+      openingExit: opening.exit,
       notice,
       activations: { interrupted, whileListed, resumed },
       titles,
