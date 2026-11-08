@@ -39,8 +39,8 @@ on GitHub.
 **Counting in this wave.** The rules of `14d4b72` hold. A row whose last
 part has an owner and a branch stays assigned (E4); a row whose
 last part is refused with a record is landed with the refusal named (D8,
-V-R2, C11, M7, K11). The six refusals recorded this wave are counted
-on their rows, not as rows.
+V-R2, C11, O9, M7, and K11, whose bell was refused in #14837). The six
+refusals recorded this wave are counted on their rows, not as rows.
 
 **Landed, by PR:**
 
@@ -103,10 +103,10 @@ with no row:
 - the full `validate:tui` run fails 14 of 144 scenarios on `main`
   (#14875 measured it at `157f775`); CI runs only `--smoke`.
 
-**Beside the campaign,** eleven PRs opened by another agent on the same
-day landed in this wave and close no row: #14857, #14859, #14862, #14863,
-#14864, #14865, #14866, #14867, #14868, #14869 and #14870. #14861 is
-open.
+**Beside the campaign,** twelve PRs opened by another agent on the same
+day landed in this wave and close no row: #14857, #14859, #14860, #14862,
+#14863, #14864, #14865, #14866, #14867, #14868, #14869 and #14870. #14861
+is open.
 
 **Owners that changed:** D's session is closed (#14877 fixed the live
 macOS e2e timeout: the database fixture bundle is kept out of
