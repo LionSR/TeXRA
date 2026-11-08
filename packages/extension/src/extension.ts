@@ -28,18 +28,12 @@ import {
   StateStores,
   ToolAvailability,
 } from '@texra-ai/harness/host';
-import {
-  withLogChannel,
-  Settings,
-  emitAppSignal,
-} from '@texra-ai/harness/plugins';
+import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   openNodeWorkspaceRoots,
   canonicalizeWorkspaceRoot,
   effectDiagnosticsLayer,
-  FileSecrets,
-  secretsDirectory,
   setLogSink,
 } from '@texra-ai/harness/node';
 import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
@@ -481,12 +475,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   yield* Deferred.succeed(settingsView, settingsViewProvider);
   registerWalkthroughWorkspaceAction(context, true, runtime);
-  // Keys another window or the service writes reach this one's surfaces.
-  yield* Effect.forkScoped(
-    FileSecrets.watch(secretsDirectory(defaultNodeStorageRoot()), (key) =>
-      emitAppSignal('credentialChanged', { key }),
-    ),
-  );
   yield* registerFileDecorations(context, session);
 
   // VS Code's event emitters don't await async listeners, so we funnel
