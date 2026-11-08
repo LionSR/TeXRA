@@ -2096,17 +2096,13 @@ const SCENARIOS = [
     rows: 40,
     env: { HARNESS_ENTRIES: '0', HARNESS_SESSION_TREE: '1' },
     keys: ['\t', DOWN, LEFT],
-    expect: [
-      'Running',
-      'Waiting on you',
-      'Interrupted',
-      'Recent',
-      'nested Interrupted',
-    ],
+    // The list holds the conversation's root and the runs held here, so an
+    // ended run outside the conversation is not listed: with the
+    // interrupted root as the conversation, no run reads as Recent.
+    expect: ['Running', 'Waiting on you', 'Interrupted', 'nested Interrupted'],
     ordered: [
       { before: 'Running', after: 'Waiting on you' },
       { before: 'Waiting on you', after: '\n  Interrupted' },
-      { before: '\n  Interrupted', after: 'Recent' },
     ],
     unexpect: ['ERROR', 'signal read during notification phase'],
   },
