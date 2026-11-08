@@ -108,7 +108,10 @@ export class TraceEmitter implements AgentTrace {
       type: 'log',
       level,
       message,
-      data: options.data === undefined ? undefined : toJsonValue(options.data),
+      // JSON RPC encodes an explicit undefined as null, a different payload.
+      ...(options.data === undefined
+        ? {}
+        : { data: toJsonValue(options.data) }),
       messageType: options.messageType,
       stageId: options.stageId,
     });
