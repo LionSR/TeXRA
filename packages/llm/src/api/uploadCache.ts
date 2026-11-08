@@ -44,12 +44,6 @@ export interface UploadCache {
   readonly uploadFile: (file: FileUpload) => Effect.Effect<void, ModelError>;
 }
 
-/** A file a binding uploaded and could not confirm it deleted. */
-interface UnreleasedUpload {
-  readonly fileId: string;
-  readonly reason: string;
-}
-
 /** Digests one binding keeps, so a document lowered on every turn (and
  *  twice in one, to check then to send) is hashed once. */
 const DIGEST_MEMO_SIZE = 64;
@@ -110,8 +104,15 @@ interface FilesApi {
   ) => Promise<unknown>;
 }
 
-/** The cache over `provider`, with the release that deletes what it made. */
-function uploadsOver(provider: FilesApi) {
+/**
+ * One binding's Files API cache. Its scope deletes every uploaded id under
+ * one deadline and reports anything the provider did not confirm deleted.
+ * The providers supply their SDK calls and expiry decoding; malformed
+ * replies and an already-absent file on deletion are handled here.
+ */
+export const filesApiUploads = Effect.fn('llm.uploads')(function* (
+  provider: FilesApi,
+): Effect.fn.Return<UploadCache, never, Scope.Scope> {
   const send = Effect.fnUntraced(function* (upload: FileUpload) {
     const created = yield* provider.request((signal, headers) =>
       provider.create(upload, signal, headers),
@@ -139,9 +140,6 @@ function uploadsOver(provider: FilesApi) {
   const digestOf = digestMemo();
   const live = new Map<string, Uploaded>();
   const inFlight = new Set<string>();
-  // Every id this binding created, including one a repeated upload replaced
-  // in `live`: release deletes them all.
-  const owned = new Set<string>();
   let released = false;
 
   const fileIdFor = (base64: string, nowMs: number): string | null => {
@@ -164,17 +162,15 @@ function uploadsOver(provider: FilesApi) {
         cause: parsed.failure,
       });
     const digest = digestOf(parsed.success.base64);
-    if (released || live.has(digest) || inFlight.has(digest)) return;
-    inFlight.add(digest);
     // Only the request is interruptible: once it answers, the id has one
-    // owner at every instant, `owned` (a release reports it) or this fiber.
-    yield* Effect.uninterruptibleMask(
-      Effect.fnUntraced(function* (restore) {
-        const uploaded = yield* restore(send(parsed.success)).pipe(
-          Effect.ensuring(Effect.sync(() => inFlight.delete(digest))),
-        );
+    // owner at every instant: the cache, or this fiber after scope close.
+    yield* Effect.uninterruptibleMask((restore) => {
+      if (released || live.has(digest) || inFlight.has(digest))
+        return Effect.void;
+      inFlight.add(digest);
+      return Effect.gen(function* () {
+        const uploaded = yield* restore(send(parsed.success));
         if (!released) {
-          owned.add(uploaded.fileId);
           live.set(digest, uploaded);
           return;
         }
@@ -188,90 +184,61 @@ function uploadsOver(provider: FilesApi) {
           Effect.catchTag('ModelError', (error) => unreleased(error.message)),
           Effect.onInterrupt(() => unreleased('interrupted')),
         );
-      }),
-    );
+      }).pipe(
+        // Keep the claim until the id is published: an uninterruptible
+        // fiber can still yield to another uploader before that write.
+        Effect.ensuring(Effect.sync(() => inFlight.delete(digest))),
+      );
+    });
   });
 
-  const releaseUploads = Effect.fn('llm.uploads.release')(function* () {
-    released = true;
-    live.clear();
-    // IDs stay owned until this attempt confirms a delete or reports a
-    // provider error. An interrupt or deadline then leaves the rest for a
-    // later release (the run-scope finalizer) instead of dropping them.
-    const fileIds = [...owned];
-    const failed: UnreleasedUpload[] = [];
-    const settled = yield* Effect.forEach(
-      fileIds,
-      (fileId) =>
-        remove(fileId).pipe(
-          Effect.tap(() => Effect.sync(() => owned.delete(fileId))),
-          Effect.catchTag('ModelError', (error) =>
-            Effect.sync(() => {
-              failed.push({ fileId, reason: error.message });
-              owned.delete(fileId);
+  yield* Effect.addFinalizer(
+    Effect.fn('llm.uploads.release')(function* () {
+      released = true;
+      // A digest is uploaded once. Derive unique ids before clearing the
+      // cache, since a provider may return the same id for different bytes.
+      const pending = new Map(
+        [...live.values()].map(({ fileId }) => [
+          fileId,
+          `no answer within ${RELEASE_DEADLINE}`,
+        ]),
+      );
+      live.clear();
+      yield* Effect.forEach(
+        [...pending.keys()],
+        (fileId) =>
+          remove(fileId).pipe(
+            Effect.match({
+              onSuccess: () => {
+                pending.delete(fileId);
+              },
+              onFailure: (error) => {
+                pending.set(fileId, error.message);
+              },
             }),
           ),
-        ),
-      { concurrency: 'unbounded', discard: true },
-    ).pipe(
-      Effect.as(true),
-      // A release runs as the binding scope's finalizer, in an uninterruptible
-      // region. The deadline below only bounds the deletes if it can
-      // interrupt them: the pinned Effect already forks each racer
-      // interruptible, but that is the race's detail, so the deletes say it
-      // here rather than depend on it.
-      Effect.interruptible,
-      Effect.timeoutOrElse({
-        duration: RELEASE_DEADLINE,
-        orElse: () => Effect.succeed(false),
-      }),
-    );
-    if (settled) return failed;
-    // An id still owned got neither a confirmed delete nor a provider error.
-    return [
-      ...failed,
-      ...fileIds
-        .filter((fileId) => owned.has(fileId))
-        .map((fileId) => ({
-          fileId,
-          reason: `no answer within ${RELEASE_DEADLINE}`,
-        })),
-    ];
-  });
-
-  return { fileIdFor, uploadFile, releaseUploads };
-}
-
-/**
- * The upload cache over a provider whose Files API follows the shape the
- * supported providers share: create a file from the bytes, read an id and an
- * expiry off the response, and treat a 404 on delete as the deletion this
- * asked for. Only the SDK calls, how a response states its expiry, and the
- * provider's name differ, so those are what a binding supplies; the
- * malformed-response ruling and the 404 tolerance are stated once here.
- *
- * The cache lives in the binding's scope: as it closes, every file it
- * uploaded is deleted, and one the provider would not confirm deleted is
- * logged and left to its own expiry (`FILE_UPLOAD_LIFETIME_SECONDS`).
- */
-export const filesApiUploads = (
-  provider: FilesApi,
-): Effect.Effect<UploadCache, never, Scope.Scope> =>
-  Effect.map(
-    Effect.acquireRelease(
-      Effect.sync(() => uploadsOver(provider)),
-      (cache) =>
-        cache
-          .releaseUploads()
-          .pipe(
-            Effect.flatMap((unreleased) =>
-              unreleased.length === 0
-                ? Effect.void
-                : Effect.logWarning(
-                    `Could not delete ${unreleased.length} uploaded file(s) when the ${provider.model} binding closed; the provider expires them on its own.`,
-                  ).pipe(Effect.annotateLogs({ unreleased })),
-            ),
-          ),
-    ),
-    ({ fileIdFor, uploadFile }) => ({ fileIdFor, uploadFile }),
+        { concurrency: 'unbounded', discard: true },
+      ).pipe(
+        // Scope finalizers are uninterruptible; the deadline must be able
+        // to interrupt the deletes it bounds.
+        Effect.interruptible,
+        Effect.timeoutOrElse({
+          duration: RELEASE_DEADLINE,
+          orElse: () => Effect.void,
+        }),
+      );
+      if (pending.size > 0)
+        yield* Effect.logWarning(
+          `Could not delete ${pending.size} uploaded file(s) when the ${provider.model} binding closed; the provider expires them on its own.`,
+        ).pipe(
+          Effect.annotateLogs({
+            unreleased: [...pending].map(([fileId, reason]) => ({
+              fileId,
+              reason,
+            })),
+          }),
+        );
+    }),
   );
+  return { fileIdFor, uploadFile };
+});

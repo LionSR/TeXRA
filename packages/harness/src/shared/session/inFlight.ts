@@ -14,7 +14,7 @@ import type {
   FailedNext,
   InvocationRef,
   RequestDecision,
-  RetryErrorInfo,
+  ModelFailure,
   ScriptCallPayload,
   ToolResultPayload,
 } from '@shared/schemas';
@@ -27,7 +27,7 @@ import type { RowRejection } from './runState';
 
 /** How an attempt ended, as its `failed` row records it. */
 export type Failure = {
-  readonly error: RetryErrorInfo;
+  readonly error: ModelFailure;
   readonly next: FailedNext;
 };
 
@@ -209,7 +209,7 @@ export type NextAttempt =
     }
   | { readonly kind: 'reask'; readonly attempt: Attempt }
   | { readonly kind: 'await'; readonly requestId: string }
-  | { readonly kind: 'fail'; readonly error: RetryErrorInfo }
+  | { readonly kind: 'fail'; readonly error: ModelFailure }
   | { readonly kind: 'cancel' };
 
 const SEND: NextAttempt = { kind: 'send', retry: null };
