@@ -66,7 +66,7 @@ describe('pinned model ids', () => {
       decideModelRoute(config, {
         ...OWN_KEY_ROUTE_FACTS,
         plans: ['chatgpt-subscription'],
-      }).kind,
-    ).toBe('chatgpt-subscription');
+      }),
+    ).toMatchObject({ kind: 'session', plan: 'chatgpt-subscription' });
   });
 });

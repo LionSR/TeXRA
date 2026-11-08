@@ -26,7 +26,7 @@ import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
 
 /** A route that bills a signed-in subscription session. */
-type SessionRoute = Exclude<CredentialRoute['kind'], 'api-key'>;
+type SessionRoute = Extract<CredentialRoute, { kind: 'session' }>['plan'];
 
 /**
  * The credential of one route. `bearer` is what the transport sends: a key,
@@ -140,7 +140,7 @@ export function routeCredential(
 > {
   return route.kind === 'api-key'
     ? apiKeyCredential(route)
-    : subscriptionCredential(route.kind);
+    : subscriptionCredential(route.plan);
 }
 
 /**
