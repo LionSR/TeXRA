@@ -39,7 +39,7 @@ on GitHub.
 **Counting in this wave.** The rules of `14d4b72` hold. A row whose last
 part has an owner and a branch stays assigned (E4); a row whose
 last part is refused with a record is landed with the refusal named (D8,
-V-R2, C11, M7, K11). The seven refusals recorded this wave are counted
+V-R2, C11, M7, K11). The six refusals recorded this wave are counted
 on their rows, not as rows.
 
 **Landed, by PR:**
@@ -77,7 +77,7 @@ on their rows, not as rows.
   Reviews found the exit controller's signal holds leaking into the shared
   worker, fixed at the owner.
 
-**Refused.** Seven records this wave: `RUN-attempt-start-on-the-row`,
+**Refused.** Six records this wave: `RUN-attempt-start-on-the-row`,
 `RUN-one-skip-signal`, `RUN-handed-down-as-general-turn-end`,
 `ROW-followup-closed-as-run-removed` (#14871);
 `LLM-xai-token-expiry-one-reading` (#14873);
