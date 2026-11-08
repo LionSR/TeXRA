@@ -44,6 +44,7 @@ import {
   EVENT_COLUMNS,
   EVENT_FROM,
   aggregateColumns,
+  aggregateOf,
   type SqlRow,
 } from './rowCodec';
 import { AGGREGATE } from './rowReader';
@@ -95,6 +96,14 @@ interface Projector {
     event: SessionRow,
     prior: string | undefined,
   ) => readonly ProjectionOp[];
+  /** What an input row a catch-up could not decode (at `commit`, of
+   *  `aggregate`) writes; absent, the row is left out, as the wide read that
+   *  marks its run damaged leaves it out. */
+  readonly unread?: (
+    aggregate: AggregateId,
+    commit: number,
+    prior: string | undefined,
+  ) => readonly ProjectionOp[];
 }
 
 /**
@@ -102,7 +111,9 @@ interface Projector {
  * (null until one is written), and what no one row states: whether a
  * `run.detach` severed the start's parent edge, and whether its input is
  * closed (the latest of `run.activate`, `followup.closed` and `run.removed`
- * is not an activation).
+ * is not an activation). `unread` holds the commits of its input rows that
+ * did not decode when the record was built from stored rows: its read
+ * selects them too, so it fails on them as a read of the run's rows does.
  */
 const RunRecordSchema = Schema.Struct({
   start: Schema.NullOr(Schema.Int),
@@ -119,6 +130,7 @@ const RunRecordSchema = Schema.Struct({
   facts: Schema.Record(FactNameSchema, Schema.Int),
   detached: Schema.Boolean,
   inputClosed: Schema.Boolean,
+  unread: Schema.Array(Schema.Int),
 });
 type RunRecord = typeof RunRecordSchema.Type;
 const RunRecordJson = Schema.fromJsonString(RunRecordSchema);
@@ -140,6 +152,7 @@ const EMPTY_RUN_RECORD: RunRecord = {
   facts: {},
   detached: false,
   inputClosed: false,
+  unread: [],
 };
 
 /** What one row of kind `T` changes on its run's record. */
@@ -194,12 +207,13 @@ function recordAfter(record: RunRecord, row: SessionRow): RunRecord {
 export const runRecordCommits = (stored: string): number[] => {
   const {
     facts,
+    unread,
     detached: _,
     inputClosed: __,
     ...rows
   } = decodeRunRecord(stored);
-  return [...Object.values(rows), ...Object.values(facts)].flatMap((commit) =>
-    commit === null ? [] : [commit],
+  return [...Object.values(rows), ...Object.values(facts), ...unread].flatMap(
+    (commit) => (commit === null ? [] : [commit]),
   );
 };
 
@@ -358,6 +372,21 @@ const PROJECTORS = {
     prior: 'run_record',
     table: 'run_record',
     projects: [],
+    unread: (aggregate, commit, prior) => {
+      if (aggregateTarget(aggregate).kind !== 'run') return [];
+      const record =
+        prior === undefined ? EMPTY_RUN_RECORD : decodeRunRecord(prior);
+      return [
+        {
+          table: 'run_record',
+          aggregate,
+          data: encodeRunRecord({
+            ...record,
+            unread: [...record.unread, commit],
+          }),
+        },
+      ];
+    },
     // A plugin's own aggregate keeps no run record.
     project: (event, prior) =>
       aggregateTarget(event.aggregateId).kind === 'run'
@@ -481,6 +510,18 @@ export function projectionUpkeep<E>(
        version = excluded.version, through_commit = excluded.through_commit`,
       [name, PROJECTORS[name].version, through],
     );
+  /** A projector's prior row of `aggregate`: its stored column, if any. */
+  const priorOf = Effect.fnUntraced(function* (
+    projector: Projector,
+    aggregate: AggregateId,
+  ) {
+    if (projector.prior === null) return undefined;
+    const row = (yield* exec(
+      `SELECT ${PRIOR_COLUMN[projector.prior]} AS prior FROM ${projector.prior} WHERE aggregate = ${AGGREGATE}`,
+      aggregateColumns(aggregate),
+    ))[0];
+    return row === undefined ? undefined : String(row.prior);
+  });
   /** Run the named projectors over decoded events: a projector with a
    *  prior row reads it back first. */
   const project = (
@@ -493,14 +534,7 @@ export function projectionUpkeep<E>(
         Effect.fnUntraced(function* (name) {
           if (!PROJECTION_INPUTS.get(name)?.has(event.type)) return;
           const projector: Projector = PROJECTORS[name];
-          const row =
-            projector.prior === null
-              ? undefined
-              : (yield* exec(
-                  `SELECT ${PRIOR_COLUMN[projector.prior]} AS prior FROM ${projector.prior} WHERE aggregate = ${AGGREGATE}`,
-                  aggregateColumns(event.aggregateId),
-                ))[0];
-          const prior = row === undefined ? undefined : String(row.prior);
+          const prior = yield* priorOf(projector, event.aggregateId);
           for (const op of projector.project(event, prior))
             yield* exec(...opStatement(op));
         }),
@@ -539,7 +573,19 @@ export function projectionUpkeep<E>(
                    ORDER BY e."commit" LIMIT 1000`,
                 [JSON.stringify(PROJECTORS[name].inputs), through, top],
               );
-        yield* project(yield* read(rows, false), [name]);
+        const events = yield* read(rows, false);
+        yield* project(events, [name]);
+        // The rows the wide read left out, for a projector that records them.
+        const projector: Projector = PROJECTORS[name];
+        const decoded = new Set(events.map((event) => event.commit));
+        for (const row of projector.unread === undefined ? [] : rows) {
+          const commit = Schema.decodeUnknownSync(Schema.Int)(row.commit);
+          if (decoded.has(commit)) continue;
+          const aggregate = aggregateOf(row.kind, row.logicalId);
+          const prior = yield* priorOf(projector, aggregate);
+          for (const op of projector.unread?.(aggregate, commit, prior) ?? [])
+            yield* exec(...opStatement(op));
+        }
         const reached =
           rows.length < 1000
             ? top

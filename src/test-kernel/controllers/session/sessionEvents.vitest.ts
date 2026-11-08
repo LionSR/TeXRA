@@ -701,6 +701,31 @@ describe('the session event table and its one publisher', () => {
             },
           });
         }).pipe(Effect.provide(substrate(storage)));
+        // A run record built at open over that row (a store that held no
+        // record yet) fails its read on it, never answers without it.
+        yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`DELETE FROM run_record;
+              DELETE FROM projection_state WHERE name = 'run_record';`);
+          } finally {
+            raw.close();
+          }
+        });
+        expect(
+          yield* Effect.flip(
+            Effect.flatMap(Database, (db) =>
+              db.readRunRecord(runStartRow.aggregateId),
+            ).pipe(Effect.provide(substrate(storage))),
+          ),
+        ).toMatchObject({
+          _tag: 'DatabaseReadFailed',
+          cause: {
+            _tag: 'DatabaseRowCorrupt',
+            type: 'run.position',
+            commit: 3,
+          },
+        });
         // A fresh session over the store opens: the healthy run lists, and
         // the damaged one lists too, shown damaged and read-only, with
         // delete its one way out of the list.
