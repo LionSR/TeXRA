@@ -142,8 +142,7 @@ const runGoal = (session: LocalSession, opening: string) =>
     });
     const ended = (current: SessionView) =>
       [...current.runs.values()].find(
-        (run) =>
-          run.launchParentId === conversation.runId && run.outcome !== null,
+        (run) => run.launch?.id === conversation.runId && run.outcome !== null,
       );
     // Ended, and its result delivered to the conversation as a follow-up.
     yield* Stream.runHead(
