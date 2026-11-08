@@ -217,6 +217,12 @@ R3-B (the log-severity sinks, `HostFrameSchema`, `DECLINE_RANK`). An owner
 who drops one records why in its PR body. The rules of the round-2 note's "What every owner follows" apply
 unchanged.
 
+**Landed (main `eb887b5`):** E's leftover PRs (#14871: D2, D8, V-R2, the
+stamp 103; #14873: C11 a, Q2, P8 c–f, U7 c; #14876: O9 9d; #14878: E5),
+F's (#14874: M7, N11, G11 h, M10) and A's (#14875: F3 with R10, K11,
+R5-3). E keeps E4's trust half. Seven refusals are recorded in
+`refuted-candidates.json`.
+
 ## 4. The lens audits and the catalogue
 
 The area audits searched one list of red flags. Six whole-repo lens audits
@@ -446,6 +452,12 @@ how a layer is built, not to what the tool refuses.
 rest; L2 F2's headless half refused) and D's PR 3 (#14844: R5-4, R5-11,
 R5-12, R5-13). Still assigned: R5-3 (A), R5-14 and R5-15 (D). R5-8's
 background cases and R5-10's three process waits have no owner.
+
+**Landed (main `eb887b5`):** D's PR 4 (#14872: R5-14, R5-15, R5-6's rest and
+R5-10's three process waits) and A's (#14875: R5-3). R5-8 has a design
+(`2026-11-08-process-spawner-as-a-requirement.md`) and no PR. #14877
+fixed the desktop e2e's first-test timeout; the agent-picker click did
+not reproduce and has no owner.
 
 ## 7. Round 6: two areas spread across layers
 
