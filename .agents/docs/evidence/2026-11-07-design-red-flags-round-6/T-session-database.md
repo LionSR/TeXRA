@@ -633,6 +633,36 @@ F13's reader, and T4 with T7c, with these changes to the plan:
   they go with the next stamp bump.
 - The catalogue rows (step 4) are the orchestrator's catalogue PR.
 
+**Landed (PR 2, branch `simplify/t-store-records`).** T3 and T5; T6 refused.
+
+- T3: the store's append reads no plugin rows and asks no fact kind. The
+  writer of a fact about a plugin's own aggregate checks it in the job that
+  appends it (`ownFactsChecked`, `tools/plugins.ts`): one read of the
+  aggregate's facts per draft, then `supersedes`, `accepts` and the new
+  parent run's openness. `FactKind.accepts` stays as the plugin's declared
+  rule (`externalInquiry.ts`); what left is the store's branch, which
+  decoded every fact row of the aggregate on every fact append. A
+  decision's rejected fact fails typed (`PluginFactRejected`); a tool
+  call's is logged at warn and left out, and the call's result commits, as
+  the inquiry plugin already treats its own refused panel row. The store's
+  reparent check under a run that is not open is now a defect. The batched
+  existence read was not done: an earlier row of the same batch changes what
+  a later one reads (a thread row that reparents its aggregate before the
+  next row of it, a parent's start before its child's), so a read before
+  the first insert would be stale.
+- T5: a `run_record` projector (version 1) keeps the commits of the rows a
+  run's `RunRows` reads, plus `detached` and `inputClosed`; `SessionLog.facts`
+  reads it (`Database.readRunRecord`, `runRowsOf`). Commits rather than row
+  copies, so a long string stays one blob and a row from an earlier build
+  still fails as itself. `recordFacts`, `runRowsFrom`, `recordsOf` and
+  `READ_RUN_RECORDS` are gone; the input read keeps a four-field lifecycle
+  fold. The session view keeps its own title rule over the live rows: a cold
+  `RunView` from the record would reshape the listing, which is not this PR.
+- T6: refused (`STORE-context-blob-as-brought-blob` in
+  `.agents/docs/refuted-candidates.json`). `context.blob` is the run state's
+  content table, which the loop reads synchronously every step, not one
+  request's JSON; and the "second digest" stores nothing twice.
+
 ## Effect-native mapping
 
 Checked against `node_modules/effect` 4.1.2.
