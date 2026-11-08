@@ -309,7 +309,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   'tool.intent': { ...V1, listing: 'none' },
   // v2: the guest's latest title is `section`, not `phase` (an earlier
   // build's row would fail as damaged).
-  'script.call': { version: 2, listing: 'none' },
+  // v3: no `stageId`: a script's calls open under the stage its own card's
+  // id names (an earlier build would read this build's row as damaged).
+  'script.call': { version: 3, listing: 'none' },
   // v2: a captured attachment holds its bytes by blob address, never inline.
   // v3: an executed result names the files its call read (`reads`), which an
   // edit of an existing file requires; an earlier build's row would read as a

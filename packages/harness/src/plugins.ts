@@ -46,6 +46,7 @@ export {
 export { AGENT_TOOL_NAME } from '@shared/schemas';
 export {
   definePlugin,
+  PluginFactRejected,
   type FactKind,
   type Plugin,
   type PluginDefinition,
@@ -211,7 +212,6 @@ export {
 export type {
   AgentTrace,
   LogOptions,
-  StageHandle,
   StreamHandle,
   StreamOptions,
   ToolCardHandle,

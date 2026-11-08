@@ -164,8 +164,10 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   parent edge is `payload.parent` on `run.start`; the terminal fact is
   `run.end` with its `outcome`. A run's turns are its `run.position`
   events (`turn.begin`, `turn.end`); a `stage.start`/`stage.end` pair is a
-  labelled span inside one, such as a script's calls, and a stage still
-  open when its run ends closes with that `run.end`. One record with no session event behind it,
+  labelled span inside one, such as a plugin's section, and a stage still
+  open when its run ends closes with that `run.end`. A script's calls are
+  the `tool.start` cards whose `stageId` is the `logId` of the `script`
+  card that issued them, which closes with its own `tool.end`. One record with no session event behind it,
   `event: "run.children"`, reports a parent run's live children as
   `{ runId, children }`, each child carrying its `childRunId`, `identity`,
   `agentName`, and `status` — where its loop stands: `running`,

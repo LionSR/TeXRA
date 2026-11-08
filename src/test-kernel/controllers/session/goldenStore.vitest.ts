@@ -117,13 +117,13 @@ const PARENT = Schema.decodeUnknownSync(RunIdSchema)('a00000000001');
 const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000008');
 /** The goal script the chat's plan launched, named by the plan call, and
  *  its one round, named by the script's `self()` call. */
-const GOAL = Schema.decodeUnknownSync(RunIdSchema)('c22000c7d5e126b3617ba3e3');
-const ROUND = '0accd89ce9df2f1109c8359e';
+const GOAL = Schema.decodeUnknownSync(RunIdSchema)('0b8519c86a23a41facbeaeb9');
+const ROUND = 'b19f3bb458d51fcb39d5f5d7';
 /** The chat's Codex child, detached by the user's stop. */
 const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
 const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
 /** The agent the script defined (`persona`), named by its `agent()` call. */
-const DEFINED = 'e06bb3ef6fa9b53a7135ae7f';
+const DEFINED = '22afd05559b5fc449aad8711';
 /** A headless run, and the fork `texra resume --fork` made of it. */
 const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
@@ -132,11 +132,11 @@ const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
 /** The service's task; the background command it sent, whose input the
  *  service's resume closed, is a finished shell the deletion's open swept
  *  (its rows stay, under its deletion marker, for the next open to collect). */
-const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
+const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000011');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
-const REVISIONS = ['5e635e24c44c38717d06c117', 'f67ab3ad610d33f7b85cbf1c'];
+const REVISIONS = ['2078258f91e047eb84d51138', '97524c016cf0da7443d17629'];
 
 const roots: string[] = [];
 afterAll(() => {

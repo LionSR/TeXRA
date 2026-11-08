@@ -418,8 +418,9 @@ two regression tests: the telemetry opt-out hint named a key the config
 file does not store, and paper2poster's theme files never reached the
 compile directory. The test audit's ranked list is two PRs with no file in
 common: D's run-loop and tool suites onto production paths (#14842), and
-G's tiers, desktop e2e specs, edge functions and test-only knobs
-(its PR is still being written). The catalogue's "Status at main `14d4b72`" counts the rows.
+G's tiers, desktop e2e specs, edge functions and test-only knobs (#14846).
+The catalogue's "Status at main `14d4b72`" counts the rows as they stood
+before #14846; "Status at main `b012b7e`" counts it.
 
 The lesson of round 5 is the information-leakage cluster of section 4
 again, one level out: a prompt, a guide page and a test are facts copied
@@ -440,6 +441,11 @@ how a layer is built, not to what the tool refuses.
 - **A:** R5-3, the CLI suites onto the real session, after the TUI
   lifecycle PR (#14837).
 - **Open:** R5-6's other `runFork` sites and the run-id counters.
+
+**Landed (main `b012b7e`):** G's PR 2 (#14846: R5-5, R5-9 and R5-10's
+rest; L2 F2's headless half refused) and D's PR 3 (#14844: R5-4, R5-11,
+R5-12, R5-13). Still assigned: R5-3 (A), R5-14 and R5-15 (D). R5-8's
+background cases and R5-10's three process waits have no owner.
 
 ## 7. Round 6: two areas spread across layers
 
@@ -487,6 +493,21 @@ designs and chooses one, and ends in a ranked plan of two PRs.
 - **The owner's call:** whether R6-T6 rides the next format batch instead
   of PR 2; R6-T7b's spec wording.
 
+**Landed (main `b012b7e`):** T PR 1 (#14848: R6-T1, R6-T2, R6-T4, R6-T7 a
+and c, with B2, B3 and B6) and S PR 1 (#14852: R6-S1, R6-S2, R6-S3, R6-S5,
+R6-S9, and E1's item 7). T PR 2 and S PR 2 are open sessions. Two things
+the reports did not foresee: the run and turn stages grouped no rows, so
+S1 needed no fold grouping and took the parent edge with it; and the
+`aggregate_change` table stays as dead DDL, because an open never alters a
+stamped store and a stamp of 103 would need the pre-1.0 detection reworked.
+
+**Landed (main `b5e28fb`):** S PR 2 (#14856: R6-S4, R6-S6, R6-S7, R6-S8,
+R6-S10) and T PR 2 (#14854: R6-T3, R6-T5; R6-T6 refused as
+`STORE-context-blob-as-brought-blob`, because `context.blob` is the run
+state's content table, read every step). Round 6 is closed except R6-T7 b.
+The two PRs shared `toolUseDispatch.ts` and the golden store; T landed
+second and reconciled.
+
 ## 8. Round 7: the fallbacks, read as design decisions
 
 Round 7 (`.agents/docs/evidence/2026-11-07-design-red-flags-round-7-fallbacks/`,
@@ -532,3 +553,10 @@ One PR per cause group, three sessions, after round 6's T and S PR 1:
 - **A, B, C and F's lettered parts, one session:** FB3 e and f, FB4 d with
   `cliState.ts`, FB6 a, d and the `claudeAgentConfig.ts` case, FB8, FB9,
   FB10 b, d and e.
+
+**Landed (main `b012b7e`):** #14851 (E), #14849 (G) and #14850 (the hosts
+session) closed FB1 to FB10, with FB10 b dropped and FB6's `storeSchema.ts`
+case judged not a finding. Two copy questions are the owner's: the local
+banner's text (#14849) and the service's missing-key wording (#14846).
+Round 5's D PR 3 (#14844) landed R5-4, R5-11, R5-12 and R5-13 in the same
+wave.

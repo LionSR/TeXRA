@@ -12,10 +12,20 @@ All notable changes to this project will be documented in this file.
   progress records are gone: read a run's bounds from `run.activate` and
   `run.end`, and its turns from `run.position`. A stage left open when its
   run ends gets no `stage.end` of its own; its run's `run.end` closes it.
-  `stage.start` carries no `kind` or `parentId`. SDK: a `Stage` states
+  A script writes no stage either: its calls are the `tool.start` records
+  whose `stageId` is the `logId` of its `script` card, which its own
+  `tool.end` closes. `stage.start` carries no `kind` or `parentId`. SDK: a `Stage` states
   `outcome` (null while open) in place of `status`, and has no `kind` or
   `parentStageId`; `StageStatus` and `StageOptions` are gone, and
   `isScriptCall` from `@texra-ai/harness/transcript` tells a script's call.
+  A plugin opens a section with `AgentTrace.stage(label, use)`, which logs
+  what `use` writes on the trace it is handed under the stage and closes it
+  on `use`'s exit; `openStage`, `StageHandle` and `LogOptions.stageId` are
+  gone, and so is the `outcomeFromCause` export. A `Stage` carries its
+  `seqNo` among its run's rows, and `transcriptTimeline` from
+  `@texra-ai/harness/transcript` lays a transcript out as its stages with
+  their rows among the other rows, in place of the `compareBySeqNo` export.
+  A transcript row names its stage as `stageId`, not `groupId`.
   A stage still open in a run whose process stopped reads as interrupted,
   not running.
 - **The compile-after-output settings are document-task settings.** The

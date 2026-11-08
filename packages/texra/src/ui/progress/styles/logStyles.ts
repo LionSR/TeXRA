@@ -12,7 +12,7 @@ import { markdownStyles } from '@ui/styles/markdownStyles';
 
 // Import individual style modules
 import { logEntryStyles } from './logEntryStyles';
-import { groupStyles } from './groupStyles';
+import { stageStyles } from './stageStyles';
 import { codeBlockStyles } from './codeBlockStyles';
 import { toolUseStyles } from './toolUseStyles';
 
@@ -79,7 +79,7 @@ export const logStyles = [
   katexStyleSheet,
   layoutStyles,
   logEntryStyles,
-  groupStyles,
+  stageStyles,
   codeBlockStyles,
   toolUseStyles,
   markdownStyles,

@@ -15,7 +15,6 @@ import {
   SessionViewAccess,
 } from '@shared/session/runHistory';
 import {
-  qualifyAggregateId,
   isTranscriptEvent,
   type AggregateId,
   type RunId,
@@ -26,6 +25,7 @@ import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 import { type ApprovalPolicy } from '@shared/approvalPolicy';
 import { generateRunId } from '@shared/schemas';
 import { FakeHost } from '@test/support/testKernel';
+import { runStart } from '@test/support/sessionRows';
 import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
 
 /**
@@ -58,16 +58,12 @@ export function publishTestRunStart(
   options: { parent?: RunId | null } = {},
 ): Effect.Effect<RunId> {
   return publishTestRows(session, [
-    {
-      type: 'run.start',
-      aggregateId: qualifyAggregateId('run', runId),
-      identity: { kind: 'agent', agent: 'chat' },
+    runStart(runId, {
       // A chat run takes a message, as the runs these suites message do.
       takesFollowUps: true,
       parent:
         options.parent == null ? null : { id: options.parent, call: null },
-      provenance: null,
-    },
+    }),
   ]).pipe(Effect.as(runId));
 }
 
@@ -126,22 +122,27 @@ export function createTestRunTrace(runId: RunId) {
   const trace = new TraceEmitter((event) => {
     if (isTranscriptEvent(event)) record(event);
   });
+  const transcript = () =>
+    buildRunTranscript(
+      rows.map((fact, index) => ({
+        ...fact,
+        aggregateId,
+        seq: index + 1,
+        at: index + 1,
+        // cast: the trace's transcript events are session event payloads.
+      })) as SessionRow[],
+      false,
+    );
   return {
     trace,
     /** The run history's final-answer row (`response.finalized`), recorded
      *  in its place beside the trace. */
     finalize: (text: string) => record({ type: 'response.finalized', text }),
-    rows: () =>
-      buildRunTranscript(
-        rows.map((fact, index) => ({
-          ...fact,
-          aggregateId,
-          seq: index + 1,
-          at: index + 1,
-          // cast: the trace's transcript events are session event payloads.
-        })) as SessionRow[],
-        false,
-      ).rows,
+    /** A lifecycle row (`run.end`, `run.activate`) in its place beside the
+     *  trace's rows. */
+    lifecycle: record,
+    transcript,
+    rows: () => transcript().rows,
     dispose: () => trace.close(),
   };
 }
