@@ -1,6 +1,6 @@
 /**
- * The process's plugin catalog: the `ToolRegistry` over the plugin list an
- * entry passes to `processLayer`, the tool catalog over it, the
+ * The process's plugin catalog: the `ToolRegistry` over the `ToolTable`
+ * `processLayer` validated at build, the tool catalog over it, the
  * user's MCP servers and the installed plugins, following the switches.
  */
 
