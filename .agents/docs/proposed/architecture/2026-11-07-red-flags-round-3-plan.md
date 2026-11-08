@@ -223,6 +223,8 @@ F's (#14874: M7, N11, G11 h, M10) and A's (#14875: F3 with R10, K11,
 R5-3). E keeps E4's trust half. Six refusals are recorded in
 `refuted-candidates.json`.
 
+**Landed (main `453cd41`):** E4's trust half (#14880). No row is assigned.
+
 ## 4. The lens audits and the catalogue
 
 The area audits searched one list of red flags. Six whole-repo lens audits
