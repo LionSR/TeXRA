@@ -289,7 +289,7 @@ function isScriptCall(row: ReadonlyDeep<TranscriptRow>): row is Extract<
   TranscriptRow,
   { kind: 'tool' }
 > & {
-  readonly groupId: string;
+  readonly stageId: string;
 }
 ```
 
@@ -306,8 +306,7 @@ interface LoadedMediaRef {
 
 ## LogRow
 
-A plain log line: a `default` row, a row with no message type, or a
-group heading on a stream that keeps its lifecycle inline.
+A plain log line: a `default` row, or a row with no message type.
 
 ```ts
 interface LogRow extends TranscriptRowBase {
@@ -476,7 +475,7 @@ function scriptStages(
 
 ```ts
 interface ScriptStageView {
-  /** The stage's id; its calls' cards carry it as their group. */
+  /** The stage's id; its calls' cards carry it as their `stageId`. */
   readonly id: string;
   /** The outcome its stage closed with; null while it is open. */
   readonly outcome: Stage['outcome'];
@@ -868,7 +867,9 @@ interface TranscriptRowBase {
   readonly level: LogLevel;
   /** True when the row belongs to the verbose tier of its host's chrome. */
   readonly verbose?: boolean;
-  readonly groupId?: string;
+  /** The stage the row belongs to (`Stage.id`), from its event's
+   *  `stageId`. */
+  readonly stageId?: string;
   /** Source vocabulary. Absent on the one row with no message type of its
    *  own, `compactionActivity` (a projection). */
   readonly messageType?: MessageType;

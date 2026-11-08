@@ -1,4 +1,4 @@
-/** Declarative stage list — renders groups, headers, and log entries inline. */
+/** Declarative stage list — renders stages, headers, and log entries inline. */
 
 // Third-party imports
 import { String as Str } from 'effect';
@@ -50,7 +50,7 @@ import { logStyles } from '../styles/logStyles';
 // Local imports - formatters
 import { formatLogEntry } from '../formatters';
 import { getTimeFormatter } from '../formatters/timestampUtils';
-import { dispatchGroupToggle } from '../utils';
+import { dispatchDisclosureToggle } from '../utils';
 import type {
   RunView,
   SessionView,
@@ -66,18 +66,18 @@ import type { TerminalOutput } from './TerminalOutput';
 
 const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
 const TIMELINE_ITEM_WINDOW_STEP = 120;
-const DEFAULT_GROUP_ROW_WINDOW = 400;
-const GROUP_ROW_WINDOW_STEP = 400;
+const DEFAULT_STAGE_ROW_WINDOW = 400;
+const STAGE_ROW_WINDOW_STEP = 400;
 
 const stageListStyles = css`
   /* Phase labels may come from workflow plans, so let long or untranslated
      values wrap instead of forcing the status and timestamp off-screen. */
-  .group-title {
+  .stage-title {
     min-inline-size: 0;
     overflow-wrap: anywhere;
   }
 
-  .group-time {
+  .stage-time {
     font-variant-numeric: tabular-nums;
   }
 `;
@@ -91,13 +91,13 @@ export class StageList extends LitElement {
   static override styles = [designTokens, ...logStyles, stageListStyles];
 
   /**
-   * The stream's transcript slice. The session view appends rows and groups in
+   * The stream's transcript slice. The session view appends rows and stages in
    * place and replaces the slice on every change, so the slice, never one
    * of its arrays, is the property Lit compares.
    */
   @property({ attribute: false }) transcript: TranscriptView | null = null;
 
-  private get groups(): TranscriptView['stages'] {
+  private get stages(): TranscriptView['stages'] {
     return this.transcript?.stages ?? [];
   }
 
@@ -106,7 +106,7 @@ export class StageList extends LitElement {
   }
 
   /** The run, the session and the surface a script stage reads and acts
-   *  through; absent, a script stage paints as a plain group. */
+   *  through; absent, a script stage paints as a plain section. */
   @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
@@ -117,10 +117,10 @@ export class StageList extends LitElement {
   /** The run's script stages by id (`scriptStages`). */
   private scripts: ReadonlyMap<string, ScriptStageView> = new Map();
 
-  /** The stream these rows belong to; every group toggle names it. */
+  /** The stream these rows belong to; every stage toggle names it. */
   @property({ attribute: false }) runId: RunId | null = null;
 
-  /** `Surface.groups` for this stream: true is expanded, false collapsed,
+  /** `RunSurface.disclosures` for this stream: true is expanded, false collapsed,
    *  a missing key expanded. Toggles go out as surface actions. */
   @property({ attribute: false }) expanded:
     | ReadonlyMap<string, boolean>
@@ -139,9 +139,9 @@ export class StageList extends LitElement {
   /** Number of recent top-level timeline entries currently rendered. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
 
-  /** Number of recent rows rendered for each group. Reassigned
+  /** Number of recent rows rendered for each stage. Reassigned
    *  (never mutated in place) so the reactive update cycle picks up changes. */
-  @state() private groupRowWindows = new Map<string, number>();
+  @state() private stageRowWindows = new Map<string, number>();
 
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
@@ -223,7 +223,7 @@ export class StageList extends LitElement {
 
   private resetRenderWindows(): void {
     this.timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
-    this.groupRowWindows = new Map();
+    this.stageRowWindows = new Map();
   }
 
   private renderRevealButton(options: {
@@ -255,7 +255,7 @@ export class StageList extends LitElement {
     scope: string,
   ): TemplateResult {
     const windowSize =
-      this.groupRowWindows.get(scope) ?? DEFAULT_GROUP_ROW_WINDOW;
+      this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW;
     const hiddenCount = Math.max(0, rows.length - windowSize);
     const visibleRows = hiddenCount > 0 ? rows.slice(hiddenCount) : rows;
 
@@ -263,7 +263,7 @@ export class StageList extends LitElement {
       hiddenCount > 0
         ? this.renderRevealButton({
             hiddenCount,
-            step: GROUP_ROW_WINDOW_STEP,
+            step: STAGE_ROW_WINDOW_STEP,
             scope,
             kind: 'rows',
             label: 'message',
@@ -303,10 +303,10 @@ export class StageList extends LitElement {
       this.timelineItemWindow += TIMELINE_ITEM_WINDOW_STEP;
     } else {
       const current =
-        this.groupRowWindows.get(scope) ?? DEFAULT_GROUP_ROW_WINDOW;
-      this.groupRowWindows = new Map(this.groupRowWindows).set(
+        this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW;
+      this.stageRowWindows = new Map(this.stageRowWindows).set(
         scope,
-        current + GROUP_ROW_WINDOW_STEP,
+        current + STAGE_ROW_WINDOW_STEP,
       );
     }
   }
@@ -318,9 +318,9 @@ export class StageList extends LitElement {
       : timeline.slice(-this.timelineItemWindow);
   }
 
-  /** Check if a group is expanded */
-  private isExpanded(groupId: string): boolean {
-    return this.expanded?.get(groupId) !== false;
+  /** Whether a stage is expanded. */
+  private isExpanded(stageId: string): boolean {
+    return this.expanded?.get(stageId) !== false;
   }
 
   private isNearBottom(threshold: number): boolean {
@@ -333,32 +333,32 @@ export class StageList extends LitElement {
   }
 
   /** A section's header: its status, title, start and duration. */
-  private renderGroupHeader(node: StageEntry): TemplateResult {
-    const group = node.stage;
+  private renderStageHeader(node: StageEntry): TemplateResult {
+    const { stage } = node;
     const formattedStartTime = getTimeFormatter().format(
-      new Date(group.startTime),
+      new Date(stage.startTime),
     );
-    const durationText = group.endTime
-      ? formatCompactDuration(group.endTime - group.startTime)
+    const durationText = stage.endTime
+      ? formatCompactDuration(stage.endTime - stage.startTime)
       : '';
 
-    const status = stageStatus(group, this.run);
+    const status = stageStatus(stage, this.run);
     return html`
-      <span class="group-status-icon">
+      <span class="stage-status-icon">
         ${waIcon(status.glyph, { label: status.word })}
       </span>
-      <bdi class="group-title">${group.name}</bdi>
-      <span class="group-time">
-        <span class="group-start-time">
+      <bdi class="stage-title">${stage.name}</bdi>
+      <span class="stage-time">
+        <span class="stage-start-time">
           ${waIcon('clock')}
           <span class="visually-hidden">Started at </span>
-          <time datetime=${new Date(group.startTime).toISOString()}
+          <time datetime=${new Date(stage.startTime).toISOString()}
             >${formattedStartTime}</time
           >
         </span>
         ${
           durationText
-            ? html`<span class="group-duration"
+            ? html`<span class="stage-duration"
                 ><span class="visually-hidden">Duration </span
                 >${durationText}</span
               >`
@@ -371,9 +371,9 @@ export class StageList extends LitElement {
   /** Rows of a stage, in transcript order. A script stage leads with its
    *  calls as the script-stage model reads them; the calls' own cards, with
    *  their output, open below it from the card's Log. */
-  private renderGroupBody(node: StageEntry): TemplateResult {
+  private renderStageBody(node: StageEntry): TemplateResult {
     const script = this.scripts.get(node.stage.id);
-    const rows = this.renderRowEntries(node.rows, `group:${node.stage.id}`);
+    const rows = this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
     const callsKey = `calls:${node.stage.id}`;
     const callsOpen = this.expanded?.get(callsKey) === true;
     return html`${
@@ -392,36 +392,36 @@ export class StageList extends LitElement {
 
   /** Render a stage: a script stage as a plain container, its script-stage
    *  view heading it; any other as a collapsible section with a header. */
-  private renderGroupNode(node: StageEntry): TemplateResult {
-    const group = node.stage;
+  private renderStage(node: StageEntry): TemplateResult {
+    const { stage } = node;
 
-    if (this.scripts.has(group.id)) {
+    if (this.scripts.has(stage.id)) {
       return html`
-        <div class="log-group log-run">
-          <div class="log-group-content">${this.renderGroupBody(node)}</div>
+        <div class="stage stage-script">
+          <div class="stage-content">${this.renderStageBody(node)}</div>
         </div>
       `;
     }
 
     // Collapsed sections contribute zero DOM nodes for their content.
-    const expanded = this.isExpanded(group.id);
-    // wa-show and wa-hide both: `dispatchGroupToggle` owns the bubble guard
+    const expanded = this.isExpanded(stage.id);
+    // wa-show and wa-hide both: `dispatchDisclosureToggle` owns the bubble guard
     // and reads the direction from the event type.
     const onToggle = (event: Event) =>
-      dispatchGroupToggle(this, event, this.runId, group.id);
+      dispatchDisclosureToggle(this, event, this.runId, stage.id);
 
     return html`
       <wa-details
-        class="log-group"
+        class="stage"
         ?open=${expanded}
         @wa-show=${onToggle}
         @wa-hide=${onToggle}
       >
-        <div slot="summary" class="log-group-header">
-          ${this.renderGroupHeader(node)}
+        <div slot="summary" class="stage-header">
+          ${this.renderStageHeader(node)}
         </div>
-        <div class="log-group-content">
-          ${expanded ? this.renderGroupBody(node) : nothing}
+        <div class="stage-content">
+          ${expanded ? this.renderStageBody(node) : nothing}
         </div>
       </wa-details>
     `;
@@ -453,7 +453,7 @@ export class StageList extends LitElement {
     // Pre-output placeholder, including terminal-mode (process-agent) runs:
     // with no output the terminal buffer is empty and would render a blank
     // pane, so show the same "Task is starting" / idle text instead.
-    if (this.rows.length === 0 && this.groups.length === 0) {
+    if (this.rows.length === 0 && this.stages.length === 0) {
       const active = this.run !== null && isWorking(this.run);
       const noun = this.run?.parentId ? 'agent' : 'task';
       return html`
@@ -495,7 +495,7 @@ export class StageList extends LitElement {
         (item) =>
           item.kind === 'row'
             ? this.renderLogEntry(item.row)
-            : this.renderGroupNode(item),
+            : this.renderStage(item),
       )}
     `;
   }

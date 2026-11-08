@@ -58,9 +58,9 @@ function applyStage(
   event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
 ): void {
   const at = d.ix.stageIndex.get(event.id);
-  let group: Stage;
+  let stage: Stage;
   if (event.type === 'stage.start') {
-    group = {
+    stage = {
       id: event.id,
       name: event.label,
       seqNo: (d.ix.appended += 1),
@@ -69,15 +69,15 @@ function applyStage(
     };
   } else {
     if (at === undefined) return;
-    group = {
+    stage = {
       ...d.next.stages[at],
       outcome: event.status,
       endTime: d.at,
     };
   }
-  const groups = writableArray(d, d.next, 'stages');
-  if (at !== undefined) groups[at] = group;
-  else d.ix.stageIndex.set(event.id, groups.push(group) - 1);
+  const stages = writableArray(d, d.next, 'stages');
+  if (at !== undefined) stages[at] = stage;
+  else d.ix.stageIndex.set(event.id, stages.push(stage) - 1);
   d.touched = true;
 }
 
@@ -344,14 +344,14 @@ function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
     d.touched = true;
   }
   const { outcome } = standing;
-  if (outcome === null || !d.next.stages.some(isOpenGroup)) return;
-  d.next.stages = d.next.stages.map((group) =>
-    isOpenGroup(group) ? { ...group, outcome, endTime: d.at } : group,
+  if (outcome === null || !d.next.stages.some(isOpenStage)) return;
+  d.next.stages = d.next.stages.map((stage) =>
+    isOpenStage(stage) ? { ...stage, outcome, endTime: d.at } : stage,
   );
   d.touched = true;
 }
 
-const isOpenGroup = (group: Stage): boolean => group.outcome === null;
+const isOpenStage = (stage: Stage): boolean => stage.outcome === null;
 
 /**
  * Apply one session event to a run's transcript, advancing the run's working

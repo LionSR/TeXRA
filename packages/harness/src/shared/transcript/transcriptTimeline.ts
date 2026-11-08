@@ -8,7 +8,7 @@ import type { Stage } from '@shared/schemas';
 
 import type { TranscriptRow } from './transcriptRow';
 
-type RowFields = Pick<TranscriptRow, 'id' | 'seqNo' | 'groupId'>;
+type RowFields = Pick<TranscriptRow, 'id' | 'seqNo' | 'stageId'>;
 
 /** One entry of the layout: a row no stage holds, or a stage and its rows. */
 export type TimelineEntry<Row extends RowFields, S extends Stage = Stage> =
@@ -29,7 +29,7 @@ export function transcriptTimeline<
   const loose: Row[] = [];
   for (const row of transcript.rows) {
     const held =
-      row.groupId === undefined ? undefined : members.get(row.groupId);
+      row.stageId === undefined ? undefined : members.get(row.stageId);
     if (held === undefined) loose.push(row);
     else held.push(row);
   }

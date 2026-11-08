@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
   `seqNo` among its run's rows, and `transcriptTimeline` from
   `@texra-ai/harness/transcript` lays a transcript out as its stages with
   their rows among the other rows, in place of the `compareBySeqNo` export.
+  A transcript row names its stage as `stageId`, not `groupId`.
   A stage still open in a run whose process stopped reads as interrupted,
   not running.
 - **The compile-after-output settings are document-task settings.** The

@@ -97,7 +97,7 @@ export interface ScriptSectionView {
 }
 
 export interface ScriptStageView {
-  /** The stage's id; its calls' cards carry it as their group. */
+  /** The stage's id; its calls' cards carry it as their `stageId`. */
   readonly id: string;
   /** The outcome its stage closed with; null while it is open. */
   readonly outcome: Stage['outcome'];
@@ -274,9 +274,9 @@ export function isScriptCall(row: ReadonlyDeep<TranscriptRow>): row is Extract<
   TranscriptRow,
   { kind: 'tool' }
 > & {
-  readonly groupId: string;
+  readonly stageId: string;
 } {
-  return row.kind === 'tool' && row.groupId !== undefined;
+  return row.kind === 'tool' && row.stageId !== undefined;
 }
 
 /**
