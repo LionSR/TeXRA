@@ -470,9 +470,6 @@ export const databaseLayer = (
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
-      // An aggregate's plugin rows, for its fact kinds' transition rules.
-      const pluginRows = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`;
       const readState = (ids: readonly AggregateId[]) =>
         Effect.map(exec(READ_STATE, aggregateLists(ids)), (rows) =>
           rows.map((row) =>
@@ -538,18 +535,15 @@ export const databaseLayer = (
         const target = aggregateTarget(draft.aggregateId);
         const columns = aggregateColumns(draft.aggregateId);
         if (edges.reparent != null) {
-          // A new parent run must be open; a late plugin writer under a
-          // removed run is refused as a failed write, not a defect.
+          // A new parent run must be open: the plugin's writer checks it in
+          // its job (`ownFactsChecked`), so one that is not is a defect.
           const current = (yield* readState([draft.aggregateId]))[0];
           if (current?.parentId !== edges.reparent) {
             const parent = (yield* readState([edges.reparent]))[0];
-            if (!parent || parent.closed) {
-              return yield* Effect.fail(
-                new Error(
-                  `A plugin aggregate's new parent must be open: ${edges.reparent}`,
-                ),
+            if (!parent || parent.closed)
+              return yield* invariant(
+                `A plugin aggregate's new parent must be open: ${edges.reparent}`,
               );
-            }
           }
         }
         const next = yield* execOne(NEXT_SEQ, [...columns, randomUUID()]);
@@ -561,27 +555,14 @@ export const databaseLayer = (
             'Sequence refused for an absent aggregate',
           );
         }
-        if (draft.type === 'plugin.fact') {
-          const name = factName(draft);
-          // Never over a corrupt row of the aggregate: it fails whole.
-          const last = (yield* reader.read(
-            yield* exec(pluginRows, [aggregate]),
-            true,
-          )).findLast(
-            (row) => row.type === 'plugin.fact' && factName(row) === name,
+        if (
+          draft.type === 'plugin.fact' &&
+          target.kind === 'run' &&
+          draft.parent !== null
+        )
+          return yield* invariant(
+            `A run's own plugin fact names no parent: ${factName(draft)}`,
           );
-          if (target.kind === 'run' && draft.parent !== null)
-            return yield* invariant(
-              `A run's own plugin fact names no parent: ${name}`,
-            );
-          // A fact kind's own transition rule refuses a stale writer, which
-          // a race can make: the write's failure, not a defect.
-          const refused = factKinds[name]?.accepts?.(
-            last?.type === 'plugin.fact' ? last : undefined,
-            draft,
-          );
-          if (refused) return yield* Effect.fail(new Error(refused));
-        }
         // The seq-1 rule: a run aggregate begins with exactly
         // one `run.start`, and nothing else ever lands at seq 1.
         if (

@@ -49,7 +49,7 @@ import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { runActionRefusal } from '@shared/session/runActions';
 import { descriptionRow } from '@shared/session/runFacts';
-import { ownFactRow } from '@tools/plugins';
+import { ownFactRow, ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -199,21 +199,32 @@ const decideSurfaceRequest = (
     }
     const { payload } = pending;
     const services = yield* followUpServices;
+    const plugin =
+      payload.kind === 'plugin'
+        ? (deps.plugins.entries.get(payload.plugin) ??
+          (yield* new Unavailable({
+            runId: req.runId,
+            reason: `Plugin "${payload.plugin}" is unavailable: restore it to answer this request.`,
+          })))
+        : undefined;
+    const log = deps.sessionLog;
     const side =
       payload.kind === 'plugin'
-        ? (
-            deps.plugins.entries.get(payload.plugin) ??
-            (yield* new Unavailable({
-              runId: req.runId,
-              reason: `Plugin "${payload.plugin}" is unavailable: restore it to answer this request.`,
-            }))
-          ).decision?.record({
+        ? plugin?.decision?.record({
             payload,
             decision: req.decision,
             inbox: (runId) => runInbox(runId, services),
             commit: (own) =>
-              deps.sessionLog.transact(
-                own.map((f) => ownFactRow(f, req.runId)),
+              log.transact((tx) =>
+                Effect.gen(function* () {
+                  const { kept, rejected } = yield* ownFactsChecked(
+                    own.map((f) => ownFactRow(f, req.runId)),
+                    plugin,
+                    log,
+                  );
+                  if (rejected[0] !== undefined) return yield* rejected[0];
+                  yield* tx.append(kept);
+                }),
               ),
           })
         : undefined;

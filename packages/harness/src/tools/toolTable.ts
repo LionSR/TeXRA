@@ -36,10 +36,11 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import type { LogWriteError } from '@shared/session/sessionLog';
 import type { ToolCatalog } from '@tools/liveTools';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import type { Plugin } from '@tools/plugins';
+import type { Plugin, PluginFactRejected } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
@@ -120,7 +121,10 @@ export interface RequestDecisionHook {
     readonly inbox: (runId: RunId) => RunInbox;
     readonly commit: (
       facts: readonly (ToolFact & { readonly aggregate: string })[],
-    ) => Effect.Effect<void, LogWriteError>;
+    ) => Effect.Effect<
+      void,
+      LogWriteError | DatabaseReadFailed | PluginFactRejected
+    >;
   }) => Effect.Effect<void, Error, GlobalValues>;
 }
 
