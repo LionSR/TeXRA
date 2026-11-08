@@ -68,6 +68,7 @@ export { rowHeadline } from '@shared/transcript/transcriptRow';
 export type {
   CompactionActivityRow,
   ContextManagementRow,
+  ErrorDetailKey,
   ErrorRow,
   ErrorRowDetail,
   FileListRow,

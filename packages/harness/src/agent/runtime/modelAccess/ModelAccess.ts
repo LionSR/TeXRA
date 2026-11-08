@@ -4,7 +4,7 @@
  * them (`routeDecision`), and makes that route a `Model` with the one
  * credential it bills (`binding`, `credentials`). Its failures are llm's
  * `ModelError` as raised, or `RouteUnavailable` when no route can carry the
- * call; `failureInfo` words either for the run's rows.
+ * call; a run records either as its verdict (`modelFailureOf`).
  *
  * Built where a run's project environment is in force (its `.env` as the
  * `ConfigProvider`, its proxy as `ProjectEnvironment`): the layer captures
