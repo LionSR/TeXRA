@@ -33,6 +33,7 @@ import { getBasename } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 import type { ToolRow as FoldedToolRow, TranscriptRow } from './transcriptRow';
+import { transcriptTimeline } from './transcriptTimeline';
 
 /** An `agent` call's agent as the card shows it: a recipe names its
  *  agents by `source:name` key, and the card shows the name. */
@@ -96,7 +97,7 @@ export interface ScriptSectionView {
 }
 
 export interface ScriptStageView {
-  /** The stage's id; its calls' cards carry it as their group. */
+  /** The stage's id; its calls' cards carry it as their `stageId`. */
   readonly id: string;
   /** The outcome its stage closed with; null while it is open. */
   readonly outcome: Stage['outcome'];
@@ -273,9 +274,9 @@ export function isScriptCall(row: ReadonlyDeep<TranscriptRow>): row is Extract<
   TranscriptRow,
   { kind: 'tool' }
 > & {
-  readonly groupId: string;
+  readonly stageId: string;
 } {
-  return row.kind === 'tool' && row.groupId !== undefined;
+  return row.kind === 'tool' && row.stageId !== undefined;
 }
 
 /**
@@ -309,15 +310,13 @@ export function scriptStages(
   run: RunView,
   view: Pick<SessionView, 'runs' | 'requests'>,
 ): ScriptStageView[] {
-  const byStage = Map.groupBy(
-    run.transcript.rows.filter(isScriptCall),
-    (row) => row.groupId,
-  );
-  const stages = run.transcript.stages.filter((stage) => byStage.has(stage.id));
-  return stages.map((stage) => {
-    const calls = (byStage.get(stage.id) ?? [])
-      .toSorted((a, b) => (a.seqNo ?? 0) - (b.seqNo ?? 0))
+  return transcriptTimeline(run.transcript).flatMap((entry) => {
+    if (entry.kind !== 'stage') return [];
+    const { stage } = entry;
+    const calls = entry.rows
+      .filter(isScriptCall)
       .map((row) => callView(row, run, view));
+    if (calls.length === 0) return [];
     const cards = new Set(calls.map((call) => call.id));
     let costUsd = 0;
     for (const childId of run.childIds) {
@@ -325,14 +324,16 @@ export function scriptStages(
       if (child?.parentCard != null && cards.has(child.parentCard))
         costUsd += child.treeUsage.cost;
     }
-    return {
-      id: stage.id,
-      outcome: stage.outcome,
-      calls,
-      sections: sectionsOf(calls),
-      agents: calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length,
-      needsYou: calls.filter((call) => call.needsYou).length,
-      costUsd,
-    };
+    return [
+      {
+        id: stage.id,
+        outcome: stage.outcome,
+        calls,
+        sections: sectionsOf(calls),
+        agents: calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length,
+        needsYou: calls.filter((call) => call.needsYou).length,
+        costUsd,
+      },
+    ];
   });
 }

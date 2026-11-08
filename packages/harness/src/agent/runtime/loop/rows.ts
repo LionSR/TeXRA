@@ -137,15 +137,11 @@ export function configRow(
 type Unqualified<T> = T extends unknown ? Omit<T, 'aggregateId'> : never;
 
 /** A display row the loop commits atomically with a run history row: the card a
- *  tool call opens, closes, or both, in the batch that settles it, and the
- *  stage a script's calls open under. */
+ *  tool call opens, closes, or both, in the batch that settles it. */
 export function displayRow(
   runId: RunId,
   draft: Unqualified<
-    Extract<
-      SessionRowDraft,
-      { type: 'tool.start' | 'tool.end' | 'stage.start' | 'stage.end' }
-    >
+    Extract<SessionRowDraft, { type: 'tool.start' | 'tool.end' }>
   >,
 ): RunHistoryDraft {
   return { ...draft, aggregateId: qualifyAggregateId('run', runId) };

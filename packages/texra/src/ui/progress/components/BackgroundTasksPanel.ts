@@ -12,7 +12,7 @@
  * document task body, whose run board already lists every call). Every row is a
  * child of the session view: label, status, tone, latest line, and clock
  * facts come from `view.runs`; the host paints the glyph and the time. The
- * card's open state is the surface's (`RunSurface.groups`, key
+ * card's open state is the surface's (`RunSurface.disclosures`, key
  * {@link DISPATCH_GROUP_KEY}); a toggle goes out as a `group` action.
  * Selecting a row is the navigation.
  */
@@ -50,10 +50,10 @@ import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
-import { dispatchGroupToggle } from '../utils';
+import { dispatchDisclosureToggle } from '../utils';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
-/** The card's key in `RunSurface.groups` for its run. */
+/** The card's key in `RunSurface.disclosures` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';
 
 @customElement('background-tasks-panel')
@@ -317,7 +317,8 @@ export class BackgroundTasksPanel extends LitElement {
                 >`
           }`;
     const open =
-      this.surface?.runs.get(run.id)?.groups.get(DISPATCH_GROUP_KEY) !== false;
+      this.surface?.runs.get(run.id)?.disclosures.get(DISPATCH_GROUP_KEY) !==
+      false;
 
     return html`
       <wa-details
@@ -347,7 +348,12 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private handleToggle(event: Event): void {
-    dispatchGroupToggle(this, event, this.run?.id ?? null, DISPATCH_GROUP_KEY);
+    dispatchDisclosureToggle(
+      this,
+      event,
+      this.run?.id ?? null,
+      DISPATCH_GROUP_KEY,
+    );
   }
 
   private renderChildren(

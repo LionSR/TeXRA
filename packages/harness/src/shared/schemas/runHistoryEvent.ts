@@ -356,8 +356,6 @@ export const ScriptCallPayloadSchema = Schema.Struct({
   /** As a response's dispatch fact records it (`DispatchFacts.replay`). */
   replay: Schema.Literals(['safe', 'unsafe']),
   logId: Schema.String.check(Schema.isMinLength(1)),
-  /** The script's stage, which its calls' cards open under. */
-  stageId: Schema.String.check(Schema.isMinLength(1)),
   /** The guest's latest `section()` title when it issued the call. */
   section: Schema.NullOr(Schema.String),
 }).check(

@@ -74,7 +74,7 @@ export function getToolTimeoutMs(
  * tool-use-only state flags and summary-row controls.
  */
 export function buildToolUseDetails(opts: {
-  row: Pick<TranscriptRowBase, 'id' | 'groupId' | 'timestamp'>;
+  row: Pick<TranscriptRowBase, 'id' | 'timestamp'>;
   iconName: IconName;
   /** Show a spinner in place of the icon. */
   running: boolean;
@@ -98,7 +98,7 @@ export function buildToolUseDetails(opts: {
     : nothing;
   const extraContent = html`${statusText}${opts.extraContent ?? nothing}`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, running: opts.running, label: opts.label, labelClass: 'tool-use-title', extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)} data-group-id=${ifDefined(opts.row.groupId)}>${opts.content}</div></wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, running: opts.running, label: opts.label, labelClass: 'tool-use-title', extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)}>${opts.content}</div></wa-details>`;
 }
 
 type ToolSectionOptions = {

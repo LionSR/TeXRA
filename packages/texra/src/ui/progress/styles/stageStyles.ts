@@ -3,10 +3,10 @@ import { css } from 'lit';
 import { panelFrameStyles } from '@ui/styles/surfaceStyles';
 
 /**
- * Log group styles for collapsible stages and run containers.
+ * Stage styles: a collapsible section, and a script stage's container.
  */
-export const groupStyles = css`
-  .log-group-header {
+export const stageStyles = css`
+  .stage-header {
     ${panelFrameStyles}
     padding: var(--panel-padding-block) var(--panel-padding-inline);
     margin: var(--wa-space-2xs) 0;
@@ -16,72 +16,72 @@ export const groupStyles = css`
     align-items: center;
   }
 
-  .log-group-content {
+  .stage-content {
     padding-inline-start: var(--wa-space-xs);
     border-inline-start: var(--border-thin) solid
       color-mix(in srgb, var(--wa-color-tabs-border) 60%, transparent);
   }
 
-  .log-run {
+  .stage-script {
     border: none;
   }
 
-  .log-run > .log-group-content {
+  .stage-script > .stage-content {
     padding-inline-start: 0;
     border-inline-start: none;
   }
 
-  .group-status-icon {
+  .stage-status-icon {
     margin-inline-end: var(--wa-space-2xs);
   }
 
-  .group-title {
+  .stage-title {
     font-weight: var(--font-weight-medium);
     flex-grow: 1;
   }
 
-  .group-time {
+  .stage-time {
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
     margin-inline-start: var(--wa-space-2xs);
   }
 
-  :is(.group-start-time, .group-duration) {
+  :is(.stage-start-time, .stage-duration) {
     margin-inline-end: var(--wa-space-2xs);
   }
 
-  .log-group {
+  .stage {
     content-visibility: auto;
     contain-intrinsic-size: auto 200px;
   }
 
-  /* Group banners are <wa-details> (matching Plan / Background Tasks etc.),
+  /* Stage banners are <wa-details> (matching Plan / Background Tasks etc.),
      so the disclosure chevron is consistent with every other panel. Strip the
-     WA card chrome so the group reads as an inline disclosure rather than a
-     boxed panel — our .log-group-header (frame + padding) and
-     .log-group-content (dashed connector) own the visuals. Unlike the shared
+     WA card chrome so the stage reads as an inline disclosure rather than a
+     boxed panel — our .stage-header (frame + padding) and
+     .stage-content (dashed connector) own the visuals. Unlike the shared
      .collapsible-quiet panels, collapse here is by lazy DOM removal in
      StageList (not the 1fr/0fr grid trick), so no content-grid rules. */
-  wa-details.log-group::part(base) {
+  wa-details.stage::part(base) {
     background: transparent;
     border: none;
     border-radius: 0;
   }
 
-  wa-details.log-group::part(header) {
+  wa-details.stage::part(header) {
     padding: 0;
     gap: var(--wa-space-2xs);
   }
 
-  wa-details.log-group::part(content) {
+  wa-details.stage::part(content) {
     padding: 0;
   }
 
   /* Align custom-element panels with native banner-details indent. */
-  .log-group-content
+  .stage-content
     > :is(
-      .log-group-header,
-      .log-group-content,
+      .stage-header,
+      .stage-content,
       .log-line,
       .banner-details,
       context-management
@@ -89,8 +89,8 @@ export const groupStyles = css`
     margin-inline-start: var(--wa-space-2xs);
   }
 
-  .log-group-content
-    .log-group-content
+  .stage-content
+    .stage-content
     :is(.log-line, .banner-details, context-management) {
     margin-inline-start: 0;
   }
