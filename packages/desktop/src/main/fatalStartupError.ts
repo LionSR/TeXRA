@@ -3,11 +3,16 @@ import { app, dialog } from 'electron';
 import { formatFatalErrorDetail } from '@texra-ai/harness/host';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 
-let fatalStartupErrorReported = false;
-let fatalDesktopShutdownRequested = false;
+/**
+ * Set by the first fatal error, from which every path quits the app: a
+ * later one is only logged, and a window closing on the way out asks no
+ * discard question. The process's own handlers write it, outside any
+ * runtime (the runtime may be what failed).
+ */
+let fatalErrorReported = false;
 
 export function isFatalDesktopShutdownRequested(): boolean {
-  return fatalDesktopShutdownRequested;
+  return fatalErrorReported;
 }
 
 export function reportFatalStartupError(error: unknown): void {
@@ -43,17 +48,15 @@ function reportFatalDesktopError(
 ): void {
   const detail = formatFatalErrorDetail(error);
   console.error(`Fatal TeXRA desktop error:\n${detail}`);
-  if (fatalStartupErrorReported) return;
-  fatalStartupErrorReported = true;
+  if (fatalErrorReported) return;
+  fatalErrorReported = true;
 
   const showFailureDialog = (): void => {
     if (DESKTOP_HEADLESS) {
-      fatalDesktopShutdownRequested = true;
       app.exit(1);
       return;
     }
     if (options.forceQuit) {
-      fatalDesktopShutdownRequested = true;
       void dialog
         .showMessageBox({
           type: 'error',

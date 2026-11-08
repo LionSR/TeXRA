@@ -78,6 +78,7 @@ import {
 import { trackNativeViewOverlays } from './nativeViewOverlays';
 import { createLogsPane } from './logsPane';
 import { createProjectWorkbench } from './projectWorkbench';
+import { injectXtermStyles } from './terminalPane';
 import { createProjectRail } from './projectRail';
 import { createMessageRoutes } from './messageRoutes';
 
@@ -173,13 +174,18 @@ let shell: Shell = {
   open: [],
   collapsed: persistedShell.getState().collapsed,
 };
-let projectsKnown = false;
-/** The main process's recent list, as its last projects message sent it. */
-let recentProjects: readonly string[] = [];
+/** The main process's recent list, as its last projects message sent it;
+ *  undefined until the first one. */
+let recentProjects: readonly string[] | undefined;
+/** Set while a projects message is applied, which is synchronous: a layout
+ *  or render signal that a disposal or adoption raises meanwhile would paint
+ *  an intermediate owner. A callback the browser schedules (a frame, a
+ *  resize) never runs inside it. */
 let applyingProjectList = false;
 // The no-workspace session is never among the open projects; how a project
 // is named is its host snapshot's.
-const hasWorkspace = () => !projectsKnown || shell.open.includes(shell.active);
+const hasWorkspace = () =>
+  recentProjects === undefined || shell.open.includes(shell.active);
 function setShell(next: Shell): void {
   shell = next;
   persistedShell.setState({ collapsed: [...next.collapsed] });
@@ -540,7 +546,7 @@ function shellTemplate(): TemplateResult {
           ${shellSidebarTemplate(
             {
               projects: railProjects(),
-              recent: recentProjects,
+              recent: recentProjects ?? [],
               renamingProjectKey,
               shell,
               commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
@@ -580,23 +586,22 @@ function shellTemplate(): TemplateResult {
   `;
 }
 
-let surfaceResizeObserver: ResizeObserver | undefined;
 let surfaceLayoutFrame: number | undefined;
+const surfaceResizeObserver = new ResizeObserver(() => {
+  if (surfaceLayoutFrame !== undefined) return;
+  // Monaco/xterm mutate layout. Run outside ResizeObserver delivery so those
+  // writes cannot feed back into the observer loop in the same frame.
+  surfaceLayoutFrame = requestAnimationFrame(() => {
+    surfaceLayoutFrame = undefined;
+    const project = projectWorkbenches.get(shell.active);
+    if (!project) return;
+    project.workbench.layoutVisibleSurfaces();
+    project.workbench.syncBrowserViewBounds();
+  });
+});
 const observedSurfaces = new Set<Element>();
 
 function observeSurfaceResizes(): void {
-  surfaceResizeObserver ??= new ResizeObserver(() => {
-    if (surfaceLayoutFrame !== undefined) return;
-    // Monaco/xterm mutate layout. Run outside ResizeObserver delivery so those
-    // writes cannot feed back into the observer loop in the same frame.
-    surfaceLayoutFrame = requestAnimationFrame(() => {
-      surfaceLayoutFrame = undefined;
-      const project = projectWorkbenches.get(shell.active);
-      if (!project || applyingProjectList) return;
-      project.workbench.layoutVisibleSurfaces();
-      project.workbench.syncBrowserViewBounds();
-    });
-  });
   const surfaces = new Set(
     document.querySelectorAll(
       '.shell-project-workbench:not([hidden]) .shell-dock',
@@ -656,6 +661,7 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 try {
+  injectXtermStyles();
   logsController.rerenderViewer();
   rerenderShell();
 } catch (error) {
@@ -794,7 +800,6 @@ const routeMessage = createMessageRoutes({
     // notifications from painting an intermediate owner during this adoption.
     applyingProjectList = true;
     try {
-      projectsKnown = true;
       recentProjects = message.recent;
       const { open } = message;
       const sessions = [...new Set([...open, message.activeKey])];
@@ -854,7 +859,7 @@ resolveDesktopPushes().listening();
 // positioned in absolute window coordinates, not renderer layout.
 window.addEventListener('resize', () => {
   const project = projectWorkbenches.get(shell.active);
-  if (!project || applyingProjectList) return;
+  if (!project) return;
   project.workbench.syncBrowserViewBounds();
   project.workbench.layoutVisibleSurfaces();
   project.terminalPane.layout();
@@ -926,7 +931,7 @@ window.addEventListener('beforeunload', (event) => {
 window.addEventListener(
   'unload',
   () => {
-    surfaceResizeObserver?.disconnect();
+    surfaceResizeObserver.disconnect();
     if (surfaceLayoutFrame !== undefined)
       cancelAnimationFrame(surfaceLayoutFrame);
     shortcuts.dispose();

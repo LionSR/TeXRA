@@ -153,21 +153,12 @@ function ensureSpawnHelperExecutable(): void {
   }
 }
 
-let nodePtyLoad: Promise<NodePtyModule> | undefined;
-
-function loadNodePty(): Promise<NodePtyModule> {
-  // Cached so repeated terminals don't re-resolve the addon; a failure clears
-  // the cache so a later attempt can retry.
-  nodePtyLoad ??= import('node-pty')
-    .then((module) => {
-      ensureSpawnHelperExecutable();
-      return module;
-    })
-    .catch((error: unknown) => {
-      nodePtyLoad = undefined;
-      throw error;
-    });
-  return nodePtyLoad;
+/** The native module, loaded on the first terminal: Node keeps a loaded
+ *  module, and a failed load is retried by the next terminal. */
+async function loadNodePty(): Promise<NodePtyModule> {
+  const module = await import('node-pty');
+  ensureSpawnHelperExecutable();
+  return module;
 }
 
 export function createDesktopPtyHost(
