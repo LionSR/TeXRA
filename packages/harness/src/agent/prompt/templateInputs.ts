@@ -3,10 +3,13 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
 import { displayToStoragePath } from '@agent/memory/memoryUtils';
-import type { AgentConfig, AttachedMemoryMiss } from '@shared/schemas';
+import {
+  isTaskConfig,
+  type AgentConfig,
+  type AttachedMemoryMiss,
+} from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -146,8 +149,8 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   return {
     inputs,
     // What the launch instruction activates (`/skills`): each step resolves
-    // the names against its own catalog; a trusted script's, none.
-    activated: isTrustedScript(agentConfig)
+    // the names against its own catalog; a task's recipe's, none.
+    activated: isTaskConfig(agentConfig)
       ? []
       : activatedSkillNames([agentConfig.instruction]),
     attachedMemories: attachedMemories.xml,

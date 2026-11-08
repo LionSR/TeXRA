@@ -17,7 +17,7 @@ import {
 import { RunCall, type RunToolCall } from '@agent/runtime/RunCall';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { recordedDecision } from '@agent/runtime/requests';
-import { isTrustedScript } from '@agent/core/definition/RunRecord';
+import { isTaskConfig } from '@shared/schemas';
 import type {
   AgentProposal,
   DecisionOf,
@@ -46,7 +46,7 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
 ].join(' ');
 
 /** Resolve `name` from the agents `run` may launch, listing them on
- *  failure. A trusted script's calls resolve in the catalog, past any scope
+ *  failure. A task's recipe's calls resolve in the catalog, past any scope
  *  or shadowing. */
 export const requireAgent = Effect.fn('requireAgent')(function* (
   stores: WorkspaceAgentsStores,
@@ -54,7 +54,7 @@ export const requireAgent = Effect.fn('requireAgent')(function* (
   run: Pick<RunToolCall['run'], 'config'>,
 ) {
   const catalog = yield* AgentCatalog;
-  const pinned = isTrustedScript(run.config) ? catalog.get(name) : undefined;
+  const pinned = isTaskConfig(run.config) ? catalog.get(name) : undefined;
   if (pinned) return pinned;
   const scope = run.config.delegationAgentScope;
   const agents = scope
@@ -164,8 +164,8 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const { runId, config } = parent.run;
     const approvals = yield* Approvals;
     const hook = (yield* RunCall)?.hook;
-    // A trusted recipe's delegation is approved unless a hook asked for it.
-    if (isTrustedScript(config) && hook !== 'ask')
+    // A task's recipe's delegation is approved unless a hook asked for it.
+    if (isTaskConfig(config) && hook !== 'ask')
       return { result: { action: 'approve' }, childApproval: 'inherit' };
     const answer = approvals.permission(runId, 'proposal', hook);
     if (answer !== 'allow' && answer !== 'ask')
