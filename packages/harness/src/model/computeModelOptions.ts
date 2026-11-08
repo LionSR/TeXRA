@@ -90,34 +90,24 @@ const UNAVAILABLE_REASON_BUILDERS: {
 type KeyStatus = boolean | 'unreadable';
 
 /**
- * Which providers have a usable API key, as plain data — the only provider-key
- * fact the per-model pass reads. Stage 0 fills the routing provider
- * (`kimiCode`); stage 2 fills the providers the route ladder
- * said it would consult. A provider absent from the map was never read, which
- * the verdict treats as a defect rather than as an absent key.
+ * The provider keys stage 0 already read (the Kimi Code key, a route fact),
+ * which stage 2 does not read again.
  */
 type ProviderKeyStatuses = Partial<Record<ApiKeyProviderId, KeyStatus>>;
 
 /**
  * The host facts every model's route is decided over, resolved once before
- * any model is routed. It deliberately excludes {@link ProviderKeyStatuses}:
- * the per-provider key statuses are read *after* routing, since that pass is
- * how the batch read learns which providers to consult.
+ * any model is routed, with the provider keys stage 0 read among them. The
+ * other providers' keys are read *after* routing, since that pass is how the
+ * batch read learns which providers to consult.
  */
 interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   facts: RouteFacts;
-}
-
-/** The route facts plus the key statuses the batch read resolved for them. */
-interface ModelAvailabilityContext extends ModelRouteContext {
   keyStatuses: ProviderKeyStatuses;
 }
 
-/**
- * What stage 1 decided for one model, and the only thing stage 3 reads about
- * it.
- */
+/** What stage 1 decided for one model, which stage 2 gives its verdict. */
 interface RoutedModel {
   /** The registry config as published: the row's hint describes the model. */
   readonly rawConfig: ModelConfig;
@@ -135,43 +125,46 @@ interface RoutedModel {
 type RoutedModels = ReadonlyMap<string, RoutedModel>;
 
 /**
- * Stage 3 — the per-model verdict over the route stage 1 decided and the
- * provider key statuses stage 2 read. Retired models need no provider key.
- *
- * A provider absent from the map was never read, rather than read and missing:
- * that is a defect in the batch read, not a request for the user to add a key.
+ * The verdict a model's route gives on its own, or the provider whose key
+ * decides it (stage 2 reads that key). Retired models need no provider key.
  */
-function resolveModelAvailability(
-  model: string,
-  { rawConfig, route }: RoutedModel,
-  keyStatuses: ProviderKeyStatuses,
-): ModelAvailabilityStatus {
-  if (rawConfig.retired) return { kind: 'retired' };
+function routeVerdict({ rawConfig, route }: RoutedModel):
+  | { readonly verdict: ModelAvailabilityStatus }
+  | {
+      readonly keyOf: ApiKeyProviderId;
+      readonly usageRoute: UsageRoute | undefined;
+    } {
+  if (rawConfig.retired) return { verdict: { kind: 'retired' } };
   switch (route.kind) {
     case 'chatgpt-subscription':
-      return { kind: 'subscription-access', usageRoute: route.kind };
+      return {
+        verdict: { kind: 'subscription-access', usageRoute: route.kind },
+      };
     case 'xai-subscription':
-      return { kind: 'xai-subscription-access', usageRoute: route.kind };
-    case 'api-key':
-      break;
+      return {
+        verdict: { kind: 'xai-subscription-access', usageRoute: route.kind },
+      };
     case 'no-api-key':
-      return { kind: 'missing-key' };
+      return { verdict: { kind: 'missing-key' } };
     case 'unserved':
-      return { kind: 'unserved' };
+      return { verdict: { kind: 'unserved' } };
+    case 'api-key':
+      return {
+        keyOf: route.provider,
+        usageRoute:
+          route.usageRoute === 'api-key' ? undefined : route.usageRoute,
+      };
   }
-  const provider = route.provider;
-  const usable = keyStatuses[provider];
-  if (usable === undefined) {
-    throw new Error(
-      `Model "${model}" routes to the "${provider}" API key, but that provider's key status was never read. A route decision reached the verdict without passing through the batch read.`,
-    );
-  }
-  if (usable === 'unreadable') return { kind: 'key-unreadable' };
-  if (!usable) return { kind: 'missing-key' };
-  return {
-    kind: 'provider-key',
-    usageRoute: route.usageRoute === 'api-key' ? undefined : route.usageRoute,
-  };
+}
+
+/** The verdict of a route that bills a key, over that key's status. */
+function keyVerdict(
+  status: KeyStatus,
+  usageRoute: UsageRoute | undefined,
+): ModelAvailabilityStatus {
+  if (status === 'unreadable') return { kind: 'key-unreadable' };
+  if (!status) return { kind: 'missing-key' };
+  return { kind: 'provider-key', usageRoute };
 }
 
 /**
@@ -192,7 +185,7 @@ const buildAvailabilityContext = Effect.fn('buildAvailabilityContext')(
 
 /**
  * Stage 1: decide every model's route once, and keep the decision, so
- * stage 3 finishes these decisions rather than re-deciding over inputs that
+ * stages 2 and 3 finish these decisions rather than re-deciding over inputs that
  * may have moved while the key read was in flight.
  */
 function routeModels(
@@ -219,50 +212,74 @@ function routeModels(
   return routed;
 }
 
-/**
- * Stage 2 — read one key status for each distinct provider stage 1 said it
- * would consult, in one batch. A provider stage 0 already resolved is not read
- * again, so no model is charged a second read (or a second warning) for it.
- */
-function withConsultedKeyStatuses(
-  routed: RoutedModels,
-  ctx: ModelAvailabilityContext,
-): Effect.Effect<ModelAvailabilityContext, never, Secrets> {
-  const consulted = new Set<ApiKeyProviderId>();
-  for (const { route } of routed.values()) {
-    if (
-      route.kind === 'api-key' &&
-      ctx.keyStatuses[route.provider] === undefined
-    ) {
-      consulted.add(route.provider);
-    }
-  }
-  if (consulted.size === 0) return Effect.succeed(ctx);
-  // A failed read is that provider's `unreadable` status, never "no key"
-  // (which would send a user with a working key to enter it again), and warns
-  // once for the provider, never once per model that consults it (#11508).
-  return Effect.flatMap(Secrets, (secrets) =>
-    Effect.forEach(
-      consulted,
-      (provider) =>
-        hasUsableApiKey(secrets, provider).pipe(
-          Effect.catchTag('SecretsFailed', (failure) =>
-            Effect.logWarning(
-              `Failed to read ${providerDisplayName(provider)} API key status.`,
-              failure.cause,
-            ).pipe(Effect.as<KeyStatus>('unreadable')),
-          ),
-          Effect.map((usable) => [provider, usable] as const),
-        ),
-      { concurrency: 'unbounded' },
-    ),
-  ).pipe(
-    Effect.map((entries) => ({
-      ...ctx,
-      keyStatuses: { ...ctx.keyStatuses, ...Object.fromEntries(entries) },
-    })),
-  );
+/** One routed model with its verdict: what stage 3 words. */
+interface DecidedModel {
+  readonly decision: RoutedModel;
+  readonly verdict: ModelAvailabilityStatus;
 }
+
+/**
+ * Stage 2 — each routed model's verdict. A route that bills a key reads that
+ * provider's status once for every model that consults it, all providers in
+ * one concurrent batch; a provider stage 0 already resolved is not read
+ * again, so no model is charged a second read (or a second warning) for it.
+ * A failed read is that provider's `unreadable` status, never "no key"
+ * (which would send a user with a working key to enter it again), and warns
+ * once for the provider, never once per model that consults it (#11508).
+ */
+const decideVerdicts = Effect.fn('decideVerdicts')(function* (
+  routed: RoutedModels,
+  { keyStatuses }: ModelRouteContext,
+) {
+  const secrets = yield* Secrets;
+  const reads = new Map<ApiKeyProviderId, Effect.Effect<KeyStatus>>();
+  const verdicts: [
+    string,
+    RoutedModel,
+    Effect.Effect<ModelAvailabilityStatus>,
+  ][] = [];
+  for (const [model, decision] of routed) {
+    const decided = routeVerdict(decision);
+    if ('verdict' in decided) {
+      verdicts.push([model, decision, Effect.succeed(decided.verdict)]);
+      continue;
+    }
+    const provider = decided.keyOf;
+    let read = reads.get(provider);
+    if (read === undefined) {
+      const seeded = keyStatuses[provider];
+      read =
+        seeded === undefined
+          ? yield* Effect.cached(
+              hasUsableApiKey(secrets, provider).pipe(
+                Effect.catchTag('SecretsFailed', (failure) =>
+                  Effect.logWarning(
+                    `Failed to read ${providerDisplayName(provider)} API key status.`,
+                    failure.cause,
+                  ).pipe(Effect.as<KeyStatus>('unreadable')),
+                ),
+              ),
+            )
+          : Effect.succeed(seeded);
+      reads.set(provider, read);
+    }
+    verdicts.push([
+      model,
+      decision,
+      Effect.map(read, (status) => keyVerdict(status, decided.usageRoute)),
+    ]);
+  }
+  const decided = yield* Effect.forEach(
+    verdicts,
+    ([model, decision, verdict]) =>
+      Effect.map(verdict, (v): readonly [string, DecidedModel] => [
+        model,
+        { decision, verdict: v },
+      ]),
+    { concurrency: 'unbounded' },
+  );
+  return new Map(decided);
+});
 
 /**
  * The user's picker choices as a delta over {@link DEFAULT_MODELS}, so a change
@@ -460,28 +477,25 @@ export type ModelOption =
     };
 
 /**
- * Stage 3 for one model, pure: its verdict over the key statuses stage 2
- * read, and the reason a run would fail with when it cannot run.
+ * Stage 3 for one model, pure: the verdict stage 2 decided, and the reason
+ * a run would fail with when it cannot run.
  */
 function optionOf(
   model: string,
-  decision: RoutedModel | undefined,
-  { keyStatuses, reasoningLevels }: ModelAvailabilityContext,
+  decided: DecidedModel | undefined,
+  { reasoningLevels }: ModelRouteContext,
 ): ModelOption {
-  if (!decision) {
+  if (!decided) {
     return {
       model,
       availability: 'unknown-model',
       unavailableReason: `Model "${model}" is not recognized.`,
     };
   }
+  const { decision } = decided;
   const { route, config } = decision;
   const source = modelSource(route, config);
-  const { kind, usageRoute } = resolveModelAvailability(
-    model,
-    decision,
-    keyStatuses,
-  );
+  const { kind, usageRoute } = decided.verdict;
   const unavailableReason = UNAVAILABLE_REASON_BUILDERS[kind]?.({
     model,
     source,
@@ -537,9 +551,11 @@ export const readModelOptions = Effect.fn('readModelOptions')(function* (
       yield* getEnabledModels(stores.globalState),
       routeCtx,
     );
-  const routed = routeModels(visible, routeCtx);
-  const context = yield* withConsultedKeyStatuses(routed, routeCtx);
-  return visible.map((model) => optionOf(model, routed.get(model), context));
+  const decided = yield* decideVerdicts(
+    routeModels(visible, routeCtx),
+    routeCtx,
+  );
+  return visible.map((model) => optionOf(model, decided.get(model), routeCtx));
 });
 
 /** The source a row is grouped and worded under: the key its route bills. */
