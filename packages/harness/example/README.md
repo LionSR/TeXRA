@@ -10,7 +10,7 @@ Set `TEXRA_EXAMPLE_MODEL` to a `provider/model` string (for example `anthropic/c
 corepack pnpm --filter @texra-ai/harness run example:packed
 ```
 
-The harness's `typecheck` (part of the repository's `npm run typecheck`) also type-checks these files in the workspace, with this directory's `tsconfig.json` over the declarations the build writes to `dist/` (`../tsconfig.example.json` maps each published subpath to its declaration), so a change that breaks an example fails before a push. Only `example:packed` installs the tarballs and runs the examples.
+The harness's `typecheck` (part of the repository's `npm run typecheck`) also type-checks these files in the workspace, with this directory's `tsconfig.json` over the declarations the build writes to `dist/` (`../tsconfig.example.json` maps each published subpath to its declaration), so a change that breaks an example fails before a push. `@texra-ai/llm` resolves to its workspace source there; only `example:packed` checks llm's built declarations, installs the tarballs and runs the examples.
 
 ## Real-model acceptance
 
