@@ -38,7 +38,7 @@ import {
 import type { SessionViewAccessShape } from '@shared/session/sessionViewAccess';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { descriptionRow } from '@shared/session/runFacts';
-import { factRows } from '@tools/plugins';
+import { factRow } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
 import { configRow, positionRow } from './loop/rows';
@@ -217,9 +217,9 @@ const forkedFacts = Effect.fn('forkRun.facts')(function* (
         ? [{ plugin, kind, version, value }]
         : [],
   );
-  // Stated on the fork as a call states its run's facts: no plugin's own
-  // aggregate among them, so nothing is appended beside.
-  return factRows(kept, runId, undefined, log).run;
+  // Copied onto the fork as the rows the run held at the cut: no plugin's
+  // own aggregate among them, and no rule to apply to a copy.
+  return kept.map((fact) => factRow(fact, runId));
 });
 
 /**

@@ -24,7 +24,10 @@ describe('classifyAgentError', () => {
           message: 'Missing API key for openai.',
         }),
       }),
-      expected: { kind: 'model', classification: { kind: 'missing-api-key' } },
+      expected: {
+        kind: 'model',
+        failure: { source: 'route', missingApiKey: true },
+      },
     },
     {
       label: 'an overflowed window by llm verdict',
@@ -32,7 +35,10 @@ describe('classifyAgentError', () => {
         kind: 'context-overflow',
         message: 'Token count of message exceeds context window: 5 > 3',
       }),
-      expected: { kind: 'model', classification: { kind: 'context-window' } },
+      expected: {
+        kind: 'model',
+        failure: { source: 'model', kind: 'context-overflow' },
+      },
     },
   ])('classifies $label as $expected.kind', ({ error, expected }) => {
     expect(classifyAgentError(error)).toMatchObject(expected);

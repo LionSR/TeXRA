@@ -89,7 +89,7 @@ import type { Sessions } from '@texra-ai/harness';
 
 const WRITES = ['appendAll', 'job'] as const;
 const READS = [
-  'readRunRecords',
+  'readRunRecord',
   'readAggregate',
   'readInputBatch',
   'aggregateState',

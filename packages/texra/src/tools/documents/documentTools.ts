@@ -11,7 +11,7 @@
 import { dirname, join } from 'node:path';
 
 // Third-party imports
-import { Effect, Exit, FileSystem, Schema } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 
 import {
   boundFile,
@@ -21,12 +21,11 @@ import {
   ToolError,
   defineTool,
   Settings,
+  type AgentTrace,
 } from '@texra-ai/harness/plugins';
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
-  outcomeFromCause,
-  RUN_OUTCOME,
   RunIdSchema,
   toErrorMessage,
   type FileLocation,
@@ -101,15 +100,15 @@ const autoOpensPdf = (docs: Documents) =>
  * What the first revision checks before the task does any work, whichever
  * launcher or resume reached it: the documents it revises exist, and no
  * context `.bib` is too large to attach whole. It writes the files-loaded
- * cards of the task's inputs and context under `stageId` (its template
- * files' card comes with the revision's prompt, which reads them). An error
- * result fails the call, and with it the task.
+ * cards of the task's inputs and context on `logger`, the first revision's
+ * stage (its template files' card comes with the revision's prompt, which
+ * reads them). A failure fails the call, and with it the task.
  */
 const openTask = Effect.fn('documents.openTask')(function* (
   docs: Documents,
-  stageId: string,
+  logger: AgentTrace,
 ) {
-  const { config, logger } = docs.run;
+  const { config } = docs.run;
   const { fileService } = docs.deps;
   const fs = yield* FileSystem.FileSystem;
   // A file is loaded when it reads: a directory or an unreadable path is
@@ -154,11 +153,10 @@ const openTask = Effect.fn('documents.openTask')(function* (
   const contexts = yield* located(config.contextFiles);
   // A missing context file is skipped, as the prompt skips it; only the
   // files found are measured.
-  const oversized = yield* rejectOversizedBibAttachments(
+  yield* rejectOversizedBibAttachments(
     docs.deps.roots.workspace,
     contexts.filter((context) => context.ok).map((c) => c.absolutePath),
   );
-  if (oversized) return oversized;
   // One files-loaded card per category, its label each file's source.
   const logCategory = (category: string, files: typeof inputs) => {
     if (files.length === 0) return;
@@ -168,11 +166,10 @@ const openTask = Effect.fn('documents.openTask')(function* (
       source: category,
       sourceDisplay: category,
     }));
-    logger.info('', { messageType: MESSAGE_TYPES.FILE_LIST, data, stageId });
+    logger.info('', { messageType: MESSAGE_TYPES.FILE_LIST, data });
   };
   logCategory('Input Files', inputs);
   logCategory('Context Files', contexts);
-  return null;
 });
 
 /** `document_context`: the prompt and media of one revision. */
@@ -192,40 +189,26 @@ export const DocumentContextTool = defineTool({
   execute: Effect.fn('document_context')(function* ({ revision, critique }) {
     const docs = yield* documentsOfCall('document_context');
     if (revision !== 0)
-      return yield* revisionContext(docs, revision, critique, undefined);
+      return yield* revisionContext(docs, revision, critique, null);
     // The first revision's checks and file cards nest under a stage that
     // closes with the call, on the call's own outcome.
-    return yield* Effect.acquireUseRelease(
-      Effect.sync(() => docs.run.logger.openStage('Revision 1')),
-      (stage) => revisionContext(docs, revision, critique, stage.id),
-      (stage, exit) =>
-        Effect.sync(() =>
-          stage.end(
-            Exit.match(exit, {
-              onSuccess: (result) =>
-                result.status === 'error'
-                  ? RUN_OUTCOME.FAILED
-                  : RUN_OUTCOME.COMPLETED,
-              onFailure: outcomeFromCause,
-            }),
-          ),
-        ),
+    return yield* docs.run.logger.stage('Revision 1', (stage) =>
+      Effect.andThen(
+        openTask(docs, stage),
+        revisionContext(docs, revision, critique, stage),
+      ),
     );
   }),
 });
 
-/** The prompt and media of `revision`, after the first revision's checks
- *  (`openTask`) when `stageId` is its stage. */
+/** The prompt and media of `revision`; the first revision's (`stage`, its
+ *  stage) also logs the template files its prompt read. */
 const revisionContext = Effect.fn('documents.revisionContext')(function* (
   docs: Documents,
   revision: number,
   critique: string | null | undefined,
-  stageId: string | undefined,
+  stage: AgentTrace | null,
 ) {
-  if (stageId !== undefined) {
-    const refused = yield* openTask(docs, stageId);
-    if (refused) return refused;
-  }
   const revisions = docs.task.requests.length;
   if (revision >= revisions)
     return yield* Effect.fail(
@@ -234,11 +217,10 @@ const revisionContext = Effect.fn('documents.revisionContext')(function* (
       ),
     );
   const revised = yield* revisionPrompt(docs, revision, critique);
-  if (stageId !== undefined && revised.loaded.length > 0)
-    docs.run.logger.info('', {
+  if (stage !== null && revised.loaded.length > 0)
+    stage.info('', {
       messageType: MESSAGE_TYPES.FILE_LIST,
       data: revised.loaded,
-      stageId,
     });
   const { prompt } = revised;
   return {

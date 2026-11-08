@@ -14,7 +14,7 @@ import {
   TOOL_CALL_STATUS,
   type ContextManagementData,
   type DeclinableUsageRoute,
-  type ErrorLogData,
+  type ModelFailure,
   type FileListEntry,
   type LoadedMediaMetadata,
   type LogLevel,
@@ -58,7 +58,9 @@ export interface TranscriptRowBase {
   readonly level: LogLevel;
   /** True when the row belongs to the verbose tier of its host's chrome. */
   readonly verbose?: boolean;
-  readonly groupId?: string;
+  /** The stage the row belongs to (`Stage.id`), from its event's
+   *  `stageId`. */
+  readonly stageId?: string;
   /** Source vocabulary. Absent on the one row with no message type of its
    *  own, `compactionActivity` (a projection). */
   readonly messageType?: MessageType;
@@ -104,12 +106,26 @@ export interface UserRow extends TranscriptRowBase {
   readonly forkAt?: number;
 }
 
+/** The fields an error's detail block shows, in display order. */
+export const ERROR_DETAIL_KEYS = Object.freeze([
+  'message',
+  'operation',
+  'model',
+  'provider',
+  'statusCode',
+  'statusText',
+  'requestId',
+  'rawMessage',
+] as const);
+/** One of {@link ERROR_DETAIL_KEYS}. */
+export type ErrorDetailKey = (typeof ERROR_DETAIL_KEYS)[number];
+
 /**
  * One `key: value` line of an error's detail block, pre-stringified so both
  * hosts show the same rendering of the same field.
  */
 export interface ErrorRowDetail {
-  readonly key: keyof ErrorLogData;
+  readonly key: ErrorDetailKey;
   readonly value: string;
 }
 
@@ -120,13 +136,10 @@ export interface ErrorRow extends TranscriptRowBase {
   /** Canonical detail field set, in display order: a host shows each as a
    *  `key: value` line. */
   readonly details: readonly ErrorRowDetail[];
-  /** The classified failure the row records: an app with words of its own
-   *  for the classification shows them where the row shows `message` (the
-   *  summary, or the `message` detail). */
-  readonly failure?: {
-    readonly message: string;
-    readonly classification: NonNullable<ErrorLogData['classification']>;
-  };
+  /** The model call's failure the row records, as its verdict: an app
+   *  with words of its own for it shows them where the row shows the
+   *  verdict's plain words (the summary, or the `message` detail). */
+  readonly failure?: ModelFailure;
 }
 
 export interface ToolRow extends TranscriptRowBase {
@@ -202,8 +215,7 @@ export interface CompactionActivityRow extends TranscriptRowBase {
   readonly label: string;
 }
 
-/** A plain log line: a `default` row, a row with no message type, or a
- *  group heading on a stream that keeps its lifecycle inline. */
+/** A plain log line: a `default` row, or a row with no message type. */
 export interface LogRow extends TranscriptRowBase {
   readonly kind: 'log';
   readonly text: TranscriptText;

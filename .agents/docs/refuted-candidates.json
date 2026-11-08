@@ -447,7 +447,7 @@
     {
       "id": "G11f-subscription-descriptor-columns",
       "candidate": "delete SubscriptionProvider.sessionName and .copyTarget as unread columns, and capture each binding directly instead of calling through a lambda",
-      "why": "Both columns are read: the extension's vscodePresenter destructures them (`const { displayName, sessionName, copyTarget } = provider`, packages/extension/src/frontend/auth/subscriptionSignIn.ts) for the loopback prompt (\"If your … session is in a different browser\") and the copy-link toast (\"Paste it into the browser where you use …\"); a search for `.sessionName` misses a destructuring read. Both differ from displayName for Grok ('xAI', 'Grok / xAI'), so neither is constant across the rows. The call-through lambdas are what let src/test-kernel/tools/setup/DefaultSetupPlatform.vitest.ts spy on `@texra-ai/llm/node`'s getChatgptStatus, the suite that checks a ChatGPT account's email and id never reach the setup tools; capturing the import at module load would bypass the spy and drop that check.",
+      "why": "Both columns are read: the extension's vscodePresenter destructures them (`const { displayName, sessionName, copyTarget } = provider`, packages/extension/src/frontend/auth/subscriptionSignIn.ts) for the loopback prompt (\"If your … session is in a different browser\") and the copy-link toast (\"Paste it into the browser where you use …\"); a search for `.sessionName` misses a destructuring read. Both differ from displayName for Grok ('xAI', 'Grok / xAI'), so neither is constant across the rows. The call-through lambdas are what let packages/texra/test/tools/setup/DefaultSetupPlatform.vitest.ts spy on `@texra-ai/llm/node`'s getChatgptStatus, the suite that checks a ChatGPT account's email and id never reach the setup tools; capturing the import at module load would bypass the spy and drop that check.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/G-app-controllers.md#finding-11-smaller-items-batched",
       "symbols": [
         {
@@ -599,6 +599,81 @@
           "file": "packages/desktop/src/main/desktopPresentation.ts",
           "symbol": "DESKTOP_HEADLESS",
           "signature": "export const DESKTOP_HEADLESS = process.env.TEXRA_DESKTOP_HEADLESS === '1';"
+        }
+      ]
+    },
+    {
+      "id": "STORE-context-blob-as-brought-blob",
+      "candidate": "a run's context.blob rows as brought blobs in the blob table, the context.blob row kind retired (execution) and its readers reading the blob by the digest a model.message names",
+      "why": "context.blob is not one request's JSON: it is the run state's content table (RunState.contents), which the run state folds from rows and the loop reads synchronously on every step (contextAt and stored for the system text, the run context and the shown tool declarations, blobRows for what the run already holds, forkRun for what a fork copies, recordedTurn for the request check). As brought blobs the content leaves the state: each of those readers becomes a store read at every step, and 'what the run holds' must be derived again from the rows that link each digest. A brought blob is never inflated on read (the media scheme), so requests would need a read path of their own: a fourth behavior, not one scheme fewer. The 'second digest' stores nothing twice: a long canonical value is one zstd copy in the blob table under its inline digest, the row holding the reference (INSERT_BLOB is ON CONFLICT DO NOTHING). And store review F14's cost (an additive change to request JSON regenerates the golden store) stays, because the golden store holds the blob table too. Refused by round 6 area T's PR 2 after re-verification on main at e10c592.",
+      "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-round-6/T-session-database.md#t6-three-content-addressing-schemes-for-one-need-and-one-content-stored-under-two-digests",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/schemas/offeredTools.ts",
+          "symbol": "ContextBlobSchema",
+          "signature": "export const ContextBlobSchema = Schema.Struct({ digest: Sha256Schema, value: JsonValueSchema, });"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/run/requestContext.ts",
+          "symbol": "blobRows",
+          "signature": "export function blobRows( runId: RunId, state: RunState, values: readonly unknown[], ): RunHistoryDraft[] {…}"
+        }
+      ]
+    },
+    {
+      "id": "RUN-attempt-start-on-the-row",
+      "candidate": "ModelInvoker's attemptStarts side table (a WeakMap keyed by the attempt's InvocationRef) replaced by the send time on the attempt row, so a billed failure is priced from the rows",
+      "why": "The send time is a monotonic clock reading (#14822): a response time is the difference of two readings, which a wall-clock step cannot make negative. A monotonic reading means nothing after a restart, so it cannot be stored and compared on resume; a wall-clock one stored on the row brings the negative response time back. The table lives as long as the invoker and prices only a failure in the attempt that sent it, which is what pricing needs. Dropped by #14829 after #14822 landed; re-verified on main at 157f775 by the storage-format batch.",
+      "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/D-model-call.md#8-smaller-red-flags-in-modelinvoker-batched",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/ModelInvoker.ts",
+          "symbol": "attemptStarts",
+          "signature": "const attemptStarts = new WeakMap<InvocationRef, number>();"
+        }
+      ]
+    },
+    {
+      "id": "RUN-one-skip-signal",
+      "candidate": "one skip signal: a tool result named 'Skipped' (a delegation whose child was stopped) folded into the tool.result disposition 'skipped'",
+      "why": "They are two facts. Disposition 'skipped' says the dispatcher never ran the call's body. name: 'Skipped' says the body ran (it launched a child) and the child was stopped before answering. Merging them would count a launched call as never run (resultFacts' ran, which counts toolCalls). Dropped by #14829; re-verified on main at 157f775.",
+      "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-round-3/V-compromises.md",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/schemas/runHistoryEvent.ts",
+          "symbol": "disposition",
+          "signature": "disposition: Schema.Literals(['executed', 'failed', 'skipped', 'duplicate']),"
+        }
+      ]
+    },
+    {
+      "id": "RUN-handed-down-as-general-turn-end",
+      "candidate": "a script run's handedDown fold field and its loop branches (turnResponse, completeTurn, the turn and wait exits, deliver's endTurn) replaced by a tool.result that ends the turn on either status and an answer folded from the ending call",
+      "why": "The run still needs the fact 'the turn's ending result was an error' to end the run failed and to answer with that error, and only a script run has it: a model's ending call that failed is answered by the model. Moving it onto tool.result means an endTurn flag on the error branch, which every other tool's error result would carry as false, and a fold rule keyed on the run being a script run: the same special case, renamed and stored. The branches are four reads of one field the fold sets once. Dropped by #14829 and re-verified on main at 157f775; the trust half (isTrustedScript, now five reads in four files deciding four different grants) stays with the trust-grant work, not the storage format.",
+      "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/E-loop-tools.md#finding-4-a-script-run-is-a-model-less-run-dressed-as-a-tool-use-run-and-the-costume-shows-in-five-loop-branches",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/session/runFacts.ts",
+          "symbol": "handedDown",
+          "signature": "readonly handedDown: ToolResultPayload['result'] | null;"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/loop/rows.ts",
+          "symbol": "handedDown",
+          "signature": "export const handedDown = Effect.fn('rows.handedDown')(function* ( run: Pick<AgentRunShape, 'steps' | 'logger' | 'runId'>, call: NonNullable<AgentRunShape['config']['script']>, ) {…})"
+        }
+      ]
+    },
+    {
+      "id": "ROW-followup-closed-as-run-removed",
+      "candidate": "the followup.closed row deleted, a run's closed input read from run.removed alone (C11 d)",
+      "why": "Its one writer on main is openResume's records-gone branch (Inbox.closeInput from resumeRun.ts): a run whose rows hold queued input but no run.config, so no run.removed was ever written and none should be (nothing was deleted, and run.removed starts a collection). Without the row, owesResume reads that input as owed a wake at every inbox notice and each wake is refused again; the queued messages are never dropped with reason 'closed'. Deleting it needs the send path to refuse a run that has no records first, which is a send-path change, not a storage-format one. Re-verified on main at 157f775 by the storage-format batch.",
+      "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/C-row-model.md",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/followUp/Inbox.ts",
+          "symbol": "closeInput",
+          "signature": "closeInput(runId: RunId): Effect.Effect<void> {…}"
         }
       ]
     }

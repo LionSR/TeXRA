@@ -1339,19 +1339,11 @@ async function normalize(file, root) {
       insertRef.run(row.commit, digest, inline ? 1 : 0);
     }
   }
-  // Each rename below is its aggregate's last change, recorded under the new
-  // id (`aggregate_change`, which no trigger keeps for a rename); the records
-  // under the random ids it replaces go first.
-  db.exec('DELETE FROM aggregate_change');
   const updateSequence = db.prepare(
     'UPDATE event_sequence SET logical_id = ?, uid = ? WHERE id = ?',
   );
-  const recordChange = db.prepare(
-    'INSERT OR REPLACE INTO aggregate_change (kind, logical_id) VALUES (?, ?)',
-  );
   for (const row of sequences) {
     updateSequence.run(ids.get(row.logical_id), uuids.get(row.uid), row.id);
-    recordChange.run(row.kind, ids.get(row.logical_id));
   }
   for (const [table, column, keys] of [
     ['projected_row', 'data', ['"commit"', 'type']],

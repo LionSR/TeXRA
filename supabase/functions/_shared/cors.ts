@@ -1,7 +1,7 @@
 /**
  * Shared CORS configuration for Edge Functions.
  *
- * Centralizes origin validation for VS Code extensions and web environments.
+ * Centralizes origin validation for browser clients.
  */
 
 /**
@@ -10,14 +10,7 @@
  * a custom scheme has an opaque origin, which a browser sends as the string
  * "null"; no entry matches it. Codespaces uses *.github.dev domains.
  */
-const ALLOWED_ORIGINS: (string | RegExp)[] = [
-  // Editor schemes: no browser sends one as an Origin, so these match only a
-  // client that sets the header itself.
-  'vscode://',
-  'vscode-insiders://',
-  'cursor://',
-  'windsurf://',
-  'antigravity://',
+const ALLOWED_ORIGINS: RegExp[] = [
   // Codespaces and github.dev
   /^https:\/\/[a-z0-9-]+\.github\.dev$/,
   /^https:\/\/[a-z0-9-]+\.app\.github\.dev$/,
@@ -38,11 +31,7 @@ function getAllowedOrigin(origin: string | null): string | null {
     return '*';
   }
 
-  const isAllowed = ALLOWED_ORIGINS.some((allowed) =>
-    typeof allowed === 'string'
-      ? origin.startsWith(allowed)
-      : allowed.test(origin),
-  );
+  const isAllowed = ALLOWED_ORIGINS.some((allowed) => allowed.test(origin));
 
   return isAllowed ? origin : null;
 }

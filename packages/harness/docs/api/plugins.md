@@ -132,8 +132,17 @@ interface AgentTrace {
   /** A chunk of a process run's output, on its stream (`process.output`). */
   output(stream: 'stdout' | 'stderr', text: string): void;
 
-  // ─── Stage + stream handles ─────────────────────────────────────────
-  openStage(label: string): StageHandle;
+  // ─── Stages and stream handles ──────────────────────────────────────
+  /**
+   * Run `use` as a labelled stage (`stage.start`): what it logs on the trace
+   * it is handed nests under the stage, which closes once `use` exits
+   * (`stage.end`): completed when it succeeds, else as its cause reads
+   * (`outcomeFromCause`).
+   */
+  stage<A, E, R>(
+    label: string,
+    use: (trace: AgentTrace) => Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R>;
   /**
    * Open a streaming message. `stream.start` marks the moment the phase the
    * stream represents actually began — emit it at the provider's phase
@@ -697,9 +706,10 @@ interface FactKind {
    *  held at the cut, `drop` none. A row about the plugin's own aggregate
    *  belongs to that aggregate and stays with it. */
   readonly fork: 'copy' | 'drop';
-  /** The kind's own transition rule, checked by the store in the writing
-   *  transaction against the aggregate's latest row of the kind (none
-   *  before the first): the rejection's reason, or null to accept. */
+  /** The kind's own transition rule, checked by its writer in the job that
+   *  appends the row (`ownFactsChecked`) against the aggregate's latest row
+   *  of the kind (none before the first): the rejection's reason, or null
+   *  to accept. */
   readonly accepts?: (
     previous: PluginRow | undefined,
     next: PluginRow,
@@ -1100,11 +1110,6 @@ interface LogOptions {
   readonly data?: unknown;
   /** The row's category; subscribers pick a render style from it. */
   readonly messageType?: MessageType;
-  /**
-   * Stage to attach this entry to, for callers that captured a group id
-   * earlier. Without one the entry belongs to no stage.
-   */
-  readonly stageId?: string;
 }
 ```
 
@@ -1344,6 +1349,20 @@ interface PluginDefinition<ROut> extends Omit<
 }
 ```
 
+## PluginFactRejected
+
+A plugin fact its writer refused in the job: its kind's rule
+(`FactKind.accepts`) rejected it against the aggregate's latest row, or
+it moves a plugin's aggregate under a run the store no longer holds
+open. Nothing was written.
+
+```ts
+class PluginFactRejected extends Schema.TaggedError<PluginFactRejected>()(
+  'PluginFactRejected',
+  { aggregateId: Schema.String, reason: Schema.String },
+)
+```
+
 ## PluginHold
 
 Keep the session layer that provides this service up until `until` ends:
@@ -1560,7 +1579,10 @@ interface RequestDecisionHook {
     readonly inbox: (runId: RunId) => RunInbox;
     readonly commit: (
       facts: readonly (ToolFact & { readonly aggregate: string })[],
-    ) => Effect.Effect<void, LogWriteError>;
+    ) => Effect.Effect<
+      void,
+      LogWriteError | DatabaseReadFailed | PluginFactRejected
+    >;
   }) => Effect.Effect<void, Error, GlobalValues>;
 }
 ```
@@ -1860,19 +1882,6 @@ interface SettingsStores {
   readonly workspaceState: StateStore;
   readonly repoState: StateStore;
   readonly globalState: StateStore;
-}
-```
-
-## StageHandle
-
-Handle returned by `openStage`.
-
-```ts
-interface StageHandle {
-  /** Stage id. */
-  readonly id: string | undefined;
-  /** Emit `stage.end` with the given outcome; its one owner calls it once. */
-  end(status?: RunOutcome): void;
 }
 ```
 

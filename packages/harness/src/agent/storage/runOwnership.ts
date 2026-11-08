@@ -20,7 +20,6 @@ import {
 } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
 import type { RunRows } from '@shared/session/runRowsShape';
-import { recordsOf } from '@shared/session/runFacts';
 import {
   addUsage,
   type CommitOrdinal,
@@ -188,8 +187,11 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   SessionLog | SessionViewAccess
 > {
   // The activation's own rows begin at its `run.activate`, or with the run.
-  const { end, activation: start } = recordsOf(lifecycles, runId);
-  if (!end) return null;
+  // An activation clears the end of the lifecycle before it.
+  const last = lifecycles.at(-1);
+  if (last?.type !== 'run.end') return null;
+  const end = last;
+  const start = lifecycles.findLast((row) => row.type === 'run.activate');
   const from = start?.seq ?? -1;
   const during = (commit: CommitOrdinal) =>
     commit > (start?.commit ?? -1) && commit <= end.commit;

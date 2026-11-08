@@ -54,6 +54,8 @@ export {
   type ProjectDatabases,
 } from '@shared/session/database';
 export type { ProcessIdentity } from '@shared/session/sessionEvents';
+// A run's record, as a project store reads it back (`readRunRecord`).
+export type { RowOf, RunRows } from '@shared/session/runRowsShape';
 export type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 export {
   canonicalizeWorkspaceRoot,

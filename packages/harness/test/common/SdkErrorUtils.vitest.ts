@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { RouteUnavailable } from '@texra-ai/harness/host';
-import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
+import { modelFailureOf } from '@common/errors/sdkError/providerErrorFormat';
 import { openaiFailure } from '../../../llm/src/api/openaiError.js';
 import { judgeFailure } from '../../../llm/src/api/verdict.js';
 import { ModelError } from '../../../llm/src/errors.js';
@@ -14,7 +14,10 @@ import { ModelError } from '../../../llm/src/errors.js';
  * the run records it: the package owns every verdict on a provider's reply.
  */
 const judged = (cause: unknown) =>
-  failureInfo(judgeFailure(openaiFailure(cause), 'api-key', false), 'openai');
+  modelFailureOf(
+    judgeFailure(openaiFailure(cause), 'api-key', false),
+    'openai',
+  );
 
 describe('context-window overflow', () => {
   it("is the verdict on OpenAI's native error code even when the message wording is unfamiliar", () => {
@@ -25,8 +28,9 @@ describe('context-window overflow', () => {
       new Headers(),
     );
 
-    expect(judged(err).classification).toStrictEqual({
-      kind: 'context-window',
+    expect(judged(err)).toMatchObject({
+      source: 'model',
+      kind: 'context-overflow',
     });
   });
 });
@@ -48,9 +52,7 @@ describe('an account out of credit', () => {
       new Headers(),
     );
 
-    expect(judged(err).classification).toStrictEqual({
-      kind: 'upstream-credit',
-    });
+    expect(judged(err)).toMatchObject({ quota: { plan: null } });
   });
 });
 
@@ -83,11 +85,11 @@ describe('a subscription that cannot bill', () => {
       session: { route: 'chatgpt-subscription', needsReauth: true },
     });
 
-    expect(failureInfo(lapsed, 'openai').classification).toStrictEqual({
-      kind: 'subscription-session',
-      route: 'chatgpt-subscription',
-      needsReauth: true,
-      sessionError: 'The refresh token was revoked.',
+    expect(modelFailureOf(lapsed, 'openai')).toStrictEqual({
+      source: 'route',
+      provider: 'openai',
+      message: 'The refresh token was revoked.',
+      session: { route: 'chatgpt-subscription', needsReauth: true },
     });
   });
 });

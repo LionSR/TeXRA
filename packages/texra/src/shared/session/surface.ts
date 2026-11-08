@@ -169,8 +169,10 @@ export interface RunSurface {
   /** The user's expansion choice in the tree, absent until they make one;
    *  a run that needs the user (`needsUser`) outranks it. */
   readonly expanded: boolean | undefined;
-  /** Stages inside its transcript. */
-  readonly groups: ReadonlyMap<string, boolean>;
+  /** Which disclosures in its view are open (its stages, its dispatch
+   *  card, its plan), by key: true open, false closed, absent the
+   *  disclosure's default. Persisted as `groups`. */
+  readonly disclosures: ReadonlyMap<string, boolean>;
   /** For a top-level run, the `lastTimestamp` this surface last showed. */
   readonly seen: number | undefined;
   /** The error the runtime answered this surface's last request on the run
@@ -179,7 +181,7 @@ export interface RunSurface {
 }
 
 /** What the surface keeps for `runId`, a fresh empty record when it keeps
- *  nothing (a shared one would share its `groups` map). */
+ *  nothing (a shared one would share its `disclosures` map). */
 export function runSurface(
   surface: Pick<Surface, 'runs'>,
   runId: RunId,
@@ -188,7 +190,7 @@ export function runSurface(
     surface.runs.get(runId) ?? {
       draft: EMPTY_DRAFT,
       expanded: undefined,
-      groups: new Map(),
+      disclosures: new Map(),
       seen: undefined,
       rejected: undefined,
     }
@@ -317,7 +319,7 @@ export function loadSurface(
         {
           draft: { ...EMPTY_DRAFT, text: run.draft },
           expanded: run.expanded,
-          groups: new Map(run.groups),
+          disclosures: new Map(run.groups),
           seen: run.seen,
           rejected: undefined,
         },
@@ -346,7 +348,7 @@ export function persistSurface(surface: Surface): PersistedSurface {
       {
         draft: run.draft.text,
         ...(run.expanded !== undefined && { expanded: run.expanded }),
-        groups: [...run.groups],
+        groups: [...run.disclosures],
         ...(run.seen !== undefined && { seen: run.seen }),
       },
     ]),
@@ -641,7 +643,7 @@ export function applySurfaceAction(
     case 'group':
       return updateRun(surface, action.runId, (run) => ({
         ...run,
-        groups: withEntry(run.groups, action.key, action.expanded),
+        disclosures: withEntry(run.disclosures, action.key, action.expanded),
       }));
     case 'workbench':
       return { ...surface, workbench: action.layout };
