@@ -53,7 +53,6 @@ import {
   withSessionDescription,
 } from './sessionDescription';
 import type { AgentRunServices } from './runRegistry';
-import type { RunReport } from './runReport';
 import type { PreparedAgentDefinition } from './AgentLaunchContext';
 
 const CHANNEL = 'executeAgent';
@@ -76,7 +75,7 @@ export interface ExecuteAgentOptions {
  *  itself, which the fiber that owns the run (the registry's) runs once. */
 export interface PreparedRun {
   readonly activation: CommitOrdinal;
-  readonly run: Effect.Effect<RunReport, Error, AgentRunServices>;
+  readonly run: Effect.Effect<void, Error, AgentRunServices>;
 }
 
 /**
@@ -274,10 +273,10 @@ const withApiKeys =
  * hold), so a launch that fails before the run exists fails here with no
  * run behind it. The run it answers runs the loop over that opening, and
  * every way the loop exits reaches the run's terminal (`endRun`) exactly
- * once, as the exit of the one masked region it runs in: a started run is
- * always finalized, and a failed one arrives as a FAILED report carrying
- * its failure. Root launches use `rootRun` and resumes `resumeRun`; a
- * caller runs `run` only on the fiber `RunRegistry.start` forked for it.
+ * once, as the exit of the one masked region it runs in. Callers read the
+ * outcome and output from its committed end. Root launches use `rootRun`
+ * and resumes `resumeRun`; a caller runs `run` only on the fiber
+ * `RunRegistry.start` forked for it.
  */
 export const executeAgent = Effect.fn('executeAgent')(function* (
   definition: PreparedAgentDefinition,
