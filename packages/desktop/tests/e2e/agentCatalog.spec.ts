@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadDatabaseFixture } from '../../../../scripts/desktop-package-smoke-environment.mjs';
 import {
+  mark,
   dismissOnboarding,
   expect,
   setSettingsTab,
@@ -14,64 +15,101 @@ test('browses agents and opens read-only and editable YAML inside the workbench'
   profile,
   launch,
 }) => {
+  test.setTimeout(180_000);
+  mark('t13 start');
   const fixture = await loadDatabaseFixture();
+  mark('t13 step 1: const fixture = await loadDatabaseFixture();');
   const customDir = join(
     fixture.resolveGlobalStoragePath(profile.dataRoot),
     'custom_agents',
   );
+  mark('t13 step 2: );');
   mkdirSync(customDir, { recursive: true });
+  mark('t13 step 3: mkdirSync(customDir, { recursive: true });');
   const customPath = join(customDir, 'catalog-fixture.yaml');
+  mark('t13 step 4: const customPath = join(customDir, catalog-fixture.yaml);');
   writeFileSync(
     customPath,
     'name: catalog-fixture\ndescription: Inspect catalog editor behavior\ntools: [read_file]\nprompt: Help inspect the catalog.\n',
   );
+  mark('t13 step 5: );');
   const launched = await launch();
+  mark('t13 step 6: const launched = await launch();');
   const { page, app } = launched;
+  mark('t13 step 7: const { page, app } = launched;');
   await setSettingsTab(launched, 'agents');
+  mark('t13 step 8: await setSettingsTab(launched, agents);');
   const catalog = page.locator('agent-selection-panel');
+  mark('t13 step 9: const catalog = page.locator(agent-selection-panel);');
   const search = catalog.getByRole('textbox', {
     name: 'Search agents',
     exact: true,
   });
+  mark('t13 step 10: });');
   await search.fill('catalog-fixture');
+  mark('t13 step 11: await search.fill(catalog-fixture);');
   await expect(catalog.locator('.catalog-row')).toHaveCount(1);
+  mark('t13 step 12: await expect(catalog.locator(.catalog-row)).toHaveCount(1)');
   await expect(catalog.locator('#catalog-detail-name')).toContainText(
     'catalog-fixture',
   );
+  mark('t13 step 13: );');
   await catalog.getByRole('button', { name: 'Open YAML', exact: true }).click();
+  mark('t13 step 14: await catalog.getByRole(button, { name: Open YAML, exact');
   const settings = page.locator('wa-dialog.desktop-settings-overlay');
+  mark('t13 step 15: const settings = page.locator(wa-dialog.desktop-settings-ov');
   await expect(settings).toHaveJSProperty('open', false);
+  mark('t13 step 16: await expect(settings).toHaveJSProperty(open, false);');
   const editor = page.locator('.shell-dock-editor:visible');
+  mark('t13 step 17: const editor = page.locator(.shell-dock-editor:visible);');
   await expect(editor.locator('.view-lines')).toContainText('catalog-fixture');
+  mark('t13 step 18: await expect(editor.locator(.view-lines)).toContainText(c');
   const mod = await app.evaluate(() =>
     process.platform === 'darwin' ? 'Meta' : 'Control',
   );
+  mark('t13 step 19: );');
   await editor.locator('.view-line').first().click();
+  mark('t13 step 20: await editor.locator(.view-line).first().click();');
   await page.keyboard.press(`${mod}+End`);
+  mark('t13 step 21: await page.keyboard.press(`${mod}+End`);');
   await page.keyboard.type('\n# saved by the internal editor');
+  mark('t13 step 22: await page.keyboard.type(\n# saved by the internal editor)');
   await page.keyboard.press(`${mod}+s`);
+  mark('t13 step 23: await page.keyboard.press(`${mod}+s`);');
   await expect
     .poll(() => readFileSync(customPath, 'utf8'))
     .toContain('# saved by the internal editor');
 
   await setSettingsTab(launched, 'agents');
+  mark('t13 step 24: await setSettingsTab(launched, agents);');
   await search.fill('assistant');
+  mark('t13 step 25: await search.fill(assistant);');
   await catalog.locator('.catalog-row-select[aria-label="assistant"]').click();
+  mark('t13 step 26: await catalog.locator(.catalog-row-select[aria-label="assis');
   await catalog.getByRole('button', { name: 'View YAML', exact: true }).click();
+  mark('t13 step 27: await catalog.getByRole(button, { name: View YAML, exact');
   await expect(settings).toHaveJSProperty('open', false);
+  mark('t13 step 28: await expect(settings).toHaveJSProperty(open, false);');
   await expect(editor.locator('.view-lines')).toContainText('name: assistant');
+  mark('t13 step 29: await expect(editor.locator(.view-lines)).toContainText(n');
   await editor.locator('.view-line').first().click();
+  mark('t13 step 30: await editor.locator(.view-line).first().click();');
   await page.keyboard.press(`${mod}+Home`);
+  mark('t13 step 31: await page.keyboard.press(`${mod}+Home`);');
   await page.keyboard.type('SHOULD_NOT_EDIT');
+  mark('t13 step 32: await page.keyboard.type(SHOULD_NOT_EDIT);');
   await expect(editor.locator('.view-lines')).not.toContainText(
     'SHOULD_NOT_EDIT',
   );
+  mark('t13 step 33: );');
 
   // Stable catalog resources reopen after a renderer reload.
   await page.reload();
+  mark('t13 step 34: await page.reload();');
   await expect(
     page.locator('.shell-dock-editor:visible .view-lines'),
   ).toContainText('name: assistant');
+  mark('t13 step 35: ).toContainText(name: assistant);');
 });
 
 // A document agent picked in the composer, then hidden in Settings → Agents

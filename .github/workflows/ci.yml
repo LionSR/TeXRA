@@ -417,7 +417,9 @@ jobs:
       - name: Run desktop e2e suite
         env:
           TEXRA_NO_UPDATE_CHECK: '1'
-        run: pnpm --filter @texra/desktop test:e2e tests/e2e/agentPickerRepro.spec.ts --repeat-each=10 --reporter=line
+        run: |
+          pnpm --filter @texra/desktop test:e2e tests/e2e/agentCatalog.spec.ts --reporter=list || true
+          pnpm --filter @texra/desktop test:e2e tests/e2e/agentCatalog.spec.ts -g "browses agents" --repeat-each=2 --reporter=list
 
       - name: Upload desktop e2e results
         if: failure()

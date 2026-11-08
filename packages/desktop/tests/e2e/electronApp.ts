@@ -20,6 +20,10 @@ import { isolatedHomeEnv } from '../../../../scripts/isolated-home.mjs';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
 
+const T0 = Date.now();
+/** Scratch timing mark. */
+export const mark = (label: string): void =>
+  console.log(`[e2e +${Date.now() - T0}ms] ${label}`);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(HERE, '..', '..');
 const MAIN_ENTRY = join(PACKAGE_ROOT, 'dist', 'main', 'index.js');
@@ -112,7 +116,9 @@ export const test = base.extend<{
       apps.push(launched);
       return launched;
     });
+    mark('fixture: teardown start');
     for (const launched of apps) await closeTexraApp(launched);
+    mark('fixture: teardown done');
     expect(apps.flatMap((launched) => launched.rendererErrors)).toEqual([]);
   },
   launched: async ({ launch }, use) => {
@@ -189,7 +195,9 @@ export async function launchTexraApp(
   }
 
   // The app reopens what the profile remembers; there is no launch flag.
+  mark('launch: start');
   await rememberOpenProject(profile.dataRoot, profile.workspaceRoot);
+  mark('launch: rememberOpenProject');
   const app = await electron.launch({
     args: [
       MAIN_ENTRY,
@@ -210,7 +218,9 @@ export async function launchTexraApp(
     },
   });
 
+  mark('launch: electron.launch');
   const page = await app.firstWindow();
+  mark('launch: firstWindow');
   const rendererErrors: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error')
@@ -236,6 +246,7 @@ export async function launchTexraApp(
   await resizeWindow(launched, 1280, 800);
   // Wait for the actual renderer, independently of native window visibility.
   await page.waitForSelector('#app', { state: 'attached' });
+  mark('launch: #app');
   await page.waitForFunction(
     () => document.body.dataset.desktopReady === 'true',
     undefined,
@@ -249,6 +260,7 @@ export async function launchTexraApp(
         timeout: 30_000,
       })
       .toBeGreaterThan(0);
+  mark('launch: desktopReady + service');
   if (HEADLESS) await assertOffscreen(app);
   else
     await expect
