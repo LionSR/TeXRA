@@ -2,7 +2,7 @@
 //
 // Stage lifecycle comes from the transcript; generated files and warnings
 // come from the rounds of the run's documents fact. This component only
-// joins and renders those facts—it does not infer or mutate workflow state.
+// joins and renders those facts—it does not infer or mutate the task's state.
 
 import { Box, Text } from 'ink';
 
@@ -50,19 +50,19 @@ interface DocumentTaskRunDetailGroup {
 }
 
 function stageLine(
-  group: Stage,
+  stage: Stage,
   status: ReturnType<typeof stageStatus>,
 ): DocumentTaskRunDetailLine {
   const appearance = COMPACTION_ACTIVITY_STATUS_STYLE[status.key];
   const duration =
-    group.endTime !== undefined
-      ? ` · ${formatCompactDuration(group.endTime - group.startTime)}`
+    stage.endTime !== undefined
+      ? ` · ${formatCompactDuration(stage.endTime - stage.startTime)}`
       : '';
   return {
-    key: `group:${group.id}`,
+    key: `stage:${stage.id}`,
     // Worded as the progress view's stage header words it, never with the
-    // workflow-call vocabulary that happens to share key names.
-    text: `${appearance.marker} ${safeTerminalText(group.name || group.id)} ${status.word}${duration}`,
+    // call-status vocabulary that happens to share key names.
+    text: `${appearance.marker} ${safeTerminalText(stage.name || stage.id)} ${status.word}${duration}`,
     color: appearance.color,
     role: 'lifecycle',
   };
@@ -74,7 +74,7 @@ function lifecyclePriority(status: ReturnType<typeof stageStatus>): number {
   return 3;
 }
 
-/** A round's results rank after failed and running groups. */
+/** A round's results rank after failed and running stages. */
 const ROUND_PRIORITY = 3;
 
 function documentTaskRunDetailGroups(
@@ -83,11 +83,11 @@ function documentTaskRunDetailGroups(
   if (!facts) return [];
 
   const groups: DocumentTaskRunDetailGroup[] = [];
-  for (const group of facts.stages) {
-    const status = stageStatus(group, facts.run);
+  for (const stage of facts.stages) {
+    const status = stageStatus(stage, facts.run);
     groups.push({
-      key: `lifecycle:${group.id}`,
-      lines: [stageLine(group, status)],
+      key: `lifecycle:${stage.id}`,
+      lines: [stageLine(stage, status)],
       priority: lifecyclePriority(status) + 1,
     });
   }
@@ -164,7 +164,7 @@ function documentTaskRunDetailGroups(
 }
 
 /**
- * Select a compact, structurally valid workflow summary for a constrained
+ * Select a compact, structurally valid document task summary for a constrained
  * viewport. Alerts receive space before lifecycle and artifacts; an artifact
  * is never shown without its round and section headings.
  */

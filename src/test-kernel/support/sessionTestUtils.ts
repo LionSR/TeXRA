@@ -122,22 +122,27 @@ export function createTestRunTrace(runId: RunId) {
   const trace = new TraceEmitter((event) => {
     if (isTranscriptEvent(event)) record(event);
   });
+  const transcript = () =>
+    buildRunTranscript(
+      rows.map((fact, index) => ({
+        ...fact,
+        aggregateId,
+        seq: index + 1,
+        at: index + 1,
+        // cast: the trace's transcript events are session event payloads.
+      })) as SessionRow[],
+      false,
+    );
   return {
     trace,
     /** The run history's final-answer row (`response.finalized`), recorded
      *  in its place beside the trace. */
     finalize: (text: string) => record({ type: 'response.finalized', text }),
-    rows: () =>
-      buildRunTranscript(
-        rows.map((fact, index) => ({
-          ...fact,
-          aggregateId,
-          seq: index + 1,
-          at: index + 1,
-          // cast: the trace's transcript events are session event payloads.
-        })) as SessionRow[],
-        false,
-      ).rows,
+    /** A lifecycle row (`run.end`, `run.activate`) in its place beside the
+     *  trace's rows. */
+    lifecycle: record,
+    transcript,
+    rows: () => transcript().rows,
     dispose: () => trace.close(),
   };
 }
