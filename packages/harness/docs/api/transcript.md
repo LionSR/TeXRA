@@ -130,26 +130,6 @@ function compareByNewestCreationTime(
 ): number
 ```
 
-## compareBySeqNo
-
-Compare transcript rows by their wire append sequence (`seqNo`), falling
-back to a wall-clock key when either row predates sequence tracking.
-
-Live rows (both carrying a usable positive `seqNo`) sort by that sequence —
-immune to clock skew and timestamp ties — with the fallback key as the
-tie-break. Archived/compat rows, or a mix of row generations, keep the
-caller's fallback chronology. `seqNoOf` and `fallbackTimeOf` let the same
-rule serve message rows (`timestamp`) and group rows (`startTime`).
-
-```ts
-function compareBySeqNo<T>(
-  a: T,
-  b: T,
-  seqNoOf: (item: T) => number | undefined,
-  fallbackTimeOf: (item: T) => number,
-): number
-```
-
 ## ContextManagementRow
 
 ```ts
@@ -593,6 +573,16 @@ interface TextBudget {
 }
 ```
 
+## TimelineEntry
+
+One entry of the layout: a row no stage holds, or a stage and its rows.
+
+```ts
+type TimelineEntry<Row extends RowFields, S extends Stage = Stage> =
+  | { readonly kind: 'row'; readonly row: Row }
+  | { readonly kind: 'stage'; readonly stage: S; readonly rows: Row[] };
+```
+
 ## ToolBadgesSection
 
 A section of short badges.
@@ -934,6 +924,20 @@ interface TranscriptText {
    *  density paints and for equality tests between two texts. */
   readonly oneLine: string;
 }
+```
+
+## transcriptTimeline
+
+The transcript's stages, each with its rows, among its other rows.
+
+```ts
+function transcriptTimeline<
+  Row extends RowFields,
+  S extends Stage,
+>(transcript: {
+  readonly rows: readonly Row[];
+  readonly stages: readonly S[];
+}): TimelineEntry<Row, S>[]
 ```
 
 ## UserRow

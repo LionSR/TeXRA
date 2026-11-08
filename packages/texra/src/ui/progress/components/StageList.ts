@@ -19,14 +19,14 @@ import {
   isInterrupted,
   isWorking,
   type RunId,
-  type Stage,
   formatCompactDuration,
   pluralize,
 } from '@texra-ai/harness/schemas';
 import {
-  compareBySeqNo,
   scriptStages,
+  transcriptTimeline,
   type ScriptStageView,
+  type TimelineEntry,
   type TranscriptRow,
 } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
@@ -82,65 +82,9 @@ const stageListStyles = css`
   }
 `;
 
-interface GroupTree {
-  group: Stage;
-  rows: TranscriptRow[];
-}
-
-type TimelineEntry =
-  | { key: string; time: number; row: TranscriptRow }
-  | { key: string; time: number; tree: GroupTree };
-
-/** Wire append sequence when both rows carry one, wall-clock otherwise. */
-function compareRows(a: TranscriptRow, b: TranscriptRow): number {
-  return compareBySeqNo(
-    a,
-    b,
-    (row) => row.seqNo,
-    (row) => row.timestamp,
-  );
-}
-
-function compareGroups(a: Stage, b: Stage): number {
-  return compareBySeqNo(
-    a,
-    b,
-    () => undefined,
-    (group) => group.startTime,
-  );
-}
-
-/**
- * The transcript as the list renders it: ungrouped rows (the user's
- * inputs, follow-ups, errors) interleaved chronologically with the stages
- * and their rows. Rows are classified by `groupId` alone.
- */
-function transcriptTimeline(
-  groups: readonly Stage[],
-  rows: readonly TranscriptRow[],
-): TimelineEntry[] {
-  const groupIds = new Set(groups.map((group) => group.id));
-  const sortedRows = rows.toSorted(compareRows);
-  const isGroupedRow = (row: TranscriptRow) =>
-    Boolean(row.groupId && groupIds.has(row.groupId));
-  const rowsByGroup = Map.groupBy(
-    sortedRows.filter(isGroupedRow),
-    (row) => row.groupId,
-  );
-  const ungrouped = sortedRows.filter((row) => !isGroupedRow(row));
-  const roots = groups.toSorted(compareGroups).map((group): GroupTree => ({
-    group,
-    rows: rowsByGroup.get(group.id) ?? [],
-  }));
-  return [
-    ...ungrouped.map((row) => ({ key: row.id, time: row.timestamp, row })),
-    ...roots.map((tree) => ({
-      key: tree.group.id,
-      time: tree.group.startTime,
-      tree,
-    })),
-  ].sort((a, b) => a.time - b.time);
-}
+/** One entry of the list: a row no stage holds, or a stage and its rows. */
+type Entry = TimelineEntry<TranscriptRow>;
+type StageEntry = Extract<Entry, { kind: 'stage' }>;
 
 @customElement('stage-list')
 export class StageList extends LitElement {
@@ -188,10 +132,9 @@ export class StageList extends LitElement {
    */
   @property({ type: Boolean, reflect: true }) terminal = false;
 
-  /** The transcript partitioned for render: rebuilt when `groups` or
-   *  `rows` change; the rows arrive in wire order and the groups keyed, so
-   *  the partition is one pass. */
-  private timeline: TimelineEntry[] = [];
+  /** The transcript laid out for render (`transcriptTimeline`), rebuilt
+   *  when the transcript changes. */
+  private timeline: Entry[] = [];
 
   /** Number of recent top-level timeline entries currently rendered. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
@@ -266,7 +209,7 @@ export class StageList extends LitElement {
     }
     const transcriptChanged = changedProperties.has('transcript');
     if (this.terminal || !transcriptChanged) return;
-    this.timeline = transcriptTimeline(this.groups, this.rows);
+    this.timeline = this.transcript ? transcriptTimeline(this.transcript) : [];
     // The windows count from the tail; a transcript that shrank (a
     // replaced history) or a fresh mount no longer lines up with them.
     const previous = changedProperties.get('transcript');
@@ -368,7 +311,7 @@ export class StageList extends LitElement {
     }
   }
 
-  private visibleTimelineEntries(): TimelineEntry[] {
+  private visibleTimelineEntries(): Entry[] {
     const timeline = this.timeline;
     return timeline.length <= this.timelineItemWindow
       ? timeline
@@ -390,8 +333,8 @@ export class StageList extends LitElement {
   }
 
   /** A section's header: its status, title, start and duration. */
-  private renderGroupHeader(node: GroupTree): TemplateResult {
-    const { group } = node;
+  private renderGroupHeader(node: StageEntry): TemplateResult {
+    const group = node.stage;
     const formattedStartTime = getTimeFormatter().format(
       new Date(group.startTime),
     );
@@ -428,10 +371,10 @@ export class StageList extends LitElement {
   /** Rows of a stage, in transcript order. A script stage leads with its
    *  calls as the script-stage model reads them; the calls' own cards, with
    *  their output, open below it from the card's Log. */
-  private renderGroupBody(node: GroupTree): TemplateResult {
-    const script = this.scripts.get(node.group.id);
-    const rows = this.renderRowEntries(node.rows, `group:${node.group.id}`);
-    const callsKey = `calls:${node.group.id}`;
+  private renderGroupBody(node: StageEntry): TemplateResult {
+    const script = this.scripts.get(node.stage.id);
+    const rows = this.renderRowEntries(node.rows, `group:${node.stage.id}`);
+    const callsKey = `calls:${node.stage.id}`;
     const callsOpen = this.expanded?.get(callsKey) === true;
     return html`${
       script && this.view && this.surface
@@ -449,12 +392,12 @@ export class StageList extends LitElement {
 
   /** Render a stage: a script stage as a plain container, its script-stage
    *  view heading it; any other as a collapsible section with a header. */
-  private renderGroupNode(node: GroupTree): TemplateResult {
-    const { group } = node;
+  private renderGroupNode(node: StageEntry): TemplateResult {
+    const group = node.stage;
 
     if (this.scripts.has(group.id)) {
       return html`
-        <div class="log-group log-run" data-run-id=${group.id}>
+        <div class="log-group log-run">
           <div class="log-group-content">${this.renderGroupBody(node)}</div>
         </div>
       `;
@@ -528,10 +471,9 @@ export class StageList extends LitElement {
       return this.renderTerminalOutput();
     }
 
-    // Interleave ungrouped rows (user input, follow-ups, errors) with run
-    // groups chronologically so the conversation reads top-to-bottom. Large
-    // runs render a recent window first; older timeline entries remain in
-    // memory and can be revealed from the top control.
+    // Rows no stage holds (user input, follow-ups, errors) and the stages,
+    // in transcript order. Large runs render a recent window first; older
+    // entries remain in memory and can be revealed from the top control.
     const visibleTimeline = this.visibleTimelineEntries();
     const hiddenTimelineCount = this.timeline.length - visibleTimeline.length;
 
@@ -549,13 +491,11 @@ export class StageList extends LitElement {
       }
       ${repeat(
         visibleTimeline,
-        (item) => item.key,
-        (item) => {
-          if ('row' in item) {
-            return this.renderLogEntry(item.row);
-          }
-          return this.renderGroupNode(item.tree);
-        },
+        (item) => (item.kind === 'row' ? item.row.id : item.stage.id),
+        (item) =>
+          item.kind === 'row'
+            ? this.renderLogEntry(item.row)
+            : this.renderGroupNode(item),
       )}
     `;
   }

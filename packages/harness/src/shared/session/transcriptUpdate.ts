@@ -63,6 +63,7 @@ function applyStage(
     group = {
       id: event.id,
       name: event.label,
+      seqNo: (d.ix.appended += 1),
       startTime: d.at,
       outcome: null,
     };
@@ -100,7 +101,13 @@ function openCardStage(d: Draft, card: string): void {
       typeof input.title === 'string' && input.title.length > 0
         ? input.title
         : 'Script';
-    const stage: Stage = { id: card, name, startTime: d.at, outcome: null };
+    const stage: Stage = {
+      id: card,
+      name,
+      seqNo: (d.ix.appended += 1),
+      startTime: d.at,
+      outcome: null,
+    };
     d.ix.stageIndex.set(card, stages.push(stage) - 1);
   } else if (stages[at].outcome !== null) {
     const { endTime: _end, ...open } = stages[at];

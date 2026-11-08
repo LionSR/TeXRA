@@ -21,7 +21,10 @@ All notable changes to this project will be documented in this file.
   A plugin opens a section with `AgentTrace.stage(label, use)`, which logs
   what `use` writes on the trace it is handed under the stage and closes it
   on `use`'s exit; `openStage`, `StageHandle` and `LogOptions.stageId` are
-  gone, and so is the `outcomeFromCause` export.
+  gone, and so is the `outcomeFromCause` export. A `Stage` carries its
+  `seqNo` among its run's rows, and `transcriptTimeline` from
+  `@texra-ai/harness/transcript` lays a transcript out as its stages with
+  their rows among the other rows, in place of the `compareBySeqNo` export.
   A stage still open in a run whose process stopped reads as interrupted,
   not running.
 - **The compile-after-output settings are document-task settings.** The
