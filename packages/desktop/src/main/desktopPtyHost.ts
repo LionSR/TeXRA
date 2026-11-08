@@ -153,8 +153,9 @@ function ensureSpawnHelperExecutable(): void {
   }
 }
 
-/** The native module, loaded on the first terminal: Node keeps a loaded
- *  module, and a failed load is retried by the next terminal. */
+/** The native module, loaded on the first terminal. Node keeps the module
+ *  once loaded, and keeps a failed load's error for the life of the process:
+ *  each later terminal reports that same error until the app restarts. */
 async function loadNodePty(): Promise<NodePtyModule> {
   const module = await import('node-pty');
   ensureSpawnHelperExecutable();
