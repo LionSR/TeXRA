@@ -7,7 +7,7 @@
  * the payment copy's (`planFallbackName` in `@ui/copy/modelAccess`), not
  * this catalog's.
  */
-import type { ApiKeyUsageRoute } from '@texra-ai/llm';
+import type { KeyPlanRoute } from '@texra-ai/llm';
 
 /** One coding plan's identity and presentation, keyed by its usage route. */
 interface CodingPlanSubscriptionDescriptor {
@@ -18,7 +18,7 @@ interface CodingPlanSubscriptionDescriptor {
   readonly credentialName: string;
   readonly credentialSetupUrl: string;
   readonly usageProvider: 'glmCodingPlan' | 'kimiCode';
-  readonly usageRoute: Exclude<ApiKeyUsageRoute, 'api-key'>;
+  readonly usageRoute: KeyPlanRoute;
   readonly displayName: string;
   readonly preferenceLabel: string;
   readonly modelFamily: string;

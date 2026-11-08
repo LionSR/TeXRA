@@ -36,7 +36,7 @@ Without a route, the model's own.
 ```ts
 function acceptedEfforts(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route?: Pick<ModelRoute, 'kind'>,
+  route?: ModelRoute,
 ): ReasoningEffort[]
 ```
 
@@ -123,20 +123,6 @@ Secret storage key for a provider's API key.
 
 ```ts
 function apiKeySecretName(provider: ApiKeyProviderId): string
-```
-
-## ApiKeyUsageRoute
-
-What a direct provider key pays through: a `key` plan, or nothing.
-
-```ts
-type ApiKeyUsageRoute =
-  | 'api-key'
-  | {
-      [P in PlanRoute]: (typeof PLAN_ROUTES)[P]['credential'] extends 'key'
-        ? P
-        : never;
-    }[PlanRoute];
 ```
 
 ## AssistantMessage
@@ -243,7 +229,7 @@ interface ChooseReasoningOptions {
   /** The user's saved level for this model, used when the selection names none. */
   readonly userEffort?: ReasoningEffort;
   /** The route the request is bound on, which may carry fewer controls than the model has. */
-  readonly route?: Pick<ModelRoute, 'kind'>;
+  readonly route?: ModelRoute;
   /** The caller's own ceiling on the levels it can serve (e.g. an installed Codex CLI's). */
   readonly routeEfforts?: readonly ReasoningEffort[];
 }
@@ -489,6 +475,18 @@ Materialized JSON: a string-keyed object of JSON values.
 
 ```ts
 const JsonObjectSchema: compose<$Record<String, Codec<Json, Json, never, never>>, Unknown>
+```
+
+## KeyPlanRoute
+
+A plan a direct provider key pays through (its credential is a `key`).
+
+```ts
+type KeyPlanRoute = {
+  [P in PlanRoute]: (typeof PLAN_ROUTES)[P]['credential'] extends 'key'
+    ? P
+    : never;
+}[PlanRoute];
 ```
 
 ## listCost
@@ -843,21 +841,29 @@ function modelRefOf(id: string): string | undefined
 ## ModelRoute
 
 The route a model's next request takes, decided by {@link decideModelRoute}.
+A route that bills a credential names its kind (a signed-in `session`, or
+an `api-key`) and the plan it pays through (`plan`; none for a key paid
+per token), so the billing route is `plan ?? 'api-key'` on either.
 
 ```ts
 type ModelRoute =
   | {
-      readonly kind: 'chatgpt-subscription';
+      readonly kind: 'session';
+      readonly plan: 'chatgpt-subscription';
       readonly endpoint: string;
       /** The input window: the user's override, else what the Codex backend grants. */
       readonly contextWindow: number;
     }
-  | { readonly kind: 'xai-subscription'; readonly endpoint: string }
+  | {
+      readonly kind: 'session';
+      readonly plan: Exclude<PlanRoute, KeyPlanRoute | 'chatgpt-subscription'>;
+      readonly endpoint: string;
+    }
   | {
       readonly kind: 'api-key';
       readonly endpoint: string;
       readonly provider: ApiKeyProviderId;
-      readonly usageRoute: ApiKeyUsageRoute;
+      readonly plan: KeyPlanRoute | null;
     }
   /** No provider key can serve the model directly. */
   | { readonly kind: 'no-api-key' }
@@ -894,13 +900,14 @@ const OWN_KEY_ROUTE_FACTS: RouteFacts
 
 The subscription plans a model can bill through instead of the caller's
 API credit, keyed by the route that bills through each. `provider` is the
-account the plan bills. A `session` plan signs in with an OAuth session,
-is its own route kind, and renews its token once on a 401; a used-up quota
-asks before moving onto an API key, because the move starts spending API
-credit. A `key` plan pays for an `api-key` route on a provider console
-key, as that route's `usageRoute`; a used-up quota falls back to the
-model's own key without asking. Hosts store these spellings, so a key is
-never renamed.
+account the plan bills; a route names its plan as `plan`, so it bills
+`plan ?? 'api-key'`. A `session` plan is the `plan` of a `session` route:
+it signs in with an OAuth session and renews its token once on a 401; a
+used-up quota asks before moving onto an API key, because the move starts
+spending API credit. A `key` plan is the `plan` of an `api-key` route on a
+provider console key (`null` for a key paid per token); a used-up quota
+falls back to the model's own key without asking. Hosts store these
+spellings, so a key is never renamed.
 
 ```ts
 const PLAN_ROUTES: Readonly<{ 'chatgpt-subscription': Readonly<{ provider: "openai"; credential: "session"; }>; 'xai-subscription': Readonly<{ provider: "xai"; credential: "session"; }>; 'kimi-code-subscription': Readonly<{ provider: "kimiCode"; credential: "key"; }>; 'glm-coding-plan-subscription': Readonly<{ provider: "glm"; credential: "key"; }>; }>
@@ -1313,7 +1320,7 @@ thinking is off and `none` is how the route says so.
 ```ts
 function wireEffort(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route: Pick<ModelRoute, 'kind'> | undefined,
+  route: ModelRoute | undefined,
   reasoning: ReasoningChoice,
 ): ReasoningEffort | null
 ```

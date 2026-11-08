@@ -90,10 +90,10 @@ export function servingBackend(
  * The route a run's reasoning is decided on. The validation model carries
  * every control the model has, so it names no llm route.
  */
-type ReasoningRoute = { readonly kind: ModelRoute['kind'] | 'validation' };
+type ReasoningRoute = ModelRoute | { readonly kind: 'validation' };
 
 const llmRoute = (route: ReasoningRoute) =>
-  route.kind === 'validation' ? undefined : { kind: route.kind };
+  route.kind === 'validation' ? undefined : route;
 
 /** {@link decideReasoning} as a value: the choice, or why it is refused. */
 const chooseOnRoute = (

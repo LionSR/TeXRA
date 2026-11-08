@@ -133,10 +133,9 @@ function routeVerdict({ rawConfig, route }: RoutedModel):
     } {
   if (rawConfig.retired) return { verdict: { kind: 'retired' } };
   switch (route.kind) {
-    case 'chatgpt-subscription':
-    case 'xai-subscription':
+    case 'session':
       return {
-        verdict: { kind: 'subscription-access', usageRoute: route.kind },
+        verdict: { kind: 'subscription-access', usageRoute: route.plan },
       };
     case 'no-api-key':
       return { verdict: { kind: 'missing-key' } };
@@ -145,8 +144,7 @@ function routeVerdict({ rawConfig, route }: RoutedModel):
     case 'api-key':
       return {
         keyOf: route.provider,
-        usageRoute:
-          route.usageRoute === 'api-key' ? undefined : route.usageRoute,
+        usageRoute: route.plan ?? undefined,
       };
   }
 }
@@ -559,12 +557,10 @@ function visibleModelsForAccess(
   const models = new Set(configuredModels);
   if (!facts.plans.includes('chatgpt-subscription')) return [...models];
   for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
-    if (
-      !config.deprecated &&
-      decideModelRoute(config, facts).kind === 'chatgpt-subscription'
-    ) {
+    if (config.deprecated) continue;
+    const route = decideModelRoute(config, facts);
+    if (route.kind === 'session' && route.plan === 'chatgpt-subscription')
       models.add(model);
-    }
   }
   return [...models];
 }
