@@ -1,7 +1,7 @@
 /**
  * How a run ends: the verdict of its fiber's exit, and the one end
  * ({@link endRun}) the run program's terminal reaches, which commits the
- * run's `run.end` in one transaction and reports the run to its caller.
+ * run's `run.end` and report in one transaction. Callers read that end.
  */
 import { Cause, Clock, Effect, Exit } from 'effect';
 
@@ -67,22 +67,6 @@ function emptyReport(ctx: RunLaunch, outcome: RunOutcome): RunReport {
 }
 
 /**
- * The run's own flow result, relabelled with the outcome the end resolved.
- *
- * A flow reports the exit it saw; the `run.end` row carries the verdict,
- * and an earlier end of the lifecycle stands. Everything the parent
- * receives has to carry that same verdict, or an orchestrator formats a
- * failure for a run whose durable record says cancelled.
- */
-function withResolvedOutcome(
-  result: RunReport,
-  outcome: RunOutcome,
-): RunReport {
-  if (result.outcome === outcome) return result;
-  return { ...result, outcome };
-}
-
-/**
  * The run program's terminal, the run's one terminal writer: every way the
  * flow exits (a result, a reported failure, an escaped exception, a stop)
  * reaches this exactly once, as the exit of the one masked region the
@@ -98,7 +82,7 @@ function withResolvedOutcome(
 export const endRun = Effect.fn('endRun')(function* (
   ctx: RunLaunch,
   exit: Exit.Exit<RunReport, Error>,
-): Effect.fn.Return<RunReport, Error, AgentRunServices> {
+): Effect.fn.Return<void, Error, AgentRunServices> {
   const { runId } = ctx;
   const agentIdentifier = ctx.config.agent;
   const carried = Exit.isSuccess(exit) ? exit.value : undefined;
@@ -177,7 +161,7 @@ export const endRun = Effect.fn('endRun')(function* (
       ? null
       : yield* childEndReport(
           ctx,
-          withResolvedOutcome(childResult, outcome),
+          { ...childResult, outcome },
           (yield* log.facts(runId))?.stop?.reason ?? null,
           (yield* Clock.currentTimeMillis) - ctx.startedAt,
         ).pipe(
@@ -216,9 +200,7 @@ export const endRun = Effect.fn('endRun')(function* (
   // interruption stays the exit.
   if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause))
     return yield* Effect.failCause(exit.cause);
-  if (childResult !== undefined && parentRunId !== null)
-    return withResolvedOutcome(childResult, resolved);
-  if (thrown !== undefined && error !== undefined)
+  if (parentRunId === null && thrown !== undefined && error !== undefined)
     // A root run's failure. Once its `run.end` row committed, the
     // session's presenter shows that row (`presentTerminalResult`); a run
     // that never opened has no row, so its launch's caller presents this.
@@ -227,5 +209,4 @@ export const endRun = Effect.fn('endRun')(function* (
       cause: thrown,
       ...(error.kind === 'model' ? { failure } : {}),
     });
-  return withResolvedOutcome(carried ?? emptyReport(ctx, resolved), resolved);
 }, Effect.uninterruptible);

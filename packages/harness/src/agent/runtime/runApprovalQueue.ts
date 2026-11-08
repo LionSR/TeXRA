@@ -201,23 +201,16 @@ export const sessionApprovals: Effect.Effect<
       );
       return next === null ? [] : [policyRow(runId, next)];
     }),
-    change: (runId, edit, rows = []) => {
+    change: (runId, edit) => {
       // The view has applied every change by the time it returns, so a
       // change the view already shows writes nothing.
       const shown = view().policy.get(runId);
-      if (
-        rows.length === 0 &&
-        shown !== undefined &&
-        sameGrants(shown, edit(shown))
-      )
+      if (shown !== undefined && sameGrants(shown, edit(shown)))
         return Effect.void;
       return log.transact((tx) =>
         Effect.gen(function* () {
-          const all: readonly SessionRowDraft[] = [
-            ...rows,
-            ...(yield* grantRows(log, view(), runId, edit)),
-          ];
-          if (all.length > 0) yield* runStateAppend(tx.append)(all);
+          const rows = yield* grantRows(log, view(), runId, edit);
+          if (rows.length > 0) yield* runStateAppend(tx.append)(rows);
         }),
       );
     },
