@@ -127,6 +127,7 @@ export {
 // A script's stages and calls, and the children a dispatch card lists.
 export {
   dispatchedChildren,
+  isScriptCall,
   scriptStages,
   type ScriptCallStatus,
   type ScriptCallView,

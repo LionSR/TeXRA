@@ -17,6 +17,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog } from '@shared/session/runHistory';
 import { publishTestRunStart, seedRows } from '@test/support/sessionTestUtils';
+import { runStart } from '@test/support/sessionRows';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   FakeHost,
@@ -98,14 +99,10 @@ const persistCompletedChild = (
     yield* publishTestRunStart(session, parentId);
     yield* Context.get(session, SessionLog).settled;
     yield* seedRows(Context.get(session, SessionLog))([
-      {
-        type: 'run.start',
-        aggregateId: qualifyAggregateId('run', childRunId),
+      runStart(childRunId, {
         identity: { kind: 'agent', agent: 'draft' },
-        takesFollowUps: false,
         parent: { id: parentId, call: null },
-        provenance: null,
-      },
+      }),
       {
         type: 'run.config',
         aggregateId: qualifyAggregateId('run', childRunId),

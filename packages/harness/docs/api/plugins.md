@@ -133,7 +133,7 @@ interface AgentTrace {
   output(stream: 'stdout' | 'stderr', text: string): void;
 
   // ─── Stage + stream handles ─────────────────────────────────────────
-  openStage(label: string, options?: StageOptions): StageHandle;
+  openStage(label: string): StageHandle;
   /**
    * Open a streaming message. `stream.start` marks the moment the phase the
    * stream represents actually began — emit it at the provider's phase
@@ -1482,8 +1482,6 @@ A process child's one turn, built around the run's trace.
 
 ```ts
 interface ProcessTurn {
-  /** The stage opened on the run's trace for the turn ("Codex session"). */
-  readonly stageLabel: string;
   /** The turn: the whole process, its output on the trace, over the
    *  process's services (a spawner, the filesystem). A stop interrupts it:
    *  a foreign call takes its signal from that interruption
@@ -1885,29 +1883,14 @@ interface SettingsStores {
 
 ## StageHandle
 
-Handle returned by `openStage` — wraps a stage with end/child ops.
+Handle returned by `openStage`.
 
 ```ts
 interface StageHandle {
   /** Stage id. */
   readonly id: string | undefined;
-  /** Emit `stage.end` with the given outcome. Idempotent. */
+  /** Emit `stage.end` with the given outcome; its one owner calls it once. */
   end(status?: RunOutcome): void;
-  /** Open a nested stage parented to this one. */
-  child(label: string, options?: StageOptions): StageHandle;
-}
-```
-
-## StageOptions
-
-Options accepted by `openStage`.
-
-```ts
-interface StageOptions {
-  /** Semantic stage kind consumed by host progress surfaces. */
-  readonly kind?: 'run' | 'session';
-  /** Parent handle for nested stages; without one the stage opens as a root. */
-  readonly parent?: StageHandle;
 }
 ```
 

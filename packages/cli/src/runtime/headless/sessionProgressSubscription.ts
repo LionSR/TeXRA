@@ -28,7 +28,7 @@ function childRow(child: RunView) {
  * out as one `kind: "progress"` record whose `event` is the row's `type` and
  * whose `payload` is the rest of the row, field names untouched: the CLI
  * contract is a versioned projection of `SessionRow`, not a second
- * vocabulary (`contract: 2`, stamped by the NDJSON sink).
+ * vocabulary (`contract: 3`, stamped by the NDJSON sink).
  *
  * It reads `view.events(view.head())` directly: every event
  * above the store's head in commit order, never the view, so a

@@ -19,7 +19,7 @@ import {
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import {
   declaredToolNames,
   type StepToolInputs,
@@ -120,7 +120,6 @@ export interface RunLaunch {
   /** The persona the run is, with the tools it declares. */
   readonly persona: Persona;
   readonly logger: AgentTrace;
-  readonly parentStage: StageHandle;
   readonly toolPolicy: ToolPolicy;
   /** Absolute or absent, parsed once at launch. */
   readonly workingDirectory?: string;

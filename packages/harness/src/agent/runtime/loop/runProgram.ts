@@ -9,7 +9,7 @@
 import { Cause, Context, Effect, Exit, ScopedRef } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
-import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   outcomeFromCause,
@@ -180,26 +180,3 @@ export const stoppedBy =
     logger.warn(`${label} stopped: ${stopped.message}`);
     return Effect.fail(stopped);
   };
-
-/**
- * A trace stage whose verdict is the body's own exit. acquireUseRelease, not
- * a Scope: a Scope's finalizer sees `Exit<unknown, unknown>` and cannot read
- * the body's value, which is why a stage closed from a mutable verdict was the
- * older shape. This serves the run loop, whose stage closes with its body.
- */
-export const stagedBy =
-  <A>(open: () => StageHandle, outcomeOf: (value: A) => RunOutcome) =>
-  <E, R>(body: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-    Effect.acquireUseRelease(
-      Effect.sync(open),
-      () => body,
-      (stage, exit) =>
-        Effect.sync(() =>
-          stage.end(
-            Exit.match(exit, {
-              onSuccess: outcomeOf,
-              onFailure: outcomeFromCause,
-            }),
-          ),
-        ),
-    );

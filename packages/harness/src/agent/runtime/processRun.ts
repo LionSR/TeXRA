@@ -57,8 +57,6 @@ export interface ProcessReport {
 
 /** A process child's one turn, built around the run's trace. */
 export interface ProcessTurn {
-  /** The stage opened on the run's trace for the turn ("Codex session"). */
-  readonly stageLabel: string;
   /** The turn: the whole process, its output on the trace, over the
    *  process's services (a spawner, the filesystem). A stop interrupts it:
    *  a foreign call takes its signal from that interruption
@@ -91,7 +89,7 @@ interface OpenedProcess {
 }
 
 /**
- * The run on its fiber: the turn under its stage, then its end on every
+ * The run on its fiber: the turn, then its end on every
  * exit, in the one masked region whose exit is the terminal, so a stop
  * landing mid-turn still ends the run. The end's transaction delivers the
  * report ({@link endRunRows}); one that never wrote fails the fiber, its
@@ -101,23 +99,19 @@ const processRun = (
   runId: RunId,
   { logger, turn }: OpenedProcess,
 ): Effect.Effect<void, Error, AgentRunServices> =>
-  Effect.suspend(() => {
-    const stage = logger.openStage(turn.stageLabel);
-    return Effect.uninterruptibleMask((restore) =>
-      Effect.flatMap(Effect.exit(restore(turn.run)), (exit) => {
-        const { outcome, error } = endVerdict(
-          Exit.map(exit, (report) =>
-            failureOf(report) === undefined
-              ? RUN_OUTCOME.COMPLETED
-              : RUN_OUTCOME.FAILED,
-          ),
-        );
-        stage.end(outcome);
-        const ending = endingOf(runId, turn, exit, error);
-        return endRunRows({ runId, outcome, ...ending }).pipe(Effect.asVoid);
-      }),
-    ).pipe(Effect.ensuring(Effect.sync(() => logger.close())));
-  });
+  Effect.uninterruptibleMask((restore) =>
+    Effect.flatMap(Effect.exit(restore(turn.run)), (exit) => {
+      const { outcome, error } = endVerdict(
+        Exit.map(exit, (report) =>
+          failureOf(report) === undefined
+            ? RUN_OUTCOME.COMPLETED
+            : RUN_OUTCOME.FAILED,
+        ),
+      );
+      const ending = endingOf(runId, turn, exit, error);
+      return endRunRows({ runId, outcome, ...ending }).pipe(Effect.asVoid);
+    }),
+  ).pipe(Effect.ensuring(Effect.sync(() => logger.close())));
 
 /** A returned turn's failure: its exit's, or the one it reported. */
 const failureOf = ({ exit, failure }: ProcessReport): string | undefined => {

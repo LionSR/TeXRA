@@ -1,9 +1,10 @@
 import { layer } from '@effect/vitest';
 import { Effect, Context, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
-import { RunIdSchema, qualifyAggregateId } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { runStart } from '@test/support/sessionRows';
 import {
   FakeHost,
   isolatedTestSession,
@@ -28,20 +29,13 @@ layer(
         );
         yield* Context.get(session, SessionLog).settled;
         const rows = yield* Context.get(session, SessionLog).transact([
-          {
-            type: 'run.start',
-            aggregateId: qualifyAggregateId(
-              'run',
-              Schema.decodeUnknownSync(RunIdSchema)('aaa010'),
-            ),
+          runStart(Schema.decodeUnknownSync(RunIdSchema)('aaa010'), {
             identity: { kind: 'agent', agent: 'assistant' },
-            takesFollowUps: false,
             parent: {
               id: Schema.decodeUnknownSync(RunIdSchema)('aaa0ff'),
               call: null,
             },
-            provenance: null,
-          },
+          }),
         ]);
         expect(rows[0]).toMatchObject({
           parent: { id: 'aaa0ff', uid: expect.any(String) },

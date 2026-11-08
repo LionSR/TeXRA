@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **`texra run` NDJSON is contract 3: a run and a turn are no longer
+  stages.** The `Run: <agent>`, `Tool-use turn`, `Background command`,
+  `Claude Code session` and `Codex session` `stage.start`/`stage.end`
+  progress records are gone: read a run's bounds from `run.activate` and
+  `run.end`, and its turns from `run.position`. A stage left open when its
+  run ends gets no `stage.end` of its own; its run's `run.end` closes it.
+  `stage.start` carries no `kind` or `parentId`. SDK: a `Stage` states
+  `outcome` (null while open) in place of `status`, and has no `kind` or
+  `parentStageId`; `StageStatus` and `StageOptions` are gone, and
+  `isScriptCall` from `@texra-ai/harness/transcript` tells a script's call.
+  A stage still open in a run whose process stopped reads as interrupted,
+  not running.
 - **The compile-after-output settings are document-task settings.** The
   project settings that compile a document task's output, open the PDF and
   repair a failed compile are stored as `texra.documents.compileAfterOutput`,

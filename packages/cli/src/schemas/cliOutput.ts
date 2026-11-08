@@ -42,16 +42,18 @@ import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
  * this stamp over one member of the `kind` union below.
  */
 const CliNdjsonLineStampSchema = Schema.Struct({
-  contract: Schema.Literal(2),
+  contract: Schema.Literal(3),
   ts: Schema.String,
 });
 
 /**
  * The CLI output contract version, stamped on every NDJSON line as
- * `contract` (`version` is the `texra version` record's own field). Version 2
+ * `contract` (`version` is the `texra version` record's own field). Version 3
  * is 1.0's: `kind: "progress"` records carry a session row verbatim (`event`
  * is the row's `type`, `payload` the rest of it), results carry `runId`, and
- * `CliRunStatus` is the only renamed vocabulary.
+ * `CliRunStatus` is the only renamed vocabulary. Version 3 has no stage for
+ * a run or a turn (read `run.activate`, `run.position` and `run.end`), and
+ * no `stage.end` a run's end wrote for a stage it left open.
  */
 export const CLI_NDJSON_CONTRACT =
   CliNdjsonLineStampSchema.fields.contract.literal;

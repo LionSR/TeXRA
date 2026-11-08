@@ -26,7 +26,6 @@ import {
   qualifyAggregateId,
   MESSAGE_TYPES,
   recipeBlockOf,
-  isPlainAgentIdentity,
   listingKeyOf,
   isTranscriptEvent,
   blocksCaller,
@@ -1018,7 +1017,6 @@ function applyTranscriptRow(u: Update, event: DisplayRow): boolean {
     event,
     {
       debug: u.view.debug,
-      lifecycleStages: isPlainAgentIdentity(run.identity),
       runLabels: u.view.runs,
     },
   );

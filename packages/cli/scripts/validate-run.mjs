@@ -3306,8 +3306,8 @@ prompt: |
     assertSuccess(result, 'texra run script fan-out NDJSON');
     const records = parseNdjson(result.stdout, 'script fan-out run NDJSON');
     assert(
-      records.every((record) => record.contract === 2),
-      'every NDJSON line should carry the version-2 contract stamp',
+      records.every((record) => record.contract === 3),
+      'every NDJSON line should carry the version-3 contract stamp',
     );
     // A progress record carries the session row: its run is the `run`
     // aggregate key, `["run", <run id>]`.

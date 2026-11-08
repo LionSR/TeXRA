@@ -55,11 +55,11 @@ const CHANNEL = 'sessionEvents';
  *  together, so they finish under one deadline for the process, not one each. */
 export const SESSION_CLOSE_DEADLINE_MS = 5_000;
 
-/** What the publisher keeps per aggregate: its open work, so closing it at
- *  a park, an end or a host exit reads no rows. Streams close at a phase
- *  move that rests or ends the run, stages only on their own rows. An
- *  earlier process's work is not here: its streams close at that same move,
- *  and a stage it left open closes on the run's outcome when the view's
+/** What the publisher keeps per aggregate: its open streams, so closing
+ *  them at a park, an end or a host exit reads no rows. They close at a
+ *  phase move that rests or ends the run. An earlier process's streams are
+ *  not here: they close at that same move. A stage is no work of the
+ *  publisher's: one left open closes on the run's outcome when the view's
  *  transcript applies its `run.end`. */
 type OpenWorkByAggregate = Map<AggregateId, Map<string, OpenWork>>;
 
@@ -95,20 +95,12 @@ function openWorkTracker(): {
         continue;
       }
       const work = aggregates.get(row.aggregateId) ?? new Map();
-      const close = (kind: OpenWork['kind'], id: string) => {
-        if (work.get(id)?.kind === kind) work.delete(id);
-      };
       if (closesRunWindow(row)) {
-        for (const [id, { kind }] of work) {
-          if (kind === 'stream') work.delete(id);
-        }
-      } else if (row.type === 'stream.start' || row.type === 'stage.start') {
-        const kind = row.type === 'stream.start' ? 'stream' : 'stage';
-        work.set(row.id, { kind, id: row.id });
+        work.clear();
+      } else if (row.type === 'stream.start') {
+        work.set(row.id, { id: row.id });
       } else if (row.type === 'stream.end') {
-        close('stream', row.id);
-      } else if (row.type === 'stage.end') {
-        close('stage', row.id);
+        work.delete(row.id);
       } else {
         continue;
       }

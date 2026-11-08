@@ -295,7 +295,7 @@ export const endIn = Effect.fn('endIn')(function* (
   const beside = [
     ...ahead,
     ...consumedRows(runId)(unapplied, { kind: 'dropped', reason: 'ended' }),
-    ...log.closure(runId, outcome),
+    ...log.closure(runId),
     end,
     ...report,
   ];

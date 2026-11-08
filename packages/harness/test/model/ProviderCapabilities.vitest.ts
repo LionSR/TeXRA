@@ -3,6 +3,7 @@ import { describe, expect } from 'vitest';
 
 import { Context, Effect, Layer } from 'effect';
 import {
+  decideModelRoute,
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
   ModelProvider,
@@ -21,16 +22,14 @@ const CODEX_INPUT_LIMIT = 272_000;
 const chatgptConfig = (host: HostRecord, config: ModelConfig) =>
   readModelSettings(host.roots).pipe(
     Effect.provide(Secrets.layer(host.secrets)),
-    Effect.map((settings) => routeFactsFor(settings, [])),
-    Effect.map((facts) =>
-      routeConfig(config, {
-        kind: 'chatgpt-subscription',
-        endpoint: 'https://api.openai.com/v1',
-        contextWindow:
-          facts.chatgptContextWindow ??
-          config.codexSubscription?.contextWindow ??
-          Number.NaN,
-      }),
+    Effect.map((settings) =>
+      routeConfig(
+        config,
+        decideModelRoute(config, {
+          ...routeFactsFor(settings, []),
+          plans: ['chatgpt-subscription'],
+        }),
+      ),
     ),
   );
 
@@ -71,7 +70,7 @@ describe('provider capabilities', () => {
         );
 
         expect(yield* chatgptConfig(host, gpt55Config)).toMatchObject({
-          contextWindow: CODEX_INPUT_LIMIT + gpt55Config.maxOutputTokens,
+          contextWindow: 400_000,
         });
       }),
   );

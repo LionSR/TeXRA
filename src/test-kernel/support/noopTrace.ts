@@ -5,7 +5,6 @@
 import type {
   AgentTrace,
   StageHandle,
-  StageOptions,
   StreamHandle,
 } from '@agent/trace/AgentTrace';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
@@ -19,9 +18,6 @@ class NoopStageHandle implements StageHandle {
     this.id = id;
   }
   end(_status?: RunOutcome): void {}
-  child(_label: string, _options?: StageOptions): StageHandle {
-    return new NoopStageHandle(crypto.randomUUID());
-  }
 }
 
 class NoopStreamHandle implements StreamHandle {
