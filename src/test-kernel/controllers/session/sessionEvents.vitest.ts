@@ -102,7 +102,7 @@ import {
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import type { ProcessProbe } from '@texra-ai/harness/node';
+import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 vi.mock('node:os', async (importOriginal) => ({

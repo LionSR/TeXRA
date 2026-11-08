@@ -16,9 +16,7 @@
  *   [`workspaceRelativePath`](#workspacerelativepath),
  *   [`resolveGlobalStoragePath`](#resolveglobalstoragepath), and
  *   [`resolveWorkspaceStoragePath`](#resolveworkspacestoragepath).
- * - **SQLite stores & process identity**: [`GlobalDatabase`](#globaldatabase),
- *   [`ProjectDatabases`](#projectdatabases), and
- *   [`ProcessIdentity`](#processidentity).
+ * - **The global SQLite store**: [`GlobalDatabase`](#globaldatabase).
  * - **Commands & atomic file I/O**:
  *   [`executeCommand`](#executecommand),
  *   [`writeFileAtomic`](#writefileatomic), and
@@ -43,20 +41,10 @@ export {
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
 export { nodePlatformServices } from '@platform/defaults/nodePlatform';
-// The process's SQLite stores (the global root's handle, which
-// `ProcessLayerOptions.globalDatabase` may replace, and the bound its input
-// history keeps; the project connections every session borrows), the
-// identity stamped on every row the process appends, and what reading a
-// process's start identity takes.
-export {
-  GlobalDatabase,
-  INPUT_HISTORY_LIMIT,
-  type ProjectDatabases,
-} from '@shared/session/database';
-export type { ProcessIdentity } from '@shared/session/sessionEvents';
+// The global root's SQLite handle, and the bound its input history keeps. The project stores stay beneath the session composition.
+export { GlobalDatabase, INPUT_HISTORY_LIMIT } from '@shared/session/database';
 // A run's record, as a project store reads it back (`readRunRecord`).
 export type { RowOf, RunRows } from '@shared/session/runRowsShape';
-export type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 export {
   canonicalizeWorkspaceRoot,
   relativeToRoot,

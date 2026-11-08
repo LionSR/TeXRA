@@ -92,16 +92,18 @@ function claudeCodeThinking(
  * the model thinks on this request and sizes thinking adaptively; a
  * budget-sized model (e.g. Haiku 4.5) rejects `adaptive`, so it keeps Claude
  * Code's own default. A request with thinking off (`@none`) says so.
- * Throws a `ToolError` for a model Claude Code cannot run.
+ * Fails with a `ToolError` for a model Claude Code cannot run.
  */
-function claudeCodeRun(
+const claudeCodeRun = Effect.fn('claudeAgent.claudeCodeRun')(function* (
   modelString: string,
   effort: AgentCliEffort | undefined,
   userEffort: AgentCliEffort,
-): ClaudeCodeRun {
-  const selection = selectAgentCliModel(modelString, CLAUDE_CODE_MODEL_RULE);
+): Effect.fn.Return<ClaudeCodeRun, ToolError> {
+  const selection = yield* resolveAgentCliModel(() =>
+    selectAgentCliModel(modelString, CLAUDE_CODE_MODEL_RULE),
+  );
   const { config } = selection;
-  const resolved = agentCliReasoning(selection, effort, { userEffort });
+  const resolved = yield* agentCliReasoning(selection, effort, { userEffort });
   return {
     ref: config.ref,
     model: config.id,
@@ -109,7 +111,7 @@ function claudeCodeRun(
     thinking: claudeCodeThinking(resolved.choice.thinking, config),
     note: resolved.choice.note,
   };
-}
+});
 
 /**
  * The run a Claude Code call asks for: its own model and effort, else the
@@ -126,8 +128,10 @@ export const readClaudeCodeRun = Effect.fn('claudeAgent.readClaudeCodeRun')(
     const modelString =
       input.model ?? (yield* Settings.get(stores, CLAUDE_AGENT_MODEL_SETTING));
     const userEffort = yield* Settings.get(stores, CLAUDE_AGENT_EFFORT_SETTING);
-    const run = yield* resolveAgentCliModel(() =>
-      claudeCodeRun(modelString, input.effort ?? undefined, userEffort),
+    const run = yield* claudeCodeRun(
+      modelString,
+      input.effort ?? undefined,
+      userEffort,
     );
     if (run.note) {
       yield* Effect.logInfo(run.note).pipe(withLogChannel(CLAUDE_AGENT_NAME));
