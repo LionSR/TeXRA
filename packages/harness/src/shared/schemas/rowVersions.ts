@@ -153,7 +153,11 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v8: no `reason`: why a run stopped is its `run.stop` row (an earlier
   // build's shutdown end would read as a person's stop, holding a child's
   // delivery back and spending a retry).
-  'run.end': { version: 8, listing: 'own' },
+  // v9: a model failure is its verdict (`failure`: llm's on the vendor's
+  // reply, the route's, or an attempt the process stopped during), never
+  // its words or a classification of it (an earlier build's end would read
+  // without its verdict).
+  'run.end': { version: 9, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   // v2: a model's summary carries its helper request's priced `usage`,
   // which the run's spend counts (a v1 summary would read as free).
@@ -192,7 +196,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // `failed` row's own `next`.
   // v9: `allowBypass` is `offersGrant`, what it means: whether the request
   // offers the run grant of its kind (an earlier build's would fail to read).
-  'request.opened': { version: 9, listing: 'request' },
+  // v10: a retry carries its failure as the verdict (`failure`), not its
+  // words and classification (`errorDetails`), and a host words it.
+  'request.opened': { version: 10, listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options.
   'request.decided': { version: 2, listing: 'request' },
@@ -220,7 +226,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v7: a script delivery's summary counts its `sectionCount`, not
   // `phaseCount` (an earlier build's user message would be refused as a
   // damaged payload).
-  log: { version: 7, listing: 'none' },
+  // v8: an error row's model failure is its verdict (`failure`), with no
+  // worded `message`, status or classification beside it (an earlier
+  // build's error row would be refused as a damaged payload).
+  log: { version: 8, listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
@@ -293,7 +302,12 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // (`next: decline`) instead of a retry request answered at once, and the
   // rebind records the declined route on a `run.config` (an earlier build's
   // fallback would resume without its route declined).
-  'model.message': { version: 15, listing: 'none' },
+  // v16: a failed attempt's error is its verdict: llm's (its kind, the
+  // vendor's own message and status, the quota a plan or credit names),
+  // the route's, or `interrupted` for an attempt the process stopped
+  // during, in place of a made-up failure message (an earlier build's
+  // error would read without its verdict).
+  'model.message': { version: 16, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).

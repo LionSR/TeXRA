@@ -63,7 +63,7 @@ const PlanRouteSchema = Schema.Literals(Struct.keys(PLAN_ROUTES));
 export type BillingRoute = PlanRoute | 'api-key';
 
 /** A model failure's fields as data: what {@link ModelError} carries. */
-const ModelErrorFieldsSchema = Schema.Struct({
+export const ModelErrorFieldsSchema = Schema.Struct({
   /** The class of failure, each one a decision some reader makes: a
    *  request this route cannot carry (nothing to repeat), a credential the
    *  provider refused (renewed once), an overflowed window (compacted and

@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
 
-import { ProviderErrorClassificationSchema } from './errors';
+import { ModelFailureSchema } from './errors';
 import type { FileLocation } from './output';
 
 /**
@@ -77,9 +77,9 @@ export const RequestShowErrorPayloadSchema = Schema.Struct({
   /** Docs page of the refusing request (e.g. 'file-management'); the host
    *  offers it as a guide link or action beside the message. */
   docsPage: Schema.optional(Schema.String),
-  /** The classification of the failure `message` words: a host with words
-   *  of its own for it shows them in place of `message`. */
-  classification: Schema.optional(ProviderErrorClassificationSchema),
+  /** The model call's failure `message` words, as its verdict: a host
+   *  with words of its own for it shows them in place of `message`. */
+  failure: Schema.optional(ModelFailureSchema),
 });
 /** {@link RequestShowErrorPayloadSchema}'s value. */
 export type RequestShowErrorPayload = typeof RequestShowErrorPayloadSchema.Type;
