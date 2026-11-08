@@ -1,671 +1,455 @@
-// Unit tests for the chat-session controller's run-slot ownership and its
-// stop and resume paths. The session's `start` and `resume` are stand-ins.
-
+/**
+ * The chat-session controller over a real session: its runs start, resume
+ * and stop on a persistent session over the validation host, whose model is
+ * the only fake (the bundled `assistant` answers with what it was sent).
+ * Each case drives the controller's public verbs (`submit`, `resume`,
+ * `stop`) and reads what the person and the process get: the run's view,
+ * the session's stored rows, and the chat's exit code.
+ *
+ * Failure modes:
+ * - a Ctrl-C while a resumed run rehydrates is lost, and the run keeps going;
+ * - a run whose end is lost exits as a success because the chat was leaving;
+ * - a message typed around a stop is dropped, reordered, or starts a second
+ *   root beside the stopped one;
+ * - a stop or a message asked while the first launch is on its way is lost,
+ *   or starts a second root;
+ * - a root whose result cannot be read exits as a success;
+ * - a resume of a run that does not exist exits as a success;
+ * - a message's late reply that resumed the old root takes the chat's root
+ *   back from the conversation the user resumed meanwhile.
+ */
+import { computed } from '@lit-labs/signals';
+import { layer } from '@effect/vitest';
 import {
   Effect,
   Exit,
   Fiber,
-  Layer,
   Schema,
   Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { layer } from '@effect/vitest';
-import { assert, beforeEach, expect, onTestFinished, vi } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  executeAgent: vi.fn(),
-  rootLaunch: vi.fn(),
-  request: vi.fn(),
-  workspaceGet: vi.fn(),
-  globalGet: vi.fn(),
-  getRunRecords: vi.fn(),
-  setCliHelperModel: vi.fn(),
-  createCliRuntimeHost: vi.fn(),
-  presentationHostClose: vi.fn(),
-  sessionStub: vi.fn(),
-  detachHostInteractions: vi.fn(),
-  createTuiHostInteractions: vi.fn(),
-  resumeRun: vi.fn(),
-  appendLocalNotice: vi.fn(),
-  appendLocalErrorTranscript: vi.fn(),
-  appendLocalUserTranscript: vi.fn(),
-  clearLocalTranscript: vi.fn(),
-  moveLocalTranscriptToRun: vi.fn(),
-  reportRequestDefect: vi.fn(),
-}));
-
-vi.mock('@cli/runtime/platform/initPlatform', () => ({
-  setCliHelperModel: mocks.setCliHelperModel,
-}));
-
-vi.mock('@cli/runtime/headless/cliPresentationHost', () => ({
-  createCliRuntimeHost: mocks.createCliRuntimeHost,
-}));
-
-vi.mock('@cli/chat/tui/state/subscribeApprovals', () => ({
-  createTuiHostInteractions: mocks.createTuiHostInteractions,
-}));
-
-vi.mock('@cli/chat/tui/state/transcript', () => ({
-  appendLocalNotice: mocks.appendLocalNotice,
-  appendLocalErrorTranscript: mocks.appendLocalErrorTranscript,
-  appendLocalUserTranscript: mocks.appendLocalUserTranscript,
-  clearLocalTranscript: mocks.clearLocalTranscript,
-  moveLocalTranscriptToRun: mocks.moveLocalTranscriptToRun,
-  reportRequestDefect: mocks.reportRequestDefect,
-}));
-
-import {
-  AgentConfigSchema,
-  ensureError,
-  RUN_OUTCOME,
-  RunIdSchema,
-  type RunId,
-  type RunOutcome,
-  type RuntimeCommand,
-  type SessionView,
-} from '@texra-ai/harness/schemas';
-import type { CliContext } from '@cli/runtime/platform/cliContext';
+import type { LocalSession } from '@texra-ai/harness';
+import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import { slashCommands } from '@cli/chat/tui/commands/slashRegistry';
-import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
 import { EMPTY_DRAFT } from '@cli/chat/tui/input/draftAttachments';
-import { rootRunId } from '@cli/chat/tui/state/cliState';
-import { currentView } from '@cli/chat/tui/state/sessionView';
 import {
-  canStopRootRun,
-  TuiSession,
-} from '@cli/chat/tui/state/sessionRunState';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+  patchSessionMeta,
+  rootRunId,
+  startChat,
+} from '@cli/chat/tui/state/cliState';
+import {
+  bindSessionView,
+  currentView,
+  runViewOf,
+} from '@cli/chat/tui/state/sessionView';
+import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
+import { notices } from '@cli/chat/tui/state/transcript';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeHost, SessionGraph } from '@test/support/testKernel';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
-  boundTestSessionView,
-  seedView,
-  viewWith,
-} from './fixtures/sessionViewFixture';
-import type { Outcome } from '@texra-ai/harness';
+  answerOf,
+  parkedRoot,
+  REAL_RUN_TIMEOUT,
+  sessionStoreFaults,
+  storedRows,
+  untilStored,
+  validationHost,
+  type StoredRow,
+} from '@test/support/storeFaults';
+import {
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
+import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 
-// The state stores the controller's setting reads land on, as ports of a
-// fake host built fresh per test rather than a module mock of
-// `platform()`: the setting reads (the team name) take the session's own
-// roots, which this file's stub takes from the test's host.
-const hostWithMockedStores = FakeHost.layer(
-  {},
-  {
-    globalState: {
-      get: mocks.globalGet,
-      update: () => Effect.void,
-      modify: () => Effect.die(new Error('unused')),
-    },
-    workspaceState: {
-      get: mocks.workspaceGet,
-      update: () => Effect.void,
-      modify: () => Effect.die(new Error('unused')),
-    },
-  },
-);
+/** The validation host's model, which its stored key makes available. */
+const MODEL = 'openai/gpt-5.6-sol';
 
-/** `runId`'s level ended: nothing here drives it any more, and its end
- *  stored `outcome`, or none when the end was lost. */
-const endedView = (runId: RunId, outcome: RunOutcome | null): SessionView => {
-  const view = currentView();
-  const run = view.runs.get(runId);
-  assert(run !== undefined);
-  return {
-    ...view,
-    runs: new Map([
-      ...view.runs,
-      [runId, { ...run, holder: 'none', position: 'ready', outcome }],
-    ]),
-  };
-};
-
-function makeSessionContext(): CliContext {
-  return createTestCliContext({
-    cwd: '/tmp/test',
-    mode: 'interactive',
-    approvalPolicy: 'ask',
-    stdoutIsTty: true,
-    stderrIsTty: true,
-    stdoutColorEnabled: true,
-    stderrColorEnabled: true,
-    quietLogs: true,
-    commandName: 'chat',
+/** Done once `holds` reads true of the chat's signals (its state and the
+ *  view it shows). */
+const until = (holds: () => boolean): Effect.Effect<void> =>
+  Effect.callback<void>((resume) => {
+    const watched = computed(holds);
+    if (watched.get()) return resume(Effect.void);
+    const unsubscribe = subscribeToSignalChanges([watched], () => {
+      if (!watched.get()) return;
+      unsubscribe();
+      resume(Effect.void);
+    });
+    return Effect.sync(unsubscribe);
   });
-}
 
-/** The controller's init over the block's runtime, as the chat entry builds
- *  it. */
-const makeInit = (overrides: Partial<ChatSessionControllerInit> = {}) =>
+/** The chat's view of `runId`. */
+const shown = (runId: RunId) => runViewOf(currentView(), runId);
+
+/** The rows `runId`'s store holds of `type`. */
+const rowsOf = (rows: readonly StoredRow[], runId: RunId, type: string) =>
+  rows.filter((row) => row.run === runId && row.type === type);
+
+/** The texts of `runId`'s model answers among `rows`, in order. */
+const answersIn = (rows: readonly StoredRow[], runId: RunId) =>
+  rows.flatMap((row) => {
+    const text = row.run === runId ? answerOf(row) : null;
+    return text === null ? [] : [text];
+  });
+
+/** The root runs the store holds: one per conversation started. */
+const rootStarts = (storage: string) =>
+  storedRows(storage).filter(
+    (row) => row.type === 'run.start' && row.parent === null,
+  );
+
+/**
+ * A conversation of the bundled `assistant` that answered and was stopped,
+ * as one the person left: started on the session as a host starts it, then
+ * stopped, so its view reads it cancelled and resumable.
+ */
+const stoppedConversation = (session: LocalSession) =>
+  Effect.gen(function* () {
+    const runId = yield* parkedRoot(yield* sessionHandleOf(session));
+    yield* session.request({ kind: 'run.stop', runId, reason: 'user' });
+    yield* session.view.changes.pipe(
+      Stream.takeUntil((view) => {
+        const run = view.runs.get(runId);
+        return run?.outcome === 'cancelled' && run.holder !== 'here';
+      }),
+      Stream.runDrain,
+    );
+    return runId;
+  });
+
+/**
+ * The chat over a persistent session of the test's host, as the chat entry
+ * builds it: the session's view bound into the TUI's signal, a fresh
+ * conversation on the bundled `assistant` and the validation model, and the
+ * controller over its own chat and shutdown scopes, closed with the test.
+ * `served`: the chat is a client of the background service.
+ */
+const openChat = (
+  options: {
+    readonly served?: boolean;
+    readonly before?: (session: LocalSession) => Effect.Effect<void>;
+  } = {},
+) =>
   Effect.gen(function* () {
     const { roots } = yield* FakeHost;
+    const session = yield* TestSession.open(roots, {
+      persistent: true,
+      host: {},
+    });
     const runtime = yield* SessionGraph.runtime;
-    const scope = Scope.makeUnsafe();
-    const chatScope = Scope.makeUnsafe();
-    onTestFinished(() =>
-      Effect.runPromise(
-        Effect.andThen(
-          Scope.close(chatScope, Exit.void),
-          Scope.close(scope, Exit.void),
-        ),
-      ),
+    const unbind = bindSessionView(runtime, {
+      current: session.view.current,
+      changes: session.view.changes,
+    });
+    yield* Effect.addFinalizer(() => Effect.sync(unbind));
+    // A fresh conversation, which the test leaves behind fresh again: the
+    // chat's state is the worker's, shared with the next suite.
+    yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        startChat();
+        patchSessionMeta({ agent: 'assistant', model: MODEL });
+      }),
+      () => Effect.sync(() => startChat()),
     );
-    const init: ChatSessionControllerInit = {
-      // Only when the test brings none: a new session resets the one launch.
-      session: overrides.session ?? new TuiSession(),
-      runSession: mocks.sessionStub(roots),
-      served: false,
-      sessionContext: makeSessionContext(),
-      chatScope,
-      shutdownScope: scope,
-      cwd: '/tmp/workspace',
-      getSlashCommandContext: () => {
-        throw new Error('slash commands are not exercised here');
-      },
-      stores: makeFakeSettingsStores().stores,
+    const scope = () =>
+      Effect.acquireRelease(Scope.make(), (made) =>
+        Scope.close(made, Exit.void),
+      );
+    const tui = new TuiSession();
+    const ctrl = createChatSessionController({
+      session: tui,
+      runSession: session,
+      served: options.served ?? false,
+      sessionContext: createTestCliContext({
+        mode: 'interactive',
+        approvalPolicy: 'ask',
+        quietLogs: true,
+        commandName: 'chat',
+      }),
+      chatScope: yield* scope(),
+      shutdownScope: yield* scope(),
+      cwd: roots.workspace ?? roots.storage,
+      // cast: these plain messages match no slash command, so only the
+      // empty table is read.
+      getSlashCommandContext: () =>
+        ({ commands: slashCommands([]) }) as SlashCommandContext,
+      stores: roots,
       runtime,
       approvalPolicy: () => undefined,
-      draft: runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT)),
+      draft: yield* SubscriptionRef.make(EMPTY_DRAFT),
       modelConnection: { connected: Effect.void, open: Effect.succeed(false) },
-      ...overrides,
-    };
-    return init;
+    });
+    return { session, tui, ctrl, storage: roots.storage };
   });
+
+/** A message as the composer submits it. */
+const typed = (text: string) => ({ ...EMPTY_DRAFT, text });
 
 const decodeRunId = Schema.decodeUnknownSync(RunIdSchema);
 
-/** The session's view ref, as a value the harness can install. The run lives
- *  in this helper; a test body composes with `yield*` instead. */
-const installableViewRef = () =>
-  Effect.runSync(SubscriptionRef.make(currentView()));
+describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
+  layer(texraHosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-chat-', TEXRA_APP), {
+      buildPerTest: true,
+    })((it) => {
+      it.effect(
+        'stops the resumed run for a Ctrl-C issued while its run is still rehydrating',
+        () =>
+          Effect.gen(function* () {
+            const { session, tui, ctrl } = yield* openChat();
+            const runId = yield* stoppedConversation(session);
 
-/**
- * Installs the session stub the controller surfaces receive, over the roots
- * the init hands it (the test's host's). Every surface is a stub the
- * controller can call; the view's level and changes stream from `installed`
- * when the case gives one, else its level is the one the TUI shows and it
- * streams no changes.
- */
-function installSession(
-  installed?: SubscriptionRef.SubscriptionRef<SessionView>,
-): void {
-  const current = () =>
-    installed === undefined
-      ? currentView()
-      : SubscriptionRef.getUnsafe(installed);
-  mocks.sessionStub.mockImplementation((roots: WorkspaceRoots) => ({
-    roots,
-    // The run's records the chat reads: its saved setup, whether it exists.
-    records: (runId: RunId) => {
-      const records = mocks.getRunRecords(runId);
-      return {
-        readConfig: Effect.tryPromise({
-          try: () => records.readConfig(),
-          catch: ensureError,
-        }),
-        exists: Effect.tryPromise({
-          try: () => records.exists(),
-          catch: ensureError,
-        }),
-      };
-    },
-    // The chat's host attaches for the session's life; detaching it is the
-    // stub's own mock.
-    attach: vi.fn(() =>
-      Effect.addFinalizer(() => Effect.sync(mocks.detachHostInteractions)),
-    ),
-    request: mocks.request,
-    start: mocks.rootLaunch,
-    resume: mocks.resumeRun,
-    // The fold's level and its stream, over whichever view ref the case
-    // installed.
-    view: {
-      current,
-      changes:
-        installed === undefined
-          ? Stream.empty
-          : SubscriptionRef.changes(installed),
-      watch: () => Stream.empty,
-      read: () => Effect.sync(current),
-    },
-  }));
-}
-/** A resumed run whose result reads `outcome` when the chat awaits it. */
-const resumedRun = (
-  runId: RunId,
-  outcome: () => RunOutcome = () => RUN_OUTCOME.COMPLETED,
-) => ({ runId, result: Effect.sync(() => ({ outcome: outcome() })) });
-
-// Live clock: the controller's stops and resumes settle on real event-loop
-// turns. The view is bound for the block; the host with the mocked stores is
-// fresh per test, as the stub's roots read it.
-layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
-  excludeTestServices: true,
-})('createChatSessionController', (it) => {
-  it.layer(hostWithMockedStores, { buildPerTest: true })((it) => {
-    beforeEach(() => {
-      for (const mock of Object.values(mocks)) mock.mockReset();
-
-      mocks.executeAgent.mockResolvedValue({
-        runId: 'e50001',
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
-      mocks.rootLaunch.mockImplementation(
-        (input: { config: unknown; runId: RunId }) =>
-          Effect.succeed({
-            runId: input.runId,
-            result: Effect.tryPromise({
-              try: () => mocks.executeAgent(input.config, input.runId),
-              catch: ensureError,
-            }),
-          }),
-      );
-      // Return the caller-provided default (undefined for workspace agents keys) — a
-      // blanket `false` is not a valid persisted value for
-      // WORKSPACE_AGENTS, which agent resolution now reads.
-      mocks.workspaceGet.mockImplementation(
-        (_key: unknown, defaultValue?: unknown) => Effect.succeed(defaultValue),
-      );
-      mocks.globalGet.mockImplementation(
-        (_key: unknown, defaultValue?: unknown) => Effect.succeed(defaultValue),
-      );
-      // The helper-model write is an Effect now, so the stubs are too.
-      mocks.setCliHelperModel.mockReturnValue(Effect.void);
-      mocks.presentationHostClose.mockReturnValue(Effect.void);
-      mocks.createCliRuntimeHost.mockReturnValue({
-        close: mocks.presentationHostClose,
-        emit: vi.fn(),
-      });
-      mocks.createTuiHostInteractions.mockReturnValue({});
-      mocks.request.mockImplementation(() =>
-        Effect.succeed<Outcome>({ kind: 'done' }),
-      );
-      mocks.reportRequestDefect.mockReturnValue(
-        Effect.succeed('The request failed inside TeXRA; see the log.'),
-      );
-      installSession();
-      mocks.resumeRun.mockImplementation((runId: RunId) =>
-        Effect.succeed(resumedRun(runId)),
-      );
-      // The durable run record `resume()` resolves before adopting the run.
-      mocks.getRunRecords.mockReturnValue({
-        readConfig: async () =>
-          Schema.decodeUnknownSync(AgentConfigSchema)({
-            agent: 'demo-agent',
-            model: 'demo-model',
-          }),
-        exists: async () => true,
-      });
-      seedView(viewWith([]));
-      rootRunId.set(undefined);
-    });
-
-    it.effect(
-      'stops the resumed run for a Ctrl-C issued while its run is still rehydrating',
-      () =>
-        Effect.gen(function* () {
-          // The early launch claim makes this resume() interruptible as soon
-          // as the session accepts the run: a Ctrl-C in that window lands on
-          // the resumed run, which ends cancelled, rather than leaving it
-          // running.
-          const rehydrated = Promise.withResolvers<void>();
-          const session = new TuiSession();
-          const stops: RunId[] = [];
-          mocks.request.mockImplementation((req: RuntimeCommand) =>
-            Effect.sync((): Outcome => {
-              if (req.kind === 'run.stop') stops.push(req.runId);
-              return { kind: 'done' };
-            }),
-          );
-          mocks.resumeRun.mockImplementationOnce((id: RunId) => {
-            const run = resumedRun(id, () => RUN_OUTCOME.CANCELLED);
-            return Effect.succeed({
-              ...run,
-              result: Effect.andThen(
-                Effect.promise(() => rehydrated.promise),
-                run.result,
-              ),
+            // The resume claims the launch at once: a Ctrl-C in the window
+            // before the session holds the run lands on the resumed run.
+            const resumed = yield* Effect.forkChild(ctrl.resume(runId), {
+              startImmediately: true,
             });
-          });
-          const ctrl = createChatSessionController(
-            yield* makeInit({ session }),
-          );
+            ctrl.stop('user');
+            yield* Fiber.join(resumed);
 
-          // A stop lands only on a run the session holds.
-          seedView(viewWith([{ id: decodeRunId('aaaaaa') }]));
-          // The resume command, run the way the Ink handler runs it.
-          const resumed = yield* Effect.forkChild(
-            ctrl.resume(decodeRunId('aaaaaa')),
-            { startImmediately: true },
-          );
-          // resume() has claimed the launch synchronously; once the durable
-          // record resolves the session holds the resumed run, the chat's
-          // root.
-          expect(session.launched).toBeDefined();
-          yield* Fiber.join(resumed);
-          expect(rootRunId.get()).toBe('aaaaaa');
-          // #8273 regression: the stop facts are a signal, so status
-          // rendering derives the Ctrl-C hint from it instead of calling
-          // impure session closures that memoized renders cache stale.
-          expect(canStopRootRun.get()).toBe(true);
-
-          // Ctrl-C fires while the resumed run is still rehydrating.
-          ctrl.stop('user');
-          yield* Effect.promise(() =>
-            vi.waitFor(() => expect(stops).toEqual(['aaaaaa'])),
-          );
-          rehydrated.resolve();
-
-          // The stop ends the run cancelled; the chat exits as interrupted.
-          seedView(endedView(decodeRunId('aaaaaa'), RUN_OUTCOME.CANCELLED));
-          expect(session.exitCode).toBe(CliExitCode.Interrupted);
-          expect(session.canStartRootRun()).toBe(true);
-        }),
-    );
-
-    it.effect(
-      'a run that fails while the chat is leaving exits as a failure',
-      () =>
-        Effect.gen(function* () {
-          // The quit does not make a failure a success: a run whose end was
-          // lost exits as a failure, whether or not the chat is leaving.
-          const session = new TuiSession();
-          const failing = Promise.withResolvers<void>();
-          mocks.resumeRun.mockImplementationOnce((id: RunId) =>
-            Effect.succeed({
-              runId: id,
-              result: Effect.andThen(
-                Effect.promise(() => failing.promise),
-                Effect.fail(new Error('the model call failed')),
-              ),
-            }),
-          );
-          const ctrl = createChatSessionController(
-            yield* makeInit({ session }),
-          );
-          seedView(viewWith([{ id: decodeRunId('aaaaaa') }]));
-          yield* ctrl.resume(decodeRunId('aaaaaa'));
-          expect(rootRunId.get()).toBe('aaaaaa');
-          // The user quits while the run still works; its failure lands after.
-          session.exited = Promise.resolve(CliExitCode.Success);
-          failing.resolve();
-          seedView(endedView(decodeRunId('aaaaaa'), null));
-
-          expect(session.exitCode).toBe(CliExitCode.AgentError);
-        }),
-    );
-
-    it.effect(
-      'sends messages typed while a stop finishes to the session in order, and the next to the stopped run',
-      () =>
-        Effect.gen(function* () {
-          // Typed while the stop finishes: both go to the session's own
-          // acceptance for that run at once, in order; the session waits for
-          // the stop and resumes the run. Once the stop has ended the run, a
-          // later message still goes to it, so it cannot start a second root
-          // beside it.
-          seedView(viewWith([{ id: decodeRunId('a11111') }]));
-          installSession(installableViewRef());
-          rootRunId.set(decodeRunId('a11111'));
-          const session = new TuiSession();
-          const ctrl = createChatSessionController(
-            yield* makeInit({
-              session,
-              served: true,
-              // cast: these plain messages match no slash command, so only the
-              // empty table is read.
-              getSlashCommandContext: () =>
-                ({ commands: slashCommands([]) }) as SlashCommandContext,
-            }),
-          );
-          const sent: string[] = [];
-          mocks.request.mockImplementation((req: RuntimeCommand) =>
-            Effect.sync((): Outcome => {
-              if (req.kind === 'followUp.send')
-                sent.push(`${req.runId} ${req.text}`);
-              return {
-                kind: 'followUp',
-                id: 'sent-1',
-                status: 'queued',
-                receipt: { state: 'accepted' },
-              };
-            }),
-          );
-
-          // The composer's submit path, run the way the composer runs it.
-          yield* ctrl.submit({
-            ...EMPTY_DRAFT,
-            text: 'Do not drop this message.',
-          });
-          yield* ctrl.submit({ ...EMPTY_DRAFT, text: 'And this one.' });
-          expect(sent).toEqual([
-            'a11111 Do not drop this message.',
-            'a11111 And this one.',
-          ]);
-          expect(session.canStartRootRun()).toBe(false);
-
-          seedView(endedView(decodeRunId('a11111'), RUN_OUTCOME.CANCELLED));
-          yield* ctrl.submit({ ...EMPTY_DRAFT, text: 'Then this.' });
-          expect(sent.at(-1)).toBe('a11111 Then this.');
-          expect(mocks.executeAgent).not.toHaveBeenCalled();
-          expect(rootRunId.get()).toBe('a11111');
-        }),
-    );
-
-    it.effect(
-      'holds the launch until the view shows its run, for a stop and a message',
-      () =>
-        Effect.gen(function* () {
-          // A service window's view follows the run on its own watch, so the
-          // session can acknowledge the launch before the view lists it.
-          // Until it does, the launch is the chat's way to the run: Ctrl-C
-          // can stop it, and a stop or a message asked then reaches it once
-          // the view shows it, instead of being lost or starting a second
-          // root.
-          installSession(installableViewRef());
-          const session = new TuiSession();
-          const ctrl = createChatSessionController(
-            yield* makeInit({
-              session,
-              served: true,
-              // cast: these plain messages match no slash command, so only
-              // the empty table is read.
-              getSlashCommandContext: () =>
-                ({ commands: slashCommands([]) }) as SlashCommandContext,
-            }),
-          );
-          const sent: string[] = [];
-          mocks.request.mockImplementation((req: RuntimeCommand) =>
-            Effect.sync((): Outcome => {
-              if (req.kind === 'followUp.send' || req.kind === 'run.stop')
-                sent.push(`${req.kind} ${req.runId}`);
-              return req.kind === 'followUp.send'
-                ? {
-                    kind: 'followUp',
-                    id: 'sent-1',
-                    status: 'sent',
-                    receipt: { state: 'accepted' },
-                  }
-                : { kind: 'done' };
-            }),
-          );
-          // The run works on: its result never comes in this test.
-          mocks.executeAgent.mockReturnValue(new Promise(() => {}));
-
-          const starting = yield* Effect.forkChild(
-            ctrl.startRootRun({
-              agent: 'demo-agent',
-              model: 'demo-model',
-              instruction: 'Start here.',
-            }),
-            { startImmediately: true },
-          );
-          yield* Effect.promise(() =>
-            vi.waitFor(() => expect(mocks.rootLaunch).toHaveBeenCalledOnce()),
-          );
-          const [{ runId: launched }] = mocks.rootLaunch.mock.calls[0];
-          expect(canStopRootRun.get()).toBe(true);
-          const messaging = yield* Effect.forkChild(
-            ctrl.submit({ ...EMPTY_DRAFT, text: 'And then this.' }),
-            { startImmediately: true },
-          );
-          ctrl.stop('user');
-
-          seedView(viewWith([{ id: launched }]));
-          yield* Fiber.join(starting);
-          yield* Fiber.join(messaging);
-
-          expect(mocks.rootLaunch).toHaveBeenCalledOnce();
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(sent.toSorted()).toEqual([
-                `followUp.send ${launched}`,
-                `run.stop ${launched}`,
-              ]),
-            ),
-          );
-        }),
-    );
-
-    it.effect("exits as a failure when the root's result cannot be read", () =>
-      Effect.gen(function* () {
-        // The run's result fails (its connection died) while the view,
-        // no longer updated, still shows it running here.
-        const session = new TuiSession();
-        mocks.resumeRun.mockImplementationOnce((id: RunId) =>
-          Effect.succeed({
-            runId: id,
-            result: Effect.fail(new Error('the service connection closed')),
+            // The resume ended once the chat's view showed the run held;
+            // the stop then ends it cancelled, and the chat exits as
+            // interrupted.
+            yield* until(() => shown(runId)?.outcome === 'cancelled');
+            expect(shown(runId)?.holder).not.toBe('here');
+            expect(tui.exitCode).toBe(CliExitCode.Interrupted);
           }),
-        );
-        const ctrl = createChatSessionController(yield* makeInit({ session }));
-        seedView(viewWith([{ id: decodeRunId('aaaaaa') }]));
-        yield* ctrl.resume(decodeRunId('aaaaaa'));
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(mocks.appendLocalErrorTranscript).toHaveBeenCalled(),
-          ),
-        );
+      );
 
-        expect(session.exitCode).toBe(CliExitCode.AgentError);
-      }),
-    );
+      it.effect(
+        'a run that fails while the chat is leaving exits as a failure',
+        () =>
+          Effect.gen(function* () {
+            // The quit does not make a failure a success: a run whose end
+            // was lost exits as a failure, whether or not the chat is
+            // leaving.
+            const { session, tui, ctrl, storage } = yield* openChat();
+            const runId = yield* stoppedConversation(session);
+            const faults = yield* sessionStoreFaults(storage);
+            yield* ctrl.resume(runId);
+            // The user quits while the run still works; the store then
+            // refuses the run's end.
+            tui.exited = Promise.resolve(CliExitCode.Success);
+            yield* faults.failNext('appendAll', 'run.end');
+            ctrl.stop('shutdown');
 
-    it.effect(
-      'exits as a usage error when the task to resume is not found',
-      () =>
-        Effect.gen(function* () {
-          const session = new TuiSession();
-          mocks.getRunRecords.mockReturnValue({
-            readConfig: async () => null,
-            exists: async () => false,
-          });
-          const ctrl = createChatSessionController(
-            yield* makeInit({ session }),
-          );
-          yield* ctrl.resume(decodeRunId('aaaaaa'));
+            yield* until(() => shown(runId)?.holder !== 'here');
+            expect(shown(runId)?.outcome).toBeNull();
+            expect(tui.exitCode).toBe(CliExitCode.AgentError);
+          }),
+      );
 
-          expect(mocks.resumeRun).not.toHaveBeenCalled();
-          expect(session.exitCode).toBe(CliExitCode.Usage);
-        }),
-    );
+      it.effect(
+        'sends messages typed while a stop finishes to the stopped run in order, and the next to the stopped run',
+        () =>
+          Effect.gen(function* () {
+            // Typed while the stop finishes: both go to the session's own
+            // acceptance for that run, in order; the session waits for the
+            // stop and continues the run. Once a stop has ended the run, a
+            // later message still goes to it, so it cannot start a second
+            // root beside it.
+            const { ctrl, storage } = yield* openChat({ served: true });
+            yield* ctrl.submit(typed('Start here.'));
+            const root = rootRunId.get();
+            assert(root !== undefined, 'the first message started no root');
+            yield* until(() => shown(root)?.position === 'waiting');
 
-    it.effect('exits as a failure when the root is missing from the view', () =>
-      Effect.sync(() => {
-        // The root's result arrives only once the view shows its end, so a
-        // root the view no longer holds lost its end.
-        const session = new TuiSession();
-        rootRunId.set(decodeRunId('a11111'));
+            ctrl.stop('user');
+            const first = yield* Effect.forkChild(
+              ctrl.submit(typed('Do not drop this message.')),
+              { startImmediately: true },
+            );
+            const second = yield* Effect.forkChild(
+              ctrl.submit(typed('And this one.')),
+              { startImmediately: true },
+            );
+            yield* Fiber.join(first);
+            yield* Fiber.join(second);
+            // Both answered: the run waits again, past its first turn.
+            yield* until(() => {
+              const run = shown(root);
+              return run?.position === 'waiting' && (run.turn ?? 0) >= 2;
+            });
 
-        expect(session.exitCode).toBe(CliExitCode.AgentError);
-      }),
-    );
+            ctrl.stop('user');
+            yield* until(() => {
+              const run = shown(root);
+              return (
+                run?.outcome === 'cancelled' &&
+                run.holder !== 'here' &&
+                (run.turn ?? 0) >= 2
+              );
+            });
+            yield* ctrl.submit(typed('Then this.'));
+            expect(rootStarts(storage)).toHaveLength(1);
 
-    it.effect(
-      "keeps a newer launch when the older root's result fails meanwhile",
-      () =>
-        Effect.sync(() => {
-          // Root A's result fails while the chat's next launch, B, is still
-          // on its way: B is newer, so it still names its run when it ends.
-          const session = new TuiSession();
-          rootRunId.set(decodeRunId('a11111'));
-          const launched = session.claimLaunch();
-          assert(launched !== undefined, 'no root is in flight');
-          session.rootFailed(decodeRunId('a11111'));
-          session.endLaunch(launched, { runId: decodeRunId('b22222') });
+            yield* untilStored(storage, (rows) =>
+              answersIn(rows, root).some((answer) =>
+                answer.includes('Then this.'),
+              ),
+            );
+            // The last answer saw every message, in the order typed, in
+            // the one conversation.
+            expect(answersIn(storedRows(storage), root).at(-1)).toBe(
+              'Model saw: Start here. | Do not drop this message. | And this one. | Then this.',
+            );
+            expect(rootRunId.get()).toBe(root);
+          }),
+      );
 
-          expect(rootRunId.get()).toBe('b22222');
-        }),
-    );
+      it.effect(
+        'holds the launch until the view shows its run, for a stop and a message',
+        () =>
+          Effect.gen(function* () {
+            // Until the session holds the first launch's run, the launch
+            // is the chat's way to it: a stop and a message asked then
+            // reach that run once it is held, instead of being lost or
+            // starting a second root.
+            const { tui, ctrl, storage } = yield* openChat({ served: true });
+            const starting = yield* Effect.forkChild(
+              ctrl.submit(typed('Start here.')),
+              { startImmediately: true },
+            );
+            yield* until(() => tui.launched !== undefined);
+            const messaging = yield* Effect.forkChild(
+              ctrl.submit(typed('And then this.')),
+              { startImmediately: true },
+            );
+            ctrl.stop('user');
+            yield* Fiber.join(starting);
+            yield* Fiber.join(messaging);
+            const root = rootRunId.get();
+            assert(root !== undefined, 'the launch reached no run');
 
-    it.effect(
-      "keeps a resume's run as the root when an earlier message's reply resumes the old one",
-      () =>
-        Effect.gen(function* () {
-          // A message to the stopped root is still on its way when the user
-          // resumes another conversation. The reply that the session resumed
-          // the old root lands while the resume is launching: the resume is
-          // newer, so its run stays the chat's root.
-          const old = decodeRunId('a11111');
-          const picked = decodeRunId('b22222');
-          seedView(viewWith([{ id: old }]));
-          seedView(endedView(old, RUN_OUTCOME.CANCELLED));
-          installSession(installableViewRef());
-          rootRunId.set(old);
-          const session = new TuiSession();
-          const ctrl = createChatSessionController(
-            yield* makeInit({
-              session,
+            // Both reached the launch's run: the session recorded its stop
+            // and queued the message on it.
+            yield* untilStored(
+              storage,
+              (rows) =>
+                rowsOf(rows, root, 'run.stop').length > 0 &&
+                rowsOf(rows, root, 'followup.queued').some((row) =>
+                  row.data.includes('And then this.'),
+                ),
+            );
+            expect(rootStarts(storage)).toHaveLength(1);
+          }),
+      );
+
+      it.effect(
+        "exits as a failure when the root's result cannot be read",
+        () =>
+          Effect.gen(function* () {
+            // The run's result fails (its end could not be stored): the
+            // chat says so and exits as a failure.
+            const { session, tui, ctrl, storage } = yield* openChat();
+            const runId = yield* stoppedConversation(session);
+            const faults = yield* sessionStoreFaults(storage);
+            yield* ctrl.resume(runId);
+            yield* faults.failNext('appendAll', 'run.end');
+            ctrl.stop('user');
+
+            yield* until(() =>
+              notices.get().some((notice) => notice.row.kind === 'error'),
+            );
+            expect(tui.exitCode).toBe(CliExitCode.AgentError);
+          }),
+      );
+
+      it.effect(
+        'exits as a usage error when the task to resume is not found',
+        () =>
+          Effect.gen(function* () {
+            const { tui, ctrl } = yield* openChat();
+            yield* ctrl.resume(decodeRunId('aaaaaa'));
+
+            expect(tui.exitCode).toBe(CliExitCode.Usage);
+          }),
+      );
+
+      it.effect(
+        'exits as a failure when the root is missing from the view',
+        () =>
+          Effect.gen(function* () {
+            // The root's result arrives only once the view shows its end,
+            // so a root the view no longer holds lost its end.
+            const { tui } = yield* openChat();
+            rootRunId.set(decodeRunId('a11111'));
+
+            expect(tui.exitCode).toBe(CliExitCode.AgentError);
+          }),
+      );
+
+      it.effect(
+        "keeps a newer launch when the older root's result fails meanwhile",
+        () =>
+          Effect.gen(function* () {
+            // Root A's result fails while the chat's next launch, B, is
+            // still on its way: B is newer, so it still names its run when
+            // it ends.
+            const { tui } = yield* openChat();
+            rootRunId.set(decodeRunId('a11111'));
+            const launched = tui.claimLaunch();
+            assert(launched !== undefined, 'no root is in flight');
+            tui.rootFailed(decodeRunId('a11111'));
+            tui.endLaunch(launched, { runId: decodeRunId('b22222') });
+
+            expect(rootRunId.get()).toBe('b22222');
+          }),
+      );
+
+      it.effect(
+        "keeps a resume's run as the root when an earlier message's reply resumes the old one",
+        () =>
+          Effect.gen(function* () {
+            // A message to the stopped root is still on its way when the
+            // user resumes another conversation. The reply that the
+            // session continued the old root lands while the resume is
+            // launching: the resume is newer, so its run stays the chat's
+            // root.
+            const { session, ctrl, storage } = yield* openChat({
               served: true,
-              // cast: this plain message matches no slash command, so only
-              // the empty table is read.
-              getSlashCommandContext: () =>
-                ({ commands: slashCommands([]) }) as SlashCommandContext,
-            }),
-          );
-          const reply = Promise.withResolvers<void>();
-          mocks.request.mockImplementation((req: RuntimeCommand) =>
-            req.kind === 'followUp.send'
-              ? Effect.promise(async (): Promise<Outcome> => {
-                  await reply.promise;
-                  return {
-                    kind: 'followUp',
-                    id: 'sent-1',
-                    status: 'queued',
-                    receipt: { state: 'accepted' },
-                  };
-                })
-              : Effect.succeed<Outcome>({ kind: 'done' }),
-          );
-          const resumed = Promise.withResolvers<void>();
-          mocks.resumeRun.mockImplementationOnce((id: RunId) =>
-            Effect.andThen(
-              Effect.promise(() => resumed.promise),
-              Effect.succeed(resumedRun(id)),
-            ),
-          );
+            });
+            const picked = yield* stoppedConversation(session);
+            yield* ctrl.submit(typed('Start here.'));
+            const old = rootRunId.get();
+            assert(old !== undefined, 'the first message started no root');
+            yield* until(() => shown(old)?.position === 'waiting');
+            ctrl.stop('user');
+            yield* until(() => shown(old)?.outcome === 'cancelled');
 
-          const sending = yield* Effect.forkChild(
-            ctrl.submit({ ...EMPTY_DRAFT, text: 'Carry on.' }),
-            { startImmediately: true },
-          );
-          const resuming = yield* Effect.forkChild(ctrl.resume(picked), {
-            startImmediately: true,
-          });
-          expect(session.launched).toBeDefined();
-          reply.resolve();
-          yield* Fiber.join(sending);
-          resumed.resolve();
-          yield* Fiber.join(resuming);
+            // The message's commit waits until the resume has claimed the
+            // chat's launch, and the resume's read of its run waits until
+            // the message's reply has landed: the reply comes while the
+            // resume is launching.
+            const faults = yield* sessionStoreFaults(storage);
+            const commit = yield* faults.holdNext('appendAll');
+            const sending = yield* Effect.forkChild(
+              ctrl.submit(typed('Carry on.')),
+              { startImmediately: true },
+            );
+            yield* commit.reached;
+            const read = yield* faults.holdNext('readRunRecord');
+            const resuming = yield* Effect.forkChild(ctrl.resume(picked), {
+              startImmediately: true,
+            });
+            yield* read.reached;
+            yield* commit.release;
+            yield* Fiber.join(sending);
+            yield* read.release;
+            yield* Fiber.join(resuming);
 
-          expect(rootRunId.get()).toBe(picked);
-        }),
-    );
+            expect(rootRunId.get()).toBe(picked);
+          }),
+      );
+    });
   });
 });

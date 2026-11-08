@@ -25,7 +25,7 @@ import {
   type StartInput,
 } from '@texra-ai/harness';
 import {
-  normalizeProviderError,
+  presentRunFailure,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -395,24 +395,21 @@ export const executeCliConfig: (
         refusal = err; // a refused resume: the caller's usage exit
       } else {
         // A launch that failed before its run opened is the caller's to
-        // present (the session presents none): a refused launch by the
-        // notice it carries, any other by its message and a model failure's
-        // verdict, which the host words. A run that opened never fails its launch:
+        // present (the session presents none), as every host presents one
+        // (`presentRunFailure`). A run that opened never fails its launch:
         // its end is its `run.end` row's.
-        const notice = err instanceof LaunchRefused ? err.notice : undefined;
         if (!(err instanceof AgentError || err instanceof LaunchRefused))
           primaryRunFailure = { error: err };
-        else if (!failurePresented) {
-          if (notice !== undefined)
-            presentationHost.emit(notice.event, notice.payload);
-          else {
-            const { failure } = normalizeProviderError(err);
-            presentationHost.emit('requestShowError', {
-              message: toErrorMessage(err),
-              ...(failure && { failure }),
-            });
-          }
-        }
+        else if (!failurePresented)
+          yield* presentRunFailure(
+            {
+              emit: (event, payload) =>
+                Effect.sync(() => {
+                  presentationHost.emit(event, payload);
+                }),
+            },
+            err,
+          );
       }
     }
 

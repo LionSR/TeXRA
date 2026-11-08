@@ -501,7 +501,7 @@ export function builtinSlashCommands(options: {
           echo: 'ifPersists',
           handler: Effect.fn('handler')(function* (remainder, context) {
             if (remainder.trim() === 'all')
-              return yield* resumeInterruptedTasks(context.runSession);
+              return yield* resumeInterruptedTasks(context.resumeTask);
             const id = parseCliHistoryId(remainder);
             if (!id)
               return yield* Effect.fail(

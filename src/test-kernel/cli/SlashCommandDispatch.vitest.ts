@@ -8,7 +8,7 @@ import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand
 import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import { builtinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { notices } from '@cli/chat/tui/state/transcript';
-import { resetCliState } from '@cli/chat/tui/state/cliState';
+import { startChat } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -73,6 +73,7 @@ function createContext(
       }),
     resetSession: vi.fn(),
     resumeRun: (_id: RunId) => Effect.void,
+    resumeTask: (_id: RunId) => Effect.void,
   };
 }
 
@@ -80,7 +81,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted))(
   'handleTuiSlashCommand',
   (it) => {
     afterEach(() => {
-      resetCliState();
+      startChat();
     });
 
     it.effect(

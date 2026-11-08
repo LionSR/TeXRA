@@ -91,7 +91,7 @@ import { EMPTY_DRAFT } from './input/draftAttachments';
 import {
   rootRunId,
   selectedRunId as selectedRunIdSignal,
-  resetCliState,
+  startChat,
   patchSessionMeta,
   sessionViewFailure as sessionViewFailureSignal,
   sessionMeta as sessionMetaSignal,
@@ -390,6 +390,7 @@ export async function runChat(
     setApprovalPolicy,
     resetSession: resetSessionForClear,
     resumeRun: chatController.resume,
+    resumeTask: chatController.resumeTask,
   });
 
   // From here on `chatScope` owns everything the session holds: what is
@@ -546,7 +547,7 @@ export async function runChat(
     const meta = sessionMetaSignal.get();
     if (isRunPending) chatController.stop('user');
     chatController.clearPendingSkills();
-    resetCliState(meta);
+    startChat(meta);
     // The erase happens outside Ink, so the scrollback prints again from a
     // new origin even when the history it rebuilds is empty.
     clearTerminalScrollback();
@@ -682,6 +683,7 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     chatScope,
+    shutdownScope: services.shutdownScope,
     terminal,
     runtime,
     leaveProcess: services.leave,

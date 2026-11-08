@@ -1,363 +1,153 @@
+/**
+ * `texra run` on a document task, driven through the CLI's entry
+ * (`runCli`) in process: the CLI's own runtime and platform over a home of
+ * the test's, with the validation model at the provider edge.
+ *
+ * Failure modes:
+ * - a failed run's output is copied over the `--output` destination, its
+ *   result names a copy, or the run storage it kept is lost.
+ */
+// Third-party imports
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { beforeEach, expect, vi } from 'vitest';
-
 import { layer } from '@effect/vitest';
-import { Effect, Context, Schema } from 'effect';
-import {
-  RoundOutputSchema,
-  type RoundOutput,
-} from '@texra/shared/plugins/documentOutputs';
-import {
-  DocumentTaskOptionsSchema,
-  documentsOutputFact,
-} from '@texra/shared/plugins/documents';
-import type { runHeadlessAgent } from '@cli/commands/run';
-import {
-  provideCliInvocation,
-  type CliContext,
-} from '@cli/runtime/platform/cliContext';
-import {
-  CliPlatform,
-  type CliPlatformServices,
-} from '@cli/runtime/platform/initPlatform';
-import type {
-  CliExecuteOptions,
-  CliConfigExecuteResult,
-} from '@cli/runtime/headless/executeCli';
+import { Effect, Schema } from 'effect';
+import { afterEach, assert, beforeEach, describe, expect, vi } from 'vitest';
+
+// Local imports
+import { setLogSink } from '@texra-ai/harness/node';
+import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import { runCli } from '@cli/commands/root';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
-import {
-  qualifyAggregateId,
-  RUN_OUTCOME,
-  RunIdSchema,
-  type RunId,
-} from '@texra-ai/harness/schemas';
-import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
-import { withTempDirEffect } from '@test/support/tempDirPlatform';
-import {
-  FakeHost,
-  SessionGraph,
-  sessionHandleOf,
-  TestSession,
-} from '@test/support/testKernel';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { SessionLog } from '@shared/session/runHistory';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { REAL_RUN_TIMEOUT, validationHost } from '@test/support/storeFaults';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 
-const mocks = vi.hoisted(() => {
-  return {
-    executeCliConfig: vi.fn(),
-    emitCliResult: vi.fn(),
-    withExpandedRunInputs: vi.fn(),
-    resolveCliRunAgent: vi.fn(),
-    selectCliRunModel: vi.fn(),
-  };
-});
+/** A document task whose every model call the provider refuses as too long
+ *  (`GOLDEN-OVERFLOW`), so the run fails. */
+const FAILING_TASK = `name: overflow_polish
+description: A document task the provider refuses every call of.
+prompt: |-
+  GOLDEN-OVERFLOW: refuse every call.
+task:
+  prefix: |
+    <documents>
+    {{ ALL_INPUTS }}
+    </documents>
+  requests:
+    - Polish the document.
+`;
 
-vi.mock('@common/storage/storageLayout', async (importActual) => ({
-  ...(await importActual<typeof import('@common/storage/storageLayout')>()),
-  runDirUnder: vi.fn(
-    (_storageRoot: string, runId: string) => `/tmp/runs/${runId}`,
-  ),
-}));
-
-vi.mock('@cli/runtime/models/runModel', () => ({
-  buildHeadlessRunContext: vi.fn((context: CliContext) => ({
-    ...context,
-    quietLogs: true,
-    renderRunProgress: false,
-  })),
-  selectCliRunModel: mocks.selectCliRunModel,
-}));
-
-vi.mock('@cli/commands/_helpers/output', async (importOriginal) => {
-  const { Effect } = await import('effect');
-  return {
-    ...(await importOriginal<typeof import('@cli/commands/_helpers/output')>()),
-    emitCliResult: (result: unknown) =>
-      Effect.sync(() => mocks.emitCliResult(result)),
-  };
-});
-
-vi.mock('@cli/runtime/agents', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
-  resolveCliRunAgent: mocks.resolveCliRunAgent,
-}));
-
-vi.mock('@cli/runtime/headless/executeCli', () => ({
-  // A pass-through, so the mocked seam has the real module's Effect-returning
-  // shape and every stub below returns the program the command yields.
-  executeCliConfig: (...args: unknown[]) => mocks.executeCliConfig(...args),
-}));
-
-vi.mock('@cli/runtime/headless/documentTaskInputs', () => ({
-  // A pass-through: the real helper yields `run(inputs)` in-fiber, so the stub
-  // hands the command back that same Effect instead of detaching it.
-  withExpandedRunInputs: (...args: unknown[]) =>
-    mocks.withExpandedRunInputs(...args),
-  hasMixedStdinDocumentTaskInputSpecs: vi.fn(
-    (inputFiles: readonly string[]) => {
-      const specs = new Set(
-        inputFiles.map((spec) => spec.trim()).filter(Boolean),
-      );
-      return specs.has('-') && specs.size > 1;
-    },
-  ),
-  STDIN_DOCUMENT_TASK_INPUT_BASENAME: 'stdin.tex',
-  DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE:
-    'At least one workflow input file is required.',
-}));
-
-// Hoisted out of each test body — a dynamic import()'s result is cached, so
-// one call here serves every test below, and the first test is not charged the
-// module graph's transform time.
-const { runHeadlessAgent: nativeRun } = await import('@cli/commands/run');
-
-type DocumentTaskRunInit = Parameters<typeof runHeadlessAgent>[1];
-type DocumentTaskExecuteResult = CliConfigExecuteResult;
-type DocumentTaskRunPayload = Extract<
-  DocumentTaskExecuteResult,
-  { ok: true }
->['result'];
-
-/** Runs the mocked launch has reported, waiting for the opening row (and
- *  the documents row) their real counterpart would have committed. */
-let pendingRunStarts: { runId: RunId; rounds: readonly RoundOutput[] }[] = [];
+const decodeRunDirectory = Schema.decodeUnknownSync(
+  Schema.Struct({ runDirectory: Schema.String }),
+);
 
 /**
- * The workflow command's program over the shared happy-path inputs, on the
- * test's session: its platform hands the command the host's stores, and
- * the commands under test read `secrets`/`globalState` off them.
+ * The CLI as a process of the test's: its home (and so its storage root)
+ * is the host's temp dir, it reaches no background service, sends no usage
+ * and holds a provider key, which the validation model answers for.
  */
-function documentTaskProgram(
-  init: Partial<DocumentTaskRunInit> = {},
-  context: CliContext = createRunCommandCliContext(),
-) {
-  // The mocked launch boundary skips the launch's own `run.start` commit, so
-  // the fixture session opens the run the mock reports first: an aggregate's
-  // first row must be that start, and the claim it takes is the one the
-  // finalization write below commits against.
-  const starts = pendingRunStarts;
-  pendingRunStarts = [];
-  return Effect.gen(function* () {
-    const session = yield* TestSession;
-    const handle = yield* sessionHandleOf(session);
-    // cast: the command reads only these members of its platform.
-    const platform = {
-      ...(yield* FakeHost).platform,
-      session: Effect.succeed(session),
-      runtime: yield* SessionGraph.runtime,
-    } as unknown as CliPlatformServices;
-    yield* Effect.forEach(
-      starts,
-      ({ runId, rounds }) => seedStartedRun(handle, runId, rounds),
-      { discard: true },
-    );
-    return yield* nativeRun(context, {
-      agent: 'polish',
-      inputFiles: ['paper.tex'],
-      contextFiles: [],
-      instruction: '',
-      options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
-      ...init,
-    }).pipe(
-      provideCliInvocation(context),
-      Effect.provideService(CliPlatform, Effect.succeed(platform)),
-    );
+const cliProcess = Effect.gen(function* () {
+  const { workspace } = (yield* FakeHost).roots;
+  assert(workspace !== undefined, 'the validation host opens a workspace');
+  // Beside the host's workspace, so the host's release removes it.
+  const home = path.join(path.dirname(workspace), 'home');
+  vi.stubEnv('HOME', home);
+  vi.stubEnv('USERPROFILE', home);
+  vi.stubEnv('TEXRA_NO_SERVICE', '1');
+  vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
+  vi.stubEnv('OPENAI_API_KEY', 'validation-fake-key');
+  const agents = path.join(
+    resolveGlobalStoragePath(path.join(home, '.texra')),
+    CUSTOM_AGENTS_STORAGE_DIR,
+  );
+  yield* Effect.promise(async () => {
+    await fs.mkdir(agents, { recursive: true });
+    await fs.writeFile(path.join(agents, 'overflow_polish.yaml'), FAILING_TASK);
   });
-}
+  return { home, workspace };
+});
 
-function runOutputSummary(absolutePath: string, originalPath: string) {
-  return {
-    round: 1,
-    relativePath: 'r1/paper.tex',
-    absolutePath,
-    location: 'runStorage',
-    originalPath,
-    added: null,
-    removed: null,
-  } as const;
-}
-
-/** The documents row's round that wrote `absolutePath` at `r1/paper.tex`,
- *  revising `originalPath`. */
-function roundWriting(absolutePath: string, originalPath: string): RoundOutput {
-  return Schema.decodeUnknownSync(RoundOutputSchema)({
-    round: 1,
-    outputs: [
-      {
-        source: 'paper',
-        round: 1,
-        location: {
-          kind: 'runStorage',
-          absolutePath,
-          relativePath: 'r1/paper.tex',
-          runId: 'abc00a',
-        },
-        lineage: {
-          base: { kind: 'external', absolutePath: originalPath },
-          document: null,
-        },
-        diff: null,
-      },
-    ],
-    compile: null,
-    missingOutputs: [],
-    latexdiffs: [],
-    reply: null,
-  });
-}
-
-function documentTaskRun(
-  runId: string,
-  outcome: DocumentTaskRunPayload['outcome'] = RUN_OUTCOME.COMPLETED,
-): DocumentTaskExecuteResult {
-  return {
-    ok: true,
-    result: {
-      outcome,
-      output: { response: '', files: [] },
-      runId: Schema.decodeUnknownSync(RunIdSchema)(runId),
-    },
-  };
-}
-
-function mockDocumentTaskRun(
-  result: DocumentTaskExecuteResult,
-  rounds: readonly RoundOutput[] = [],
-): void {
-  // The finalization runs the command's post-run step on the committed
-  // result, as the real skeleton does.
-  const implementation = (
-    _config: unknown,
-    _context: unknown,
-    options: Pick<CliExecuteOptions, 'afterRun'>,
-  ) =>
-    result.ok && options.afterRun
-      ? Effect.as(options.afterRun(result.result), result)
-      : Effect.succeed(result);
-  if (result.ok) pendingRunStarts.push({ runId: result.result.runId, rounds });
-  mocks.executeCliConfig.mockImplementationOnce(implementation);
-}
-
-/** Materializes the round-1 output file the copy target is sourced from. */
-async function writeGeneratedOutput(root: string): Promise<string> {
-  const generated = path.join(root, 'run', 'r1', 'paper.tex');
-  await fs.mkdir(path.dirname(generated), { recursive: true });
-  await fs.writeFile(generated, 'polished');
-  return generated;
-}
-
-/**
- * The run's opening row, committed by the fixture session itself: the first
- * append claims the aggregate for this process, the way the launch's own
- * commit claims it before finalization writes.
- */
-const seedStartedRun = (
-  session: Context.Context<SessionServices>,
-  runId: RunId,
-  rounds: readonly RoundOutput[],
-) =>
-  Context.get(session, SessionLog).transact([
-    {
-      type: 'run.start',
-      aggregateId: qualifyAggregateId('run', runId),
-      identity: { kind: 'agent', agent: 'polish' },
-      takesFollowUps: false,
-      parent: null,
-      provenance: null,
-    },
-    ...(rounds.length === 0
-      ? []
-      : [
-          {
-            type: 'plugin.fact' as const,
-            aggregateId: qualifyAggregateId('run', runId),
-            parent: null,
-            ...documentsOutputFact(rounds),
-          },
-        ]),
-  ]);
-
-layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
+describe('texra run, document tasks', { timeout: REAL_RUN_TIMEOUT }, () => {
+  let stdout = '';
+  let stderr = '';
   beforeEach(() => {
-    vi.clearAllMocks();
-    pendingRunStarts = [];
-    mocks.resolveCliRunAgent.mockReturnValue(
-      Effect.succeed({
-        name: 'polish',
-        source: 'builtIn',
-        path: '/agents/polish.yaml',
-        tools: [],
-        blocks: {
-          task: {
-            outputs: [],
-            files: {},
-            prefix: '',
-            requests: ['Polish the documents.'],
-          },
-        },
-      }),
-    );
-    mocks.selectCliRunModel.mockImplementation(
-      (_context: CliContext, model: string | undefined) =>
-        Effect.succeed(model ?? 'deepseek/deepseek-v4-flash'),
-    );
-    mocks.withExpandedRunInputs.mockImplementation(
-      (
-        _inputSpecs: readonly string[],
-        _contextSpecs: readonly string[],
-        _cwd: string,
-        _options: unknown,
-        run: (inputs: {
-          readonly inputFiles: string[];
-          readonly contextFiles: string[];
-          readonly stdinInputPath?: string;
-        }) => Effect.Effect<unknown, unknown, never>,
-      ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
-    );
+    stdout = '';
+    stderr = '';
+    spyOnStreamWrite(process.stdout, (chunk) => {
+      stdout += chunk;
+    });
+    spyOnStreamWrite(process.stderr, (chunk) => {
+      stderr += chunk;
+    });
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // The CLI's platform silences the process's log sink: put it back.
+    setLogSink(null);
   });
 
-  // A session of its own per case, released with it.
-  it.layer(TestSession.layer(), { buildPerTest: true })((it) => {
-    it.effect(
-      'keeps failed output in run storage and preserves the requested --output destination',
-      () =>
-        withTempDirEffect('texra-workflow-', (root) =>
-          Effect.gen(function* () {
-            const generated = yield* Effect.promise(() =>
-              writeGeneratedOutput(root),
-            );
-            const outputSummary = runOutputSummary(
-              generated,
-              path.join(root, 'paper.tex'),
-            );
-            mockDocumentTaskRun(documentTaskRun('abc00a', RUN_OUTCOME.FAILED), [
-              roundWriting(generated, path.join(root, 'paper.tex')),
-            ]);
-            const target = path.join(root, 'polished.tex');
-            yield* Effect.promise(() => fs.writeFile(target, 'keep-me'));
+  // Live clock: the CLI's entry and its run work in real time.
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-workflow-'), { buildPerTest: true })(
+      (it) => {
+        it.effect(
+          'keeps failed output in run storage and preserves the requested --output destination',
+          () =>
+            Effect.gen(function* () {
+              const { home, workspace } = yield* cliProcess;
+              const target = path.join(workspace, 'polished.tex');
+              yield* Effect.promise(async () => {
+                await fs.writeFile(
+                  path.join(workspace, 'paper.tex'),
+                  '\\section{A}\nText.\n',
+                );
+                await fs.writeFile(target, 'keep-me');
+              });
 
-            const exitCode = yield* documentTaskProgram(
-              { output: 'polished.tex' },
-              createRunCommandCliContext({ cwd: root }),
-            );
+              const { exitCode } = yield* Effect.promise(() =>
+                runCli([
+                  'run',
+                  'overflow_polish',
+                  '--input',
+                  'paper.tex',
+                  '--output',
+                  'polished.tex',
+                  '--cwd',
+                  workspace,
+                  '--model',
+                  'openai/gpt-5.6-sol',
+                  '--output-format',
+                  'json',
+                ]),
+              );
 
-            expect(exitCode).toBe(CliExitCode.AgentError);
-            expect(
-              yield* Effect.promise(() => fs.readFile(target, 'utf8')),
-            ).toBe('keep-me');
-            const emission = mocks.emitCliResult.mock.calls[0]?.[0];
-            expect(emission?.json).toMatchObject({
-              outcome: RUN_OUTCOME.FAILED,
-              output: { documents: { outputs: [outputSummary] } },
-              runDirectory: '/tmp/runs/abc00a',
-            });
-            expect(emission?.json).not.toHaveProperty('copiedOutput');
-            expect(emission?.json).not.toHaveProperty('copiedOutputs');
-            expect(emission?.text).toContain('/tmp/runs/abc00a');
-          }),
-        ),
+              expect(exitCode).toBe(CliExitCode.AgentError);
+              expect(
+                yield* Effect.promise(() => fs.readFile(target, 'utf8')),
+              ).toBe('keep-me');
+              const result: unknown = JSON.parse(stdout);
+              expect(result).toMatchObject({
+                outcome: 'failed',
+                output: { documents: { outputs: [] } },
+              });
+              expect(result).not.toHaveProperty('copiedOutput');
+              expect(result).not.toHaveProperty('copiedOutputs');
+              // The run's storage is kept, under the CLI's own storage root.
+              const { runDirectory } = decodeRunDirectory(result);
+              expect(runDirectory.startsWith(path.join(home, '.texra'))).toBe(
+                true,
+              );
+              expect(
+                (yield* Effect.promise(() =>
+                  fs.stat(runDirectory),
+                )).isDirectory(),
+              ).toBe(true);
+            }),
+        );
+      },
     );
   });
 });
