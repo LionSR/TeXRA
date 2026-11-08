@@ -298,7 +298,7 @@ export const sessionListRunIds = computed(() =>
 /** The child list's keyboard ownership and the row the user moved to, with
  *  the run that was active when they did: a later change of the active run
  *  moves the highlight to it. */
-export interface ChildListFocus {
+interface ChildListFocus {
   readonly focused: boolean;
   readonly chosen?: { readonly runId: RunId; readonly whileActive?: RunId };
 }
@@ -380,7 +380,7 @@ export const sessionRunIds = computed((): ReadonlySet<RunId> => {
 // slash-command palette, and reverse search. These view-level toggles live
 // here as signal state rather than local component state.
 
-export interface InfoPaneContent {
+interface InfoPaneContent {
   readonly title: string;
   readonly lines: readonly string[];
 }
@@ -405,7 +405,7 @@ export function closeInfoPane(): void {
 
 /** Passive reader target. Holding the captured run id rather than a text
  * snapshot keeps each reader live even if transcript focus moves elsewhere. */
-export type ForegroundReaderTarget =
+type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly runId: RunId }
   | { readonly kind: 'script'; readonly runId: RunId }
   | { readonly kind: 'workPlan'; readonly runId: RunId };
