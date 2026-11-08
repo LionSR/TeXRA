@@ -60,6 +60,7 @@ import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner, type ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
+import type { ToolTable } from '@tools/toolTable';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -338,23 +339,26 @@ export interface ProcessServicesOptions {
 /** The process services and the {@link SessionOwner} over the session map
  *  (one session per storage root), which the public `processLayer` serves
  *  its `Sessions` over, with the project stores and the process's identity
- *  that its cold reads take; `processLayer`'s type serves neither. */
-export function ownerProcessLayer({
-  storageRoot,
-  settings,
-  plugins,
-  secrets,
-  appState,
-  agentDirectories,
-  toolAvailability = toolAvailabilityLayer,
-  usageLog = UsageLog.disabled,
-  minimumLogLevel,
-  workspace,
-}: ProcessServicesOptions): Layer.Layer<
+ *  that its cold reads take; `processLayer`'s type serves neither. The
+ *  table is the one that composition validated. */
+export function ownerProcessLayer(
+  {
+    storageRoot,
+    settings,
+    secrets,
+    appState,
+    agentDirectories,
+    toolAvailability = toolAvailabilityLayer,
+    usageLog = UsageLog.disabled,
+    minimumLogLevel,
+    workspace,
+  }: Omit<ProcessServicesOptions, 'plugins'>,
+  table: ToolTable,
+): Layer.Layer<
   RunServices | ToolCatalog | SessionOwner | ProjectDatabases | ProcessIdentity
 > {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
-  const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
+  const catalog = pluginCatalogLayer(table, mcpConfigPathOf(storageRoot));
   // Read once per build; an unreadable identity is undefined.
   const identity = Layer.unwrap(
     Effect.map(processStartIdentity, (s) =>

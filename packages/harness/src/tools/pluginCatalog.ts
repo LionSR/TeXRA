@@ -1,6 +1,6 @@
 /**
- * The process's plugin catalog: the `ToolRegistry` over the plugin list an
- * entry passes to `processLayer`, the tool catalog over it, the
+ * The process's plugin catalog: the `ToolRegistry` over the `ToolTable`
+ * `processLayer` validated at build, the tool catalog over it, the
  * user's MCP servers and the installed plugins, following the switches.
  */
 
@@ -27,8 +27,8 @@ import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
-import { readDisabledTools, type Plugin } from '@tools/plugins';
-import { toolTable } from '@tools/toolTable';
+import { readDisabledTools } from '@tools/plugins';
+import type { ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 
@@ -36,10 +36,10 @@ import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 const SWITCH_READ = Schedule.exponential('200 millis');
 
 /**
- * The process's `ToolRegistry` over the app's `plugins` and the tool catalog
+ * The process's `ToolRegistry` over the validated table and the tool catalog
  * (`ToolCatalog`) over it, with the MCP servers of `mcpConfigPath` (a host's is
  * the user's `~/.texra/mcp.json`) and the installed plugins.
- * `processLayer` builds it from the plugin list an entry passes. The layer takes the process `FileSystem`
+ * `processLayer` passes the table it validated at build. The layer takes the process `FileSystem`
  * that `processLayer` serves, to read that file, and its
  * `AppState`, which holds the key MCP env values are digested under, the
  * switches and the plugin install record. A switch flipped or a plugin
@@ -47,10 +47,7 @@ const SWITCH_READ = Schedule.exponential('200 millis');
  * (`AppState.changes`), not only at a run's next step, so what follows the
  * catalog outside a run (a plugin layer's lifetime) follows the switch.
  */
-export const pluginCatalogLayer = (
-  plugins: readonly Plugin[],
-  mcpConfigPath: string,
-) =>
+export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -122,7 +119,7 @@ export const pluginCatalogLayer = (
         ),
         Stream.filterMap((read) => read),
       );
-      return toolCatalogLayer(toolTable(plugins), {
+      return toolCatalogLayer(table, {
         loader: mcpPluginLoader(fs, mcpConfigPath, envKey),
         installed,
         switches,

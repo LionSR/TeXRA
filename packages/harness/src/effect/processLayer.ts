@@ -47,7 +47,7 @@ import {
 } from '@skills/skillSources';
 import type { ToolCatalog } from '@tools/liveTools';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
+import { ToolRegistry, toolTable, type ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { PluginsRefused } from './errors.js';
@@ -243,53 +243,54 @@ function sessionsLayer(
       ),
       options.plugins,
     );
-  const sessions = Layer.effect(
-    Sessions,
-    Effect.gen(function* () {
-      // What a cold read of a project's store needs of the process.
-      const stores = Context.pick(
-        GlobalValues,
-        FileSystem.FileSystem,
-        ChildProcessSpawner,
-        ProjectDatabases,
-        ProcessIdentity,
-        ToolRegistry,
-      )(
-        yield* Effect.context<
-          ProcessServices | ProjectDatabases | ProcessIdentity
-        >(),
-      );
-      return yield* makeSessions(
-        yield* SessionOwner,
-        yield* AgentCatalog,
-        (held) =>
-          projectViews(options.storageRoot, held).pipe(
-            Effect.provideContext(stores),
-          ),
-      );
-    }),
-  ).pipe(
-    Layer.provideMerge(ownerProcessLayer({ ...options, appState })),
-    // Beneath every session the process builds, so its runs' steps list
-    // what the hosts' settings pages list.
-    Layer.provideMerge(
-      options.skills === undefined
-        ? Layer.empty
-        : Layer.succeed(HostSkillSources)({
-            resourcesPath: options.skills.resourcesPath,
-            options: options.skills.skillSourceOptions ?? {},
-            contributions: hostSkillContributions(
-              options.plugins.map(({ id }) => id),
-              options.skills.projectDataDirName,
+  const sessions = (table: ToolTable) =>
+    Layer.effect(
+      Sessions,
+      Effect.gen(function* () {
+        // What a cold read of a project's store needs of the process.
+        const stores = Context.pick(
+          GlobalValues,
+          FileSystem.FileSystem,
+          ChildProcessSpawner,
+          ProjectDatabases,
+          ProcessIdentity,
+          ToolRegistry,
+        )(
+          yield* Effect.context<
+            ProcessServices | ProjectDatabases | ProcessIdentity
+          >(),
+        );
+        return yield* makeSessions(
+          yield* SessionOwner,
+          yield* AgentCatalog,
+          (held) =>
+            projectViews(options.storageRoot, held).pipe(
+              Effect.provideContext(stores),
             ),
-          }),
-    ),
-  );
+        );
+      }),
+    ).pipe(
+      Layer.provideMerge(ownerProcessLayer({ ...options, appState }, table)),
+      // Beneath every session the process builds, so its runs' steps list
+      // what the hosts' settings pages list.
+      Layer.provideMerge(
+        options.skills === undefined
+          ? Layer.empty
+          : Layer.succeed(HostSkillSources)({
+              resourcesPath: options.skills.resourcesPath,
+              options: options.skills.skillSourceOptions ?? {},
+              contributions: hostSkillContributions(
+                options.plugins.map(({ id }) => id),
+                options.skills.projectDataDirName,
+              ),
+            }),
+      ),
+    );
   return Layer.unwrap(
     Effect.try({
       try: () => toolTable(options.plugins),
       catch: (thrown) =>
         new PluginsRefused({ message: toErrorMessage(thrown) }),
-    }).pipe(Effect.as(sessions)),
+    }).pipe(Effect.map(sessions)),
   );
 }
