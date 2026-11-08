@@ -409,7 +409,7 @@ lands inside the valid range instead of being rejected: `872` entered for
 and the failure then names a number the user never meant to set.
 
 ```ts
-const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING: { readonly key: "chatgptCodex.contextWindowK"; readonly slot: "config"; readonly schema: withDecodingDefault<NullOr<Int>, never>; readonly title: "Subscription input token budget (K tokens)"; readonly description: "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it (500 for GPT-6.1 Sol, 272 for the others); a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery."; }
+const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING: { readonly key: "chatgptCodex.contextWindowK"; readonly slot: "config"; readonly schema: withDecodingDefault<NullOr<Int>, never>; readonly title: "Subscription input token budget (K tokens)"; readonly description: "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it; a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery."; }
 ```
 
 ## CHATGPT_PREFER_SUBSCRIPTION_SETTING
@@ -514,7 +514,7 @@ const CredentialSwitchSchema: Union<readonly [Struct<{ readonly kind: Literal<"d
 ## DASHSCOPE_REGION_SETTING
 
 ```ts
-const DASHSCOPE_REGION_SETTING: { readonly provider: "dashscope"; readonly key: "dashscope.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Qwen China region (Bailian)"; readonly description: "Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to \"Bailian\"."; readonly slot: "globalState"; }
+const DASHSCOPE_REGION_SETTING: { readonly provider: "dashscope"; readonly key: "dashscope.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Qwen China region (Bailian)"; readonly description: "Use the China region endpoint instead of the international one. Display name switches to \"Bailian\"."; readonly slot: "globalState"; }
 ```
 
 ## DatabaseAggregateClosed
@@ -929,7 +929,7 @@ const GLM_ENDPOINT_SETTING: { readonly id: "glm"; readonly key: "endpoint.glm"; 
 ## GLM_REGION_SETTING
 
 ```ts
-const GLM_REGION_SETTING: { readonly provider: "glm"; readonly key: "glm.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM China region"; readonly description: "Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint."; readonly slot: "globalState"; }
+const GLM_REGION_SETTING: { readonly provider: "glm"; readonly key: "glm.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "GLM China region"; readonly description: "Use the China region endpoint instead of the international one. Enabled by default. API keys work with either endpoint."; readonly slot: "globalState"; }
 ```
 
 ## GOAL_MAX_COST_SETTING
@@ -1338,7 +1338,7 @@ type MessageType = typeof MessageTypeSchema.Type;
 ## MINIMAX_REGION_SETTING
 
 ```ts
-const MINIMAX_REGION_SETTING: { readonly provider: "minimax"; readonly key: "minimax.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "MiniMax China region"; readonly description: "Use the China region endpoint (api.minimax.cn) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region."; readonly slot: "globalState"; }
+const MINIMAX_REGION_SETTING: { readonly provider: "minimax"; readonly key: "minimax.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "MiniMax China region"; readonly description: "Use the China region endpoint instead of the international one. API keys are region-specific — you must obtain a key from the matching region."; readonly slot: "globalState"; }
 ```
 
 ## MODEL_AVAILABILITY_STATUS
@@ -1405,7 +1405,7 @@ type ModelBackend = typeof ModelBackendSchema.Type;
 ## MOONSHOT_REGION_SETTING
 
 ```ts
-const MOONSHOT_REGION_SETTING: { readonly provider: "moonshot"; readonly key: "moonshot.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Kimi/Moonshot China region"; readonly description: "Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai."; readonly slot: "globalState"; }
+const MOONSHOT_REGION_SETTING: { readonly provider: "moonshot"; readonly key: "moonshot.useChina"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Kimi/Moonshot China region"; readonly description: "Use the China endpoint instead of the international one. Enabled by default. Keys are platform-specific: a key from one region does not work on the other."; readonly slot: "globalState"; }
 ```
 
 ## needsUser

@@ -58,7 +58,7 @@ export const MOONSHOT_REGION_SETTING = {
   schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   title: 'Kimi/Moonshot China region',
   description:
-    'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
+    'Use the China endpoint instead of the international one. Enabled by default. Keys are platform-specific: a key from one region does not work on the other.',
   slot: 'globalState',
 } as const satisfies RegionSettingRow;
 
@@ -70,7 +70,7 @@ export const DASHSCOPE_REGION_SETTING = {
   ),
   title: 'Qwen China region (Bailian)',
   description:
-    'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
+    'Use the China region endpoint instead of the international one. Display name switches to "Bailian".',
   slot: 'globalState',
 } as const satisfies RegionSettingRow;
 
@@ -82,7 +82,7 @@ export const MINIMAX_REGION_SETTING = {
   ),
   title: 'MiniMax China region',
   description:
-    'Use the China region endpoint (api.minimax.cn) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
+    'Use the China region endpoint instead of the international one. API keys are region-specific — you must obtain a key from the matching region.',
   slot: 'globalState',
 } as const satisfies RegionSettingRow;
 
@@ -94,7 +94,7 @@ export const GLM_REGION_SETTING = {
   schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   title: 'GLM China region',
   description:
-    'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
+    'Use the China region endpoint instead of the international one. Enabled by default. API keys work with either endpoint.',
   slot: 'globalState',
 } as const satisfies RegionSettingRow;
 
