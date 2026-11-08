@@ -40,7 +40,10 @@ pre-commit install        # optional hooks (needs `pip install pre-commit`)
 `npm run typecheck` before committing; this is the most common way a change lands
 broken. It runs `tsc` over the root and test configs and each package's own
 `typecheck` script at once, the harness's being its full build, which
-regenerates `packages/harness/dist/`.
+regenerates `packages/harness/dist/`, followed by a `tsc` pass over
+`packages/harness/example/` against those built declarations
+(`packages/harness/tsconfig.example.json`). The `packed example` CI job still
+installs the packed tarballs and runs the examples.
 
 The pre-commit hook runs oxfmt on the staged paths; when it rewrites a file
 the commit stops, and you stage the output and commit again. CI runs

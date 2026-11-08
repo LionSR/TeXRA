@@ -10,6 +10,8 @@ Set `TEXRA_EXAMPLE_MODEL` to a `provider/model` string (for example `anthropic/c
 corepack pnpm --filter @texra-ai/harness run example:packed
 ```
 
+The harness's `typecheck` (part of the repository's `npm run typecheck`) also type-checks these files in the workspace, with this directory's `tsconfig.json` over the declarations the build writes to `dist/` (`../tsconfig.example.json` maps each published subpath to its declaration), so a change that breaks an example fails before a push. Only `example:packed` installs the tarballs and runs the examples.
+
 ## Real-model acceptance
 
 `acceptance.ts` is the harness's acceptance against a real model. Nothing in it hands the model a script: each scenario states a task in plain words, the model reads the tool descriptions and writes the programs itself, and the checks read only outcomes, calls, child runs, facts and artifacts, never exact text or request counts, so they hold for any competent model.

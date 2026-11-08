@@ -1,0 +1,21 @@
+// Type-checks example/ in the workspace, as part of this package's
+// `typecheck`, against the declarations the build just wrote to dist/: the
+// types a consumer of the packed package gets. The compiler settings are
+// example/tsconfig.json's, the ones the packed consumer uses; this file only
+// maps each published subpath (`publishConfig.exports` in package.json) to
+// its built declaration, since the workspace manifest's `exports` name the
+// sources. A subpath missing here resolves to its source and fails loudly.
+{
+  "extends": "./example/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@texra-ai/harness": ["./dist/types/index.d.ts"],
+      "@texra-ai/harness/schemas": ["./dist/types/schemas.d.ts"],
+      "@texra-ai/harness/transcript": ["./dist/types/transcriptEntry.d.ts"],
+      "@texra-ai/harness/plugins": ["./dist/types/plugins.d.ts"],
+      "@texra-ai/harness/host": ["./dist/types/host.d.ts"],
+      "@texra-ai/harness/node": ["./dist/types/node.d.ts"],
+      "acme-notes": ["./example/acme-notes/index.d.ts"]
+    }
+  }
+}
