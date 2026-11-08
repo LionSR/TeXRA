@@ -10,7 +10,6 @@ import type {
   PositionAt,
   RequestDecision,
   RunFamily,
-  RunOutcome,
   SessionRow,
   FactName,
 } from '@shared/schemas';
@@ -36,7 +35,6 @@ export type RunRowState = {
   readonly family: RunFamily | null;
   /** Where the loop stands. */
   readonly at: PositionAt | null;
-  readonly outcome: RunOutcome | null;
   readonly turn: number;
   /** By request id, in the order the rows opened them. */
   readonly requests: Readonly<Record<string, RequestState>>;
