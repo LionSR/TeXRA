@@ -129,12 +129,6 @@ const recoverRun = <A, E, R>(
  * the Ink layer never directly mutates session run-state fields.
  */
 export interface ChatSessionController {
-  /** Start a new root agent run from a fresh config. The program completes
-   *  once the session holds the run, or its launch failed. */
-  startRootRun(
-    config: AgentConfigPayload,
-  ): Effect.Effect<void, never, ProcessServices>;
-
   /**
    * Resume a suspended tool-use session by run id.
    *
@@ -535,9 +529,6 @@ export function createChatSessionController(
         );
       }),
     );
-
-  const startRootRun: ChatSessionController['startRootRun'] = (config) =>
-    Effect.asVoid(launchRootRun(Effect.succeed(config)));
 
   // -----------------------------------------------------------------------
   // resume
@@ -1015,7 +1006,6 @@ export function createChatSessionController(
   };
 
   return {
-    startRootRun,
     resume,
     resumeTask,
     stop,

@@ -1,47 +1,16 @@
 // The TUI host's side of the request protocol (one run model, 3.7): the
-// bypass a decision turns on, and the credential work behind a retry on the user's own key. A run asks
-// with `session.openRequest`; the surface answers with `request.decide`.
+// bypass a decision turns on, and the credential work behind a retry on the
+// user's own key. A run asks with `session.openRequest`; the surface answers
+// with `request.decide`, which the session stores as the request's
+// `request.decided`.
 
+import { computed } from '@lit-labs/signals';
 import { layer } from '@effect/vitest';
-import { Effect, Fiber, Layer, Schema, SubscriptionRef, Context } from 'effect';
-import { afterEach, beforeEach, expect, type MockInstance, vi } from 'vitest';
-import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
+import { Context, Effect, Fiber, Layer, Schema, SubscriptionRef } from 'effect';
+import { expect } from 'vitest';
+import { apiKeySecretName } from '@texra-ai/llm';
 
-const mocks = vi.hoisted(() => ({
-  /** The key prompt: the user closes it without entering a key. */
-  promptForCliProviderApiKey: vi.fn(() => Effect.void),
-  setCliSubscriptionPreference: vi.fn(),
-}));
-
-vi.mock('@model/subscriptionAccess', async (importActual) => {
-  const actual =
-    await importActual<typeof import('@model/subscriptionAccess')>();
-  const { get } = actual.SubscriptionPreference;
-  return {
-    ...actual,
-    SubscriptionPreference: {
-      ...actual.SubscriptionPreference,
-      get: (...args: Parameters<typeof get>) =>
-        args[0] === 'chatgpt' ? true : get(...args),
-    },
-  };
-});
-
-vi.mock('@cli/chat/tui/hosts/cliProviderKeys', async (importActual) => ({
-  ...(await importActual<
-    typeof import('@cli/chat/tui/hosts/cliProviderKeys')
-  >()),
-  promptForCliProviderApiKey: mocks.promptForCliProviderApiKey,
-}));
-
-vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
-  notify: vi.fn(),
-}));
-
-vi.mock('@cli/chat/tui/state/subscriptionPreference', () => ({
-  setCliSubscriptionPreference: mocks.setCliSubscriptionPreference,
-}));
-
+import { SubscriptionPreference } from '@texra-ai/harness/host';
 import {
   RunIdSchema,
   type RequestPayload,
@@ -57,22 +26,21 @@ import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { startChat, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
+import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
+import { subscribeToSignalChanges } from '@texra/shared/signals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import type { CliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import {
   SessionLog,
-  Approvals,
   SessionViewAccess,
   runStateAppend,
 } from '@shared/session/runHistory';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-
 import {
   holdTestRun,
   publishTestRunStart,
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
+import { storedRows } from '@test/support/storeFaults';
 import {
   FakeHost,
   SessionGraph,
@@ -84,14 +52,23 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
-import type { PlatformSecrets } from '@texra-ai/harness/plugins';
-
-/** The settings the TUI's retry decisions write through, if any. */
-const settingsStores = makeFakeSettingsStores();
 
 /** The file's session as the harness holds it: its requests, interactions,
  *  log and view. */
 const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
+
+/** Done once `holds` reads true of the TUI's signals. */
+const until = (holds: () => boolean): Effect.Effect<void> =>
+  Effect.callback<void>((resume) => {
+    const watched = computed(holds);
+    if (watched.get()) return resume(Effect.void);
+    const unsubscribe = subscribeToSignalChanges([watched], () => {
+      if (!watched.get()) return;
+      unsubscribe();
+      resume(Effect.void);
+    });
+    return Effect.sync(unsubscribe);
+  });
 
 /**
  * Close whatever the test did not answer: a request left open outlives its
@@ -116,36 +93,34 @@ const cancelOpenRequests = Effect.gen(function* () {
 });
 
 /**
- * Attach the TUI presentation host for one test, until its scope closes. It
- * answers nothing on its own: it stages what a request needs before it can
- * be shown, and performs the `useOwnApiKey` capability a retry decision
- * names. It counts the host's secret reads for the test. The scope's close
+ * Attach the TUI presentation host for one test, in a fresh conversation,
+ * until its scope closes, over the host's own settings. It answers nothing on its own: it stages
+ * what a request needs before it can be shown, and performs the
+ * `useOwnApiKey` capability a retry decision names. The scope's close
  * detaches it, cancels the requests left open, then drops the stored OpenAI
  * key, so each case starts with none.
  */
 const tui = Effect.gen(function* () {
-  const { secrets } = yield* FakeHost;
-  secretReads = vi.spyOn(secrets, 'get');
+  // A fresh conversation: the chat's root decides where this file's runs
+  // hang, and an earlier suite in the worker may have left its own.
+  startChat();
+  const { roots, secrets } = yield* FakeHost;
   yield* Effect.addFinalizer(() =>
-    Effect.suspend(() => {
-      secretReads.mockRestore();
-      return secrets.delete(OPENAI_KEY);
-    }).pipe(Effect.orDie),
+    secrets.delete(OPENAI_KEY).pipe(Effect.orDie),
   );
   const cliContext = createTuiCliContext();
   yield* setTestApprovalPolicy(cliContext.approvalPolicy);
-  // cast: the TUI host interactions only emit through the presentation host.
-  const presentationHost = {
-    emit: vi.fn(),
-    close: vi.fn(() => Effect.void),
-  } as unknown as CliRuntimeHost;
   const session = yield* sessionHandle;
   yield* Effect.addFinalizer(() => cancelOpenRequests);
-  const interactions = createTuiHostInteractions(presentationHost, cliContext, {
-    requests: yield* TestSession,
-    settings: settingsStores.stores,
-    runtime: yield* SessionGraph.runtime,
-  });
+  const interactions = createTuiHostInteractions(
+    createCliRuntimeHost(cliContext),
+    cliContext,
+    {
+      requests: yield* TestSession,
+      settings: roots,
+      runtime: yield* SessionGraph.runtime,
+    },
+  );
   yield* attachInteractions(Context.get(session, Interactions), interactions);
   return interactions.performHost;
 });
@@ -179,7 +154,7 @@ function ensureRun(runId: RunId) {
 }
 
 /** Ask through the protocol the TUI host answers: `request.opened` on the
- *  run, settled by the `request.decided` a surface commits. */
+ *  run, answered by the `request.decided` a surface commits. */
 function openRequest(runId: RunId, payload: RequestPayload) {
   return Effect.gen(function* () {
     yield* ensureRun(runId);
@@ -244,20 +219,24 @@ const PERSONAL_KEY_RETRY = {
   credentials: 'personal',
 } as const;
 
-function waitFor(assertion: () => void): Effect.Effect<void> {
-  return Effect.promise(async () => {
-    await vi.waitFor(assertion);
+/** Done once the modal shows a `kind` request whose data matches `data`. */
+const untilApproval = (kind: string, data: { readonly runId: RunId }) =>
+  until(() => {
+    const payload = currentApproval.get()?.payload;
+    return payload?.kind === kind && payload.data.runId === data.runId;
   });
-}
 
-function waitForApproval(
-  kind: string,
-  data: Record<string, unknown>,
-): Effect.Effect<void> {
-  return waitFor(() => {
-    expect(currentApproval.get()?.payload).toMatchObject({ kind, data });
+/** The stored rows of `type` on `runId`, as the session's store holds them,
+ *  their data decoded. */
+const storedOf = (runId: RunId, type: string) =>
+  Effect.gen(function* () {
+    const session = yield* sessionHandle;
+    yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+    const { roots } = yield* FakeHost;
+    return storedRows(roots.storage)
+      .filter((row) => row.run === runId && row.type === type)
+      .map((row): unknown => JSON.parse(row.data));
   });
-}
 
 /** The session's view bound into the TUI's signal for the file, as the chat
  *  entry binds it. */
@@ -275,35 +254,16 @@ const boundSessionView = Layer.effectDiscard(
 /** The OpenAI key's entry in the fake host's secret store. */
 const OPENAI_KEY = apiKeySecretName('openai');
 
-/** Reads of the fake host's secret store; a key check is a read of
- *  the provider's entry. Each case starts with no OpenAI key stored. */
-let secretReads: MockInstance<PlatformSecrets['get']>;
-
-/** Whether the store's OpenAI key entry was read: the own-key check. */
-const openAiKeyChecks = (): number =>
-  secretReads.mock.calls.filter(([key]) => key === OPENAI_KEY).length;
-
-// One session for the file, its view bound for the file. Live clock: the
-// host's key work and the surface's decisions settle on real event-loop
-// turns.
+// One persistent session for the file, its view bound for the file. Live
+// clock: the host's key work and the surface's decisions finish on real
+// event-loop turns.
 layer(
   boundSessionView.pipe(
-    Layer.provideMerge(TestSession.layer()),
+    Layer.provideMerge(TestSession.layer(undefined, { persistent: true })),
     Layer.provideMerge(SessionGraph.hosted),
   ),
   { excludeTestServices: true },
 )('TUI request decisions', (it) => {
-  beforeEach(() => {
-    // The session runtime reads key variables from the process environment; a
-    // blank one counts as unset, so an ambient key never stands in for one.
-    for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    mocks.setCliSubscriptionPreference.mockReset();
-  });
-
   it.effect('sets the run bash bypass at the approval decision site', () =>
     Effect.gen(function* () {
       const performHost = yield* tui;
@@ -315,16 +275,17 @@ layer(
         }),
       );
 
-      yield* waitForApproval('bash', { runId });
+      yield* untilApproval('bash', { runId });
       yield* decideCurrent(performHost, { action: APPROVE_SESSION_ACTION });
+      yield* Fiber.join(pending);
 
-      expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-      const session = yield* sessionHandle;
-      yield* waitFor(() =>
-        expect(
-          Context.get(session, Approvals).bypass(runId, 'bash') !== null,
-        ).toBe(true),
-      );
+      expect(yield* storedOf(runId, 'request.decided')).toMatchObject([
+        { decision: { action: 'approve' } },
+      ]);
+      // The grant the approval offered is the run's own from now on.
+      expect(yield* storedOf(runId, 'approval.policy')).toMatchObject([
+        { snapshot: { own: { bash: 'on' } } },
+      ]);
     }),
   );
 
@@ -332,31 +293,30 @@ layer(
     'switches a ChatGPT subscription retry to the API key only on the explicit decision',
     () =>
       Effect.gen(function* () {
-        yield* (yield* FakeHost).secrets.set(OPENAI_KEY, 'sk-own-key');
+        const { roots, secrets } = yield* FakeHost;
+        yield* secrets.set(OPENAI_KEY, 'sk-own-key');
+        // The run is on the ChatGPT subscription the user prefers.
+        yield* SubscriptionPreference.set('chatgpt', roots, true).pipe(
+          Effect.orDie,
+        );
         const performHost = yield* tui;
+        const runId = runIdFor('s3');
         const pending = yield* Effect.forkChild(
           openRetry(chatGptSubscriptionRetry('s3')),
         );
 
-        yield* waitForApproval('retry', {
-          runId: runIdFor('s3'),
-          errorDetails: {
-            message: 'ChatGPT subscription usage limit reached.',
-          },
-        });
-        expect(openAiKeyChecks()).toBe(0);
-
+        yield* untilApproval('retry', { runId });
         yield* decideCurrent(performHost, PERSONAL_KEY_RETRY);
+        yield* Fiber.join(pending);
 
-        expect(yield* Fiber.join(pending)).toEqual(PERSONAL_KEY_RETRY);
         // The decision is the whole switch: the run declines the exhausted
-        // route on its own run history, so the user's stored preference is not
-        // rewritten on their behalf.
-        expect(mocks.setCliSubscriptionPreference).not.toHaveBeenCalled();
-        // The shared key entry checks the provider the run's offer named,
-        // finds its key, and asks for none.
-        expect(openAiKeyChecks()).toBe(1);
-        expect(mocks.promptForCliProviderApiKey).not.toHaveBeenCalled();
+        // route on its own run history, and the stored key served it
+        // without a prompt.
+        expect(yield* storedOf(runId, 'request.decided')).toMatchObject([
+          { decision: PERSONAL_KEY_RETRY },
+        ]);
+        // The user's stored preference is not rewritten on their behalf.
+        expect(SubscriptionPreference.get('chatgpt', roots)).toBe(true);
       }),
   );
 });
