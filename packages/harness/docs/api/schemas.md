@@ -1497,17 +1497,6 @@ interface OpenFilePayload {
 }
 ```
 
-## outcomeFromCause
-
-The one verdict of how a run that did not return ended, from its failure
-cause: a stop outranks a failure, and any interrupt in the cause is a
-stop, even when a finalizer then failed (`Interrupt` + `Die`), so every
-terminal row agrees.
-
-```ts
-function outcomeFromCause(cause: Cause.Cause<unknown>): RunOutcome
-```
-
 ## OutcomeSchema
 
 What the runtime answers with: a typed value the host renders.

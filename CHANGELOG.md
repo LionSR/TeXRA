@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
   `outcome` (null while open) in place of `status`, and has no `kind` or
   `parentStageId`; `StageStatus` and `StageOptions` are gone, and
   `isScriptCall` from `@texra-ai/harness/transcript` tells a script's call.
+  A plugin opens a section with `AgentTrace.stage(label, use)`, which logs
+  what `use` writes on the trace it is handed under the stage and closes it
+  on `use`'s exit; `openStage`, `StageHandle` and `LogOptions.stageId` are
+  gone, and so is the `outcomeFromCause` export.
   A stage still open in a run whose process stopped reads as interrupted,
   not running.
 - **The compile-after-output settings are document-task settings.** The

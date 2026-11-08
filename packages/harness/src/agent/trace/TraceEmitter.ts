@@ -12,18 +12,18 @@
  *   - fan out to the sinks it was built with
  *   - swallow per-sink exceptions so one bad sink can't break the run
  */
-import { Stream } from 'effect';
+import { Effect, Exit, Stream } from 'effect';
 
 import { writeLogLine } from '@logger/logSink';
 import {
   MESSAGE_TYPES,
+  outcomeFromCause,
   qualifyAggregateId,
   RUN_OUTCOME,
   toJsonValue,
   type RunId,
   type LogLevel,
   type MessageType,
-  type RunOutcome,
   type ToolUseLog,
 } from '@shared/schemas';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
@@ -34,7 +34,6 @@ import type {
   AgentTrace,
   AgentTraceSink,
   LogOptions,
-  StageHandle,
   StreamHandle,
   StreamOptions,
   ToolCardHandle,
@@ -110,16 +109,41 @@ export class TraceEmitter implements AgentTrace {
       message,
       data: options.data === undefined ? undefined : toJsonValue(options.data),
       messageType: options.messageType,
-      stageId: options.stageId,
     });
   }
 
   // ─── Stages ────────────────────────────────────────────────────────
 
-  openStage(label: string): StageHandle {
-    const id = crypto.randomUUID();
-    this.emit({ type: 'stage.start', id, label });
-    return new StageHandleImpl(this, id);
+  stage<A, E, R>(
+    label: string,
+    use: (trace: AgentTrace) => Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R> {
+    return Effect.acquireUseRelease(
+      Effect.sync(() => {
+        const id = crypto.randomUUID();
+        this.emit({ type: 'stage.start', id, label });
+        return id;
+      }),
+      // A chunk is transient text on its row's id, which carries the stage.
+      (id) =>
+        use(
+          new TraceEmitter((event) =>
+            this.emit(
+              event.type === 'stream.chunk' ? event : { ...event, stageId: id },
+            ),
+          ),
+        ),
+      (id, exit) =>
+        Effect.sync(() =>
+          this.emit({
+            type: 'stage.end',
+            id,
+            status: Exit.isSuccess(exit)
+              ? RUN_OUTCOME.COMPLETED
+              : outcomeFromCause(exit.cause),
+          }),
+        ),
+    );
   }
 
   // ─── Streams ───────────────────────────────────────────────────────
@@ -196,23 +220,6 @@ class ToolCardHandleImpl implements ToolCardHandle {
       ...log,
       error: 'The turn ended before this tool reported.',
       status: 'failed',
-    });
-  }
-}
-
-class StageHandleImpl implements StageHandle {
-  private readonly trace: TraceEmitter;
-  readonly id: string;
-  constructor(trace: TraceEmitter, id: string) {
-    this.trace = trace;
-    this.id = id;
-  }
-
-  end(status?: RunOutcome): void {
-    this.trace.emit({
-      type: 'stage.end',
-      id: this.id,
-      status: status ?? RUN_OUTCOME.COMPLETED,
     });
   }
 }
