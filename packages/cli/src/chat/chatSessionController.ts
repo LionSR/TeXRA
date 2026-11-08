@@ -174,7 +174,7 @@ export interface ChatSessionController {
   readonly performHost: (command: HostCommand) => void;
 }
 
-export interface ChatSessionControllerInit {
+interface ChatSessionControllerInit {
   /** Mutable session state the controller owns. */
   readonly session: TuiSession;
 
