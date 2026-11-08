@@ -81,6 +81,8 @@ import {
 import { runStateAppend } from '@shared/session/runHistory';
 import { SessionRowSchema } from '@shared/schemas';
 import { Database } from '@shared/session/database';
+import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
@@ -93,10 +95,12 @@ import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
+  EXTERNAL_INQUIRY_THREAD_KIND,
   inquiryThreadFact,
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import { ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import type { ProcessProbe } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -678,9 +682,37 @@ describe('the session event table and its one publisher', () => {
       return Effect.gen(function* () {
         // Any undecodable row of a run damages it, not only its start. The
         // store is held while open, so the row is damaged between opens.
+        const closed: SessionRowDraft = {
+          type: 'followup.closed',
+          aggregateId: runStartRow.aggregateId,
+        };
         yield* Effect.flatMap(Database, (db) =>
-          db.appendAll([runStartRow, olderStart, waiting]),
+          db.appendAll([runStartRow, olderStart, waiting, closed]),
         ).pipe(Effect.provide(substrate(storage)));
+        // A record's fact that no one row states is read from the row that
+        // set it: that row broken since fails the record's read.
+        yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`UPDATE event SET data = '{' WHERE "commit" = 4;`);
+          } finally {
+            raw.close();
+          }
+        });
+        expect(
+          yield* Effect.flip(
+            Effect.flatMap(Database, (db) =>
+              db.readRunRecord(runStartRow.aggregateId),
+            ).pipe(Effect.provide(substrate(storage))),
+          ),
+        ).toMatchObject({
+          _tag: 'DatabaseReadFailed',
+          cause: {
+            _tag: 'DatabaseRowCorrupt',
+            type: 'followup.closed',
+            commit: 4,
+          },
+        });
         yield* corrupt(3);
         yield* Effect.gen(function* () {
           const db = yield* Database;
@@ -697,6 +729,31 @@ describe('the session event table and its one publisher', () => {
             },
           });
         }).pipe(Effect.provide(substrate(storage)));
+        // A run record built at open over that row (a store that held no
+        // record yet) fails its read on it, never answers without it.
+        yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`DELETE FROM run_record;
+              DELETE FROM projection_state WHERE name = 'run_record';`);
+          } finally {
+            raw.close();
+          }
+        });
+        expect(
+          yield* Effect.flip(
+            Effect.flatMap(Database, (db) =>
+              db.readRunRecord(runStartRow.aggregateId),
+            ).pipe(Effect.provide(substrate(storage))),
+          ),
+        ).toMatchObject({
+          _tag: 'DatabaseReadFailed',
+          cause: {
+            _tag: 'DatabaseRowCorrupt',
+            type: 'run.position',
+            commit: 3,
+          },
+        });
         // A fresh session over the store opens: the healthy run lists, and
         // the damaged one lists too, shown damaged and read-only, with
         // delete its one way out of the list.
@@ -724,7 +781,7 @@ describe('the session event table and its one publisher', () => {
         expect(
           yield* Effect.flip(
             Effect.flatMap(Database, (db) =>
-              db.readRunRecords(runStartRow.aggregateId),
+              db.readRunRecord(runStartRow.aggregateId),
             ).pipe(Effect.provide(substrate(storage))),
           ),
         ).toMatchObject({
@@ -992,6 +1049,18 @@ describe('the session event table and its one publisher', () => {
           parent: summary.parentRunId,
         };
       };
+      const inquiryPlugin = {
+        id: EXTERNAL_INQUIRY_THREAD_KIND.plugin,
+        factKinds: [EXTERNAL_INQUIRY_THREAD_KIND],
+      };
+      // The reads the writer's check makes, over the store.
+      const checkedLog: Pick<SessionLogShape, 'runRows' | 'facts'> = {
+        runRows: (id, read) =>
+          first
+            .readAggregate(id, 1, RUN_ROW_READS[read].kinds)
+            .pipe(Effect.map((rows) => foldRunRows(read, rows))),
+        facts: (runId) => first.readRunRecord(qualifyAggregateId('run', runId)),
+      };
       // Every aggregate this case writes, the unrelated run's among them.
       const stored = rowsOf(
         first,
@@ -1011,18 +1080,23 @@ describe('the session event table and its one publisher', () => {
       const initialCommit = initial[0]?.commit;
       if (initialCommit === undefined) throw new Error('nothing appended');
       expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(root);
+      // The thread's writer checks its rows in its job (`ownFactsChecked`):
+      // a row under a run that is not open is its rejection, and one the
+      // store meets anyway is a defect.
+      const unknownParent = thread({
+        parentRunId: Schema.decodeUnknownSync(RunIdSchema)('ffff00'),
+        status: 'answered',
+        turnCount: 3,
+      });
       expect(
-        (yield* Effect.flip(
-          first.appendAll([
-            thread({
-              parentRunId: Schema.decodeUnknownSync(RunIdSchema)('ffff00'),
-            }),
-          ]),
-        ))._tag,
-      ).toBe('DatabaseWriteFailed');
+        (yield* ownFactsChecked([unknownParent], inquiryPlugin, checkedLog))
+          .rejected,
+      ).toHaveLength(1);
+      const orphan = yield* Effect.exit(first.appendAll([unknownParent]));
+      expect(Exit.isFailure(orphan) && Cause.hasDies(orphan.cause)).toBe(true);
       // Visiting the first asker again must not let its delayed turn-1
       // answer regress state and then admit the former asker's turn-2 open.
-      const staleBatches: SessionRowDraft[][] = [
+      const staleBatches = [
         [
           thread({ status: 'answered' }),
           thread({ parentRunId: OLDER, turnCount: 2 }),
@@ -1031,9 +1105,9 @@ describe('the session event table and its one publisher', () => {
         [thread({ parentRunId: OLDER, turnCount: 2 })],
       ];
       for (const stale of staleBatches) {
-        expect((yield* Effect.flip(first.appendAll(stale)))._tag).toBe(
-          'DatabaseWriteFailed',
-        );
+        expect(
+          (yield* ownFactsChecked(stale, inquiryPlugin, checkedLog)).kept,
+        ).toEqual([]);
       }
       expect(yield* stored).toEqual(initial);
       expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(root);
@@ -1058,16 +1132,20 @@ describe('the session event table and its one publisher', () => {
         ),
       ).toBe(true);
       // Neither a late update nor a new inquiry can attach to the tombstoned
-      // asker: the closed thread refuses its writer, a closed parent the new one.
-      for (const [draft, refusal] of [
-        [thread(), 'DatabaseAggregateClosed'],
-        [thread({ parentRunId: OLDER }), 'DatabaseAggregateClosed'],
-        [thread({ threadId: 'ei_abcdef012345' }), 'DatabaseWriteFailed'],
-      ] as const) {
+      // asker: the closed thread refuses its writer, and the new one's writer
+      // rejects it under a closed parent.
+      for (const draft of [thread(), thread({ parentRunId: OLDER })]) {
         expect((yield* Effect.flip(first.appendAll([draft])))._tag).toBe(
-          refusal,
+          'DatabaseAggregateClosed',
         );
       }
+      expect(
+        (yield* ownFactsChecked(
+          [thread({ threadId: 'ei_abcdef012345' })],
+          inquiryPlugin,
+          checkedLog,
+        )).rejected,
+      ).toHaveLength(1);
       expect(yield* first.currentCommit).toBe(8);
       const tombstone = committed.at(-1);
       const cleanupError = new Error(
