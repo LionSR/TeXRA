@@ -150,7 +150,8 @@ const SCENARIOS = [
   {
     name: 'transcript',
     frame: 'scrollback',
-    env: { HARNESS_ENTRIES: '8' },
+    // A chat between turns: its root waits, so Ctrl-C exits.
+    env: { HARNESS_ENTRIES: '8', HARNESS_ROOT_WAITING: '1' },
     expect: [
       'TeXRA',
       'agent: chat · model: harness-model',
@@ -614,6 +615,7 @@ const SCENARIOS = [
     frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
+      HARNESS_ROOT_ENDED: '1',
       HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
     },
     keys: ['/', `${ESC}/agent\r`],
@@ -669,11 +671,12 @@ const SCENARIOS = [
     name: 'agent-form',
     frame: 'scrollback',
     // The harness mirrors `texra chat`: agent selection is open exactly while
-    // no root run is pending, so a fixture with no interruptible run gets the
-    // selectable picker and its "Choose the root agent" description, not the
+    // the chat holds no root run, so a fixture whose root has ended gets the
+    // selectable picker and its "Choose an agent" description, not the
     // read-only `texra chat --agent <name>` hint.
     env: {
       HARNESS_ENTRIES: '4',
+      HARNESS_ROOT_ENDED: '1',
       HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
     },
     keys: ['/agent', '\r'],
@@ -708,6 +711,7 @@ const SCENARIOS = [
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
+      HARNESS_ROOT_ENDED: '1',
       HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
     },
     keys: ['/agent', '\r'],
@@ -984,14 +988,6 @@ const SCENARIOS = [
     unexpect: ['keys deny', 'approval: deny privileged actions', 'Ready never'],
   },
   {
-    name: 'uninterruptible-running-status-bar',
-    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
-    frame: 'viewport',
-    expect: ['Ctrl-C exit'],
-    expectPatterns: [RUNNING_STATUS_PATTERN],
-    unexpect: ['Ctrl-C stop'],
-  },
-  {
     // The status bar is the single owner of active-run liveness. The harness
     // publishes a real activation and executing flow step; frame settlement
     // advances the displayed duration beyond zero.
@@ -1089,6 +1085,7 @@ const SCENARIOS = [
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
+      HARNESS_ROOT_ENDED: '1',
       HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
     },
     keys: ['/agent', '\r'],
@@ -2540,6 +2537,7 @@ const SCENARIOS = [
     name: 'empty-task-shortcut-hidden',
     env: {
       HARNESS_ENTRIES: '4',
+      HARNESS_ROOT_WAITING: '1',
     },
     keys: [ESC + 'p'],
     frame: 'viewport',
@@ -2636,7 +2634,8 @@ const SCENARIOS = [
     expect: [
       'Coordinate a small math proof through nested CLI work.',
       '/ commands',
-      'Ctrl-C exit',
+      // The plan's root is running here, so Ctrl-C stops it.
+      'Ctrl-C stop',
     ],
     unexpect: ['Work plan:', 'Objective'],
   },
@@ -2776,7 +2775,7 @@ const SCENARIOS = [
   {
     name: 'ctrl-c-clears-draft',
     frame: 'viewport',
-    env: { HARNESS_ENTRIES: '4' },
+    env: { HARNESS_ENTRIES: '4', HARNESS_ROOT_WAITING: '1' },
     keys: ['unfinished draft', ETX],
     expect: ['Ctrl-C exit'],
     unexpect: ['unfinished draft'],

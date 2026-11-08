@@ -1288,6 +1288,9 @@ const HARNESS_RUN_IDLE =
 function harnessInitialRunStatus(): SeededStanding | undefined {
   if (HARNESS_RUN_ACTIVE) return 'running';
   if (HARNESS_RUN_IDLE) return 'waiting';
+  // A root whose run has ended: the chat holds no root run, so the next
+  // message starts one and `/agent` may choose its agent.
+  if (process.env.HARNESS_ROOT_ENDED === '1') return RUN_OUTCOME.COMPLETED;
   return undefined;
 }
 
