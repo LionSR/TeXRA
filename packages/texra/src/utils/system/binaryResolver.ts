@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Context, Effect } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import { hasExtension } from '@texra-ai/harness/host';
@@ -45,9 +45,12 @@ export interface FoundCommand {
   readonly resolvedPath: string;
 }
 
-// Found paths by tool name, kept for the session (bounded). A miss is not
-// kept: a tool installed mid-session is found by the next lookup.
-const foundTools = new LRUCache<string, string>({ max: 64 });
+/** Found paths by tool name, kept for the process (bounded): a TeX Live
+ *  script's lookup spawns `kpsewhich`. A miss is not kept: a tool installed
+ *  mid-session is found by the next lookup. */
+const FoundTools = Context.Reference('@texra/utils/FoundTools', {
+  defaultValue: () => new LRUCache<string, string>({ max: 64 }),
+});
 
 function toolCandidates(tool: string): string[] {
   const candidates = [tool];
@@ -110,6 +113,7 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
 const findTool = Effect.fn('findTool')(function* (
   tool: string,
 ): Effect.fn.Return<string | null, never, ChildProcessSpawner> {
+  const foundTools = yield* FoundTools;
   const cached = foundTools.get(tool);
   if (cached !== undefined) return cached;
   const found = yield* findToolUncached(tool);

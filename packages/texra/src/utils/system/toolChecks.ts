@@ -178,26 +178,21 @@ export function detectPackageManager(): SystemPackageManager | null {
   return null;
 }
 
-const packageManagerAvailability = new Map<SystemPackageManager, boolean>();
-
 /**
  * Whether one specific package manager is installed.
  *
  * Callers that only have an install command for some managers need this rather
  * than {@link detectPackageManager}: that one answers "which manager does this
  * platform use", so on a Linux box with both apt and Linuxbrew it returns
- * `apt` and a brew-only command map would never match. Each answer is probed
- * once and cached, including misses. The answer is a PATH lookup, not a
- * spawn, so it stays synchronous for the install-command getters; a present
+ * `apt` and a brew-only command map would never match. The answer is a PATH
+ * lookup (about 0.1 ms), not a spawn, made on each ask: its callers are a
+ * person's actions (an install click, the git advice, the setup probe), and a
+ * manager installed mid-session is seen. It stays synchronous for the
+ * install-command getters; a present
  * but broken binary counts as installed, and the install command it picks
  * then fails visibly. Each caller surfaces the boolean (or
  * `detectPackageManager`'s null) itself.
  */
 export function hasPackageManager(name: SystemPackageManager): boolean {
-  const cached = packageManagerAvailability.get(name);
-  if (cached !== undefined) return cached;
-
-  const available = whichOnExtendedPath(name, commandDirs()) !== null;
-  packageManagerAvailability.set(name, available);
-  return available;
+  return whichOnExtendedPath(name, commandDirs()) !== null;
 }

@@ -1,4 +1,4 @@
-import { Effect, Option, Predicate, Schema } from 'effect';
+import { Context, Effect, Option, Predicate, Schema } from 'effect';
 
 // Local imports - agent config
 import {
@@ -129,7 +129,11 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
 // slug (`codex debug models --bundled`); those are the route's ceiling.
 // ============================================================================
 
-const codexRouteEffortsByKey = new Map<string, readonly ReasoningEffort[]>();
+/** The levels each binary and slug answered, kept for the process: a probe
+ *  is a spawn of up to five seconds. */
+const CodexRouteEfforts = Context.Reference('@texra/tools/CodexRouteEfforts', {
+  defaultValue: () => new Map<string, readonly ReasoningEffort[]>(),
+});
 const codexRouteEffortLanes = new Map<string, PerKeyLane>();
 
 /** Just the shape `catalogEfforts` depends on — a `models` array. Model
@@ -183,6 +187,7 @@ const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
   slug: string,
   key: string,
 ): Effect.fn.Return<readonly ReasoningEffort[], never, ChildProcessSpawner> {
+  const codexRouteEffortsByKey = yield* CodexRouteEfforts;
   const cached = codexRouteEffortsByKey.get(key);
   if (cached != null) return cached;
 
