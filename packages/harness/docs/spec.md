@@ -343,7 +343,10 @@ The `model.message` arms:
 `run.end`), `process.exit` how a process run's command exited, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts#RunRecordEventDraftSchema`,
-`shared/session/runRowReads.ts#recordFacts`, `agent/followUp/Inbox.ts#admission`).
+`controllers/session/projections.ts#recordAfter`, `agent/followUp/Inbox.ts#admission`).
+A run's record (`SessionLog.facts`) is one projection row per run, the
+`run_record` table, naming the commits of the rows it reads
+(`controllers/session/projections.ts#runRowsOf`).
 
 ### 3.3 Display rows (session-authored and run-authored)
 
@@ -374,8 +377,9 @@ also read by `applyRunRows`.
 The transcript tier is display rows too
 (`shared/schemas/traceEvent.ts#TraceRowFieldsSchema`):
 `log`, `stage.start` and `stage.end` (a labelled span no other row bounds,
-such as a script's calls; a stage still open when its run ends closes with
-that `run.end`), `tool.start` (a call's card opens),
+such as a plugin's section; a stage still open when its run ends closes with
+that `run.end`), `tool.start` (a call's card opens; a script's call names
+the `script` card that issued it as its `stageId`, the script's stage),
 `tool.end` (it closes), `usage` (one priced turn; a run with a run history
 stores none), `context.state`, `stream.start`, `stream.end`, and
 `response.finalized` (the final text of one provider response; a loop turn that
@@ -925,7 +929,7 @@ its title.
 - **4 write points**:
   `src/test-kernel/support/crashConformance.ts#'resumes from every commit point to the clean outcome, running nothing twice'`
 - **5 fold**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'holds the batch contract: a mismatched delivery dies, a loose-keyed attachment is accepted'`;
+  `packages/harness/test/shared/session/runHistory.vitest.ts#'holds the batch contract: a mismatched delivery dies, a loose-keyed attachment is accepted'`;
   `src/test-kernel/controllers/session/goldenStore.vitest.ts#'folds to the pinned session view and run states'`
 - **6 retry**:
   `src/test-kernel/agent/runtime/RetryState.vitest.ts#'admits a manual retry through a durable approval'`,

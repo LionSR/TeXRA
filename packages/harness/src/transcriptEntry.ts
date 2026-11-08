@@ -134,18 +134,19 @@ export {
   type ScriptSectionView,
   type ScriptStageView,
 } from '@shared/transcript/scriptStage';
+// A transcript's stages with their rows, among its other rows.
+export {
+  transcriptTimeline,
+  type TimelineEntry,
+} from '@shared/transcript/transcriptTimeline';
 // Delivery envelopes inside assistant text, collapsed to their summaries,
 // and the entity decoding their bodies take.
 export {
   decodeXmlEntities,
   summarizeEmbeddedSubagentFollowups,
 } from '@shared/subagentFollowup';
-// Run lists and stages: their order, a group's status, and a
-// compaction's status.
-export {
-  compareByNewestCreationTime,
-  compareBySeqNo,
-} from '@shared/runs/runOrdering';
+// Run lists' order, and a compaction's status.
+export { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 export type {
   CompactionActivityBlock,
   CompactionActivityStatus,

@@ -35,7 +35,7 @@ import {
   validationHost,
 } from '@test/support/storeFaults';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
-import { makeSessions } from '../../../packages/harness/src/effect/sessionPrograms';
+import { makeSessions } from '../../src/effect/sessionPrograms';
 
 /** The model every case runs on: the validation model answers it. */
 const MODEL = 'openai/gpt-5.6-sol';

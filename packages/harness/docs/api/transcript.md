@@ -130,26 +130,6 @@ function compareByNewestCreationTime(
 ): number
 ```
 
-## compareBySeqNo
-
-Compare transcript rows by their wire append sequence (`seqNo`), falling
-back to a wall-clock key when either row predates sequence tracking.
-
-Live rows (both carrying a usable positive `seqNo`) sort by that sequence —
-immune to clock skew and timestamp ties — with the fallback key as the
-tie-break. Archived/compat rows, or a mix of row generations, keep the
-caller's fallback chronology. `seqNoOf` and `fallbackTimeOf` let the same
-rule serve message rows (`timestamp`) and group rows (`startTime`).
-
-```ts
-function compareBySeqNo<T>(
-  a: T,
-  b: T,
-  seqNoOf: (item: T) => number | undefined,
-  fallbackTimeOf: (item: T) => number,
-): number
-```
-
 ## ContextManagementRow
 
 ```ts
@@ -309,7 +289,7 @@ function isScriptCall(row: ReadonlyDeep<TranscriptRow>): row is Extract<
   TranscriptRow,
   { kind: 'tool' }
 > & {
-  readonly groupId: string;
+  readonly stageId: string;
 }
 ```
 
@@ -326,8 +306,7 @@ interface LoadedMediaRef {
 
 ## LogRow
 
-A plain log line: a `default` row, a row with no message type, or a
-group heading on a stream that keeps its lifecycle inline.
+A plain log line: a `default` row, or a row with no message type.
 
 ```ts
 interface LogRow extends TranscriptRowBase {
@@ -496,7 +475,7 @@ function scriptStages(
 
 ```ts
 interface ScriptStageView {
-  /** The stage's id; its calls' cards carry it as their group. */
+  /** The stage's id; its calls' cards carry it as their `stageId`. */
   readonly id: string;
   /** The outcome its stage closed with; null while it is open. */
   readonly outcome: Stage['outcome'];
@@ -591,6 +570,19 @@ interface TextBudget {
   readonly headLines: number;
   readonly tailLines: number;
 }
+```
+
+## TimelineEntry
+
+One entry of the layout: a row no stage holds, or a stage and its rows.
+
+```ts
+type TimelineEntry<
+  Row extends Pick<TranscriptRow, 'id' | 'seqNo' | 'stageId'>,
+  S extends Stage = Stage,
+> =
+  | { readonly kind: 'row'; readonly row: Row }
+  | { readonly kind: 'stage'; readonly stage: S; readonly rows: Row[] };
 ```
 
 ## ToolBadgesSection
@@ -878,7 +870,9 @@ interface TranscriptRowBase {
   readonly level: LogLevel;
   /** True when the row belongs to the verbose tier of its host's chrome. */
   readonly verbose?: boolean;
-  readonly groupId?: string;
+  /** The stage the row belongs to (`Stage.id`), from its event's
+   *  `stageId`. */
+  readonly stageId?: string;
   /** Source vocabulary. Absent on the one row with no message type of its
    *  own, `compactionActivity` (a projection). */
   readonly messageType?: MessageType;
@@ -934,6 +928,20 @@ interface TranscriptText {
    *  density paints and for equality tests between two texts. */
   readonly oneLine: string;
 }
+```
+
+## transcriptTimeline
+
+The transcript's stages, each with its rows, among its other rows.
+
+```ts
+function transcriptTimeline<
+  Row extends Pick<TranscriptRow, 'id' | 'seqNo' | 'stageId'>,
+  S extends Stage,
+>(transcript: {
+  readonly rows: readonly Row[];
+  readonly stages: readonly S[];
+}): TimelineEntry<Row, S>[]
 ```
 
 ## UserRow

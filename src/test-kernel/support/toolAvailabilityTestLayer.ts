@@ -7,8 +7,9 @@ import {
 
 /**
  * The tool availability every test runtime serves: no dependency probe runs
- * (a real one spawns the CLIs it looks for on every session open), and the
- * tool gate withholds nothing until a suite sets results on `results`.
+ * (a real one spawns the CLIs it looks for on every session open, so its
+ * answer would be the developer's machine's), and the tool gate withholds
+ * nothing. A suite of availability itself builds the real layer.
  */
 export const unprobedToolAvailability = Layer.effect(
   ToolAvailability,

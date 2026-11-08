@@ -5,7 +5,6 @@ import { Effect, Stream, Predicate } from 'effect';
 import { isAgentRunRecord } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
 import { qualifyAggregateId, type AgentRunListingEntry } from '@shared/schemas';
-import { recordsOf } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -16,8 +15,8 @@ const RUN_STORAGE_CONCURRENCY = 32;
 /**
  * The runs a user started, newest first, each with its private record: the
  * view rebuilt cold from the log (the same `RunView` a live session holds)
- * beside the same listing's rows, already decoded by the database read and
- * folded per run (`recordsOf`) for its configuration.
+ * beside the same listing's rows, already decoded by the database read: each
+ * run's latest `run.config` is its configuration.
  */
 export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
   AgentRunListingEntry[],
@@ -42,7 +41,7 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
       > {
         const { id, identity } = run;
         const own = rows.get(qualifyAggregateId('run', id)) ?? [];
-        const record = recordsOf(own, id).config;
+        const record = own.findLast((row) => row.type === 'run.config')?.config;
         // Registration commits `run.config` in the `run.start` batch, so an
         // agent run without an AgentConfig is corrupt: skipped loudly below.
         if (identity.kind !== 'agent' || !record || !isAgentRunRecord(record))

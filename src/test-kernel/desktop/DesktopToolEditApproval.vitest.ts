@@ -5,6 +5,7 @@ import { layer } from '@effect/vitest';
 import {
   Effect,
   Fiber,
+  FiberSet,
   type FileSystem,
   type Path,
   SubscriptionRef,
@@ -13,6 +14,7 @@ import {
 } from 'effect';
 import { afterEach, expect, vi } from 'vitest';
 
+import type { ProcessServices } from '@texra-ai/harness/host';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { DesktopToolEditApprovalHost } from '@desktop/main/desktopToolEditApproval';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -52,6 +54,11 @@ const review = Effect.gen(function* () {
   // holds no runtime of its own; a desktop window hands them its process
   // runtime, and so does this suite.
   const runtime = yield* SessionGraph.runtime;
+  // What a window spawns runs in the case's scope, which interrupts it on
+  // close, instead of on the runtime where nothing joins it.
+  const spawn = yield* FiberSet.makeRuntime<ProcessServices>().pipe(
+    Effect.provide(yield* runtime.contextEffect),
+  );
   const onRuntime = <A, E>(
     program: Effect.Effect<
       A,
@@ -64,14 +71,14 @@ const review = Effect.gen(function* () {
   const roots = createFakeWorkspaceRoots({ workspaceRoot: '/workspace' });
   /** One desktop window following the session's tool edits. */
   const openWindow = (focused: boolean) =>
-    Effect.gen(function* () {
+    Effect.sync(() => {
       const opened: string[] = [];
       const warnings: string[] = [];
       // The previews the host staged, as each program produces one.
       const staged: ToolEditPreview[] = [];
       const host = new DesktopToolEditApprovalHost({
         spawn: (program) => {
-          runtime.runFork(program);
+          spawn(program);
         },
         focused: () => focused,
         ui: {
@@ -99,8 +106,7 @@ const review = Effect.gen(function* () {
         session: localSession,
         roots,
       });
-      const window = runtime.runFork(controller.follow);
-      yield* Effect.addFinalizer(() => Fiber.interrupt(window));
+      spawn(controller.follow);
       return { controller, opened, staged, warnings };
     });
   /** Ask for the edit; the fiber ends with its answer. */

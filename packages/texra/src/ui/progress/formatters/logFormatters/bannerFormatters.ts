@@ -74,7 +74,7 @@ const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
 export function formatBannerContentTemplate(
   row: StreamingTextRow,
 ): FormatResult {
-  const { id, groupId, timestamp, verbose, level, kind } = row;
+  const { id, timestamp, verbose, level, kind } = row;
   const trimmedContent = row.text.full.trim();
   if (!trimmedContent) return null;
 
@@ -117,11 +117,11 @@ export function formatBannerContentTemplate(
     // The transcript has one header grid for people, assistant output and errors.
     // Keep the disclosure at the trailing edge, beside the copy action.
     // prettier-ignore
-    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}><div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('wand-magic-sparkles')}<span>Assistant</span></span><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${buildCopyButton(config.copyTitle, trimmedContent)}</div>${contentTemplate}${cutNote}</wa-details>`;
+    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)}><div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('wand-magic-sparkles')}<span>Assistant</span></span><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${buildCopyButton(config.copyTitle, trimmedContent)}</div>${contentTemplate}${cutNote}</wa-details>`;
   }
 
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)}>${buildDetailsSummary({
     iconName: config.iconName,
     label: config.labelText,
     timestamp: timestampInfo && {

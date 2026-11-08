@@ -9,21 +9,15 @@
  * this interface — there is no host subtype. SDK consumers program directly
  * against `AgentTrace`.
  */
-import type { MessageType, RunOutcome, ToolUseLog } from '@shared/schemas';
+import type { Effect } from 'effect';
+
+import type { MessageType, ToolUseLog } from '@shared/schemas';
 
 import type { AgentEvent } from '@shared/session/agentEvent';
 
 /** A sink the trace was built with: it receives every event emitted on the
  *  trace until the trace closes. */
 export type AgentTraceSink = (event: AgentEvent) => void;
-
-/** Handle returned by `openStage`. */
-export interface StageHandle {
-  /** Stage id. */
-  readonly id: string | undefined;
-  /** Emit `stage.end` with the given outcome; its one owner calls it once. */
-  end(status?: RunOutcome): void;
-}
 
 /** Options accepted by `openRun`. */
 export interface StreamOptions {
@@ -75,11 +69,6 @@ export interface LogOptions {
   readonly data?: unknown;
   /** The row's category; subscribers pick a render style from it. */
   readonly messageType?: MessageType;
-  /**
-   * Stage to attach this entry to, for callers that captured a group id
-   * earlier. Without one the entry belongs to no stage.
-   */
-  readonly stageId?: string;
 }
 
 /**
@@ -99,8 +88,17 @@ export interface AgentTrace {
   /** A chunk of a process run's output, on its stream (`process.output`). */
   output(stream: 'stdout' | 'stderr', text: string): void;
 
-  // ─── Stage + stream handles ─────────────────────────────────────────
-  openStage(label: string): StageHandle;
+  // ─── Stages and stream handles ──────────────────────────────────────
+  /**
+   * Run `use` as a labelled stage (`stage.start`): what it logs on the trace
+   * it is handed nests under the stage, which closes once `use` exits
+   * (`stage.end`): completed when it succeeds, else as its cause reads
+   * (`outcomeFromCause`).
+   */
+  stage<A, E, R>(
+    label: string,
+    use: (trace: AgentTrace) => Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R>;
   /**
    * Open a streaming message. `stream.start` marks the moment the phase the
    * stream represents actually began — emit it at the provider's phase

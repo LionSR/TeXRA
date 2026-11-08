@@ -39,10 +39,8 @@ import {
 } from '@shared/schemas';
 
 import { byId } from './runRows';
-import { runRowsFrom } from './runRowReads';
 import type { TurnResult } from '@texra-ai/llm';
 import type { RunHistoryDraft, RunInputDraft } from './runState';
-import type { RunRows } from './runRowsShape';
 import type { Invocation, PendingResponse } from './inFlight';
 
 /** The text a completed model turn or assistant message contains, in order. */
@@ -192,19 +190,9 @@ export const consumedRow = (
   disposition,
 });
 
-/** Run `runId`'s record rows among `rows`, folded (`runRowsFrom`). */
-export const recordsOf = (
-  rows: readonly SessionRow[],
-  runId: RunId,
-): RunRows => {
-  const id = qualifyAggregateId('run', runId);
-  return runRowsFrom(rows.filter((row) => row.aggregateId === id));
-};
-
 /** Whether `row` bounds a lifecycle of run `runId`: its `run.activate`
  *  starts one, its `run.end` ends it. The pair a lifecycle's rows lie
- *  between is `recordsOf`'s `activation` and `end` (an activation clears the
- *  end of the lifecycle before it). */
+ *  between is its latest `run.activate` and the `run.end` after it. */
 export const boundsLifecycle = (
   row: Pick<SessionRow, 'aggregateId' | 'type'>,
   runId: RunId,

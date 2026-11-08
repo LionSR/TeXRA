@@ -153,6 +153,10 @@ const ADDITIVE = [
     "commit"  INTEGER NOT NULL,
     usage     TEXT NOT NULL
   ) STRICT`,
+  `CREATE TABLE IF NOT EXISTS run_record (
+    aggregate INTEGER PRIMARY KEY REFERENCES event_sequence(id) ON DELETE CASCADE,
+    record    TEXT NOT NULL
+  ) STRICT`,
   `CREATE INDEX IF NOT EXISTS event_sequence_parent
     ON event_sequence(parent_id) WHERE parent_id IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS event_aggregate_type ON event(aggregate, type, seq)`,
