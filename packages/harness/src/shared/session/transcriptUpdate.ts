@@ -110,8 +110,9 @@ function openCardStage(d: Draft, card: string): void {
     };
     d.ix.stageIndex.set(card, stages.push(stage) - 1);
   } else if (stages[at].outcome !== null) {
+    // Its time restarts with the resume, so its duration is time it ran.
     const { endTime: _end, ...open } = stages[at];
-    stages[at] = { ...open, outcome: null };
+    stages[at] = { ...open, startTime: d.at, outcome: null };
   } else return;
   d.touched = true;
 }

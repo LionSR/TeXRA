@@ -605,12 +605,17 @@ Re-read on `main` `0a10f44`, after PR 1 and #14848. In order:
   first card naming the `script` card opens (`openCardStage`, labelled by
   the script's `title`), reopens it when a resume issues more calls after
   the run's end closed it, and closes it with the `script` card's own
-  `tool.end`. The headless stream and the TUI's popup read the same
+  `tool.end`. Any card starting under the stage reopens it, a resumed
+  call's retry under its recorded card included (review, b181e04). A
+  reopened stage restarts its `startTime`, as the dispatch's `stage.start`
+  on resume did, so its duration is the time it ran, not the stopped gap. The headless stream and the TUI's popup read the same
   projection through `scriptStages`; the NDJSON stream has no script
   `stage.*` lines (contract 3, unreleased).
 - **Finding 8.** `StageHandle`, `openStage` and `LogOptions.stageId` are
   replaced by `AgentTrace.stage(label, use)`, an `acquireUseRelease` whose
-  inner trace stamps the stage on what `use` logs. The documents plugin's
+  inner trace stamps the stage on what `use` logs; a row a nested stage
+  already stamped keeps its own, and the nested stage's own rows carry the
+  outer id. The documents plugin's
   oversized-bib check fails the call instead of returning an error result,
   so its stage reads the exit alone; `outcomeFromCause` left the
   `/schemas` surface with its one app caller.

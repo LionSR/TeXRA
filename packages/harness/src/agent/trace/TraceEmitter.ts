@@ -124,12 +124,16 @@ export class TraceEmitter implements AgentTrace {
         this.emit({ type: 'stage.start', id, label });
         return id;
       }),
-      // A chunk is transient text on its row's id, which carries the stage.
+      // A chunk is transient text on its row's id, which carries the stage;
+      // an event a nested stage stamped keeps its own (a nested stage's
+      // `stage.start`/`stage.end` carry this one's id, their parent).
       (id) =>
         use(
           new TraceEmitter((event) =>
             this.emit(
-              event.type === 'stream.chunk' ? event : { ...event, stageId: id },
+              event.type === 'stream.chunk' || event.stageId !== undefined
+                ? event
+                : { ...event, stageId: id },
             ),
           ),
         ),
