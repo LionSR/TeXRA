@@ -63,8 +63,9 @@ why.
 **Refused.** One record this wave: `STORE-context-blob-as-brought-blob`
 (R6-T6, #14854).
 
-**Held for the owner,** unchanged: R6-T7 b, the two copy questions of
-`b012b7e`, and the earlier items.
+**Held for the owner:** R6-T7 b, the two copy questions of `b012b7e`, and
+the earlier items. R6-T6's placement, held at `b012b7e`, is resolved by its
+refusal.
 
 **Open,** with no owner: as at `b012b7e`, plus one item with no row: the
 desktop e2e's agent-picker step (`agentCatalog.spec.ts`, the composer's
