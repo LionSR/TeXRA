@@ -1452,22 +1452,20 @@ process takes them from context instead of building a Node layer of its
 own, and `GlobalStorageFs`, the cross-workspace storage view every session
 of the process shares, `GlobalDatabase`, that same root's one database
 handle, which the app's records and the CLI's input history read through,
-`ProjectDatabases`, whose project-scoped borrows share each persistent
-connection between application state and a session graph, and
-`AppSignals`, the process's app-lifecycle signal hub. Every run and
+and `AppSignals`, the process's app-lifecycle signal hub. Every run and
 session of the process is provided these, beneath the run-level services
 the agent runtime adds (`RunServices`) and the `ProcessServices` a
-composition root runs on.
+composition root runs on. The project stores (`ProjectDatabases`) and the
+identity stamped on every row (`ProcessIdentity`) are not among them: only
+the session composition and its stores read them.
 
 ```ts
 type PlatformServices =
-  | ProcessIdentity
   | FileSystem.FileSystem
   | Path.Path
   | ChildProcessSpawner
   | GlobalStorageFs
   | GlobalDatabase
-  | ProjectDatabases
   | HttpClient.HttpClient
   | Secrets
   | SubscriptionAccounts
@@ -1754,11 +1752,7 @@ interface ProcessServicesOptions {
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
   /** The global application-state layer, acquired in this runtime's scope
    *  (`processLayer` picks the host's and seeds it). */
-  readonly appState: Layer.Layer<
-    AppState,
-    DatabaseOpenFailed,
-    GlobalDatabase | ProcessIdentity | ProcessProbe
-  >;
+  readonly appState: Layer.Layer<AppState, DatabaseOpenFailed, GlobalDatabase>;
   /** The dependency probes every tool gate and Tools dashboard read. Hosts
    *  leave it absent; only the repository's test kernel passes one, which
    *  starts no probe, so a suite does not see what the machine installed. */
@@ -1771,15 +1765,6 @@ interface ProcessServicesOptions {
     UsageLog,
     never,
     HttpClient.HttpClient | AppState
-  >;
-  /** The process's handle on the global storage root, built and closed with
-   *  this runtime. Absent, the root's own database, whose open creates its
-   *  SQLite file and forks a change poll, so the CLI entry that runs before
-   *  any platform, on a possibly read-only root, passes a refusal. */
-  readonly globalDatabase?: Layer.Layer<
-    GlobalDatabase,
-    DatabaseOpenFailed,
-    ProcessIdentity | ProcessProbe
   >;
   /** The runtime's emission threshold for Effect diagnostics, from facts that
    *  cannot change mid-process: the surface (the extension's channel filters

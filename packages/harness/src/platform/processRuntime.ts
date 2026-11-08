@@ -26,12 +26,10 @@ import {
 } from 'effect';
 import { logEntryOf, writeLogEntry } from '@logger/logSink';
 import type { AppSignals } from '@platform/appSignals';
-import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   DatabaseOpenFailed,
   type CurrentValues,
   type GlobalDatabase,
-  type ProjectDatabases,
 } from '@shared/session/database';
 import type { UsageLog } from '@shared/usageLog';
 import type { HttpClient } from 'effect/http';
@@ -81,21 +79,19 @@ export class StateStores extends Context.Service<
  * own, and `GlobalStorageFs`, the cross-workspace storage view every session
  * of the process shares, `GlobalDatabase`, that same root's one database
  * handle, which the app's records and the CLI's input history read through,
- * `ProjectDatabases`, whose project-scoped borrows share each persistent
- * connection between application state and a session graph, and
- * `AppSignals`, the process's app-lifecycle signal hub. Every run and
+ * and `AppSignals`, the process's app-lifecycle signal hub. Every run and
  * session of the process is provided these, beneath the run-level services
  * the agent runtime adds (`RunServices`) and the `ProcessServices` a
- * composition root runs on.
+ * composition root runs on. The project stores (`ProjectDatabases`) and the
+ * identity stamped on every row (`ProcessIdentity`) are not among them: only
+ * the session composition and its stores read them.
  */
 export type PlatformServices =
-  | ProcessIdentity
   | FileSystem.FileSystem
   | Path.Path
   | ChildProcessSpawner
   | GlobalStorageFs
   | GlobalDatabase
-  | ProjectDatabases
   | HttpClient.HttpClient
   | Secrets
   | SubscriptionAccounts
