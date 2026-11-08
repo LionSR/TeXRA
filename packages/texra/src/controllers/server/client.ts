@@ -35,6 +35,7 @@ import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 import { isOutcomeOf } from '@texra-ai/harness';
 import {
   ensureError,
+  formatResultCount,
   type RuntimeCommand,
   Rejected,
 } from '@texra-ai/harness/schemas';
@@ -396,7 +397,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     return yield* Effect.fail(newerService(info));
   if (info !== null && (isOlder(info) || info.draining)) {
     const leaving = info;
-    const tasks = `${leaving.running} running task${leaving.running === 1 ? '' : 's'}`;
+    const tasks = formatResultCount(leaving.running, 'running task');
     // With no task running it exits at once: nothing to wait for.
     yield* (leaving.running > 0 ? options.waiting : Effect.logInfo)(
       leaving.draining
