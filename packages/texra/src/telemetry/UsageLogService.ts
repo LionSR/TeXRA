@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import {
   Cause,
-  Clock,
   DateTime,
   Duration,
   Effect,
@@ -26,7 +25,6 @@ import { envFlag } from '@texra-ai/harness/node';
 import { extractErrorMessage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settingsView/texraSettings';
-import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import type { AppState, ConfigProvider } from '@texra-ai/harness/host';
 
 const CHANNEL = 'UsageLogService';
@@ -88,7 +86,7 @@ const MAX_QUEUE_SIZE = 1000;
 /** A queue this long asks for a flush before the periodic one. */
 const BATCH_SIZE = 10;
 /** The periodic flush, and the first wait between retries. */
-const FLUSH_INTERVAL = Duration.seconds(30);
+export const FLUSH_INTERVAL = Duration.seconds(30);
 const REQUEST_TIMEOUT_MS = 10000;
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;
 /** The longest wait between retries of an undelivered batch. */
@@ -477,17 +475,7 @@ export const usageLogLayer = (
        */
       const backgroundFlush = Effect.fn('UsageLogService.backgroundFlush')(
         function* () {
-          yield* drain().pipe(
-            Effect.retry(backoff),
-            Effect.orDie,
-            // The backoff wait must not keep a host process alive on its own.
-            (flush) =>
-              Clock.clockWith((clock) =>
-                flush.pipe(
-                  Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
-                ),
-              ),
-          );
+          yield* drain().pipe(Effect.retry(backoff), Effect.orDie);
         },
         Effect.catchDefect((defect) =>
           Effect.logError(`Usage flush failed: ${toErrorMessage(defect)}`).pipe(
@@ -581,15 +569,12 @@ export const usageLogLayer = (
           Queue.take(triggers).pipe(Effect.andThen(backgroundFlush())),
         ),
       );
-      // `Effect.schedule` waits one interval before the first request; the
-      // unref'd sleeps never keep the host process alive. The close leaves
-      // this ticker to the scope: a request it makes then has no sender.
+      // `Effect.schedule` waits one interval before the first request. The
+      // close leaves this ticker to the scope: a request it makes then has
+      // no sender.
       yield* Effect.forkScoped(
-        Clock.clockWith((clock) =>
-          Effect.sync(requestFlush).pipe(
-            Effect.schedule(Schedule.spaced(FLUSH_INTERVAL)),
-            Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
-          ),
+        Effect.sync(requestFlush).pipe(
+          Effect.schedule(Schedule.spaced(FLUSH_INTERVAL)),
         ),
         { startImmediately: true },
       );

@@ -619,19 +619,6 @@
           "signature": "export function blobRows( runId: RunId, state: RunState, values: readonly unknown[], ): RunHistoryDraft[] {…}"
         }
       ]
-    },
-    {
-      "id": "TEST-usage-log-test-clock",
-      "candidate": "the UsageLogService suite on it.effect and TestClock.adjust(FLUSH_INTERVAL) instead of vi.useFakeTimers, after the service's rewrite as a queue (round 5 tests R5-15, L4 F7)",
-      "why": "The service's periodic flush and its retry backoff both run under unrefSleepClock(clock), whose sleep is its own unref'd setTimeout and never calls the clock it wraps, so TestClock.adjust cannot advance them; faking setTimeout is what reaches that timer. The suite can move to the test clock only when the service stops sleeping on its own timer, which is a production change (dropping unrefSleepClock once every host is shown to dispose its runtime on exit), not a test rewrite.",
-      "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-round-5-tests/4-nondeterminism.md#7-usagelogservice-fakes-nodes-timers-under-an-effect-service-instead-of-using-testclock",
-      "symbols": [
-        {
-          "file": "packages/texra/src/utils/system/unrefSleepClock.ts",
-          "symbol": "unrefSleepClock",
-          "signature": "export function unrefSleepClock(clock: Clock.Clock): Clock.Clock {…}"
-        }
-      ]
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { it, layer } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, Scope } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
+import { TestClock } from 'effect/testing';
+import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AGENT_SOURCE } from '@texra-ai/harness/schemas';
 import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
@@ -8,7 +9,7 @@ import { AppState, UsageLog } from '@texra-ai/harness/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { usageAgentName } from '@shared/usageLog';
-import { usageLogLayer } from '@telemetry/UsageLogService';
+import { FLUSH_INTERVAL, usageLogLayer } from '@telemetry/UsageLogService';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import {
   jsonResponse,
@@ -19,9 +20,6 @@ import {
   TELEMETRY_ENABLED_SETTING,
   TEXRA_SETTINGS,
 } from '@texra/shared/settingsView/texraSettings';
-
-/** The shipped periodic flush. */
-const FLUSH_INTERVAL_MS = 30_000;
 
 function usageEntry(model: string) {
   return {
@@ -44,59 +42,38 @@ function stubBatchFetch(): Mock {
 }
 
 describe('UsageLogService', () => {
-  // The service's lifetime is a layer the process runtime builds; a suite
-  // owns one scope in its place, and closing it is what the host's runtime
-  // disposal does.
-  let lifetime: Scope.Closeable | undefined;
-  let usageLog: UsageLog['Service'];
-  /** Queue one entry, as the invoker's usage report does. */
-  const logUsage = (...args: Parameters<UsageLog['Service']['log']>) =>
-    Effect.runSync(usageLog.log(...args));
-
-  const stopUsageLog = async (): Promise<void> => {
-    const scope = lifetime;
-    lifetime = undefined;
-    if (scope) await Effect.runPromise(Scope.close(scope, Exit.void));
-  };
-
-  /** Start the service over the test host's app state, where the install
-   *  id is kept, replacing one already running. */
+  /** The service over the test host's app state, where the install id is
+   *  kept, built in the case's scope: closing that scope is the host's
+   *  runtime disposal, which sends what is still queued and returns once
+   *  nothing more can be sent. */
   const startUsageLog = Effect.gen(function* () {
-    yield* Effect.promise(stopUsageLog);
     const host = yield* FakeHost;
-    const scope = Scope.makeUnsafe();
-    lifetime = scope;
-    const context = yield* Scope.provide(
-      Layer.build(
-        usageLogLayer({
-          version: undefined,
-          editorType: undefined,
-        }).pipe(
-          Layer.provide(
-            Layer.mergeAll(
-              // The process runtime's diagnostics, which the service logs
-              // through; the fetch each test stubs; and the host's app
-              // state.
-              effectDiagnosticsLayer('Trace'),
-              testHttpClientLayer,
-              AppState.layer(host.roots.globalState),
-            ),
+    const scope = yield* Scope.make();
+    const context = yield* Layer.buildWithScope(
+      usageLogLayer({ version: undefined, editorType: undefined }).pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            // The process runtime's diagnostics, which the service logs
+            // through; the fetch each test stubs; and the host's app state.
+            effectDiagnosticsLayer('Trace'),
+            testHttpClientLayer,
+            AppState.layer(host.roots.globalState),
           ),
         ),
       ),
       scope,
     );
-    usageLog = Context.get(context, UsageLog);
+    const usageLog = Context.get(context, UsageLog);
+    return {
+      /** Queue one entry, as the invoker's usage report does. */
+      log: (...args: Parameters<UsageLog['Service']['log']>) =>
+        usageLog.log(...args),
+      stop: Scope.close(scope, Exit.void),
+    };
   });
 
-  beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-  });
-
-  afterEach(async () => {
-    await stopUsageLog();
+  afterEach(() => {
     setLogSink(null);
-    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
@@ -109,19 +86,22 @@ describe('UsageLogService', () => {
       {},
       { config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog) },
     ),
-    { buildPerTest: true, excludeTestServices: true },
+    { buildPerTest: true },
   )('texra.telemetry.enabled opt-out', (it) => {
-    // Optional entries must be discarded without a request.
-    async function expectNoOptionalUsageSent(
+    // Optional entries must be discarded without a request, by the periodic
+    // flush and by the final drain alike.
+    const expectNoOptionalUsageSent = Effect.fnUntraced(function* (
+      usageLog: Effect.Success<typeof startUsageLog>,
       config: WorkspaceRoots['config'],
-    ): Promise<void> {
+    ) {
       const fetchMock = stubBatchFetch();
 
-      logUsage(usageEntry('optional'), config);
-      await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
+      yield* usageLog.log(usageEntry('optional'), config);
+      yield* TestClock.adjust(FLUSH_INTERVAL);
+      yield* usageLog.stop;
 
       expect(fetchMock).not.toHaveBeenCalled();
-    }
+    });
 
     // The notice and the doctor hint quote the line a user pastes into the
     // config file, where keys carry the catalog's namespace: the bare row
@@ -139,12 +119,12 @@ describe('UsageLogService', () => {
 
     it.effect('does not let a project opt in over a user-wide opt-out', () =>
       Effect.gen(function* () {
-        yield* startUsageLog;
+        const usageLog = yield* startUsageLog;
         const { config } = (yield* FakeHost).roots;
         yield* config.update(TELEMETRY_ENABLED_SETTING.key, false, 'global');
         yield* config.update(TELEMETRY_ENABLED_SETTING.key, true, 'workspace');
 
-        yield* Effect.promise(() => expectNoOptionalUsageSent(config));
+        yield* expectNoOptionalUsageSent(usageLog, config);
       }),
     );
 
@@ -152,17 +132,16 @@ describe('UsageLogService', () => {
     // queued under the old value rather than letting the next flush ship them.
     it.effect('discards entries queued before the setting was turned off', () =>
       Effect.gen(function* () {
-        yield* startUsageLog;
+        const usageLog = yield* startUsageLog;
         const { config } = (yield* FakeHost).roots;
 
         const fetchMock = stubBatchFetch();
 
-        logUsage(usageEntry('before-opt-out'), config);
+        yield* usageLog.log(usageEntry('before-opt-out'), config);
         yield* config.update(TELEMETRY_ENABLED_SETTING.key, false, 'global');
 
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS),
-        );
+        yield* TestClock.adjust(FLUSH_INTERVAL);
+        yield* usageLog.stop;
 
         expect(fetchMock).not.toHaveBeenCalled();
       }),
@@ -173,12 +152,12 @@ describe('UsageLogService', () => {
     // texra run`. It overrides a stored `true` and cannot re-enable logging.
     it.effect('sends nothing while TEXRA_NO_TELEMETRY=1 is set', () =>
       Effect.gen(function* () {
-        yield* startUsageLog;
+        const usageLog = yield* startUsageLog;
         const { config } = (yield* FakeHost).roots;
         yield* config.update(TELEMETRY_ENABLED_SETTING.key, true, 'global');
         vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
 
-        yield* Effect.promise(() => expectNoOptionalUsageSent(config));
+        yield* expectNoOptionalUsageSent(usageLog, config);
       }),
     );
   });
@@ -188,16 +167,17 @@ describe('UsageLogService', () => {
       {},
       { config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog) },
     ),
-    { buildPerTest: true, excludeTestServices: true },
+    { buildPerTest: true },
   )('delivery', (it) => {
     // The client checks every entry against the schema the edge decodes, so
     // the edge rejecting a batch means the two versions disagree: that batch
     // is dropped, and the entries after it still go out.
     it.effect('a rejected batch does not block the next good entry', () =>
       Effect.gen(function* () {
-        yield* startUsageLog;
+        const usageLog = yield* startUsageLog;
         const { config } = (yield* FakeHost).roots;
         const bodies: { entries: { model: string }[] }[] = [];
+        const firstSent = Promise.withResolvers<void>();
         vi.stubGlobal(
           'fetch',
           vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -205,6 +185,7 @@ describe('UsageLogService', () => {
               entries: { model: string }[];
             };
             bodies.push(body);
+            firstSent.resolve();
             return body.entries.some(({ model }) => model === 'skewed')
               ? jsonResponse({
                   success: false,
@@ -219,14 +200,13 @@ describe('UsageLogService', () => {
           }),
         );
 
-        logUsage(usageEntry('skewed'), config);
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS),
-        );
-        logUsage(usageEntry('good'), config);
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(4 * FLUSH_INTERVAL_MS),
-        );
+        yield* usageLog.log(usageEntry('skewed'), config);
+        yield* TestClock.adjust(FLUSH_INTERVAL);
+        // The rejected batch has left the queue once its request is made.
+        yield* Effect.promise(() => firstSent.promise);
+        yield* usageLog.log(usageEntry('good'), config);
+        yield* TestClock.adjust(FLUSH_INTERVAL);
+        yield* usageLog.stop;
 
         expect(
           bodies.map(({ entries }) => entries.map(({ model }) => model)),
