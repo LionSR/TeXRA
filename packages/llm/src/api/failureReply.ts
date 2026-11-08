@@ -1,7 +1,7 @@
 /**
- * Reading a failed request's reply: the body an SDK error carries wherever
- * its SDK put it, the status it resolves to, and the message that is safe to
- * show. The verdict (`verdict.ts`) is decided over this reading.
+ * Reading a failed request's reply: the SDK's body, the adapter's HTTP
+ * status or a streamed error's type, and the message that is safe to show.
+ * The verdict (`verdict.ts`) is decided over this reading.
  */
 // Third-party imports
 import { Predicate } from 'effect';
@@ -68,36 +68,6 @@ function parsedJson(text: string): unknown {
   }
 }
 
-/** The reply body an SDK error carries, wherever its SDK put it. */
-function replyBody(source: unknown): unknown {
-  if (!isFields(source)) return undefined;
-  const { response, message } = source;
-  const body =
-    source.error ??
-    source.body ??
-    source.data ??
-    (isFields(response) ? response.data : undefined);
-  if (body !== undefined) return body;
-  // The Google SDK puts the JSON body in its message.
-  return typeof message === 'string' && message.startsWith('{')
-    ? parsedJson(message)
-    : undefined;
-}
-
-/** The HTTP status an SDK error names, on itself or its response. */
-function sdkStatus(source: unknown): number | undefined {
-  if (!isFields(source)) return undefined;
-  return (
-    numberField(source, 'status') ??
-    numberField(source, 'statusCode') ??
-    numberField(source, 'code') ??
-    [source.response, source.error]
-      .filter(isFields)
-      .map((nested) => numberField(nested, 'status'))
-      .find(Predicate.isNotUndefined)
-  );
-}
-
 /** The status a provider's error type or code stands for, when the reply lost its status. */
 const STATUS_BY_ERROR_TYPE: ReadonlyMap<string, number> = new Map([
   ['invalid_request_error', 400],
@@ -122,18 +92,6 @@ const statusFromBody = (body: unknown): number | undefined =>
     .filter(Predicate.isString)
     .map((value) => STATUS_BY_ERROR_TYPE.get(value))
     .find(Predicate.isNotUndefined);
-
-/** A sub-400 status (an SSE 200 carrying an error body) never outranks the body's. */
-function resolvedStatus(
-  error: ModelError,
-  source: unknown,
-  body: unknown,
-): number | undefined {
-  if (error.status !== undefined && error.status >= 400) return error.status;
-  const detected = sdkStatus(source);
-  if (detected !== undefined && detected >= 400) return detected;
-  return statusFromBody(body) ?? detected ?? error.status;
-}
 
 /** Sorted-key JSON, so a body re-serialized in another key order still matches. */
 function canonical(value: unknown): string {
@@ -170,9 +128,17 @@ function serializes(text: string, body: unknown): boolean {
 /** One failure's reply, read once. */
 export function readReply(error: ModelError): Reply {
   const source = error.cause instanceof Error ? error.cause : error;
-  // A streamed response's failure event carries its error as a plain object.
+  // The SDKs expose decoded bodies as `error`; Google also keeps a raw
+  // `body` when it could not decode one. Terminal events are plain objects.
   const body =
-    replyBody(source) ?? (isFields(error.cause) ? error.cause : undefined);
+    (isFields(source) ? (source.error ?? source.body) : undefined) ??
+    (isFields(error.cause) ? error.cause : undefined);
+  // The adapter owns HTTP status. SSE errors may carry only a body type;
+  // that type also outranks a non-error HTTP status such as the stream's 200.
+  const status =
+    error.status !== undefined && error.status >= 400
+      ? error.status
+      : (statusFromBody(body) ?? error.status);
   const own =
     source instanceof Error && source.message.trim() !== ''
       ? source.message.trim()
@@ -182,5 +148,5 @@ export function readReply(error: ModelError): Reply {
     (own !== undefined && serializes(own, body) ? undefined : own) ??
     firstString(body, 'message') ??
     (own === undefined ? error.message : '');
-  return { source, body, status: resolvedStatus(error, source, body), message };
+  return { source, body, status, message };
 }

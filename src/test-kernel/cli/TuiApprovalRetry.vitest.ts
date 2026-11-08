@@ -177,14 +177,15 @@ function openRetry(permission: RetryRequest) {
 }
 
 function chatGptSubscriptionRetry(label: string): RetryRequest {
-  const message = 'ChatGPT subscription usage limit reached.';
   return {
     requestId: `retry-${label}`,
     runId: runIdFor(label),
     operation: 'model request',
-    errorDetails: {
-      message,
-      classification: { kind: 'chatgpt-subscription' },
+    failure: {
+      source: 'model',
+      kind: 'provider-rejection',
+      message: 'Usage limit reached.',
+      quota: { plan: 'chatgpt-subscription' },
       provider: 'openai',
     },
     credentialSwitch: {

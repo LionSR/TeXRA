@@ -9,9 +9,12 @@
  */
 import { Effect } from 'effect';
 
-import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { SessionRoots } from '@platform/rootedFs';
-import { RUN_OUTCOME, type RunStopReason } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  runEndErrorMessage,
+  type RunStopReason,
+} from '@shared/schemas';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 
@@ -47,7 +50,7 @@ export const childEndReport = Effect.fn('childEndReport')(function* (
       runId,
       script.title,
       report.outcome,
-      report.failure?.message ?? null,
+      report.failure === undefined ? null : runEndErrorMessage(report.failure),
       ctx.startedAt,
     );
   }
@@ -67,10 +70,9 @@ export const childEndReport = Effect.fn('childEndReport')(function* (
       return formatSubagentError(
         runId,
         config.agent,
-        report.failure ??
-          normalizeProviderError(
-            new Error(`The agent run ${runId} ended failed.`),
-          ),
+        report.failure === undefined
+          ? `The agent run ${runId} ended failed.`
+          : runEndErrorMessage(report.failure),
         context,
       );
     case RUN_OUTCOME.COMPLETED: {

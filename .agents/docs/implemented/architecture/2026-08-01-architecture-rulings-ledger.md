@@ -405,7 +405,7 @@ supersedes the Promise-shape requirement and the instructions in
 **Evidence.** `packages/texra/src/controllers/settingsView/settingsViewDispatch.ts`
 owns the one backend selector, `settingsViewProgram`, over the
 already-validated inbound union. Its two consumers are the extension's
-`SettingsViewMessageHandler.handleMessage` and desktop's
+`SettingsViewProvider` message listener and desktop's
 `createDesktopSettingsIpc`; each supplies Effect-valued handlers and executes
 once at its native message entry. Exhaustive `HandlerRegistry` typing and its
 `unsupported(reason)` markers remain shared; the same markers derive frontend

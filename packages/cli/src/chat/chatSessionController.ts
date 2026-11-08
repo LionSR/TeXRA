@@ -54,7 +54,7 @@ import { resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { createHostRunActions } from '@texra/controllers/session/hostRunActions';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
-import { modelFailureText } from '@ui/copy/modelAccess';
+import { shownFailureText } from '@ui/copy/modelAccess';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -331,7 +331,7 @@ export function createChatSessionController(
         if (session.exited) return;
         if (event === 'requestShowError')
           appendLocalErrorTranscript(
-            modelFailureText(
+            shownFailureText(
               // cast: `emit` is generic over the event, and this branch is
               // the error's.
               payload as RuntimePresentationEventPayloads['requestShowError'],

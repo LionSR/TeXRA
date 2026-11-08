@@ -47,7 +47,6 @@ import {
   logProviderError,
 } from '@agent/trace/helpers';
 import {
-  failureInfo,
   routeFailureOf,
   type CallFailure,
 } from '@agent/runtime/modelAccess/failureInfo';
@@ -56,7 +55,10 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import { quotaFallbackMessage } from '@common/errors/sdkError/providerErrorFormat';
+import {
+  modelFailureOf,
+  quotaFallbackMessage,
+} from '@common/errors/sdkError/providerErrorFormat';
 import { SessionRoots } from '@platform/rootedFs';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
@@ -64,7 +66,7 @@ import {
   qualifyAggregateId,
   type FailedNext,
   type InvocationRef,
-  type RetryErrorInfo,
+  type ModelFailure,
   type NormalizedUsage,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -111,11 +113,6 @@ import type { SessionServices } from './rootLaunch';
 
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
-
-/** What a person is asked before an attempt the process stopped during is
- *  sent again: one they approved, or one past the automatic retries. */
-const INTERRUPTED_RETRY_MESSAGE =
-  'The process stopped while a model request was running, so it may have been billed without an answer. Retry again?';
 
 /**
  * How much of a failed attempt's streamed output the failure carries. The
@@ -581,11 +578,10 @@ export const modelInvokerLayer = (): Layer.Layer<
       const failedRows = Effect.fn('ModelInvoker.failedRows')(function* (
         cell: RunCell,
         ref: InvocationRef,
-        error: RetryErrorInfo,
+        error: ModelFailure,
         next: FailedNext,
         bound: BoundModel,
         usage: NormalizedUsage | null,
-        quota: ModelError['quota'],
       ): Effect.fn.Return<readonly RunHistoryDraft[], never, SessionServices> {
         const failedRow = (next: FailedNext): RunHistoryDraft => ({
           type: 'model.message',
@@ -602,7 +598,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const { requestId } = next;
         const credentialSwitch = yield* access.credentialSwitch(
           bound,
-          quota,
+          error.source === 'model' ? error.quota : undefined,
           (yield* cell.current).declinedRoutes,
         );
         if (
@@ -626,7 +622,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             runId,
             operation: 'Model request',
             model: bound.modelId,
-            errorDetails: error,
+            failure: error,
             credentialSwitch,
           },
         } as const;
@@ -650,15 +646,15 @@ export const modelInvokerLayer = (): Layer.Layer<
         next: FailedNext,
         bound: BoundModel,
       ): Effect.fn.Return<void, InvokeError, SessionServices> {
-        const info = failureInfo(error, bound.config.provider);
-        const quota = error instanceof ModelError ? error.quota : undefined;
+        const failure = modelFailureOf(error, bound.config.provider);
         if (next.kind !== 'retry' && next.kind !== 'unchain')
           yield* logProviderError(
             logger,
             next.kind === 'stop'
               ? 'Model request failed (no retry available)'
               : 'Model request failed',
-            { ...info, rawErrorBody: error.cause },
+            failure,
+            error.cause,
           );
         // A response the provider billed before refusing it is priced
         // and reported like a turn's, on its `failed` row.
@@ -686,7 +682,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             roots,
           );
         yield* cell.append(
-          yield* failedRows(cell, ref, info, next, bound, usage, quota),
+          yield* failedRows(cell, ref, failure, next, bound, usage),
         );
       });
 
@@ -815,14 +811,10 @@ export const modelInvokerLayer = (): Layer.Layer<
           yield* failedRows(
             cell,
             attempt.ref,
-            {
-              message: INTERRUPTED_RETRY_MESSAGE,
-              provider: bound.config.provider,
-            },
+            { source: 'interrupted', provider: bound.config.provider },
             { kind: 'ask', requestId: `retry-${randomUUID()}` },
             bound,
             null,
-            undefined,
           ),
         );
       });

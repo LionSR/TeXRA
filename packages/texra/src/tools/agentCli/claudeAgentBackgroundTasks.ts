@@ -11,7 +11,7 @@
 
 // Local imports
 import type { AgentTrace, ToolCardHandle } from '@texra-ai/harness/plugins';
-import type { ToolUseLog } from '@texra-ai/harness/schemas';
+import { formatResultCount, type ToolUseLog } from '@texra-ai/harness/schemas';
 
 // Third-party type imports
 import type { SDKBackgroundTasksChangedMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -22,7 +22,7 @@ const CLAUDE_BACKGROUND_TASK_TOOL_NAME = 'claude:background_tasks';
 function buildBackgroundTaskLog(tasks: BackgroundTasks): ToolUseLog {
   return {
     toolName: CLAUDE_BACKGROUND_TASK_TOOL_NAME,
-    summary: `${tasks.length} Claude background task${tasks.length === 1 ? '' : 's'}`,
+    summary: formatResultCount(tasks.length, 'Claude background task'),
     input: { source: 'background_tasks_changed' },
     output: { tasks },
     status: 'in_progress',
