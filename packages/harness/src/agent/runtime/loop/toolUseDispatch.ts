@@ -145,15 +145,16 @@ interface Dispatch {
 
 /** One call as the per-call program takes it: its facts (a response's
  *  dispatch fact, or a script's `script.call`), its input and its dispatch.
- *  `stage` is the script's stage its batches may open: its title, which
- *  labels it, and `opens`, true for the first batch the script's door
- *  commits; null for a response's call and for the skips a script's end
- *  commits. */
+ *  `stage` is a script's call's stage, whose id is the script's own card:
+ *  its title, which labels it, and `opens`, true for the first batch the
+ *  script's door commits (false for the skips a script's end commits);
+ *  null for a response's call. */
 interface Call {
   readonly dispatch: Dispatch;
   readonly fact: DispatchFacts | ScriptCallPayload;
   readonly input: unknown;
   readonly stage: {
+    readonly id: string;
     readonly title: string | null;
     readonly opens: () => boolean;
   } | null;
@@ -270,7 +271,7 @@ const commit = (
       batch.push(
         displayRow(runId, {
           type: 'stage.start',
-          id: script.stageId,
+          id: stage.id,
           label: stage.title ?? 'Script',
         }),
       );
@@ -281,12 +282,13 @@ const commit = (
         payload: script,
       });
     batch.push(...rows);
-    const [issued] = result === undefined ? [] : issuedBy(state, fact.callId);
-    if (issued !== undefined && result !== undefined)
+    const issued =
+      result !== undefined && issuedBy(state, fact.callId).length > 0;
+    if (issued)
       batch.push(
         displayRow(runId, {
           type: 'stage.end',
-          id: issued.call.stageId,
+          id: fact.logId,
           status: result.status === 'executed' ? 'completed' : 'failed',
         }),
       );
@@ -326,7 +328,7 @@ const commitResult = (
  *  tool's opens and closes with its result, which a read projects it from
  *  (`rowCodec.ts`): the card stores no output. */
 const cardRows = (
-  { dispatch, fact }: Call,
+  { dispatch, fact, stage }: Call,
   ran: unknown,
   attempt: number,
   opened: boolean,
@@ -336,7 +338,7 @@ const cardRows = (
   const script = scriptOf(fact);
   const base = {
     logId: fact.logId,
-    ...(script === null ? {} : { stageId: script.stageId }),
+    ...(stage === null ? {} : { stageId: stage.id }),
   };
   const { runId } = dispatch.run;
   return [
@@ -752,7 +754,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
                 dispatch,
                 fact,
                 input: fact.input,
-                stage: null,
+                stage: { id: script.logId, title: null, opens: () => false },
               };
               const at = { responseId, callId: fact.callId };
               // A request the call was waiting on is withdrawn with it.
@@ -838,7 +840,6 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
       input,
       replay: answer !== undefined ? 'safe' : (tool?.replay ?? 'unsafe'),
       logId: crypto.randomUUID(),
-      stageId: `script-${script.logId}`,
       section: op.section,
     };
     const { title } = source;
@@ -846,7 +847,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
       dispatch,
       fact,
       input,
-      stage: { title, opens: opensStage },
+      stage: { id: script.logId, title, opens: opensStage },
     };
     if (known?.status.kind === 'settled') {
       // Replayed from its row: it takes no lane and does not run.
