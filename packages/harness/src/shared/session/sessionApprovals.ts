@@ -17,7 +17,6 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from './database';
-import type { UnfoldedDraft } from './sessionEvents';
 
 /** Each operation a run asks permission for (the guard's `OPERATIONS`). */
 export type ApprovalOperation =
@@ -40,11 +39,10 @@ export interface SessionApprovals {
   /** Update grants in one transaction, returning once durable and folded.
    *  An unchanged grant writes nothing. A grant turned on answers every
    *  open request it covers in that transaction, unless the request says
-   *  only a person answers it. Additional `rows` always commit in it. */
+   *  only a person answers it. */
   change(
     runId: RunId,
     edit: (grants: ApprovalGrants) => ApprovalGrants,
-    rows?: readonly UnfoldedDraft[],
   ): Effect.Effect<
     void,
     DatabaseAggregateClosed | DatabaseReadFailed | DatabaseWriteFailed
