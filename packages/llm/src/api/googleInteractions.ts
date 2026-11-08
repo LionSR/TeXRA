@@ -614,6 +614,9 @@ export function googleInteractionsModel(
                 ...createInput(turn, inputSteps),
                 background: false,
                 stream: true,
+                // This codec owns one response. SDK continuation starts
+                // separately billed requests even with maxRetries: 0.
+                automatic_continuation: false,
               },
               { maxRetries: 0, fetchOptions: { signal } },
             ),

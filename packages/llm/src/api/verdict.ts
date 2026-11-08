@@ -352,9 +352,12 @@ export function judgeFailure(
     kind: kindOf(error, reply, terminalOverflow, chained),
     message: messageOf(reply, terminalOverflow),
     cause: error.cause,
-    // A used-up quota is never repeated as it is: its retry carries the
-    // route's switch.
-    retryable: quota === undefined ? notRetryable(reply, overflow) : false,
+    // A verdict can rule out a retry, never override the producer's refusal
+    // to repeat an operation (such as cancellation of already-finished work).
+    retryable:
+      quota !== undefined || !error.retryable
+        ? false
+        : notRetryable(reply, overflow),
     ...(reply.status === undefined ? {} : { status: reply.status }),
     ...(quota === undefined ? {} : { quota }),
     ...scopeOf(error, reply, quota),
