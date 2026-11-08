@@ -10,7 +10,7 @@ import {
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   noLaterTurn,
-  requireToolRun,
+  inRunSession,
   type RunToolCall,
 } from '@agent/runtime/RunCall';
 import {
@@ -269,18 +269,17 @@ const executeBashTool = Effect.fn('executeBashTool')(function* (
   const cwd = toolCall.env.workingDirectory ?? toolCall.env.roots.workspace;
 
   if (input.run_in_background) {
-    const call = yield* requireToolRun('bash run_in_background');
     // A background shell delivers its result as a follow-up message; a
     // one-shot run has no later turn to take it, and the session's close
     // would kill the command and discard its result with nothing reported.
-    if (noLaterTurn(call.run))
-      return yield* Effect.fail(
-        new ToolError(
-          'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
-        ),
-      );
-    return yield* executeBackground(call, input, input.timeout, cwd).pipe(
-      Effect.provide(call.session),
+    return yield* inRunSession('bash run_in_background', (call) =>
+      noLaterTurn(call.run)
+        ? Effect.fail(
+            new ToolError(
+              'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
+            ),
+          )
+        : executeBackground(call, input, input.timeout, cwd),
     );
   }
 
