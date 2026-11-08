@@ -94,6 +94,9 @@ export class SettingsViewProvider {
         skillDisplay: Skills.display(roots),
         accountCopy: ACCOUNT_OUTCOME,
         bindings: {
+          // A panel closed or replaced while the message builds has no
+          // receiver, and no caller waits on a repaint, so the post is
+          // dropped; one disposed during `postMessage` still fails.
           post: (message) =>
             Effect.suspend(() => {
               const panel = this._view;
