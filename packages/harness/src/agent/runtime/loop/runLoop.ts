@@ -59,7 +59,7 @@ import {
   finalizedRows,
   positionRow,
 } from './rows';
-import { openRun, settleRun, stoppedBy, type RunExit } from './runProgram';
+import { openRun, settleRun, type RunExit } from './runProgram';
 import { dispatchPendingResponse } from './toolUseDispatch';
 import { hooksOf } from './hooks';
 import { dispatchTools, stepFor } from './step';
@@ -283,7 +283,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     run,
     access,
     yield* Inbox,
-    Effect.succeed(cell),
+    cell,
   );
 
   /** A turn's exit, and a handed-down call's run's at its park: a failed
@@ -537,8 +537,5 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       compaction
         .landPending(cell, 'the run stopped')
         .pipe(Effect.asVoid, Effect.ensuring(settleRun(cell, followUps)(exit))),
-  ).pipe(
-    Effect.map((loop) => result(loop.outcome, loop.state)),
-    Effect.catchCause(stoppedBy(logger, `Tool-use run ${runId}`)),
-  );
+  ).pipe(Effect.map((loop) => result(loop.outcome, loop.state)));
 }, Effect.scoped);
