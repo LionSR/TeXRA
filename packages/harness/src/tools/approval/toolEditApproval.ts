@@ -80,74 +80,76 @@ function diffEdit(original: string, proposed: string): DiffHunks {
 export const requestToolEditApproval = (
   request: ToolEditProposal,
 ): Effect.Effect<ToolEditApprovalResult, Error, ToolContext> =>
-  inRunSession('A tool-edit approval', (call) => reviewEdit(call, request));
+  inRunSession(
+    'A tool-edit approval',
+    Effect.fn('requestToolEditApproval')(function* (call: RunToolCall) {
+      const { run, requests, hook } = call;
+      const { runId } = run;
+      const approvals = yield* Approvals;
+      const log = yield* SessionLog;
+      const acceptProposedAsIs = (): Effect.Effect<ToolEditApprovalResult> =>
+        finalizeApprovalResult(request.proposedContent, request);
+      const answer = approvals.permission(runId, 'toolEdit', hook);
+      if (answer === 'allow') return yield* acceptProposedAsIs();
+      if (answer !== 'ask') return answer;
 
-const reviewEdit = Effect.fn('requestToolEditApproval')(function* (
-  call: RunToolCall,
-  request: ToolEditProposal,
-) {
-  const { run, requests, hook } = call;
-  const { runId } = run;
-  const approvals = yield* Approvals;
-  const log = yield* SessionLog;
-  const acceptProposedAsIs = (): Effect.Effect<ToolEditApprovalResult> =>
-    finalizeApprovalResult(request.proposedContent, request);
-  const answer = approvals.permission(runId, 'toolEdit', hook);
-  if (answer === 'allow') return yield* acceptProposedAsIs();
-  if (answer !== 'ask') return answer;
-
-  // One diff pass gives the hunks, their line counts and the first
-  // changed line, so every surface reports the same numbers for one edit.
-  const { originalContent, proposedContent, path, sourceTool } = request;
-  const { hunks, timeout } = diffEdit(originalContent ?? '', proposedContent);
-  yield* reportDiffTimeout(timeout);
-  const lines = countLineChanges(hunks);
-  const content: Effect.Success<ReturnType<typeof readToolEditContent>> = {
-    originalContent,
-    proposedContent,
-    hunks,
-    firstChangedLine: firstChangedLine(hunks, proposedContent),
-  };
-  const text = JSON.stringify(content);
-  const address = blobAddress(text);
-  const permission: ToolEditRequest = {
-    requestId: requests.nextId('toolEdit'),
-    path,
-    // The call's own workspace root, as data: the display path a host
-    // shows is relative to the session that raised the request, not to
-    // whichever roots the answering fiber happens to carry.
-    relativePath: workspaceRelativePath(call.env.roots.workspace, path),
-    sourceTool,
-    // The policy asked, so the edit grant is off.
-    offersGrant: hook !== 'ask',
-    runId,
-    addedLines: lines.added,
-    removedLines: lines.removed,
-    content: address,
-  };
-  return yield* requests
-    .open({ kind: 'toolEdit', data: permission }, [{ digest: address, text }])
-    .pipe(
-      Effect.flatMap(
-        ({ payload, decision }): Effect.Effect<ToolEditApprovalResult> =>
-          decision.action !== 'approve'
-            ? Effect.succeed(decision)
-            : readToolEditContent(log.blobs, payload.data.content).pipe(
-                Effect.flatMap((reviewed) =>
-                  // A host's edited bytes may be CRLF. The base and proposal
-                  // are the request's stored ones, including after a resume.
-                  finalizeApprovalResult(
-                    (decision.content ?? reviewed.proposedContent).replaceAll(
-                      '\r\n',
-                      '\n',
+      // One diff pass gives the hunks, their line counts and the first
+      // changed line, so every surface reports the same numbers for one edit.
+      const { originalContent, proposedContent, path, sourceTool } = request;
+      const { hunks, timeout } = diffEdit(
+        originalContent ?? '',
+        proposedContent,
+      );
+      yield* reportDiffTimeout(timeout);
+      const lines = countLineChanges(hunks);
+      const content: Effect.Success<ReturnType<typeof readToolEditContent>> = {
+        originalContent,
+        proposedContent,
+        hunks,
+        firstChangedLine: firstChangedLine(hunks, proposedContent),
+      };
+      const text = JSON.stringify(content);
+      const address = blobAddress(text);
+      const permission: ToolEditRequest = {
+        requestId: requests.nextId('toolEdit'),
+        path,
+        // The call's own workspace root, as data: the display path a host
+        // shows is relative to the session that raised the request, not to
+        // whichever roots the answering fiber happens to carry.
+        relativePath: workspaceRelativePath(call.env.roots.workspace, path),
+        sourceTool,
+        // The policy asked, so the edit grant is off.
+        offersGrant: hook !== 'ask',
+        runId,
+        addedLines: lines.added,
+        removedLines: lines.removed,
+        content: address,
+      };
+      return yield* requests
+        .open({ kind: 'toolEdit', data: permission }, [
+          { digest: address, text },
+        ])
+        .pipe(
+          Effect.flatMap(
+            ({ payload, decision }): Effect.Effect<ToolEditApprovalResult> =>
+              decision.action !== 'approve'
+                ? Effect.succeed(decision)
+                : readToolEditContent(log.blobs, payload.data.content).pipe(
+                    Effect.flatMap((reviewed) =>
+                      // A host's edited bytes may be CRLF. The base and proposal
+                      // are the request's stored ones, including after a resume.
+                      finalizeApprovalResult(
+                        (
+                          decision.content ?? reviewed.proposedContent
+                        ).replaceAll('\r\n', '\n'),
+                        reviewed,
+                      ),
                     ),
-                    reviewed,
                   ),
-                ),
-              ),
-      ),
-    );
-});
+          ),
+        );
+    }),
+  );
 
 function finalizeApprovalResult(
   appliedContent: string,
