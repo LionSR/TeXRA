@@ -28,7 +28,7 @@ import {
   autoDecideRequests,
   commandTool,
   createRecordingHost,
-} from '../progressTestUtils';
+} from '@test/agent/progressTestUtils';
 
 type Session = Context.Context<SessionServices>;
 

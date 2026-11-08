@@ -11,7 +11,7 @@ import {
   RemoteOperationSchema,
   type TurnRequest,
 } from '@texra-ai/llm';
-import { googleInteractionsModel } from '../../../packages/llm/src/api/googleInteractions.js';
+import { googleInteractionsModel } from '../../src/api/googleInteractions.js';
 
 const REQUEST: TurnRequest = {
   system: 'Use both tools.',

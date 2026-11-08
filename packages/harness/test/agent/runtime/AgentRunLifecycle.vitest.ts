@@ -1,9 +1,19 @@
 import { layer } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Context, Layer, Schema } from 'effect';
+import {
+  Context,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FiberSet,
+  Layer,
+  Schema,
+} from 'effect';
 
 import { afterEach, expect, vi } from 'vitest';
 
 import {
+  generateRunId,
   RunIdSchema,
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -45,14 +55,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-let lifecycleFixtureCounter = 0;
-
 /** A run of the file's session, with its launch context. */
 const lifecycleFixture = (agent = 'test-agent') =>
   Effect.flatMap(Effect.flatMap(TestSession, sessionHandleOf), (session) => {
-    const runId = Schema.decodeUnknownSync(RunIdSchema)(
-      `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}`,
-    );
+    const runId = generateRunId();
     const ctx = testLaunch(runId, {
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent,
@@ -75,7 +81,8 @@ const PARENT_RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('aa0001');
  * Park the run's terminal before its `run.end` write: its first read of the
  * session log (`lost`) enqueues a job that holds the session's publisher
  * until `release`, so the end's transaction queues behind it. `started`
- * resolves once that job holds the publisher.
+ * resolves once that job holds the publisher. The job runs in the case's
+ * scope, so a failure or a hold the case forgot ends with it.
  */
 const parkTerminal = (session: Context.Context<SessionServices>) =>
   Effect.gen(function* () {
@@ -83,8 +90,9 @@ const parkTerminal = (session: Context.Context<SessionServices>) =>
     const release = yield* Deferred.make<void>();
     const log = Context.get(session, SessionLog);
     const lost = log.lost.bind(log);
+    const runFork = yield* FiberSet.makeRuntime();
     vi.spyOn(log, 'lost').mockImplementationOnce((runId) => {
-      Effect.runFork(
+      runFork(
         log.transact(() =>
           Deferred.succeed(started, undefined).pipe(
             Effect.andThen(Deferred.await(release)),
