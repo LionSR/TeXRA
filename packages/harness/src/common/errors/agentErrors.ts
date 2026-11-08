@@ -2,8 +2,8 @@ import { Predicate, Schema } from 'effect';
 
 import {
   LaunchNoticeSchema,
-  RetryErrorInfoSchema,
-  SubscriptionSessionRouteSchema,
+  ModelFailureSchema,
+  SubscriptionSessionFailureSchema,
 } from '@shared/schemas';
 
 /**
@@ -13,7 +13,7 @@ import {
  * Host-neutral, so any host can reference it.
  * A more specific error should be added only when a concrete thrower and
  * catcher exist for it — anything else duplicates the existing
- * `ProviderError` schema.
+ * `ModelFailure` verdict.
  */
 export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   message: Schema.String,
@@ -21,7 +21,7 @@ export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   /** A model failure as the run's rows record it (the run ended on it, or a
    *  helper call raised it), which a host reads in place of this message's
    *  words. */
-  failure: Schema.optional(RetryErrorInfoSchema),
+  failure: Schema.optional(ModelFailureSchema),
 }) {}
 
 /**
@@ -45,8 +45,8 @@ export class LaunchRefused extends Schema.TaggedError<LaunchRefused>()(
  * harness's own model access, never a vendor's (that is llm's `ModelError`).
  * A missing key is the one fact a host acts on (it offers the key
  * setting); any other failure is read as its message, which for a
- * subscription session is the session's own failure, classified with its
- * route and remedy (`subscription-session`) by `providerErrorOf`.
+ * subscription session is the session's own failure, recorded with its
+ * route and remedy (`session`) on the run's `route` failure.
  */
 export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
   'RouteUnavailable',
@@ -56,12 +56,7 @@ export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
     message: Schema.String,
     /** A signed-in subscription that could not bill the call: its route,
      *  and whether only a fresh sign-in can help (else it may recover). */
-    session: Schema.optional(
-      Schema.Struct({
-        route: SubscriptionSessionRouteSchema,
-        needsReauth: Schema.Boolean,
-      }),
-    ),
+    session: Schema.optional(SubscriptionSessionFailureSchema),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -77,7 +72,7 @@ export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
    * place either path that reads a session decides it.
    */
   static ofSession(
-    route: typeof SubscriptionSessionRouteSchema.Type,
+    route: (typeof SubscriptionSessionFailureSchema.Type)['route'],
     error: Error,
   ): RouteUnavailable {
     return new RouteUnavailable({

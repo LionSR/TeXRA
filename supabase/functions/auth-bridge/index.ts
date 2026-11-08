@@ -9,17 +9,15 @@
  * navigation, which browsers honor where they drop the server redirect) and
  * keeps a real-click "Open in <editor>" button as the fallback.
  *
- * PKCE flow: GoTrue puts a one-time ?code= in the query string (or ?error= on
- * failure), and the editor exchanges the code using a verifier it never
- * shared. The page hands the query on to the editor's deep link; only when
- * the query is empty does it hand over the URL fragment instead, which is
- * where an implicit-flow response would carry its tokens (no TeXRA client
- * requests that flow).
+ * PKCE flow: GoTrue puts a one-time ?code= in the query string, and the editor
+ * exchanges the code using a verifier it never shared. GoTrue may return
+ * errors in the URL fragment; the page moves those error fields into the
+ * callback query the editor reads. Implicit-flow tokens are not supported.
  *
  * The editor scheme, extension id, and application nonce ride as PATH segments
  * (/auth-bridge/<ext>/<id>/<nonce>) so redirect_to carries no '?' that an OAuth
  * round-trip could mangle into the function name. The page reconstructs
- * `${ext}://${id}/auth-callback` + the original query, replacing any inbound
+ * `${ext}://${id}/auth-callback` + the callback query, replacing any inbound
  * app_nonce with the validated path nonce.
  *
  * Routes:
@@ -277,15 +275,16 @@ function bridgePageHtml(ext: string, id: string, nonce: string): string {
     'antigravity-ide': 'Antigravity IDE'
   };
 
-  // PKCE puts the one-time code (and any error) in the query string; read
-  // query-first, with the fragment as a defensive fallback.
-  function paramFrom(part, name) {
-    if (!part || part.length < 2) return null;
-    return new URLSearchParams(part.slice(1)).get(name);
-  }
-  function getParam(name) {
-    var fromSearch = paramFrom(window.location.search, name);
-    return fromSearch !== null ? fromSearch : paramFrom(window.location.hash, name);
+  // PKCE codes arrive in the query. GoTrue also uses the fragment for errors;
+  // normalize only those fields to the query the editor reads, never tokens.
+  var callbackParams = new URLSearchParams(window.location.search);
+  var fragmentParams = new URLSearchParams(window.location.hash.slice(1));
+  if (!callbackParams.has('error') && fragmentParams.has('error')) {
+    for (var name of ['error', 'error_code', 'error_description']) {
+      var value = fragmentParams.get(name);
+      callbackParams.delete(name);
+      if (value !== null) callbackParams.set(name, value);
+    }
   }
 
   var heading = document.getElementById('heading');
@@ -316,17 +315,11 @@ function bridgePageHtml(ext: string, id: string, nonce: string): string {
   ) {
     fail('This sign-in link is invalid or unsupported.');
   } else {
-    // Reconstruct the editor deep link: ${'$'}{EXT}://${'$'}{ID}/auth-callback plus
-    // the original query (the PKCE ?code=). ext/id come from the path, so the
-    // query is GoTrue's alone and rides back verbatim.
-    var search = window.location.search; // includes leading '?', or ''
-    var hash = window.location.hash; // includes leading '#', or ''
     var base = EXT + '://' + ID + '/auth-callback';
 
-    var oauthError = getParam('error');
-    var errorDescription = getParam('error_description');
-    var hasCode = getParam('code');
-    var hasToken = getParam('access_token');
+    var oauthError = callbackParams.get('error');
+    var errorDescription = callbackParams.get('error_description');
+    var hasCode = callbackParams.get('code');
 
     openLink.textContent = 'Open in ' + (DISPLAY[EXT] || 'your editor');
 
@@ -339,22 +332,11 @@ function bridgePageHtml(ext: string, id: string, nonce: string): string {
         errorDescription || 'Authorization failed (' + oauthError + ').';
     }
 
-    var tail = '';
-    if (search && search.length > 1) {
-      tail = search; // already starts with '?'
-    } else if (hash && hash.length > 1) {
-      tail = hash; // already starts with '#'
-    }
-    var marker = tail.charAt(0) === '#' ? '#' : '?';
-    var callbackParams = new URLSearchParams(
-      tail.length > 1 ? tail.slice(1) : ''
-    );
     // Ignore any inbound app_nonce and append the validated path nonce once.
     callbackParams.delete('app_nonce');
     callbackParams.append('app_nonce', APP_NONCE);
-    tail = marker + callbackParams.toString();
 
-    var deepLink = base + tail;
+    var deepLink = base + '?' + callbackParams.toString();
     openLink.setAttribute('href', deepLink);
     linkCode.textContent = deepLink;
 
@@ -378,9 +360,8 @@ function bridgePageHtml(ext: string, id: string, nonce: string): string {
       }
     });
 
-    if (!oauthError && (hasCode || hasToken)) {
-      // Auto-open the editor only when a usable OAuth payload is present
-      // (a code or access_token, not arbitrary query params). A refresh or
+    if (!oauthError && hasCode) {
+      // Auto-open the editor only when a PKCE code is present. A refresh or
       // direct visit after the history scrub has none — stay manual there.
       // The button stays as the fallback because browsers may block or
       // prompt on custom-scheme navigation (and some strip it entirely

@@ -222,7 +222,7 @@ export function buildAgentProposalApprovalContent(
 }
 
 export function formatRetryRequestMessage(payload: RetryRequest): string {
-  return `Retry requested (${payload.operation}): ${modelFailureText(payload.errorDetails)}`;
+  return `Retry requested (${payload.operation}): ${modelFailureText(payload.failure)}`;
 }
 
 export function formatBashApprovalSummary(payload: BashRequest): string {

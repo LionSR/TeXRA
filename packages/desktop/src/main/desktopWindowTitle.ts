@@ -13,7 +13,7 @@ type DesktopTitleSession = {
 
 type DesktopTitleWindow = Pick<
   BrowserWindow,
-  'getTitle' | 'isDestroyed' | 'setTitle' | 'webContents'
+  'isDestroyed' | 'setTitle' | 'webContents'
 >;
 
 /** Compute the current title synchronously, including before a window opens. */
@@ -30,57 +30,26 @@ export function getDesktopWindowTitle(
 }
 
 /**
- * Keep one BrowserWindow title synchronized with its session's view, for as
- * long as the enclosing scope is open and `isCurrent` holds. Renderer page
- * titles are presentation content and cannot replace this host-owned
- * projection. `isCurrent` is the owner's synchronous check: a project switch
- * forks the old scope's close, so until that close runs, only this check
- * keeps the old session's stream from writing over the new project's title.
+ * Keep the window's title on its project's view for this scope's life.
+ * Switching projects closes the previous scope before installing the next
+ * title follower. Renderer titles cannot replace this host-owned projection.
  */
 export const installDesktopWindowTitle = Effect.fn('installDesktopWindowTitle')(
   function* (
     window: DesktopTitleWindow,
     session: DesktopTitleSession,
     projectName: string | undefined,
-    isCurrent: () => boolean,
   ): Effect.fn.Return<void, never, Scope.Scope> {
-    let currentTitle = window.getTitle();
-    let disposed = false;
-    const update = (): void => {
-      if (disposed || !isCurrent() || window.isDestroyed()) return;
-      const title = getDesktopWindowTitle(session, projectName);
-      if (title === currentTitle) return;
-      currentTitle = title;
-      window.setTitle(title);
-    };
     const preventRendererTitle = (event: { preventDefault(): void }): void => {
       event.preventDefault();
     };
-
-    yield* Stream.runForEach(session.view.changes, () =>
-      Effect.sync(update),
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning(
-          'The window title stopped following its session',
-          cause,
-        ),
-      ),
-      Effect.forkScoped({ startImmediately: true }),
-    );
-    // Registered after the fork, so the scope's close runs this first and
-    // synchronously, before that fiber is interrupted.
     yield* Effect.acquireRelease(
       Effect.sync(() => {
         window.webContents.on('page-title-updated', preventRendererTitle);
       }),
       () =>
         Effect.sync(() => {
-          disposed = true;
-          // Check the window before touching `.webContents`: the property
-          // getter itself throws "Object has been destroyed" once the window
-          // is gone, which is the case when the window's own `closed`
-          // handler closes this scope; the listener dies with it anyway.
+          // The getter itself throws once Electron destroys the window.
           if (window.isDestroyed()) return;
           if (!window.webContents.isDestroyed()) {
             window.webContents.removeListener(
@@ -90,6 +59,23 @@ export const installDesktopWindowTitle = Effect.fn('installDesktopWindowTitle')(
           }
         }),
     );
-    update();
+    // Registered last, so the scope interrupts and joins this follower before
+    // releasing the renderer-title listener.
+    yield* session.view.changes.pipe(
+      Stream.map(() => getDesktopWindowTitle(session, projectName)),
+      Stream.changes,
+      Stream.runForEach((title) =>
+        Effect.sync(() => {
+          if (!window.isDestroyed()) window.setTitle(title);
+        }),
+      ),
+      Effect.catchDefect((defect) =>
+        Effect.logWarning(
+          'The window title stopped following its session',
+          defect,
+        ),
+      ),
+      Effect.forkScoped({ startImmediately: true }),
+    );
   },
 );

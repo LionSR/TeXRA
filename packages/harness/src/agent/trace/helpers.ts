@@ -21,14 +21,13 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import {
   MESSAGE_TYPES,
-  toRetryErrorInfo,
   type CompactionActivityData,
   type CompactionActivityOutcome,
   type ContextManagementData,
   type ErrorContext,
   type ErrorLogData,
   type MediaAttachmentKind,
-  type ProviderError,
+  type ModelFailure,
   type ScriptDeliverySummary,
   type StoredMedia,
 } from '@shared/schemas';
@@ -50,16 +49,17 @@ export function logSdkError(
   });
 }
 
-/** Log a normalized provider failure: its body-free `RetryErrorInfo` on the
- *  stream log, its raw response body on the process log only. */
+/** Log a model call's failure: its verdict on the stream log, the vendor's
+ *  raw response body on the process log only. */
 export function logProviderError(
   trace: AgentTrace,
   message: string,
-  error: ProviderError,
+  failure: ModelFailure,
+  rawErrorBody: unknown,
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
-    logErrorData(trace, message, toRetryErrorInfo(error));
-    return logProviderBody(message, error.rawErrorBody);
+    logErrorData(trace, message, { failure });
+    return logProviderBody(message, rawErrorBody);
   });
 }
 
@@ -75,12 +75,11 @@ function logProviderBody(message: string, body: unknown): Effect.Effect<void> {
       );
 }
 
-/** Emit an error log row. A `ProviderError` does not fit `data`: its raw
- *  body is rejected by the row schema, so pass its `RetryErrorInfo`. */
+/** Emit an error log row. The vendor's raw body never rides `data`. */
 function logErrorData(
   trace: AgentTrace,
   message: string,
-  data: ErrorLogData & { readonly rawErrorBody?: never },
+  data: ErrorLogData,
 ): void {
   trace.error(message, { messageType: MESSAGE_TYPES.ERROR, data });
 }

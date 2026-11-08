@@ -6,7 +6,7 @@ import { normalizeFilePath } from '@utils/core';
 import { AgentConfigSchema } from './agentConfig';
 import { RunIdSchema } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
-import { RetryErrorInfoSchema } from './errors';
+import { ModelFailureSchema, modelFailureMessage } from './errors';
 import { RunOutcomeSchema } from './run';
 import { RunIdentitySchema } from './runIdentity';
 import { TokenUsageStatsSchema } from './usage';
@@ -57,18 +57,30 @@ export const RunStopReasonSchema = Schema.Literals([
  *  process's `shutdown`. */
 export type RunStopReason = typeof RunStopReasonSchema.Type;
 
-/** Why a run ended failed, always saying what went wrong (`message`): a
- *  local failure, or a model failure as the run's rows record it, with its
- *  classification (a used-up plan, a missing key, an overflowed window). */
+/** Why a run ended failed: a local failure in its own words, or a model
+ *  failure as the run's rows record it, its verdict (`failure`), which each
+ *  reader words. */
 const RunEndErrorSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literals(['disk-full', 'result-lost', 'unexpected']),
     message: Schema.String,
   }),
-  RetryErrorInfoSchema.mapFields(
-    Struct.assign({ kind: Schema.Literal('model') }),
-  ),
+  Schema.Struct({
+    kind: Schema.Literal('model'),
+    failure: ModelFailureSchema,
+  }),
 ]);
+
+/** Why a run ended failed ({@link RunEndErrorSchema}). */
+export type RunEndError = typeof RunEndErrorSchema.Type;
+
+/** A run's failure in plain words: a model failure's verdict worded
+ *  ({@link modelFailureMessage}), a local one's own words. */
+export function runEndErrorMessage(error: RunEndError): string {
+  return error.kind === 'model'
+    ? modelFailureMessage(error.failure)
+    : error.message;
+}
 
 /**
  * What a run produced (one run model, section 3.4): the value the flow hands
