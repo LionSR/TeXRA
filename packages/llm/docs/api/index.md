@@ -900,13 +900,14 @@ const OWN_KEY_ROUTE_FACTS: RouteFacts
 
 The subscription plans a model can bill through instead of the caller's
 API credit, keyed by the route that bills through each. `provider` is the
-account the plan bills. A `session` plan signs in with an OAuth session,
-is its own route kind, and renews its token once on a 401; a used-up quota
-asks before moving onto an API key, because the move starts spending API
-credit. A `key` plan pays for an `api-key` route on a provider console
-key, as that route's `usageRoute`; a used-up quota falls back to the
-model's own key without asking. Hosts store these spellings, so a key is
-never renamed.
+account the plan bills; a route names its plan as `plan`, so it bills
+`plan ?? 'api-key'`. A `session` plan is the `plan` of a `session` route:
+it signs in with an OAuth session and renews its token once on a 401; a
+used-up quota asks before moving onto an API key, because the move starts
+spending API credit. A `key` plan is the `plan` of an `api-key` route on a
+provider console key (`null` for a key paid per token); a used-up quota
+falls back to the model's own key without asking. Hosts store these
+spellings, so a key is never renamed.
 
 ```ts
 const PLAN_ROUTES: Readonly<{ 'chatgpt-subscription': Readonly<{ provider: "openai"; credential: "session"; }>; 'xai-subscription': Readonly<{ provider: "xai"; credential: "session"; }>; 'kimi-code-subscription': Readonly<{ provider: "kimiCode"; credential: "key"; }>; 'glm-coding-plan-subscription': Readonly<{ provider: "glm"; credential: "key"; }>; }>
