@@ -26,7 +26,7 @@ import {
   type ToolRun,
 } from '@agent/core/tools/ToolTypes';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
-import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { RunFileService } from '@common/storage/runStorage';
 import {
   ToolError,
@@ -169,7 +169,6 @@ declare module '../core/tools/ToolTypes.js' {
     readonly scope: Scope.Scope;
     readonly opening: TemplateOpening | null;
     readonly logger: AgentTrace;
-    readonly parentStage: StageHandle;
     readonly fileService: RunFileService;
   }
   interface CallRequests {

@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, Result, Scope } from 'effect';
+import { Cause, Effect, Exit, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
 import { Sessions } from '@texra-ai/harness';
@@ -139,17 +139,13 @@ void Effect.runPromise(
         // The app is a client of the one background service, so a
         // folder's tasks keep running when it quits and other windows and
         // terminals see them. An app that cannot reach it runs them here,
-        // and says so once.
+        // and each folder's window says so (`openProjectSession`).
         const service = yield* reachDesktopService(
           platformInit.dataRoot,
           platformInit.mainDir,
         ).pipe(Scope.provide(processScope), Effect.result);
-        if (Result.isFailure(service))
-          yield* Effect.logWarning(
-            `TeXRA runs this app's tasks here only, so other windows and terminals will not see them: ${service.failure.message}`,
-          );
         const registry = yield* openDesktopProjectRegistry({
-          service: Result.isSuccess(service) ? service.success : undefined,
+          service,
           dataRoot: platformInit.dataRoot,
           processRoots: platformInit.processRoots,
           processScope,

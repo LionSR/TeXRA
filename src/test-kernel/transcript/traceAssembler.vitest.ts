@@ -117,6 +117,25 @@ layer(
       );
       // The trace viewer reads the same document the export writes.
       expect(() => parseTraceData(trace)).not.toThrow();
+      // A stage an earlier build exported, with its retired `kind`, fails the
+      // parse instead of reading as this build's stage with the field dropped.
+      const logRow = trace.events.find((event) => event.type === 'log');
+      if (logRow?.type !== 'log') throw new Error('expected a log row');
+      const { level: _l, message: _m, messageType: _t, ...envelope } = logRow;
+      const earlier = {
+        ...trace,
+        events: [
+          ...trace.events,
+          {
+            ...envelope,
+            type: 'stage.start',
+            id: 'run-stage',
+            label: 'Run: review',
+            kind: 'run',
+          },
+        ],
+      };
+      expect(() => parseTraceData(earlier)).toThrow(/kind/);
     }),
   );
 });

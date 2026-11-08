@@ -7,7 +7,6 @@ import { JsonValueSchema } from './jsonValue';
 import { FileListEntrySchema, LogLevelSchema, MessageTypeSchema } from './log';
 import { ToolCallStatusSchema, ToolCardSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
-import { StageKindSchema } from './stage';
 import { TokenUsageStatsSchema } from './usage';
 
 function trace<T extends string, const F extends Schema.Struct.Fields>(
@@ -47,8 +46,6 @@ export const TraceRowFieldsSchema = Schema.Union([
   trace('stage.start', {
     id: Schema.String,
     label: Schema.String,
-    parentId: Schema.optional(Schema.NullOr(Schema.String)),
-    kind: Schema.optional(Schema.NullOr(StageKindSchema)),
   }),
   trace('stage.end', { id: Schema.String, status: RunOutcomeSchema }),
   trace('tool.start', {

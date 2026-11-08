@@ -11,7 +11,7 @@
  * awaited `agent()` call that owns its child, the echo's answer, then a
  * compaction (`context.edit`) and a fork, and the bash
  * bypass turned on and off again. The pass records the commit each write
- * transaction ended at, from the store's own `observedCommit`: a batch
+ * transaction ended at, from the batches the session's publisher reports: a batch
  * commits whole, so those are the crash points. For each point N the suite
  * copies the clean store, truncates it to commits 1..N (the store a process
  * killed after commit N leaves), opens a
@@ -77,6 +77,7 @@ import {
   Fiber,
   Layer,
   RcMap,
+  Schedule,
   Schema,
   Stream,
   SubscriptionRef,
@@ -412,18 +413,17 @@ const liveRows = (
     }),
   );
 
-/** Wait until `ready` holds of the held store's rows, read at each commit. */
+/** Wait until `ready` holds of the held store's rows, read again every
+ *  10 ms (each read takes only the commits since the last). */
 const until = (storage: string, ready: (rows: readonly Row[]) => boolean) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const db = yield* RcMap.get(yield* ProjectDatabases, storage);
-      yield* SubscriptionRef.changes(db.observedCommit).pipe(
-        Stream.mapEffect(() => liveRows(storage)),
-        Stream.takeUntil(ready),
-        Stream.runDrain,
-      );
+  liveRows(storage).pipe(
+    Effect.repeat({
+      until: ready,
+      schedule: Schedule.spaced(Duration.millis(10)),
     }),
-  ).pipe(Effect.timeout('30 seconds'));
+    Effect.asVoid,
+    Effect.timeout('30 seconds'),
+  );
 
 /** The root's view edits, by cause. */
 const editsOf = (rows: readonly Row[], root: string) =>
@@ -744,10 +744,13 @@ const cleanPass = (
     const points = yield* Effect.scoped(
       Effect.gen(function* () {
         const session = yield* persistentTestSession(roots);
-        // The session's own store handle: the process holds one per root.
-        const db = yield* RcMap.get(yield* ProjectDatabases, roots.storage);
+        // Each transaction's commit, as the session's publisher reports what
+        // it committed: the tail's `drained` moves once per batch.
+        const log = Context.get(session, SessionLog);
+        const drained = yield* SubscriptionRef.make(log.now());
+        yield* Effect.forkScoped(Stream.runDrain(log.tail(log.now(), drained)));
         const commits: number[] = [];
-        yield* SubscriptionRef.changes(db.observedCommit).pipe(
+        yield* SubscriptionRef.changes(drained).pipe(
           Stream.runForEach((commit) =>
             Effect.sync(() => {
               commits.push(commit);
@@ -953,12 +956,12 @@ export function crashConformanceSuite(
                     },
                   ],
                 });
-                // The root's prompt line and its stage commit with its opening, so
-                // no crash point sits between them (the resume never logs it).
+                // The root's prompt line commits with its opening, so no crash
+                // point sits between them (the resume never logs it).
                 const first = (type: string) =>
                   cleanRows.find((row) => row.run === root && row.type === type)
                     ?.commit ?? 0;
-                const traced = Math.max(first('log'), first('stage.start'));
+                const traced = first('log');
                 expect(
                   points.filter(
                     (p) => p >= first('run.position') && p < traced,

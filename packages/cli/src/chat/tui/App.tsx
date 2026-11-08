@@ -20,6 +20,7 @@ import {
   acceptsFollowUp,
   isUnreadable,
 } from '@texra-ai/harness/schemas';
+import { isScriptCall } from '@texra-ai/harness/transcript';
 import { isCtrlInput, isEscapeInput, metaChordInput } from '@cli/tui/inputKeys';
 import { defaultShortcutModifierLabel } from '@cli/runtime/terminal/shortcutLabels';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
@@ -197,8 +198,7 @@ export function App(props: AppProps): React.JSX.Element {
   const scriptPopup = useSignal(scriptPopupViewSignal);
   // The active run's transcript holds a script's calls: Ctrl-O shows them.
   const scriptAvailable =
-    activeRun?.transcript.stages.some((group) => group.kind === 'script') ??
-    false;
+    activeRun?.transcript.rows.some(isScriptCall) ?? false;
   // Kill, skip and retry; a refusal (a finished call) reads into the transcript.
   const request = (req: RuntimeCommand): void => {
     props.runtime.runFork(

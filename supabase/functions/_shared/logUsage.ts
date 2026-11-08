@@ -74,22 +74,22 @@ function rejectBatch(
 }
 
 /**
- * Serve usage logging over `batchSchema`, the one thing the two functions'
+ * The usage-logging handler over `batchSchema`, the one thing the two functions'
  * wires differ in. `resolveOwner` yields the batch owner (null = 401), or
  * throws {@link AuthUnavailable} when it cannot tell (503); `store` writes
  * the batch and returns false when it was already stored (a
  * client retry), and throws on failure.
  */
-export function serveLogUsage<
+export function logUsageHandler<
   Owner,
   Batch extends { readonly entries: readonly unknown[] },
 >(
   batchSchema: Schema.Codec<Batch, unknown>,
   resolveOwner: (req: Request) => Promise<Owner | null>,
   store: (owner: Owner, batch: Batch) => Promise<boolean>,
-): void {
+): (req: Request) => Promise<Response> {
   const decodeBatch = Schema.decodeUnknownResult(batchSchema);
-  Deno.serve(async (req: Request) => {
+  return async (req: Request) => {
     const response = handleCors(req);
     if (response) return response;
 
@@ -153,5 +153,5 @@ export function serveLogUsage<
       console.error('[LOG_USAGE] Unexpected error:', error);
       return rejectBatch(req, 'Internal server error', 500);
     }
-  });
+  };
 }

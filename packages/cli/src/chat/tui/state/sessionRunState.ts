@@ -33,7 +33,8 @@ interface RootLaunch {
   readonly launched: Deferred.Deferred<RunId | null>;
   /** For a launch that ended without a run: the code the chat exits with
    *  unless a later root replaces it (a refused resume is a usage error, a
-   *  failed launch an agent error, a resume with no run a success). */
+   *  failed launch an agent error, a resume with nothing to resume a usage
+   *  error, a document task's resume a success). */
   readonly exitCode: CliExitCode | undefined;
 }
 
@@ -103,19 +104,24 @@ export class TuiSession {
   exited: Promise<CliExitCode> | undefined;
 
   /** The chat's exit code: a dead session view is a failure on every exit
-   *  path; then a launch that ended without a run says it; otherwise the
-   *  root run's outcome does, and a root whose end was lost (interrupted
-   *  with nothing driving it) is a failure. */
+   *  path; then a launch that ended without a run says it; a chat that
+   *  ran nothing succeeds; otherwise the outcome the root's `run.end`
+   *  stored decides. A root with no stored outcome succeeds only while it
+   *  waits between turns or runs on in the service the chat leaves: one
+   *  missing from the view, or interrupted with nothing driving it, lost its
+   *  end (its result arrives only once the view shows that end). */
   get exitCode(): CliExitCode {
     if (sessionViewFailure.get() !== undefined) return CliExitCode.AgentError;
     const launched = rootLaunch.get()?.exitCode;
     if (launched !== undefined) return launched;
+    if (rootRunId.get() === undefined) return CliExitCode.Success;
     const root = rootRun();
-    if (root === undefined) return CliExitCode.Success;
-    if (isInterrupted(root)) return CliExitCode.AgentError;
-    return root.outcome === null
+    if (root === undefined || isInterrupted(root))
+      return CliExitCode.AgentError;
+    if (root.outcome !== null) return runOutcomeExitCode(root.outcome);
+    return this.isResumableIdle()
       ? CliExitCode.Success
-      : runOutcomeExitCode(root.outcome);
+      : CliExitCode.AgentError;
   }
 
   /** The launch on its way to the session: what a stop waits for. */

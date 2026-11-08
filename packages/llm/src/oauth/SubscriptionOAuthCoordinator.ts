@@ -196,8 +196,9 @@ export class SubscriptionOAuthCoordinator<
         );
   }
 
-  /** End the stored (readable) session at the provider, then delete it either
-   *  way; a failed end is reported after. Under the lock, after any refresh in
+  /** End the stored session at the provider, then delete it either way; a
+   *  failed end is reported after, and an unreadable session (which cannot be
+   *  ended) is deleted with a warning. Under the lock, after any refresh in
    *  flight, so the token ended is the one a refresh rotated to, not the one
    *  it replaced. */
   readonly signOut = Effect.fn('SubscriptionOAuthCoordinator.signOut')(
@@ -207,8 +208,17 @@ export class SubscriptionOAuthCoordinator<
         Effect.gen({ self: this }, function* () {
           const ended = yield* Effect.exit(
             this.loadSession().pipe(
-              Effect.catchTag('SubscriptionOAuthError', () =>
-                Effect.succeed(null),
+              // An unreadable session can't be ended at the provider, but the
+              // sign-out still deletes it; say what was left undone.
+              Effect.catchTag('SubscriptionOAuthError', (error) =>
+                Effect.as(
+                  endSession
+                    ? Effect.logWarning(
+                        `${this.policy.secretKey}: signed out locally; the provider session was not ended because the stored session is unreadable`,
+                      ).pipe(Effect.annotateLogs({ data: error.message }))
+                    : Effect.void,
+                  null,
+                ),
               ),
               Effect.flatMap((session) =>
                 session && endSession ? endSession(session) : Effect.void,

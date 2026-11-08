@@ -73,6 +73,7 @@ export type {
   AggregateState,
   DatabaseAggregateClosed,
   InputHistoryRecord,
+  RunChanged,
   SessionStoreMovedAside,
 } from '@shared/session/database';
 // Where a run stands, the pair of `RunView` fields a renderer reads.
@@ -135,7 +136,6 @@ export type {
   SessionRowDraft,
   AgentNotFoundPayload,
   Stage,
-  StageStatus,
   ToolCallStatus,
   ToolCard,
   ToolDefinition,
@@ -360,6 +360,7 @@ export {
   type RequestDecision,
   RequestShowErrorPayloadSchema,
   type RetryRequest,
+  outcomeFromCause,
   RUN_OUTCOME,
   type RunEndOutput,
   RunEndSchema,

@@ -25,6 +25,7 @@ import {
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
+  outcomeFromCause,
   RUN_OUTCOME,
   RunIdSchema,
   toErrorMessage,
@@ -190,20 +191,25 @@ export const DocumentContextTool = defineTool({
   }),
   execute: Effect.fn('document_context')(function* ({ revision, critique }) {
     const docs = yield* documentsOfCall('document_context');
-    // The first revision's checks and file cards nest under a stage of the
-    // run's own, closed with the call.
-    const stage =
-      revision === 0 ? docs.run.parentStage.child('Revision 1') : null;
-    return yield* revisionContext(docs, revision, critique, stage?.id).pipe(
-      Effect.onExit((exit) =>
+    if (revision !== 0)
+      return yield* revisionContext(docs, revision, critique, undefined);
+    // The first revision's checks and file cards nest under a stage that
+    // closes with the call, on the call's own outcome.
+    return yield* Effect.acquireUseRelease(
+      Effect.sync(() => docs.run.logger.openStage('Revision 1')),
+      (stage) => revisionContext(docs, revision, critique, stage.id),
+      (stage, exit) =>
         Effect.sync(() =>
-          stage?.end(
-            Exit.isSuccess(exit) && exit.value.status !== 'error'
-              ? RUN_OUTCOME.COMPLETED
-              : RUN_OUTCOME.FAILED,
+          stage.end(
+            Exit.match(exit, {
+              onSuccess: (result) =>
+                result.status === 'error'
+                  ? RUN_OUTCOME.FAILED
+                  : RUN_OUTCOME.COMPLETED,
+              onFailure: outcomeFromCause,
+            }),
           ),
         ),
-      ),
     );
   }),
 });

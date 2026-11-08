@@ -458,13 +458,15 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     return errorResult(toErrorMessage(selected.failure), {
       name: 'ModelUnavailable',
     });
+  if (selected.success._tag === 'Fallback')
+    run.logger.warn(selected.success.notice);
   const workingDirectory = launch.workingDirectory ?? call.env.workingDirectory;
   const proposal: AgentProposal = Schema.decodeUnknownSync(AgentProposalSchema)(
     {
       agent: agent.name,
       agentSource: agent.source,
       ...(persona != null && { persona }),
-      model: selected.success,
+      model: selected.success.model,
       memories: launch.memories,
       ...(workingDirectory !== undefined && { workingDirectory }),
       task: task !== null,

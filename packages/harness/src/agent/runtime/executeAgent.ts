@@ -33,7 +33,6 @@ import type { AgentEvent } from '@shared/session/agentEvent';
 import {
   type CommitOrdinal,
   isTaskConfig,
-  RUN_OUTCOME,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -188,22 +187,8 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   const initialMediaMayBeInserted =
     config.mediaFiles.length > 0 && supportsMediaInMessage;
 
-  // The root "Run:" stage, its user instruction logged first so it has no
-  // group and renders before the run group; a root never inherits a
-  // parent run's stage.
-  const parentStage = yield* Effect.acquireRelease(
-    Effect.sync(() => {
-      if (!initialMediaMayBeInserted && initialInstruction)
-        logUserMessage(agentLogger, initialInstruction);
-      return agentLogger.openStage(`Run: ${config.agent}`, { kind: 'run' });
-    }),
-    // A scope that fails before the run's terminal row closes the stage
-    // as failed; `end` is idempotent, so a published verdict stands.
-    (stage, exit) =>
-      Exit.isSuccess(exit)
-        ? Effect.void
-        : Effect.sync(() => stage.end(RUN_OUTCOME.FAILED)),
-  );
+  if (!initialMediaMayBeInserted && initialInstruction)
+    logUserMessage(agentLogger, initialInstruction);
 
   // A task's tools render their templates from this opening at every
   // call, so it is built on resume too; a conversation's rows hold its own.
@@ -232,7 +217,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     persona,
     toolPolicy: { stopAfterCycle },
     logger: agentLogger,
-    parentStage,
     opening,
     entry: {
       ...entry,

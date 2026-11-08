@@ -233,8 +233,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           assert.ok(address, 'the request names its proposal by address');
           const stored = (yield* Context.get(session, SessionLog).blobs([
             address,
-          ])).get(address);
-          assert.ok(stored, 'the store holds the proposal under that address');
+          ]))(address);
           const content: unknown = JSON.parse(stored);
           assert.ok(typeof content === 'object' && content !== null);
           assert.strictEqual(

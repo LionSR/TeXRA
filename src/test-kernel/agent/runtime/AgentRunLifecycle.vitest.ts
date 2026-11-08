@@ -13,7 +13,6 @@ import {
 import { setLogSink } from '@texra-ai/harness/node';
 import { endRun } from '@agent/runtime/AgentRunLifecycle';
 import { type RunReport } from '@agent/runtime/runReport';
-import type { RunLaunch } from '@agent/runtime/run/AgentRun';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
@@ -73,28 +72,26 @@ const lifecycleFixture = (agent = 'test-agent') =>
 const PARENT_RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('aa0001');
 
 /**
- * Park the run's terminal before its `run.end` write: its stage end, the
- * terminal's first step, enqueues a job that holds the session's publisher
+ * Park the run's terminal before its `run.end` write: its first read of the
+ * session log (`lost`) enqueues a job that holds the session's publisher
  * until `release`, so the end's transaction queues behind it. `started`
  * resolves once that job holds the publisher.
  */
-const parkTerminal = (
-  ctx: RunLaunch,
-  session: Context.Context<SessionServices>,
-) =>
+const parkTerminal = (session: Context.Context<SessionServices>) =>
   Effect.gen(function* () {
     const started = yield* Deferred.make<void>();
     const release = yield* Deferred.make<void>();
-    const endStage = ctx.parentStage.end.bind(ctx.parentStage);
-    vi.spyOn(ctx.parentStage, 'end').mockImplementationOnce((outcome) => {
+    const log = Context.get(session, SessionLog);
+    const lost = log.lost.bind(log);
+    vi.spyOn(log, 'lost').mockImplementationOnce((runId) => {
       Effect.runFork(
-        Context.get(session, SessionLog).transact(() =>
+        log.transact(() =>
           Deferred.succeed(started, undefined).pipe(
             Effect.andThen(Deferred.await(release)),
           ),
         ),
       );
-      endStage(outcome);
+      return lost(runId);
     });
     return { started, release };
   });
@@ -112,7 +109,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         // uninterruptible, so the stop its launch takes lands after the end
         // the run reported.
         const { runId, ctx, session } = yield* lifecycleFixture();
-        const parked = yield* parkTerminal(ctx, session);
+        const parked = yield* parkTerminal(session);
 
         const running = yield* Effect.forkChild(
           startAwaited(

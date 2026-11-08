@@ -15,17 +15,14 @@ import {
   secretsDirectory,
 } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@texra-ai/harness/plugins';
+import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 
 // Local file imports
 import { repairLaunchPath } from './pathFix.js';
-import {
-  resolveDesktopDataRoot,
-  resolveDesktopMainDir,
-  resolveResourcesPath,
-} from './paths.js';
+import { resolveDesktopMainDir, resolveResourcesPath } from './paths.js';
 import type { ConfigStore } from '@texra-ai/harness/node';
 interface ElectronPlatformInitResult {
   /**
@@ -40,10 +37,9 @@ interface ElectronPlatformInitResult {
    */
   globalConfigStore: ConfigStore;
   /**
-   * Desktop's memory/history/executions data root (`~/.texra` in
-   * production, see `resolveDesktopDataRoot()`). Threaded out so the project
-   * registry gets it from one owner instead of re-resolving it — this root no
-   * longer lives under `userData` (#7987).
+   * Desktop's memory/history/executions data root, the CLI's `~/.texra`.
+   * Threaded out so the project registry gets it from one owner instead of
+   * re-resolving it — this root no longer lives under `userData` (#7987).
    */
   dataRoot: string;
   /**
@@ -60,17 +56,18 @@ interface ElectronPlatformInitResult {
 export const initializeElectronPlatform = Effect.fn(
   'initializeElectronPlatform',
 )(function* (moduleDirname: string) {
-  const userDataPath = app.getPath('userData');
   // Desktop's memory/history/executions data root: shared with the CLI's
-  // `~/.texra` scheme in production so a workspace worked on from both hosts
-  // shows one history.
-  const dataRoot = yield* resolveDesktopDataRoot(userDataPath);
+  // `~/.texra` so a workspace worked on from both hosts shows one history.
+  const dataRoot = defaultNodeStorageRoot();
   // The process identity and application state are acquired by the
   // runtime's own layers, over the spawner and database it serves.
   const { mainDir, resourcesPath, configStores } = yield* Effect.gen(
     function* () {
       const mainDir = yield* resolveDesktopMainDir(moduleDirname);
-      const resourcesPath = yield* resolveResourcesPath(mainDir);
+      const resourcesPath = yield* resolveResourcesPath(
+        mainDir,
+        app.isPackaged,
+      );
       const configStores = yield* openTexraConfigStores(
         TEXRA_SETTINGS.catalog,
         dataRoot,

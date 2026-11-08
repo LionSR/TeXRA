@@ -8,8 +8,8 @@ import { Box, Text } from 'ink';
 
 import {
   fileLocationDisplayPath,
+  type RunView,
   type Stage,
-  type StageStatus,
   formatCompactDuration,
 } from '@texra-ai/harness/schemas';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
@@ -23,7 +23,7 @@ import {
   outputDisplayName,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { stageStatus } from '@ui/copy/runStatus';
 
 import { COMPACTION_ACTIVITY_STATUS_STYLE } from './transcriptEntryLayout';
 
@@ -37,6 +37,8 @@ interface DocumentTaskRunDetailLine {
 
 type DocumentTaskRunFacts = {
   readonly stages: readonly Stage[];
+  /** The run the stages are of: an open one reads as the run reads. */
+  readonly run: Pick<RunView, 'holder' | 'outcome'>;
   /** The run's rounds, as its documents fact records them. */
   readonly rounds: readonly RoundOutput[];
 };
@@ -49,29 +51,26 @@ interface DocumentTaskRunDetailGroup {
 
 function stageLine(
   group: Stage,
-  label: string,
-  status: StageStatus,
+  status: ReturnType<typeof stageStatus>,
 ): DocumentTaskRunDetailLine {
-  const appearance = COMPACTION_ACTIVITY_STATUS_STYLE[status];
+  const appearance = COMPACTION_ACTIVITY_STATUS_STYLE[status.key];
   const duration =
     group.endTime !== undefined
       ? ` · ${formatCompactDuration(group.endTime - group.startTime)}`
       : '';
   return {
     key: `group:${group.id}`,
-    // A stage's status is running or a run outcome, so it is worded
-    // with the stream vocabulary — the same one the progress view's group
-    // icon announces, never the workflow-call vocabulary that happens to
-    // share key names.
-    text: `${appearance.marker} ${safeTerminalText(label)} ${runStatusLabel(status)}${duration}`,
+    // Worded as the progress view's stage header words it, never with the
+    // workflow-call vocabulary that happens to share key names.
+    text: `${appearance.marker} ${safeTerminalText(group.name || group.id)} ${status.word}${duration}`,
     color: appearance.color,
     role: 'lifecycle',
   };
 }
 
-function lifecyclePriority(status: StageStatus): number {
-  if (status === 'failed') return 0;
-  if (status === 'running') return 1;
+function lifecyclePriority(status: ReturnType<typeof stageStatus>): number {
+  if (status.key === 'failed') return 0;
+  if (status.key === 'running') return 1;
   return 3;
 }
 
@@ -85,16 +84,11 @@ function documentTaskRunDetailGroups(
 
   const groups: DocumentTaskRunDetailGroup[] = [];
   for (const group of facts.stages) {
+    const status = stageStatus(group, facts.run);
     groups.push({
       key: `lifecycle:${group.id}`,
-      lines: [
-        stageLine(
-          group,
-          group.name || (group.kind === 'run' ? 'Workflow' : group.id),
-          group.status,
-        ),
-      ],
-      priority: lifecyclePriority(group.status) + 1,
+      lines: [stageLine(group, status)],
+      priority: lifecyclePriority(status) + 1,
     });
   }
   for (const record of facts.rounds) {

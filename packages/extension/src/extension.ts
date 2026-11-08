@@ -418,20 +418,14 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const { globalState } = roots;
   // A window of the service opens no session of its own: no store, run
   // or claims. Only a window that cannot reach the service runs its
-  // tasks here, and says so once. While the link is down, the service's
-  // session answers with the offline refusal.
-  const warn = (message: string) =>
-    Effect.asVoid(Effect.forkDetach(vscodeUi.notify('warning', message)));
+  // tasks here, and its banner says so. While the link is down, the
+  // service's session answers with the offline refusal.
   const windowSession: GuiSession = yield* openProjectSession(
     roots,
-    Result.isSuccess(reached) ? reached.success : undefined,
-    warn,
+    reached,
+    (message) =>
+      Effect.asVoid(Effect.forkDetach(vscodeUi.notify('warning', message))),
   ).pipe(Effect.provideService(HostWindows, hosts));
-  if (Result.isFailure(reached)) {
-    const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${reached.failure.message}`;
-    yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));
-    yield* warn(reason);
-  }
   const { session } = windowSession;
 
   // The setup pill: shown only while no credential is usable, the one

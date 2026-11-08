@@ -11,9 +11,7 @@ import type {
   DisplayRow,
   RunEnd,
   RunId,
-  RunOutcome,
   SessionRow,
-  SessionRowDraft,
 } from '@shared/schemas';
 import type { Effect, Stream, SubscriptionRef } from 'effect';
 import type { AgentEvent } from './agentEvent';
@@ -22,6 +20,7 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
   SessionStoreMovedAside,
+  StoredBlobs,
 } from './database';
 import type { RunRowRead, RunRowsRead } from './runRowReads';
 import type { RunRows } from './runRowsShape';
@@ -30,12 +29,6 @@ import type { Append, UnfoldedDraft } from './sessionEvents';
 
 /** A streaming row's closing fact, as the run history commits it. */
 export type StreamClosure = Extract<RunHistoryDraft, { type: 'stream.end' }>;
-
-/** The facts that close a run's open work: its streams, and with an
- *  outcome its stages too. */
-export type ClosureFact =
-  | StreamClosure
-  | Extract<SessionRowDraft, { type: 'stage.end' }>;
 
 /** A write the store refused: nothing was written. */
 export type LogWriteError = DatabaseAggregateClosed | DatabaseWriteFailed;
@@ -71,10 +64,9 @@ export interface SessionLogShape {
   /** The first row of `runId` the store refused, taken, as its `run.end`
    *  error. */
   lost(runId: RunId): Effect.Effect<RunEnd['error'] | undefined>;
-  /** What closes `runId`'s open streams (and stages, with an `outcome`);
-   *  read in a publisher job or after {@link settled}. */
+  /** What closes `runId`'s open streams; read in a publisher job or after
+   *  {@link settled}. */
   closure(runId: RunId): StreamClosure[];
-  closure(runId: RunId, outcome: RunOutcome): ClosureFact[];
   /** A barrier: every job enqueued before it has run, the view applied it, and
    *  the terminal-result presenter read the view's tail past it. A refused
    *  detached row is heard by its writer. */
@@ -98,10 +90,11 @@ export interface SessionLogShape {
     through?: number,
   ): Effect.Effect<RunRowsRead<R>, DatabaseReadFailed>;
   /** The strings under `digests`: what the rows name by address (media
-   *  bytes, a tool edit's proposal). */
+   *  bytes, a tool edit's proposal). A digest the store lacks fails the
+   *  read, so the lookup it answers is total over `digests`. */
   blobs(
     digests: readonly string[],
-  ): Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
+  ): Effect.Effect<StoredBlobs, DatabaseReadFailed>;
   /** A run's facts, folded from its latest row of each record type (its
    *  requests and pending input left out: a `runRows` read holds those);
    *  null while the store holds no open run under the id. */

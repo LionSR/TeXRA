@@ -12,9 +12,9 @@
  * reaches the updater.
  *
  * The service holds no log: a view across a process boundary is built from
- * its transport's inputs (`RemoteSessionView`). The plane's tail as this view
- * has applied it, `SessionStore.folded`, is derived from `ref` where the log
- * is (`sessionStore.ts`).
+ * its transport's inputs (`RemoteSessionView`). The publisher's batches as
+ * this view has applied them, `SessionStore.applied`, are released by
+ * `ref`'s cursor where the log is (`sessionStore.ts`).
  */
 import {
   Cause,

@@ -174,7 +174,16 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   // Top-level runs come in the session view's order. A child this terminal owns
   // under a parent outside the scope (detached from an earlier turn) is a
   // root here but not in `view.order`: only these sort, after the session view's.
-  const tops = view.order.flatMap((id) => view.runs.get(id) ?? []);
+  const tops = view.order.map((id) => {
+    const run = view.runs.get(id);
+    // The view's update removes a run from `order` with its entry, so a miss
+    // is a broken view, not a run to leave out.
+    if (run === undefined)
+      throw new Error(
+        `The session view orders run ${id} but holds no run for it`,
+      );
+    return run;
+  });
   const detached = [...view.runs.values()].filter(
     (run) =>
       run.parentId !== null &&

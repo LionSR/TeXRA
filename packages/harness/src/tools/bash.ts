@@ -250,7 +250,6 @@ function backgroundBashTurn(params: {
   });
 
   return {
-    stageLabel: 'Background command',
     run,
     reportError: (error) => formatBashError(runId, call, error),
   };

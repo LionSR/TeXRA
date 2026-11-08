@@ -12,10 +12,8 @@ import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**
- * Abstract terminal-run outcome, independent of any one surface's status
- * union (`StageStatus`, a script call's status, ...). Callers
- * classify their own domain-specific status into one of these buckets; this
- * module is the single source of truth for which icon each bucket gets.
+ * The icon buckets a script call's status sorts into (`ScriptStage`); a run's
+ * and a stage's glyph come from `runStatus`'s tone table.
  */
 type TerminalStatusKind = 'cancelled' | 'completed' | 'failed' | 'running';
 
@@ -68,24 +66,33 @@ export function renderStatusBadge({
   return html`<wa-tag variant="neutral" size="s" class=${ifDefined(className)}>${icon} ${label}</wa-tag>`;
 }
 
-interface SetStatusIconOptions<Status extends string> {
+interface SetStatusIconOptions<Status extends string, Success extends Status> {
   readonly status: Status;
-  readonly fallbacks: Partial<Record<Status, SetStatusFallback>>;
-  /** Tooltip text for the green check rendered when `status` is not in `fallbacks`. */
+  /** The status the green check stands for. */
+  readonly success: Success;
+  /** A labeled tag for every other status: total, so a new status is a
+   *  compile error here instead of a check. */
+  readonly fallbacks: Readonly<
+    Record<Exclude<Status, Success>, SetStatusFallback>
+  >;
+  /** Tooltip text for the green check rendered for `success`. */
   readonly title?: string;
 }
 
 /**
- * Render a green-check wa-icon when `status` has no entry in `fallbacks`, or a
- * labeled wa-tag using the matching fallback otherwise.
+ * Render a green-check wa-icon for the `success` status, or a labeled wa-tag
+ * using the status's fallback otherwise.
  */
-export function renderSetStatusIcon<Status extends string>({
+export function renderSetStatusIcon<
+  Status extends string,
+  Success extends Status,
+>({
   status,
+  success,
   fallbacks,
   title,
-}: SetStatusIconOptions<Status>): TemplateResult {
-  const fallback = fallbacks[status];
-  if (!fallback) {
+}: SetStatusIconOptions<Status, Success>): TemplateResult {
+  if (status === success) {
     // `label` exposes the check's meaning to assistive technology; `title`
     // alone is a hover-only tooltip on an otherwise aria-hidden icon.
     const label = title ?? 'Set';
@@ -95,6 +102,8 @@ export function renderSetStatusIcon<Status extends string>({
       title: label,
     });
   }
+  // cast: a status other than `success` is a key of the total table.
+  const fallback = fallbacks[status as Exclude<Status, Success>];
   return html`<wa-tag variant=${fallback.variant ?? 'neutral'} size="s"
     >${fallback.label}</wa-tag
   >`;
@@ -117,6 +126,7 @@ export function renderKeyStatusIcon(
 ): TemplateResult {
   return renderSetStatusIcon({
     status,
+    success: 'secret',
     title: credentialOriginLabel('secret', 'key'),
     fallbacks: {
       env: { label: credentialOriginLabel('env', 'key') },

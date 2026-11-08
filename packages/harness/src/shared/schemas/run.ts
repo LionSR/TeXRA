@@ -3,7 +3,7 @@ import { Cause, Schema } from 'effect';
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
  * run end", decided exactly once at the run-lifecycle boundary. Current
- * production writers use these values for terminal run, group-end, and run
+ * production writers use these values for terminal run, stage-end, and run
  * state.
  *
  * `cancelled` is a sibling of `failed`, never folded into it — a user stop is
@@ -41,17 +41,6 @@ export const RunPositionSchema = Schema.Literals([
   'waiting',
 ]);
 export type RunPosition = typeof RunPositionSchema.Type;
-
-/**
- * A stage's status (`StageSchema.status`, from `stage.start` and
- * `stage.end` rows, and the run's end for a group still open): running, or
- * the outcome it closed with.
- */
-export const StageStatusSchema = Schema.Union([
-  Schema.Literal('running'),
-  RunOutcomeSchema,
-]);
-export type StageStatus = typeof StageStatusSchema.Type;
 
 export const WorktreeInfoSchema = Schema.Struct({
   /** Absolute path of the worktree the agent is operating in. */

@@ -91,12 +91,17 @@ export function createTerminalPane(
   injectXtermStyles();
 
   const sessions = new Map<string, TerminalSession>();
+  /** Theme tokens this pane already reported missing. */
+  const reportedTokens = new Set<string>();
 
   function createSession(sessionId: string): TerminalSession {
     const host = document.createElement('div');
     host.className = 'desktop-terminal-pane desktop-terminal-surface';
 
-    const { theme, fontFamily } = resolveXtermTheme(document.body);
+    const { theme, fontFamily } = resolveXtermTheme(
+      document.body,
+      reportedTokens,
+    );
     const terminal = new Terminal({
       allowProposedApi: true,
       convertEol: false,
@@ -185,7 +190,7 @@ export function createTerminalPane(
     },
 
     refreshTheme() {
-      const { theme } = resolveXtermTheme(document.body);
+      const { theme } = resolveXtermTheme(document.body, reportedTokens);
       for (const { terminal } of sessions.values())
         terminal.options.theme = theme;
     },

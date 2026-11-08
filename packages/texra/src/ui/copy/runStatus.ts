@@ -8,8 +8,10 @@
 import {
   isInterrupted,
   isPlainAgentIdentity,
+  type RunOutcome,
   type RunStanding,
   type RunView,
+  type Stage,
   type ToolCallStatus,
 } from '@texra-ai/harness/schemas';
 import type { IconName } from '@ui/wa/iconNames';
@@ -146,9 +148,26 @@ function sectionOf(run: RunStatusFacts): RunSection {
     : 'recent';
 }
 
-/** The word a status key reads as: a stage's status is a key too. */
+/** The word a status key reads as. */
 export function runStatusLabel(key: RunStatusKey): string {
   return RUN_STATUS[key].word;
+}
+
+/** How a stage reads: the outcome it closed with, or, while it is open, as
+ *  its run reads: interrupted when nobody drives the run any more (its
+ *  process died before the run's end closed the stage), else running. A
+ *  transcript shown without its run (null) reads an open stage as running. */
+export function stageStatus(
+  stage: Pick<Stage, 'outcome'>,
+  run: Pick<RunView, 'holder' | 'outcome'> | null,
+): Pick<RunStatus, 'word' | 'tone' | 'glyph'> & {
+  readonly key: RunOutcome | 'running' | 'interrupted';
+} {
+  const key =
+    stage.outcome ??
+    (run !== null && isInterrupted(run) ? 'interrupted' : 'running');
+  const { word, tone } = RUN_STATUS[key];
+  return { key, word, tone, glyph: TONE_GLYPH[tone] };
 }
 
 /**

@@ -2,8 +2,8 @@
  * Each run's trace sink (the session log's `publish`, `lost` and `closure`): its rows in the publisher's order, the
  * transient text of what it streams, and what it left open. A row the store
  * refused is the run's own to hear at its end (`lost`), never another
- * writer's; the text a committed row closes is dropped as the tail delivers
- * it (`committed`). The trace's one read side is those rows and that text
+ * writer's; the text a committed row closes is dropped as the publisher
+ * publishes it (`committed`). The trace's one read side is those rows and that text
  * read back (`replayTrace`).
  */
 import { Effect, Stream, Struct, SubscriptionRef } from 'effect';
@@ -17,7 +17,6 @@ import {
   aggregateTarget,
   TOOL_CALL_STATUS,
   type RunId,
-  type RunOutcome,
   type CommitOrdinal,
   type DisplayRow,
   type SessionRow,
@@ -30,7 +29,6 @@ import { boundsLifecycle, recordsOf } from '@shared/session/runFacts';
 import { closesRunWindow } from '@shared/session/runRowReads';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type {
-  ClosureFact,
   SessionLogShape,
   StreamClosure,
 } from '@shared/session/sessionLog';
@@ -38,7 +36,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { textSince, type InflightText } from './sessionSources';
 
-/** A session's trace sink, and the tail's hand-off of each committed row. */
+/** A session's trace sink, and the hand-off of each published row. */
 interface RunTraceSink extends Pick<
   SessionLogShape,
   'publish' | 'lost' | 'closure'
@@ -104,27 +102,15 @@ export function makeRunTrace({
       });
       return new Map(held).set(runId, rows);
     });
-  function closure(runId: RunId): StreamClosure[];
-  function closure(runId: RunId, outcome: RunOutcome): ClosureFact[];
-  function closure(runId: RunId, outcome?: RunOutcome): ClosureFact[] {
+  const closure = (runId: RunId): StreamClosure[] => {
     const aggregateId = qualifyAggregateId('run', runId);
-    return events
-      .openWork(aggregateId)
-      .flatMap(({ kind, id }): ClosureFact[] => {
-        if (kind === 'stream')
-          return [
-            {
-              type: 'stream.end',
-              aggregateId,
-              id,
-              finalText: readText(runId, id),
-            },
-          ];
-        return outcome === undefined
-          ? []
-          : [{ type: 'stage.end', aggregateId, id, status: outcome }];
-      });
-  }
+    return events.openWork(aggregateId).map(({ id }) => ({
+      type: 'stream.end',
+      aggregateId,
+      id,
+      finalText: readText(runId, id),
+    }));
+  };
   return {
     publish: (runId, event) => {
       if (refusedAfterClose()) return;

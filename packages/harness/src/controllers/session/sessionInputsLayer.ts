@@ -1,25 +1,38 @@
 /**
- * Read durable events before the live text that follows them. Changes in
- * the three source levels are only wakeups: each read captures text first,
- * then the log ordinal, and drains that finite prefix before yielding text.
- * Thus a committed run.start has reached this reader before its first chunk.
+ * Read durable events before the live text that follows them. The replay
+ * reads the store; after it the rows come from the publisher's batches as
+ * each job commits. Each step captures the text first, then the batches
+ * published by then, so a row committed before a chunk (the publisher
+ * applies chunks in its order) reaches this reader first.
  */
 // Node imports
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
+import {
+  type Context,
+  Effect,
+  Exit,
+  Layer,
+  PubSub,
+  Schedule,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
+  qualifyAggregateId,
   referencedAggregates,
   replayInputs,
   isDisplayRow,
   type AggregateId,
   type DisplayRow,
   type ExistenceReconciliation,
+  type LocalRuntimeState,
   type SessionViewInput,
   type TextChunk,
+  type TranscriptSubscription,
   type UnreadableRun,
 } from '@shared/schemas';
 import {
@@ -27,8 +40,13 @@ import {
   type AggregateState,
   type DatabaseReadFailed,
 } from '@shared/session/database';
+import {
+  SessionEvents,
+  type CommittedBatch,
+} from '@shared/session/sessionEvents';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { Settings } from '@shared/config/settings';
+import { LISTED_KINDS } from './projections';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -61,10 +79,52 @@ const requiredRead = <A>(
     Effect.orDie,
   );
 
+/**
+ * The replay a view starts from, read from the store as of `at`: the
+ * listing, the subscribed aggregates' rows, and the existence of every
+ * aggregate they name. A session's reader and a cold read of a store no
+ * session holds both start here.
+ */
+export const readReplay = Effect.fnUntraced(function* (
+  log: Context.Service.Shape<typeof Database>,
+  read: {
+    readonly debug: boolean;
+    readonly local: LocalRuntimeState;
+    readonly subscriptions: readonly TranscriptSubscription[];
+    readonly at: number;
+  },
+) {
+  const listing = (yield* requiredRead(log.readListing())).filter(isDisplayRow);
+  const checked = new Set<AggregateId>(read.subscriptions.map(({ id }) => id));
+  for (const event of listing)
+    for (const id of referencedAggregates(event)) checked.add(id);
+  const aggregateRows: DisplayRow[] = [];
+  for (const aggregate of read.subscriptions) {
+    aggregateRows.push(
+      ...(yield* requiredRead(
+        log.readDisplayAggregate(aggregate.id, aggregate.fromSeq),
+      )),
+    );
+  }
+  const checkedIds = [...checked];
+  const replayState = yield* requiredRead(
+    log.readInputBatch([], read.at, read.at, checkedIds),
+  );
+  return replayInputs({
+    debug: read.debug,
+    local: read.local,
+    listing,
+    subscriptions: read.subscriptions,
+    aggregateRows,
+    existence: reconcileExistence(checkedIds, replayState),
+  });
+});
+
 export const sessionInputsLayer = Layer.effect(
   SessionInputs,
   Effect.gen(function* () {
     const log = yield* Database;
+    const events = yield* SessionEvents;
     const local = yield* LocalRuntimeSource;
     const text = yield* TextChunkSource;
     const roots = yield* WorkspaceRoots;
@@ -80,113 +140,96 @@ export const sessionInputsLayer = Layer.effect(
               ? aggregates.map((entry) => ({ ...entry, fromSeq: 0 }))
               : aggregates;
             const effectiveCommit = reset ? 0 : fromCommit;
-            const anchor =
-              effectiveCommit === 0
-                ? yield* requiredRead(log.currentCommit)
-                : effectiveCommit;
-            const listing = (yield* requiredRead(log.readListing())).filter(
-              isDisplayRow,
-            );
-            const checked = new Set<AggregateId>(
-              effectiveAggregates.map(({ id }) => id),
-            );
-            for (const event of listing)
-              for (const id of referencedAggregates(event)) checked.add(id);
-            const aggregateRows: DisplayRow[] = [];
-            for (const aggregate of effectiveAggregates) {
-              aggregateRows.push(
-                ...(yield* requiredRead(
-                  log.readDisplayAggregate(aggregate.id, aggregate.fromSeq),
-                )),
-              );
-            }
-            const replayState = yield* requiredRead(
-              log.readInputBatch(
-                effectiveAggregates.map(({ id }) => id),
-                anchor,
-                [...checked],
-              ),
-            );
+            // Both before the head is read: every batch past it reaches
+            // them, one to wake this reader, one to take the batches from.
+            const wake = yield* events.subscribe;
+            const batches = yield* events.subscribe;
+            const head = events.head();
+            const anchor = effectiveCommit === 0 ? head : effectiveCommit;
             const initialLocal = yield* SubscriptionRef.get(local.ref);
-            const replay = replayInputs({
+            const replay = yield* readReplay(log, {
               debug,
               local: initialLocal,
-              listing,
               subscriptions: effectiveAggregates,
-              aggregateRows,
-              existence: reconcileExistence(replayState),
+              at: anchor,
             });
-            // Every level replays on subscribe; changes during the cold read
-            // are therefore covered by the first finite tail read.
+            const subscribed = new Set(aggregates.map(({ id }) => id));
+            /** What this view reads of a committed row: a listing kind of
+             *  any aggregate, any row of a subscribed one. */
+            const wanted = (row: DisplayRow) =>
+              LISTED_KINDS.has(row.type) || subscribed.has(row.aggregateId);
+            /** What the view starts behind the publisher: read once, by
+             *  the first step. */
+            const behind =
+              anchor < head
+                ? requiredRead(
+                    log.readInputBatch(
+                      aggregates.map(({ id }) => id),
+                      anchor,
+                      head,
+                      [],
+                    ),
+                  )
+                : Effect.succeed({ events: [], state: [], damaged: [] });
+            // Every level replays on subscribe, so the first step captures
+            // the text and the local state as of now.
             const wakes = Stream.mergeAll<unknown, never, never>(
               [
-                SubscriptionRef.changes(log.level),
+                Stream.flattenTake(Stream.fromSubscription(wake)),
                 SubscriptionRef.changes(local.ref),
                 SubscriptionRef.changes(text.ref),
               ],
               { concurrency: 3 },
             );
-            /** The durable half of a drain: the rows committed past
-             *  `from`, and the existence of the aggregates that changed
-             *  after `change` (the replay read every other one). */
-            const readDurable = (from: number, change: number) =>
-              requiredRead(
-                log.readInputBatch(
-                  aggregates.map(({ id }) => id),
-                  from,
-                  [],
-                  change,
-                ),
-              ).pipe(
-                Effect.map((read) => ({
-                  cursor: read.cursor,
-                  change: read.change,
-                  rows: read.events,
-                  existence: reconcileExistence(read),
-                })),
-              );
             const tail = wakes.pipe(
-              // Wakeups carry no data: the next read captures every source's
-              // current level. Retain one pending read, not a backlog of reads
-              // of the same state after a burst of text chunks.
+              // Wakeups carry no data: the next step takes every source's
+              // current state. Retain one pending step, not a backlog.
               Stream.buffer({ capacity: 1, strategy: 'dropping' }),
               Stream.mapAccumEffect(
-                () => {
-                  const text: InflightText = new Map();
-                  return {
-                    cursor: anchor,
-                    // The wake level the last durable read saw; none yet, so
-                    // the first drain reads.
-                    level: -1,
-                    text,
-                    local: initialLocal,
-                    // Every change the record holds: an aggregate that started
-                    // during the cold read is checked again once its rows are
-                    // in the view, not only by the replay.
-                    change: 0,
-                  };
-                },
+                () => ({
+                  cursor: anchor,
+                  first: true,
+                  text: new Map() as InflightText,
+                  local: initialLocal,
+                }),
                 Effect.fnUntraced(function* (previous) {
-                  // Text first, then the level: a row committed before a
-                  // chunk moved the level this read sees.
+                  // Text first, then the batches: a row committed before a
+                  // chunk was published before the chunk reached the text.
                   const nextText = yield* SubscriptionRef.get(text.ref);
                   const snapshot = yield* SubscriptionRef.get(local.ref);
-                  const level = yield* SubscriptionRef.get(log.level);
-                  // A burst of text, or a local change, moved no durable
-                  // state: only a new level is worth a database read.
-                  const { cursor, change, rows, existence } =
-                    level === previous.level
-                      ? {
-                          cursor: previous.cursor,
-                          change: previous.change,
-                          rows: [],
-                          existence: {
-                            checkedAggregateIds: [],
-                            present: [],
-                            unreadable: [],
-                          },
-                        }
-                      : yield* readDurable(previous.cursor, previous.change);
+                  const caughtUp = previous.first
+                    ? yield* behind
+                    : { events: [], state: [], damaged: [] };
+                  const from = previous.first
+                    ? Math.max(anchor, head)
+                    : previous.cursor;
+                  const taken = (yield* PubSub.takeUpTo(
+                    batches,
+                    Number.MAX_SAFE_INTEGER,
+                  )).flatMap((take): readonly CommittedBatch[] =>
+                    Exit.isExit(take) ? [] : take,
+                  );
+                  const cursor = Math.max(
+                    from,
+                    ...taken.map(({ through }) => through),
+                  );
+                  const rows = [
+                    ...caughtUp.events.filter(isDisplayRow),
+                    ...taken.flatMap(({ rows }) =>
+                      rows.filter((row) => row.commit > from && wanted(row)),
+                    ),
+                  ];
+                  // A removal closes its run and the runs under it, which
+                  // the marker names.
+                  const closed = rows.flatMap((row) =>
+                    row.type === 'run.removed'
+                      ? row.runIds.map((id) => qualifyAggregateId('run', id))
+                      : [],
+                  );
+                  const existence: ExistenceReconciliation = {
+                    ...reconcileExistence([], caughtUp),
+                    checkedAggregateIds: closed,
+                  };
                   // The snapshot was read before the rows: it goes before
                   // them, as in the replay.
                   const changed: SessionViewInput[] = isDeepStrictEqual(
@@ -204,10 +247,9 @@ export const sessionInputsLayer = Layer.effect(
                     inputs.length > 0 ||
                     rows.length > 0 ||
                     cursor !== previous.cursor ||
-                    existence.checkedAggregateIds.length > 0 ||
-                    // The first drain must publish the anchor: replay.complete
-                    // reconciles existence but does not advance the view cursor.
-                    previous.level === -1
+                    // The first step publishes the anchor: the replay
+                    // reconciles existence but moves no cursor.
+                    previous.first
                   ) {
                     // Every nonempty batch needs its closing marker so the
                     // webview decoder can release it as one complete read.
@@ -215,23 +257,15 @@ export const sessionInputsLayer = Layer.effect(
                   }
                   const batch: SessionViewInput[] = [
                     ...changed,
-                    ...rows
-                      .filter(isDisplayRow)
-                      .map((event): SessionViewInput => ({
-                        _tag: 'event',
-                        read: 'all',
-                        event,
-                      })),
+                    ...rows.map((event): SessionViewInput => ({
+                      _tag: 'event',
+                      read: 'all',
+                      event,
+                    })),
                     ...inputs,
                   ];
                   return [
-                    {
-                      cursor,
-                      level,
-                      text: nextText,
-                      local: snapshot,
-                      change,
-                    },
+                    { cursor, first: false, text: nextText, local: snapshot },
                     batch.length === 0 ? [] : [batch],
                   ] as const;
                 }),
@@ -247,13 +281,15 @@ export const sessionInputsLayer = Layer.effect(
 /** An aggregate a removal closed no longer exists, even while the
  *  `run.removed` row is still stored; the runs the read found this build
  *  cannot open (`damaged`) ride beside. */
-function reconcileExistence(read: {
-  readonly checkedAggregateIds: readonly AggregateId[];
-  readonly state: readonly AggregateState[];
-  readonly damaged: readonly UnreadableRun[];
-}): ExistenceReconciliation {
+function reconcileExistence(
+  checkedAggregateIds: readonly AggregateId[],
+  read: {
+    readonly state: readonly AggregateState[];
+    readonly damaged: readonly UnreadableRun[];
+  },
+): ExistenceReconciliation {
   return {
-    checkedAggregateIds: [...read.checkedAggregateIds],
+    checkedAggregateIds: [...checkedAggregateIds],
     present: read.state
       .filter((state) => !state.closed)
       .map(({ aggregateId }) => aggregateId),

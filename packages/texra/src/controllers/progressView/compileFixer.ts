@@ -8,6 +8,7 @@ import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 // Local imports - run facts and filesystem access
 import { decideRunModel, pathToLocationIn } from '@texra-ai/harness/host';
 import { entryTypeIn } from '@texra-ai/harness/node';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   Rejected,
@@ -93,11 +94,15 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
           (option) => option.value === model && isModelOptionAvailable(option),
         ),
     );
-    if (!decision || decision.unavailable) {
+    if (!decision || decision._tag === 'Unavailable') {
       return yield* new Rejected({
         reason: 'No model is available to launch latexFixer.',
       });
     }
+    if (decision._tag === 'Fallback')
+      yield* Effect.logWarning(`latexFixer: ${decision.notice}`).pipe(
+        withLogChannel('CompileFixer'),
+      );
 
     const model = decision.model;
     const targets = yield* compileFixerTargets(

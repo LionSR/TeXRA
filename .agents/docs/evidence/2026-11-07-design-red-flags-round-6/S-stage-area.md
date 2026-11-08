@@ -551,3 +551,41 @@ and fails on `main`):
   `toolFormatters/helpers.ts`), `styles/groupStyles.ts`
 - `packages/harness/AGENTS.md` "Event channels and cards" (the script-stage
   sentence).
+
+### Landed (PR 1, `simplify/s-stages-part-1`)
+
+Re-read on `main` `4f35cec`, after #14836's renames. In order:
+
+- **Finding 2.** A `Stage` stores `outcome: RunOutcome | null`;
+  `StageStatus` is deleted. `stageStatus(stage, run)` in
+  `packages/texra/src/ui/copy/runStatus.ts` reads an open stage as its run
+  reads (interrupted when nobody drives the run), used by `StageList` and
+  the CLI's `DocumentTaskRunDetails.tsx`, with one regression test
+  (`packages/texra/test/ui/stageStatus.vitest.ts`, failing on `main`). The
+  dead `is-${status}` class went. `terminalStatusIcon` stays for script
+  calls' statuses (`ScriptStage.ts`), which are not stage statuses.
+- **Finding 1.** The run, turn and process-run stages, `stagedBy`,
+  `parentStage` and `stageLabel` are deleted. Re-verification showed the run
+  and turn stages grouped no rows at all (no writer stamped their ids on a
+  member), so no fold grouping by `run.position` was needed; the turn
+  stage's one reader (resetting the turn's response stream) is now
+  `turn.begin` and `run.activate`. With the run stage gone nothing wrote a
+  parent edge, so `stage.start.parentId`, `Stage.parentStageId` and
+  `StageHandle.child` went too (finding 4's `card` edge is still PR 2's).
+  The documents plugin's `Revision 1` section is one `acquireUseRelease`
+  span closed on the call's exit (`outcomeFromCause`, now exported from
+  `@texra-ai/harness/schemas`); every non-script stage renders as a
+  collapsible section in the progress view, a script stage as before.
+- **Finding 3.** The publisher tracks streams only; `closure` has no
+  outcome overload and `ClosureFact` and `StageHandleImpl.ended` are gone.
+- **Finding 5.** `StageKindSchema` and `StageOptions` are deleted. Finding
+  4 was not needed for it: only the script dispatch puts a card under a
+  stage, so `isScriptCall` (a tool card under a stage) answers the three
+  `script` readers.
+- **Finding 9.** `TranscriptContext.lifecycleStages`, the `stage` slot kind
+  and its heading row are deleted.
+
+Format: `stage.start` v3, the CLI NDJSON contract 3, the golden store
+regenerated. Left for PR 2: findings 4 (`Stage.card`, `script.call.stageId`,
+the `script-` id grammar), 6, 7, 8 (`StageHandle`, `LogOptions.stageId`)
+and 10.

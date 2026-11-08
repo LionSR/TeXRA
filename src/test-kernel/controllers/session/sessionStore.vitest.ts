@@ -142,11 +142,16 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
                 (row) => row.run === runId && row.type === 'tool.start',
               ),
             );
-            // Every read the view's updater retries fails: it dies, so the
-            // rename below commits but never reaches the view.
+            // Every read the view's updater retries fails: a second reader's
+            // set makes it replay, it dies, so the rename below commits but
+            // never reaches the view.
             const faults = yield* sessionStoreFaults(roots.storage);
             for (let read = 0; read < 6; read += 1)
               yield* faults.failNext('readInputBatch');
+            yield* Context.get(session, SessionViewAccess).subscribe([
+              { id: qualifyAggregateId('run', runId), fromSeq: 0 },
+              { id: qualifyAggregateId('run', generateRunId()), fromSeq: 0 },
+            ]);
 
             const renamed = yield* Effect.exit(
               Context.get(session, SessionRequests)

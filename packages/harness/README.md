@@ -365,6 +365,11 @@ the session store's source; in short:
   nothing was written. A run whose aggregate closed under it stops, with no
   retry. A project store another process holds does not open at all: the
   open fails with `STORE_HELD_MESSAGE`.
+- **S6** A run's deletion was asked against a lifetime that has since ended
+  (`RunChanged`, typed): nothing was written, and the request says the run
+  started again. A row that breaks the store's own rules (a second
+  `run.start`) is the writer's defect: it fails the writing fiber, never
+  as a failed write.
 
 ## Generated files and deletion
 

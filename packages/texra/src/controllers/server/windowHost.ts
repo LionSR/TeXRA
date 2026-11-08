@@ -113,8 +113,9 @@ const unoffered = (call: HostCall) => Effect.fail(unofferedError(call));
  * life; returns once the service (or, for a link to this process, its own
  * windows) holds the attachment. `focused` emits when
  * the window gains focus, so the project's calls come here first. When the
- * link loses the service, the window goes on with its own process's
- * capabilities, and attaches again to the service the link reaches next.
+ * link loses the service, the attachment ends and the window waits: no call
+ * reaches it, its session refuses with the link's offline reason, and it
+ * attaches again to the service the link reaches next.
  */
 export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
   Client extends WindowClient,

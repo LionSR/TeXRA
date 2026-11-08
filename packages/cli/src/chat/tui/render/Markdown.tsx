@@ -10,7 +10,7 @@ import { renderAnsiMarkdown } from './ansiMarkdown';
 
 interface MarkdownProps {
   readonly content: string;
-  readonly width?: number;
+  readonly width: number;
 }
 
 // Memoized: props are scalars, so unchanged entries skip even the LRU lookup

@@ -8,9 +8,9 @@
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
+import { app } from 'electron';
 import { Effect, type Scope } from 'effect';
 
-import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   linkService,
   spawnService,
@@ -19,33 +19,26 @@ import {
 import type { GlobalValues } from '@texra-ai/harness/host';
 
 /** The service bundle: the packaged app's, or the extension build's in a
- *  development run. */
-function serviceBundle(mainDir: string): string | undefined {
-  return [
-    path.join(process.resourcesPath, 'serve', 'texra-serve.mjs'),
-    path.join(mainDir, '../../../extension/serve/texra-serve.mjs'),
-  ].find((candidate) => existsSync(candidate));
-}
+ *  development run, as `app.isPackaged` says. */
+const serviceBundle = (mainDir: string): string =>
+  app.isPackaged
+    ? path.join(process.resourcesPath, 'serve', 'texra-serve.mjs')
+    : path.join(mainDir, '../../../extension/serve/texra-serve.mjs');
 
 /**
  * Hold the service of `dataRoot`, starting it when none answers, for the
- * caller's scope; the link reaches it again when it goes away. Only the user's own `~/.texra` has one: a profile kept
- * elsewhere (a test's) runs its tasks in the app.
+ * caller's scope; the link reaches it again when it goes away.
  */
 export function reachDesktopService(
   dataRoot: string,
   mainDir: string,
 ): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> {
   return Effect.suspend(() => {
-    if (dataRoot !== defaultNodeStorageRoot())
-      return Effect.fail(
-        new Error(
-          `the app keeps its data in ${dataRoot}, outside ${defaultNodeStorageRoot()}`,
-        ),
-      );
     const bundle = serviceBundle(mainDir);
-    if (bundle === undefined)
-      return Effect.fail(new Error('this build ships no service bundle'));
+    if (!existsSync(bundle))
+      return Effect.fail(
+        new Error(`this build has no service bundle at ${bundle}`),
+      );
     return linkService(
       dataRoot,
       spawnService(dataRoot, process.execPath, [bundle, 'serve'], {

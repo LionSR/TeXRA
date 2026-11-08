@@ -176,25 +176,20 @@ const keepAgent = Effect.fn('keepAgent')(function* (name: string) {
   yield* cliPlatform;
   const catalog = yield* AgentCatalog;
   const custom = catalog.get(agentKey('custom', name));
-  const kept =
-    custom &&
-    (yield* catalog
-      .customize(custom, 'keep')
-      .pipe(
-        Effect.catchTag('AgentCustomizeRefused', () =>
-          Effect.succeed(undefined),
-        ),
-      ));
-  if (!custom || kept === undefined) {
-    return refuse(`${name} has no newer built-in version to dismiss.`);
-  }
-  yield* emitCopyResult({
-    action: 'kept',
-    name,
-    path: custom.path,
-    text: `Kept your ${name}; it is now based on the current built-in version.`,
-  });
-  return CliExitCode.Success;
+  if (!custom) return refuse(`${name} has no custom copy.`);
+  return yield* catalog.customize(custom, 'keep').pipe(
+    Effect.flatMap(() =>
+      emitCopyResult({
+        action: 'kept',
+        name,
+        path: custom.path,
+        text: `Kept your ${name}; it is now based on the current built-in version.`,
+      }).pipe(Effect.as(CliExitCode.Success)),
+    ),
+    Effect.catchTag('AgentCustomizeRefused', (refused) =>
+      Effect.succeed(refuse(refused.message)),
+    ),
+  );
 });
 
 const NAME_ARG = {
