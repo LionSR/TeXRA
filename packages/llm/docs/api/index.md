@@ -223,12 +223,15 @@ model has on `options.route`.
 - Any other level the model lacks becomes the nearest level it has (ties
   go up), reported in `note`.
 
+A request the model cannot run as asked is the failure, a value the
+caller branches on.
+
 ```ts
 function chooseReasoning(
   config: Pick<ModelConfig, 'label' | 'provider' | 'reasoning' | 'modes'>,
   request: ReasoningRequest = {},
   options: ChooseReasoningOptions = {},
-): ReasoningChoice
+): Result.Result<ReasoningChoice, ReasoningChoiceError>
 ```
 
 ## ChooseReasoningOptions

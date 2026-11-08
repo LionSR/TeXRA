@@ -356,6 +356,7 @@ export {
   MESSAGE_TYPES,
   MODEL_AVAILABILITY_STATUS,
   ModelAvailabilityKindSchema,
+  DeclinableUsageRouteSchema,
   type NormalizedUsage,
   NullableFileFieldsSchema,
   type Plan,

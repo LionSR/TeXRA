@@ -180,15 +180,17 @@ const followedPorts = (current: Ref.Ref<InstalledHost>) => {
  * The services a host's `ProcessRuntime` holds, one tag each, for
  * `Context.pick`: the `ProcessServices` type is a union nothing enumerates
  * as values, so they are listed once here. Every process serves the
- * platform services (`PlatformServices`): its `ProcessIdentity`, the Node
+ * platform services (`PlatformServices`): the Node
  * `FileSystem`, `Path` and `ChildProcessSpawner`, `GlobalStorageFs`, the
- * `GlobalDatabase` and `ProjectDatabases` handles, the `HttpClient`,
+ * `GlobalDatabase` handle, the `HttpClient`,
  * `Secrets` with its `SubscriptionAccounts`, `AppState`, `AgentDirectories`,
  * `GlobalValues`, `StateStores`, `UsageLog` and `AppSignals`. The agent runtime adds (`RunServices`) the
  * `AgentCatalog`, the model routes' `RouteRetries` gate, the `ToolRegistry`
  * and `ToolAvailability`; the composition adds its `ToolCatalog`; and a
  * composition root opens its sessions through `Sessions`, with the internal
- * `SessionOwner` beside it, which the suites' root launches ask.
+ * `SessionOwner`, the project stores (`ProjectDatabases`) and the process's
+ * `ProcessIdentity` beside it, which the suites' root launches and store
+ * faults ask.
  */
 const PROCESS_SERVICES = [
   ProcessIdentity,
@@ -216,6 +218,16 @@ const PROCESS_SERVICES = [
   SessionOwner,
 ] as const;
 
+/** What the kernel's process serves: a host's, and the internal services
+ *  the suites read beside it (`SessionOwner`, the project stores and the
+ *  process identity), which `processLayer`'s type omits. */
+type KernelProcess =
+  | ProcessServices
+  | Sessions
+  | SessionOwner
+  | ProjectDatabases
+  | ProcessIdentity;
+
 /** The process over the host's app (its settings and plugins) and `extra`, its validation route
  *  served by `model`, built over the block's host. */
 const composedProcess = (
@@ -224,7 +236,9 @@ const composedProcess = (
 ) =>
   // `processLayer` serves the internal `SessionOwner` beside `Sessions`
   // (provideMerge); the suites' root launches and `sessionHandleOf` ask it.
-  // cast: the process layer provides `SessionOwner`, which its type omits.
+  // It serves the project stores and the process identity the same way;
+  // the store faults borrow a project's store through them.
+  // cast: the process layer provides these, which its type omits.
   Layer.unwrap(
     Effect.gen(function* () {
       const host = yield* FakeHost;
@@ -248,11 +262,7 @@ const composedProcess = (
         minimumLogLevel: 'Trace',
       }).pipe(Layer.provide(model));
     }),
-  ) as Layer.Layer<
-    ProcessServices | Sessions | SessionOwner,
-    never,
-    FakeHost | CurrentHost
-  >;
+  ) as Layer.Layer<KernelProcess, never, FakeHost | CurrentHost>;
 
 /**
  * The process a host composes, as a layer over the block's fake host:
@@ -296,21 +306,15 @@ export const SessionGraph = {
    * otherwise register its cleanup against the block layer's scope.
    */
   runtime: Effect.acquireRelease(
-    Effect.map(
-      Effect.context<ProcessServices | Sessions | SessionOwner>(),
-      (context) =>
-        withForkFailureReporting(
-          ManagedRuntime.make(
-            Layer.succeedContext(Context.pick(...PROCESS_SERVICES)(context)),
-          ),
+    Effect.map(Effect.context<KernelProcess>(), (context) =>
+      withForkFailureReporting(
+        ManagedRuntime.make(
+          Layer.succeedContext(Context.pick(...PROCESS_SERVICES)(context)),
         ),
+      ),
     ),
     (runtime) => runtime.disposeEffect,
-  ) satisfies Effect.Effect<
-    ProcessRuntime,
-    never,
-    ProcessServices | Sessions | SessionOwner | Scope.Scope
-  >,
+  ) satisfies Effect.Effect<ProcessRuntime, never, KernelProcess | Scope.Scope>,
 };
 
 /**

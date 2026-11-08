@@ -337,13 +337,15 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     takesFollowUps: event.takesFollowUps,
     context: null,
     parentId: event.parent?.id ?? null,
-    launchParentId: event.parent?.id ?? null,
+    launch:
+      event.parent === null
+        ? null
+        : { id: event.parent.id, card: event.parent.call?.card ?? null },
     forkedFrom:
       event.provenance?.kind === 'fork'
         ? { id: event.provenance.from.id, at: event.provenance.at }
         : null,
     forkPoint: null,
-    parentCard: event.parent?.call?.card ?? null,
     ancestors: [],
     childIds: [],
     rollup: { total: 0, running: 0, finished: 0 },

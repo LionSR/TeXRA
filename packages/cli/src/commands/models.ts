@@ -34,19 +34,12 @@ import type { CliContext } from '../runtime/platform/cliContext';
  * stderr line and `ModelOrNetworkError`. Each command hands it to
  * `defineCliCommand` as its `catchExitCode`, so a failure of the process
  * runtime build — which happens before any program below can handle it —
- * reads the same way an init failure inside one does.
+ * reads the same way an init failure inside one does. Opening the platform
+ * and reading the model options touch only local stores, so no failure here
+ * is a network one.
  */
 function reportModelPlatformFailure(cause: unknown): number {
-  const message = toErrorMessage(cause);
-  const detail =
-    cause instanceof Error && cause.cause instanceof Error
-      ? toErrorMessage(cause.cause)
-      : message;
-  writeTextStderr(
-    /ENOTFOUND|EAI_AGAIN|getaddrinfo|fetch failed/i.test(detail)
-      ? `texra: could not reach the network to list models: ${detail}`
-      : `texra: could not list models: ${message}`,
-  );
+  writeTextStderr(`texra: could not list models: ${toErrorMessage(cause)}`);
   return CliExitCode.ModelOrNetworkError;
 }
 

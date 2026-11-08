@@ -5,7 +5,7 @@
  * this table and the Responses vendors' (`responsesConfiguration.ts`), so a
  * caller never spells a wire field.
  */
-import { Schema } from 'effect';
+import { Result, Schema } from 'effect';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ModelError, PLAN_ROUTES } from '../errors.js';
@@ -150,9 +150,17 @@ export function configurationFor(spec: BindSpec): {
       message: `No protocol serves ${config.provider} models.`,
     });
   }
+  // The model's default reasoning on the route, unless the spec names one;
+  // a default the route cannot carry is the spec's invalid request.
+  const reasoning =
+    spec.options?.reasoning ??
+    Result.getOrThrowWith(
+      chooseReasoning(config, {}, { route }),
+      ({ message }) => new ModelError({ kind: 'invalid-request', message }),
+    );
   const options: Options = {
     maxOutputTokens: config.maxOutputTokens,
-    reasoning: chooseReasoning(config, {}, { route }),
+    reasoning,
     serverState: false,
     fastTier: false,
     webSocket: false,

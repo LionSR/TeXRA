@@ -278,9 +278,9 @@ export const replaceRuns = (
       // Only a run still under its parent names the launching call: a
       // detached child's parent, and its rows, may be gone.
       parent_call_position:
-        run.parentId === null || run.parentCard === null
+        run.parentId === null || run.launch?.card == null
           ? null
-          : (fed.calls.byCard.get(run.parentCard) ?? null),
+          : (fed.calls.byCard.get(run.launch.card) ?? null),
       kind: cutText(run.identity.kind),
       name: cutText(runIdentityName(run.identity)),
       model: cutText(run.model),

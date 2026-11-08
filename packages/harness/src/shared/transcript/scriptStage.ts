@@ -2,7 +2,7 @@
  * The script stage as every host shows it: the calls a `script` call issued,
  * read from their cards (the tool rows under the script's `script` stage)
  * and, for an `agent` call, from the child run its card launched
- * (`RunView.parentCard`). One model for the progress view, the terminal
+ * (`RunView.launch.card`). One model for the progress view, the terminal
  * popup and a headless run; a host only decides how a row looks.
  *
  * Nothing here is a fact of its own: a status is the card's, read with its
@@ -175,7 +175,7 @@ function callView(
   // The newest child this card launched: a re-run attempt launches its own.
   const child = run.childIds
     .map((id) => view.runs.get(id))
-    .findLast((candidate) => candidate?.parentCard === row.id);
+    .findLast((candidate) => candidate?.launch?.card === row.id);
   const status = statusOf(row, agent, child, isInterrupted(run));
   const asking = child === undefined ? undefined : askingRun(view, child);
   const request =
@@ -282,7 +282,7 @@ export function isScriptCall(row: ReadonlyDeep<TranscriptRow>): row is Extract<
 /**
  * The runs `run` launched that are not a script's calls: what its dispatch
  * card lists (a direct `agent` call that detached, a background script's
- * run). A child whose card (`parentCard`) sits under a script stage, awaited
+ * run). A child whose card (`launch.card`) sits under a script stage, awaited
  * or sent to the background, has its one home in that stage's rows.
  */
 export function dispatchedChildren<Run extends RunView>(
@@ -295,7 +295,7 @@ export function dispatchedChildren<Run extends RunView>(
   return run.childIds.flatMap((id) => {
     const child = view.runs.get(id);
     return child === undefined ||
-      (child.parentCard !== null && scriptCards.has(child.parentCard))
+      (child.launch?.card != null && scriptCards.has(child.launch.card))
       ? []
       : [child];
   });
@@ -321,7 +321,7 @@ export function scriptStages(
     let costUsd = 0;
     for (const childId of run.childIds) {
       const child = view.runs.get(childId);
-      if (child?.parentCard != null && cards.has(child.parentCard))
+      if (child?.launch?.card != null && cards.has(child.launch.card))
         costUsd += child.treeUsage.cost;
     }
     return [

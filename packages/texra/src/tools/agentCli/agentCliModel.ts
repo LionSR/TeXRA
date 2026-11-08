@@ -14,7 +14,6 @@ import {
   type ChooseReasoningOptions,
   type ModelConfig,
   type ReasoningChoice,
-  ReasoningChoiceError,
   type SelectedModel,
   selectModel,
 } from '@texra-ai/llm';
@@ -66,15 +65,23 @@ export function agentCliReasoning(
   selection: SelectedModel,
   effort: AgentCliEffort | undefined,
   options: ChooseReasoningOptions,
-): AgentCliModel {
+): Effect.Effect<AgentCliModel, ToolError> {
   const request =
     effort === undefined ? selection.request : { ...selection.request, effort };
-  const choice = chooseReasoning(selection.config, request, options);
-  const sent = Schema.decodeUnknownResult(AgentCliEffortSchema)(choice.effort);
-  return {
-    choice,
-    effort: Result.isSuccess(sent) ? sent.success : undefined,
-  };
+  return Effect.fromResult(
+    chooseReasoning(selection.config, request, options),
+  ).pipe(
+    Effect.mapError((error) => new ToolError(error.message, { cause: error })),
+    Effect.map((choice) => {
+      const sent = Schema.decodeUnknownResult(AgentCliEffortSchema)(
+        choice.effort,
+      );
+      return {
+        choice,
+        effort: Result.isSuccess(sent) ? sent.success : undefined,
+      };
+    }),
+  );
 }
 
 /** Run a model/effort resolution, reporting a refusal as the tool's error. */
@@ -86,10 +93,7 @@ export const resolveAgentCliModel = <A>(
     catch: (error) =>
       error instanceof ToolError
         ? error
-        : new ToolError(
-            error instanceof ReasoningChoiceError
-              ? error.message
-              : `Model selection failed: ${String(error)}`,
-            { cause: error },
-          ),
+        : new ToolError(`Model selection failed: ${String(error)}`, {
+            cause: error,
+          }),
   });
