@@ -5,13 +5,14 @@ import assert from 'node:assert/strict';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Schema, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 import {
   completedTurn,
   RemoteOperationSchema,
   type TurnRequest,
 } from '@texra-ai/llm';
 import { googleInteractionsModel } from '../../../packages/llm/src/api/googleInteractions.js';
+import { judgedModel } from '../../../packages/llm/src/api/verdict.js';
 
 const REQUEST: TurnRequest = {
   system: 'Use both tools.',
@@ -50,6 +51,24 @@ function response(events: unknown[]): Response {
 
 describe('canonical Google Interactions protocol', () => {
   const fetchModel = vi.fn<typeof fetch>();
+  const configuredModel = () =>
+    googleInteractionsModel(
+      {
+        protocol: 'google-interactions',
+        requestedModel: 'gemini-test',
+        background: 'supported',
+        deployment: {
+          endpoint: 'https://synthetic.invalid',
+          credentialScope: 'test-account',
+        },
+        defaults: {
+          maxOutputTokens: 2048,
+          store: true,
+          thinkingLevel: 'high',
+        },
+      },
+      { apiKey: 'synthetic-key', fetch: fetchModel },
+    );
   /** The Request the model sent on fetch call `index`. */
   const sentRequest = (index: number): Request => {
     const [input] = fetchModel.mock.calls[index];
@@ -72,33 +91,13 @@ describe('canonical Google Interactions protocol', () => {
         },
       ]),
     );
-    vi.stubGlobal('fetch', fetchModel);
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
   });
 
   it.effect(
     'submits once, polls signed tool calls, and replays their canonical results',
     () =>
       Effect.gen(function* () {
-        const configured = googleInteractionsModel(
-          {
-            protocol: 'google-interactions',
-            requestedModel: 'gemini-test',
-            background: 'supported',
-            deployment: {
-              endpoint: 'https://synthetic.invalid',
-              credentialScope: 'test-account',
-            },
-            defaults: {
-              maxOutputTokens: 2048,
-              store: true,
-              thinkingLevel: 'high',
-            },
-          },
-          { apiKey: 'synthetic-key' },
-        );
+        const configured = configuredModel();
         const turn = yield* configured.prepareTurn({
           ...REQUEST,
           mode: 'background',
@@ -320,29 +319,75 @@ describe('canonical Google Interactions protocol', () => {
           { status: 429, headers: { 'retry-after': '7' } },
         ),
       );
-      const configured = googleInteractionsModel(
-        {
-          protocol: 'google-interactions',
-          requestedModel: 'gemini-test',
-          background: 'supported',
-          deployment: {
-            endpoint: 'https://synthetic.invalid',
-            credentialScope: 'test-account',
-          },
-          defaults: {
-            maxOutputTokens: 2048,
-            store: true,
-            thinkingLevel: 'high',
-          },
-        },
-        { apiKey: 'synthetic-key' },
-      );
+      const configured = configuredModel();
       const turn = yield* configured.prepareTurn(REQUEST);
       assert(turn.mode === 'foreground');
       const failure = yield* Effect.flip(
         completedTurn(configured.streamTurn(turn)),
       );
       expect(failure).toMatchObject({ status: 429, retryAfterMs: 7000 });
+    }),
+  );
+
+  // Failure mode: after a checkpoint followed by EOF, the SDK can issue a
+  // second billed request despite maxRetries: 0. A turn must fail at that
+  // boundary so its caller alone decides whether to issue another request.
+  it.effect('does not resume a dropped stream through an SDK checkpoint', () =>
+    Effect.gen(function* () {
+      fetchModel.mockImplementationOnce(async () =>
+        response([
+          {
+            event_type: 'interaction.created',
+            interaction: { id: 'int_1', status: 'in_progress' },
+          },
+          {
+            event_type: 'interaction.status_update',
+            interaction_id: 'int_1',
+            status: 'in_progress',
+            continuation_token: 'synthetic-checkpoint',
+          },
+        ]),
+      );
+      const configured = configuredModel();
+      const turn = yield* configured.prepareTurn(REQUEST);
+      assert(turn.mode === 'foreground');
+      const failure = yield* Effect.flip(
+        completedTurn(configured.streamTurn(turn)),
+      );
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+      expect(failure).toMatchObject({
+        kind: 'provider-rejection',
+        responseId: 'int_1',
+        message: 'Google ended without an identified terminal result.',
+      });
+    }),
+  );
+
+  // Failure mode: judging a cancellation refusal must not turn the
+  // lifecycle's explicit non-retryable result into a retryable rejection.
+  it.effect('keeps a completed cancellation target non-retryable', () =>
+    Effect.gen(function* () {
+      const configured = judgedModel(configuredModel(), 'api-key');
+      const turn = yield* configured.prepareTurn({
+        ...REQUEST,
+        mode: 'background',
+      });
+      const background = configured.background;
+      assert(background);
+      const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
+        origin: turn,
+        providerResponseId: 'int_1',
+      });
+      fetchModel.mockImplementationOnce(async () =>
+        Response.json({ id: 'int_1', status: 'completed' }),
+      );
+      expect(yield* Effect.flip(background.cancel(operation))).toMatchObject({
+        kind: 'provider-rejection',
+        retryable: false,
+        operation,
+        message:
+          'The background response int_1 was not cancelled; it is completed.',
+      });
     }),
   );
 });
