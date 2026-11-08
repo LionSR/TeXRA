@@ -926,7 +926,7 @@ its title.
 - **4 write points**:
   `src/test-kernel/support/crashConformance.ts#'resumes from every commit point to the clean outcome, running nothing twice'`
 - **5 fold**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'holds the batch contract: a mismatched delivery dies, a loose-keyed attachment is accepted'`;
+  `src/test-kernel/shared/session/runHistory.vitest.ts#'holds the batch contract: a mismatched delivery dies, a loose-keyed attachment is accepted'`;
   `src/test-kernel/controllers/session/goldenStore.vitest.ts#'folds to the pinned session view and run states'`
 - **6 retry**:
   `src/test-kernel/agent/runtime/RetryState.vitest.ts#'admits a manual retry through a durable approval'`,
