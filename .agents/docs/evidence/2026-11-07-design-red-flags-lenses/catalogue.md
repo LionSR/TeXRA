@@ -99,7 +99,7 @@ with no row:
 - the harness examples are outside the root typecheck: twice this wave
   (#14871, #14873) the `packed example` job alone caught an example reading
   a field the PR had renamed; `npm run typecheck` does not reach
-  `packages/harness/examples/`;
+  `packages/harness/example/`;
 - the full `validate:tui` run fails 14 of 144 scenarios on `main`
   (#14875 measured it at `157f775`); CI runs only `--smoke`.
 
