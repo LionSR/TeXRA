@@ -1347,10 +1347,10 @@ interface PluginDefinition<ROut> extends Omit<
 
 ## PluginFactRejected
 
-A fact about its plugin's own aggregate that its writer refused in the
-job: its kind's rule (`FactKind.accepts`) rejected it against the
-aggregate's latest row, or it moves the aggregate under a run the store
-no longer holds open. Nothing was written.
+A plugin fact its writer refused in the job: its kind's rule
+(`FactKind.accepts`) rejected it against the aggregate's latest row, or
+it moves a plugin's aggregate under a run the store no longer holds
+open. Nothing was written.
 
 ```ts
 class PluginFactRejected extends Schema.TaggedError<PluginFactRejected>()(
