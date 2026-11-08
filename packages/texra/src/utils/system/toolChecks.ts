@@ -162,8 +162,8 @@ const PREFERRED_PACKAGE_MANAGER: Readonly<
 
 /**
  * Detect the first available package manager on the system.
- * Returns 'brew', 'apt', 'scoop', or null if none found. Each answer comes
- * from {@link hasPackageManager}, which owns the probe cache.
+ * Returns 'brew', 'apt', 'scoop', or null if none found. Each answer is a
+ * {@link hasPackageManager} PATH lookup, made on each call.
  */
 export function detectPackageManager(): SystemPackageManager | null {
   const first = PREFERRED_PACKAGE_MANAGER[process.platform];

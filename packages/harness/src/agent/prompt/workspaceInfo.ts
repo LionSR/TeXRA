@@ -7,7 +7,6 @@ import { DateTime, Effect } from 'effect';
 
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
-import type { SettingsStores } from '@shared/config/settings';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { executeCommand } from '@utils/system/execUtils';
 import { envVar } from '@utils/system/envFlags';
@@ -58,11 +57,8 @@ function getPlatformLabel(): string {
  * Gather git repository information for the workspace.
  * Returns null if the workspace is not a git repo or git is unavailable.
  */
-const getGitInfo = Effect.fn(function* (
-  workspaceRoot: string,
-  settings: SettingsStores | undefined,
-) {
-  const opts = { cwd: workspaceRoot, settings, timeout: GIT_TIMEOUT_MS };
+const getGitInfo = Effect.fn(function* (workspaceRoot: string) {
+  const opts = { cwd: workspaceRoot, timeout: GIT_TIMEOUT_MS };
   const runGit = (...args: string[]) => executeCommand(['git', ...args], opts);
 
   // Deliberately not isGitRepository(): that also requires stdout === 'true',
@@ -104,18 +100,14 @@ const getGitInfo = Effect.fn(function* (
  * that help the LLM understand the user's workspace context.
  *
  * @param wsPath - The run's workspace root, or undefined when no folder is open.
- * @param settings - The same session's setting slots, carried beside the root:
- * the git reads below spawn with that project's configured identity instead of
- * one resolved from ambient state. `undefined` where the caller has none.
  */
 export const buildWorkspaceInfoBlock = Effect.fn(function* (
   wsPath: string | undefined,
-  settings: SettingsStores | undefined,
 ) {
   const platform = getPlatformLabel();
   const shell = yield* detectShell;
   const date = DateTime.formatIsoDateUtc(yield* DateTime.now);
-  const git = wsPath ? yield* getGitInfo(wsPath, settings) : null;
+  const git = wsPath ? yield* getGitInfo(wsPath) : null;
 
   const lines: string[] = [];
 
