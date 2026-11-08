@@ -26,7 +26,7 @@ import process from 'node:process';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Result, Scope, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - the package under test
@@ -206,7 +206,9 @@ function bind(spec: LiveProtocol, apiKey: string): Model {
       maxOutputTokens: 2048,
       temperature: 0,
       // Chosen on the route, as a run's binding chooses it.
-      reasoning: chooseReasoning(selected.config, selected.request, { route }),
+      reasoning: Result.getOrThrow(
+        chooseReasoning(selected.config, selected.request, { route }),
+      ),
       serverState: true,
     },
   });

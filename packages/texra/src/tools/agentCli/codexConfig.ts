@@ -97,21 +97,19 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
     selectAgentCliModel(modelString, CODEX_MODEL_RULE),
   );
   const slug = codexBackendModelId(selection.config);
-  const uncapped = yield* resolveAgentCliModel(() =>
-    agentCliReasoning(selection, undefined, { userEffort }),
-  );
+  const uncapped = yield* agentCliReasoning(selection, undefined, {
+    userEffort,
+  });
   const { effort } = uncapped.choice;
   const resolved =
     effort === null || rank(effort) <= rank(ReasoningEffort.HIGH)
       ? uncapped
       : yield* codexRouteEfforts(binaryPath, slug).pipe(
           Effect.flatMap((routeEfforts) =>
-            resolveAgentCliModel(() =>
-              agentCliReasoning(selection, undefined, {
-                userEffort,
-                routeEfforts,
-              }),
-            ),
+            agentCliReasoning(selection, undefined, {
+              userEffort,
+              routeEfforts,
+            }),
           ),
         );
   return {
