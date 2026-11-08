@@ -2,7 +2,6 @@
 
 import {
   appendFileSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -903,37 +902,75 @@ prompt: |
   }
 }
 
-/**
- * The rows `sql` selects from the store in `dir`, read from a copy of its
- * `texra.db` and write-ahead log: the process that holds a project store (a
- * service, a chat, a headless run) admits no other connection, so the
- * validator reads what the holder has committed to the files. The log is
- * copied first: a holder that closes after that has checkpointed it into
- * the file the copy takes next, and a store with no log has it all there.
+/** Read durable rows only after the scenario's owning session has closed.
+ * A live owner holds EXCLUSIVE: opening this connection then must fail,
+ * rather than manufacturing a snapshot from separately copied DB/WAL files.
  */
 function storeRows(dir, sql, ...params) {
-  const copy = mkdtempSync(path.join(tmpdir(), 'texra-validate-store-'));
+  const db = new DatabaseSync(path.join(dir, 'texra.db'), { readOnly: true });
   try {
-    try {
-      copyFileSync(
-        path.join(dir, 'texra.db-wal'),
-        path.join(copy, 'texra.db-wal'),
-      );
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-    copyFileSync(path.join(dir, 'texra.db'), path.join(copy, 'texra.db'));
-    const db = new DatabaseSync(path.join(copy, 'texra.db'), {
-      readOnly: true,
-    });
-    try {
-      return db.prepare(sql).all(...params);
-    } finally {
-      db.close();
-    }
+    return db.prepare(sql).all(...params);
   } finally {
-    rmSync(copy, { recursive: true, force: true });
+    db.close();
   }
+}
+
+/** Observe a service task through the same supported NDJSON attach a user
+ * can save. This reader never opens its database or steers the task.
+ */
+function watchTask(project, runId, env = project.ptyEnv) {
+  const child = spawn(
+    process.execPath,
+    [
+      binaryPath,
+      'tasks',
+      'attach',
+      runId,
+      '--cwd',
+      project.work,
+      '--output-format',
+      'ndjson',
+    ],
+    { cwd: project.work, env: { ...process.env, CI: '1', ...env } },
+  );
+  liveChildren.add(child);
+  let stdout = '';
+  let stderr = '';
+  let error;
+  let exitCode;
+  let closing;
+  child.stdout.on('data', (chunk) => (stdout += chunk));
+  child.stderr.on('data', (chunk) => (stderr += chunk));
+  child.on('error', (cause) => (error = cause));
+  const exited = new Promise((resolve) =>
+    child.on('close', (code) => {
+      exitCode = code;
+      resolve(code);
+    }),
+  );
+  return {
+    events: () => {
+      if (error) throw error;
+      assert(
+        closing !== undefined || exitCode === undefined || exitCode === 0,
+        `task observer ${runId} exited ${exitCode}\n${stderr}`,
+      );
+      return stdout
+        .split('\n')
+        .slice(0, -1)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line))
+        .filter((record) => record.kind === 'progress')
+        .map((record) => ({ type: record.event, ...record.payload }));
+    },
+    close: () =>
+      (closing ??= (async () => {
+        child.kill('SIGTERM');
+        await exited;
+        liveChildren.delete(child);
+        writeArtifact(`task-watch-${runId}.json`, { stdout, stderr });
+      })()),
+  };
 }
 
 /**
@@ -1008,6 +1045,14 @@ prompt: |
       );
       assertSuccess(first, 'texra run echo_validation');
       return parseJson(first.stdout, 'echo run').runId;
+    },
+    /** End this scenario's service only after its live interactions finish. */
+    stopService: () => {
+      const result = run(process.execPath, [binaryPath, 'service', 'stop'], {
+        cwd: work,
+        env: ptyEnv,
+      });
+      assertSuccess(result, 'texra service stop before durable assertions');
     },
     /** The rows `sql` selects from the project's store (`storeRows`). */
     readStore: (sql) => {
@@ -1512,6 +1557,7 @@ async function validateFork() {
     );
     assert(fork && fork !== source, 'the fork should continue a new task');
 
+    project.stopService();
     const rows = project.readStore(VIEW_ROWS);
     const artifactPath = writeArtifact('fork.json', {
       source,
@@ -1570,6 +1616,7 @@ async function validateTuiFork() {
         { message: 'Second message', reply: replies[1] },
       ],
     );
+    project.stopService();
     const rows = project.readStore(VIEW_ROWS);
     const source = runStartForkedFrom(rows, seed)?.run;
     const artifactPath = writeArtifact('tui-fork.json', {
@@ -1629,18 +1676,12 @@ description: Run one command, held until released, once it is approved.
 tools: [bash]
 
 prompt: |
-  GOLDEN-APPROVAL bash until [ -e midturn.release ]; do sleep 0.05; done; echo released
+  GOLDEN-APPROVAL bash touch midturn.running; until [ -e midturn.release ]; do sleep 0.05; done; echo released
 `,
     );
     const message = 'Typed while the command ran.';
     const release = path.join(project.work, 'midturn.release');
-    const rowsOf = (sql) => {
-      try {
-        return project.readStore(sql);
-      } catch {
-        return [];
-      }
-    };
+    const rowsOf = (sql) => project.readStore(sql);
     const chatRun = () =>
       rowsOf(
         `SELECT s.logical_id AS run FROM event e
@@ -1698,18 +1739,18 @@ prompt: |
           } else if (phase === 'asked' && plain.includes('Run command?')) {
             advance('Run command?', 'running');
             pty.write('y');
-            // The command runs once its approval is recorded; the message
-            // is typed while it waits, and released once its row is queued.
+            // The command writes its start marker, then waits. The TUI
+            // confirms the follow-up was queued before we release it.
             const typeOnceRunning = () => {
-              if (chatRows(`e.type = 'request.decided'`).length === 0)
+              if (!existsSync(path.join(project.work, 'midturn.running')))
                 return pty.setTimer(typeOnceRunning, 250);
               pty.write(message);
               pty.setTimer(() => pty.write('\r'), 300);
               const releaseOnceQueued = () => {
+                const shown = stripVTControlCharacters(pty.output);
                 if (
-                  chatRows(
-                    `e.type = 'followup.queued' AND json_extract(e.data, '$.content.text') = '${message}'`,
-                  ).length === 0
+                  !shown.includes('Queued follow-ups (1)') ||
+                  !shown.includes(`1. ${message}`)
                 )
                   return pty.setTimer(releaseOnceQueued, 250);
                 phase = 'released';
@@ -1805,15 +1846,19 @@ async function validateBackgroundCompaction() {
     );
     assertSuccess(started, 'texra tasks start echo_validation');
     const source = started.stdout.trim();
-    await waitFor(
-      'the first turn to end',
-      () =>
-        project.readStore(
-          `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = '${source}' AND e.type = 'run.position'
-           AND json_extract(e.data, '$.payload.at') = 'waiting'`,
-        ).length > 0,
-    );
+    const observed = watchTask(project, source);
+    try {
+      await waitFor('the first turn to end', () =>
+        observed
+          .events()
+          .some(
+            (row) =>
+              row.type === 'run.position' && row.payload.at === 'waiting',
+          ),
+      );
+    } finally {
+      await observed.close();
+    }
     const replies = [
       'First message | Second message',
       'Earlier turns, summarized. | Third message',
@@ -1825,6 +1870,7 @@ async function validateBackgroundCompaction() {
         { message: 'Third message', reply: replies[1] },
       ],
     );
+    project.stopService();
     const rows = project.readStore(VIEW_ROWS);
     const artifactPath = writeArtifact('background-compaction.json', {
       source,
@@ -2161,6 +2207,7 @@ prompt: |
     ).map((row) => String(row.data));
   };
   const windows = [];
+  const observers = [];
   const attachWindow = async (mode) => {
     const child = spawn(
       process.execPath,
@@ -2195,16 +2242,34 @@ prompt: |
     texra(['tasks', 'list'], 'texra tasks list');
     const answering = await attachWindow('answer');
     const answered = startTask();
-    await waitFor('the answered read', () => toolResults(answered).length > 0);
+    const answerWatch = watchTask(project, answered, env);
+    observers.push(answerWatch);
+    try {
+      await waitFor('the answered read', () =>
+        answerWatch.events().some((row) => row.type === 'tool.end'),
+      );
+    } finally {
+      await answerWatch.close();
+    }
     answering.child.kill();
     await answering.exited;
     const hanging = await attachWindow('hang');
     const detached = startTask();
+    const detachWatch = watchTask(project, detached, env);
+    observers.push(detachWatch);
     await waitFor('the hanging window to be asked', () =>
       hanging.stdout.includes('CALLED'),
     );
     hanging.child.kill('SIGKILL');
-    await waitFor('the detached read', () => toolResults(detached).length > 0);
+    try {
+      await waitFor('the detached read', () =>
+        detachWatch.events().some((row) => row.type === 'tool.end'),
+      );
+    } finally {
+      await detachWatch.close();
+    }
+    await hanging.exited;
+    project.stopService();
     const artifactPath = writeArtifact('service-host-calls.json', {
       answered: toolResults(answered),
       detached: toolResults(detached),
@@ -2221,7 +2286,9 @@ prompt: |
       `a read whose window detached mid-call should fail as detached (artifact: ${artifactPath})`,
     );
   } finally {
+    await Promise.all(observers.map((observer) => observer.close()));
     for (const window of windows) window.child.kill('SIGKILL');
+    await Promise.all(windows.map((window) => window.exited));
     run(process.execPath, [binaryPath, 'service', 'stop'], {
       cwd: project.work,
       env,
@@ -2300,11 +2367,10 @@ async function validateServiceSessionIdle() {
       'texra tasks start (first)',
     );
     const ended = (runId) =>
-      project.readStore(
-        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-         WHERE s.logical_id = '${runId}' AND e.type = 'run.position'
-         AND json_extract(e.data, '$.payload.at') = 'waiting'`,
-      ).length > 0;
+      parseJson(
+        texra(['tasks', 'list', '--output-format', 'json'], 'texra tasks list'),
+        'tasks list',
+      ).some((task) => task.runId === runId && task.statusKey === 'waiting');
     // A project's session is the one holder of its store, which it keeps
     // exclusively: the session is open while a reader is refused
     // (`SQLITE_BUSY`). The service logs nothing as a session closes.
@@ -2731,15 +2797,18 @@ prompt: |
       path.join(projectDir(), 'config.json'),
       `${JSON.stringify({ 'texra.approvalPolicy': policy })}\n`,
     );
-  const rowTypes = (runId) =>
+  const rowTypes = (runId, through) =>
     storeRows(
       projectDir(),
       `SELECT e.type FROM event e
        JOIN event_sequence s ON s.id = e.aggregate
-       WHERE s.logical_id = ? ORDER BY e."commit"`,
+       WHERE s.logical_id = ? AND e."commit" <= ? ORDER BY e."commit"`,
       runId,
+      through,
     ).map((row) => row.type);
   let windowA;
+  let firstWatch;
+  let narrowWatch;
   try {
     // A first task opens the project in the service, which makes its
     // store; then the setting is Auto-approve and window A attaches.
@@ -2762,7 +2831,11 @@ prompt: |
       [hostHarnessPath, storageRoot, project.work, 'answer'],
       { cwd: project.work, env: { ...process.env, ...env } },
     );
-    windowA = { child, stdout: '' };
+    windowA = {
+      child,
+      stdout: '',
+      exited: new Promise((resolve) => child.on('close', resolve)),
+    };
     child.stdout.on('data', (chunk) => (windowA.stdout += chunk));
     await waitFor('window A to attach', () =>
       windowA.stdout.includes('ATTACHED'),
@@ -2788,28 +2861,20 @@ prompt: |
       'texra tasks start approval_validation',
     );
     const runId = started.stdout.trim();
+    firstWatch = watchTask(project, runId, env);
     await waitFor('the command to wait for approval', () =>
-      rowTypes(runId).includes('request.opened'),
+      firstWatch.events().some((row) => row.type === 'request.opened'),
     );
     // Long enough for an Auto-approve run to have run its command.
     await new Promise((resolve) => setTimeout(resolve, 3_000));
     const approved = path.join(project.work, 'approved.txt');
-    const rows = rowTypes(runId);
-    const artifactPath = writeArtifact('service-policy-owner.json', {
-      setting: JSON.parse(
-        readFileSync(path.join(projectDir(), 'config.json'), 'utf8'),
-      ),
-      rows,
-      commandRan: existsSync(approved),
-      startNotice: started.stderr.trim(),
-      windowA: windowA.stdout.trim().split('\n'),
-    });
-    assert(
-      !existsSync(approved) &&
-        !rows.includes('request.decided') &&
-        !started.stderr.includes('approval policy'),
-      `after a restart the service should follow the project's Ask setting, not a policy window A held (artifact: ${artifactPath})`,
+    const setting = JSON.parse(
+      readFileSync(path.join(projectDir(), 'config.json'), 'utf8'),
     );
+    const firstCommandRan = existsSync(approved);
+    const firstPrefix = firstWatch.events();
+    const firstThrough = Math.max(...firstPrefix.map((row) => row.commit));
+    await firstWatch.close();
     texra(['tasks', 'stop', runId], 'texra tasks stop');
     // A launch narrows its own task for good: started with
     // `--approval-policy ask` while the project asks, then the project is
@@ -2828,15 +2893,42 @@ prompt: |
       ],
       'texra tasks start --approval-policy ask',
     ).stdout.trim();
+    narrowWatch = watchTask(project, narrowed, env);
     await waitFor('the narrowed task to start', () =>
-      rowTypes(narrowed).includes('run.start'),
+      narrowWatch.events().some((row) => row.type === 'run.start'),
     );
     setPolicy('yolo');
     await waitFor('the narrowed command to wait for approval', () =>
-      rowTypes(narrowed).includes('request.opened'),
+      narrowWatch.events().some((row) => row.type === 'request.opened'),
     );
     await new Promise((resolve) => setTimeout(resolve, 3_000));
-    const narrowedRows = rowTypes(narrowed);
+    const narrowedCommandRan = existsSync(approved);
+    const narrowPrefix = narrowWatch.events();
+    const narrowThrough = Math.max(...narrowPrefix.map((row) => row.commit));
+    await narrowWatch.close();
+    texra(['tasks', 'stop', narrowed], 'texra tasks stop (narrowed)');
+    windowA.child.kill('SIGTERM');
+    await windowA.exited;
+    project.stopService();
+    // Stop may add cancellation decisions. Verify the durable prefixes
+    // observed while both commands were still waiting, not teardown rows.
+    const rows = rowTypes(runId, firstThrough);
+    const narrowedRows = rowTypes(narrowed, narrowThrough);
+    const artifactPath = writeArtifact('service-policy-owner.json', {
+      setting,
+      rows,
+      observed: firstPrefix,
+      commandRan: firstCommandRan,
+      startNotice: started.stderr.trim(),
+      windowA: windowA.stdout.trim().split('\n'),
+    });
+    assert(
+      !firstCommandRan &&
+        rows.includes('request.opened') &&
+        !rows.includes('request.decided') &&
+        !started.stderr.includes('approval policy'),
+      `after a restart the service should follow the project's Ask setting, not a policy window A held (artifact: ${artifactPath})`,
+    );
     // The limit is what holds it, recorded on its run.start; the project's
     // Auto-approve may land before or after that row.
     const limit = storeRows(
@@ -2849,17 +2941,21 @@ prompt: |
     writeArtifact('service-policy-narrowed.json', {
       limit,
       rows: narrowedRows,
-      commandRan: existsSync(approved),
+      observed: narrowPrefix,
+      commandRan: narrowedCommandRan,
     });
     assert(
       limit === 'ask' &&
-        !existsSync(approved) &&
+        !narrowedCommandRan &&
+        narrowedRows.includes('request.opened') &&
         !narrowedRows.includes('request.decided'),
       'a task started with --approval-policy ask should still ask after the project is widened to Auto-approve',
     );
-    texra(['tasks', 'stop', narrowed], 'texra tasks stop (narrowed)');
   } finally {
+    await firstWatch?.close();
+    await narrowWatch?.close();
     windowA?.child.kill('SIGKILL');
+    await windowA?.exited;
     run(process.execPath, [binaryPath, 'service', 'stop'], {
       cwd: project.work,
       env,
@@ -2926,6 +3022,7 @@ prompt: |
       runId,
     );
   };
+  let observed;
   try {
     const runId = texra(
       [
@@ -2941,6 +3038,7 @@ prompt: |
       ],
       'texra tasks start approval_validation',
     );
+    observed = watchTask(project, runId, env);
     let phase = 'opening';
     let from = 0;
     const chat = await runTexraPty(['chat'], {
@@ -2969,13 +3067,12 @@ prompt: |
           pty.setTimer(() => pty.write(key), 600 + index * 400),
         );
         if (phase !== 'sent') return;
-        // The follow-up's answer is a second finalized response in the
-        // task's own rows; the screen repaints old replies, so it is read
-        // from the store.
+        // The screen repaints old replies. The supported NDJSON attach
+        // emits the task's finalized rows once, including the follow-up.
         const poll = () => {
-          const answered = taskRows(runId).filter(
-            (row) => row.type === 'response.finalized',
-          ).length;
+          const answered = observed
+            .events()
+            .filter((row) => row.type === 'response.finalized').length;
           if (answered < 2) return pty.setTimer(poll, 500);
           phase = 'done';
           ['\u001b', ETX, ETX].forEach((key, index) =>
@@ -2985,6 +3082,8 @@ prompt: |
         pty.setTimer(poll, 1_000);
       },
     });
+    await observed.close();
+    project.stopService();
     const rows = taskRows(runId);
     const approved = path.join(project.work, 'approved.txt');
     const artifactPath = writeArtifact('service-tasks-tui.json', {
@@ -3007,6 +3106,7 @@ prompt: |
       `/tasks should attach to the service task, approve its command and send a follow-up (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
     );
   } finally {
+    await observed?.close();
     run(process.execPath, [binaryPath, 'service', 'stop'], {
       cwd: project.work,
       env,
@@ -3174,10 +3274,33 @@ async function validateOpenTimePrompt() {
       )[0].n;
     const interrupted = activations();
 
+    let passiveOpened = false;
+    const passive = await runTexraPty(['chat'], {
+      label: 'texra chat without resuming',
+      cwd: project.work,
+      cols: 160,
+      rows: 40,
+      timeoutMs: 40_000,
+      env: project.ptyEnv,
+      onData: (_data, pty) => {
+        if (
+          passiveOpened ||
+          !stripVTControlCharacters(pty.output).includes('/ commands')
+        )
+          return;
+        passiveOpened = true;
+        pty.setTimer(() => pty.write(ETX), 2_000);
+        pty.setTimer(() => pty.write(ETX), 3_200);
+      },
+    });
+    assert(
+      passiveOpened && passive.exit.exitCode === 0,
+      'the passive chat should open and exit without resuming a task',
+    );
+    const whileListed = activations();
+
     let phase = 'opening';
     let notice = [];
-    let whileListed = null;
-    let resumed = null;
     const chat = await runTexraPty(['chat'], {
       label: 'texra chat with an interrupted task',
       cwd: project.work,
@@ -3187,35 +3310,27 @@ async function validateOpenTimePrompt() {
       env: project.ptyEnv,
       onData: (_data, pty) => {
         const plain = stripVTControlCharacters(pty.output);
-        // A fresh chat has no run, so no status label: its input hint is
-        // the sign that it is open.
-        if (phase !== 'opening' || !plain.includes('/ commands')) return;
-        phase = 'open';
-        pty.setTimer(() => {
-          // Nothing resumed on its own while the chat opened.
-          whileListed = activations();
-          pty.write('/resume all');
-          pty.setTimer(() => pty.write('\r'), 400);
-          const poll = () => {
-            const now = activations();
-            const shown = stripVTControlCharacters(pty.output);
-            const at = shown.lastIndexOf('Resuming 1 task');
-            if (at !== -1)
-              notice = shown
-                .slice(at)
-                .split('\n')
-                .slice(0, 1)
-                .map((line) => line.trim());
-            if (now > interrupted) {
-              resumed = now;
-              pty.setTimer(() => pty.write(ETX), 800);
-              pty.setTimer(() => pty.write(ETX), 2_000);
-            } else pty.setTimer(poll, 300);
-          };
-          pty.setTimer(poll, 600);
-        }, 2_000);
+        if (phase === 'opening' && plain.includes('/ commands')) {
+          phase = 'requested';
+          pty.setTimer(() => pty.write('/resume all'), 500);
+          pty.setTimer(() => pty.write('\r'), 900);
+        }
+        const at = plain.lastIndexOf('Resuming 1 task');
+        if (phase !== 'requested' || at === -1) return;
+        notice = plain
+          .slice(at)
+          .split('\n')
+          .slice(0, 1)
+          .map((line) => line.trim());
+        // The notice precedes the detached resumes. Wait for the actual
+        // task's Idle row in the session list, not the notice alone.
+        if (!plain.slice(at).includes('Idle')) return;
+        phase = 'resumed';
+        pty.setTimer(() => pty.write(ETX), 800);
+        pty.setTimer(() => pty.write(ETX), 2_000);
       },
     });
+    const resumed = activations();
 
     let renamed = false;
     await runTexraPty(['resume', source], {
@@ -3255,6 +3370,7 @@ async function validateOpenTimePrompt() {
     });
     assert(
       chat.exit.exitCode === 0 &&
+        phase === 'resumed' &&
         notice.length === 1 &&
         notice[0].includes('First message') &&
         whileListed === interrupted &&
