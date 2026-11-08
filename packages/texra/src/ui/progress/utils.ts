@@ -21,15 +21,15 @@ export function getComposedPathElement<T extends Element>(
 }
 
 /**
- * Dispatch a `<wa-details>` group's open/close as a surface action. Wired to
+ * Dispatch a `<wa-details>` disclosure's open/close as a surface action. Wired to
  * both `wa-show` and `wa-hide`, which BUBBLE (unlike the native `<details>`
- * `toggle`), so a nested group's toggle would otherwise re-trigger every
+ * `toggle`), so a nested disclosure's toggle would otherwise re-trigger every
  * ancestor — hence the `target === currentTarget` guard. Direction comes from
  * the event type rather than local state, so no per-row closures are needed,
- * and the surface owns the answer: the group body follows the `expanded` map
+ * and the surface owns the answer: the disclosure's body follows the `expanded` map
  * the host hands back.
  */
-export function dispatchGroupToggle(
+export function dispatchDisclosureToggle(
   host: EventTarget,
   event: Event,
   runId: RunId | null,

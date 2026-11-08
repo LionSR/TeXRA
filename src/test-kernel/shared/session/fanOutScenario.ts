@@ -66,8 +66,9 @@ const GRANDCHILD_IDENTITY: RunIdentity = {
   kind: 'agent',
   agent: 'custom:lint',
 };
-/** The root script's stage: its calls' cards carry it as their group. */
-const SCRIPT_STAGE = 'script-review';
+/** The root script's `script` card, its stage: its calls' cards carry it
+ *  as their group. */
+const SCRIPT_STAGE = 'script-card';
 const ROOT_POLICY: ApprovalGrants = {
   own: { toolEdit: 'on' },
   goal: [],
@@ -209,9 +210,10 @@ export function buildScenario({ proposal = false } = {}) {
     }),
   });
   log.emit(ROOT, T.root + 1, {
-    type: 'stage.start',
-    id: SCRIPT_STAGE,
-    label: 'review',
+    type: 'tool.start',
+    logId: SCRIPT_STAGE,
+    toolName: 'script',
+    input: { code: '', title: 'review' },
   });
   // The script's one `agent` call: its card opens under the script's stage
   // and launches the child.
@@ -413,9 +415,10 @@ export function buildScenario({ proposal = false } = {}) {
     result: { output: 'search done', summary: "Completed 'custom:search'" },
   });
   log.emit(ROOT, T.childDone + 2, {
-    type: 'stage.end',
-    id: SCRIPT_STAGE,
+    type: 'tool.end',
+    logId: SCRIPT_STAGE,
     status: 'completed',
+    result: { output: 'review done' },
   });
   log.emit(ROOT, T.rootDone, {
     type: 'run.end',

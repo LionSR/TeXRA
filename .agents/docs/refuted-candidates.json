@@ -601,6 +601,24 @@
           "signature": "export const DESKTOP_HEADLESS = process.env.TEXRA_DESKTOP_HEADLESS === '1';"
         }
       ]
+    },
+    {
+      "id": "STORE-context-blob-as-brought-blob",
+      "candidate": "a run's context.blob rows as brought blobs in the blob table, the context.blob row kind retired (execution) and its readers reading the blob by the digest a model.message names",
+      "why": "context.blob is not one request's JSON: it is the run state's content table (RunState.contents), which the run state folds from rows and the loop reads synchronously on every step (contextAt and stored for the system text, the run context and the shown tool declarations, blobRows for what the run already holds, forkRun for what a fork copies, recordedTurn for the request check). As brought blobs the content leaves the state: each of those readers becomes a store read at every step, and 'what the run holds' must be derived again from the rows that link each digest. A brought blob is never inflated on read (the media scheme), so requests would need a read path of their own: a fourth behavior, not one scheme fewer. The 'second digest' stores nothing twice: a long canonical value is one zstd copy in the blob table under its inline digest, the row holding the reference (INSERT_BLOB is ON CONFLICT DO NOTHING). And store review F14's cost (an additive change to request JSON regenerates the golden store) stays, because the golden store holds the blob table too. Refused by round 6 area T's PR 2 after re-verification on main at e10c592.",
+      "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-round-6/T-session-database.md#t6-three-content-addressing-schemes-for-one-need-and-one-content-stored-under-two-digests",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/schemas/offeredTools.ts",
+          "symbol": "ContextBlobSchema",
+          "signature": "export const ContextBlobSchema = Schema.Struct({ digest: Sha256Schema, value: JsonValueSchema, });"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/run/requestContext.ts",
+          "symbol": "blobRows",
+          "signature": "export function blobRows( runId: RunId, state: RunState, values: readonly unknown[], ): RunHistoryDraft[] {…}"
+        }
+      ]
     }
   ]
 }
