@@ -487,6 +487,14 @@ designs and chooses one, and ends in a ranked plan of two PRs.
 - **The owner's call:** whether R6-T6 rides the next format batch instead
   of PR 2; R6-T7b's spec wording.
 
+**Landed (main `b012b7e`):** T PR 1 (#14848: R6-T1, R6-T2, R6-T4, R6-T7 a
+and c, with B2, B3 and B6) and S PR 1 (#14852: R6-S1, R6-S2, R6-S3, R6-S5,
+R6-S9, and E1's item 7). T PR 2 and S PR 2 are open sessions. Two things
+the reports did not foresee: the run and turn stages grouped no rows, so
+S1 needed no fold grouping and took the parent edge with it; and the
+`aggregate_change` table stays as dead DDL, because an open never alters a
+stamped store and a stamp of 103 would need the pre-1.0 detection reworked.
+
 ## 8. Round 7: the fallbacks, read as design decisions
 
 Round 7 (`.agents/docs/evidence/2026-11-07-design-red-flags-round-7-fallbacks/`,
@@ -532,3 +540,10 @@ One PR per cause group, three sessions, after round 6's T and S PR 1:
 - **A, B, C and F's lettered parts, one session:** FB3 e and f, FB4 d with
   `cliState.ts`, FB6 a, d and the `claudeAgentConfig.ts` case, FB8, FB9,
   FB10 b, d and e.
+
+**Landed (main `b012b7e`):** #14851 (E), #14849 (G) and #14850 (the hosts
+session) closed FB1 to FB10, with FB10 b dropped and FB6's `storeSchema.ts`
+case judged not a finding. Two copy questions are the owner's: the local
+banner's text (#14849) and the service's missing-key wording (#14846).
+Round 5's D PR 3 (#14844) landed R5-4, R5-11, R5-12 and R5-13 in the same
+wave.
