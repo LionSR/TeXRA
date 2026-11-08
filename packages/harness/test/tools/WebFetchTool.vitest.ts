@@ -89,8 +89,9 @@ layer(SessionGraph.hosted)('WebFetchTool', (it) => {
   );
 
   // With only HTTPS_PROXY set, an http:// URL connects directly; the guard
-  // must hold on that path too. A fresh module builds a fresh dispatcher,
-  // which reads the environment once.
+  // must hold on that path too. An agent reads the environment once, when it
+  // is built, and `HttpAgents` keeps it; a fresh module brings a fresh
+  // `HttpAgents` default, so the agent is built again under the stubbed proxy.
   it.effect('rejects localhost over a direct path while a proxy is set', () =>
     Effect.gen(function* () {
       vi.stubEnv('HTTPS_PROXY', 'http://192.0.2.1:3128');
