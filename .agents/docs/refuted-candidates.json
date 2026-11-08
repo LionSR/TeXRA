@@ -694,6 +694,19 @@
           "signature": "export const SubscriptionTokenResponseSchema = Schema.Struct({ access_token: Schema.String.check(Schema.isMinLength(1)), refresh_token: Schema.optional( Schema.NullOr(Schema.String.check(Schema.isMinLength(1))), ), id_token: Schema.optional( Schema.NullOr(Schema.String.check(Schema.isMinLength(1))), ), expires_in: Schema.Number, scope: Schema.optional(Schema.NullOr(Schema.String)), });"
         }
       ]
+    },
+    {
+      "id": "M7-file-lanes-as-references",
+      "candidate": "the harness's module-level PerKeyLanes maps (fileSecrets keyLanes, jsonStore writeLanes, memoryFileSystem memoryTreeLanes, approvedWrite approvedWriteLanes, sessionLayer rootLanes, workspaceAgentsState workspaceWriteLanes) as one Context.Reference<PerKeyLanes> each, defaulting to a fresh Map",
+      "why": "Each map orders the writes to one file, one store or one storage root, which every layer in the process shares: two JsonStore instances on one file, two sessions opening one root, two runs editing one file must meet on one lane, so a per-layer map would be a defect, not isolation. None is returned or crosses its module, and withPerKeyLane deletes a key once no fiber holds or waits on it (in an ensuring, so on interruption too), so an idle map is empty and a test has nothing to reset. A reference per site adds a declaration and a context read at six sites and changes no behaviour. Refused by package F (8.1) after re-verification on main at 157f775.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/M-harness-tools.md#finding-7-eleven-process-lifetime-facts-live-in-module-level-lets-and-maps-two-of-them-deciding-the-proxy-policy-differently",
+      "symbols": [
+        {
+          "file": "packages/harness/src/utils/core/perKeyQueue.ts",
+          "symbol": "withPerKeyLane",
+          "signature": "export function withPerKeyLane<Key, RefusalE = never>( lanes: PerKeyLanes<Key>, key: Key, refuseClaim?: (occupant: PerKeyLane | undefined) => RefusalE | undefined, ): <A, E, R>( self: Effect.Effect<A, E, R>, ) => Effect.Effect<A, E | RefusalE, R> {…}"
+        }
+      ]
     }
   ]
 }

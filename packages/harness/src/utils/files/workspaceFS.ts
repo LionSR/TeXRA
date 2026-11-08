@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 // Local imports
 import { relativeToRoot } from '@utils/system/nodeWorkspace';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 import { escapesRoot } from '@utils/core/pathCore';
 
 /**

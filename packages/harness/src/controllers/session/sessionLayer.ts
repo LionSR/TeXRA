@@ -36,7 +36,7 @@ import { globalStorageFsLayer, SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import {
-  nodeProcesses,
+  processStartIdentity,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
 import {
@@ -355,9 +355,9 @@ export function ownerProcessLayer({
 > {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
-  // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
+  // Read once per build; an unreadable identity is undefined.
   const identity = Layer.unwrap(
-    Effect.map(nodeProcesses.selfIdentity(), (s) =>
+    Effect.map(processStartIdentity, (s) =>
       ProcessIdentity.layer(processOwnerId(s)),
     ),
   );

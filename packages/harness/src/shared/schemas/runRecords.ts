@@ -1,7 +1,7 @@
 /** Canonical run metadata records, independent of runtime machinery. */
 import { Schema, SchemaGetter, Struct } from 'effect';
 
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 
 import { AgentConfigSchema } from './agentConfig';
 import { RunIdSchema } from './identifiers';

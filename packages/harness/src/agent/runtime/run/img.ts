@@ -2,7 +2,8 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Schema } from 'effect';
+import { Context, Effect, FileSystem, Ref, Schema } from 'effect';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { imageSize } from 'image-size';
 
 // Local imports - log
@@ -10,12 +11,69 @@ import { withLogChannel } from '@logger/effectLog';
 import { Settings, type ConfigProvider } from '@shared/config/settings';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { detectImageTool } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import { MAX_IMAGE_DIMENSION_SETTING } from '@shared/state/stateSettings';
 
 const CHANNEL = 'ImgUtils';
+
+/** The version command of each image processor: GraphicsMagick has no
+ *  `--version` flag. */
+const IMAGE_TOOL_COMMANDS = {
+  magick: ['magick', '--version'],
+  gm: ['gm', 'version'],
+} as const;
+
+/** Whether `command` answers: it exits 0, or prints a version (some tools
+ *  exit non-zero for their version command). A `--version` probe answers
+ *  the same from any directory, so it runs in the process cwd. */
+const answers = (command: readonly string[]) =>
+  Effect.map(
+    executeCommand([...command], {
+      cwd: process.cwd(),
+      timeout: 5000,
+      quiet: true,
+    }),
+    (result) =>
+      result.exitCode === 0 || /\d+\.\d+/.test(result.stdout + result.stderr),
+  );
+
+/** The image processor found, kept for the process: every image resize and
+ *  PDF conversion asks, and each probe spawns two processes. A miss is not
+ *  kept, so a tool installed mid-session is found on the next ask. */
+const FoundImageTool = Context.Reference<Ref.Ref<'magick' | 'gm' | undefined>>(
+  '@texra-ai/harness/FoundImageTool',
+  {
+    defaultValue: () => Ref.makeUnsafe<'magick' | 'gm' | undefined>(undefined),
+  },
+);
+
+/**
+ * Which of the two interchangeable image processors is installed, preferring
+ * ImageMagick, or `null` when neither is: the one decision PDF
+ * rasterization and image resizing both make. Whether another tool is
+ * installed, and how to install it, are the app's.
+ */
+const detectImageTool = Effect.fn('img.detectImageTool')(
+  function* (): Effect.fn.Return<
+    'magick' | 'gm' | null,
+    never,
+    ChildProcessSpawner
+  > {
+    const found = yield* FoundImageTool;
+    const kept = yield* Ref.get(found);
+    if (kept !== undefined) return kept;
+    const [hasMagick, hasGm] = yield* Effect.all(
+      (['magick', 'gm'] as const).map((tool) =>
+        answers(IMAGE_TOOL_COMMANDS[tool]),
+      ),
+      { concurrency: 'unbounded' },
+    );
+    const tool = hasMagick ? 'magick' : hasGm ? 'gm' : undefined;
+    yield* Ref.set(found, tool);
+    return tool ?? null;
+  },
+);
 
 /** DPI/density used when rasterizing a PDF page to PNG. */
 const PDF_RASTER_DENSITY = 300;
@@ -132,10 +190,8 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
       const result = yield* executeCommand(convertArgs, {
         // Both operands are absolute paths, so the conversion is
         // independent of where it runs: the process cwd is the honest
-        // root rather than a workspace this module never receives, and
-        // there are no workspace settings to carry with it.
+        // root rather than a workspace this module never receives.
         cwd: process.cwd(),
-        settings: undefined,
       });
       if (!result.success) {
         return yield* new MediaConversionFailed({
@@ -223,7 +279,6 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
     // Absolute input and output paths, and no workspace of its own: see
     // `resizeImageIfNeeded`.
     cwd: process.cwd(),
-    settings: undefined,
     killProcessTree: true,
   });
   if (!result.success) {
@@ -278,7 +333,6 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(function* (
     {
       // Absolute input path: see `resizeImageIfNeeded`.
       cwd: process.cwd(),
-      settings: undefined,
       killProcessTree: true,
     },
   );

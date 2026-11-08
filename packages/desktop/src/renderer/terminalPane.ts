@@ -72,24 +72,19 @@ interface TerminalSession {
 
 /**
  * xterm ships its CSS as a stylesheet rather than shadow-scoped styles. The
- * pane renders in the light DOM, so inject once at document level.
+ * panes render in the light DOM, so the renderer's entry injects it once, at
+ * document level.
  */
-let stylesInjected = false;
-
-function injectXtermStyles(): void {
-  if (stylesInjected) return;
+export function injectXtermStyles(): void {
   const style = document.createElement('style');
   style.dataset.texraXterm = 'true';
   style.textContent = xtermStyles;
   document.head.append(style);
-  stylesInjected = true;
 }
 
 export function createTerminalPane(
   callbacks: TerminalPaneCallbacks,
 ): TerminalPane {
-  injectXtermStyles();
-
   const sessions = new Map<string, TerminalSession>();
   /** Theme tokens this pane already reported missing. */
   const reportedTokens = new Set<string>();

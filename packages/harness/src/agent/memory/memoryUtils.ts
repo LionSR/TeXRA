@@ -4,7 +4,7 @@ import { Result } from 'effect';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { ToolError } from '@shared/schemas';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 import { isPathWithin } from '@utils/core/pathCore';
 
 /** The root the memory tool shows its tree under. */

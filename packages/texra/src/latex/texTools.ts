@@ -268,8 +268,6 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     const runEngine = (tool: 'latexmk' | 'pdflatex', args: string[]) =>
       runTool(tool, args, {
         cwd: workspaceRoot,
-        // A TeX engine spawns no git command that an identity could mark.
-        settings: undefined,
         env,
         timeout,
         killProcessTree: tool === 'latexmk',

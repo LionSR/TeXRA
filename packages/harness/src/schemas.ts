@@ -210,7 +210,11 @@ export {
 } from '@transcript/traceDocumentSchema';
 // Path basics that hold in a browser: forward slashes, a path's base name,
 // and its base name without the extension.
-export { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
+export {
+  getBasename,
+  getFileStem,
+  normalizeFilePath,
+} from '@utils/core/pathBasics';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): the
 // harness's own, which an app reads and writes through `Settings` and places
 // in its settings UIs (a webview included), and the catalog an app builds

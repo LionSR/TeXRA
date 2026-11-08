@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
 
-import { getBasename } from '@utils/core';
+import { getBasename } from '@utils/core/pathBasics';
 import { RunIdSchema } from './identifiers';
 
 const WorkspaceFileLocationSchema = Schema.Struct({

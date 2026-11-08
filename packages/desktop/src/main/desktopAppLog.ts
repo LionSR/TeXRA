@@ -29,9 +29,13 @@ const MAX_VIEWER_LOG_BYTES = 160 * 1024;
 const CONSOLE_LEVELS = ['debug', 'error', 'info', 'log', 'warn'] as const;
 type ConsoleLevel = (typeof CONSOLE_LEVELS)[number];
 
+/** The process's one log file, set by {@link installDesktopAppLog} and read
+ *  by the console mirror and Electron's event handlers, which run outside
+ *  any runtime; undefined while file logging is off. */
 let logFilePath: string | undefined;
-let consoleInstalled = false;
 
+/** Called once, by the process's bootstrap: a second call would mirror the
+ *  console twice. */
 export function installDesktopAppLog(): void {
   logFilePath = initializeDesktopLogFile();
   if (logFilePath == null) return;
@@ -59,7 +63,7 @@ export function getDesktopLogDirectory(): string {
 
 /** Where the desktop log is on disk (the snapshot carries it redacted). */
 export function getDesktopLogFilePath(): string {
-  return logFilePath ?? join(getDesktopLogDirectory(), LOG_FILE_NAME);
+  return join(getDesktopLogDirectory(), LOG_FILE_NAME);
 }
 
 export function readDesktopLogSnapshot(options: {
@@ -113,9 +117,6 @@ export function attachRendererConsoleLog(webContents: WebContents): void {
 }
 
 function installConsoleMirror(): void {
-  if (consoleInstalled) return;
-  consoleInstalled = true;
-
   for (const level of CONSOLE_LEVELS) {
     const original = console[level].bind(console);
     console[level] = (...args: unknown[]) => {
@@ -166,9 +167,8 @@ function appendDesktopLogEntry(entry: LogEntry): void {
 
 function initializeDesktopLogFile(): string | undefined {
   try {
-    const logDir = getDesktopLogDirectory();
-    mkdirSync(logDir, { recursive: true });
-    return join(logDir, LOG_FILE_NAME);
+    mkdirSync(getDesktopLogDirectory(), { recursive: true });
+    return getDesktopLogFilePath();
   } catch (error) {
     console.warn('TeXRA desktop file logging is disabled.', error);
     return undefined;

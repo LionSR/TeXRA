@@ -98,7 +98,7 @@ describe('executeCommand', () => {
             '-e',
             `process.stdout.write(JSON.stringify([process.env.OPENAI_API_KEY ?? null, process.env.TEXRA_TEST_UNRELATED ?? null]))`,
           ],
-          { cwd: WORKSPACE, settings: undefined },
+          { cwd: WORKSPACE },
         );
 
         expect(JSON.parse(result.stdout)).toStrictEqual([null, 'kept']);
@@ -118,7 +118,6 @@ describe('executeCommand', () => {
         const fiber = yield* Effect.forkChild(
           executeCommand(SLEEPER_SCRIPT, {
             cwd: dir,
-            settings: undefined,
             timeout: 60_000,
             env: { PID_FILE: pidFile },
           }),
@@ -166,7 +165,6 @@ describe('executeCommand', () => {
             'Effect.runFork(',
             '  executeCommand(process.env.COMMAND!, {',
             '    cwd: process.cwd(),',
-            '    settings: undefined,',
             '    timeout: 60_000,',
             '    env: { PID_FILE: process.env.PID_FILE! },',
             '  }).pipe(Effect.provide(nodePlatformServices)),',

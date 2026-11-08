@@ -149,7 +149,6 @@ const runWithFlattenFallback = Effect.fn('latexdiff.runWithFlattenFallback')(
       const result = yield* runTool(tool, args(flatten), {
         timeout: timeoutMs,
         cwd,
-        settings: roots,
       });
       if (!result.success || !result.stdout) {
         return yield* new LatexdiffFailed({
@@ -270,9 +269,9 @@ export const latexdiffAgainstCommit = Effect.fn('latexdiffAgainstCommit')(
 
     // latexdiff-vc --git runs `git show <commit>:<file>`, which expects a
     // path relative to the repository root; an absolute path breaks its temp
-    // path construction. The roots of the workspace carry its git identity.
+    // path construction.
     const fileDir = path.dirname(inputFile);
-    const gitRoot = yield* repositoryRoot(fileDir, roots);
+    const gitRoot = yield* repositoryRoot(fileDir);
     const cwd = gitRoot ?? fileDir;
     const filePath = gitRoot
       ? path.relative(gitRoot, inputFile)

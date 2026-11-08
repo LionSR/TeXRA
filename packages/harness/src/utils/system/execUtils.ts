@@ -6,7 +6,6 @@ import * as CommandLine from 'effect/process/CommandLine';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { ExecResult } from '@shared/schemas';
-import { Settings, type SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
@@ -16,11 +15,6 @@ import type {
   ChildProcessSpawner,
 } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
-import {
-  GIT_AUTHOR_EMAIL_SETTING,
-  GIT_AUTHOR_NAME_SETTING,
-  GIT_MARK_COMMITS_SETTING,
-} from '@shared/state/stateSettings';
 
 const CHANNEL = 'execUtils';
 
@@ -70,42 +64,13 @@ function normalizeOutput(text: string | null | undefined): string {
 }
 
 /**
- * Git author environment for a spawned process.
- *
- * When the calling session's workspace marks agent commits, these are merged
- * into the environment of every command {@link executeCommand} runs, so any
- * `git commit` carries the configured agent identity. Read at spawn time from
- * the setting slots the caller named on the command options, not from a value
- * applied once for the whole process: a process holding several projects
- * attributes each project's commits by that project's own setting. Empty when
- * the caller has no workspace, or when commit marking is off.
- */
-const gitAuthorEnv = Effect.fn('gitAuthorEnv')(function* (
-  settings: SettingsStores | undefined,
-) {
-  if (!settings) return {};
-  if (!(yield* Settings.get(settings, GIT_MARK_COMMITS_SETTING))) {
-    return {};
-  }
-  const name = yield* Settings.get(settings, GIT_AUTHOR_NAME_SETTING);
-  const email = yield* Settings.get(settings, GIT_AUTHOR_EMAIL_SETTING);
-  return {
-    GIT_AUTHOR_NAME: name,
-    GIT_AUTHOR_EMAIL: email,
-    GIT_COMMITTER_NAME: name,
-    GIT_COMMITTER_EMAIL: email,
-  };
-});
-
-/**
  * The complete environment a command runs with: {@link inheritedEnv} on the
- * extended PATH, the git author identity, the caller's overrides, and the
+ * extended PATH, the caller's overrides, and the
  * project context an agent orients by.
  */
 function commandEnv(
   inherited: Record<string, string>,
   workspaceRoot: string,
-  authorEnv: Record<string, string | undefined> | undefined,
   envOverrides: Record<string, string> | undefined,
 ): Effect.Effect<Record<string, string | undefined>> {
   // withCommandDirs, not a bare `env.PATH =`: on Windows the copy of
@@ -114,7 +79,6 @@ function commandEnv(
   // the shell resolves against is then undefined.
   return withCommandDirs({
     ...inherited,
-    ...authorEnv,
     ...envOverrides,
     PROJECT_DIR: workspaceRoot,
     PROJECT_NAME: path.basename(workspaceRoot),
@@ -157,18 +121,6 @@ export interface ExecuteCommandBaseOptions {
    * has no folder, and it fails the run the same way the ambient miss did.
    */
   readonly cwd: string | undefined;
-  /**
-   * The setting slots the command's git identity is read from: whether this
-   * workspace marks agent commits, and the name and email it marks them with.
-   *
-   * Required — not optional — so every caller names the stores it holds (a
-   * run's session roots, a tool call's `call.roots`, the host's roots at
-   * command entry) instead of the command reaching for an ambient one.
-   * `undefined` is the honest answer only where the caller itself has no
-   * workspace, and it then carries no agent-commit identity, exactly as an
-   * uninitialised ambient read did.
-   */
-  readonly settings: SettingsStores | undefined;
   /** Called with stdout chunks as they arrive, enabling live output streaming. */
   readonly onStdout?: (chunk: string) => void;
   /** Called with stderr chunks as they arrive, enabling live error streaming. */
@@ -465,20 +417,7 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
     yield* logError('No workspace path found');
     return resultFromProcessOutput('', 'No workspace path found', 127);
   }
-  // The git identity is a setting read; a failed read fails this command,
-  // reported like a spawn failure, rather than dropping the identity.
-  const authorEnv = yield* Effect.result(gitAuthorEnv(options.settings));
-  if (authorEnv._tag === 'Failure') {
-    const message = toErrorMessage(authorEnv.failure);
-    yield* logError(message);
-    return resultFromProcessOutput('', message, 127);
-  }
-  const env = yield* commandEnv(
-    yield* inheritedEnv(),
-    cwd,
-    authorEnv.success,
-    options.env,
-  );
+  const env = yield* commandEnv(yield* inheritedEnv(), cwd, options.env);
   if (!options.quiet) {
     yield* Effect.logDebug(`Running command: ${displayCommand(command)}`);
   }

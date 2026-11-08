@@ -162,8 +162,6 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
     // No `working_directory` on the call means the search runs from the
     // session's own workspace root, which the call carries as data.
     cwd: call.workingDirectory ?? call.roots.workspace,
-    // The call's own setting slots.
-    settings: call.roots,
     maxBuffer: GREP_MAX_BUFFER_CHARS,
   });
 

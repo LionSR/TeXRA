@@ -29,7 +29,7 @@ import type { RunView, SessionView } from '@shared/session/readonlyViews';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { formatScriptCallFiles } from '@shared/transcript/scriptCall';
-import { getBasename } from '@utils/core';
+import { getBasename } from '@utils/core/pathBasics';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 import type { ToolRow as FoldedToolRow, TranscriptRow } from './transcriptRow';

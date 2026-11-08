@@ -99,7 +99,6 @@ function readerWrote(
   return Effect.map(
     executeCommand([...command], {
       cwd: outDir,
-      settings: undefined,
       quiet: true,
     }),
     (result) => result.success && !result.stdout.includes('NO_IMAGE'),

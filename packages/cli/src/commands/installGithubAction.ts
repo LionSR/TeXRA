@@ -179,15 +179,15 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
 ) {
   const { cwd } = context;
 
-  // No TeXRA settings: the command commits with the user's own git identity.
-  if (!(yield* isGitRepository(cwd, undefined))) {
+  // The command commits with the user's own git identity.
+  if (!(yield* isGitRepository(cwd))) {
     writeTextStderr(
       'Not inside a git repository. Run this from a cloned GitHub repo.',
     );
     return CliExitCode.Usage;
   }
 
-  const root = (yield* repositoryRoot(cwd, undefined)) ?? cwd;
+  const root = (yield* repositoryRoot(cwd)) ?? cwd;
   const workflowAbsPath = path.join(root, WORKFLOW_RELATIVE_PATH);
 
   // An unreadable workflow path is the command's failure, reported by the
@@ -202,12 +202,11 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
     return CliExitCode.Usage;
   }
 
-  const url = yield* originUrl(root, undefined);
+  const url = yield* originUrl(root);
   const slug = url ? parseGitHubSlug(url) : null;
-  const base =
-    opts.base ?? (yield* originDefaultBranch(root, undefined)) ?? 'main';
+  const base = opts.base ?? (yield* originDefaultBranch(root)) ?? 'main';
   const branch = opts.branch ?? DEFAULT_BRANCH_NAME;
-  const startBranch = yield* currentBranch(root, undefined);
+  const startBranch = yield* currentBranch(root);
 
   const branchExists = yield* localBranchExists(root, branch);
   if (branchExists && !opts.force) {

@@ -97,9 +97,8 @@ const runCommand = (
  * clock and which therefore moves under a running process); the boot id
  * makes them unique across reboots. The field is parsed after the last `)`
  * because the command name before it may itself contain spaces or parens.
+ * Both are small `/proc` reads, made on each probe.
  */
-let linuxBootId: string | undefined;
-
 const readLinuxIdentity = Effect.fn('nodeProcesses.readLinuxIdentity')(
   function* (
     pid: number,
@@ -108,11 +107,13 @@ const readLinuxIdentity = Effect.fn('nodeProcesses.readLinuxIdentity')(
     ProcessIdentityUnreadable,
     FileSystem.FileSystem
   > {
-    linuxBootId ??= (yield* readTextFile(
-      pid,
-      '/proc/sys/kernel/random/boot_id',
-    )).trim();
-    const stat = yield* readTextFile(pid, `/proc/${pid}/stat`);
+    const [bootId, stat] = yield* Effect.all(
+      [
+        readTextFile(pid, '/proc/sys/kernel/random/boot_id'),
+        readTextFile(pid, `/proc/${pid}/stat`),
+      ],
+      { concurrency: 2 },
+    );
     const afterComm = stat
       .slice(stat.lastIndexOf(')') + 1)
       .trim()
@@ -125,7 +126,7 @@ const readLinuxIdentity = Effect.fn('nodeProcesses.readLinuxIdentity')(
         detail: `Unparseable /proc/${pid}/stat: ${stat.trim()}`,
       });
     }
-    return `${linuxBootId}:${startTicks}`;
+    return `${bootId.trim()}:${startTicks}`;
   },
 );
 
@@ -181,56 +182,34 @@ const readWindowsIdentity = Effect.fn('nodeProcesses.readWindowsIdentity')(
   },
 );
 
-const readIdentity = (
-  pid: number,
-): Effect.Effect<string | undefined, never, ProcessProbe> =>
-  Effect.suspend(
-    (): Effect.Effect<string, ProcessIdentityUnreadable, ProcessProbe> => {
-      switch (process.platform) {
-        case 'linux':
-          return readLinuxIdentity(pid);
-        case 'win32':
-          return readWindowsIdentity(pid);
-        default:
-          return readPsIdentity(pid);
-      }
-    },
-  ).pipe(
-    // The source fails when the pid does not exist; callers probing a
-    // foreign pid separate that case with `kill(pid, 0)`. Any failure to
-    // read this process's own identity is worth seeing once.
-    Effect.catch((error: ProcessIdentityUnreadable) =>
-      pid === process.pid
-        ? Effect.logWarning('Could not read this process start identity').pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-            Effect.as(undefined),
-          )
-        : Effect.succeed(undefined),
-    ),
-  );
-
-/** Memoized only once read successfully, so a transient failure is retried. */
-let selfIdentity: string | undefined;
-
 /**
- * Kernel facts about processes, used to prove whether the owner recorded in
- * an execution lease is still the same process. An identity is an opaque
- * string that cannot change while a process runs and that no later process
- * with the same pid can repeat: two equal strings name one process, two
- * different strings name two. Callers only compare it verbatim. Neither
- * program fails: an unreadable identity is undefined, and `selfIdentity` is
- * memoized once read, retried until then.
+ * This process's start identity: an opaque string that cannot change while
+ * the process runs and that no later process with the same pid can repeat,
+ * so two equal strings name one process. Callers only compare it verbatim.
+ * It never fails: an unreadable identity is logged and is undefined. The
+ * process layer reads it once, when it is built.
  */
-export const nodeProcesses = {
-  identity: readIdentity,
-  selfIdentity: (): Effect.Effect<string | undefined, never, ProcessProbe> =>
-    Effect.suspend(() =>
-      selfIdentity === undefined
-        ? Effect.map(readIdentity(process.pid), (identity) => {
-            selfIdentity = identity;
-            return identity;
-          })
-        : Effect.succeed(selfIdentity),
+export const processStartIdentity: Effect.Effect<
+  string | undefined,
+  never,
+  ProcessProbe
+> = Effect.suspend(
+  (): Effect.Effect<string, ProcessIdentityUnreadable, ProcessProbe> => {
+    switch (process.platform) {
+      case 'linux':
+        return readLinuxIdentity(process.pid);
+      case 'win32':
+        return readWindowsIdentity(process.pid);
+      default:
+        return readPsIdentity(process.pid);
+    }
+  },
+).pipe(
+  Effect.catch((error: ProcessIdentityUnreadable) =>
+    Effect.logWarning('Could not read this process start identity').pipe(
+      Effect.annotateLogs({ data: error }),
+      withLogChannel(CHANNEL),
+      Effect.as(undefined),
     ),
-};
+  ),
+);

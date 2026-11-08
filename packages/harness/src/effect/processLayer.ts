@@ -210,7 +210,7 @@ export function processLayer(
   return Layer.mergeAll(
     sessionsLayer(options),
     Layer.succeed(RunLabels)(true),
-    Layer.effectDiscard(Effect.sync(installProcessHttpDispatcher)),
+    Layer.effectDiscard(installProcessHttpDispatcher),
   );
 }
 

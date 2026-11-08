@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
@@ -107,7 +107,6 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   filePath: string,
   workspaceRoot: string | undefined,
   latexindentConfig: string,
-  settings: SettingsStores,
 ) {
   // Resolve workspace-relative paths to absolute so cleanup works correctly.
   // Some callers (latexCommands, housekeeping/indent) pass relative paths.
@@ -126,8 +125,6 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   // it left no backup or log to clean up.
   const { success } = yield* runTool('latexindent', args, {
     cwd: workspaceRoot,
-    // The slots the caller resolved this formatter from.
-    settings,
   });
 
   // Always clean up backup files — latexindent creates .bak before modifying,

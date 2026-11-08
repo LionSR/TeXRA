@@ -231,8 +231,10 @@ export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the
 // capped, jittered delay a caller that sleeps for itself waits.
-export { jitteredExponentialBackoffMs } from '@utils/core';
-export { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
+export {
+  jitteredExponentialBackoffMs,
+  randomizedExponentialBackoff,
+} from '@utils/core/backoffSchedule';
 export { isTransientHttpStatus } from '@utils/core/httpStatus';
 // A tool's requests: one attempt under a deadline, the transient-failure
 // retry, the scoped clients an attempt's scope aborts, and whether a failure

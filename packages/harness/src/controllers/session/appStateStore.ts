@@ -22,7 +22,7 @@ import {
   REPO_STATE,
   WORKSPACE_STORES,
 } from '@shared/session/valueFamily';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -167,7 +167,7 @@ const openRepoStateStore = Effect.fn('appStateStore.openRepoStateStore')(
         '--git-dir',
         '--show-toplevel',
       ],
-      { cwd: workspaceRoot, settings: undefined, timeout: 5_000, quiet: true },
+      { cwd: workspaceRoot, timeout: 5_000, quiet: true },
     );
     if (!result.success) {
       if (

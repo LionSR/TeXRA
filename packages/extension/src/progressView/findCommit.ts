@@ -29,7 +29,6 @@ export const findCommitInHistory = Effect.fn('findCommitInHistory')(function* (
 
   const gitOptions = {
     cwd: workspaceRoot,
-    settings: roots,
     quiet: true,
   };
   const verifyResult = yield* executeCommand(
