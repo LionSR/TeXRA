@@ -42,10 +42,6 @@ import type { TranscriptView } from './sessionView';
 export interface TranscriptContext {
   /** The surface shows debug-level log rows. */
   readonly debug: boolean;
-  /** Run and session headings go to the stage surface rather than the
-   *  rows: a plain agent run's (`isPlainAgentIdentity`). A full-log child,
-   *  a detached process or an external-CLI session keeps its verbatim log. */
-  readonly lifecycleStages: boolean;
   /** The session's runs by id, for the `executions` tool header. */
   readonly runLabels?: RunLabels;
 }
@@ -54,15 +50,10 @@ export interface TranscriptContext {
 // Working state (never on the view)
 // ---------------------------------------------------------------------------
 
-/** The current state of one row id (a stage, a text stream, a tool card or a
- *  log row): what a later event for the same id updates, and what `paint`
- *  turns into the row. */
+/** The current state of one row id (a text stream, a tool card or a log
+ *  row): what a later event for the same id updates, and what `paint` turns
+ *  into the row. */
 export type Slot =
-  | {
-      readonly kind: 'stage';
-      base: TranscriptRowBase;
-      readonly label: string;
-    }
   | {
       readonly kind: 'text';
       base: TranscriptRowBase;
@@ -327,10 +318,6 @@ function rowOf(
   ctx: TranscriptContext,
 ): TranscriptRow | undefined {
   switch (slot.kind) {
-    case 'stage':
-      return ctx.lifecycleStages
-        ? undefined
-        : plainLogRow(slot.base, slot.label);
     case 'text': {
       const text = live ?? slot.text;
       return slot.rowKind

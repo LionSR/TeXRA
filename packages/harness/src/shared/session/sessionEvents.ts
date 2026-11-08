@@ -32,9 +32,8 @@ import type {
 import type { RunStateRowType } from './runState';
 import type { WithBlobs } from './historyTurns';
 
-/** One piece of work a run's rows left open (`SessionEvents.openWork`). */
+/** A stream a run's rows left open (`SessionEvents.openWork`). */
 export interface OpenWork {
-  readonly kind: 'stage' | 'stream';
   readonly id: string;
 }
 
@@ -165,11 +164,10 @@ export class SessionEvents extends Context.Service<
      *  limit. Idempotent; the
      *  publisher's scope runs it too. */
     readonly drain: Effect.Effect<void>;
-    /** What this publisher committed open on one aggregate and nothing has
-     *  closed since, in first-appearance order: a stream until its
-     *  `stream.end` or a phase move that pauses or ends its run, a stage
-     *  until its `stage.end`. What a run's wait (streams) or a host exit
-     *  (both) closes. Read on the publisher fiber (inside a job) or after
+    /** The streams this publisher committed open on one aggregate and
+     *  nothing has closed since, in first-appearance order: each until its
+     *  `stream.end` or a phase move that pauses or ends its run. What a
+     *  run's wait or end closes. Read on the publisher fiber (inside a job) or after
      *  `SessionLog.settled`, it counts every job committed before. */
     readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];
     /** The last commit this publisher published; the store's commit when

@@ -59,13 +59,7 @@ import {
   finalizedRows,
   positionRow,
 } from './rows';
-import {
-  openRun,
-  settleRun,
-  stagedBy,
-  stoppedBy,
-  type RunExit,
-} from './runProgram';
+import { openRun, settleRun, stoppedBy, type RunExit } from './runProgram';
 import { dispatchPendingResponse } from './toolUseDispatch';
 import { hooksOf } from './hooks';
 import { dispatchTools, stepFor } from './step';
@@ -403,10 +397,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state = compacted;
       }
     });
-    return yield* stagedBy(
-      () => logger.openStage('Tool-use turn', { kind: 'session' }),
-      (exit: RunExit) => exit.outcome,
-    )(body);
+    return yield* body;
   });
 
   // ------------------------------------------------------------- the loop

@@ -50,7 +50,7 @@ function scriptPlainLines(
       lines.set(call.id, scriptCallLine(call));
     }
     // The stage's total once it has ended, its discarded attempts included.
-    if (stage.status !== 'running' && stage.costUsd > 0)
+    if (stage.outcome !== null && stage.costUsd > 0)
       lines.set(
         `${stage.id}:total`,
         `Script total: ${formatCostUsd(stage.costUsd)}`,

@@ -230,7 +230,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     },
                   ],
                 },
-                contract: 2,
+                contract: 3,
               }),
             ]);
           }),

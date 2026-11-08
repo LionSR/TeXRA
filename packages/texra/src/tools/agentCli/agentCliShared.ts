@@ -212,8 +212,6 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
 
 interface AgentCliTurnParams<TTurn> {
   logger: AgentTrace;
-  /** Stage label opened on the child trace (e.g. "Codex session"). */
-  stageLabel: string;
   /** The claim on the thread this turn continues, closed as it ends. */
   claim: Scope.Closeable | undefined;
   /** The provider's turn: its own foreign edge (the provider SDK's
@@ -228,7 +226,7 @@ interface AgentCliTurnParams<TTurn> {
   formatError: (turn: TTurn | null, err: unknown) => string;
   /** Omitted by providers (codex) that always throw on failure. */
   isTurnError?: (turn: TTurn) => boolean;
-  turnErrorMessage?: (turn: TTurn) => string | undefined;
+  turnErrorMessage?: (turn: TTurn) => string;
 }
 
 /**
@@ -243,7 +241,6 @@ export function buildAgentCliTurn<TTurn>(
 ): ProcessTurn {
   const {
     logger,
-    stageLabel,
     claim,
     runProviderTurn,
     getUsage,
@@ -269,8 +266,8 @@ export function buildAgentCliTurn<TTurn>(
     logger.info(`Turn completed in ${(wallTimeMs / 1000).toFixed(1)}s`);
     if (isTurnError?.(turn) === true) {
       const failure =
-        turnErrorMessage?.(turn) ||
-        `${stageLabel} reported a failed turn without throwing.`;
+        turnErrorMessage?.(turn) ??
+        'The provider reported a failed turn without throwing.';
       logger.error(failure);
       return { report: formatError(turn, null), failure };
     }
@@ -281,7 +278,6 @@ export function buildAgentCliTurn<TTurn>(
     ),
   );
   return {
-    stageLabel,
     run,
     reportError: (error) => formatError(null, error),
   };

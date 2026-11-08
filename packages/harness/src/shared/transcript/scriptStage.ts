@@ -98,7 +98,8 @@ export interface ScriptSectionView {
 export interface ScriptStageView {
   /** The stage's id; its calls' cards carry it as their group. */
   readonly id: string;
-  readonly status: Stage['status'];
+  /** The outcome its stage closed with; null while it is open. */
+  readonly outcome: Stage['outcome'];
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly sections: readonly ScriptSectionView[];
@@ -264,6 +265,20 @@ function firstLine(text: string): string {
 }
 
 /**
+ * Whether a row is a script's call: a tool card under a stage. Only the
+ * loop's script dispatch puts a card under a stage, so the stages that hold
+ * one are a run's script stages.
+ */
+export function isScriptCall(row: ReadonlyDeep<TranscriptRow>): row is Extract<
+  TranscriptRow,
+  { kind: 'tool' }
+> & {
+  readonly groupId: string;
+} {
+  return row.kind === 'tool' && row.groupId !== undefined;
+}
+
+/**
  * The runs `run` launched that are not a script's calls: what its dispatch
  * card lists (a direct `agent` call that detached, a background script's
  * run). A child whose card (`parentCard`) sits under a script stage, awaited
@@ -273,18 +288,8 @@ export function dispatchedChildren<Run extends RunView>(
   run: Run,
   view: { readonly runs: ReadonlyMap<RunId, Run> },
 ): Run[] {
-  const { stages, rows } = run.transcript;
-  const stageIds = new Set(
-    stages.filter((group) => group.kind === 'script').map((group) => group.id),
-  );
   const scriptCards = new Set(
-    rows.flatMap((row) =>
-      row.kind === 'tool' &&
-      row.groupId !== undefined &&
-      stageIds.has(row.groupId)
-        ? [row.id]
-        : [],
-    ),
+    run.transcript.rows.filter(isScriptCall).map((row) => row.id),
   );
   return run.childIds.flatMap((id) => {
     const child = view.runs.get(id);
@@ -304,20 +309,11 @@ export function scriptStages(
   run: RunView,
   view: Pick<SessionView, 'runs' | 'requests'>,
 ): ScriptStageView[] {
-  const { rows } = run.transcript;
-  const stages = run.transcript.stages.filter(
-    (group) => group.kind === 'script',
-  );
-  if (stages.length === 0) return [];
   const byStage = Map.groupBy(
-    rows.filter(
-      (
-        row: ReadonlyDeep<TranscriptRow>,
-      ): row is ToolRow & { readonly groupId: string } =>
-        row.kind === 'tool' && row.groupId !== undefined,
-    ),
+    run.transcript.rows.filter(isScriptCall),
     (row) => row.groupId,
   );
+  const stages = run.transcript.stages.filter((stage) => byStage.has(stage.id));
   return stages.map((stage) => {
     const calls = (byStage.get(stage.id) ?? [])
       .toSorted((a, b) => (a.seqNo ?? 0) - (b.seqNo ?? 0))
@@ -331,7 +327,7 @@ export function scriptStages(
     }
     return {
       id: stage.id,
-      status: stage.status,
+      outcome: stage.outcome,
       calls,
       sections: sectionsOf(calls),
       agents: calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length,

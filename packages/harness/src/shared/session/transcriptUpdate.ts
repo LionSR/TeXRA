@@ -7,7 +7,7 @@
  *
  * The caller supplies each event's clock and id, and the reducer owns no
  * clock, timer, IO, or durable write. Each event type writes the value the
- * event means: a stage its stage and heading, a tool card its row from
+ * event means: a stage its entry in `stages`, a tool card its row from
  * one decode, a stream its text row, a `log` row its decoded payload
  * (`transcriptLogRows.ts`). The working state lives in `transcriptState.ts`.
  */
@@ -15,7 +15,6 @@ import { Predicate } from 'effect';
 import {
   MESSAGE_TYPES,
   TOOL_CALL_STATUS,
-  isPlainAgentIdentity,
   isTranscriptEvent,
   type SessionRow,
   type Stage,
@@ -51,8 +50,7 @@ import { standingAfter, type RunStanding } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
 /** A stage start opens its stage whole; a stage end closes the group
- *  its start opened and writes nothing for a group no start opened. A
- *  group's parent is a group this transcript opened, or it has none. */
+ *  its start opened and writes nothing for a group no start opened. */
 function applyStage(
   d: Draft,
   event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
@@ -64,17 +62,13 @@ function applyStage(
       id: event.id,
       name: event.label,
       startTime: d.at,
-      status: 'running',
-      ...(event.parentId && d.ix.stageIndex.has(event.parentId)
-        ? { parentStageId: event.parentId }
-        : {}),
-      ...(event.kind != null ? { kind: event.kind } : {}),
+      outcome: null,
     };
   } else {
     if (at === undefined) return;
     group = {
       ...d.next.stages[at],
-      status: event.status,
+      outcome: event.status,
       endTime: d.at,
     };
   }
@@ -100,35 +94,10 @@ function record(d: Draft, event: TraceRowFields): void {
       recordProcessOutputRow(d, event);
       return;
 
-    case 'stage.start': {
-      // A new model-turn boundary starts fresh: whatever MODEL_RESPONSE
-      // stream the previous turn may have opened is no longer this turn's
-      // to reuse. Tool-use turns are session stages containing several
-      // inner model/tool rounds.
-      if (event.kind === 'session') {
-        ix.pendingModelResponseId = undefined;
-      }
-      write(d, {
-        kind: 'stage',
-        base: open(
-          d,
-          event.id,
-          event.parentId ?? undefined,
-          MESSAGE_TYPES.DEFAULT,
-          true,
-        ),
-        label: event.label,
-      });
+    case 'stage.start':
+    case 'stage.end':
       applyStage(d, event);
       return;
-    }
-
-    case 'stage.end': {
-      const slot = ix.slots.get(event.id);
-      if (slot?.kind === 'stage') write(d, slot);
-      applyStage(d, event);
-      return;
-    }
 
     case 'tool.start': {
       if (ix.closed) return;
@@ -322,12 +291,12 @@ function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
   const { outcome } = standing;
   if (outcome === null || !d.next.stages.some(isOpenGroup)) return;
   d.next.stages = d.next.stages.map((group) =>
-    isOpenGroup(group) ? { ...group, status: outcome, endTime: d.at } : group,
+    isOpenGroup(group) ? { ...group, outcome, endTime: d.at } : group,
   );
   d.touched = true;
 }
 
-const isOpenGroup = (group: Stage): boolean => group.status === 'running';
+const isOpenGroup = (group: Stage): boolean => group.outcome === null;
 
 /**
  * Apply one session event to a run's transcript, advancing the run's working
@@ -351,6 +320,14 @@ export function applyTranscriptEvent(
   };
   if (event.type === 'run.position' && event.payload.at === 'waiting')
     d.ix.lastWait = event.seq;
+  // A turn starts fresh, and so does an activation (a resume may pick up a
+  // turn mid-way): whatever MODEL_RESPONSE stream came before is no longer
+  // this turn's for `response.finalized` to close.
+  if (
+    event.type === 'run.activate' ||
+    (event.type === 'run.position' && event.payload.at === 'turn.begin')
+  )
+    d.ix.pendingModelResponseId = undefined;
   const standing = standingAfter(event);
   if (standing !== null) applyStandingToTranscript(d, standing);
   else if (isTranscriptEvent(event)) {
@@ -397,10 +374,7 @@ export function buildRunTranscript(
   if (start.type !== 'run.start' || start.seq !== 1) {
     throw new Error('A transcript read must begin with its creation row.');
   }
-  const ctx: TranscriptContext = {
-    debug,
-    lifecycleStages: isPlainAgentIdentity(start.identity),
-  };
+  const ctx: TranscriptContext = { debug };
   for (const event of events) {
     transcript = applyTranscriptEvent(transcript, work, event, ctx);
   }

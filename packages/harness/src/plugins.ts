@@ -212,7 +212,6 @@ export type {
   AgentTrace,
   LogOptions,
   StageHandle,
-  StageOptions,
   StreamHandle,
   StreamOptions,
   ToolCardHandle,

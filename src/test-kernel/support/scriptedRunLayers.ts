@@ -293,7 +293,6 @@ export function testLaunch(
     config,
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     logger,
-    parentStage: logger.openStage(`Run: ${config.agent}`),
     toolPolicy: {},
     opening: {
       inputs: {},

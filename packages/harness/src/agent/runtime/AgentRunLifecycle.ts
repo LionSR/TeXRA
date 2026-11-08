@@ -86,7 +86,7 @@ function withResolvedOutcome(
  * The run program's terminal, the run's one terminal writer: every way the
  * flow exits (a result, a reported failure, an escaped exception, a stop)
  * reaches this exactly once, as the exit of the one masked region the
- * program runs in. The transcript stage ends first, then the `run.end`
+ * program runs in. The `run.end`
  * row commits in one transaction with everything the end decides
  * (`endRunRows`): a child's report with its parent's delivery among them
  * (`childEndReport`). An end the store refused fails the fiber once,
@@ -149,19 +149,6 @@ export const endRun = Effect.fn('endRun')(function* (
         operation: `execute ${agentIdentifier}`,
       });
   }
-  // Close the transcript stage first: its `stage.end` is published ahead
-  // of the `run.end` row, and a refusal of it is that row's write failure.
-  yield* Effect.try({
-    try: () => ctx.parentStage.end(verdict.outcome),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((stageErr) =>
-      logLifecycleWarning('Failed to end parent stage', {
-        runId,
-        error: stageErr,
-      }),
-    ),
-  );
   // The failure a child's report carries: the error without its kind.
   const failure =
     error === undefined

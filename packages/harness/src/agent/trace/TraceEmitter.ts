@@ -35,7 +35,6 @@ import type {
   AgentTraceSink,
   LogOptions,
   StageHandle,
-  StageOptions,
   StreamHandle,
   StreamOptions,
   ToolCardHandle,
@@ -117,15 +116,9 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Stages ────────────────────────────────────────────────────────
 
-  openStage(label: string, options: StageOptions = {}): StageHandle {
+  openStage(label: string): StageHandle {
     const id = crypto.randomUUID();
-    this.emit({
-      type: 'stage.start',
-      id,
-      label,
-      parentId: options.parent?.id,
-      kind: options.kind,
-    });
+    this.emit({ type: 'stage.start', id, label });
     return new StageHandleImpl(this, id);
   }
 
@@ -208,8 +201,6 @@ class ToolCardHandleImpl implements ToolCardHandle {
 }
 
 class StageHandleImpl implements StageHandle {
-  private ended = false;
-
   private readonly trace: TraceEmitter;
   readonly id: string;
   constructor(trace: TraceEmitter, id: string) {
@@ -218,17 +209,11 @@ class StageHandleImpl implements StageHandle {
   }
 
   end(status?: RunOutcome): void {
-    if (this.ended) return;
-    this.ended = true;
     this.trace.emit({
       type: 'stage.end',
       id: this.id,
       status: status ?? RUN_OUTCOME.COMPLETED,
     });
-  }
-
-  child(label: string, options: StageOptions = {}): StageHandle {
-    return this.trace.openStage(label, { ...options, parent: this });
   }
 }
 
