@@ -1539,6 +1539,14 @@ async function validateFork() {
   }
 }
 
+/** The `run.start` row of the task forked from `id`, if one was started. */
+const runStartForkedFrom = (rows, id) =>
+  rows.find(
+    (row) =>
+      row.type === 'run.start' &&
+      JSON.parse(row.provenance ?? 'null')?.from?.id === id,
+  );
+
 /**
  * The TUI's fork (GUI lane G5): in a resumed chat, `/fork` continues a new
  * task holding the conversation (its next reply names the first message).
@@ -1563,12 +1571,7 @@ async function validateTuiFork() {
       ],
     );
     const rows = project.readStore(VIEW_ROWS);
-    const opened = rows.find(
-      (row) =>
-        row.type === 'run.start' &&
-        JSON.parse(row.provenance ?? 'null')?.from?.id === seed,
-    );
-    const source = opened?.run;
+    const source = runStartForkedFrom(rows, seed)?.run;
     const artifactPath = writeArtifact('tui-fork.json', {
       seed,
       source,
@@ -1576,11 +1579,7 @@ async function validateTuiFork() {
       replies,
       rows,
     });
-    const forkStart = rows.find(
-      (row) =>
-        row.type === 'run.start' &&
-        JSON.parse(row.provenance ?? 'null')?.from?.id === source,
-    );
+    const forkStart = runStartForkedFrom(rows, source);
     const causes = rows
       .filter(
         (row) => row.run === forkStart?.run && row.type === 'context.edit',
@@ -3163,13 +3162,7 @@ async function validateOpenTimePrompt() {
         }
       },
     });
-    const source = project
-      .readStore(VIEW_ROWS)
-      .find(
-        (row) =>
-          row.type === 'run.start' &&
-          JSON.parse(row.provenance ?? 'null')?.from?.id === seed,
-      )?.run;
+    const source = runStartForkedFrom(project.readStore(VIEW_ROWS), seed)?.run;
     assert(
       killed && opening.exit.signal === 9 && source !== undefined,
       `the forked chat should reach idle and be killed before testing resume (exit ${JSON.stringify(opening.exit)})\noutput:\n${stripVTControlCharacters(opening.output).slice(-3000)}`,
