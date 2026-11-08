@@ -14,8 +14,11 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   configureElectronTestStub,
   resetElectronTestStub,
-} from './electronTestStub.ts';
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
+} from '@test/desktop/electronTestStub.ts';
+import {
+  desktopSourcePath,
+  moduleFileUrl,
+} from '@test/desktop/desktopTestPaths.ts';
 
 interface DesktopAppLogModule {
   readDesktopLogSnapshot(options: { workspaceRoot?: string | undefined }): {
