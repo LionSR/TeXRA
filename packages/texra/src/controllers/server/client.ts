@@ -397,7 +397,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     return yield* Effect.fail(newerService(info));
   if (info !== null && (isOlder(info) || info.draining)) {
     const leaving = info;
-    const tasks = `${formatResultCount(leaving.running, 'running task')}`;
+    const tasks = formatResultCount(leaving.running, 'running task');
     // With no task running it exits at once: nothing to wait for.
     yield* (leaving.running > 0 ? options.waiting : Effect.logInfo)(
       leaving.draining
