@@ -2036,6 +2036,23 @@ class RunChanged extends Schema.TaggedError<RunChanged>()('RunChanged', {
 })
 ```
 
+## RunEndError
+
+Why a run ended failed ({@link RunEndErrorSchema}).
+
+```ts
+type RunEndError = typeof RunEndErrorSchema.Type;
+```
+
+## runEndErrorMessage
+
+A run's failure in plain words: a model failure's verdict worded
+({@link modelFailureMessage}), a local one's own words.
+
+```ts
+function runEndErrorMessage(error: RunEndError): string
+```
+
 ## RunEndOutput
 
 ```ts

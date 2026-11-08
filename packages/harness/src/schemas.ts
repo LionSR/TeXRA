@@ -290,10 +290,13 @@ export {
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
 // A model call's failure as a run records it (its verdict), its plain
-// words, and the used-up plan it names, for an app that words it itself.
+// words and a run end's, and the used-up plan it names, for an app that
+// words it itself.
 export {
   modelFailureMessage,
+  runEndErrorMessage,
   usedUpPlanOf,
+  type RunEndError,
   type UsedUpPlan,
 } from '@shared/schemas';
 // Escaping for an XML or HTML attribute value and for element text.
