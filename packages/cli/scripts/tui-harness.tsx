@@ -597,7 +597,9 @@ function seedRun(
  * from its birth job until its fiber ends: the view reads them as
  * `runsHere`, which a run needs to read as running or waiting rather than
  * interrupted. A fixture has no fiber, so each hold is one that never ends
- * until the run's terminal row or removal releases it.
+ * until the run's terminal row or removal releases it. A stop the registry
+ * applies (a `run.stop` row, then the fiber's interruption) ends the run
+ * CANCELLED, as a real run's terminal (`endRun`) does.
  */
 const heldRuns = new Map<RunId, Fiber.Fiber<unknown, unknown>>();
 function holdRun(runId: RunId): void {
@@ -608,7 +610,15 @@ function holdRun(runId: RunId): void {
       Effect.map(
         registryOf(Context.get(harnessRuntimeSession, Runs)).start(runId, {
           open: Effect.void,
-          run: () => Effect.never,
+          run: () =>
+            Effect.onInterrupt(Effect.never, () =>
+              Effect.sync(() => {
+                // A release (`releaseRun`) drops the hold first: its caller
+                // writes the run's end, or removes the run.
+                if (heldRuns.delete(runId))
+                  publishRunEnd(runId, RUN_OUTCOME.CANCELLED);
+              }),
+            ),
         }),
         ({ fiber }) => fiber,
       ),
@@ -673,6 +683,10 @@ function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
     throw new Error(`tui-harness: cannot end unknown run ${runId}`);
   }
   releaseRun(runId);
+  publishRunEnd(runId, outcome);
+}
+
+function publishRunEnd(runId: RunId, outcome: RunOutcome): void {
   publish({
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
