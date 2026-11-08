@@ -5,7 +5,7 @@ import { css, type CSSResult } from 'lit';
 export const retryRequestPanelStyles: CSSResult = css`
   /* No local clip. A max-height of 4em with overflow hidden cut the message
      with no way to read the rest: the adjacent "Error details" disclosure
-     holds errorDetails, a different value, not the truncated remainder. The
+     holds the failure's details, a different value, not the truncated remainder. The
      text-overflow: ellipsis beside it never applied either — that needs
      white-space: nowrap or a line clamp, so the text was hard-cut without
      even an ellipsis to show it. Length is already handled one level up,

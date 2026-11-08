@@ -1,6 +1,14 @@
-import { Schema, Struct } from 'effect';
+import { getReasonPhrase } from 'http-status-codes';
+import { Result, Schema, String as Str, Struct } from 'effect';
+import {
+  ModelErrorFieldsSchema,
+  PLAN_ROUTES,
+  providerDisplayName,
+} from '@texra-ai/llm';
 
-import { DeclinableUsageRouteSchema } from './usage';
+import { formatCompactDuration } from '@utils/text/stringUtils';
+
+import { type DeclinableUsageRoute, DeclinableUsageRouteSchema } from './usage';
 
 /** A route that bills a signed-in subscription session (ChatGPT, Grok). */
 export const SubscriptionSessionRouteSchema = DeclinableUsageRouteSchema.pick([
@@ -8,78 +16,135 @@ export const SubscriptionSessionRouteSchema = DeclinableUsageRouteSchema.pick([
   'xai-subscription',
 ]);
 
-/** A provider failure's one classification: a missing key, an overflowed
- *  window, the account's own credit run out (the key in use is the broken
- *  one, so only a new key helps), a used-up plan, or a subscription session
- *  that could not bill. */
-export const ProviderErrorClassificationSchema = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literals([
-      'missing-api-key',
-      'context-window',
-      'upstream-credit',
-    ]),
-  }),
-  /** A used-up plan, named by the route that bills through it (a retry can
-   *  decline that route for the run, so the model goes on with the user's
-   *  own key), with what the provider said of it: its tier in the provider's
-   *  own word (ChatGPT's `plus`), and how long until the quota resets, from
-   *  the moment it refused. */
-  Schema.Struct({
-    kind: DeclinableUsageRouteSchema,
-    planType: Schema.optional(Schema.String),
-    resetsInMs: Schema.optional(
-      Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    ),
-  }),
-  /** A signed-in subscription that could not bill the call: its route,
-   *  whether only a fresh sign-in can help (else it may recover), and the
-   *  session's own failure. */
-  Schema.Struct({
-    kind: Schema.Literal('subscription-session'),
-    route: SubscriptionSessionRouteSchema,
-    needsReauth: Schema.Boolean,
-    sessionError: Schema.String,
-  }),
-]);
-export type ProviderErrorClassification =
-  (typeof ProviderErrorClassificationSchema)['Type'];
-
-/** Core error details from a provider/SDK */
-const ProviderErrorObjectSchema = Schema.Struct({
-  message: Schema.String,
-  statusCode: Schema.optional(Schema.Int),
-  statusText: Schema.optional(Schema.String),
-  provider: Schema.optional(Schema.String),
-  /** The provider failure's one canonical classification. Absent for ordinary
-   *  provider, transport, abort, and local-I/O failures. */
-  classification: Schema.optional(ProviderErrorClassificationSchema),
-  requestId: Schema.optional(Schema.String),
-  rawErrorBody: Schema.optional(Schema.Unknown),
-  /** Tail of the text the model streamed before the attempt failed, written
-   *  by `failureInfo` from what the run loop had already received.
-   *  Lets the retry surface show the user that the work so far is not lost.
-   *  The producer truncates to a few KB; this schema is inferred only, not
-   *  parsed at runtime, so size enforcement stays the producer's. */
-  partialText: Schema.optional(Schema.String),
+/** A signed-in subscription that could not bill a call: its route, and
+ *  whether only a fresh sign-in can help (else it may recover). */
+export const SubscriptionSessionFailureSchema = Schema.Struct({
+  route: SubscriptionSessionRouteSchema,
+  needsReauth: Schema.Boolean,
 });
-/** A provider failure as a host reads it: the retry record with its raw body. */
-export type ProviderError = typeof ProviderErrorObjectSchema.Type;
 
 /**
- * Minimal error info for retry state tracking.
- *
- * Structurally this is exactly a {@link ProviderError} without `rawErrorBody`
- * (large, not worth persisting in retry state) — that optional field is the
- * sole difference between the two shapes, so they round-trip by narrowing
- * (drop `rawErrorBody`) and widening (it stays absent). Deriving the schema
- * with `.omit()` keeps it from drifting out of sync with
- * `ProviderErrorObjectSchema` as new error fields are added.
+ * A model call's failure as a run records it: the verdict, never its words.
+ * `model` is llm's verdict on the vendor's reply (its kind, the vendor's own
+ * message and status, and the quota a used-up plan or credit names), `route`
+ * is model access finding no route to send on (a missing key, a subscription
+ * session that could not bill), and `interrupted` is an attempt the process
+ * stopped during, which may have been billed without an answer. `provider`
+ * is the binding's. Each reader words it ({@link modelFailureMessage}, or an
+ * app's own copy), so a wording change is not a format change.
  */
-export const RetryErrorInfoSchema = ProviderErrorObjectSchema.mapFields(
-  Struct.omit(['rawErrorBody']),
-);
-export type RetryErrorInfo = typeof RetryErrorInfoSchema.Type;
+export const ModelFailureSchema = Schema.Union([
+  ModelErrorFieldsSchema.mapFields(
+    Struct.pick(['kind', 'message', 'status', 'requestId', 'quota']),
+  ).mapFields(
+    Struct.assign({
+      source: Schema.Literal('model'),
+      provider: Schema.optional(Schema.String),
+      /** Tail of the text the model streamed before the attempt failed:
+       *  the retry surface shows that the work so far is not lost. */
+      partialText: Schema.optional(Schema.String),
+    }),
+  ),
+  Schema.Struct({
+    source: Schema.Literal('route'),
+    provider: Schema.optional(Schema.String),
+    message: Schema.String,
+    /** The route's credential is not set anywhere the run reads. */
+    missingApiKey: Schema.optional(Schema.Literal(true)),
+    session: Schema.optional(SubscriptionSessionFailureSchema),
+  }),
+  Schema.Struct({
+    source: Schema.Literal('interrupted'),
+    provider: Schema.optional(Schema.String),
+  }),
+]);
+/** {@link ModelFailureSchema}'s value. */
+export type ModelFailure = typeof ModelFailureSchema.Type;
+
+/** A used-up plan as llm's verdict names it. */
+export type UsedUpPlan = {
+  readonly plan: DeclinableUsageRoute;
+  readonly planType?: string | undefined;
+  readonly resetsInMs?: number | undefined;
+};
+
+/** The plan a failure says ran out, with its tier and reset; none for the
+ *  account's own credit or any other failure. */
+export function usedUpPlanOf(failure: ModelFailure): UsedUpPlan | undefined {
+  if (failure.source !== 'model') return undefined;
+  const { quota } = failure;
+  if (quota === undefined || quota.plan === null) return undefined;
+  return { ...quota, plan: quota.plan };
+}
+
+/** An HTTP status's reason phrase; undefined for an unknown code (`getReasonPhrase` throws). */
+export function reasonPhrase(statusCode: number): string | undefined {
+  return Result.getOrUndefined(Result.try(() => getReasonPhrase(statusCode)));
+}
+
+/**
+ * The provider a plan bills, by its own name (`OpenAI` for a ChatGPT plan):
+ * how the plain words below name a plan, so an embedder without copy of its
+ * own reads what ran out. An app's switch and sign-in labels are its copy,
+ * worded from the same facts where it shows them.
+ */
+export const planOwner = (plan: DeclinableUsageRoute): string =>
+  providerDisplayName(PLAN_ROUTES[plan].provider);
+
+/** What a person is told of an attempt the process stopped during. */
+const INTERRUPTED_MESSAGE =
+  'The process stopped while a model request was running, so it may have been billed without an answer. Retry again?';
+
+/**
+ * A model call's failure in plain words, the one wording of the verdict for
+ * every reader without copy of its own: a used-up plan says what ran out
+ * and what to do; an overflowed window says why a retry cannot help; a
+ * subscription session says its remedy; anything else is the vendor's
+ * message under its status.
+ */
+export function modelFailureMessage(failure: ModelFailure): string {
+  if (failure.source === 'interrupted') return INTERRUPTED_MESSAGE;
+  if (failure.source === 'route') {
+    const { message, session } = failure;
+    if (session === undefined) return message;
+    const remedy = session.needsReauth
+      ? 'Sign in again'
+      : 'Try again in a moment';
+    return `Your ${planOwner(session.route)} subscription is unavailable: ${message} ${remedy}, or turn the subscription off.`;
+  }
+  const plan = usedUpPlanOf(failure);
+  if (plan !== undefined) {
+    const tier = plan.planType ? ` ${Str.capitalize(plan.planType)}` : '';
+    const reset =
+      plan.resetsInMs === undefined
+        ? ''
+        : ` Resets in ${formatCompactDuration(plan.resetsInMs)}.`;
+    return (
+      `Usage limit reached on your ${planOwner(plan.plan)}${tier} plan.${reset}` +
+      ' Switch to your own API key to keep working, or wait until the limit resets.'
+    );
+  }
+  if (failure.kind === 'context-overflow')
+    return (
+      `${failure.message} Retrying would resend the same oversized request. ` +
+      'Start a new session, or reduce attached files and tool output.'
+    );
+  const { status } = failure;
+  const statusText = status === undefined ? undefined : reasonPhrase(status);
+  const message = failure.message || statusText || 'Provider request failed';
+  return status
+    ? `HTTP ${status}${statusText ? ` ${statusText}` : ''} – ${message}`
+    : message;
+}
+
+/** A failure as a host reads it: its plain words, the model call's verdict
+ *  when one failed, and the vendor's raw body, which stays in the process
+ *  log. */
+export interface ProviderError {
+  readonly message: string;
+  readonly failure?: ModelFailure;
+  readonly rawErrorBody?: unknown;
+}
 
 /** Context about where/when the error occurred */
 const ErrorContextSchema = Schema.Struct({
@@ -89,26 +154,16 @@ const ErrorContextSchema = Schema.Struct({
 export type ErrorContext = typeof ErrorContextSchema.Type;
 
 /**
- * Complete error log data. `decodeLogPayload` reads it with
- * `onExcessProperty: 'error'`: a stream log still carrying the retired
- * independent classification markers must fail loudly rather than have them
- * stripped into a classification-less row that reads as an ordinary provider
- * failure.
+ * An error log row's data: a model call's failure as its verdict, or any
+ * other failure's own words (`message`, and the error's text where it says
+ * more, `rawMessage`), with where it happened. `decodeLogPayload` reads it
+ * with `onExcessProperty: 'error'`: an earlier build's row carrying its
+ * worded fields must fail loudly rather than read as a failure without one.
  */
-export const ErrorLogDataSchema = RetryErrorInfoSchema.mapFields(
-  Struct.assign({
-    // Compose the shared operation/model context pair from ErrorContextSchema
-    // so adding a field there propagates to the flattened log-row shape instead
-    // of silently diverging.
-    ...ErrorContextSchema.fields,
-    rawMessage: Schema.optional(Schema.String),
-  }),
-);
+export const ErrorLogDataSchema = Schema.Struct({
+  failure: Schema.optional(ModelFailureSchema),
+  message: Schema.optional(Schema.String),
+  rawMessage: Schema.optional(Schema.String),
+  ...ErrorContextSchema.fields,
+});
 export type ErrorLogData = typeof ErrorLogDataSchema.Type;
-
-/** Project a full ProviderError onto the retry-state record by dropping the
- *  bulky `rawErrorBody`; every other field carries over unchanged. */
-export function toRetryErrorInfo(err: ProviderError): RetryErrorInfo {
-  const { rawErrorBody, ...rest } = err;
-  return rest;
-}

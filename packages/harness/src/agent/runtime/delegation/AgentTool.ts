@@ -23,6 +23,7 @@ import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
+  runEndErrorMessage,
   AGENT_SOURCE,
   AgentProposalSchema,
   type AgentProposal,
@@ -260,7 +261,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     );
   if (result.outcome !== 'completed')
     return errorResult(
-      `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error?.message ? `: ${result.error.message}` : '.'}`,
+      `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error ? `: ${runEndErrorMessage(result.error)}` : '.'}`,
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
     );
   const config = yield* getRunRecords(runId).readConfig();
