@@ -48,7 +48,9 @@ describe('UsageLogService', () => {
    *  nothing more can be sent. */
   const startUsageLog = Effect.gen(function* () {
     const host = yield* FakeHost;
-    const scope = yield* Scope.make();
+    // A child of the case's scope: a case that fails before `stop` still
+    // closes it, so no sender or ticker outlives the case.
+    const scope = yield* Scope.fork(yield* Scope.Scope);
     const context = yield* Layer.buildWithScope(
       usageLogLayer({ version: undefined, editorType: undefined }).pipe(
         Layer.provide(
