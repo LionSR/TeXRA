@@ -16,7 +16,7 @@
  */
 import { Schema } from 'effect';
 
-import { RetryErrorInfoSchema } from './errors';
+import { ModelFailureSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
@@ -152,13 +152,13 @@ export const ModelMessagePayloadSchema = Schema.Union([
     invocation: InvocationRefSchema,
     providerResponseId: Schema.String.check(Schema.isMinLength(1)),
   }),
-  /** The attempt failed: what went wrong, in the runtime's own failure
-   *  vocabulary (deliberately not the llm package's `ModelError`), and what
-   *  the invoker does next, decided once here so a resume replays it. */
+  /** The attempt failed: what went wrong, as its verdict (llm's on the
+   *  vendor's reply, or the route's), and what the invoker does next,
+   *  decided once here so a resume replays it. */
   Schema.Struct({
     kind: Schema.Literal('failed'),
     invocation: InvocationRefSchema,
-    error: RetryErrorInfoSchema,
+    error: ModelFailureSchema,
     next: FailedNextSchema,
     /** The priced usage of a response the provider billed before refusing
      *  it (Anthropic's overflowed turn), counted like a response's. */

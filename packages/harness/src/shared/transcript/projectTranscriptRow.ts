@@ -13,6 +13,8 @@
 import {
   MESSAGE_TYPES,
   type ErrorLogData,
+  modelFailureMessage,
+  reasonPhrase,
   type FileListEntry,
   type LogPayload,
   type ToolUseLog,
@@ -23,16 +25,18 @@ import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
 import { transcriptText } from './transcriptText';
-import type {
-  ErrorRow,
-  ErrorRowDetail,
-  LoadedMediaRef,
-  LogRow,
-  StatItem,
-  StreamingTextRow,
-  ToolRow,
-  TranscriptRow,
-  TranscriptRowBase,
+import {
+  ERROR_DETAIL_KEYS,
+  type ErrorDetailKey,
+  type ErrorRow,
+  type ErrorRowDetail,
+  type LoadedMediaRef,
+  type LogRow,
+  type StatItem,
+  type StreamingTextRow,
+  type ToolRow,
+  type TranscriptRow,
+  type TranscriptRowBase,
 } from './transcriptRow';
 
 // ---------------------------------------------------------------------------
@@ -77,42 +81,45 @@ export function streamingTextRow(
 // ---------------------------------------------------------------------------
 
 /**
- * The canonical error detail set, in display order. Typed against
- * `ErrorLogData` so a schema rename is a compile error here rather than a
- * field that quietly stops rendering.
+ * An error's detail fields, by key: a model failure's from its verdict (its
+ * plain words, provider, status and request id), any other failure's from
+ * its own words.
  *
  * `partialText` is deliberately absent: it is a retry surface's material,
  * not a transcript row's. `RetryRequestPanel` reads it from the approval
  * request's own payload, never from a projected row.
  */
-const ERROR_DETAIL_FIELDS = [
-  'message',
-  'operation',
-  'model',
-  'provider',
-  'statusCode',
-  'statusText',
-  'classification',
-  'requestId',
-  'rawMessage',
-] as const satisfies readonly (keyof ErrorLogData)[];
+function errorFields(
+  data: ErrorLogData,
+): Partial<Record<ErrorDetailKey, string | number>> {
+  const { failure, operation, model } = data;
+  const where = { operation, model };
+  if (failure === undefined)
+    return { message: data.message, ...where, rawMessage: data.rawMessage };
+  const status = failure.source === 'model' ? failure.status : undefined;
+  return {
+    message: modelFailureMessage(failure),
+    ...where,
+    provider: failure.provider,
+    statusCode: status,
+    statusText: status === undefined ? undefined : reasonPhrase(status),
+    requestId: failure.source === 'model' ? failure.requestId : undefined,
+  };
+}
 
 function errorDetails(
   data: ErrorLogData | undefined,
   summary: string,
 ): ErrorRowDetail[] {
   if (!data) return [];
-  return ERROR_DETAIL_FIELDS.flatMap((key) => {
-    const value = data[key];
+  const fields = errorFields(data);
+  return ERROR_DETAIL_KEYS.flatMap((key) => {
+    const value = fields[key];
     // The message is the summary on most failures; repeating it under the
-    // summary says nothing. Neither does an empty provider body.
+    // summary says nothing.
     if (value == null || (key === 'message' && value === summary)) return [];
-    const text =
-      typeof value === 'object'
-        ? JSON.stringify(value, null, 2)
-        : String(value);
-    if (text.trim() === '' || text === '{}') return [];
-    return [{ key, value: text }];
+    const text = String(value);
+    return text.trim() === '' ? [] : [{ key, value: text }];
   });
 }
 
@@ -126,14 +133,7 @@ function errorRow(
     kind: 'error',
     summary: transcriptText(summary),
     details: errorDetails(data, summary),
-    ...(data?.classification === undefined
-      ? {}
-      : {
-          failure: {
-            message: data.message,
-            classification: data.classification,
-          },
-        }),
+    ...(data?.failure !== undefined && { failure: data.failure }),
   };
 }
 

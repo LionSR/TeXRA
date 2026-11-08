@@ -305,25 +305,22 @@ export function activationDrafts(
   return [{ type: 'run.activate', aggregateId: target }, ...ended, ...changed];
 }
 
-/** The `run.end` row: the run's outcome, its error with the note of a last
- *  turn whose delivery failed (`note`), and what it produced, or nothing.
- *  Why a cancelled run stopped is its `run.stop` row. */
+/** The `run.end` row: the run's outcome, its error, and what it produced,
+ *  or nothing. Why a cancelled run stopped is its `run.stop` row. */
 export function runEndDraft(
   runId: RunId,
   end: {
     readonly outcome: RunOutcome;
     readonly error?: RunEnd['error'];
-    readonly note?: string;
     readonly output?: RunEndOutput;
   },
 ): Extract<RunInputDraft, { readonly type: 'run.end' }> {
-  const { outcome, error, note } = end;
-  const message = [error?.message, note].filter(Boolean).join('; ');
+  const { outcome, error } = end;
   return {
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
     outcome,
-    ...(error && { error: { ...error, message } }),
+    ...(error && { error }),
     output: end.output ?? emptyRunEndOutput(),
   };
 }
