@@ -246,7 +246,6 @@ const composedProcess = (
         // The suite's captured entries are the assertion surface: emit every
         // level the programs run and let each test filter what it reads.
         minimumLogLevel: 'Trace',
-        processStart: Effect.succeed('vitest'),
       }).pipe(Layer.provide(model));
     }),
   ) as Layer.Layer<
