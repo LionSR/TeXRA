@@ -49,7 +49,7 @@ import {
   autoDecideRequests,
   createRecordingHost,
   decideRequest,
-} from '../agent/progressTestUtils';
+} from '@test/agent/progressTestUtils';
 
 /** The per-install key env values are digested under, fixed. */
 const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));
