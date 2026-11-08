@@ -107,7 +107,7 @@ export interface UserRow extends TranscriptRowBase {
 }
 
 /** The fields an error's detail block shows, in display order. */
-export const ERROR_DETAIL_KEYS = [
+export const ERROR_DETAIL_KEYS = Object.freeze([
   'message',
   'operation',
   'model',
@@ -116,7 +116,7 @@ export const ERROR_DETAIL_KEYS = [
   'statusText',
   'requestId',
   'rawMessage',
-] as const;
+] as const);
 /** One of {@link ERROR_DETAIL_KEYS}. */
 export type ErrorDetailKey = (typeof ERROR_DETAIL_KEYS)[number];
 
