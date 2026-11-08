@@ -82,10 +82,10 @@ function applyStage(
 }
 
 /**
- * A script's stage, projected from cards: a card opening under another card
+ * A script's stage, projected from cards: a card starting under another card
  * (`stageId`, the `script` card that issued it) opens that card's stage,
  * labelled by its title, or reopens it when the run's end closed it and a
- * resume issues more calls; the script card's own close closes it on its
+ * resume starts a call again; the script card's own close closes it on its
  * result.
  */
 function openCardStage(d: Draft, card: string): void {
@@ -167,6 +167,10 @@ function record(d: Draft, event: TraceRowFields): void {
         ...(event.section !== undefined ? { section: event.section } : {}),
         ...(event.attempt !== undefined ? { attempt: event.attempt } : {}),
       };
+      // A card starting under a stage (a new call, or a resumed call's
+      // retry under the same card) opens it, or reopens it after the run's
+      // end closed it.
+      if (event.stageId !== undefined) openCardStage(d, event.stageId);
       const slot = ix.slots.get(event.logId);
       if (slot) {
         if (slot.kind === 'tool' && ix.activeTools.has(event.logId)) {
@@ -176,7 +180,6 @@ function record(d: Draft, event: TraceRowFields): void {
         }
         return;
       }
-      if (event.stageId !== undefined) openCardStage(d, event.stageId);
       write(d, {
         kind: 'tool',
         base: open(

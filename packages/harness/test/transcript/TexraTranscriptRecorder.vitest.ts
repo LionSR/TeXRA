@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { MESSAGE_TYPES, type RunId } from '@texra-ai/harness/schemas';
+import {
+  emptyRunEndOutput,
+  MESSAGE_TYPES,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import type { TranscriptRow } from '@texra-ai/harness/transcript';
 
@@ -58,5 +62,41 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
       'The file contains the theorem statement.',
     ]);
     expect(responses[1]?.id).not.toBe(responses[0]?.id);
+  });
+});
+
+describe('createTestRunTrace script stage across a stop and resume', () => {
+  it("reopens the stage when a resumed call's card starts again", () => {
+    // cast: a fixture run id; the trace only stamps it on its rows.
+    const { trace, lifecycle, transcript } = createTestRunTrace(
+      'stream:test' as RunId,
+    );
+    const call = {
+      type: 'tool.start',
+      logId: 'call-1',
+      stageId: 'script-card',
+      toolName: 'agent',
+      input: {},
+    } as const;
+    trace.emit({
+      type: 'tool.start',
+      logId: 'script-card',
+      toolName: 'script',
+      input: { code: '', title: 'Map' },
+    });
+    trace.emit(call);
+    lifecycle({
+      type: 'run.end',
+      outcome: 'cancelled',
+      output: emptyRunEndOutput(),
+    });
+    lifecycle({ type: 'run.activate' });
+    // The resumed call keeps its card: its retry starts the same `logId`.
+    trace.emit({ ...call, attempt: 2 });
+
+    expect(transcript().stages).toMatchObject([
+      { id: 'script-card', name: 'Map', outcome: null },
+    ]);
+    expect(transcript().stages[0]).not.toHaveProperty('endTime');
   });
 });
