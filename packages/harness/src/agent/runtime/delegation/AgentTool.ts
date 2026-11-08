@@ -14,7 +14,6 @@
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
-import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runOwnership';
@@ -34,6 +33,7 @@ import {
   type SubagentProgressUpdate,
   type ToolResult,
   type AgentConfig,
+  isTaskConfig,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import {
@@ -343,8 +343,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
             ),
         });
   // The call's files: a run-storage file must be this run's own or a declared
-  // output of a completed child of it; a trusted script's files pass as named.
-  const trusted = isTrustedScript(run.config);
+  // output of a completed child of it; a task's recipe's files pass as named.
+  const trusted = isTaskConfig(run.config);
   const resolved = yield* Effect.result(
     Effect.all(
       (
@@ -371,7 +371,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const oneShot = noLaterTurn(run);
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
-  // A task, a structured call and a trusted script's call reach the child
+  // A task launch, a structured call and a call from a task's recipe reach the child
   // verbatim; any other is handed off with the parent's instruction.
   const handsOff = task === null && outputSchema === undefined && !trusted;
   // A completed call with the same prompt, options and file bytes is reused.

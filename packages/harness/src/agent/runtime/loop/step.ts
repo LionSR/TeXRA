@@ -46,7 +46,6 @@ import { ModelProvider } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
-import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
@@ -54,6 +53,7 @@ import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
+  isTaskConfig,
   qualifyAggregateId,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
@@ -216,8 +216,8 @@ const openStep = Effect.fn('Step.open')(function* (
   const roots = yield* SessionRoots;
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
-    // A trusted script's tools are fixed; else read the switches live.
-    const trusted = isTrustedScript(run.config);
+    // A task's recipe's tools are fixed; else read the switches live.
+    const trusted = isTaskConfig(run.config);
     const off = trusted
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
