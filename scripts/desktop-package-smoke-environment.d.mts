@@ -31,7 +31,7 @@ export type DatabaseFixture = Pick<
   > &
   Pick<
     typeof import('@platform/defaults/nodeProcesses'),
-    'nodeProcesses' | 'processOwnerId'
+    'processOwnerId' | 'processStartIdentity'
   > &
   Pick<
     typeof import('@platform/defaults/nodePlatform'),
