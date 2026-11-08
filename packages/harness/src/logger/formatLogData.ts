@@ -9,6 +9,8 @@
 import { Predicate } from 'effect';
 import { configure } from 'safe-stable-stringify';
 
+import { formatResultCount } from '@utils/text/stringUtils';
+
 const safeStringify = configure({ circularValue: '[Circular]' });
 
 /**
@@ -67,7 +69,7 @@ function capStack(stack: string | undefined): string | undefined {
   if (lines.length <= keep) return stack;
   return [
     ...lines.slice(0, keep),
-    `    … ${lines.length - keep} more frame${lines.length - keep === 1 ? '' : 's'}`,
+    `    … ${formatResultCount(lines.length - keep, 'more frame')}`,
   ].join('\n');
 }
 
