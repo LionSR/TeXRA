@@ -27,7 +27,7 @@ const RETRY_REQUEST_HIDDEN_NOUN = 'error rows';
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const { data } = props.payload;
-  const errorText = modelFailureText(data.errorDetails);
+  const errorText = modelFailureText(data.failure);
   // The run decided the offer; the card only renders it.
   const canSwitchToPersonalKey = data.credentialSwitch != null;
   // The modal only names the answers, as `REQUEST_ACTIONS` keys them. `y`

@@ -353,7 +353,7 @@ const primaryFailure = (error: unknown): unknown =>
  * attaches later: a refused launch's notice (`LaunchRefused.notice`), or
  * else the primary failure as `prefix` plus its text (a `Rejected`
  * request's reason). With no prefix, a model failure is shown as its run
- * would record it, its classification beside, which a host may word in its
+ * would record it, its verdict beside, which a host may word in its
  * place; a prefixed text says more than the failure, so it is shown as
  * written. A host that throws on the notice shows that text as an error
  * instead. It presents whatever it is given, so each failure has one

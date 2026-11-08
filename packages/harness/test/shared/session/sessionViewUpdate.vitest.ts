@@ -25,6 +25,7 @@ import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { RunHistoryRow } from '@shared/session/historyTurns';
 import { applyRunRows, type RunHistoryDraft } from '@shared/session/runState';
 
+import { toolUseTurn } from '@test/support/sessionRows';
 import {
   CHILD,
   Log,
@@ -37,7 +38,7 @@ import {
   subscribe,
   tail,
   viewOf,
-} from './fanOutScenario';
+} from '@test/shared/session/fanOutScenario';
 
 function runView(view: SessionView, id: RunId): RunView {
   const found = view.runs.get(id);
@@ -130,134 +131,16 @@ describe('session view update', () => {
 
 const RUN_HISTORY_RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 const RUN_HISTORY_AGGREGATE = qualifyAggregateId('run', RUN_HISTORY_RUN);
-const ORIGIN = {
-  protocol: 'openai-responses',
-  requestedModel: 'gpt-test',
-  deployment: {
-    endpoint: 'https://api.example.test/v1',
-    credentialScope: 'openai',
-  },
-  codecVersion: 1,
-} as const;
-const INVOCATION = {
-  invocationId: '0f1e2d3c-4b5a-4a9b-8c7d-6e5f4a3b2c1d',
-  attempt: 1,
-} as const;
-const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
-const USER = (text: string) => ({
-  role: 'user',
-  content: [{ kind: 'text', text }],
-});
-const TURN = {
-  kind: 'http',
-  providerResponseId: 'resp-1',
-  requestedOrigin: ORIGIN,
-  returnedModel: null,
-  modelFingerprint: null,
-  content: [
-    { kind: 'message', content: [{ kind: 'text', text: 'running ls' }] },
-    {
-      kind: 'local-call',
-      providerCallId: 'call-a',
-      name: 'bash',
-      argumentsText: '{"command":"ls"}',
-    },
-    {
-      kind: 'local-call',
-      providerCallId: 'call-b',
-      name: 'bash',
-      argumentsText: '{"command":"ls"}',
-    },
-  ],
-  finishReason: 'tool-calls',
-  usage: {
-    inputTokens: 10,
-    outputTokens: 5,
-    totalTokens: 15,
-    cachedInputTokens: 4,
-    cacheWriteTokens: null,
-    reasoningTokens: null,
-    toolUsePromptTokens: null,
-  },
-};
-const CALLS = [
-  {
-    callId: 'call-a',
-    toolName: 'bash',
-    lane: 'barrier',
-    replay: 'unsafe',
-    duplicateOf: null,
-    logId: 'card-0',
-  },
-  {
-    callId: 'call-b',
-    toolName: 'bash',
-    lane: 'barrier',
-    replay: 'unsafe',
-    duplicateOf: 'call-a',
-    logId: 'card-1',
-  },
-];
-/** What the writer stamps beside `calls`: the runtime's priced usage. */
-const TURN_USAGE = {
-  inputTokens: 10,
-  outputTokens: 5,
-  cost: 0.25,
-  responseTimeMs: 1200,
-  provider: 'openai-responses',
-  cachedInputTokens: 4,
-  cacheMissInputTokens: 6,
-};
+const toolTurn = toolUseTurn(RUN_HISTORY_RUN);
 /** Where the loop stands: its first position opens the run. */
 const position = (at: string, turn: number) => ({
   type: 'run.position',
   payload: { family: 'toolUse', at, turn },
 });
-
-/** The row a call's body starts with. */
-const intent = (callId: string, attempt = 1) => ({
-  type: 'tool.intent',
-  payload: {
-    origin: { kind: 'response', responseId: RESPONSE_ID },
-    callId,
-    attempt,
-  },
-});
 const message = (payload: Record<string, unknown>) => ({
   type: 'model.message',
   payload,
 });
-const settlement = (
-  callId: string,
-  overrides: Record<string, unknown> = {},
-) => ({
-  type: 'tool.result',
-  payload: {
-    responseId: RESPONSE_ID,
-    callId,
-    attempt: 1,
-    disposition: 'executed',
-    duplicateOf: null,
-    result: { status: 'executed', output: 'ok' },
-    attachments: [],
-    ...overrides,
-  },
-});
-const TOOL_GROUP = {
-  role: 'tool',
-  results: [
-    {
-      callOrdinal: 0,
-      status: 'success',
-      content: [{ kind: 'text', text: 'ok' }],
-    },
-    {
-      callOrdinal: 1,
-      status: 'success',
-      content: [{ kind: 'text', text: 'ok' }],
-    },
-  ],
-};
 
 /** One committed row, stored and read back through the production boundary. */
 const runHistoryRow = (
@@ -297,39 +180,18 @@ const rowAccepted = (draft: Record<string, unknown>): boolean =>
 
 /** The whole life of one tool-use turn, commit by commit. */
 const TURN_ROWS: readonly RunHistoryRow[] = [
-  message({
-    kind: 'append',
-    messages: [USER('list the files')],
-    sourceResponse: null,
-  }),
+  toolTurn.append,
   position('turn.ready', 0),
-  message({
-    kind: 'attempt',
-    request: '0'.repeat(64),
-    invocation: INVOCATION,
-    origin: ORIGIN,
+  toolTurn.attempt,
+  toolTurn.identified,
+  toolTurn.response,
+  toolTurn.intent,
+  toolTurn.result('call-a'),
+  toolTurn.result('call-b', {
+    disposition: 'duplicate',
+    duplicateOf: 'call-a',
   }),
-  message({
-    kind: 'identified',
-    invocation: INVOCATION,
-    providerResponseId: 'resp-1',
-  }),
-  message({
-    kind: 'response',
-    responseId: RESPONSE_ID,
-    invocation: INVOCATION,
-    turn: TURN,
-    calls: CALLS,
-    usage: TURN_USAGE,
-  }),
-  intent('call-a'),
-  settlement('call-a'),
-  settlement('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
-  message({
-    kind: 'append',
-    messages: [TOOL_GROUP],
-    sourceResponse: RESPONSE_ID,
-  }),
+  toolTurn.delivery,
   position('results.ready', 1),
   {
     type: 'run.position',
@@ -365,10 +227,10 @@ describe('applyRunRows', () => {
             3,
             message({
               kind: 'response',
-              responseId: RESPONSE_ID,
-              invocation: INVOCATION,
+              responseId: toolTurn.responseId,
+              invocation: toolTurn.invocation,
               turn: {
-                ...TURN,
+                ...toolTurn.providerTurn,
                 content: [
                   {
                     kind: 'local-call',
@@ -378,13 +240,13 @@ describe('applyRunRows', () => {
                   },
                 ],
               },
-              calls: [{ ...CALLS[0], callId: '__proto__' }],
+              calls: [{ ...toolTurn.calls[0], callId: '__proto__' }],
               usage: null,
             }),
             {
               type: 'tool.intent',
               payload: {
-                origin: { kind: 'response', responseId: RESPONSE_ID },
+                origin: { kind: 'response', responseId: toolTurn.responseId },
                 callId: '__proto__',
                 attempt: 1,
               },
@@ -426,12 +288,20 @@ describe('applyRunRows', () => {
       // A call's attempt never goes back: attempt 2's body started, so
       // attempt 1 settling now would retire attempt 2's uncertainty silently.
       'out-of-order',
-      () => through(6, intent('call-a', 2), settlement('call-a')),
+      () =>
+        through(
+          6,
+          {
+            ...toolTurn.intent,
+            payload: { ...toolTurn.intent.payload, attempt: 2 },
+          },
+          toolTurn.result('call-a'),
+        ),
     ],
     [
       // A call settles once.
       'orphan-settlement',
-      () => through(7, settlement('call-a', { attempt: 2 })),
+      () => through(7, toolTurn.result('call-a', { attempt: 2 })),
     ],
   ])('refuses loudly: %s', (reason, run) => {
     expect(reasonOf(run())).toBe(reason);
@@ -459,7 +329,7 @@ describe('applyRunRows', () => {
             section: null,
           },
         },
-        settlement('call-a/0', {
+        toolTurn.result('call-a/0', {
           result: { status: 'executed', output: 'ok', value: { a: 1 } },
         }),
       ),
@@ -471,26 +341,28 @@ describe('applyRunRows', () => {
     const response = (calls: unknown) =>
       message({
         kind: 'response',
-        responseId: RESPONSE_ID,
-        invocation: INVOCATION,
-        turn: TURN,
+        responseId: toolTurn.responseId,
+        invocation: toolTurn.invocation,
+        turn: toolTurn.providerTurn,
         calls,
         usage: null,
       });
     // A dispatch fact stands for one local call: its order, its id, and the
     // tool the provider asked for. Recovery dispatches what the fact names.
-    expect(rowAccepted(response(CALLS))).toBe(true);
+    expect(rowAccepted(response(toolTurn.calls))).toBe(true);
     expect(
-      rowAccepted(response([{ ...CALLS[0], toolName: 'rm' }, CALLS[1]])),
+      rowAccepted(
+        response([{ ...toolTurn.calls[0], toolName: 'rm' }, toolTurn.calls[1]]),
+      ),
     ).toBe(false);
     // The delivered tool group takes its provider-facing status from the
     // result, so a call the run recorded as failed carries an error result.
-    expect(rowAccepted(settlement('call-a', { disposition: 'failed' }))).toBe(
-      false,
-    );
+    expect(
+      rowAccepted(toolTurn.result('call-a', { disposition: 'failed' })),
+    ).toBe(false);
     expect(
       rowAccepted(
-        settlement('call-a', {
+        toolTurn.result('call-a', {
           disposition: 'failed',
           result: { status: 'error', error: 'exit 1' },
         }),
@@ -499,7 +371,7 @@ describe('applyRunRows', () => {
     // Attachment metadata is JSON. The two binary fields are dropped; a third
     // one under a loose key would be a `JSON.stringify` throw on a live run.
     const attachment = (extra: Record<string, unknown>) =>
-      settlement('call-a', {
+      toolTurn.result('call-a', {
         result: {
           status: 'executed',
           output: 'ok',
@@ -507,7 +379,9 @@ describe('applyRunRows', () => {
             {
               path: 'out/plot.png',
               mimeType: 'image/png',
-              bytes: new Uint8Array([1, 2]),
+              // cast: binary fields are not part of the row shape; the decode
+              // must drop these two and refuse any other.
+              bytes: new Uint8Array([1, 2]) as never,
               ...extra,
             },
           ],

@@ -15,7 +15,7 @@ import {
   boundTestSessionView,
   seedView,
   viewWith,
-} from './fixtures/sessionViewFixture';
+} from '@test/cli/fixtures/sessionViewFixture';
 
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal()),

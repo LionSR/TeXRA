@@ -6,7 +6,7 @@ import {
   formatInstructionActionHint,
   instructionActions,
 } from '@ui/copy/instructionActions';
-import { modelFailureText } from '@ui/copy/modelAccess';
+import { shownFailureText } from '@ui/copy/modelAccess';
 
 // Local imports - CLI runtime
 import { writeNdjsonStdout, writeTextStderr } from '../platform/logSinks';
@@ -81,7 +81,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     {
       requestShowError: (payload) => {
         runProgress?.preserve();
-        present('error', modelFailureText(payload));
+        present('error', shownFailureText(payload));
         return true;
       },
       requestShowInstruction: (payload) => {

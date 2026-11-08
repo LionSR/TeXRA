@@ -33,11 +33,7 @@ import {
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
-import {
-  foldRunRows,
-  RUN_ROW_READS,
-  runRowsFrom,
-} from '@shared/session/runRowReads';
+import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
 import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
 import type {
   SessionLogShape,
@@ -199,9 +195,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           .pipe(Effect.map((rows) => foldRunRows(read, rows))),
       blobs: database.readBlobs,
       facts: (runId) =>
-        database
-          .readRunRecords(qualifyAggregateId('run', runId))
-          .pipe(Effect.map((rows) => (rows[0] ? runRowsFrom(rows) : null))),
+        database.readRunRecord(qualifyAggregateId('run', runId)),
       // A removed run's rows end with its deletion marker: none to show.
       display: (runId) =>
         Effect.map(

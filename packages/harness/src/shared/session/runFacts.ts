@@ -39,10 +39,8 @@ import {
 } from '@shared/schemas';
 
 import { byId } from './runRows';
-import { runRowsFrom } from './runRowReads';
 import type { TurnResult } from '@texra-ai/llm';
 import type { RunHistoryDraft, RunInputDraft } from './runState';
-import type { RunRows } from './runRowsShape';
 import type { Invocation, PendingResponse } from './inFlight';
 
 /** The text a completed model turn or assistant message contains, in order. */
@@ -192,19 +190,9 @@ export const consumedRow = (
   disposition,
 });
 
-/** Run `runId`'s record rows among `rows`, folded (`runRowsFrom`). */
-export const recordsOf = (
-  rows: readonly SessionRow[],
-  runId: RunId,
-): RunRows => {
-  const id = qualifyAggregateId('run', runId);
-  return runRowsFrom(rows.filter((row) => row.aggregateId === id));
-};
-
 /** Whether `row` bounds a lifecycle of run `runId`: its `run.activate`
  *  starts one, its `run.end` ends it. The pair a lifecycle's rows lie
- *  between is `recordsOf`'s `activation` and `end` (an activation clears the
- *  end of the lifecycle before it). */
+ *  between is its latest `run.activate` and the `run.end` after it. */
 export const boundsLifecycle = (
   row: Pick<SessionRow, 'aggregateId' | 'type'>,
   runId: RunId,
@@ -317,25 +305,22 @@ export function activationDrafts(
   return [{ type: 'run.activate', aggregateId: target }, ...ended, ...changed];
 }
 
-/** The `run.end` row: the run's outcome, its error with the note of a last
- *  turn whose delivery failed (`note`), and what it produced, or nothing.
- *  Why a cancelled run stopped is its `run.stop` row. */
+/** The `run.end` row: the run's outcome, its error, and what it produced,
+ *  or nothing. Why a cancelled run stopped is its `run.stop` row. */
 export function runEndDraft(
   runId: RunId,
   end: {
     readonly outcome: RunOutcome;
     readonly error?: RunEnd['error'];
-    readonly note?: string;
     readonly output?: RunEndOutput;
   },
 ): Extract<RunInputDraft, { readonly type: 'run.end' }> {
-  const { outcome, error, note } = end;
-  const message = [error?.message, note].filter(Boolean).join('; ');
+  const { outcome, error } = end;
   return {
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
     outcome,
-    ...(error && { error: { ...error, message } }),
+    ...(error && { error }),
     output: end.output ?? emptyRunEndOutput(),
   };
 }

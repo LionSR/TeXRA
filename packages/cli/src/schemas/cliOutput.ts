@@ -52,8 +52,9 @@ const CliNdjsonLineStampSchema = Schema.Struct({
  * is 1.0's: `kind: "progress"` records carry a session row verbatim (`event`
  * is the row's `type`, `payload` the rest of it), results carry `runId`, and
  * `CliRunStatus` is the only renamed vocabulary. Version 3 has no stage for
- * a run or a turn (read `run.activate`, `run.position` and `run.end`), and
- * no `stage.end` a run's end wrote for a stage it left open.
+ * a run, a turn or a script (read `run.activate`, `run.position` and
+ * `run.end`; a script's calls are the cards whose `stageId` is its card),
+ * and no `stage.end` a run's end wrote for a stage it left open.
  */
 export const CLI_NDJSON_CONTRACT =
   CliNdjsonLineStampSchema.fields.contract.literal;

@@ -42,6 +42,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   qualifyAggregateId,
+  runEndErrorMessage,
   RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -228,7 +229,8 @@ const codemode = (dir: string) =>
           check(
             'run completed',
             outcome === 'completed',
-            evidence.end?.error?.message ?? outcome,
+            (evidence.end?.error && runEndErrorMessage(evidence.end.error)) ??
+              outcome,
           ),
           check(
             'a script finished',
@@ -323,7 +325,8 @@ const plugin = (dir: string) =>
           check(
             'run completed',
             outcome === 'completed',
-            evidence.end?.error?.message ?? outcome,
+            (evidence.end?.error && runEndErrorMessage(evidence.end.error)) ??
+              outcome,
           ),
           check(
             'a script imported the notes module',
@@ -504,7 +507,7 @@ const crashResume = (dir: string) =>
             check(
               'the script reached a committed self() result and a pending sign-off',
               false,
-              `self ended: ${selfEnded > 0}, sign-off started: ${signoffStarted}, crash process ${signal === 'SIGKILL' ? 'killed at the time limit' : `exited first, its run ${evidence.end?.outcome ?? 'not ended'}${evidence.end?.error ? `: ${evidence.end.error.message}` : ''}`}`,
+              `self ended: ${selfEnded > 0}, sign-off started: ${signoffStarted}, crash process ${signal === 'SIGKILL' ? 'killed at the time limit' : `exited first, its run ${evidence.end?.outcome ?? 'not ended'}${evidence.end?.error ? `: ${runEndErrorMessage(evidence.end.error)}` : ''}`}`,
             ),
           ],
           evidence,
@@ -556,7 +559,8 @@ const crashResume = (dir: string) =>
           check(
             'resumed run completed',
             outcome === 'completed',
-            evidence.end?.error?.message ?? outcome,
+            (evidence.end?.error && runEndErrorMessage(evidence.end.error)) ??
+              outcome,
           ),
           check(
             'committed children did not run again',

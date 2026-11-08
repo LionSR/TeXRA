@@ -53,7 +53,7 @@ export function formatUserMessageTemplate(row: UserRow): FormatResult {
 export function formatProgressStatusTemplate(
   row: ProgressStatusRow,
 ): FormatResult {
-  const { level, id, groupId, timestamp } = row;
+  const { level, id, timestamp } = row;
   const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
     new Date(timestamp),
   );
@@ -67,17 +67,16 @@ export function formatProgressStatusTemplate(
   // prettier-ignore
   return html`<div
       data-log-id=${ifDefined(id)}
-      data-group-id=${ifDefined(groupId)}
     ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div></div>`;
 }
 
 /**
  * Format error message as TemplateResult. The detail field set and its display
- * order are the row's — see `ERROR_DETAIL_FIELDS` in `@texra-ai/harness/transcript`
- * — and a classified failure reads in the app's words (`errorRowText`).
+ * order are the row's, and a model failure reads in the app's words
+ * (`errorRowText`).
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
-  const { id, groupId, timestamp } = row;
+  const { id, timestamp } = row;
   const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
     new Date(timestamp),
     'minute',
@@ -94,7 +93,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   if (!hasDetails) {
     const levelIcon = buildLevelIcon('error');
     // prettier-ignore
-    return html`<div class="log-line" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class="message-error">${summaryText}</span></div>`;
+    return html`<div class="log-line" data-log-id=${ifDefined(id)}><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class="message-error">${summaryText}</span></div>`;
   }
 
   // Build modular template parts to avoid overly long single-line templates.
@@ -115,12 +114,12 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   // prettier-ignore
   const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${timestampLabel}${copyButton}</div>`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error message-disclosure" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error message-disclosure" data-log-id=${ifDefined(id)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
 /** Format a plain log line as TemplateResult. */
 export function formatDefaultLogMessageTemplate(row: LogRow): FormatResult {
-  const { id, level, timestamp, groupId, verbose } = row;
+  const { id, level, timestamp, verbose } = row;
   const text = row.text.full;
   const levelIcon = buildLevelIcon(level);
   const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
@@ -135,7 +134,6 @@ export function formatDefaultLogMessageTemplate(row: LogRow): FormatResult {
   return html`<div
       class="log-line"
       data-log-id=${id}
-      data-group-id=${ifDefined(groupId)}
     ><span class="timestamp" title=${tooltipTimestamp}>${timestampContent}</span>${when(
         verbose,
         () => html` <span class=${`level-${level}`}>${level.toUpperCase().padEnd(8)}</span>`,

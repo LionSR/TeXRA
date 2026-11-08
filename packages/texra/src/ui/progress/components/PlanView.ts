@@ -10,17 +10,17 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 import type { Surface } from '@texra/shared/session/surface';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import { dispatchGroupToggle } from '../utils';
+import { dispatchDisclosureToggle } from '../utils';
 import type { RunId, Plan } from '@texra-ai/harness/schemas';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
-/** The panel's key in `RunSurface.groups` for its run. */
+/** The panel's key in `RunSurface.disclosures` for its run. */
 const GROUP_KEY = 'plan';
 
 /**
- * The panel's open state is the surface's (`RunSurface.groups`, under the run
+ * The panel's open state is the surface's (`RunSurface.disclosures`, under the run
  * and `GROUP_KEY`), like the dispatch card's: it survives a run switch and a
  * reload, and a toggle is dispatched, never kept here.
  */
@@ -56,7 +56,7 @@ export class PlanView extends LitElement {
   @property({ attribute: false }) plan: Plan | null = null;
 
   private readonly handleToggle = (event: Event): void => {
-    dispatchGroupToggle(this, event, this.runId, GROUP_KEY);
+    dispatchDisclosureToggle(this, event, this.runId, GROUP_KEY);
   };
 
   override render(): TemplateResult | typeof nothing {
@@ -65,7 +65,7 @@ export class PlanView extends LitElement {
     }
     const open =
       this.runId !== null &&
-      this.surface?.runs.get(this.runId)?.groups.get(GROUP_KEY) === true;
+      this.surface?.runs.get(this.runId)?.disclosures.get(GROUP_KEY) === true;
 
     // The body is kept to one line so the pre-wrap document gets no
     // template whitespace.

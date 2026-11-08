@@ -13,10 +13,9 @@ import { Effect, FileSystem } from 'effect';
 import {
   agentBlockOf,
   boundFile,
-  errorResult,
   AGENT_TOOL_NAME,
   TEMPLATE_INPUT_NAMES,
-  type ToolResult,
+  ToolError,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
 import {
@@ -138,7 +137,7 @@ export const taskFileVars = Effect.fn('documents.taskFileVars')(function* (
 const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
 
 /**
- * Reject a task's context that attaches an oversized bibliography file.
+ * Fail a task's context that attaches an oversized bibliography file.
  * `workspaceRoot` is the owning session's workspace folder, handed in as
  * data so a relative path resolves against its own session.
  */
@@ -147,11 +146,7 @@ export const rejectOversizedBibAttachments = Effect.fn(
 )(function* (
   workspaceRoot: string | undefined,
   contextFiles: readonly string[],
-): Effect.fn.Return<
-  Extract<ToolResult, { status: 'error' }> | null,
-  Error,
-  FileSystem.FileSystem
-> {
+): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
   const fs = yield* FileSystem.FileSystem;
   const bibFiles = contextFiles
     .filter((file) => file.trim() !== '')
@@ -184,10 +179,10 @@ export const rejectOversizedBibAttachments = Effect.fn(
 
     const sizeBytes = Number(stats.size);
     const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
-    return errorResult(message, {
-      summary: `Rejected oversized BibTeX attachment`,
-    });
+    return yield* Effect.fail(
+      new ToolError(message, {
+        summary: 'Rejected oversized BibTeX attachment',
+      }),
+    );
   }
-
-  return null;
 });

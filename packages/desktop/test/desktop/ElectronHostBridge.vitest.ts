@@ -9,7 +9,10 @@ import {
 } from '@desktop/shared/hostBridgeChannels';
 
 // Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
+import {
+  desktopSourcePath,
+  moduleFileUrl,
+} from '@test/desktop/desktopTestPaths.ts';
 
 async function loadPreloadModule(electron: {
   contextBridge: { exposeInMainWorld(name: string, api: unknown): void };

@@ -2,8 +2,8 @@
  * The reads of a run's rows, for every reader but the run state and the
  * session view (those apply their shared rows through `runRows.ts`): each
  * read of {@link RUN_ROW_READS} names the kinds it selects and folds those
- * rows, typed as them, into what it answers (`foldRunRows`); a run's record
- * rows fold into its `RunRows` (`runRowsFrom`). Beside them: a row as the
+ * rows, typed as them, into what it answers (`foldRunRows`). A run's
+ * `RunRows` is the store's `run_record` projection. Beside them: a row as the
  * decision of a request (`isRequestDecision`), where a row leaves its run
  * (`standingAfter`, `closesRunWindow`), and what became of one input
  * (`followUpReceipt`).
@@ -11,13 +11,13 @@
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
 import {
+  runEndErrorMessage,
   type FollowUpReceipt,
   type RunOutcome,
   type RunPosition,
   type SessionRow,
   factName,
 } from '@shared/schemas';
-import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   applyRunRow,
   type BatchCopies,
@@ -25,7 +25,7 @@ import {
   isSharedRunRow,
   type SharedRunRow,
 } from './runRows';
-import type { RowOf, RunRows, SharedRunRows } from './runRowsShape';
+import type { RowOf, SharedRunRows } from './runRowsShape';
 
 /** One read: the kinds it selects and what it makes of those rows. */
 interface RowRead<K extends SessionRow['type'], A> {
@@ -84,9 +84,8 @@ export const RUN_ROW_READS = {
       'run.removed',
     ],
     (rows) => {
-      const { parent, end, stop, inputClosed } = runRowsFrom(rows);
       const { followUps, taken } = sharedRowsFrom(rows.filter(isSharedRunRow));
-      return { parent, end, stop, inputClosed, followUps, taken };
+      return { ...lifecycleOf(rows), followUps, taken };
     },
   ),
   requests: rowRead(['request.opened', 'request.decided'], (rows) => ({
@@ -134,97 +133,27 @@ export function foldRunRows<R extends RunRowRead>(
   );
 }
 
-/** What one record row changes on `rows`. Every kind has a case, so a new
- *  kind does not compile until it is decided here. */
-function recordFacts(rows: RunRows, row: SessionRow): Partial<RunRows> {
-  switch (row.type) {
-    case 'run.start': {
-      const grants = row.approvalPolicy ?? NO_APPROVAL_GRANTS;
-      return { start: row, parent: row.parent, grants };
-    }
-    case 'approval.policy':
-      return { grants: row.snapshot };
-    case 'run.detach':
-      return { parent: null };
-    case 'run.activate':
-      return { activation: row, end: null, stop: null, inputClosed: false };
-    case 'run.stop':
-      return { stop: row };
-    case 'run.end':
-      return { end: row };
-    case 'followup.closed':
-    case 'run.removed':
-      return { inputClosed: true };
-    case 'run.report':
-      return { report: row.report };
-    case 'process.exit':
-      return { exit: row };
-    case 'run.config':
-      return { config: row.config };
-    case 'run.position':
-      return { position: row };
-    case 'plugin.fact':
-      return { facts: { ...rows.facts, [factName(row)]: row } };
-    case 'run.description': {
-      const label = row.by === 'model' ? { label: row } : {};
-      // A user's title stands until the user renames again.
-      return row.by === 'model' && rows.title?.by === 'user'
-        ? label
-        : { title: row, ...label };
-    }
-    // The shared rows (`applyRunRow`), the transcript tier and the run
-    // history record nothing here.
-    case 'followup.queued':
-    case 'followup.consumed':
-    case 'request.opened':
-    case 'request.decided':
-    case 'tool.result':
-    case 'script.call':
-    case 'log':
-    case 'process.output':
-    case 'stage.start':
-    case 'stage.end':
-    case 'tool.start':
-    case 'tool.end':
-    case 'usage':
-    case 'context.state':
-    case 'stream.start':
-    case 'stream.end':
-    case 'response.finalized':
-    case 'model.message':
-    case 'context.edit':
-    case 'tool.intent':
-    case 'tools.offered':
-    case 'context.blob':
-    case 'hook.outcome':
-      return {};
+/** The input read's lifecycle: the parent edge the start set and a
+ *  `run.detach` severs, the current lifecycle's end and stop (an activation
+ *  clears both), and whether the input is closed (the latest of
+ *  `run.activate`, `followup.closed` and `run.removed` is not an
+ *  activation). */
+function lifecycleOf(rows: readonly SessionRow[]) {
+  let parent: RowOf<'run.start'>['parent'] = null;
+  let end: RowOf<'run.end'> | null = null;
+  let stop: RowOf<'run.stop'> | null = null;
+  let inputClosed = false;
+  for (const row of rows) {
+    if (row.type === 'run.start') parent = row.parent;
+    if (row.type === 'run.detach') parent = null;
+    if (row.type === 'run.activate')
+      [end, stop, inputClosed] = [null, null, false];
+    if (row.type === 'run.stop') stop = row;
+    if (row.type === 'run.end') end = row;
+    if (row.type === 'followup.closed' || row.type === 'run.removed')
+      inputClosed = true;
   }
-}
-
-/**
- * The `RunRows` of a run's record rows: its committed records
- * (`SessionLog.facts`), or the lifecycle rows a read selects. Every other
- * row records nothing.
- */
-export function runRowsFrom(rows: readonly SessionRow[]): RunRows {
-  let record: RunRows = {
-    start: null,
-    parent: null,
-    activation: null,
-    end: null,
-    stop: null,
-    inputClosed: false,
-    report: null,
-    exit: null,
-    config: null,
-    position: null,
-    title: null,
-    label: null,
-    grants: null,
-    facts: {},
-  };
-  for (const row of rows) record = { ...record, ...recordFacts(record, row) };
-  return record;
+  return { parent, end, stop, inputClosed };
 }
 
 /** Whether `row` decides a request: what a waiter on a request reads off
@@ -370,5 +299,5 @@ const unansweredBy = (
   state: 'unanswered',
   turn,
   reason: end?.outcome ?? 'ended',
-  ...(end?.error?.message != null && { error: end.error.message }),
+  ...(end?.error != null && { error: runEndErrorMessage(end.error) }),
 });

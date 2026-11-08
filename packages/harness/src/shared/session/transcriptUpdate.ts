@@ -7,17 +7,19 @@
  *
  * The caller supplies each event's clock and id, and the reducer owns no
  * clock, timer, IO, or durable write. Each event type writes the value the
- * event means: a stage its entry in `stages`, a tool card its row from
- * one decode, a stream its text row, a `log` row its decoded payload
+ * event means: a plugin's stage its entry in `stages`, a tool card its row
+ * from one decode (and the stage of a script card the cards under it name), a stream its text row, a `log` row its decoded payload
  * (`transcriptLogRows.ts`). The working state lives in `transcriptState.ts`.
  */
 import { Predicate } from 'effect';
 import {
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   TOOL_CALL_STATUS,
   isTranscriptEvent,
   type SessionRow,
   type Stage,
+  type ToolCallStatus,
   type ToolUseLog,
   type TraceRowFields,
 } from '@shared/schemas';
@@ -49,32 +51,84 @@ import {
 import { standingAfter, type RunStanding } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
-/** A stage start opens its stage whole; a stage end closes the group
- *  its start opened and writes nothing for a group no start opened. */
+/** A plugin's section: its start opens the stage whole; its end closes the
+ *  stage its start opened and writes nothing for one no start opened. */
 function applyStage(
   d: Draft,
   event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
 ): void {
   const at = d.ix.stageIndex.get(event.id);
-  let group: Stage;
+  let stage: Stage;
   if (event.type === 'stage.start') {
-    group = {
+    stage = {
       id: event.id,
       name: event.label,
+      seqNo: (d.ix.appended += 1),
       startTime: d.at,
       outcome: null,
     };
   } else {
     if (at === undefined) return;
-    group = {
+    stage = {
       ...d.next.stages[at],
       outcome: event.status,
       endTime: d.at,
     };
   }
-  const groups = writableArray(d, d.next, 'stages');
-  if (at !== undefined) groups[at] = group;
-  else d.ix.stageIndex.set(event.id, groups.push(group) - 1);
+  const stages = writableArray(d, d.next, 'stages');
+  if (at !== undefined) stages[at] = stage;
+  else d.ix.stageIndex.set(event.id, stages.push(stage) - 1);
+  d.touched = true;
+}
+
+/**
+ * A script's stage, projected from cards: a card starting under another card
+ * (`stageId`, the `script` card that issued it) opens that card's stage,
+ * labelled by its title, or reopens it when the run's end closed it and a
+ * resume starts a call again; the script card's own close closes it on its
+ * result.
+ */
+function openCardStage(d: Draft, card: string): void {
+  const heading = d.ix.slots.get(card);
+  if (heading?.kind !== 'tool') return;
+  const at = d.ix.stageIndex.get(card);
+  const stages = writableArray(d, d.next, 'stages');
+  if (at === undefined) {
+    const input = Predicate.isObject(heading.log.input)
+      ? heading.log.input
+      : {};
+    const name =
+      typeof input.title === 'string' && input.title.length > 0
+        ? input.title
+        : 'Script';
+    const stage: Stage = {
+      id: card,
+      name,
+      seqNo: (d.ix.appended += 1),
+      startTime: d.at,
+      outcome: null,
+    };
+    d.ix.stageIndex.set(card, stages.push(stage) - 1);
+  } else if (stages[at].outcome !== null) {
+    // Its time restarts with the resume, so its duration is time it ran.
+    const { endTime: _end, ...open } = stages[at];
+    stages[at] = { ...open, startTime: d.at, outcome: null };
+  } else return;
+  d.touched = true;
+}
+
+function closeCardStage(d: Draft, card: string, status: ToolCallStatus): void {
+  const at = d.ix.stageIndex.get(card);
+  if (at === undefined) return;
+  const stages = writableArray(d, d.next, 'stages');
+  stages[at] = {
+    ...stages[at],
+    outcome:
+      status === TOOL_CALL_STATUS.COMPLETED
+        ? RUN_OUTCOME.COMPLETED
+        : RUN_OUTCOME.FAILED,
+    endTime: d.at,
+  };
   d.touched = true;
 }
 
@@ -114,6 +168,10 @@ function record(d: Draft, event: TraceRowFields): void {
         ...(event.section !== undefined ? { section: event.section } : {}),
         ...(event.attempt !== undefined ? { attempt: event.attempt } : {}),
       };
+      // A card starting under a stage (a new call, or a resumed call's
+      // retry under the same card) opens it, or reopens it after the run's
+      // end closed it.
+      if (event.stageId !== undefined) openCardStage(d, event.stageId);
       const slot = ix.slots.get(event.logId);
       if (slot) {
         if (slot.kind === 'tool' && ix.activeTools.has(event.logId)) {
@@ -166,6 +224,7 @@ function record(d: Draft, event: TraceRowFields): void {
       if (!inProgress) {
         slot.base = settle(ix, slot.base);
         ix.activeTools.delete(event.logId);
+        closeCardStage(d, event.logId, event.status);
       }
       write(d, slot);
       return;
@@ -289,14 +348,14 @@ function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
     d.touched = true;
   }
   const { outcome } = standing;
-  if (outcome === null || !d.next.stages.some(isOpenGroup)) return;
-  d.next.stages = d.next.stages.map((group) =>
-    isOpenGroup(group) ? { ...group, outcome, endTime: d.at } : group,
+  if (outcome === null || !d.next.stages.some(isOpenStage)) return;
+  d.next.stages = d.next.stages.map((stage) =>
+    isOpenStage(stage) ? { ...stage, outcome, endTime: d.at } : stage,
   );
   d.touched = true;
 }
 
-const isOpenGroup = (group: Stage): boolean => group.outcome === null;
+const isOpenStage = (stage: Stage): boolean => stage.outcome === null;
 
 /**
  * Apply one session event to a run's transcript, advancing the run's working

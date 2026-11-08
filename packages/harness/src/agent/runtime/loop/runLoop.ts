@@ -517,7 +517,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     },
     runId,
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
-      ? { failure: at.lastError }
+      ? { failure: { kind: 'model' as const, failure: at.lastError } }
       : {}),
     ...(at.input.memoryMisses?.length
       ? { memoryMisses: [...at.input.memoryMisses] }

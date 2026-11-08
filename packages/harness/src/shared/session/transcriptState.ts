@@ -1,6 +1,6 @@
 /**
  * A run's transcript working state: what each written id left behind, the
- * row and group positions, the open cards and streams, and the live text.
+ * row and stage positions, the open cards and streams, and the live text.
  * Its owner keeps it beside the `TranscriptView` it builds, never on it (the
  * session view's updater keeps one per run, a cold read its own), so a host
  * can neither depend on nor mutate it. `transcriptUpdate.ts` writes it one
@@ -84,7 +84,7 @@ export type Slot =
 export interface TranscriptIndexes {
   /** Row position by row id. */
   readonly rowIndex: Map<string, number>;
-  /** Stage position by group id. */
+  /** Stage position by stage id. */
   readonly stageIndex: Map<string, number>;
   /** The compaction projection's working state. */
   readonly compactionState: CompactionActivityProjection;
@@ -281,7 +281,7 @@ export interface Draft extends TranscriptWork {
 export function open(
   d: Draft,
   id: string,
-  groupId: string | undefined,
+  stageId: string | undefined,
   messageType: MessageType,
   settled: boolean,
   level: LogLevel = 'info',
@@ -295,7 +295,7 @@ export function open(
     verbose: d.ctx.debug,
     messageType,
     ...(settled ? { settlementSeqNo: (d.ix.settled += 1) } : {}),
-    ...(groupId !== undefined ? { groupId } : {}),
+    ...(stageId !== undefined ? { stageId } : {}),
   };
 }
 
