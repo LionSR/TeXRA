@@ -337,13 +337,13 @@ export const createHostRunActions = Effect.fn(
     followUpLauncher(runId, text) {
       // A background script replays its recorded program and reads no new
       // input, so the note goes to the conversation that started the script.
-      let launcher = runView(runId)?.launchParentId ?? null;
+      let launcher = runView(runId)?.launch?.id ?? null;
       for (
         let parent = launcher === null ? undefined : runView(launcher);
         parent?.identity.kind === 'script';
         parent = launcher === null ? undefined : runView(launcher)
       )
-        launcher = parent.launchParentId;
+        launcher = parent.launch?.id ?? null;
       if (launcher === null) return Effect.void;
       const present = (message: string) => ports.notify('warning', message);
       const deliver = session

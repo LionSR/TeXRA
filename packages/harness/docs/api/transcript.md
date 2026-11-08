@@ -152,7 +152,7 @@ function decodeXmlEntities(text: string): string
 
 The runs `run` launched that are not a script's calls: what its dispatch
 card lists (a direct `agent` call that detached, a background script's
-run). A child whose card (`parentCard`) sits under a script stage, awaited
+run). A child whose card (`launch.card`) sits under a script stage, awaited
 or sent to the background, has its one home in that stage's rows.
 
 ```ts
