@@ -8,16 +8,17 @@ import type { Stage } from '@shared/schemas';
 
 import type { TranscriptRow } from './transcriptRow';
 
-type RowFields = Pick<TranscriptRow, 'id' | 'seqNo' | 'stageId'>;
-
 /** One entry of the layout: a row no stage holds, or a stage and its rows. */
-export type TimelineEntry<Row extends RowFields, S extends Stage = Stage> =
+export type TimelineEntry<
+  Row extends Pick<TranscriptRow, 'id' | 'seqNo' | 'stageId'>,
+  S extends Stage = Stage,
+> =
   | { readonly kind: 'row'; readonly row: Row }
   | { readonly kind: 'stage'; readonly stage: S; readonly rows: Row[] };
 
 /** The transcript's stages, each with its rows, among its other rows. */
 export function transcriptTimeline<
-  Row extends RowFields,
+  Row extends Pick<TranscriptRow, 'id' | 'seqNo' | 'stageId'>,
   S extends Stage,
 >(transcript: {
   readonly rows: readonly Row[];

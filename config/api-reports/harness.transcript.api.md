@@ -46,7 +46,7 @@ Exports: 74
 - `StreamingTextRow` — `interface StreamingTextRow extends TranscriptRowBase { readonly kind: 'assistant' | 'thinking' | 'scratchpad'; readonly text: TranscriptText; readonly streaming: boolean; readonly pendingEmbeddedFollowup?: boolean; readonly cut?: ResponseCut; }`
 - `summarizeEmbeddedSubagentFollowups` — `function summarizeEmbeddedSubagentFollowups: (text: string) => string`
 - `TextBudget` — `interface TextBudget { readonly headLines: number; readonly tailLines: number; }`
-- `TimelineEntry` — `type TimelineEntry<Row extends RowFields, S extends Stage = Stage> = { readonly kind: 'row'; readonly row: Row; } | { readonly kind: 'stage'; readonly stage: S; readonly rows: Row[]; }; ≡ TimelineEntry<Row, S>`
+- `TimelineEntry` — `type TimelineEntry<Row extends Pick<TranscriptRow, 'id' | 'seqNo' | 'stageId'>, S extends Stage = Stage> = { readonly kind: 'row'; readonly row: Row; } | { readonly kind: 'stage'; readonly stage: S; readonly rows: Row[]; }; ≡ TimelineEntry<Row, S>`
 - `ToolBadgesSection` — `interface ToolBadgesSection extends ToolSectionBase { readonly kind: 'badges'; readonly badges: readonly string[]; }`
 - `ToolCodeSection` — `interface ToolCodeSection extends ToolSectionBase { readonly kind: 'code'; readonly text: TranscriptText; readonly language: string | PayloadLanguage; }`
 - `ToolDiffSection` — `interface ToolDiffSection extends ToolSectionBase { readonly kind: 'diff'; readonly oldText: string; readonly newText: string; readonly fileLabel?: string; }`
@@ -73,7 +73,7 @@ Exports: 74
 - `TranscriptSubscriptionSchema` — `const TranscriptSubscriptionSchema: Struct<{ readonly fromSeq: Int; readonly id: brand<String, "AggregateId">; }>`
 - `transcriptText` — `function transcriptText: (raw: string) => TranscriptText`
 - `TranscriptText` — `interface TranscriptText { readonly lineCount: number; readonly full: string; readonly oneLine: string; }`
-- `transcriptTimeline` — `function transcriptTimeline: <Row extends RowFields, S extends Stage>(transcript: { readonly rows: readonly Row[]; readonly stages: readonly S[]; }) => TimelineEntry<Row, S>[]`
+- `transcriptTimeline` — `function transcriptTimeline: <Row extends Pick<TranscriptRow, "id" | "seqNo" | "stageId">, S extends Stage>(transcript: { readonly rows: readonly Row[]; readonly stages: readonly S[]; }) => TimelineEntry<Row, S>[]`
 - `UserRow` — `interface UserRow extends TranscriptRowBase { readonly kind: 'user'; readonly text: TranscriptText; readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>; readonly attachments?: readonly MediaAttachmentKind[]; readonly media?: readonly StoredMedia[]; readonly forkAt?: number; }`
 - `viewDiagnosticsLayer` — `const viewDiagnosticsLayer: Layer<never, never, never>`
 - `WebSearchRow` — `interface WebSearchRow extends TranscriptRowBase { readonly kind: 'webSearch'; readonly query?: string; }`
