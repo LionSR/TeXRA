@@ -214,15 +214,11 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         resourcesPath: options.resourcesPath,
         spawn: desktopSpawner(runtime, owner, project.root),
       }).pipe(
-        // Gated on the same owner check as the surface's posts: the title
-        // stops with the scope, and the check stops a switch's old title
-        // before that close has run.
         Effect.tap(() =>
           installDesktopWindowTitle(
             host.window,
             project.session,
             project.root && project.display.name,
-            () => surfaceScope === owner,
           ),
         ),
         Scope.provide(owner),
