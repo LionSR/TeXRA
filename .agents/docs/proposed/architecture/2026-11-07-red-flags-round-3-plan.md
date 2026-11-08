@@ -418,8 +418,9 @@ two regression tests: the telemetry opt-out hint named a key the config
 file does not store, and paper2poster's theme files never reached the
 compile directory. The test audit's ranked list is two PRs with no file in
 common: D's run-loop and tool suites onto production paths (#14842), and
-G's tiers, desktop e2e specs, edge functions and test-only knobs
-(its PR is still being written). The catalogue's "Status at main `14d4b72`" counts the rows.
+G's tiers, desktop e2e specs, edge functions and test-only knobs (#14846).
+The catalogue's "Status at main `14d4b72`" counts the rows as they stood
+before #14846; "Status at main `b012b7e`" counts it.
 
 The lesson of round 5 is the information-leakage cluster of section 4
 again, one level out: a prompt, a guide page and a test are facts copied
@@ -440,6 +441,11 @@ how a layer is built, not to what the tool refuses.
 - **A:** R5-3, the CLI suites onto the real session, after the TUI
   lifecycle PR (#14837).
 - **Open:** R5-6's other `runFork` sites and the run-id counters.
+
+**Landed (main `b012b7e`):** G's PR 2 (#14846: R5-5, R5-9 and R5-10's
+rest; L2 F2's headless half refused) and D's PR 3 (#14844: R5-4, R5-11,
+R5-12, R5-13). Still assigned: R5-3 (A), R5-14 and R5-15 (D). R5-8's
+background cases and R5-10's three process waits have no owner.
 
 ## 7. Round 6: two areas spread across layers
 
