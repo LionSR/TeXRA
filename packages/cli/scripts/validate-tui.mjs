@@ -2104,7 +2104,7 @@ const SCENARIOS = [
       { before: 'Running', after: 'Waiting on you' },
       { before: 'Waiting on you', after: '\n  Interrupted' },
     ],
-    unexpect: ['ERROR', 'signal read during notification phase'],
+    unexpect: ['Recent', 'ERROR', 'signal read during notification phase'],
   },
   {
     // Enter resumes the selected interrupted run. The list opens on the
