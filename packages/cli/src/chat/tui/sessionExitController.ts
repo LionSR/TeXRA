@@ -31,7 +31,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 
 import {
-  resetCliState,
+  startChat,
   clearTransientNotice,
   rootRunId as rootRunIdSignal,
   setTransientNotice,
@@ -68,6 +68,10 @@ interface SessionExitControllerContext {
   /** The chat's scope: what the session holds, closed and awaited on
    *  graceful exit. */
   readonly chatScope: Scope.Closeable;
+  /** The process's shutdown scope, closed last on every exit path: the
+   *  signal policies the chat holds are released there, so the hold lasts
+   *  through the whole exit and never outlives the process's platform. */
+  readonly shutdownScope: Scope.Scope;
   /** The TUI's hold on the terminal, suspended, resumed and released here. */
   readonly terminal: TuiTerminal;
   /** The process runtime the exit drain runs on: one run per exit path. */
@@ -112,6 +116,15 @@ export function createSessionExitController(
   ctx: SessionExitControllerContext,
 ): SessionExitController {
   const { ink, session } = ctx;
+  /** Hold `policy` until the returned release runs, or until the process's
+   *  shutdown, whichever comes first. */
+  const hold = (policy: SignalPolicy): (() => void) => {
+    const release = holdSignals(policy);
+    ctx.runtime.runSync(
+      Scope.addFinalizer(ctx.shutdownScope, Effect.sync(release)),
+    );
+    return release;
+  };
 
   // While its fiber sleeps, a second Ctrl-C leaves at once. The notice is
   // regenerable display state; replacing it must not change whether that
@@ -212,12 +225,12 @@ export function createSessionExitController(
     );
     ctx.terminal.release();
     // The code the chat ends with: the drain above awaited the run, so its
-    // outcome is final, and resetCliState() below clears the root.
+    // outcome is final, and the fresh chat state below has no root.
     const exitCode = session.exitCode;
     // Print the resume hint after the terminal modes are restored, but before
-    // resetCliState() clears the stream tree the hint is built from.
+    // the fresh chat state drops the stream tree the hint is built from.
     printResumeHintOnExit(resumeHintView);
-    resetCliState();
+    startChat();
     if (resumableIdle) {
       // The run waiting at the WAIT node keeps the event loop alive, so a
       // normal return would never let the process exit. Leave here, AFTER
@@ -248,7 +261,7 @@ export function createSessionExitController(
   const leave = (cause: ChatExit): Promise<CliExitCode> => {
     if (session.exited) return session.exited;
     releaseSignals();
-    holdSignals(leaveAtOnce);
+    hold(leaveAtOnce);
     clearTransientNotice();
     ink.unmount();
     if (cause.kind === 'signal') {
@@ -324,7 +337,7 @@ export function createSessionExitController(
       SIGCONT: handleSigcont,
     }),
   };
-  const releaseSignals = holdSignals(policy);
+  const releaseSignals = hold(policy);
 
   return {
     handleSigint,

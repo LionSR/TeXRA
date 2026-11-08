@@ -1,4 +1,4 @@
-import { computed, signal } from '@lit-labs/signals';
+import { computed } from '@lit-labs/signals';
 import { Deferred, Effect } from 'effect';
 
 import {
@@ -9,11 +9,7 @@ import {
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/headless/terminalStatus';
 
-import {
-  registerCliStateResetHook,
-  rootRunId,
-  sessionViewFailure,
-} from './cliState';
+import { chatField, rootRunId, sessionViewFailure } from './cliState';
 import { runViewOf, sessionView } from './sessionView';
 
 /**
@@ -25,7 +21,7 @@ import { runViewOf, sessionView } from './sessionView';
  * reactively instead of calling impure session closures that memoized
  * renders would cache stale (#8273).
  */
-interface RootLaunch {
+export interface RootLaunch {
   /** Done once the session holds the launch's run, with its id, or the
    *  launch ended without one, with null: a stop asked meanwhile waits for
    *  it, then lands on the root the chat holds, and a message typed
@@ -48,8 +44,7 @@ export type ChatExit =
   | { readonly kind: 'graceful' }
   | { readonly kind: 'signal'; readonly exitCode: number };
 
-const rootLaunch = signal<RootLaunch | undefined>(undefined);
-registerCliStateResetHook(() => rootLaunch.set(undefined));
+const rootLaunch = chatField('rootLaunch');
 
 /** The launch still on its way to the session, if one is. */
 const launchInFlight = (): RootLaunch | undefined => {

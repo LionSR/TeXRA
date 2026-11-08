@@ -46,7 +46,7 @@ export function formSelectionHandler<T>({
   return (value) => {
     if (completion === 'busy') {
       // The submission token is the single owner of "is this submission still
-      // live": resetCliState clears `formProgress`, so a stale token can never
+      // live": a new chat starts with no `formProgress`, so a stale token can never
       // match the current progress.
       const token = Symbol('form submission');
       const currentProgress = () => {
