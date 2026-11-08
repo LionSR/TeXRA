@@ -90,7 +90,6 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
       )) {
         const { exitCode } = yield* executeCommand(['security', ...probe], {
           cwd: process.cwd(),
-          settings: undefined,
           timeout: 1000,
           quiet: true,
         });

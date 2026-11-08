@@ -92,7 +92,6 @@ export function handleIndentCurrentTeX(
         relativePath,
         roots.workspace,
         formatter.configPath,
-        roots,
       );
 
       if (success) {
@@ -153,10 +152,7 @@ export function handleGetTeXCount(
           const { output, errors } = yield* getTeXCount(
             roots.workspace,
             relativePath,
-            {
-              mode: countingMode.value,
-              settings: roots,
-            },
+            { mode: countingMode.value },
           );
 
           if (!output) {

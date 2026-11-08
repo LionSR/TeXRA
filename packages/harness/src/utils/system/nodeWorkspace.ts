@@ -7,7 +7,7 @@ import * as path from 'node:path';
 
 import { Context, Effect, String as Str } from 'effect';
 
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
 

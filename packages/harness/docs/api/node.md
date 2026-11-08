@@ -207,18 +207,6 @@ interface ExecuteCommandBaseOptions {
    * has no folder, and it fails the run the same way the ambient miss did.
    */
   readonly cwd: string | undefined;
-  /**
-   * The setting slots the command's git identity is read from: whether this
-   * workspace marks agent commits, and the name and email it marks them with.
-   *
-   * Required — not optional — so every caller names the stores it holds (a
-   * run's session roots, a tool call's `call.roots`, the host's roots at
-   * command entry) instead of the command reaching for an ambient one.
-   * `undefined` is the honest answer only where the caller itself has no
-   * workspace, and it then carries no agent-commit identity, exactly as an
-   * uninitialised ambient read did.
-   */
-  readonly settings: SettingsStores | undefined;
   /** Called with stdout chunks as they arrive, enabling live output streaming. */
   readonly onStdout?: (chunk: string) => void;
   /** Called with stderr chunks as they arrive, enabling live error streaming. */

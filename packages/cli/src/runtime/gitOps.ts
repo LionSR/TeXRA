@@ -18,7 +18,6 @@ export function git(
 ): GitRead<ExecResult> {
   return executeCommand(['git', ...args], {
     cwd,
-    settings: undefined,
     quiet: true,
   });
 }
@@ -29,7 +28,6 @@ export function gh(
 ): GitRead<ExecResult> {
   return executeCommand(['gh', ...args], {
     cwd,
-    settings: undefined,
     quiet: true,
   });
 }

@@ -91,7 +91,6 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
       ['kpsewhich', '-format=texmfscripts', `${script}.pl`],
       {
         cwd: process.cwd(),
-        settings: undefined,
         timeout: KPSEWHICH_TIMEOUT_MS,
         quiet: true,
       },

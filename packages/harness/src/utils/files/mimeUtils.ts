@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import mime from 'mime-types';
 
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 
 const AUDIO_MIME_TYPE_OVERRIDES: Readonly<Record<string, string>> = {
   // mime-types does not expose every audio subtype accepted by current model SDKs.

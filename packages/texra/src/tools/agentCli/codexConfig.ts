@@ -193,9 +193,8 @@ const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
 
   const result = yield* executeCommand(
     [binaryPath, 'debug', 'models', '--bundled'],
-    // A capability probe of the binary itself: it runs no git command, and
-    // this module holds no workspace whose identity it could carry.
-    { quiet: true, timeout: 5_000, cwd: process.cwd(), settings: undefined },
+    // A capability probe of the binary itself, from any directory.
+    { quiet: true, timeout: 5_000, cwd: process.cwd() },
   );
   if (result.timedOut || result.exitCode === 127) {
     yield* Effect.logWarning(

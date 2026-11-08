@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect, Predicate } from 'effect';
 
 import type { AgentConfig, RunWorkspaceFile } from '@shared/schemas';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryMetadataAt } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';

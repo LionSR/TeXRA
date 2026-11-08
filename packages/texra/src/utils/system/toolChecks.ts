@@ -61,7 +61,6 @@ function answered(result: ExecResult): boolean {
 const runProbe = (cmd: string, args: readonly string[]) =>
   executeCommand([cmd, ...args], {
     cwd: process.cwd(),
-    settings: undefined,
     timeout: 5000,
     quiet: true,
   });

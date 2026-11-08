@@ -31,7 +31,6 @@ import {
   defineTool,
   type ToolResult,
   Secrets,
-  type SettingsStores,
 } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -380,7 +379,6 @@ const getFindCurrentFallbackInfo = (
   owner: string,
   repo: string,
   cwd: string,
-  settings: SettingsStores,
 ): Effect.Effect<
   { defaultBranch?: string; suggestions: string },
   never,
@@ -392,7 +390,7 @@ const getFindCurrentFallbackInfo = (
         Effect.logWarning(
           `The default branch of ${owner}/${repo} could not be read; using origin/HEAD: ${error.message}`,
         ).pipe(
-          Effect.andThen(originDefaultBranch(cwd, settings)),
+          Effect.andThen(originDefaultBranch(cwd)),
           Effect.map((branch) => branch ?? undefined),
         ),
       ),
@@ -413,11 +411,7 @@ const getFindCurrentFallbackInfo = (
   );
 
 const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
-  function* (
-    input: FindCurrentInput,
-    workingDirectory: string | undefined,
-    settings: SettingsStores,
-  ) {
+  function* (input: FindCurrentInput, workingDirectory: string | undefined) {
     yield* requireToken();
     const cwd =
       (yield* Effect.fromResult(
@@ -431,7 +425,7 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
       );
     }
     const [remoteUrl, branch] = yield* Effect.all(
-      [originUrl(cwd, settings), currentBranch(cwd, settings)],
+      [originUrl(cwd), currentBranch(cwd)],
       { concurrency: 'unbounded' },
     );
     if (remoteUrl === null) {
@@ -464,7 +458,6 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
         remote.owner,
         remote.repo,
         cwd,
-        settings,
       );
       if (branch === defaultBranch) {
         return yield* Effect.fail(
@@ -526,11 +519,7 @@ export const GitHubSubscriptionTool = defineTool({
       case 'list':
         return yield* execList(run.runId);
       case 'find_current':
-        return yield* execFindCurrent(
-          input,
-          toolCall.env.workingDirectory,
-          toolCall.env.roots,
-        );
+        return yield* execFindCurrent(input, toolCall.env.workingDirectory);
     }
   }),
 });

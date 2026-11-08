@@ -26,7 +26,6 @@ import {
   splitCommitLines,
 } from '@texra/utils/git/commitLogFormat';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 /**
  * Hard upper bound on git output bytes (8 MiB). Commit subjects and numstat
@@ -37,15 +36,6 @@ const MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 
 const GIT_TIMEOUT_MS = 10_000;
 
-interface GitReadOptions {
-  /**
-   * Setting slots of the workspace being read, held as data by the host that
-   * asked (its session roots): the spawned `git` carries that project's
-   * configured identity rather than one resolved from ambient state.
-   */
-  settings: SettingsStores | undefined;
-}
-
 /**
  * Run one git read, returning stdout (`''` when empty) or `undefined` on
  * failure, which is logged at `warn`.
@@ -53,11 +43,9 @@ interface GitReadOptions {
 const readGit = Effect.fn('repositoryOverview.readGit')(function* (
   workspace: string,
   args: readonly string[],
-  options: GitReadOptions,
 ): Effect.fn.Return<string | undefined, never, ChildProcessSpawner> {
   const result = yield* executeCommand(['git', ...args], {
     cwd: workspace,
-    settings: options.settings,
     timeout: GIT_TIMEOUT_MS,
     maxBuffer: MAX_BUFFER_BYTES,
   });
@@ -84,23 +72,18 @@ export const readRecentCommits = Effect.fn(
 )(function* (
   workspaceRoot: string,
   limit: number,
-  options: GitReadOptions,
 ): Effect.fn.Return<GitRecentCommits, never, ChildProcessSpawner> {
-  if (!(yield* isGitRepository(workspaceRoot, options.settings))) {
+  if (!(yield* isGitRepository(workspaceRoot))) {
     return { commits: [], isGitRepo: false };
   }
-  const output = yield* readGit(
-    workspaceRoot,
-    [
-      // `--no-pager` is portable; Windows lacks `cat` on PATH (#3817).
-      '--no-pager',
-      'log',
-      '-n',
-      String(limit),
-      `--pretty=format:${COMMIT_LABEL_FORMAT}`,
-    ],
-    options,
-  );
+  const output = yield* readGit(workspaceRoot, [
+    // `--no-pager` is portable; Windows lacks `cat` on PATH (#3817).
+    '--no-pager',
+    'log',
+    '-n',
+    String(limit),
+    `--pretty=format:${COMMIT_LABEL_FORMAT}`,
+  ]);
   return {
     commits: output === undefined ? [] : splitCommitLines(output),
     isGitRepo: true,

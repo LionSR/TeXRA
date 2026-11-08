@@ -15,7 +15,7 @@ import {
   SessionViewAccess,
 } from '@shared/session/runHistory';
 import type { ToolRegistry } from '@tools/toolTable';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 
 import { getRunRecords } from './runOwnership';
 

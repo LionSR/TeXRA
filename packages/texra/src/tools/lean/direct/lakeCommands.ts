@@ -82,7 +82,6 @@ function executeLake(
   // next waiter only after the process is gone.
   return executeCommand(['lake', ...options.args], {
     cwd: options.workspaceRoot,
-    settings: undefined,
     timeout: LAKE_RUN_TIMEOUT_MS,
     maxBuffer: LAKE_PROCESS_MAX_BUFFER_CHARS,
     quiet: true,

@@ -43,7 +43,7 @@ replace any; they belong to the observability plane, not here.
 3. One `[1, 2)` backoff `Schedule`, `randomizedExponentialBackoff`, used by
    `packages/harness/src/tools/timeouts.ts` and
    `packages/texra/src/latex/arxivProcessor.ts`. The ±20 % capped helper
-   `jitteredExponentialBackoffMs` (`packages/harness/src/utils/core/index.ts`,
+   `jitteredExponentialBackoffMs` (`packages/harness/src/utils/core/backoffSchedule.ts`,
    used by `ModelRetryGate` and GitHub polling) is a different contract and
    stays: `Schedule.jittered` over the `[1, 2)` contract would cut its mean
    wait by a third.

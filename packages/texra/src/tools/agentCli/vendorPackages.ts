@@ -205,7 +205,6 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   // no workspace settings either.
   const prefixResult = yield* executeCommand(['npm', 'prefix', '-g'], {
     cwd: process.cwd(),
-    settings: undefined,
     timeout: 5000,
   });
   const prefix = prefixResult.success ? prefixResult.stdout : undefined;

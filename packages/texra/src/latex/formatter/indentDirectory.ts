@@ -73,12 +73,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
     ).pipe(withLogChannel(CHANNEL));
     return { status: 'disabled', count: 0 };
   }
-  const {
-    id,
-    configPath: config,
-    run: runFormatter,
-    settings: formatterSettings,
-  } = formatter;
+  const { id, configPath: config, run: runFormatter } = formatter;
   yield* Effect.logDebug(`Formatter: ${id}, Config: ${config}`).pipe(
     withLogChannel(CHANNEL),
   );
@@ -137,9 +132,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
 
       // A failed run is `false`. A missing formatter fails the walk with its
       // `ToolMissing`, once, rather than once per file.
-      if (
-        yield* runFormatter(fullPath, workspaceRoot, config, formatterSettings)
-      ) {
+      if (yield* runFormatter(fullPath, workspaceRoot, config)) {
         yield* Effect.logInfo(`Successfully formatted: ${fullPath}`).pipe(
           withLogChannel(CHANNEL),
         );

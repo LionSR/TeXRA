@@ -314,7 +314,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         const commits = yield* readRecentCommits(
           options.root,
           yield* Settings.get(stores, GIT_COMMITS_TO_SHOW_SETTING),
-          { settings: stores },
         ).pipe(withLogChannel(CHANNEL));
         yield* write({ commits });
       }),

@@ -30,7 +30,16 @@ import {
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
 } from '@shared/toolUse';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settings';
+import {
+  Settings,
+  type SettingsStores,
+  type StateReadFailed,
+} from '@shared/config/settings';
+import {
+  GIT_AUTHOR_EMAIL_SETTING,
+  GIT_AUTHOR_NAME_SETTING,
+  GIT_MARK_COMMITS_SETTING,
+} from '@shared/state/stateSettings';
 import { SessionLog } from '@shared/session/runHistory';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { executed } from '@tools/core/result';
@@ -136,6 +145,27 @@ const BashInputSchema = Schema.Struct({
 type BashInput = typeof BashInputSchema.Type;
 
 /**
+ * The git identity a shell command runs with, so a `git commit` the agent
+ * runs carries it. Read from the calling session's settings at each launch,
+ * not once for the process: a process holding several projects attributes
+ * each project's commits by that project's own setting. Empty when commit
+ * marking is off.
+ */
+const gitAuthorEnv = Effect.fn('BashTool.gitAuthorEnv')(function* (
+  settings: SettingsStores,
+): Effect.fn.Return<Record<string, string>, StateReadFailed> {
+  if (!(yield* Settings.get(settings, GIT_MARK_COMMITS_SETTING))) return {};
+  const name = yield* Settings.get(settings, GIT_AUTHOR_NAME_SETTING);
+  const email = yield* Settings.get(settings, GIT_AUTHOR_EMAIL_SETTING);
+  return {
+    GIT_AUTHOR_NAME: name,
+    GIT_AUTHOR_EMAIL: email,
+    GIT_COMMITTER_NAME: name,
+    GIT_COMMITTER_EMAIL: email,
+  };
+});
+
+/**
  * The one turn of a background shell command: it runs the process, records
  * its output on the run's trace as `process.output` rows, and reports the
  * delivery projected from those rows with the command's exit. Everything
@@ -147,11 +177,8 @@ function backgroundBashTurn(params: {
   call: BackgroundBashCall;
   timeoutMs: number;
   cwd: string | undefined;
-  /**
-   * The launching session's setting slots, so a `git commit` the background
-   * shell runs carries the project's configured agent identity.
-   */
-  settings: SettingsStores;
+  /** The project's agent-commit identity ({@link gitAuthorEnv}). */
+  env: Record<string, string>;
   logger: AgentTrace;
   /** The session's log, which the turn's output rows are read back from. */
   log: SessionLogShape;
@@ -224,7 +251,7 @@ function backgroundBashTurn(params: {
     const startedAt = yield* Clock.currentTimeMillis;
     const result = yield* executeCommand(command, {
       cwd: params.cwd,
-      settings: params.settings,
+      env: params.env,
       timeout: params.timeoutMs,
       buffer: false,
       // A stop interrupts this call: its release signals the shell's whole
@@ -298,9 +325,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   const startedAt = yield* Clock.currentTimeMillis;
   const result = yield* executeCommand(command, {
     cwd,
-    // The call's own session roots: a `git commit` the agent runs
-    // carries this project's configured identity.
-    settings: toolCall.env.roots,
+    env: yield* gitAuthorEnv(toolCall.env.roots),
     buffer: false,
     timeout: timeoutMs,
     // The string command form gets shell teardown: interruption and
@@ -362,7 +387,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
 ) {
   const { command } = input;
   const preview = previewLabel(command);
-  const settings = yield* SessionRoots;
+  const env = yield* gitAuthorEnv(yield* SessionRoots);
   const log = yield* SessionLog;
   // The durable record states only what a shell command has: no run mode,
   // no model. The run's name reaches terminals (the task list): no control
@@ -382,7 +407,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
           call: input,
           timeoutMs,
           cwd,
-          settings,
+          env,
           logger,
           log,
         }),

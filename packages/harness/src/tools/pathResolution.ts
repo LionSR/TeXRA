@@ -7,7 +7,7 @@ import { ToolError } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import {
   canonicalizePath,

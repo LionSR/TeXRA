@@ -87,7 +87,7 @@ import {
 } from '@shared/session/inFlight';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
-import { getBasename } from '@utils/core';
+import { getBasename } from '@utils/core/pathBasics';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
