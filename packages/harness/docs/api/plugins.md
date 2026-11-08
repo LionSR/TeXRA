@@ -697,9 +697,10 @@ interface FactKind {
    *  held at the cut, `drop` none. A row about the plugin's own aggregate
    *  belongs to that aggregate and stays with it. */
   readonly fork: 'copy' | 'drop';
-  /** The kind's own transition rule, checked by the store in the writing
-   *  transaction against the aggregate's latest row of the kind (none
-   *  before the first): the rejection's reason, or null to accept. */
+  /** The kind's own transition rule, checked by its writer in the job that
+   *  appends the row (`ownFactsChecked`) against the aggregate's latest row
+   *  of the kind (none before the first): the rejection's reason, or null
+   *  to accept. */
   readonly accepts?: (
     previous: PluginRow | undefined,
     next: PluginRow,
@@ -1562,7 +1563,10 @@ interface RequestDecisionHook {
     readonly inbox: (runId: RunId) => RunInbox;
     readonly commit: (
       facts: readonly (ToolFact & { readonly aggregate: string })[],
-    ) => Effect.Effect<void, LogWriteError>;
+    ) => Effect.Effect<
+      void,
+      LogWriteError | DatabaseReadFailed | PluginFactRejected
+    >;
   }) => Effect.Effect<void, Error, GlobalValues>;
 }
 ```

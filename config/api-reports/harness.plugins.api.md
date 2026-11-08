@@ -85,7 +85,7 @@ Exports: 139
 - `RecipeChange` — `interface RecipeChange { readonly path: string; readonly absolutePath: string; readonly base: string | null; readonly added: number | null; readonly removed: number | null; }`
 - `RefusalDecision` — `type RefusalDecision = Extract<RequestDecision, { action: 'reject' | 'deny' | 'cancel'; }>; ≡ RefusalDecision`
 - `renderPrompt` — `const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, Error, never>`
-- `RequestDecisionHook` — `interface RequestDecisionHook { readonly record: (request: { readonly payload: PluginRequest; readonly decision: RequestDecision; readonly inbox: (runId: RunId) => RunInbox; readonly commit: (facts: readonly (ToolFact & { readonly aggregate: string; })[]) => Effect.Effect<void, LogWriteError>; }) => Effect.Effect<void, Error, GlobalValues>; }`
+- `RequestDecisionHook` — `interface RequestDecisionHook { readonly record: (request: { readonly payload: PluginRequest; readonly decision: RequestDecision; readonly inbox: (runId: RunId) => RunInbox; readonly commit: (facts: readonly (ToolFact & { readonly aggregate: string; })[]) => Effect.Effect<void, LogWriteError | DatabaseReadFailed | PluginFactRejected>; }) => Effect.Effect<void, Error, GlobalValues>; }`
 - `requestToolEditApproval` — `const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>`
 - `requireRun` — `const requireRun: (toolName: string) => Effect<ToolContextShape & { readonly requests: CallRequests; readonly run: ToolRun; }, ToolError, ToolContext>`
 - `resolveToolPath` — `const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>`
