@@ -4,7 +4,7 @@ import { expect } from 'vitest';
 
 import { slashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { SessionGraph } from '@test/support/testKernel';
-import { boundTestSessionView } from './fixtures/sessionViewFixture';
+import { boundTestSessionView } from '@test/cli/fixtures/sessionViewFixture';
 
 layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
   excludeTestServices: true,
