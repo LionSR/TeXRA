@@ -38,7 +38,7 @@ import {
 import { ScriptTool } from '@tools/codemode/ScriptTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
-import { recordSessionEvents } from './progressTestUtils';
+import { recordSessionEvents } from '@test/agent/progressTestUtils';
 import type { ITool, ToolResult } from '@texra-ai/harness/plugins';
 
 /** The calls a folded state holds settled. */
