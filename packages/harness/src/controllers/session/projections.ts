@@ -108,10 +108,10 @@ interface Projector {
 
 /**
  * What a run's record holds: the commit of each row its `RunRows` reads
- * (null until one is written), and what no one row states: whether a
- * `run.detach` severed the start's parent edge, and whether its input is
- * closed (the latest of `run.activate`, `followup.closed` and `run.removed`
- * is not an activation). `unread` holds the commits of its input rows that
+ * (null until one is written), the facts no one row states included by the
+ * row that set them: `detach`, the `run.detach` that severed the start's
+ * parent edge, and `closedBy`, the `followup.closed` or `run.removed` that
+ * closed its input since its latest `run.activate`. `unread` holds the commits of its input rows that
  * did not decode when the record was built from stored rows: its read
  * selects them too, so it fails on them as a read of the run's rows does.
  */
@@ -128,8 +128,8 @@ const RunRecordSchema = Schema.Struct({
   userTitle: Schema.NullOr(Schema.Int),
   label: Schema.NullOr(Schema.Int),
   facts: Schema.Record(FactNameSchema, Schema.Int),
-  detached: Schema.Boolean,
-  inputClosed: Schema.Boolean,
+  detach: Schema.NullOr(Schema.Int),
+  closedBy: Schema.NullOr(Schema.Int),
   unread: Schema.Array(Schema.Int),
 });
 type RunRecord = typeof RunRecordSchema.Type;
@@ -150,8 +150,8 @@ const EMPTY_RUN_RECORD: RunRecord = {
   userTitle: null,
   label: null,
   facts: {},
-  detached: false,
-  inputClosed: false,
+  detach: null,
+  closedBy: null,
   unread: [],
 };
 
@@ -166,19 +166,19 @@ type RecordStep<T extends SessionRow['type']> = (
 const RECORD_STEPS: { readonly [T in SessionRow['type']]?: RecordStep<T> } = {
   'run.start': (record, row) => ({ ...record, start: row.commit }),
   'approval.policy': (record, row) => ({ ...record, policy: row.commit }),
-  'run.detach': (record) => ({ ...record, detached: true }),
+  'run.detach': (record, row) => ({ ...record, detach: row.commit }),
   // A resumed run never carries the previous lifecycle's end or stop.
   'run.activate': (record, row) => ({
     ...record,
     activation: row.commit,
     end: null,
     stop: null,
-    inputClosed: false,
+    closedBy: null,
   }),
   'run.stop': (record, row) => ({ ...record, stop: row.commit }),
   'run.end': (record, row) => ({ ...record, end: row.commit }),
-  'followup.closed': (record) => ({ ...record, inputClosed: true }),
-  'run.removed': (record) => ({ ...record, inputClosed: true }),
+  'followup.closed': (record, row) => ({ ...record, closedBy: row.commit }),
+  'run.removed': (record, row) => ({ ...record, closedBy: row.commit }),
   'run.report': (record, row) => ({ ...record, report: row.commit }),
   'process.exit': (record, row) => ({ ...record, exit: row.commit }),
   'run.config': (record, row) => ({ ...record, config: row.commit }),
@@ -205,13 +205,7 @@ function recordAfter(record: RunRecord, row: SessionRow): RunRecord {
 
 /** The commits a stored run record names: the rows `runRowsOf` reads. */
 export const runRecordCommits = (stored: string): number[] => {
-  const {
-    facts,
-    unread,
-    detached: _,
-    inputClosed: __,
-    ...rows
-  } = decodeRunRecord(stored);
+  const { facts, unread, ...rows } = decodeRunRecord(stored);
   return [...Object.values(rows), ...Object.values(facts), ...unread].flatMap(
     (commit) => (commit === null ? [] : [commit]),
   );
@@ -241,6 +235,11 @@ export function runRowsOf(
     return found as RowOf<T>;
   };
   const start = row('run.start', record.start);
+  const closer =
+    record.closedBy !== null &&
+    byCommit.get(record.closedBy)?.type === 'run.removed'
+      ? row('run.removed', record.closedBy)
+      : row('followup.closed', record.closedBy);
   const userTitle = row('run.description', record.userTitle);
   const label = row('run.description', record.label);
   const facts: Record<string, RowOf<'plugin.fact'>> = {};
@@ -250,11 +249,14 @@ export function runRowsOf(
   }
   return {
     start,
-    parent: record.detached ? null : (start?.parent ?? null),
+    parent:
+      row('run.detach', record.detach) === null
+        ? (start?.parent ?? null)
+        : null,
     activation: row('run.activate', record.activation),
     end: row('run.end', record.end),
     stop: row('run.stop', record.stop),
-    inputClosed: record.inputClosed,
+    inputClosed: closer !== null,
     report: row('run.report', record.report)?.report ?? null,
     exit: row('process.exit', record.exit),
     config: row('run.config', record.config)?.config ?? null,

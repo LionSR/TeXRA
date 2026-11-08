@@ -682,9 +682,37 @@ describe('the session event table and its one publisher', () => {
       return Effect.gen(function* () {
         // Any undecodable row of a run damages it, not only its start. The
         // store is held while open, so the row is damaged between opens.
+        const closed: SessionRowDraft = {
+          type: 'followup.closed',
+          aggregateId: runStartRow.aggregateId,
+        };
         yield* Effect.flatMap(Database, (db) =>
-          db.appendAll([runStartRow, olderStart, waiting]),
+          db.appendAll([runStartRow, olderStart, waiting, closed]),
         ).pipe(Effect.provide(substrate(storage)));
+        // A record's fact that no one row states is read from the row that
+        // set it: that row broken since fails the record's read.
+        yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`UPDATE event SET data = '{' WHERE "commit" = 4;`);
+          } finally {
+            raw.close();
+          }
+        });
+        expect(
+          yield* Effect.flip(
+            Effect.flatMap(Database, (db) =>
+              db.readRunRecord(runStartRow.aggregateId),
+            ).pipe(Effect.provide(substrate(storage))),
+          ),
+        ).toMatchObject({
+          _tag: 'DatabaseReadFailed',
+          cause: {
+            _tag: 'DatabaseRowCorrupt',
+            type: 'followup.closed',
+            commit: 4,
+          },
+        });
         yield* corrupt(3);
         yield* Effect.gen(function* () {
           const db = yield* Database;
