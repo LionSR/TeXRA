@@ -636,8 +636,9 @@ F13's reader, and T4 with T7c, with these changes to the plan:
 **Landed (PR 2, branch `simplify/t-store-records`).** T3 and T5; T6 refused.
 
 - T3: the store's append reads no plugin rows and asks no fact kind. The
-  writer of a fact about a plugin's own aggregate checks it in the job that
-  appends it (`ownFactsChecked`, `tools/plugins.ts`): one read of the
+  writer of every plugin fact (a run's own, or one about the plugin's own
+  aggregate) checks it in the job that appends it (`ownFactsChecked`,
+  `tools/plugins.ts`): one read of the
   aggregate's facts per draft, then `supersedes`, `accepts` and the new
   parent run's openness. `FactKind.accepts` stays as the plugin's declared
   rule (`externalInquiry.ts`); what left is the store's branch, which
@@ -656,7 +657,10 @@ F13's reader, and T4 with T7c, with these changes to the plan:
   copies, so a long string stays one blob and a row from an earlier build
   still fails as itself. `recordFacts`, `runRowsFrom`, `recordsOf` and
   `READ_RUN_RECORDS` are gone; the input read keeps a four-field lifecycle
-  fold. The session view keeps its own title rule over the live rows: a cold
+  fold. A record built at open over stored rows keeps the commits of any
+  input row that did not decode (`unread`), so its read fails on them as
+  the strict read it replaced did. The session view keeps its own title
+  rule over the live rows: a cold
   `RunView` from the record would reshape the listing, which is not this PR.
 - T6: refused (`STORE-context-blob-as-brought-blob` in
   `.agents/docs/refuted-candidates.json`). `context.blob` is the run state's
