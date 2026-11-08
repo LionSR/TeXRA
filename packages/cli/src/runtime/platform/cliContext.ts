@@ -335,7 +335,6 @@ export interface CliGlobalArgs {
    * user explicitly selects another approval policy.
    */
   readonly noInput?: boolean;
-  readonly includeInteropSkills?: boolean;
   readonly skillSourcePaths?: readonly string[];
 }
 
@@ -526,7 +525,6 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       envAgent: yield* envTier('TEXRA_AGENT'),
       envModel,
       skillSourceOptions: {
-        includeInterop: init.globalArgs.includeInteropSkills === true,
         additionalPaths: init.globalArgs.skillSourcePaths ?? [],
       },
     };

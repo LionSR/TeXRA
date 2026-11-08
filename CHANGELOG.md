@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Imported skills are a source group, not a CLI flag.** The `.agents`,
+  `.claude`, `.codex` and `.gemini` skill folders beside the workspace and in
+  the home directory are always discovered, in the `interop` scope that the
+  Skills tab lists as "Imported", and `skills.disabledSources` now lists
+  `interop` by default, so they stay off until a person enables the group in
+  the settings or `texra config edit`. On the extension and desktop the
+  group's switch used to control nothing, because only the CLI's
+  `--include-interop` flag could discover these folders. That flag is gone,
+  on `texra chat`, `texra run`, `texra resume` and `texra skills list`, and a
+  resume hint no longer carries it. SDK: `SkillSourceOptions.includeInterop`
+  and `Skills.interopDirs` are gone.
 - **`texra run` NDJSON is contract 3: a run and a turn are no longer
   stages.** The `Run: <agent>`, `Tool-use turn`, `Background command`,
   `Claude Code session` and `Codex session` `stage.start`/`stage.end`

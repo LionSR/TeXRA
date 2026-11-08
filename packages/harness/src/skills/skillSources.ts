@@ -9,7 +9,6 @@ import type { ActiveSkillSourceScope } from '@shared/schemas';
 import type { SkillSource, SkillSourceTier } from './loadSkills';
 
 export interface SkillSourceOptions {
-  readonly includeInterop?: boolean;
   readonly additionalPaths?: readonly string[];
 }
 
@@ -27,15 +26,20 @@ export interface HostSkillOptions {
   /**
    * The folder the host keeps in each project, relative to a session's
    * workspace (TeXRA's `.texra`): its `skills/` holds the project's own
-   * skills. Absent, a project has no skills but those a custom root or an
-   * interop listing reads.
+   * skills. Absent, a project has no skills but those a custom root or the
+   * other agent tools' folders hold.
    */
   readonly projectDataDirName?: string;
   readonly skillSourceOptions?: SkillSourceOptions;
 }
 
-/** The other agent tools' folders whose `skills/` an interop listing reads. */
-export const INTEROP_SKILL_DIRS = Object.freeze([
+/**
+ * The other agent tools' folders whose `skills/` are discovered beside a
+ * workspace and the home folder, in the `interop` scope. Discovery always
+ * reads them; `skills.disabledSources` lists the scope by default, so a
+ * person switches them on from the settings, the same way as any source.
+ */
+const INTEROP_SKILL_DIRS = Object.freeze([
   '.agents',
   '.claude',
   '.codex',
@@ -133,10 +137,7 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
   {
     id: 'core:interop-project',
     tier: 'interop-project',
-    roots: ({ cwd, options }) =>
-      options.includeInterop === true && cwd !== undefined
-        ? interopRoots(cwd, 'project')
-        : [],
+    roots: ({ cwd }) => (cwd === undefined ? [] : interopRoots(cwd, 'project')),
   },
   {
     id: 'core:user',
@@ -174,8 +175,7 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
   {
     id: 'core:interop-user',
     tier: 'interop-user',
-    roots: ({ home, options }) =>
-      options.includeInterop === true ? interopRoots(home, 'user') : [],
+    roots: ({ home }) => interopRoots(home, 'user'),
   },
   {
     id: 'core:bundled',

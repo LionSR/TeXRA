@@ -329,12 +329,13 @@ what's available, and pull in extra skill folders for any agent run:
 ```bash
 texra skills list
 texra run polish --input paper.tex --source ~/my-skills
-texra chat --include-interop
 ```
 
-`--source` (alias `-s`) adds an additional skill root and may be repeated;
-`--include-interop` also includes `.agents`, `.claude`, `.codex`, and `.gemini`
-skill folders from the workspace and home directory. When skills share a name,
+`--source` (alias `-s`) adds an additional skill root and may be repeated.
+The `.agents`, `.claude`, `.codex` and `.gemini` skill folders beside the
+workspace and in the home directory are the imported source group, off by
+default; enable it with the `skills.disabledSources` setting (`texra config
+edit`) or the Skills tab. When skills share a name,
 project and user skills take precedence over bundled ones. In chat, pick a
 skill with `/skills` to apply it to your next request.
 

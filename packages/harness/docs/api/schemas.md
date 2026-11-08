@@ -617,7 +617,7 @@ const DiffStatsSchema: Struct<{ readonly added: optional<Int>; readonly removed:
 ## DISABLED_SKILL_SOURCES_SETTING
 
 ```ts
-const DISABLED_SKILL_SOURCES_SETTING: { readonly key: "skills.disabledSources"; readonly slot: "config"; readonly schema: withDecodingDefault<$Array<Literals<readonly ["bundled", "user", "project", "interop", "custom"]>>, never>; readonly title: "Skill sources"; readonly description: "Enable or disable skill source groups in this workspace."; }
+const DISABLED_SKILL_SOURCES_SETTING: { readonly key: "skills.disabledSources"; readonly slot: "config"; readonly schema: withDecodingDefault<$Array<Literals<readonly ["bundled", "user", "project", "interop", "custom"]>>, never>; readonly title: "Skill sources"; readonly description: "Enable or disable skill source groups in this workspace. The imported group, the `.agents`, `.claude`, `.codex` and `.gemini` skill folders beside the workspace and in the home directory, is off until enabled."; }
 ```
 
 ## DISABLED_SKILLS_SETTING
