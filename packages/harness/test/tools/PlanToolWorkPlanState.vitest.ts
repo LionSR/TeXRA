@@ -28,7 +28,7 @@ import {
   autoDecideRequests,
   createRecordingHost,
   decideRequest,
-} from '../agent/progressTestUtils';
+} from '@test/agent/progressTestUtils';
 
 const followUpPlan: Plan = {
   objective: [

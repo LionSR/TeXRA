@@ -38,7 +38,7 @@ import {
   subscribe,
   tail,
   viewOf,
-} from './fanOutScenario';
+} from '@test/shared/session/fanOutScenario';
 
 function runView(view: SessionView, id: RunId): RunView {
   const found = view.runs.get(id);

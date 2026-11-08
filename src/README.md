@@ -6,8 +6,13 @@ layers and the boundary rules are in the root [`AGENTS.md`](../AGENTS.md)
 VS Code-free zone list, lint rules, ratchet baselines) are canonical there, not
 here.
 
-Repo-root `src/` holds only `src/test-kernel/`, the test suite. It may import
-or mock extension, desktop and CLI surfaces, and ships in nothing.
+Repo-root `src/` holds only `src/test-kernel/`: the suites that compose
+several packages (a suite whose imports, or a support module it runs over,
+such as `support/texraApp.ts`, reach more than one package) and the shared
+test support (`support/`, `fixtures/`, the helpers beside the suites). A suite
+that tests one package lives in that package's `test/`, under the same tier
+directory name. `src/test-kernel/` may import or mock extension, desktop and
+CLI surfaces, and ships in nothing.
 
 ## The harness: `packages/harness/src` (`@texra-ai/harness`)
 
