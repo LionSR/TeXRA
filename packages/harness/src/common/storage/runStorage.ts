@@ -10,7 +10,7 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 import { getPathSegments } from '@utils/core/pathCore';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';

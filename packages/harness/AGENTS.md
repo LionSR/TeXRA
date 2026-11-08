@@ -6,7 +6,7 @@ Folder-scoped addition to the root [AGENTS.md](../../AGENTS.md) for
 ## Directory organization
 
 - `packages/harness/src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, parsing, plugins, storage). Check a module's dependencies before using it from browser code.
-- `packages/harness/src/utils/` is host-agnostic, not browser-safe: an import added to a module in the closure of the `./schemas` or `./transcript` entry must stay browser-safe. `utils/core/` has path basics, abort and failure helpers, hashing and derived run ids (`idHash.ts`), and `withPerKeyLane` (`perKeyQueue.ts`).
+- `packages/harness/src/utils/` is host-agnostic, not browser-safe: an import added to a module in the closure of the `./schemas` or `./transcript` entry must stay browser-safe. `utils/core/` has the browser-safe path basics (`pathBasics.ts`) and the Node path rules (`pathCore.ts`), the backoff delays (`backoffSchedule.ts`), HTTP status reads, hashing and derived run ids (`idHash.ts`), and `withPerKeyLane` (`perKeyQueue.ts`).
 - `packages/harness/src/platform/` defines the host ports and the process runtime types. Each host's composition root builds one `ManagedRuntime` over `processLayer()` and opens and closes sessions through its `SessionOwner`.
 - Hosts and the app hold a session as the public `Session` (`packages/harness/src/effect/sessions.ts`): its view, a run's records (`records(runId)`), the run listing and deletion, its starts, resumes and requests, all typed; `Sessions.open` gives the `LocalSession` this process holds, which adds the runs it is running (`held`), a handle by activation (`run`) and its notices (`emit`). A window of the background service holds a plain `Session` the service answers (`packages/texra/src/controllers/server/serviceSession.ts`). Inside the harness a session is its owners, each its own service (`SessionServices`, `packages/harness/src/agent/runtime/rootLaunch.ts`, composed in `packages/harness/src/controllers/session/sessionOwners.ts`), which its runs, requests and the SDK read from context; a host never names them.
 
@@ -27,7 +27,7 @@ points to a strictly lower layer:
 9. `effect/`: the SDK (`Sessions`, `processLayer`).
 10. The entry files at the root (`index.ts`, `node.ts`, `plugins.ts`, `schemas.ts`, `host.ts`, `transcriptEntry.ts`).
 
-The known exceptions: the settings-reading system helper in `utils/` (`execUtils.ts`) and the derived run id (`idHash.ts`, the `RunId` type) reach `shared/`; and `agent/`, `tools/` and `transcript/` form one cycle.
+The known exceptions: two `utils/` modules import a type from `shared/`, `execUtils.ts` its `ExecResult` and `idHash.ts` the `RunId`; and `agent/`, `tools/` and `transcript/` form one cycle.
 
 ## Configuration, storage, and workspace files
 
@@ -78,7 +78,7 @@ A run is one Effect program in `packages/harness/src/agent/runtime/loop/`, with 
 
 ## Storage format
 
-`storeSchema.ts` (`packages/harness/src/controllers/session/`) stamps every `texra.db` with its schema version, moves a pre-1.0 store aside whole at open (`texra.db.pre1`, never read again, settings included) and refuses a newer schema. Row kinds carry their own versions (`packages/harness/src/shared/schemas/rowVersions.ts`), read only by the row codec (`rowCodec.ts`). A kind changes with no upcaster (the codec converts no stored row; the first released version that must stay readable across a change brings the first upcaster): bump its version when an older build's row would read wrong, so that row reads as an earlier build's (`DatabaseRowEarlier`) and never as damaged or silently stripped.
+`storeSchema.ts` (`packages/harness/src/controllers/session/`) stamps every `texra.db` with its schema version, moves a pre-1.0 store aside whole at open (`texra.db.pre1`, never read again, settings included) and refuses, untouched, any other schema: a newer build's, or an earlier one this build has no step from (there is no migration; a column or table changes only with a stamp bump). Row kinds carry their own versions (`packages/harness/src/shared/schemas/rowVersions.ts`), read only by the row codec (`rowCodec.ts`). A kind changes with no upcaster (the codec converts no stored row; the first released version that must stay readable across a change brings the first upcaster): bump its version when an older build's row would read wrong, so that row reads as an earlier build's (`DatabaseRowEarlier`) and never as damaged or silently stripped.
 
 ## Core quality
 

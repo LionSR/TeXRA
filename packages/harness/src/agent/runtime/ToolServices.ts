@@ -60,8 +60,8 @@ export type RunServices =
  *  against whichever roots its fiber happens to carry. The child-launch
  *  door (`ChildRuns`) and the call's place in its run (`RunCall`) are
  *  references with defaults, never requirements; a plugin's tool reads the
- *  door and never the session's `Runs`, which only the engine door carries
- *  (`RunCallShape.session`). */
+ *  door and never the session's own services, which only the harness's
+ *  built-ins name (`builtinPlugins.ts`). */
 export type PluginToolServices =
   | RunServices
   | ToolContext
@@ -137,9 +137,9 @@ const noRunChildRuns: ChildRunsShape = Object.freeze({
   requested: () => noRun,
 });
 
-/** The session's services, picked from its run's fiber: what each call's
- *  run carries (`RunCallShape.session`), which a built-in runs over and
- *  the doors a plugin's tool calls through ({@link childRuns}) provide. */
+/** The session's services, picked from its run's fiber where the loop
+ *  dispatches a response: what the doors a plugin's tool calls through
+ *  ({@link childRuns}, its requests) run over. */
 export const sessionServices = Effect.map(
   Effect.context<SessionServices>(),
   Context.pick(
@@ -170,8 +170,10 @@ export const ChildRuns = Context.Reference<ChildRunsShape>(
  *  session's services, which the loop picked where it dispatched the call.
  *  A launch is provided those session services; its other requirements
  *  still resolve from the dispatching fiber. A plugin's tool sees neither. */
-export const childRuns = (call: RunCallShape): ChildRunsShape => {
-  const { session } = call;
+export const childRuns = (
+  call: RunCallShape,
+  session: Context.Context<SessionServices>,
+): ChildRunsShape => {
   const { runId } = call.run;
   const log = Context.get(session, SessionLog);
   const inSession = <A, E, R>(effect: Effect.Effect<A, E, R>) =>

@@ -40,7 +40,7 @@ export const githubActivity: TexraPlugin = {
         // "not a repository" as `false` and never fails; interrupting a
         // dashboard refresh kills its `git` process instead of abandoning it.
         const [token, inGitRepo] = yield* Effect.all(
-          [getGitHubToken(secrets), isGitRepository(workspace, undefined)],
+          [getGitHubToken(secrets), isGitRepository(workspace)],
           { concurrency: 'unbounded' },
         );
         const tokenPresent = token !== undefined;

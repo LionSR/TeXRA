@@ -9,6 +9,7 @@ import {
   type ModelOrigin,
   type ModelRoute,
   type ReasoningChoice,
+  type ReasoningChoiceError,
   ReasoningEffort,
   ReasoningEffortSchema,
   type ReasoningRequest,
@@ -17,7 +18,6 @@ import {
 import { Settings, type StateStore } from '@shared/config/settings';
 import { ModelBackendSchema, type ModelBackend } from '@shared/schemas';
 import type { StateKey } from '@shared/state/stateSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
@@ -90,24 +90,18 @@ export function servingBackend(
  * The route a run's reasoning is decided on. The validation model carries
  * every control the model has, so it names no llm route.
  */
-type ReasoningRoute = { readonly kind: ModelRoute['kind'] | 'validation' };
+type ReasoningRoute = ModelRoute | { readonly kind: 'validation' };
 
 const llmRoute = (route: ReasoningRoute) =>
-  route.kind === 'validation' ? undefined : { kind: route.kind };
+  route.kind === 'validation' ? undefined : route;
 
 /** {@link decideReasoning} as a value: the choice, or why it is refused. */
-function chooseOnRoute(
+const chooseOnRoute = (
   config: ModelConfig,
   request: ReasoningRequest,
   userEffort: ReasoningEffort | undefined,
   route: ReasoningRoute,
-): Result.Result<ReasoningChoice, Error> {
-  return Result.try({
-    try: () =>
-      chooseReasoning(config, request, { userEffort, route: llmRoute(route) }),
-    catch: ensureError,
-  });
-}
+) => chooseReasoning(config, request, { userEffort, route: llmRoute(route) });
 
 /**
  * The run's reasoning decision: the model string's own request, else the
@@ -121,7 +115,7 @@ export function decideReasoning(
   request: ReasoningRequest,
   userEffort: ReasoningEffort | undefined,
   route: ReasoningRoute,
-): Effect.Effect<ReasoningChoice, Error> {
+): Effect.Effect<ReasoningChoice, ReasoningChoiceError> {
   return Effect.fromResult(chooseOnRoute(config, request, userEffort, route));
 }
 
@@ -153,7 +147,7 @@ export interface RouteReasoning {
 function sentOf(
   config: ModelConfig,
   route: ReasoningRoute,
-  decided: Result.Result<ReasoningChoice, Error>,
+  decided: Result.Result<ReasoningChoice, ReasoningChoiceError>,
 ): SentReasoning {
   if (Result.isFailure(decided)) return { refused: decided.failure.message };
   const { note } = decided.success;

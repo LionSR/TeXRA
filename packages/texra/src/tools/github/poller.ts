@@ -21,7 +21,6 @@ import {
   withLogChannel,
   type AppSignals,
 } from '@texra-ai/harness/plugins';
-import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import { shouldDropBotEvent } from './botFilter';
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';
 import { formatSubscriptionHalted } from './formatUtils';
@@ -187,13 +186,10 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
     );
   });
 
-  // An idle timer must not hold the process open.
-  const clock = yield* Clock.Clock;
   yield* Effect.repeat(round, {
     schedule: Schedule.fixed(Duration.millis(GITHUB_POLL_INTERVAL_MS)),
     while: (keepPolling) => keepPolling,
   }).pipe(
-    Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
     // A bug in one target's poll ends that target's subscription, said to
     // its runs, instead of retrying the same bug every interval.
     Effect.catchDefect((defect) =>

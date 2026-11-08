@@ -9,12 +9,11 @@ import { join } from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { build } from 'esbuild';
-import { Effect, Exit, Fiber } from 'effect';
+import { Effect, Exit, Fiber, Schedule } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
 import { executeCommand } from '@texra-ai/harness/node';
-import { waitForCondition } from '@test/support/asyncTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
@@ -33,46 +32,39 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 // runner aborts the test mid-poll and the extra budget buys nothing.
 const PROCESS_EXIT_TEST_TIMEOUT_MS = 30_000;
 
-function waitForProcessExit(pid: number): Promise<void> {
-  return waitForCondition(
-    () => {
-      try {
-        process.kill(pid, 0);
-        return false;
-      } catch {
-        return true;
-      }
-    },
-    {
-      timeoutMs: 10_000,
-      intervalMs: 20,
-      timeoutMessage: `Timed out waiting for process ${pid} to exit`,
-    },
+const processExited = (pid: number) =>
+  Effect.sync(() => {
+    try {
+      process.kill(pid, 0);
+      return false;
+    } catch {
+      return true;
+    }
+  }).pipe(
+    Effect.repeat({
+      schedule: Schedule.spaced('20 millis'),
+      until: (exited) => exited,
+    }),
+    Effect.timeout('10 seconds'),
   );
-}
 
 // Backgrounds a long sleep, records its pid, then blocks on `wait` so the
 // tracked shell keeps running while the descendant holds the inherited stdio.
 const SLEEPER_SCRIPT = 'sleep 60 & echo $! > "$PID_FILE"; wait';
 // The shell's `>` creates the pid file before `echo` writes to it, so under
 // load the file can exist and still be empty; wait for a parseable pid.
-async function waitForPublishedPid(pidFile: string): Promise<number> {
-  let pid = Number.NaN;
-  await waitForCondition(
-    () => {
-      pid = existsSync(pidFile)
-        ? Number.parseInt(readFileSync(pidFile, 'utf8'), 10)
-        : Number.NaN;
-      return Number.isInteger(pid) && pid > 0;
-    },
-    {
-      timeoutMs: 10_000,
-      intervalMs: 20,
-      timeoutMessage: `Timed out waiting for a pid in ${pidFile}`,
-    },
+const publishedPid = (pidFile: string) =>
+  Effect.sync(() =>
+    existsSync(pidFile)
+      ? Number.parseInt(readFileSync(pidFile, 'utf8'), 10)
+      : Number.NaN,
+  ).pipe(
+    Effect.repeat({
+      schedule: Schedule.spaced('20 millis'),
+      until: (pid) => Number.isInteger(pid) && pid > 0,
+    }),
+    Effect.timeout('10 seconds'),
   );
-  return pid;
-}
 
 describe('executeCommand', () => {
   const tempDirs = useTempDirs();
@@ -106,7 +98,7 @@ describe('executeCommand', () => {
             '-e',
             `process.stdout.write(JSON.stringify([process.env.OPENAI_API_KEY ?? null, process.env.TEXRA_TEST_UNRELATED ?? null]))`,
           ],
-          { cwd: WORKSPACE, settings: undefined },
+          { cwd: WORKSPACE },
         );
 
         expect(JSON.parse(result.stdout)).toStrictEqual([null, 'kept']);
@@ -126,21 +118,18 @@ describe('executeCommand', () => {
         const fiber = yield* Effect.forkChild(
           executeCommand(SLEEPER_SCRIPT, {
             cwd: dir,
-            settings: undefined,
             timeout: 60_000,
             env: { PID_FILE: pidFile },
           }),
         );
-        const childPid = yield* Effect.promise(() =>
-          waitForPublishedPid(pidFile),
-        );
+        const childPid = yield* publishedPid(pidFile);
         yield* Fiber.interrupt(fiber);
         expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
 
         // The interrupt is the only teardown here: no abort signal is threaded
         // through, so the backgrounded sleep dies because `executeCommand`'s own
         // finalizer signalled the detached shell's process group.
-        yield* Effect.promise(() => waitForProcessExit(childPid));
+        yield* processExited(childPid);
       }).pipe(Effect.provide(nodeSpawnerLayer)),
     PROCESS_EXIT_TEST_TIMEOUT_MS,
   );
@@ -176,7 +165,6 @@ describe('executeCommand', () => {
             'Effect.runFork(',
             '  executeCommand(process.env.COMMAND!, {',
             '    cwd: process.cwd(),',
-            '    settings: undefined,',
             '    timeout: 60_000,',
             '    env: { PID_FILE: process.env.PID_FILE! },',
             '  }).pipe(Effect.provide(nodePlatformServices)),',
@@ -202,10 +190,10 @@ describe('executeCommand', () => {
           stdio: 'ignore',
         });
         // The shell leads its own process group, so its pid is the group id.
-        const group = yield* Effect.promise(() => waitForPublishedPid(pidFile));
+        const group = yield* publishedPid(pidFile);
 
         host.kill('SIGKILL');
-        yield* Effect.promise(() => waitForProcessExit(-group));
+        yield* processExited(-group);
         assert.equal(existsSync(join(dir, 'marker')), false);
       }),
     // The bundle build comes on top of the process-exit budget.

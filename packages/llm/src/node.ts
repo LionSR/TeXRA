@@ -202,7 +202,7 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
     options.fetch,
   );
   const { route } = spec;
-  const billing = route.kind === 'api-key' ? route.usageRoute : route.kind;
+  const billing = route.plan ?? 'api-key';
   return {
     model: judgedModel(model, billing),
     origin: originOf(configuration),

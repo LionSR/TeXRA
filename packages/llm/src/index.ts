@@ -62,6 +62,7 @@ export type {
 } from './message.js';
 export {
   ModelError,
+  ModelErrorFieldsSchema,
   fillModelError,
   PLAN_ROUTES,
   RemoteOperationSchema,
@@ -144,7 +145,7 @@ export {
   routeConfig,
 } from './models/modelRoute.js';
 export type {
-  ApiKeyUsageRoute,
+  KeyPlanRoute,
   CredentialRoute,
   ModelRoute,
   RouteFacts,

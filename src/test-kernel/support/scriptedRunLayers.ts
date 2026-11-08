@@ -164,7 +164,7 @@ export function testBinding(
       kind: 'api-key',
       endpoint: 'https://api.deepseek.com',
       provider: 'deepseek',
-      usageRoute: 'api-key',
+      plan: null,
     },
     forcedToolChoice: true,
     billing: 'api-key',

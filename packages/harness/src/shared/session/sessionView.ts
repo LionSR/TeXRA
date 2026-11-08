@@ -134,9 +134,14 @@ export const RunViewSchema = Schema.Struct({
   takesFollowUps: Schema.Boolean,
   /** Latest `context.state`. */
   context: Schema.NullOr(ContextStateDataSchema),
+  /** The run it is attached to now: its launcher until a detach. */
   parentId: Schema.NullOr(RunIdSchema),
-  /** The run that launched it (`run.start.parent`), which a detach keeps. */
-  launchParentId: Schema.NullOr(RunIdSchema),
+  /** Its launch edge (`run.start.parent`), which a detach keeps: the run
+   *  that launched it, and that run's tool card it was launched from
+   *  (`parent.call.card`; null for a launch no call made). Null for a root. */
+  launch: Schema.NullOr(
+    Schema.Struct({ id: RunIdSchema, card: Schema.NullOr(Schema.String) }),
+  ),
   /** The task this one was forked from and the settled point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
   forkedFrom: Schema.NullOr(Schema.Struct({ id: RunIdSchema, at: Positive })),
@@ -144,8 +149,6 @@ export const RunViewSchema = Schema.Struct({
    *  the point a whole-task fork cuts at; null before its first turn ends,
    *  when there is nothing to fork. */
   forkPoint: Schema.NullOr(Positive),
-  /** The parent's tool card that launched this run (`run.start.parent.call.card`). */
-  parentCard: Schema.NullOr(Schema.String),
   /** Root first. */
   ancestors: Schema.Array(
     Schema.Struct({ id: RunIdSchema, label: Schema.String }),

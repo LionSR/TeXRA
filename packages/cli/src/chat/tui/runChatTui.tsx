@@ -26,11 +26,7 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
-import { FileSecrets, secretsDirectory } from '@texra-ai/harness/node';
-import {
-  SESSION_CLOSE_DEADLINE_MS,
-  emitAppSignal,
-} from '@texra-ai/harness/plugins';
+import { SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness/plugins';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -91,7 +87,7 @@ import { EMPTY_DRAFT } from './input/draftAttachments';
 import {
   rootRunId,
   selectedRunId as selectedRunIdSignal,
-  resetCliState,
+  startChat,
   patchSessionMeta,
   sessionViewFailure as sessionViewFailureSignal,
   sessionMeta as sessionMetaSignal,
@@ -390,6 +386,7 @@ export async function runChat(
     setApprovalPolicy,
     resetSession: resetSessionForClear,
     resumeRun: chatController.resume,
+    resumeTask: chatController.resumeTask,
   });
 
   // From here on `chatScope` owns everything the session holds: what is
@@ -441,17 +438,6 @@ export async function runChat(
     title: installTerminalTitleUpdates(context.cwd),
   });
   onChatClose(announceForegroundApprovals());
-  runtime.runSync(
-    Effect.gen(function* () {
-      // Keys another TeXRA window or the service saves reach this chat too.
-      yield* Effect.forkIn(
-        FileSecrets.watch(secretsDirectory(context.storageRoot), (key) =>
-          emitAppSignal('credentialChanged', { key }),
-        ),
-        chatScope,
-      );
-    }),
-  );
   // The runs this terminal paints, watched on the session for as long as
   // the set holds: the watch keeps their transcripts in the view, and a
   // new set replaces the watch. The chat's scope ends it.
@@ -546,7 +532,7 @@ export async function runChat(
     const meta = sessionMetaSignal.get();
     if (isRunPending) chatController.stop('user');
     chatController.clearPendingSkills();
-    resetCliState(meta);
+    startChat(meta);
     // The erase happens outside Ink, so the scrollback prints again from a
     // new origin even when the history it rebuilds is empty.
     clearTerminalScrollback();
@@ -682,6 +668,7 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     chatScope,
+    shutdownScope: services.shutdownScope,
     terminal,
     runtime,
     leaveProcess: services.leave,

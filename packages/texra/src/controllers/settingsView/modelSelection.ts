@@ -135,6 +135,7 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
       isFast: isFastFirstResponseModel(config.inputPrice),
       isExpensive: isExpensiveModel(config.outputPrice),
       availability: option.availability,
+      usageRoute: option.usageRoute,
     };
 
     items.push({ ...item, ...reasoningLevelData(decided) });

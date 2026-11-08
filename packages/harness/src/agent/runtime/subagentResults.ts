@@ -10,7 +10,6 @@
 
 import {
   type AttachedMemoryMiss,
-  type RetryErrorInfo,
   type RunEndOutput,
   type RunId,
   type RunOutcome,
@@ -110,12 +109,12 @@ export function formatSubagentDelivery(
 }
 
 /**
- * Format a child's normalized failure as a delivery message.
+ * Format a child's failure, in its words, as a delivery message.
  */
 export function formatSubagentError(
   runId: string,
   agentName: string,
-  formatted: Pick<RetryErrorInfo, 'message'>,
+  message: string,
   options: DeliveryContext & { readonly wallTimeMs: number },
 ): string {
   return formatDelivery({
@@ -124,6 +123,6 @@ export function formatSubagentError(
     attributes: [{ name: 'agent', value: agentName }],
     wallTime: `${(options.wallTimeMs / 1000).toFixed(1)}s`,
     lines: formatDeliveryPreamble(options),
-    message: formatted.message,
+    message,
   });
 }

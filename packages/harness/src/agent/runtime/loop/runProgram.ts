@@ -6,10 +6,9 @@
  * `Effect.acquireUseRelease`.
  */
 
-import { Cause, Context, Effect, Exit, ScopedRef } from 'effect';
+import { Context, Effect, Exit, ScopedRef } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
-import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   outcomeFromCause,
@@ -25,7 +24,6 @@ import {
   type RunCell,
 } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
 import { registryOf, Runs } from '../runRegistry';
@@ -165,18 +163,4 @@ export const settleRun =
           : 'recoverable',
       ),
     );
-  };
-
-/**
- * The caller's error for a run that ended in a failure cause. Any interrupt
- * in the cause is re-raised unchanged, so a stop that also hit a finalizer
- * stays a cancellation. Anything else becomes the caller's error.
- */
-export const stoppedBy =
-  (logger: AgentTrace, label: string) =>
-  (cause: Cause.Cause<Error>): Effect.Effect<never, Error> => {
-    if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-    const stopped = ensureError(Cause.squash(cause));
-    logger.warn(`${label} stopped: ${stopped.message}`);
-    return Effect.fail(stopped);
   };

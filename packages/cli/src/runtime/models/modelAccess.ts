@@ -19,7 +19,7 @@ import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 
 // Local file imports
-import { MODEL_AVAILABILITY_LABEL } from '@ui/copy/modelAccess';
+import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
 import { resolveKnownCliModelId } from '../platform/cliConfig';
 
 export interface CliModelAccess {
@@ -124,7 +124,10 @@ export function formatCliNoRunnableModelsMessage(
 function formatModelAccessStatus(model: ModelOptionData): string {
   return model.availability === undefined
     ? 'available'
-    : MODEL_AVAILABILITY_LABEL[model.availability].toLowerCase();
+    : modelAvailabilityLabel({
+        availability: model.availability,
+        usageRoute: model.usageRoute,
+      }).toLowerCase();
 }
 
 /**
@@ -210,7 +213,7 @@ function findCliModelAccessEntry(
  * The record is the whole of `ModelOptionData`, so it follows that schema: at
  * 1.0 the fanned-out `availabilityLabel`, `requiresKey` and `disabled` keys are
  * gone and `availability` (the machine-readable kind) is what a consumer reads;
- * the human label for a kind lives in `MODEL_AVAILABILITY_LABEL`.
+ * the human label for a kind is `modelAvailabilityLabel`.
  */
 export function cliModelRecord(
   model: ModelOptionData,
@@ -258,7 +261,6 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
     case 'unserved':
       return 'Only OpenRouter or GitHub Copilot serves this model, which TeXRA no longer supports: choose another model.';
     case 'subscription-access':
-    case 'xai-subscription-access':
     case undefined:
       return undefined;
     case 'unknown-model':
@@ -276,7 +278,12 @@ export function formatCliModelDetails(entry: CliModelAccess): string {
   if (model.provider) lines.push(`provider: ${model.provider}`);
   lines.push(`status: ${status}`);
   if (model.availability)
-    lines.push(`availability: ${MODEL_AVAILABILITY_LABEL[model.availability]}`);
+    lines.push(
+      `availability: ${modelAvailabilityLabel({
+        availability: model.availability,
+        usageRoute: model.usageRoute,
+      })}`,
+    );
   const recovery = formatCliModelRecovery(entry);
   if (recovery) lines.push(`recovery: ${recovery}`);
   if (model.context) lines.push(`context: ${model.context}`);

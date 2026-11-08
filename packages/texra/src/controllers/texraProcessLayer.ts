@@ -21,7 +21,7 @@ import {
   type ProcessServices,
   type SkillSourceOptions,
 } from '@texra-ai/harness/host';
-import { Secrets } from '@texra-ai/harness/plugins';
+import { emitAppSignal, Secrets } from '@texra-ai/harness/plugins';
 import {
   CommandDirs,
   FileSecrets,
@@ -121,5 +121,16 @@ export const texraProcessLayer = ({
     // resolves on the app's directories too.
     Layer.provideMerge(Layer.succeed(CommandDirs)(commandDirs)),
   );
-  return Layer.merge(services, HostWindows.layer(editors));
+  return Layer.merge(
+    HostWindows.layer(editors),
+    // Every process follows keys written by other hosts, even without a
+    // window. The watch closes before the services that consume its signals.
+    Layer.effectDiscard(
+      Effect.forkScoped(
+        FileSecrets.watch(secretsDirectory(storageRoot), (key) =>
+          emitAppSignal('credentialChanged', { key }),
+        ),
+      ),
+    ),
+  ).pipe(Layer.provideMerge(services));
 };

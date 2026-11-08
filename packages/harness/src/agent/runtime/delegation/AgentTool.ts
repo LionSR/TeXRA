@@ -18,11 +18,12 @@ import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runOwnership';
-import { RunCall, noLaterTurn, requireToolRun } from '@agent/runtime/RunCall';
+import { RunCall, inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
+  runEndErrorMessage,
   AGENT_SOURCE,
   AgentProposalSchema,
   type AgentProposal,
@@ -190,57 +191,58 @@ export type ChildLaunch = {
  * (attempt 0), recovered from rows after restart. A stop cancels it, and
  * the next request takes the next ordinal.
  */
-const scriptRequest = Effect.fn('AgentTool.scriptRequest')(
-  function* (call: RunToolCall, script: ScriptScope, proposal: AgentProposal) {
-    const { runId } = call.run;
-    const shared = {
-      responseId: call.responseId,
-      callId: script.callId,
-      attempt: 0,
-    };
-    const from = (yield* SessionLog).now();
-    const state = yield* (yield* RunHistory).load(runId);
-    const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
-    if (own?.request.decision === null)
-      // A session that closes first decides nothing: the next resume asks.
-      return yield* decisionOf(runId, own.requestId, from).pipe(
-        Effect.map((row) => row.decision),
-        Effect.catch((cause) =>
-          Effect.logWarning(
-            `The script's agent request ${own.requestId} closed without a decision; the call stays in flight and the next resume asks again.`,
-          ).pipe(
-            Effect.annotateLogs({ data: cause }),
-            Effect.andThen(Effect.interrupt),
-          ),
+const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
+  call: RunToolCall,
+  script: ScriptScope,
+  proposal: AgentProposal,
+) {
+  const { runId } = call.run;
+  const shared = {
+    responseId: call.responseId,
+    callId: script.callId,
+    attempt: 0,
+  };
+  const from = (yield* SessionLog).now();
+  const state = yield* (yield* RunHistory).load(runId);
+  const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
+  if (own?.request.decision === null)
+    // A session that closes first decides nothing: the next resume asks.
+    return yield* decisionOf(runId, own.requestId, from).pipe(
+      Effect.map((row) => row.decision),
+      Effect.catch((cause) =>
+        Effect.logWarning(
+          `The script's agent request ${own.requestId} closed without a decision; the call stays in flight and the next resume asks again.`,
+        ).pipe(
+          Effect.annotateLogs({ data: cause }),
+          Effect.andThen(Effect.interrupt),
         ),
-      );
-    if (own !== null) return own.request.decision;
-    const calls = yield* script.calls;
-    return yield* call.requests
-      .open({
-        kind: 'proposal',
-        data: {
-          requestId: callRequestId(shared, raised + 1),
-          offersGrant: (yield* RunCall)?.hook !== 'ask',
-          runId,
-          ...proposal,
-          script: {
-            title: script.title,
-            source: script.source,
-            calls: calls.map(({ toolName, input }) => ({
-              toolName,
-              // A tool the preview does not know shows its arguments.
-              preview:
-                deriveToolInputPreview(toolName, input) ||
-                truncateWithEllipsis(JSON.stringify(input) ?? '', 200),
-            })),
-          },
+      ),
+    );
+  if (own !== null) return own.request.decision;
+  const calls = yield* script.calls;
+  return yield* call.requests
+    .open({
+      kind: 'proposal',
+      data: {
+        requestId: callRequestId(shared, raised + 1),
+        offersGrant: (yield* RunCall)?.hook !== 'ask',
+        runId,
+        ...proposal,
+        script: {
+          title: script.title,
+          source: script.source,
+          calls: calls.map(({ toolName, input }) => ({
+            toolName,
+            // A tool the preview does not know shows its arguments.
+            preview:
+              deriveToolInputPreview(toolName, input) ||
+              truncateWithEllipsis(JSON.stringify(input) ?? '', 200),
+          })),
         },
-      })
-      .pipe(Effect.map(({ decision }) => decision));
-  },
-  (effect, call) => Effect.provide(effect, call.session),
-);
+      },
+    })
+    .pipe(Effect.map(({ decision }) => decision));
+});
 
 /** What an ended child becomes for its call: its envelope (a recipe's read
  *  through its block), or the error a script's `await` throws for it. */
@@ -260,7 +262,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     );
   if (result.outcome !== 'completed')
     return errorResult(
-      `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error?.message ? `: ${result.error.message}` : '.'}`,
+      `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error ? `: ${runEndErrorMessage(result.error)}` : '.'}`,
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
     );
   const config = yield* getRunRecords(runId).readConfig();
@@ -284,12 +286,10 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
 });
 
 /** One call, launched over its call's session. */
-export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
-  launch: ChildLaunch,
-) {
-  const call = yield* requireToolRun(launch.tool);
-  return yield* agentCall(call, launch).pipe(Effect.provide(call.session));
-});
+export const launchChildAgent = (launch: ChildLaunch) =>
+  inRunSession(launch.tool, (call) => agentCall(call, launch)).pipe(
+    Effect.withSpan('AgentTool.call'),
+  );
 
 /** A child's run failed the call: timed out, or ended without an answer. */
 export function failedResult(agentName: string, error: Error): ToolResult {

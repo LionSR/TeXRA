@@ -6,7 +6,7 @@ import { afterEach, assert, beforeEach, describe, expect, vi } from 'vitest';
 
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 
-import { resetCliState } from '@cli/chat/tui/state/cliState';
+import { startChat } from '@cli/chat/tui/state/cliState';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { installTerminalTitleUpdates } from '@cli/chat/tui/terminalTitle';
@@ -15,7 +15,7 @@ import {
   boundTestSessionView,
   seedView,
   viewWith,
-} from './fixtures/sessionViewFixture';
+} from '@test/cli/fixtures/sessionViewFixture';
 
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -33,7 +33,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
 })('terminal cleanup', (it) => {
   beforeEach(() => seedView(viewWith([])));
   afterEach(() => {
-    resetCliState();
+    startChat();
     vi.useRealTimers();
     vi.restoreAllMocks();
     // `writeSync` is a vi.fn() created inside the vi.mock() factory above, not

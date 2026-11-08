@@ -27,7 +27,6 @@ interface LatexFormatterDefinition {
     filePath: string,
     workspaceRoot: string | undefined,
     configPath: string,
-    settings: SettingsStores,
   ): Effect.Effect<
     boolean,
     ToolMissing,
@@ -37,13 +36,6 @@ interface LatexFormatterDefinition {
 
 export interface LatexFormatter extends LatexFormatterDefinition {
   readonly configPath: string;
-  /**
-   * The slots this formatter was resolved from, carried with it: the run it
-   * spawns names the same project's settings that chose the formatter, so a
-   * caller holding only the resolved formatter never reaches for an ambient
-   * one.
-   */
-  readonly settings: SettingsStores;
 }
 
 // Keyed by every selectable formatter, so the setting's validated value
@@ -84,7 +76,6 @@ export const resolveLatexFormatter = Effect.fn('resolveLatexFormatter')(
     return {
       ...selected,
       configPath: yield* Settings.get(stores, selected.configFile),
-      settings: stores,
     };
   },
 );

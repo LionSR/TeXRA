@@ -216,9 +216,9 @@ const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
   const view = yield* (yield* SessionViewAccess).read([]);
   const self = view.runs.get(runId);
   const root =
-    self?.identity.kind === 'script' ? (self.launchParentId ?? runId) : runId;
+    self?.identity.kind === 'script' ? (self.launch?.id ?? runId) : runId;
   const scripts = [...view.runs.values()].filter(
-    (run) => run.identity.kind === 'script' && run.launchParentId === root,
+    (run) => run.identity.kind === 'script' && run.launch?.id === root,
   );
   return [root, ...scripts.map((run) => run.id)];
 });

@@ -13,7 +13,7 @@ import {
   type TuiRequest,
 } from '@cli/chat/tui/state/approvalQueue';
 import {
-  resetCliState,
+  startChat,
   rootRunId,
   sessionListRunIds,
 } from '@cli/chat/tui/state/cliState';
@@ -41,7 +41,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
   excludeTestServices: true,
 })('CLI approval surface', (it) => {
   beforeEach(() => rootRunId.set(ROOT));
-  afterEach(() => resetCliState());
+  afterEach(() => startChat());
 
   it('isolates approval prompts, counts, and run lists to the current chat', () => {
     const local = bashPayload(RUN_A);

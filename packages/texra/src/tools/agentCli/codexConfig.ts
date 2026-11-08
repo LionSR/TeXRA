@@ -1,4 +1,4 @@
-import { Effect, Option, Predicate, Schema } from 'effect';
+import { Context, Effect, Option, Predicate, Schema } from 'effect';
 
 // Local imports - agent config
 import {
@@ -97,21 +97,19 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
     selectAgentCliModel(modelString, CODEX_MODEL_RULE),
   );
   const slug = codexBackendModelId(selection.config);
-  const uncapped = yield* resolveAgentCliModel(() =>
-    agentCliReasoning(selection, undefined, { userEffort }),
-  );
+  const uncapped = yield* agentCliReasoning(selection, undefined, {
+    userEffort,
+  });
   const { effort } = uncapped.choice;
   const resolved =
     effort === null || rank(effort) <= rank(ReasoningEffort.HIGH)
       ? uncapped
       : yield* codexRouteEfforts(binaryPath, slug).pipe(
           Effect.flatMap((routeEfforts) =>
-            resolveAgentCliModel(() =>
-              agentCliReasoning(selection, undefined, {
-                userEffort,
-                routeEfforts,
-              }),
-            ),
+            agentCliReasoning(selection, undefined, {
+              userEffort,
+              routeEfforts,
+            }),
           ),
         );
   return {
@@ -129,7 +127,11 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
 // slug (`codex debug models --bundled`); those are the route's ceiling.
 // ============================================================================
 
-const codexRouteEffortsByKey = new Map<string, readonly ReasoningEffort[]>();
+/** The levels each binary and slug answered, kept for the process: a probe
+ *  is a spawn of up to five seconds. */
+const CodexRouteEfforts = Context.Reference('@texra/tools/CodexRouteEfforts', {
+  defaultValue: () => new Map<string, readonly ReasoningEffort[]>(),
+});
 const codexRouteEffortLanes = new Map<string, PerKeyLane>();
 
 /** Just the shape `catalogEfforts` depends on — a `models` array. Model
@@ -183,14 +185,14 @@ const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
   slug: string,
   key: string,
 ): Effect.fn.Return<readonly ReasoningEffort[], never, ChildProcessSpawner> {
+  const codexRouteEffortsByKey = yield* CodexRouteEfforts;
   const cached = codexRouteEffortsByKey.get(key);
   if (cached != null) return cached;
 
   const result = yield* executeCommand(
     [binaryPath, 'debug', 'models', '--bundled'],
-    // A capability probe of the binary itself: it runs no git command, and
-    // this module holds no workspace whose identity it could carry.
-    { quiet: true, timeout: 5_000, cwd: process.cwd(), settings: undefined },
+    // A capability probe of the binary itself, from any directory.
+    { quiet: true, timeout: 5_000, cwd: process.cwd() },
   );
   if (result.timedOut || result.exitCode === 127) {
     yield* Effect.logWarning(

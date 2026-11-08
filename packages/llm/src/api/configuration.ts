@@ -5,7 +5,7 @@
  * this table and the Responses vendors' (`responsesConfiguration.ts`), so a
  * caller never spells a wire field.
  */
-import { Schema } from 'effect';
+import { Result, Schema } from 'effect';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ModelError, PLAN_ROUTES } from '../errors.js';
@@ -150,9 +150,17 @@ export function configurationFor(spec: BindSpec): {
       message: `No protocol serves ${config.provider} models.`,
     });
   }
+  // The model's default reasoning on the route, unless the spec names one;
+  // a default the route cannot carry is the spec's invalid request.
+  const reasoning =
+    spec.options?.reasoning ??
+    Result.getOrThrowWith(
+      chooseReasoning(config, {}, { route }),
+      ({ message }) => new ModelError({ kind: 'invalid-request', message }),
+    );
   const options: Options = {
     maxOutputTokens: config.maxOutputTokens,
-    reasoning: chooseReasoning(config, {}, { route }),
+    reasoning,
     serverState: false,
     fastTier: false,
     webSocket: false,
@@ -167,10 +175,12 @@ export function configurationFor(spec: BindSpec): {
     !(
       config.provider === ModelProvider.OPENAI && config.reasoning !== undefined
     );
-  const credentialProvider =
+  // A session's scope is named by its plan, a key's by its kind: the name a
+  // stored turn's deployment carries, so a continuation still matches it.
+  const [credentialProvider, credentialName] =
     route.kind === 'api-key'
-      ? route.provider
-      : PLAN_ROUTES[route.kind].provider;
+      ? [route.provider, route.kind]
+      : [PLAN_ROUTES[route.plan].provider, route.plan];
   const configuration = CONFIGURE[protocol]({
     spec: { ...spec, model: config, options },
     config,
@@ -179,7 +189,7 @@ export function configurationFor(spec: BindSpec): {
       deployment: {
         endpoint: spec.route.endpoint,
         // A non-secret name of the credential route.
-        credentialScope: `${credentialProvider}:${route.kind}`,
+        credentialScope: `${credentialProvider}:${credentialName}`,
       },
     },
     controls: {

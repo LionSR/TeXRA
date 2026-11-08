@@ -146,7 +146,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
         loadAgentsMd(roots.workspace, roots.storageRoot),
         options.textOnly
           ? Effect.succeed('')
-          : buildWorkspaceInfoBlock(roots.workspace, roots),
+          : buildWorkspaceInfoBlock(roots.workspace),
       ],
       { concurrency: 'unbounded' },
     );

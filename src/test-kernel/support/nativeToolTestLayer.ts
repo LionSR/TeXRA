@@ -115,20 +115,23 @@ export function nativeToolTestLayer(
       // A test call is no script's and issues none; under a run it launches
       // children through the door over its own place in the run, and outside
       // one the place and the door keep their defaults (null, a refusal).
-      const runCall: RunCallShape | null =
+      const inRun =
         toolRun === undefined || session === undefined
           ? null
+          : { toolRun, session };
+      const runCall: RunCallShape | null =
+        inRun === null
+          ? null
           : {
-              run: toolRun,
-              session,
+              run: inRun.toolRun,
               responseId: 'test-response',
               instruction: undefined,
               attempt: 1,
               logId: `log-${callId}`,
               // The run's rows as the store holds them: what a case seeds
               // (`seedEditedFiles`) is what the call reads.
-              facts: Context.get(session, RunHistory)
-                .load(toolRun.runId)
+              facts: Context.get(inRun.session, RunHistory)
+                .load(inRun.toolRun.runId)
                 .pipe(
                   Effect.map((state) => state ?? NO_FACTS),
                   Effect.orDie,
@@ -138,10 +141,17 @@ export function nativeToolTestLayer(
               ...origin,
             };
       const childDoor =
-        runCall === null
+        runCall === null || inRun === null
           ? Layer.effectDiscard(Effect.void)
-          : Layer.succeed(ChildRuns)(childRuns(runCall));
+          : Layer.succeed(ChildRuns)(childRuns(runCall, inRun.session));
       return Layer.mergeAll(
+        // A run's call is dispatched in its session's fiber, which the
+        // loop's guard and a built-in (`inRunSession`) read the session's
+        // services from; a call outside a run has none and is refused first.
+        // cast: the type states what a run's call is served.
+        (session === undefined
+          ? Layer.empty
+          : Layer.succeedContext(session)) as Layer.Layer<SessionServices>,
         // The call's rooted filesystems, from the same roots it is given.
         sessionFsLayer(roots),
         Layer.effect(
@@ -150,16 +160,16 @@ export function nativeToolTestLayer(
             // A run's requests are its loop's: `callRequests` over the run's
             // cell, under the ids this call's first attempt derives.
             const requests =
-              runCall === null
+              runCall === null || inRun === null
                 ? undefined
                 : yield* Effect.map(
-                    Context.get(runCall.session, RunHistory)
+                    Context.get(inRun.session, RunHistory)
                       .open(runCall.run.runId)
                       .pipe(Effect.orDie),
                     (cell) =>
                       callRequests({
                         run: runCall.run,
-                        session: runCall.session,
+                        session: inRun.session,
                         cell,
                         commit: cell.append,
                         at: { responseId: runCall.responseId, callId },

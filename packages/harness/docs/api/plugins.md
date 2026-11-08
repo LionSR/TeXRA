@@ -1415,8 +1415,8 @@ tool takes `WorkspaceFs` from context instead of resolving a static
 against whichever roots its fiber happens to carry. The child-launch
 door (`ChildRuns`) and the call's place in its run (`RunCall`) are
 references with defaults, never requirements; a plugin's tool reads the
-door and never the session's `Runs`, which only the engine door carries
-(`RunCallShape.session`).
+door and never the session's own services, which only the harness's
+built-ins name (`builtinPlugins.ts`).
 
 ```ts
 type PluginToolServices =

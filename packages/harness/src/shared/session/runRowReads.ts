@@ -11,6 +11,7 @@
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
 import {
+  runEndErrorMessage,
   type FollowUpReceipt,
   type RunOutcome,
   type RunPosition,
@@ -298,5 +299,5 @@ const unansweredBy = (
   state: 'unanswered',
   turn,
   reason: end?.outcome ?? 'ended',
-  ...(end?.error?.message != null && { error: end.error.message }),
+  ...(end?.error != null && { error: runEndErrorMessage(end.error) }),
 });

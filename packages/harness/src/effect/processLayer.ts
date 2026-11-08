@@ -210,7 +210,7 @@ export function processLayer(
   return Layer.mergeAll(
     sessionsLayer(options),
     Layer.succeed(RunLabels)(true),
-    Layer.effectDiscard(Effect.sync(installProcessHttpDispatcher)),
+    Layer.effectDiscard(installProcessHttpDispatcher),
   );
 }
 
@@ -255,7 +255,11 @@ function sessionsLayer(
           ProjectDatabases,
           ProcessIdentity,
           ToolRegistry,
-        )(yield* Effect.context<ProcessServices>());
+        )(
+          yield* Effect.context<
+            ProcessServices | ProjectDatabases | ProcessIdentity
+          >(),
+        );
         return yield* makeSessions(
           yield* SessionOwner,
           yield* AgentCatalog,

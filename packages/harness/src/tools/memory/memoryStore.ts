@@ -23,7 +23,7 @@ import {
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import type { StorageFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 
 import {
   deleteMemoryPath,

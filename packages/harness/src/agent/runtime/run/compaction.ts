@@ -402,10 +402,11 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       bound: BoundModel,
     ) {
       const state = yield* cell.current;
-      const failed = state.invocation?.current.failed;
+      const error = state.invocation?.current.failed?.error;
       if (
         state.overflowCompacted ||
-        failed?.error.classification?.kind !== 'context-window'
+        error?.source !== 'model' ||
+        error.kind !== 'context-overflow'
       )
         return null;
       const compacted = yield* forced(cell, bound, 'overflow', []);

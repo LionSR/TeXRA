@@ -107,7 +107,7 @@ async function bundleDatabaseFixture() {
         export { qualifyAggregateId, SessionRowSchema } from '@shared/schemas';
         export { resolveGlobalStoragePath, resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
         export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
-        export { nodeProcesses, processOwnerId } from '@platform/defaults/nodeProcesses';
+        export { processOwnerId, processStartIdentity } from '@platform/defaults/nodeProcesses';
         export { nodePlatformServices } from '@platform/defaults/nodePlatform';
         export { ToolRegistry, toolTable } from '@tools/toolTable';
         export { servicePaths } from '@texra/controllers/server/discovery';
@@ -141,9 +141,7 @@ export async function rememberOpenProject(dataRoot, workspaceRoot) {
   // the application's runtime serves.
   await Effect.runPromise(
     Effect.gen(function* () {
-      const owner = fixture.processOwnerId(
-        yield* fixture.nodeProcesses.selfIdentity(),
-      );
+      const owner = fixture.processOwnerId(yield* fixture.processStartIdentity);
       yield* Effect.gen(function* () {
         const { values } = yield* fixture.GlobalDatabase;
         const records = fixture.openDesktopProjectRecords(values);

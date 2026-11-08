@@ -17,7 +17,7 @@ import {
   type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core/pathBasics';
 import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
 import { entryExists } from '@utils/files/fsEntryExists';
 

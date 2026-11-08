@@ -19,9 +19,7 @@ Node.js platform implementation and host building blocks for
   [`workspaceRelativePath`](#workspacerelativepath),
   [`resolveGlobalStoragePath`](#resolveglobalstoragepath), and
   [`resolveWorkspaceStoragePath`](#resolveworkspacestoragepath).
-- **SQLite stores & process identity**: [`GlobalDatabase`](#globaldatabase),
-  [`ProjectDatabases`](#projectdatabases), and
-  [`ProcessIdentity`](#processidentity).
+- **The global SQLite store**: [`GlobalDatabase`](#globaldatabase).
 - **Commands & atomic file I/O**:
   [`executeCommand`](#executecommand),
   [`writeFileAtomic`](#writefileatomic), and
@@ -207,18 +205,6 @@ interface ExecuteCommandBaseOptions {
    * has no folder, and it fails the run the same way the ambient miss did.
    */
   readonly cwd: string | undefined;
-  /**
-   * The setting slots the command's git identity is read from: whether this
-   * workspace marks agent commits, and the name and email it marks them with.
-   *
-   * Required — not optional — so every caller names the stores it holds (a
-   * run's session roots, a tool call's `call.roots`, the host's roots at
-   * command entry) instead of the command reaching for an ambient one.
-   * `undefined` is the honest answer only where the caller itself has no
-   * workspace, and it then carries no agent-commit identity, exactly as an
-   * uninitialised ambient read did.
-   */
-  readonly settings: SettingsStores | undefined;
   /** Called with stdout chunks as they arrive, enabling live output streaming. */
   readonly onStdout?: (chunk: string) => void;
   /** Called with stderr chunks as they arrive, enabling live error streaming. */
@@ -275,7 +261,20 @@ a connection. Current values and input history only: no event rows.
 ```ts
 class GlobalDatabase extends Context.Service<
   GlobalDatabase,
-  Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>
+  {
+    /** The bounded CLI input rows, oldest first, and a new last one. */
+    readonly inputHistory: {
+      readonly read: Effect.Effect<
+        readonly InputHistoryRecord[],
+        DatabaseReadFailed
+      >;
+      readonly append: (
+        record: InputHistoryRecord,
+      ) => Effect.Effect<void, DatabaseWriteFailed>;
+    };
+    /** The root's current values: application state, not history. */
+    readonly values: CurrentValues;
+  }
 >()('@texra-ai/harness/session/GlobalDatabase')
 ```
 
@@ -546,41 +545,6 @@ rest.
 
 ```ts
 const pathExists: (fs: FileSystem, target: string) => Effect<boolean, PlatformError, never>
-```
-
-## ProcessIdentity
-
-The canonical hostname, pid, and nullable process-start tuple: the
-`origin` stamped on every event the process appends. Resolved once at each
-process entry, where the start identity can be awaited, and provided to
-the process layer.
-
-```ts
-class ProcessIdentity extends Context.Service<
-  ProcessIdentity,
-  { readonly ownerId: OwnerId }
->()('@texra-ai/harness/session/ProcessIdentity')
-```
-
-## ProcessProbe
-
-What reading a start identity takes: `/proc` on Linux, `ps` or PowerShell
-elsewhere.
-
-```ts
-type ProcessProbe = FileSystem.FileSystem | ChildProcessSpawner;
-```
-
-## ProjectDatabases
-
-Persistent project connections, retained by project and session scopes
-until the last borrower releases one (never an ephemeral in-memory one).
-
-```ts
-class ProjectDatabases extends Context.Service<
-  ProjectDatabases,
-  RcMap.RcMap<string, Database['Service'], DatabaseOpenFailed>
->()('@texra-ai/harness/session/ProjectDatabases')
 ```
 
 ## projectValueIgnored

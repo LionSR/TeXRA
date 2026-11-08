@@ -5,10 +5,12 @@ import { lookup } from 'node:dns';
 import { Effect, Result, Schema, Stream } from 'effect';
 import { FetchHttpClient, HttpClient, type HttpClientError } from 'effect/http';
 import ipaddr from 'ipaddr.js';
-import { EnvHttpProxyAgent, type Dispatcher } from 'undici';
 
 // Local imports - core
-import { undiciFetchThrough } from '@platform/defaults/longRunningModelTransport';
+import {
+  proxyAgent,
+  undiciFetchThrough,
+} from '@platform/defaults/longRunningModelTransport';
 import { ToolError } from '@shared/schemas';
 import {
   retryTransientFetch,
@@ -103,29 +105,21 @@ const publicOnlyLookup: LookupFunction = (hostname, options, callback) =>
   });
 
 /**
- * Built on first use, as the proxy agent reads the environment when it is
- * constructed. Every direct connection resolves through
- * {@link publicOnlyLookup}: with no proxy configured, for a host `NO_PROXY`
- * exempts, and for a scheme no `*_PROXY` variable covers. A proxied request
- * connects to the proxy, whose connector ignores this `lookup`, so there the
- * proxy resolves the name and only {@link assertPublicLiteral} applies.
+ * undici's own `fetch` through the `web` agent under the work's proxy policy
+ * ({@link proxyAgent}); the global `fetch` is the runtime's bundled undici,
+ * which rejects a dispatcher built by this package's undici. Every direct
+ * connection resolves through {@link publicOnlyLookup}: with no proxy
+ * configured, for a host `NO_PROXY` exempts, and for a scheme no `*_PROXY`
+ * variable covers. A proxied request connects to the proxy, whose connector
+ * ignores this `lookup`, so there the proxy resolves the name and only
+ * {@link assertPublicLiteral} applies.
  */
-let dispatcher: Dispatcher | undefined;
-
-function webFetchDispatcher(): Dispatcher {
-  dispatcher ??= new EnvHttpProxyAgent({
-    connect: { lookup: publicOnlyLookup },
-  });
-  return dispatcher;
-}
-
-/**
- * undici's own `fetch`, not the global one: the global is the runtime's
- * bundled undici, which rejects a dispatcher built by this package's undici
- * (see `longRunningModelFetch`).
- */
-const publicFetch: typeof fetch = (input, init) =>
-  undiciFetchThrough(webFetchDispatcher(), input, init);
+const publicFetch = Effect.map(
+  proxyAgent('web', { connect: { lookup: publicOnlyLookup } }),
+  (agent): typeof fetch =>
+    (input, init) =>
+      undiciFetchThrough(agent, input, init),
+);
 
 /** Refuse an IP-literal host, the one form {@link publicOnlyLookup} never sees. */
 function assertPublicLiteral(url: URL) {
@@ -162,11 +156,12 @@ const getPublic = Effect.fn('WebFetchTool.getPublic')(function* (
     yield* scopedClient,
     (status) => status >= 200 && status < 400,
   );
+  const fetchPublic = yield* publicFetch;
   let target = new URL(start);
   for (let redirects = 0; ; redirects++) {
     yield* assertPublicLiteral(target);
     const response = yield* client.get(target).pipe(
-      Effect.provideService(FetchHttpClient.Fetch, publicFetch),
+      Effect.provideService(FetchHttpClient.Fetch, fetchPublic),
       Effect.provideService(FetchHttpClient.RequestInit, {
         redirect: 'manual',
       }),

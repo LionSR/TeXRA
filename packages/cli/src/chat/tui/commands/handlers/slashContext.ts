@@ -9,6 +9,7 @@ import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
+import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
 import type { BuiltinSlashCommands } from '../registerBuiltins';
 
 /**
@@ -48,7 +49,14 @@ export interface SlashCommandContext {
   /** Start a new task (`/clear`): false, with a notice, while a response
    *  is running. */
   readonly resetSession: () => boolean;
-  readonly resumeRun: (id: RunId) => Effect.Effect<void, Error>;
+  readonly resumeRun: (
+    id: RunId,
+  ) => Effect.Effect<void, Error, ProcessServices>;
+  /** Resume a task beside the chat (`/resume all`): it joins the agent
+   *  list; a refusal is the caller's to word. */
+  readonly resumeTask: (
+    id: RunId,
+  ) => Effect.Effect<void, RequestRefusal, ProcessServices>;
 }
 
 /** Output boundary shared by direct slash dispatch and busy form submission. */

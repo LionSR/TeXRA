@@ -45,8 +45,8 @@ const boundEndpoint = (
       throw new Error(`unexpected ${route.kind} route`);
     }
     const baseUrl = route.endpoint;
-    return route.usageRoute !== 'api-key'
-      ? { baseUrl, usageRoute: route.usageRoute }
+    return route.plan !== null
+      ? { baseUrl, usageRoute: route.plan }
       : { baseUrl };
   });
 

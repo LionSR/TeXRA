@@ -9,7 +9,7 @@
 import { Cause, Clock, Context, Effect, Exit, Random, Semaphore } from 'effect';
 import { ModelError } from '@texra-ai/llm';
 
-import { jitteredExponentialBackoffMs } from '@utils/core';
+import { jitteredExponentialBackoffMs } from '@utils/core/backoffSchedule';
 
 /** Base delay between automatic resends; the gate doubles it per failure of
  *  a cooling route, and a loop waits it out after a failure no route owns. */

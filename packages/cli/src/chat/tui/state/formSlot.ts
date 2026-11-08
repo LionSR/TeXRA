@@ -10,9 +10,9 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { signal, type Signal } from '@lit-labs/signals';
+import { computed } from '@lit-labs/signals';
 
-import { registerCliStateResetHook } from './cliState';
+import { chatField } from './cliState';
 
 /** Active inline slash form, or `undefined` when the chat input owns the
  *  screen. The form's `onDone` closes the slot. Kept opaque (the form
@@ -30,12 +30,16 @@ interface ActiveSlashForm {
   ) => React.ReactNode;
 }
 
-export const activeForm: Signal.State<ActiveSlashForm | undefined> = signal<
-  ActiveSlashForm | undefined
->(undefined);
+/** The slot's occupant, and the forms waiting for it, nearest first: the
+ *  chat's state, so a new conversation starts with the slot free. */
+export interface FormSlot {
+  readonly active: ActiveSlashForm | undefined;
+  readonly queued: readonly ActiveSlashForm[];
+}
 
-/** Forms waiting for the slot, nearest first. */
-const QUEUED_FORMS: ActiveSlashForm[] = [];
+const slot = chatField('forms');
+
+export const activeForm = computed(() => slot.get().active);
 
 type FormRequest = Omit<ActiveSlashForm, 'id'>;
 
@@ -46,8 +50,12 @@ type FormRequest = Omit<ActiveSlashForm, 'id'>;
  */
 export function openActiveForm(request: FormRequest): ActiveSlashForm {
   const form = { ...request, id: randomUUID() };
-  if (activeForm.get() === undefined) activeForm.set(form);
-  else QUEUED_FORMS.push(form);
+  const { active, queued } = slot.get();
+  slot.set(
+    active === undefined
+      ? { active: form, queued }
+      : { active, queued: [...queued, form] },
+  );
   return form;
 }
 
@@ -58,9 +66,11 @@ export function openActiveForm(request: FormRequest): ActiveSlashForm {
  * rather than being dropped.
  */
 export function takeActiveForm(request: FormRequest): void {
-  const displaced = activeForm.get();
-  if (displaced) QUEUED_FORMS.unshift(displaced);
-  activeForm.set({ ...request, id: randomUUID() });
+  const { active, queued } = slot.get();
+  slot.set({
+    active: { ...request, id: randomUUID() },
+    queued: active === undefined ? queued : [active, ...queued],
+  });
 }
 
 /**
@@ -70,16 +80,12 @@ export function takeActiveForm(request: FormRequest): void {
  * whatever is showing now.
  */
 export function closeActiveForm(form: ActiveSlashForm): void {
-  const queued = QUEUED_FORMS.indexOf(form);
-  if (queued >= 0) {
-    QUEUED_FORMS.splice(queued, 1);
+  const { active, queued } = slot.get();
+  if (queued.includes(form)) {
+    slot.set({ active, queued: queued.filter((waiting) => waiting !== form) });
     return;
   }
-  if (activeForm.get() !== form) return;
-  activeForm.set(QUEUED_FORMS.shift());
+  if (active !== form) return;
+  const [next, ...rest] = queued;
+  slot.set({ active: next, queued: rest });
 }
-
-registerCliStateResetHook(() => {
-  QUEUED_FORMS.length = 0;
-  activeForm.set(undefined);
-});

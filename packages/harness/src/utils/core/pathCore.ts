@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { normalize } from 'pathe';
 
 // Local imports - path basics
-import { normalizeFilePath } from './index.js';
+import { normalizeFilePath } from './pathBasics.js';
 
 /**
  * Get path segments as an array.

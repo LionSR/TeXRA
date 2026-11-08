@@ -253,18 +253,8 @@ export class Database extends Context.Service<
     readonly readRunRecord: (
       id: AggregateId,
     ) => Effect.Effect<RunRows | null, DatabaseReadFailed>;
-    /** The bounded CLI input rows, oldest first, and a new last one. */
-    readonly inputHistory: {
-      readonly read: Effect.Effect<
-        readonly InputHistoryRecord[],
-        DatabaseReadFailed
-      >;
-      readonly append: (
-        record: InputHistoryRecord,
-      ) => Effect.Effect<void, DatabaseWriteFailed>;
-    };
-    /** The root's current values: application state, not history. */
-    readonly values: CurrentValues;
+    readonly inputHistory: GlobalDatabase['Service']['inputHistory'];
+    readonly values: GlobalDatabase['Service']['values'];
     /** One aggregate's rows of `types` from `fromSeq` (through `toSeq`, a
      *  fork's cut), read through the `(aggregate, type, seq)` index in seq
      *  order. A row past `toSeq` is never read. */
@@ -331,7 +321,20 @@ export class Database extends Context.Service<
  *  a connection. Current values and input history only: no event rows. */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
-  Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>
+  {
+    /** The bounded CLI input rows, oldest first, and a new last one. */
+    readonly inputHistory: {
+      readonly read: Effect.Effect<
+        readonly InputHistoryRecord[],
+        DatabaseReadFailed
+      >;
+      readonly append: (
+        record: InputHistoryRecord,
+      ) => Effect.Effect<void, DatabaseWriteFailed>;
+    };
+    /** The root's current values: application state, not history. */
+    readonly values: CurrentValues;
+  }
 >()('@texra-ai/harness/session/GlobalDatabase') {}
 
 /** Persistent project connections, retained by project and session scopes

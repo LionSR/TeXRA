@@ -46,6 +46,7 @@ import {
   sessionServices,
 } from '@agent/runtime/ToolServices';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
   RunCall,
   ScriptDiverged,
@@ -87,7 +88,7 @@ import {
 } from '@shared/session/inFlight';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
-import { getBasename } from '@utils/core';
+import { getBasename } from '@utils/core/pathBasics';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
@@ -138,8 +139,9 @@ interface Dispatch {
   readonly recovered: boolean;
   /** Each offered tool's plugin, by tool name. */
   readonly pluginOf: ReadonlyMap<string, string>;
-  /** The session's services, which each call's run carries. */
-  readonly session: RunCallShape['session'];
+  /** The session's services, picked where the loop dispatched the
+   *  response: what its calls' requests and child doors run over. */
+  readonly session: Context.Context<SessionServices>;
 }
 
 /** One call as the per-call program takes it: its facts (a response's
@@ -502,7 +504,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     // This call's place in its run, and the child door over exactly it.
     const runCall: RunCallShape = {
       run,
-      session,
       responseId,
       instruction: dispatch.instruction,
       attempt,
@@ -526,7 +527,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
             requests,
             emit: onToolOutput,
           }),
-          Effect.provideService(ChildRuns, childRuns(runCall)),
+          Effect.provideService(ChildRuns, childRuns(runCall, session)),
           Effect.provideService(RunCall, runCall),
           Effect.provide(step.services),
         ),

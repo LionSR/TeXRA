@@ -309,7 +309,6 @@ const texCount = Effect.fn('documents.texCount')(function* (
   const counted = yield* Effect.exit(
     getTeXCountStats(
       deps.roots.workspace,
-      deps.roots,
       files.map((file) => file.absolutePath),
     ),
   );

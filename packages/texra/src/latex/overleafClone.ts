@@ -128,7 +128,6 @@ const checkOverleafClonePreconditions = Effect.fn(
   // Directory-independent: the clone target may not exist yet.
   const gitVersion = yield* executeCommand(['git', '--version'], {
     cwd: process.cwd(),
-    settings: undefined,
     quiet: true,
   });
   if (!gitVersion.success) {

@@ -18,23 +18,16 @@ import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import { formatResetDuration } from '@ui/copy/format';
 import type {
   DeclinableUsageRoute,
-  ErrorLogData,
+  ModelAvailabilityKind,
+  ModelFailure,
   TokenUsageStats,
   UsageRoute,
 } from '@texra-ai/harness/schemas';
-import { formatCostUsd } from '@texra-ai/harness/schemas';
-
-/** The words for each `ModelOptionData.availability` kind. */
-export const MODEL_AVAILABILITY_LABEL = {
-  'provider-key': 'API key set',
-  'missing-key': 'Missing API key',
-  'key-unreadable': 'API key unreadable',
-  'subscription-access': CHATGPT_AUTH.subscriptionLabel,
-  'xai-subscription-access': GROK_AUTH.subscriptionLabel,
-  retired: 'Retired',
-  unserved: 'Unavailable',
-  'unknown-model': 'Unknown model',
-} as const;
+import {
+  formatCostUsd,
+  modelFailureMessage,
+  usedUpPlanOf,
+} from '@texra-ai/harness/schemas';
 
 /**
  * Each plan a model call can bill through, as a person knows it: the name of
@@ -75,60 +68,90 @@ const SESSION_ACCOUNTS = Object.freeze({
   'xai-subscription': GROK_AUTH,
 });
 
+/** The words for each availability kind but a subscription's, which its
+ *  plan names. */
+const AVAILABILITY_LABEL = Object.freeze({
+  'provider-key': 'API key set',
+  'missing-key': 'Missing API key',
+  'key-unreadable': 'API key unreadable',
+  retired: 'Retired',
+  unserved: 'Unavailable',
+  'unknown-model': 'Unknown model',
+} satisfies Record<
+  Exclude<ModelAvailabilityKind, 'subscription-access'>,
+  string
+>);
+
+/** A model option's availability as a person reads it: the kind, or for a
+ *  model a subscription serves, that subscription's plan. */
+export function modelAvailabilityLabel({
+  availability,
+  usageRoute,
+}: {
+  readonly availability: ModelAvailabilityKind;
+  readonly usageRoute?: DeclinableUsageRoute;
+}): string {
+  if (availability !== 'subscription-access')
+    return AVAILABILITY_LABEL[availability];
+  return usageRoute === undefined
+    ? 'Subscription'
+    : PLAN_NAMES[usageRoute].plan;
+}
+
 /**
- * A model call's failure as a person reads it, from the facts the run
+ * A model call's failure as a person reads it, from the verdict the run
  * recorded: a used-up plan (the plan, its tier and when it resets), or a
  * subscription that could not bill (the session's failure, and whether a
- * sign-in fixes it), in these words; any other failure as the harness
- * worded it.
+ * sign-in fixes it), in these words; any other failure in the harness's
+ * plain words.
  */
-export function modelFailureText({
-  message,
-  classification,
-}: Pick<ErrorLogData, 'message' | 'classification'>): string {
-  if (classification === undefined) return message;
-  switch (classification.kind) {
-    case 'missing-api-key':
-    case 'context-window':
-    case 'upstream-credit':
-      return message;
-    case 'subscription-session': {
-      const { subscriptionLabel, signInLabel } =
-        SESSION_ACCOUNTS[classification.route];
-      const remedy = classification.needsReauth
-        ? `${signInLabel} again`
-        : 'Try again in a moment';
-      return `${subscriptionLabel} unavailable: ${classification.sessionError} ${remedy}, or turn off "${subscriptionLabel}".`;
-    }
-    default: {
-      const { plan, fallback } = PLAN_NAMES[classification.kind];
-      const tier = classification.planType
-        ? ` (${Str.capitalize(classification.planType)} plan)`
-        : '';
-      const reset =
-        classification.resetsInMs === undefined
-          ? ''
-          : ` Resets in ${formatResetDuration(classification.resetsInMs)}.`;
-      return `${plan} usage limit reached${tier}.${reset} Switch to ${fallback} to keep working, or wait until the limit resets.`;
-    }
+export function modelFailureText(failure: ModelFailure): string {
+  if (failure.source === 'route' && failure.session !== undefined) {
+    const { subscriptionLabel, signInLabel } =
+      SESSION_ACCOUNTS[failure.session.route];
+    const remedy = failure.session.needsReauth
+      ? `${signInLabel} again`
+      : 'Try again in a moment';
+    return `${subscriptionLabel} unavailable: ${failure.message} ${remedy}, or turn off "${subscriptionLabel}".`;
   }
+  const used = usedUpPlanOf(failure);
+  if (used === undefined) return modelFailureMessage(failure);
+  const { plan, fallback } = PLAN_NAMES[used.plan];
+  const tier = used.planType ? ` (${Str.capitalize(used.planType)} plan)` : '';
+  const reset =
+    used.resetsInMs === undefined
+      ? ''
+      : ` Resets in ${formatResetDuration(used.resetsInMs)}.`;
+  return `${plan} usage limit reached${tier}.${reset} Switch to ${fallback} to keep working, or wait until the limit resets.`;
+}
+
+/** A failure a host shows: a model call's in {@link modelFailureText}'s
+ *  words, any other in its own. */
+export function shownFailureText({
+  message,
+  failure,
+}: {
+  readonly message: string;
+  readonly failure?: ModelFailure;
+}): string {
+  return failure === undefined ? message : modelFailureText(failure);
 }
 
 /**
  * An error row as a person reads it: its headline, and its details as one
  * `key: value` line each (the block a copy or a full-output reader takes). A
- * classified failure reads in {@link modelFailureText}'s words wherever the
- * row shows the harness's message for it: its headline, or its `message`
+ * model failure reads in {@link modelFailureText}'s words wherever the row
+ * shows the harness's plain words for it: its headline, or its `message`
  * detail.
  */
 export function errorRowText({ summary, details, failure }: ErrorRow): {
   readonly summary: string;
   readonly detailText: TranscriptText;
 } {
+  const plain =
+    failure === undefined ? undefined : modelFailureMessage(failure);
   const worded = (text: string): string =>
-    failure !== undefined && text === failure.message
-      ? modelFailureText(failure)
-      : text;
+    failure !== undefined && text === plain ? modelFailureText(failure) : text;
   return {
     summary: worded(summary.full),
     detailText: transcriptText(

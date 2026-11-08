@@ -27,7 +27,7 @@ import {
 } from '@texra/shared/model/modelPicker';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
-import { MODEL_AVAILABILITY_LABEL } from '@ui/copy/modelAccess';
+import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
 // Side-effect imports - register WA icon component
@@ -63,12 +63,13 @@ function sortFastFirst(
  * What the row's availability kind means and says; `undefined` is a row the
  * backend left unresolved (the secret-free basic list), which blocks nothing.
  */
-function availabilityOf({ availability: kind }: ModelSelectionItem) {
-  return kind === undefined
+function availabilityOf({ availability, usageRoute }: ModelSelectionItem) {
+  return availability === undefined
     ? undefined
     : {
-        ...MODEL_AVAILABILITY_STATUS[kind],
-        label: MODEL_AVAILABILITY_LABEL[kind],
+        ...MODEL_AVAILABILITY_STATUS[availability],
+        missingKey: availability === 'missing-key',
+        label: modelAvailabilityLabel({ availability, usageRoute }),
       };
 }
 
@@ -183,11 +184,11 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
     const status = availabilityOf(model);
     if (status === undefined || status.available) return nothing;
 
-    const title = status.requiresKey
+    const title = status.missingKey
       ? `${status.label} — add a key in API configuration`
       : status.label;
-    const iconName = status.requiresKey ? 'key' : 'triangle-exclamation';
-    const className = status.requiresKey
+    const iconName = status.missingKey ? 'key' : 'triangle-exclamation';
+    const className = status.missingKey
       ? 'model-row-icon'
       : 'model-row-icon model-row-icon--warning';
 

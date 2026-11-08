@@ -104,8 +104,7 @@ export const probeSdkBinaryStatus = Effect.fn('probeSdkBinaryStatus')(
  * apt and Linuxbrew still gets the brew command rather than npm.
  *
  * Definitions call this from an `installCommand` getter so the probe stays
- * lazy — `hasPackageManager()` probes once per manager and caches, so reading
- * the property repeatedly costs nothing after the first access.
+ * lazy: it runs when an install action reads the command.
  */
 export function preferredInstallCommand(
   commands: Partial<Record<SystemPackageManager | 'win32', string>> & {

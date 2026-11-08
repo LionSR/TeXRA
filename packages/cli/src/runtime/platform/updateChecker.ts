@@ -150,7 +150,6 @@ const readBrewStdout = Effect.fn('readBrewStdout')(function* (
   const result = yield* executeCommand(['brew', ...args], {
     timeout: HOMEBREW_COMMAND_TIMEOUT_MS,
     cwd,
-    settings: undefined,
     quiet: true,
   });
   return result.success ? result.stdout : undefined;

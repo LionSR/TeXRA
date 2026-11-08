@@ -188,7 +188,7 @@ export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
       : null;
   const declined = quota.plan;
   const fallback = decideModelRoute(failed.config, OWN_KEY_ROUTE_FACTS);
-  if (fallback.kind !== 'api-key' || fallback.usageRoute !== 'api-key') {
+  if (fallback.kind !== 'api-key' || fallback.plan !== null) {
     return null;
   }
   const automatic =

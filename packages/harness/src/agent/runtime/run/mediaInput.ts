@@ -30,7 +30,7 @@ import type { DraftBlob } from '@shared/session/historyTurns';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getBasename } from '@utils/core';
+import { getBasename } from '@utils/core/pathBasics';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { getBase64EncodedMedia, processPdf2Png } from './img';

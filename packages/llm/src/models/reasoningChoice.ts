@@ -7,7 +7,7 @@
  * Code, Codex) goes through it, so the default, the handling of a level a
  * model lacks, and the report of what was changed are the same everywhere.
  */
-import { Schema } from 'effect';
+import { Result, Schema } from 'effect';
 import {
   EFFORT_SCALE,
   ModelProvider,
@@ -45,7 +45,7 @@ const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
  */
 function routeControls(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route: Pick<ModelRoute, 'kind'> | undefined,
+  route: ModelRoute | undefined,
 ): ModelConfig['reasoning'] {
   const { reasoning } = config;
   if (route === undefined || reasoning === undefined) return reasoning;
@@ -58,7 +58,7 @@ function routeControls(
     case ModelProvider.MINIMAX:
       return { ...reasoning, efforts: [ReasoningEffort.HIGH] };
     default:
-      return route.kind === 'chatgpt-subscription'
+      return route.kind === 'session' && route.plan === 'chatgpt-subscription'
         ? {
             ...reasoning,
             efforts: reasoning.efforts.filter((effort) =>
@@ -122,19 +122,24 @@ function snapped(
   accepted: readonly ReasoningEffort[],
   wanted: ReasoningEffort,
   label: string,
-): { effort: ReasoningEffort; requested?: ReasoningEffort; note?: string } {
-  if (accepted.includes(wanted)) return { effort: wanted };
+): Result.Result<
+  { effort: ReasoningEffort; requested?: ReasoningEffort; note?: string },
+  ReasoningChoiceError
+> {
+  if (accepted.includes(wanted)) return Result.succeed({ effort: wanted });
   const effort = nearestEffort(accepted, wanted);
   if (effort === undefined) {
-    throw new ReasoningChoiceError({
-      message: `${label} does not accept effort ${wanted} (accepts ${accepted.join(', ') || 'no effort level'}).`,
-    });
+    return Result.fail(
+      new ReasoningChoiceError({
+        message: `${label} does not accept effort ${wanted} (accepts ${accepted.join(', ') || 'no effort level'}).`,
+      }),
+    );
   }
-  return {
+  return Result.succeed({
     effort,
     requested: wanted,
     note: `${label} has no ${wanted} effort; using ${effort} (accepts ${accepted.join(', ')}).`,
-  };
+  });
 }
 
 /** How {@link chooseReasoning} resolves a request the model cannot serve. */
@@ -142,7 +147,7 @@ export interface ChooseReasoningOptions {
   /** The user's saved level for this model, used when the selection names none. */
   readonly userEffort?: ReasoningEffort;
   /** The route the request is bound on, which may carry fewer controls than the model has. */
-  readonly route?: Pick<ModelRoute, 'kind'>;
+  readonly route?: ModelRoute;
   /** The caller's own ceiling on the levels it can serve (e.g. an installed Codex CLI's). */
   readonly routeEfforts?: readonly ReasoningEffort[];
 }
@@ -158,12 +163,15 @@ export interface ChooseReasoningOptions {
  *   changes the kind of answer, not its amount.
  * - Any other level the model lacks becomes the nearest level it has (ties
  *   go up), reported in `note`.
+ *
+ * A request the model cannot run as asked is the failure, a value the
+ * caller branches on.
  */
 export function chooseReasoning(
   config: Pick<ModelConfig, 'label' | 'provider' | 'reasoning' | 'modes'>,
   request: ReasoningRequest = {},
   options: ChooseReasoningOptions = {},
-): ReasoningChoice {
+): Result.Result<ReasoningChoice, ReasoningChoiceError> {
   const reasoning = routeControls(config, options.route);
   const label = config.label;
 
@@ -171,9 +179,11 @@ export function chooseReasoning(
     request.mode !== undefined &&
     !(config.modes ?? []).includes(request.mode)
   ) {
-    throw new ReasoningChoiceError({
-      message: `${label} has no ${request.mode} mode.`,
-    });
+    return Result.fail(
+      new ReasoningChoiceError({
+        message: `${label} has no ${request.mode} mode.`,
+      }),
+    );
   }
   const mode = request.mode ?? null;
   const explicit = request.effort;
@@ -181,11 +191,13 @@ export function chooseReasoning(
 
   if (reasoning === undefined) {
     if (explicit !== undefined && explicit !== ReasoningEffort.NONE) {
-      throw new ReasoningChoiceError({
-        message: `${label} does not reason; it cannot take effort ${explicit}.`,
-      });
+      return Result.fail(
+        new ReasoningChoiceError({
+          message: `${label} does not reason; it cannot take effort ${explicit}.`,
+        }),
+      );
     }
-    return { thinking: false, effort: null, mode };
+    return Result.succeed({ thinking: false, effort: null, mode });
   }
 
   if (wanted === ReasoningEffort.NONE) {
@@ -193,21 +205,26 @@ export function chooseReasoning(
       if (explicit === undefined) {
         // Only the user's saved `none` asked for this; the model always
         // thinks, so the default applies instead.
-        return {
-          ...chooseReasoning(
+        return Result.map(
+          chooseReasoning(
             config,
             { ...request, effort: DEFAULT_EFFORT },
             { ...options, userEffort: undefined },
           ),
-          requested: ReasoningEffort.NONE,
-          note: `${label} cannot turn thinking off; using the default ${DEFAULT_EFFORT}.`,
-        };
+          (choice) => ({
+            ...choice,
+            requested: ReasoningEffort.NONE,
+            note: `${label} cannot turn thinking off; using the default ${DEFAULT_EFFORT}.`,
+          }),
+        );
       }
-      throw new ReasoningChoiceError({
-        message: `${label} cannot turn thinking off.`,
-      });
+      return Result.fail(
+        new ReasoningChoiceError({
+          message: `${label} cannot turn thinking off.`,
+        }),
+      );
     }
-    return { thinking: false, effort: null, mode };
+    return Result.succeed({ thinking: false, effort: null, mode });
   }
 
   const accepted = options.routeEfforts
@@ -223,16 +240,20 @@ export function chooseReasoning(
     config.reasoning?.efforts.length === 0
   ) {
     if (explicit === undefined && options.userEffort === undefined)
-      return { thinking: true, effort: null, mode };
-    return {
+      return Result.succeed({ thinking: true, effort: null, mode });
+    return Result.succeed({
       thinking: true,
       effort: null,
       mode,
       requested: wanted,
       note: `${label} has no effort levels; ignoring ${wanted}.`,
-    };
+    });
   }
-  return { thinking: true, mode, ...snapped(accepted, wanted, label) };
+  return Result.map(snapped(accepted, wanted, label), (effort) => ({
+    thinking: true,
+    mode,
+    ...effort,
+  }));
 }
 
 /**
@@ -242,7 +263,7 @@ export function chooseReasoning(
  */
 export function acceptedEfforts(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route?: Pick<ModelRoute, 'kind'>,
+  route?: ModelRoute,
 ): ReasoningEffort[] {
   const reasoning = routeControls(config, route);
   if (reasoning === undefined) return [];
@@ -258,7 +279,7 @@ export function acceptedEfforts(
  */
 export function wireEffort(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route: Pick<ModelRoute, 'kind'> | undefined,
+  route: ModelRoute | undefined,
   reasoning: ReasoningChoice,
 ): ReasoningEffort | null {
   if (reasoning.thinking || routeControls(config, route)?.off === undefined) {

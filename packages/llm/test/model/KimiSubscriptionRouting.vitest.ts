@@ -28,7 +28,7 @@ const onKimiCode = {
   kind: 'api-key',
   endpoint: 'https://api.kimi.com/coding/v1',
   provider: 'kimiCode',
-  usageRoute: 'kimi-code-subscription',
+  plan: 'kimi-code-subscription',
 };
 
 describe('decideModelRoute on Kimi Code', () => {

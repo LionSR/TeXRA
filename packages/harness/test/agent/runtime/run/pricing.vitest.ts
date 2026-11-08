@@ -71,7 +71,7 @@ const boundAnthropic: BoundModel = {
     kind: 'api-key',
     endpoint: 'https://api.example.test/v1',
     provider: 'anthropic',
-    usageRoute: 'api-key',
+    plan: null,
   },
   forcedToolChoice: true,
   billing: 'api-key',

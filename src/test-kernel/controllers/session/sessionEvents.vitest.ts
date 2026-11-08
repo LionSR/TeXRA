@@ -102,7 +102,7 @@ import {
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import type { ProcessProbe } from '@texra-ai/harness/node';
+import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 vi.mock('node:os', async (importOriginal) => ({
@@ -575,7 +575,7 @@ describe('the session event table and its one publisher', () => {
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: 102,
+          user_version: 103,
         });
         expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
           auto_vacuum: 2,
@@ -794,7 +794,7 @@ describe('the session event table and its one publisher', () => {
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
-    const format = 103;
+    const format = 104;
     return Effect.gen(function* () {
       yield* storeOfFormat(storage, format);
       const failure = yield* Effect.flip(
