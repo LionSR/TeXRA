@@ -48,13 +48,13 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
 
   override render(): TemplateResult {
     const data = this.permission.data;
-    const detailsText = this.formatRetryDetails(data.errorDetails);
+    const detailsText = this.formatRetryDetails(data.failure);
     const ownKeyLabel = 'Retry with your own API key';
 
     return this.renderCard(
       html`
         <div class="retry-request__error">
-          ${modelFailureText(data.errorDetails)}
+          ${modelFailureText(data.failure)}
         </div>
         ${
           detailsText
@@ -93,17 +93,16 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     return this.permission.data.credentialSwitch != null;
   }
 
-  private formatRetryDetails(
-    details: RetryRequest['errorDetails'],
-  ): string | null {
+  private formatRetryDetails(failure: RetryRequest['failure']): string | null {
+    const model = failure.source === 'model' ? failure : undefined;
     const lines = [
-      details.provider && `provider: ${details.provider}`,
-      details.requestId && `requestId: ${details.requestId}`,
+      failure.provider && `provider: ${failure.provider}`,
+      model?.requestId && `requestId: ${model.requestId}`,
     ].filter(Boolean);
 
     // Show the tail of text that was generated before the failure — useful
     // both for diagnostics and for letting the user see progress wasn't lost.
-    const partialText = details.partialText;
+    const partialText = model?.partialText;
     if (partialText) {
       const maxTailChars = 1024;
       // Counted in grapheme clusters, so the cut never tears one. A text one

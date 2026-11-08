@@ -56,7 +56,7 @@ import {
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
-import { modelFailureText } from '@ui/copy/modelAccess';
+import { shownFailureText } from '@ui/copy/modelAccess';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -335,10 +335,10 @@ export function createChatSessionController(
   // A launch's failure, shown unless the chat is leaving.
   const reportRunFailure = (error: unknown): void => {
     if (session.exited) return;
-    const { classification } = normalizeProviderError(error);
+    const { failure } = normalizeProviderError(error);
     showFailure(
       error,
-      modelFailureText({ message: toErrorMessage(error), classification }),
+      shownFailureText({ message: toErrorMessage(error), failure }),
     );
   };
   // A held run's own failure (its end could not be read) fails the chat's

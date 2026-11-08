@@ -235,10 +235,11 @@ export {
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
 // Failures as hosts and plugins read them: the agent error, a predicate, and
-// a failure's message with its classification.
+// a failure's plain words with a model call's verdict.
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export { isModuleNotFoundError } from '@common/errors/errorPredicates';
 export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+export type { ProviderError } from '@shared/schemas';
 // Platform path containment, segments, POSIX form, case-free extension check.
 export {
   getPathSegments,

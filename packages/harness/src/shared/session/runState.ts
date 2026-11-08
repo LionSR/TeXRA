@@ -25,7 +25,7 @@ import {
   type OfferedTool,
   type PositionAt,
   qualifyAggregateId,
-  type RetryErrorInfo,
+  type ModelFailure,
   type RunId,
   type TokenUsageStats,
   type SessionRow,
@@ -142,7 +142,7 @@ export type RunState = RunRowState &
     readonly backend: ModelBackend | null;
     /** The failure that stopped the turn's invocation or that a person was
      *  asked about, until a response or the input of a new turn clears it. */
-    readonly lastError: RetryErrorInfo | null;
+    readonly lastError: ModelFailure | null;
     /** Subscription routes this run declines: its `run.config` binding's, and
      *  each retry answered with the user's own API key. */
     readonly declinedRoutes: readonly DeclinableUsageRoute[];

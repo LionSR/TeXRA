@@ -99,7 +99,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(result).toMatchObject({
               outcome: RUN_OUTCOME.FAILED,
               output: { response: 'I checked the tool.' },
-              failure: { message: 'Later provider failure' },
+              failure: {
+                kind: 'model',
+                failure: { message: 'Later provider failure' },
+              },
             });
           }),
       );

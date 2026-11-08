@@ -13,6 +13,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import { SessionLog } from '@shared/session/runHistory';
 import {
+  runEndErrorMessage,
   type RunOutcome,
   emptyRunEndOutput,
   outcomeFromCause,
@@ -113,8 +114,10 @@ export const endRun = Effect.fn('endRun')(function* (
   const thrown =
     carried?.failure !== undefined
       ? new AgentError({
-          message: carried.failure.message,
-          failure: carried.failure,
+          message: runEndErrorMessage(carried.failure),
+          ...(carried.failure.kind === 'model' && {
+            failure: carried.failure.failure,
+          }),
         })
       : verdict.error !== undefined
         ? ensureError(verdict.error)
@@ -145,22 +148,17 @@ export const endRun = Effect.fn('endRun')(function* (
     // A root's failure is logged here; a child's is delivered to its
     // orchestrator, so a second wrapper error would blame the parent.
     if (parentRunId === null)
-      yield* logSdkError(ctx.logger, error.message, thrown, {
+      yield* logSdkError(ctx.logger, runEndErrorMessage(error), thrown, {
         operation: `execute ${agentIdentifier}`,
       });
   }
-  // The failure a child's report carries: the error without its kind.
-  const failure =
-    error === undefined
-      ? undefined
-      : (({ kind: _kind, ...rest }) => rest)(error);
   // A child's failure rides its result, the error its delivery reports.
   const childResult: RunReport | undefined =
     parentRunId === null
       ? carried
       : {
           ...(carried ?? emptyReport(ctx, verdict.outcome)),
-          ...(failure !== undefined && { failure }),
+          ...(error !== undefined && { failure: error }),
         };
   const log = yield* SessionLog;
   // Rows the store refused fail the run unless a stop ended it, whoever
@@ -223,9 +221,9 @@ export const endRun = Effect.fn('endRun')(function* (
     // session's presenter shows that row (`presentTerminalResult`); a run
     // that never opened has no row, so its launch's caller presents this.
     return yield* new AgentError({
-      message: error.message,
+      message: runEndErrorMessage(error),
       cause: thrown,
-      ...(error.kind === 'model' ? { failure } : {}),
+      ...(error.kind === 'model' && { failure: error.failure }),
     });
   return withResolvedOutcome(carried ?? emptyReport(ctx, resolved), resolved);
 }, Effect.uninterruptible);
