@@ -123,7 +123,7 @@ import {
   focusRun,
   rootRunId,
   patchSessionMeta,
-  resetCliState,
+  startChat,
   selectedRunId,
   sessionMeta,
   setCliSessionModelOverride,
@@ -1718,11 +1718,11 @@ function resetHarnessForClear(): void {
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);
   }
-  // `resetCliState` retires the focus the way the real `/clear` does, and
+  // `startChat` retires the focus the way the real `/clear` does, and
   // nothing re-focuses a run this reset just removed: the next local row
   // adopts the local-conversation id, which is what the surface renders
   // until a new turn mints a run.
-  resetCliState(meta);
+  startChat(meta);
   // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
   // outside Ink, then print the scrollback again from a new origin.
   clearTerminalScrollback();

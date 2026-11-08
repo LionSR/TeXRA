@@ -9,7 +9,7 @@
 // `request.decide` (with the bypass a session-wide approval grants), or the
 // host capability a retry on the user's own key needs.
 
-import { computed, signal } from '@lit-labs/signals';
+import { computed } from '@lit-labs/signals';
 import { Cause, Effect, absurd } from 'effect';
 
 import {
@@ -25,7 +25,7 @@ import {
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { ToolEditPreviewRead } from '@texra/controllers/approval/ToolEditApprovalController';
 
-import { registerCliStateResetHook, sessionRunIds } from './cliState';
+import { chatField, fieldOf, sessionRunIds } from './cliState';
 import { sessionView } from './sessionView';
 import {
   appendLocalErrorTranscript,
@@ -124,13 +124,23 @@ interface AttentionRequest {
  * presents, a tool edit with its preview, which keeps the card off the
  * screen until the preview is read.
  */
-const stagedPresentations = signal<ReadonlyMap<string, TuiRequest>>(new Map());
+/** This surface's part of the chat's state, which a new conversation
+ *  starts empty: the pending requests themselves are the session view's,
+ *  closed by the runs they belong to. */
+export interface ApprovalSurface {
+  /** What hosts staged, by request id. */
+  readonly staged: ReadonlyMap<string, TuiRequest>;
+  /** Decided on this surface; hidden until the session view drops the
+   *  fact. */
+  readonly decided: ReadonlySet<string>;
+  /** Jump-to-waiting: the focused stream's requests lead the order. */
+  readonly promoted: RunId | undefined;
+}
 
-/** Decided on this surface; hidden until the session view drops the fact. */
-const decided = signal<ReadonlySet<string>>(new Set());
-
-/** Jump-to-waiting: the focused stream's requests lead the order. */
-const promoted = signal<RunId | undefined>(undefined);
+const approvals = chatField('approvals');
+const stagedPresentations = fieldOf(approvals, 'staged');
+const decided = fieldOf(approvals, 'decided');
+const promoted = fieldOf(approvals, 'promoted');
 
 /** Whether the promoted stream's requests lead `request`'s. */
 function leads(request: { readonly runId: RunId }): boolean {
@@ -347,15 +357,3 @@ function decideRequest(
     issue(requests, runtime, runId, request.requestId, arm.runtime);
   else performHost(arm.host);
 }
-
-/** Forget every staged presentation and local decision: the Surface reset
- *  (`/clear`). The pending requests themselves are the session view's, closed by the
- *  runs they belong to. */
-function resetApprovalSurface(): void {
-  stagedPresentations.set(new Map());
-  decided.set(new Set());
-  promoted.set(undefined);
-  presentedOrder.clear();
-}
-
-registerCliStateResetHook(resetApprovalSurface);

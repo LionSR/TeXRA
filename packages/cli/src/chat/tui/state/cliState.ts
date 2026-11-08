@@ -30,6 +30,10 @@ import {
   type RunSection,
 } from '@ui/copy/runStatus';
 import { sessionView } from './sessionView';
+import type { RootLaunch } from './sessionRunState';
+import type { LocalNotice } from './transcript';
+import type { FormSlot } from './formSlot';
+import type { ApprovalSurface } from './approvalQueue';
 import type {
   RunModelDecisionReason,
   AgentDelegationScope,
@@ -67,8 +71,78 @@ const EMPTY_SESSION_META: SessionMeta = {
   version: '',
 };
 
+// ---------------------------------------------------------------------------
+// chatState
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything one conversation of the chat holds: its display snapshot, its
+ * interaction record and root, its foreground surfaces, and the facts the
+ * state modules beside this one own (each module is the only writer of its
+ * field). `/clear` starts a new conversation by replacing this value
+ * ({@link startChat}), so nothing a conversation held outlives it and no
+ * module keeps a reset of its own.
+ */
+interface ChatState {
+  readonly meta: SessionMeta;
+  readonly surface: Surface;
+  readonly rootRunId: RunId | undefined;
+  readonly infoPanes: readonly InfoPaneContent[];
+  readonly reader: ForegroundReaderTarget | undefined;
+  readonly childList: ChildListFocus;
+  readonly slashPaletteOpen: boolean;
+  readonly reverseSearchOpen: boolean;
+  readonly notice: TransientNotice | undefined;
+  readonly formProgress: FormProgress | undefined;
+  readonly rootLaunch: RootLaunch | undefined;
+  readonly localNotices: readonly LocalNotice[];
+  readonly forms: FormSlot;
+  readonly approvals: ApprovalSurface;
+}
+
+const newChatState = (meta: SessionMeta): ChatState => ({
+  meta,
+  surface: emptySurface('cli'),
+  rootRunId: undefined,
+  infoPanes: [],
+  reader: undefined,
+  childList: { focused: false },
+  slashPaletteOpen: false,
+  reverseSearchOpen: false,
+  notice: undefined,
+  formProgress: undefined,
+  rootLaunch: undefined,
+  localNotices: [],
+  forms: { active: undefined, queued: [] },
+  approvals: { staged: new Map(), decided: new Set(), promoted: undefined },
+});
+
+const chat = signal<ChatState>(newChatState(EMPTY_SESSION_META));
+
+/** One field of a state record held in `source`, read (and watched) as a
+ *  signal of its own and written into the record `source` holds now. */
+export function fieldOf<S extends object, K extends keyof S>(
+  source: { get(): S; set(value: S): void },
+  key: K,
+): Signal.Computed<S[K]> & { readonly set: (value: S[K]) => void } {
+  return Object.assign(
+    computed(() => source.get()[key]),
+    { set: (value: S[K]) => source.set({ ...source.get(), [key]: value }) },
+  );
+}
+
+/** One field of the chat's state, written into the current conversation. */
+export const chatField = <K extends keyof ChatState>(key: K) =>
+  fieldOf(chat, key);
+
+/** Start a new conversation: the chat's state becomes a fresh value, keeping
+ *  only `meta` (by default the process's version). */
+export function startChat(nextMeta: SessionMeta = defaultSessionMeta()): void {
+  chat.set(newChatState(nextMeta));
+}
+
 /** Reactive display snapshot for the current CLI session. */
-export const sessionMeta = signal<SessionMeta>(EMPTY_SESSION_META);
+export const sessionMeta = chatField('meta');
 
 export function patchSessionMeta(patch: Partial<SessionMeta>): void {
   sessionMeta.set({ ...sessionMeta.get(), ...patch });
@@ -104,7 +178,7 @@ export const CLI_LOCAL_RUN_ID =
 
 /** The chat's interaction record: the shared `Surface`, written only through
  *  `actOnSurface`, the vocabulary the webview and desktop dispatch too. */
-const surfaceChoice = signal<Surface>(emptySurface('cli'));
+const surfaceChoice = chatField('surface');
 
 export function actOnSurface(action: SurfaceAction): void {
   surfaceChoice.set(applySurfaceAction(surfaceChoice.get(), action));
@@ -224,11 +298,11 @@ export const sessionListRunIds = computed(() =>
 /** The child list's keyboard ownership and the row the user moved to, with
  *  the run that was active when they did: a later change of the active run
  *  moves the highlight to it. */
-interface ChildListFocus {
+export interface ChildListFocus {
   readonly focused: boolean;
   readonly chosen?: { readonly runId: RunId; readonly whileActive?: RunId };
 }
-const CHILD_LIST = signal<ChildListFocus>({ focused: false });
+const CHILD_LIST = chatField('childList');
 
 /**
  * The child list's highlighted row: the row the user moved to while the
@@ -281,7 +355,7 @@ export function focusChildList(focused: boolean): void {
 }
 
 /** The top-level run the current session rooted at. */
-export const rootRunId = signal<RunId | undefined>(undefined);
+export const rootRunId = chatField('rootRunId');
 
 /** The root run and every run under it. */
 export const rootRunIds = computed(() =>
@@ -306,12 +380,12 @@ export const sessionRunIds = computed((): ReadonlySet<RunId> => {
 // slash-command palette, and reverse search. These view-level toggles live
 // here as signal state rather than local component state.
 
-interface InfoPaneContent {
+export interface InfoPaneContent {
   readonly title: string;
   readonly lines: readonly string[];
 }
 
-const INFO_PANE_QUEUE = signal<readonly InfoPaneContent[]>([]);
+const INFO_PANE_QUEUE = chatField('infoPanes');
 export const infoPane: Signal.Computed<InfoPaneContent | undefined> = computed(
   () => INFO_PANE_QUEUE.get().at(0),
 );
@@ -331,12 +405,12 @@ export function closeInfoPane(): void {
 
 /** Passive reader target. Holding the captured run id rather than a text
  * snapshot keeps each reader live even if transcript focus moves elsewhere. */
-type ForegroundReaderTarget =
+export type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly runId: RunId }
   | { readonly kind: 'script'; readonly runId: RunId }
   | { readonly kind: 'workPlan'; readonly runId: RunId };
 
-const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
+const FOREGROUND_READER = chatField('reader');
 /** The open reader, resolved against the view like the selection: a reader
  *  whose run has left the view is closed. */
 export const foregroundReader: Signal.Computed<
@@ -400,8 +474,8 @@ export function closeForegroundReader(): void {
 /** True while the slash-command palette is mounted in the InputBar. App-level
  *  Tab handlers gate on this so palette-Tab (accept selection) doesn't double
  *  with run-focus Tab. */
-export const slashPaletteOpen = signal<boolean>(false);
-export const reverseSearchOpen = signal<boolean>(false);
+export const slashPaletteOpen = chatField('slashPaletteOpen');
+export const reverseSearchOpen = chatField('reverseSearchOpen');
 
 /** Windowed content rows of the chat input's current draft (≥ 1), reported
  * by `InputBar`. The row allocator budgets the input bar from this instead of
@@ -431,7 +505,7 @@ type TransientNoticeOptions = { readonly ttlMs?: number } & (
 const DEFAULT_TRANSIENT_NOTICE_TTL_MS = 4_000;
 
 /** Single status-bar notice slot; later notices replace earlier ones. */
-export const transientNotice = signal<TransientNotice | undefined>(undefined);
+export const transientNotice = chatField('notice');
 
 /** Why the session view stopped updating (the session view died), once it has: the
  *  composer is closed on it, since nothing typed could be shown again. */
@@ -476,12 +550,6 @@ export function clearTransientNotice(): void {
   transientNotice.set(undefined);
 }
 
-const RESET_HOOKS = new Set<() => void>();
-
-export function registerCliStateResetHook(resetHook: () => void): void {
-  RESET_HOOKS.add(resetHook);
-}
-
 /** Submit-side state for the one active slash form. */
 export interface FormProgress {
   readonly token: symbol;
@@ -496,20 +564,4 @@ export interface FormProgress {
   readonly dismiss: () => void;
 }
 
-export const formProgress = signal<FormProgress | undefined>(undefined);
-registerCliStateResetHook(() => formProgress.set(undefined));
-
-export function resetCliState(
-  nextSessionMeta: SessionMeta = defaultSessionMeta(),
-): void {
-  sessionMeta.set(nextSessionMeta);
-  surfaceChoice.set(emptySurface('cli'));
-  rootRunId.set(undefined);
-  INFO_PANE_QUEUE.set([]);
-  FOREGROUND_READER.set(undefined);
-  slashPaletteOpen.set(false);
-  reverseSearchOpen.set(false);
-  CHILD_LIST.set({ focused: false });
-  clearTransientNotice();
-  for (const resetHook of RESET_HOOKS) resetHook();
-}
+export const formProgress = chatField('formProgress');

@@ -31,7 +31,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 
 import {
-  resetCliState,
+  startChat,
   clearTransientNotice,
   rootRunId as rootRunIdSignal,
   setTransientNotice,
@@ -212,12 +212,12 @@ export function createSessionExitController(
     );
     ctx.terminal.release();
     // The code the chat ends with: the drain above awaited the run, so its
-    // outcome is final, and resetCliState() below clears the root.
+    // outcome is final, and the fresh chat state below has no root.
     const exitCode = session.exitCode;
     // Print the resume hint after the terminal modes are restored, but before
-    // resetCliState() clears the stream tree the hint is built from.
+    // the fresh chat state drops the stream tree the hint is built from.
     printResumeHintOnExit(resumeHintView);
-    resetCliState();
+    startChat();
     if (resumableIdle) {
       // The run waiting at the WAIT node keeps the event loop alive, so a
       // normal return would never let the process exit. Leave here, AFTER

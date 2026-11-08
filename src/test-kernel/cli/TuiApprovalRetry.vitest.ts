@@ -55,7 +55,7 @@ import {
 import { openRequest as openRunRequest } from '@agent/runtime/requests';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
-import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
+import { startChat, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { CliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
@@ -112,7 +112,7 @@ const cancelOpenRequests = Effect.gen(function* () {
       .pipe(Effect.ignore);
   }
   yield* Context.get(session, SessionLog).settled;
-  resetCliState();
+  startChat();
 });
 
 /**
