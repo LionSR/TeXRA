@@ -483,7 +483,7 @@ export function listingKeyOf(event: SessionRow): string | null {
   if (event.type === 'plugin.fact')
     return `${type}/${event.plugin}/${event.kind}`;
   // Both a run's latest model title and its latest user title are kept:
-  // the fold lets the user's win.
+  // the view lets the user's win.
   if (event.type === 'run.description') return `${type}/${event.by}`;
   return type;
 }

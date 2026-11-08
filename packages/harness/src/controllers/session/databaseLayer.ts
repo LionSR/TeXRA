@@ -61,7 +61,13 @@ import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
-import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
+import {
+  LISTED_TYPES,
+  projectionUpkeep,
+  runRecordCommits,
+  runRowsOf,
+  usageRows,
+} from './projections';
 import {
   EVENT_COLUMNS,
   EVENT_FROM,
@@ -84,7 +90,8 @@ import {
   PROJECTED_COLUMNS,
   PROJECTED_FROM,
   READ_LISTING,
-  READ_RUN_RECORDS,
+  READ_COMMITS,
+  READ_RUN_RECORD,
   rowReader,
   settleCards,
 } from './rowReader';
@@ -706,8 +713,23 @@ export const databaseLayer = (
         },
         readListing: () => query(decodedRows(READ_LISTING, [])),
         readBlobs: (digests) => query(reader.blobs(digests)),
-        readRunRecords: (id) =>
-          query(decodedRows(READ_RUN_RECORDS, aggregateColumns(id), true)),
+        readRunRecord: (id) =>
+          snapshot(
+            Effect.gen(function* () {
+              const stored = (yield* execOne(
+                READ_RUN_RECORD,
+                aggregateColumns(id),
+              ))?.record;
+              if (stored === undefined) return null;
+              const record = String(stored);
+              const rows = yield* decodedRows(
+                READ_COMMITS,
+                [JSON.stringify(runRecordCommits(record))],
+                true,
+              );
+              return runRowsOf(record, rows);
+            }),
+          ),
         ...currentValues({
           exec,
           execOne,

@@ -343,7 +343,10 @@ The `model.message` arms:
 `run.end`), `process.exit` how a process run's command exited, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts#RunRecordEventDraftSchema`,
-`shared/session/runRowReads.ts#recordFacts`, `agent/followUp/Inbox.ts#admission`).
+`controllers/session/projections.ts#recordAfter`, `agent/followUp/Inbox.ts#admission`).
+A run's record (`SessionLog.facts`) is one projection row per run, the
+`run_record` table, naming the commits of the rows it reads
+(`controllers/session/projections.ts#runRowsOf`).
 
 ### 3.3 Display rows (session-authored and run-authored)
 

@@ -34,6 +34,7 @@ import type {
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { WithBlobs } from './historyTurns';
+import type { RunRows } from './runRowsShape';
 import type { ValueFamily } from './valueFamily';
 
 /** Current CLI history rows, ordered oldest first. */
@@ -247,9 +248,11 @@ export class Database extends Context.Service<
     readonly readBlobs: (
       digests: readonly string[],
     ) => Effect.Effect<StoredBlobs, DatabaseReadFailed>;
-    /** The latest listing row of each type on one open run, its requests
-     *  and follow-ups left out: its private records beside its status. */
-    readonly readRunRecords: (id: AggregateId) => EventsRead;
+    /** One open run's record (the `run_record` projection over the rows
+     *  it names), null for a run never started or removed. */
+    readonly readRunRecord: (
+      id: AggregateId,
+    ) => Effect.Effect<RunRows | null, DatabaseReadFailed>;
     /** The bounded CLI input rows, oldest first, and a new last one. */
     readonly inputHistory: {
       readonly read: Effect.Effect<

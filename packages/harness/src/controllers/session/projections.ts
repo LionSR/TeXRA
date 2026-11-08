@@ -15,12 +15,19 @@
  *   `context.edit` summary and model `run.description` label (a run with a
  *   run history stores its spend there, never as a `usage` row), and each
  *   run's spend summed by `sumUsageStats`.
+ * - `run_record`: per run, the commits of the rows its `RunRows` reads and
+ *   the two facts no single row states (`RunRecordSchema`); `runRowsOf`
+ *   reads it back over those rows.
  *
  * This module reads decoded events only, never `event.data`.
  */
 import { Effect, Schema } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
+  aggregateTarget,
+  factName,
+  FactNameSchema,
   listingKeyOf,
   listingTypeOf,
   pendingKeyOf,
@@ -32,6 +39,7 @@ import {
   type SessionRow,
   type TokenUsageStats,
 } from '@shared/schemas';
+import type { RowOf, RunRows } from '@shared/session/runRowsShape';
 import {
   EVENT_COLUMNS,
   EVENT_FROM,
@@ -62,26 +70,203 @@ type ProjectionOp =
       readonly commit: number;
       /** The listing's `usage` row data: the run's spend so far. */
       readonly data: string;
+    }
+  | {
+      readonly table: 'run_record';
+      readonly aggregate: AggregateId;
+      readonly data: string;
     };
 
-/** A run's prior row in the table a projector reads back. */
-interface ProjectionPrior {
-  readonly usage?: TokenUsageStats;
-}
+/** The tables a projector reads its aggregate's prior row from, each by its
+ *  one stored column. */
+const PRIOR_COLUMN = { run_usage: 'usage', run_record: 'record' } as const;
 
 interface Projector {
   readonly version: number;
   /** The kinds it reads: what a catch-up selects. */
   readonly inputs: readonly string[];
   /** The prior row it reads by primary key before projecting, if any. */
-  readonly prior: 'run_usage' | null;
+  readonly prior: keyof typeof PRIOR_COLUMN | null;
   /** The table its rebuild empties, and the projected types it deletes. */
-  readonly table: 'listing_entry' | 'run_usage';
+  readonly table: 'listing_entry' | 'run_usage' | 'run_record';
   readonly projects: readonly 'usage'[];
+  /** `prior` is the stored column of the aggregate's prior row. */
   readonly project: (
     event: SessionRow,
-    prior: ProjectionPrior,
+    prior: string | undefined,
   ) => readonly ProjectionOp[];
+}
+
+/**
+ * What a run's record holds: the commit of each row its `RunRows` reads
+ * (null until one is written), and what no one row states: whether a
+ * `run.detach` severed the start's parent edge, and whether its input is
+ * closed (the latest of `run.activate`, `followup.closed` and `run.removed`
+ * is not an activation).
+ */
+const RunRecordSchema = Schema.Struct({
+  start: Schema.NullOr(Schema.Int),
+  policy: Schema.NullOr(Schema.Int),
+  activation: Schema.NullOr(Schema.Int),
+  end: Schema.NullOr(Schema.Int),
+  stop: Schema.NullOr(Schema.Int),
+  report: Schema.NullOr(Schema.Int),
+  exit: Schema.NullOr(Schema.Int),
+  config: Schema.NullOr(Schema.Int),
+  position: Schema.NullOr(Schema.Int),
+  userTitle: Schema.NullOr(Schema.Int),
+  label: Schema.NullOr(Schema.Int),
+  facts: Schema.Record(FactNameSchema, Schema.Int),
+  detached: Schema.Boolean,
+  inputClosed: Schema.Boolean,
+});
+type RunRecord = typeof RunRecordSchema.Type;
+const RunRecordJson = Schema.fromJsonString(RunRecordSchema);
+const decodeRunRecord = Schema.decodeUnknownSync(RunRecordJson);
+const encodeRunRecord = Schema.encodeSync(RunRecordJson);
+
+const EMPTY_RUN_RECORD: RunRecord = {
+  start: null,
+  policy: null,
+  activation: null,
+  end: null,
+  stop: null,
+  report: null,
+  exit: null,
+  config: null,
+  position: null,
+  userTitle: null,
+  label: null,
+  facts: {},
+  detached: false,
+  inputClosed: false,
+};
+
+/** What one row of a run changes on its record. */
+function recordAfter(record: RunRecord, row: SessionRow): RunRecord {
+  const at = row.commit;
+  switch (row.type) {
+    case 'run.start':
+      return { ...record, start: at };
+    case 'approval.policy':
+      return { ...record, policy: at };
+    case 'run.detach':
+      return { ...record, detached: true };
+    case 'run.activate':
+      // A resumed run never carries the previous lifecycle's end or stop.
+      return {
+        ...record,
+        activation: at,
+        end: null,
+        stop: null,
+        inputClosed: false,
+      };
+    case 'run.stop':
+      return { ...record, stop: at };
+    case 'run.end':
+      return { ...record, end: at };
+    case 'followup.closed':
+    case 'run.removed':
+      return { ...record, inputClosed: true };
+    case 'run.report':
+      return { ...record, report: at };
+    case 'process.exit':
+      return { ...record, exit: at };
+    case 'run.config':
+      return { ...record, config: at };
+    case 'run.position':
+      return { ...record, position: at };
+    case 'plugin.fact':
+      return { ...record, facts: { ...record.facts, [factName(row)]: at } };
+    case 'run.description':
+      return row.by === 'user'
+        ? { ...record, userTitle: at }
+        : { ...record, label: at };
+    default:
+      return record;
+  }
+}
+
+/** The kinds a run's record reads (`recordAfter`). */
+const RUN_RECORD_INPUTS = [
+  'run.start',
+  'approval.policy',
+  'run.detach',
+  'run.activate',
+  'run.stop',
+  'run.end',
+  'followup.closed',
+  'run.removed',
+  'run.report',
+  'process.exit',
+  'run.config',
+  'run.position',
+  'plugin.fact',
+  'run.description',
+] as const satisfies readonly SessionRow['type'][];
+
+/** The commits a stored run record names: the rows `runRowsOf` reads. */
+export const runRecordCommits = (stored: string): number[] => {
+  const {
+    facts,
+    detached: _,
+    inputClosed: __,
+    ...rows
+  } = decodeRunRecord(stored);
+  return [...Object.values(rows), ...Object.values(facts)].flatMap((commit) =>
+    commit === null ? [] : [commit],
+  );
+};
+
+/**
+ * A run's `RunRows` from its stored record and the rows it names
+ * (`runRecordCommits`). Its title is its latest user title, else its latest
+ * model label: a user's title stands until the user renames again. Its
+ * grants are its latest `approval.policy`'s, else its start's.
+ */
+export function runRowsOf(
+  stored: string,
+  rows: readonly SessionRow[],
+): RunRows {
+  const record = decodeRunRecord(stored);
+  const byCommit = new Map(rows.map((row) => [row.commit, row]));
+  const row = <T extends SessionRow['type']>(
+    type: T,
+    commit: number | null,
+  ): RowOf<T> | null => {
+    if (commit === null) return null;
+    const found = byCommit.get(commit);
+    if (found?.type !== type)
+      throw new Error(`The run record names no ${type} at commit ${commit}`);
+    // cast: the row's type was just checked to be `T`.
+    return found as RowOf<T>;
+  };
+  const start = row('run.start', record.start);
+  const userTitle = row('run.description', record.userTitle);
+  const label = row('run.description', record.label);
+  const facts: Record<string, RowOf<'plugin.fact'>> = {};
+  for (const [name, commit] of Object.entries(record.facts)) {
+    const fact = row('plugin.fact', commit);
+    if (fact !== null) facts[name] = fact;
+  }
+  return {
+    start,
+    parent: record.detached ? null : (start?.parent ?? null),
+    activation: row('run.activate', record.activation),
+    end: row('run.end', record.end),
+    stop: row('run.stop', record.stop),
+    inputClosed: record.inputClosed,
+    report: row('run.report', record.report)?.report ?? null,
+    exit: row('process.exit', record.exit),
+    config: row('run.config', record.config)?.config ?? null,
+    position: row('run.position', record.position),
+    title: userTitle ?? label,
+    label,
+    grants:
+      row('approval.policy', record.policy)?.snapshot ??
+      (start === null ? null : (start.approvalPolicy ?? NO_APPROVAL_GRANTS)),
+    facts,
+  };
 }
 
 /** A priced row's spend as the `usage` display row carries it: its counts,
@@ -122,7 +307,7 @@ export function usageRows(event: SessionRow): readonly SessionRow[] {
 const decodeUsageRow = Schema.decodeUnknownSync(SessionRowSchema);
 
 /** The projections this build maintains; {@link PROJECTORS} has one each. */
-const PROJECTION_NAMES = ['listing', 'usage'] as const;
+const PROJECTION_NAMES = ['listing', 'usage', 'run_record'] as const;
 type ProjectionName = (typeof PROJECTION_NAMES)[number];
 
 const PROJECTORS = {
@@ -158,7 +343,9 @@ const PROJECTORS = {
       const priced = stored ?? pricedUsage(event);
       if (priced === null) return [];
       const total = sumUsageStats(
-        prior.usage === undefined ? [priced] : [prior.usage, priced],
+        prior === undefined
+          ? [priced]
+          : [decodeStoredUsage(prior).usage, priced],
       );
       return [
         ...(stored === null
@@ -179,6 +366,31 @@ const PROJECTORS = {
         },
       ];
     },
+  },
+  run_record: {
+    version: 1,
+    inputs: RUN_RECORD_INPUTS,
+    prior: 'run_record',
+    table: 'run_record',
+    projects: [],
+    // A plugin's own aggregate keeps no run record.
+    project: (event, prior) =>
+      aggregateTarget(event.aggregateId).kind === 'run'
+        ? [
+            {
+              table: 'run_record',
+              aggregate: event.aggregateId,
+              data: encodeRunRecord(
+                recordAfter(
+                  prior === undefined
+                    ? EMPTY_RUN_RECORD
+                    : decodeRunRecord(prior),
+                  event,
+                ),
+              ),
+            },
+          ]
+        : [],
   },
 } as const satisfies Record<ProjectionName, Projector>;
 
@@ -240,6 +452,12 @@ function opStatement(op: ProjectionOp): [string, unknown[]] {
          ON CONFLICT("commit", type) DO UPDATE SET data = excluded.data`,
         [op.commit, op.type, op.data],
       ];
+    case 'run_record':
+      return [
+        `INSERT INTO run_record (aggregate, record) VALUES (${AGGREGATE}, ?)
+         ON CONFLICT(aggregate) DO UPDATE SET record = excluded.record`,
+        [...aggregateColumns(op.aggregate), op.data],
+      ];
     case 'run_usage':
       return [
         `INSERT INTO run_usage (aggregate, "commit", usage)
@@ -289,16 +507,15 @@ export function projectionUpkeep<E>(
         names,
         Effect.fnUntraced(function* (name) {
           if (!PROJECTION_INPUTS.get(name)?.has(event.type)) return;
-          const projector = PROJECTORS[name];
+          const projector: Projector = PROJECTORS[name];
           const row =
             projector.prior === null
               ? undefined
               : (yield* exec(
-                  `SELECT * FROM ${projector.prior} WHERE aggregate = ${AGGREGATE}`,
+                  `SELECT ${PRIOR_COLUMN[projector.prior]} AS prior FROM ${projector.prior} WHERE aggregate = ${AGGREGATE}`,
                   aggregateColumns(event.aggregateId),
                 ))[0];
-          const prior: ProjectionPrior =
-            row === undefined ? {} : decodeStoredUsage(String(row.usage));
+          const prior = row === undefined ? undefined : String(row.prior);
           for (const op of projector.project(event, prior))
             yield* exec(...opStatement(op));
         }),

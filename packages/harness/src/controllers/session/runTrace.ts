@@ -26,7 +26,7 @@ import {
   type TranscriptSubscription,
   TRACE_ROW_TYPES,
 } from '@shared/schemas';
-import { boundsLifecycle, recordsOf } from '@shared/session/runFacts';
+import { boundsLifecycle } from '@shared/session/runFacts';
 import { closesRunWindow } from '@shared/session/runRowReads';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type {
@@ -327,14 +327,12 @@ export function replayTrace<E>(
       // The lifecycle the reader's activation is in starts at its
       // `run.activate`, whether or not it has ended since.
       seq =
-        recordsOf(
-          read
-            .filter(own)
-            .flatMap(({ event }) =>
-              event.commit <= activation ? [event] : [],
-            ),
-          runId,
-        ).activation?.seq ?? -1;
+        read.findLast(
+          (input): input is Extract<SessionViewInput, { _tag: 'event' }> =>
+            own(input) &&
+            input.event.commit <= activation &&
+            input.event.type === 'run.activate',
+        )?.event.seq ?? -1;
       return read.flatMap(readInput);
     };
     const over = Effect.exit(result).pipe(

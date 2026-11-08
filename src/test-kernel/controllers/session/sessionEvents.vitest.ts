@@ -88,11 +88,7 @@ import {
 } from '@shared/session/runHistory';
 import { SessionRowSchema } from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import {
-  foldRunRows,
-  RUN_ROW_READS,
-  runRowsFrom,
-} from '@shared/session/runRowReads';
+import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
@@ -137,18 +133,11 @@ vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
 const STORE_WRITER = `
 import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/databaseLayer';
-import { ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 import { qualifyAggregateId } from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import {
-  foldRunRows,
-  RUN_ROW_READS,
-  runRowsFrom,
-} from '@shared/session/runRowReads';
-import type { SessionLogShape } from '@shared/session/sessionLog';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 const [storage, owner, run] = process.argv.slice(2);
@@ -765,7 +754,7 @@ describe('the session event table and its one publisher', () => {
         expect(
           yield* Effect.flip(
             Effect.flatMap(Database, (db) =>
-              db.readRunRecords(runStart.aggregateId),
+              db.readRunRecord(runStart.aggregateId),
             ).pipe(Effect.provide(substrate(storage))),
           ),
         ).toMatchObject({
@@ -1043,10 +1032,7 @@ describe('the session event table and its one publisher', () => {
           first
             .readAggregate(id, 1, RUN_ROW_READS[read].kinds)
             .pipe(Effect.map((rows) => foldRunRows(read, rows))),
-        facts: (runId) =>
-          first
-            .readRunRecords(qualifyAggregateId('run', runId))
-            .pipe(Effect.map((rows) => (rows[0] ? runRowsFrom(rows) : null))),
+        facts: (runId) => first.readRunRecord(qualifyAggregateId('run', runId)),
       };
       // Every aggregate this case writes, the unrelated run's among them.
       const stored = rowsOf(
