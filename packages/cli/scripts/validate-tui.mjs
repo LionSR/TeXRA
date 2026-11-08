@@ -1462,7 +1462,7 @@ const SCENARIOS = [
       '$ npm run typecheck',
       'Directory:',
       'y approve',
-      'a approve commands for session',
+      'a approve commands for this task',
     ],
     unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
     maxOccurrences: [{ text: '{ T } TeXRA', max: 1 }],
