@@ -18,7 +18,6 @@ import {
   asideName,
   cannotOpen,
   freeName,
-  inImmediateTransaction,
   isDamaged,
   pragmaValue,
   retryBusy,
@@ -269,7 +268,7 @@ const prepareStore = Effect.fnUntraced(function* (
           yield* run(sql, statement);
         yield* run(sql, `PRAGMA application_id = ${APPLICATION_ID}`);
         yield* run(sql, `PRAGMA user_version = ${SCHEMA_VERSION}`);
-      }).pipe(inImmediateTransaction(sql));
+      }).pipe(sql.withTransaction);
       continue;
     }
     // Off outside the transaction (a no-op inside one): a drop then
@@ -372,9 +371,9 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
       })),
     ),
     Scope.provide(first),
-    Effect.catchCause((cause) => Effect.succeed({ cause })),
+    Effect.exit,
   );
-  if ('sql' in attempt) return attempt;
+  if (Exit.isSuccess(attempt)) return attempt.value;
   if (!persistent || !isDamaged(attempt.cause)) {
     return yield* Effect.failCause(attempt.cause);
   }

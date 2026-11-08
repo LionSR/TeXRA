@@ -33,7 +33,11 @@ import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { resumeBlocker } from './resumeBlocker';
 
-import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
+import {
+  executeAgent,
+  type ExecuteAgentOptions,
+  type PreparedRun,
+} from './executeAgent';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import {
   registryOf,
@@ -42,7 +46,6 @@ import {
   type RunRegistry,
   Runs,
 } from './runRegistry';
-import type { RunReport } from './runReport';
 
 /** What a resume answers: the commit of the activation it opened, which
  *  the caller now holds; the refusal its records decided; or the owning
@@ -122,13 +125,6 @@ function refusalFor(
     withLogChannel(CHANNEL),
     Effect.as({ failed: { kind: 'unusableCheckpoint' } } as const),
   );
-}
-
-/** What a resume's opening answers: the commit of the activation, and the
- *  run the registry forks (a conversation's program, or a child's loop). */
-interface OpenedResume {
-  readonly activation: CommitOrdinal;
-  readonly run: Effect.Effect<RunReport | undefined, Error, AgentRunServices>;
 }
 
 /**
@@ -217,7 +213,7 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   runId: RunId,
   options: ResumeRunOptions,
   owner?: RunId,
-): Effect.fn.Return<OpenedResume, Error | ResumeRefused, AgentRunServices> {
+): Effect.fn.Return<PreparedRun, Error | ResumeRefused, AgentRunServices> {
   const refuse = (answer: ResumeRefusalAnswer) =>
     Effect.fail(new ResumeRefused({ answer }));
   const inbox = yield* Inbox;
