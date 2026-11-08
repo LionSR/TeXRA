@@ -148,11 +148,11 @@ describe(
                 Effect.flip(resume(runId, { session })),
               );
               yield* input.reached;
-              yield* faults.failNext('readRunRecords');
+              yield* faults.failNext('readRunRecord');
               yield* input.release;
 
               const error = yield* Fiber.join(resumed);
-              expect(error.message).toContain('injected readRunRecords fault');
+              expect(error.message).toContain('injected readRunRecord fault');
               expect(activations(storage, runId)).toBe(1);
               expect(yield* queuedTexts(session, runId)).toEqual([
                 'Keep this input.',
@@ -168,12 +168,12 @@ describe(
               const faults = yield* sessionStoreFaults(storage);
               // The first records read finds the run's owner; the second, its
               // config, is inside the resume.
-              const owner = yield* faults.holdNext('readRunRecords');
+              const owner = yield* faults.holdNext('readRunRecord');
               const resumed = yield* Effect.forkChild(
                 resume(runId, { session }),
               );
               yield* owner.reached;
-              const config = yield* faults.holdNext('readRunRecords');
+              const config = yield* faults.holdNext('readRunRecord');
               yield* owner.release;
               yield* config.reached;
 

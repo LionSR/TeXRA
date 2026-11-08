@@ -60,14 +60,14 @@ export function recordLogRow(
   event: Extract<TraceRowFields, { type: 'log' }>,
 ): void {
   if (event.level === 'debug' && !d.ctx.debug) return;
-  const groupId = event.stageId;
+  const stageId = event.stageId;
   const messageType = event.messageType ?? MESSAGE_TYPES.DEFAULT;
   const text = event.message;
   const decoded = decodeLogPayload(messageType, event.data);
   if ('issue' in decoded) {
     write(d, {
       kind: 'log',
-      base: open(d, d.stampId, groupId, MESSAGE_TYPES.ERROR, true, 'error'),
+      base: open(d, d.stampId, stageId, MESSAGE_TYPES.ERROR, true, 'error'),
       text: `Malformed ${messageType} payload`,
       payload: {
         messageType: MESSAGE_TYPES.ERROR,
@@ -76,7 +76,7 @@ export function recordLogRow(
     });
     return;
   }
-  const base = open(d, d.stampId, groupId, messageType, true, event.level);
+  const base = open(d, d.stampId, stageId, messageType, true, event.level);
   const { payload } = decoded;
   switch (payload.messageType) {
     case MESSAGE_TYPES.MODEL_RESPONSE:

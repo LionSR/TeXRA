@@ -2,23 +2,10 @@
  * No-op AgentTrace for suites whose code under test takes a trace they do
  * not assert on.
  */
-import type {
-  AgentTrace,
-  StageHandle,
-  StreamHandle,
-} from '@agent/trace/AgentTrace';
+import type { AgentTrace, StreamHandle } from '@agent/trace/AgentTrace';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
-import type { RunOutcome } from '@shared/schemas';
 
 const NOOP: () => void = () => undefined;
-
-class NoopStageHandle implements StageHandle {
-  readonly id: string | undefined;
-  constructor(id: string | undefined) {
-    this.id = id;
-  }
-  end(_status?: RunOutcome): void {}
-}
 
 class NoopStreamHandle implements StreamHandle {
   readonly id: string;
@@ -40,8 +27,8 @@ export const noopTrace: AgentTrace = {
   error: NOOP,
   output: NOOP,
 
-  openStage() {
-    return new NoopStageHandle(crypto.randomUUID());
+  stage(_label, use) {
+    return use(this);
   },
   openRun() {
     return new NoopStreamHandle(crypto.randomUUID());

@@ -11,7 +11,7 @@ import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { InvokeCommandTool } from '@texra/tools/setup/InvokeCommandTool';
 
 // Local file imports
-import { createFakeSetupPlatform, withSetup } from './fixtures';
+import { createFakeSetupPlatform, withSetup } from '@test/tools/setup/fixtures';
 
 interface InvokeRecord {
   command: string;
