@@ -619,6 +619,24 @@
           "signature": "export function blobRows( runId: RunId, state: RunState, values: readonly unknown[], ): RunHistoryDraft[] {…}"
         }
       ]
+    },
+    {
+      "id": "LLM-xai-token-expiry-one-reading",
+      "candidate": "the xAI token response's expires_in decoded plainly, with the one fallback (access JWT exp, else expires_in, else the default) read in buildSession (O9 9e)",
+      "why": "The shared SubscriptionOAuthCoordinator types every provider's token response as SubscriptionTokenResponse, whose expires_in is a number (ChatGPT's response always carries it), and buildSession takes that type, so xAI's default cannot move into buildSession without widening the shared type for ChatGPT too. Within the schema the two combinators are not a repetition: Schema.catchDecoding does not see a missing key (a struct reports 'Missing key' before the field's codec runs; verified on effect 4.1.2), so withDecodingDefault covers an absent expires_in and catchDecoding a malformed one, over one named constant (XAI_DEFAULT_EXPIRES_IN_SEC). buildSession already prefers the access JWT's exp. Refused by package E's harness-leftovers PR after re-verification on main at 157f775.",
+      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/O-llm-providers.md#9-smaller-red-flags-batched",
+      "symbols": [
+        {
+          "file": "packages/llm/src/oauth/xai/xaiProvider.ts",
+          "symbol": "XaiTokenResponseSchema",
+          "signature": "export const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields( Struct.assign({ expires_in: Schema.Union([Schema.Finite, Schema.FiniteFromString]) .check(Schema.isGreaterThan(0)) .pipe( Schema.catchDecoding(() => Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)), ), ) .pipe( Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)), ), token_type: Schema.optional(Schema.NullOr(Schema.String)), scope: Schema.optional(Schema.NullOr(Schema.String)), }), );"
+        },
+        {
+          "file": "packages/llm/src/oauth/subscriptionSessionSchema.ts",
+          "symbol": "SubscriptionTokenResponseSchema",
+          "signature": "export const SubscriptionTokenResponseSchema = Schema.Struct({ access_token: Schema.String.check(Schema.isMinLength(1)), refresh_token: Schema.optional( Schema.NullOr(Schema.String.check(Schema.isMinLength(1))), ), id_token: Schema.optional( Schema.NullOr(Schema.String.check(Schema.isMinLength(1))), ), expires_in: Schema.Number, scope: Schema.optional(Schema.NullOr(Schema.String)), });"
+        }
+      ]
     }
   ]
 }
