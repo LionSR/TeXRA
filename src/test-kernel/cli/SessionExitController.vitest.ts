@@ -65,6 +65,9 @@ const createController = (
       commandName: 'texra',
       cwd: '/tmp/project',
       chatScope,
+      // The test's scope stands in for the process's shutdown: the signal
+      // holds the exit takes are released with it.
+      shutdownScope: yield* Scope.Scope,
       terminal: tuiTerminal,
       runtime,
       // Only an exit that leaves a waiting root leaves the process here.

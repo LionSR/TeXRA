@@ -683,6 +683,7 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     chatScope,
+    shutdownScope: services.shutdownScope,
     terminal,
     runtime,
     leaveProcess: services.leave,
