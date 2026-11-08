@@ -18,6 +18,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
+import type { SqlClient } from 'effect/sql/SqlClient';
 import { withLogChannel } from '@logger/effectLog';
 import { CURRENT_VALUE_VERSION as VALUE_VERSION } from '@shared/schemas';
 import {
@@ -97,12 +98,17 @@ export function currentValues(store: {
   readonly query: <A, E>(
     read: Effect.Effect<A, E>,
   ) => Effect.Effect<A, DatabaseReadFailed>;
+  readonly afterCommit: SqlClient['afterCommit'];
   /** Moved once per committed value write. */
   readonly written: SubscriptionRef.SubscriptionRef<number>;
   /** Record for the gate that a value was written at this build's version. */
   readonly valueWritten: Effect.Effect<void, SqlError>;
 }): Pick<Database['Service'], 'values' | 'inputHistory'> {
-  const { exec, execOne, transact, query, written, valueWritten } = store;
+  const { exec, execOne, transact, query, afterCommit, written, valueWritten } =
+    store;
+  const notifyWritten = afterCommit(
+    SubscriptionRef.update(written, (count) => count + 1),
+  );
   const valueRow = (family: string, key: string) =>
     execOne(
       'SELECT key, value FROM current_value WHERE family = ? AND key = ?',
@@ -117,11 +123,9 @@ export function currentValues(store: {
           ),
         ),
       ),
-    modify: (family, key, change) => {
-      let wrote = false;
-      return transact(
+    modify: (family, key, change) =>
+      transact(
         Effect.gen(function* () {
-          wrote = false;
           const row = yield* valueRow(family.name, key);
           const result = change(
             row === undefined ? undefined : yield* decodeValue(family, row),
@@ -134,7 +138,7 @@ export function currentValues(store: {
               'DELETE FROM current_value WHERE family = ? AND key = ?',
               [family.name, key],
             );
-            wrote = row !== undefined;
+            if (row !== undefined) yield* notifyWritten;
             return result;
           }
           const value = yield* Schema.encodeEffect(
@@ -148,20 +152,14 @@ export function currentValues(store: {
               yield* Clock.currentTimeMillis,
             ]);
             yield* valueWritten;
-            wrote = true;
+            yield* notifyWritten;
           }
           return result;
         }),
       ).pipe(
-        Effect.tap(() =>
-          wrote
-            ? SubscriptionRef.update(written, (count) => count + 1)
-            : Effect.void,
-        ),
         Effect.flatMap(Effect.fromResult),
         Effect.map(([value]) => value),
-      );
-    },
+      ),
     list: (family) =>
       query(
         exec(

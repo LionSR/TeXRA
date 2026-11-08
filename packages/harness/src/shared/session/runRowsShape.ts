@@ -1,7 +1,7 @@
 /**
  * What a run's rows say about it, as `runRows.ts` and `runRowReads.ts` fold
  * them: the row state the run state copies, the row state and pending
- * input the session view keeps, and the records the other readers hold.
+ * input the session view keeps; and the record the store projects.
  */
 import type {
   CommitOrdinal,
@@ -70,9 +70,10 @@ export type PendingFollowUps = {
 export type SharedRunRows = RunRowState & PendingFollowUps;
 
 /**
- * What a run's record rows say about it (`runRowsFrom`), each field from the
- * rows its comment names: what `SessionLog.facts` serves, and the lifecycle
- * part of the input read. The session view keeps its own on `RunView`.
+ * What a run's record rows say about it, each field from the rows its
+ * comment names: what `SessionLog.facts` serves, read from the store's
+ * `run_record` projection (`controllers/session/projections.ts`). The
+ * session view keeps its own on `RunView`.
  */
 export type RunRows = {
   /** Its `run.start`, and its parent edge: the start's, until a

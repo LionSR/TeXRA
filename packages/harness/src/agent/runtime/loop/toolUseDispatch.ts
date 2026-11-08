@@ -250,7 +250,7 @@ function resultContent(
 const commit = (
   { dispatch, fact }: Call,
   rows: readonly RunHistoryDraft[],
-  alongside?: ReturnType<typeof factRows>['alongside'],
+  alongside?: ReturnType<typeof factRows>,
 ) =>
   dispatch.cell.append((state) => {
     const script = scriptOf(fact);
@@ -636,9 +636,8 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
       ...cards,
       ...post,
       ...answered.map((id) => consumedRow(runId, id, { kind: 'answered' })),
-      ...facts.run,
     ],
-    facts.alongside,
+    facts,
   );
 });
 
