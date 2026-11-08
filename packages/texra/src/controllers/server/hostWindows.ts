@@ -103,23 +103,9 @@ interface Window {
   readonly capabilities: ReadonlySet<HostCapability>;
   focusedAt: number;
   readonly frames: Queue.Queue<HostAttachFrame>;
-  /** The calls it has not answered yet, by call id: what each answer
-   *  does, and how the call fails when the window goes. */
-  readonly pending: Map<string, PendingCall>;
+  /** The calls it has not answered yet, by call id. */
+  readonly pending: Map<string, Deferred.Deferred<unknown, WindowCallFailed>>;
 }
-
-interface PendingCall {
-  readonly answer: (answer: HostAnswer) => Effect.Effect<void>;
-  readonly fail: (failure: WindowCallFailed) => Effect.Effect<void>;
-}
-
-const answerFailure = (
-  answer: Extract<HostAnswer, { ok: false }>,
-): WindowCallFailed =>
-  new WindowCallFailed({
-    reason: 'failed',
-    message: answer.message,
-  });
 
 /** The project folder a session holds, or its store for a session with
  *  no folder. */
@@ -163,48 +149,52 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
     call: AnsweredCall,
     schema: Schema.Codec<A, unknown>,
   ): Effect.fn.Return<A, WindowCallFailed> {
-    const window = target(key, CALL_CAPABILITY[call.kind]);
     const within = ANSWER_WITHIN[call.kind];
     const answered = Deferred.makeUnsafe<unknown, WindowCallFailed>();
-    // Registered in the same step that checks the window is attached, so
-    // a detach either finds this call or came before it.
-    if (window === undefined)
-      return yield* new WindowCallFailed({
-        reason: 'detached',
-        message: 'No TeXRA window of this project is attached.',
-      });
-    const id = randomUUID();
-    window.pending.set(id, {
-      answer: (answer) =>
-        answer.ok
-          ? Deferred.succeed(answered, answer.value).pipe(Effect.asVoid)
-          : Deferred.fail(answered, answerFailure(answer)).pipe(Effect.asVoid),
-      fail: (failure) => Deferred.fail(answered, failure).pipe(Effect.asVoid),
-    });
-    calls.set(id, window);
-    yield* Queue.offer(window.frames, {
-      kind: 'call',
-      id,
-      call,
-      awaited: true,
-    });
-    const value = yield* Deferred.await(answered).pipe(
-      Effect.timeoutOrElse({
-        duration: within,
-        orElse: () =>
-          Effect.fail(
+    const value = yield* Effect.acquireUseRelease(
+      Effect.suspend(() => {
+        // Target selection and registration are one synchronous step. The
+        // acquisition installs cleanup before sending can be interrupted.
+        const window = target(key, CALL_CAPABILITY[call.kind]);
+        if (window === undefined)
+          return Effect.fail(
             new WindowCallFailed({
-              reason: 'no-answer',
-              message: `The TeXRA window did not answer within ${within}.`,
+              reason: 'detached',
+              message: 'No TeXRA window of this project is attached.',
             }),
-          ),
+          );
+        const id = randomUUID();
+        window.pending.set(id, answered);
+        calls.set(id, window);
+        return Effect.succeed({ window, id });
       }),
-      Effect.ensuring(
+      ({ window, id }) =>
+        Queue.offer(window.frames, {
+          kind: 'call',
+          id,
+          call,
+          awaited: true,
+        }).pipe(
+          Effect.andThen(
+            Deferred.await(answered).pipe(
+              Effect.timeoutOrElse({
+                duration: within,
+                orElse: () =>
+                  Effect.fail(
+                    new WindowCallFailed({
+                      reason: 'no-answer',
+                      message: `The TeXRA window did not answer within ${within}.`,
+                    }),
+                  ),
+              }),
+            ),
+          ),
+        ),
+      ({ window, id }) =>
         Effect.sync(() => {
           window.pending.delete(id);
           calls.delete(id);
         }),
-      ),
     );
     const parsed = Schema.decodeUnknownResult(schema)(value);
     if (!Result.isSuccess(parsed))
@@ -221,7 +211,8 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
     windows.delete(window);
     for (const [id, pending] of window.pending) {
       calls.delete(id);
-      yield* pending.fail(
+      yield* Deferred.fail(
+        pending,
         new WindowCallFailed({
           reason: 'detached',
           message: 'The TeXRA window closed before it answered.',
@@ -345,7 +336,18 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
   const answer = (id: string, reply: HostAnswer) =>
     Effect.suspend(() => {
       const pending = calls.get(id)?.pending.get(id);
-      if (pending !== undefined) return pending.answer(reply);
+      if (pending !== undefined)
+        return (
+          reply.ok
+            ? Deferred.succeed(pending, reply.value)
+            : Deferred.fail(
+                pending,
+                new WindowCallFailed({
+                  reason: 'failed',
+                  message: reply.message,
+                }),
+              )
+        ).pipe(Effect.asVoid);
       // Only an awaited call is answered: one answered after its wait ended
       // (its run gave up, or its window went) is late, not a notice.
       return Effect.logWarning(

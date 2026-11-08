@@ -1,3 +1,4 @@
+import { Result } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -26,19 +27,23 @@ const neverThinks = model(undefined);
 
 describe('chooseReasoning', () => {
   it('never turns thinking off on a model that always thinks', () => {
-    expect(() => chooseReasoning(alwaysThinks, { effort: E.NONE })).toThrow(
-      /cannot turn thinking off/,
-    );
+    expect(
+      Result.getOrThrow(
+        Result.flip(chooseReasoning(alwaysThinks, { effort: E.NONE })),
+      ).message,
+    ).toMatch(/cannot turn thinking off/);
   });
 
   it('never makes a non-reasoning model think', () => {
-    expect(chooseReasoning(neverThinks)).toEqual({
+    expect(Result.getOrThrow(chooseReasoning(neverThinks))).toEqual({
       thinking: false,
       effort: null,
       mode: null,
     });
-    expect(() => chooseReasoning(neverThinks, { effort: E.HIGH })).toThrow(
-      /does not reason/,
-    );
+    expect(
+      Result.getOrThrow(
+        Result.flip(chooseReasoning(neverThinks, { effort: E.HIGH })),
+      ).message,
+    ).toMatch(/does not reason/);
   });
 });

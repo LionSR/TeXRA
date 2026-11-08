@@ -58,8 +58,9 @@ export interface AppSignalPayloads {
    * store itself, so every writer is covered — the settings controllers, the
    * setup agent's `unset_api_key`, the GitHub token forms — without any of
    * them remembering to. The one file store emits from its own commit
-   * finalizer, and a window's watch of the file (`FileSecrets.watch`)
-   * emits for writes from other processes. The finalizer runs on every exit of the write, failure and
+   * finalizer, and the process's watch of the directory (`FileSecrets.watch`,
+   * started once by the app's process layer) emits for writes from other
+   * processes. The finalizer runs on every exit of the write, failure and
    * interruption included, because an interrupted commit may still have
    * landed; the signal means "re-read this key", never "the value changed".
    * The same stores hold OAuth tokens and other credentials, so a subscriber filters on `key` and ignores the rest: an

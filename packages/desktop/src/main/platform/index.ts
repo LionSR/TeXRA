@@ -9,12 +9,9 @@ import {
 } from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
-  FileSecrets,
   nodeFileServices,
   openNodeWorkspaceRoots,
-  secretsDirectory,
 } from '@texra-ai/harness/node';
-import { emitAppSignal } from '@texra-ai/harness/plugins';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -109,13 +106,6 @@ export const initializeElectronPlatform = Effect.fn(
     Error,
     ProcessServices
   > = Effect.gen(function* () {
-    // Keys another window or the service writes reach this one's surfaces.
-    yield* Effect.forkIn(
-      FileSecrets.watch(secretsDirectory(dataRoot), (key) =>
-        emitAppSignal('credentialChanged', { key }),
-      ),
-      processScope,
-    );
     repairLaunchPath();
     // The process roots are the no-workspace roots. Each open project gets
     // its own roots (desktopProjects.ts); these only back the window before

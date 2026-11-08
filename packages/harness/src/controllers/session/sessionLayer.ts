@@ -38,7 +38,6 @@ import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import {
   nodeProcesses,
   processOwnerId,
-  type ProcessProbe,
 } from '@platform/defaults/nodeProcesses';
 import {
   nodePlatformServices,
@@ -312,11 +311,7 @@ export interface ProcessServicesOptions {
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
   /** The global application-state layer, acquired in this runtime's scope
    *  (`processLayer` picks the host's and seeds it). */
-  readonly appState: Layer.Layer<
-    AppState,
-    DatabaseOpenFailed,
-    GlobalDatabase | ProcessIdentity | ProcessProbe
-  >;
+  readonly appState: Layer.Layer<AppState, DatabaseOpenFailed, GlobalDatabase>;
   /** The dependency probes every tool gate and Tools dashboard read. Hosts
    *  leave it absent; only the repository's test kernel passes one, which
    *  starts no probe, so a suite does not see what the machine installed. */
@@ -330,15 +325,6 @@ export interface ProcessServicesOptions {
     never,
     HttpClient.HttpClient | AppState
   >;
-  /** The process's handle on the global storage root, built and closed with
-   *  this runtime. Absent, the root's own database, whose open creates its
-   *  SQLite file and forks a change poll, so the CLI entry that runs before
-   *  any platform, on a possibly read-only root, passes a refusal. */
-  readonly globalDatabase?: Layer.Layer<
-    GlobalDatabase,
-    DatabaseOpenFailed,
-    ProcessIdentity | ProcessProbe
-  >;
   /** The runtime's emission threshold for Effect diagnostics, from facts that
    *  cannot change mid-process: the surface (the extension's channel filters
    *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
@@ -351,7 +337,8 @@ export interface ProcessServicesOptions {
 
 /** The process services and the {@link SessionOwner} over the session map
  *  (one session per storage root), which the public `processLayer` serves
- *  its `Sessions` over. */
+ *  its `Sessions` over, with the project stores and the process's identity
+ *  that its cold reads take; `processLayer`'s type serves neither. */
 export function ownerProcessLayer({
   storageRoot,
   settings,
@@ -361,11 +348,10 @@ export function ownerProcessLayer({
   agentDirectories,
   toolAvailability = toolAvailabilityLayer,
   usageLog = UsageLog.disabled,
-  globalDatabase: globalDatabaseOption,
   minimumLogLevel,
   workspace,
 }: ProcessServicesOptions): Layer.Layer<
-  RunServices | ToolCatalog | SessionOwner
+  RunServices | ToolCatalog | SessionOwner | ProjectDatabases | ProcessIdentity
 > {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
@@ -376,9 +362,10 @@ export function ownerProcessLayer({
     ),
   );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
-  const globalDatabase = (
-    globalDatabaseOption ?? globalDatabaseLayer(globalStorage)
-  ).pipe(Layer.provide(identity), Layer.orDie);
+  const globalDatabase = globalDatabaseLayer(globalStorage).pipe(
+    Layer.provide(identity),
+    Layer.orDie,
+  );
   const services = Layer.mergeAll(
     secrets,
     // The follower registers each plugin's agent directory off the catalog.

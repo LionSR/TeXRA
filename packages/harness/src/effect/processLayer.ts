@@ -254,7 +254,11 @@ function sessionsLayer(
         ProjectDatabases,
         ProcessIdentity,
         ToolRegistry,
-      )(yield* Effect.context<ProcessServices>());
+      )(
+        yield* Effect.context<
+          ProcessServices | ProjectDatabases | ProcessIdentity
+        >(),
+      );
       return yield* makeSessions(
         yield* SessionOwner,
         yield* AgentCatalog,

@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { computed, signal } from '@lit-labs/signals';
+import { computed } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -22,7 +22,7 @@ import {
   foregroundReader,
   selectedRunId,
   rootRunId,
-  registerCliStateResetHook,
+  chatField,
   sessionRunIds,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
@@ -40,7 +40,7 @@ export const paintedRunIds = computed((): readonly RunId[] => {
   return [...sessionRunIds.get(), ...(reader ? [reader] : [])];
 });
 
-interface LocalNotice {
+export interface LocalNotice {
   readonly runId: RunId;
   /** The settlement seq of the row the notice follows; 0 before any. */
   readonly afterSeq: number;
@@ -52,7 +52,7 @@ function rowSeq(row: TranscriptRow | undefined): number {
   return row?.settlementSeqNo ?? row?.seqNo ?? 0;
 }
 
-export const notices = signal<readonly LocalNotice[]>([]);
+export const notices = chatField('localNotices');
 
 /** A result the TUI itself reports (a slash command, a model fallback): a
  *  dim, marked row, so it never reads as the model speaking. */
@@ -217,5 +217,3 @@ export function reportRequestDefect(
     Effect.as(`The request failed inside TeXRA: ${message}`),
   );
 }
-
-registerCliStateResetHook(() => notices.set([]));

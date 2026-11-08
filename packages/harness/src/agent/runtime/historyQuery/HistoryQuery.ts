@@ -27,6 +27,7 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
+  modelFailureMessage,
   qualifyAggregateId,
   type CommitOrdinal,
   type DispatchFacts,
@@ -140,8 +141,11 @@ function modelWrites(
       ];
     }
     case 'failed': {
-      const { message } = p.error;
-      return [modelEnd(runId, at, p.invocation, 'failed', { error: message })];
+      return [
+        modelEnd(runId, at, p.invocation, 'failed', {
+          error: modelFailureMessage(p.error),
+        }),
+      ];
     }
     case 'cancelled':
       return [modelEnd(runId, at, p.invocation, 'cancelled', {})];

@@ -10,30 +10,25 @@ import {
   Exit,
   Fiber,
   FiberSet,
-  Schema,
   Scope,
   Semaphore,
   Stream,
   SubscriptionRef,
 } from 'effect';
 
+import { type Run, type RunStopReason, type Session } from '@texra-ai/harness';
 import {
-  LaunchRefused,
-  type Run,
-  type RunStopReason,
-  type Session,
-} from '@texra-ai/harness';
-import {
-  normalizeProviderError,
   presentFollowUpResult,
+  presentRunFailure,
+  type Notices,
   type ProcessRuntime,
   type ProcessServices,
+  type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 import {
   type RuntimeCommand,
   type RunView,
   type SessionView,
-  AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
   escapeText,
@@ -56,7 +51,10 @@ import {
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
-import { modelFailureText } from '@ui/copy/modelAccess';
+import { createHostRunActions } from '@texra/controllers/session/hostRunActions';
+import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
+import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
+import { shownFailureText } from '@ui/copy/modelAccess';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -115,13 +113,13 @@ import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
  */
 const recoverRun = <A, E, R>(
   program: Effect.Effect<A, E, R>,
-  recover: (error: unknown) => A,
+  recover: (error: unknown) => Effect.Effect<A>,
 ): Effect.Effect<A, never, R> =>
   program.pipe(
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
-        : Effect.sync(() => recover(Cause.squash(cause))),
+        : recover(Cause.squash(cause)),
     ),
   );
 
@@ -131,10 +129,6 @@ const recoverRun = <A, E, R>(
  * the Ink layer never directly mutates session run-state fields.
  */
 export interface ChatSessionController {
-  /** Start a new root agent run from a fresh config. The program completes
-   *  once the session holds the run, or its launch failed. */
-  startRootRun(config: AgentConfigPayload): Effect.Effect<void>;
-
   /**
    * Resume a suspended tool-use session by run id.
    *
@@ -142,7 +136,13 @@ export interface ChatSessionController {
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(id: RunId): Effect.Effect<void, Error>;
+  resume(id: RunId): Effect.Effect<void, Error, ProcessServices>;
+
+  /** Resume a task beside the chat (a document task, `/resume all`'s
+   *  interrupted ones): it joins the agent list, and the chat keeps its own
+   *  conversation. A failed launch is shown here; a refusal is the
+   *  caller's to word. */
+  resumeTask(id: RunId): Effect.Effect<void, RequestRefusal, ProcessServices>;
 
   /** Request stop of the root run using the configured child policy, for
    *  `reason`: a `user` stop also cancels its remote background work. */
@@ -174,7 +174,7 @@ export interface ChatSessionController {
   readonly performHost: (command: HostCommand) => void;
 }
 
-export interface ChatSessionControllerInit {
+interface ChatSessionControllerInit {
   /** Mutable session state the controller owns. */
   readonly session: TuiSession;
 
@@ -321,35 +321,40 @@ export function createChatSessionController(
   // Internal helpers
   // -----------------------------------------------------------------------
 
-  // A failure the chat shows: a refused launch by the notice it carries (an
-  // unknown model's instruction, an unknown agent) where the chat's runtime
-  // notices show, any other as the transcript line `text`. The session
-  // shows neither: a launch's failure is its caller's to show.
-  const showFailure = (error: unknown, text: string): void => {
-    const notice = error instanceof LaunchRefused ? error.notice : undefined;
-    if (notice !== undefined)
-      presentationHost.emit(notice.event, notice.payload);
-    else appendLocalErrorTranscript(text);
+  // The chat's notices, where the hosts' run actions present a failure: an
+  // error is a transcript line, where the person is reading; any other
+  // notice (a refused launch's instruction, an unknown agent) goes where the
+  // chat's runtime notices show. Nothing is shown once the chat is leaving.
+  const notices: Notices = {
+    emit: (event, payload) =>
+      Effect.sync(() => {
+        if (session.exited) return;
+        if (event === 'requestShowError')
+          appendLocalErrorTranscript(
+            shownFailureText(
+              // cast: `emit` is generic over the event, and this branch is
+              // the error's.
+              payload as RuntimePresentationEventPayloads['requestShowError'],
+            ),
+          );
+        else presentationHost.emit(event, payload);
+      }),
   };
-
-  // A launch's failure, shown unless the chat is leaving.
-  const reportRunFailure = (error: unknown): void => {
-    if (session.exited) return;
-    const { classification } = normalizeProviderError(error);
-    showFailure(
-      error,
-      modelFailureText({ message: toErrorMessage(error), classification }),
-    );
-  };
+  const showFailure = (error: unknown) => presentRunFailure(notices, error);
   // A held run's own failure (its end could not be read) fails the chat's
   // exit and says so, only while it is still the chat's root and the user
   // did not stop it.
-  const reportHeldRunFailure = (runId: RunId, error: unknown): void => {
-    if (rootRunId.get() !== runId) return;
-    if (runViewOf(currentView(), runId)?.outcome === 'cancelled') return;
-    session.rootFailed(runId);
-    reportRunFailure(error);
-  };
+  const reportHeldRunFailure = (
+    runId: RunId,
+    error: unknown,
+  ): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      if (rootRunId.get() !== runId) return Effect.void;
+      if (runViewOf(currentView(), runId)?.outcome === 'cancelled')
+        return Effect.void;
+      session.rootFailed(runId);
+      return showFailure(error);
+    });
 
   // One interaction host for the chat session's lifetime, as the extension
   // and desktop attach theirs. The session routes every request to its last
@@ -388,8 +393,29 @@ export function createChatSessionController(
     }),
   );
 
+  // The terminal's binding of the hosts' one run-action body: what follows
+  // a run's end lives as long as the process, as the chat's sends do. The
+  // transcript is always on screen, so nothing is revealed, and a run is
+  // taken up by the path that launched it (the root launch adopts its run;
+  // a task resumed beside the chat joins the agent list).
+  const runActions = runtime.runSync(
+    createHostRunActions({
+      roots: runSession.roots,
+      session: runSession,
+      present: notices,
+      revealProgress: () => Effect.void,
+      launched: () => Effect.void,
+      openFinalOutput: (absolutePath) =>
+        Effect.sync(() => appendLocalNotice(`Final output: ${absolutePath}`)),
+      notify: (_level, message) =>
+        Effect.sync(() => appendLocalNotice(message)),
+    }).pipe(Scope.provide(shutdownScope)),
+  );
+  const resumeTask: ChatSessionController['resumeTask'] = (id) =>
+    runActions.resume(id);
+
   // -----------------------------------------------------------------------
-  // startRootRun
+  // The root launch
   // -----------------------------------------------------------------------
 
   /** Done once the chat's view shows `runId` held here. */
@@ -431,7 +457,7 @@ export function createChatSessionController(
   const launchRootRun = <R>(
     resolveConfig: Effect.Effect<AgentConfigPayload, Error, R>,
     shownInstruction?: string,
-  ): Effect.Effect<boolean, never, R> =>
+  ): Effect.Effect<boolean, never, R | ProcessServices> =>
     // The claim and the fork of the program that ends it are one
     // uninterruptible step: an interrupted caller never leaves a launch
     // that nothing will end. Only the wait for the launch is interruptible.
@@ -442,24 +468,34 @@ export function createChatSessionController(
         const runId = generateRunId();
         let resolved = false;
         let held = false;
-        const launch = Effect.gen(function* () {
+        // A configuration that cannot be prepared has no launch to show its
+        // failure: it shows here, below the instruction it was typed for.
+        const prepared = Effect.gen(function* () {
           const config = yield* resolveConfig;
           resolved = true;
           yield* adoptRunConfig(config);
-          const registeredConfig =
-            yield* Schema.decodeUnknownEffect(AgentConfigSchema)(config);
+          return yield* decodeLaunchConfig(config);
+        }).pipe(
+          Effect.tapError((error) =>
+            Effect.sync(() => {
+              if (!resolved && shownInstruction !== undefined)
+                appendLocalUserTranscript(shownInstruction);
+            }).pipe(Effect.andThen(showFailure(error))),
+          ),
+        );
+        const launch = Effect.gen(function* () {
+          const config = yield* prepared;
           // Each chat round mints a fresh root run id, so bash/tool-edit/
           // super-YOLO bypass, which is keyed per stream, would otherwise
           // reset every round even though the user is continuing the same
           // conversation. The new round continues the previous one, so bypass
           // resolution falls through to whatever the prior round had, unless
-          // this round sets its own explicit value.
-          const run = yield* runSession.start({
-            config: registeredConfig,
+          // this round sets its own explicit value. A launch that fails is
+          // shown by the run actions.
+          const run = yield* runActions.runValidated(config, {
             runId,
             continues: rootRunId.get(),
             approval: launchApproval(init.approvalPolicy()),
-            interactive: true,
           });
           held = true;
           moveLocalTranscriptToRun(run.runId);
@@ -467,14 +503,14 @@ export function createChatSessionController(
           return { runId: run.runId, result: yield* handOver(launched, run) };
         });
         // Owned by the process's shutdown scope, as the chat's sends are.
-        return recoverRun(launch, (error) => {
-          if (!resolved && shownInstruction !== undefined) {
-            appendLocalUserTranscript(shownInstruction);
-          }
-          reportRunFailure(error);
-          session.endLaunch(launched, { exitCode: CliExitCode.AgentError });
-          return undefined;
-        }).pipe(
+        // Every typed failure was shown where it arose; a defect is shown
+        // here.
+        return recoverRun(launch.pipe(Effect.tapDefect(showFailure)), () =>
+          Effect.sync(() => {
+            session.endLaunch(launched, { exitCode: CliExitCode.AgentError });
+            return undefined;
+          }),
+        ).pipe(
           Effect.flatMap((run) =>
             run === undefined
               ? Effect.void
@@ -494,16 +530,13 @@ export function createChatSessionController(
       }),
     );
 
-  const startRootRun = (config: AgentConfigPayload): Effect.Effect<void> =>
-    Effect.asVoid(launchRootRun(Effect.succeed(config)));
-
   // -----------------------------------------------------------------------
   // resume
   // -----------------------------------------------------------------------
 
   // The user's resume of a conversation they pick. Config is adopted once
   // the session accepted the resumed run.
-  const resume = (id: RunId): Effect.Effect<void, Error> =>
+  const resume = (id: RunId): Effect.Effect<void, Error, ProcessServices> =>
     // The claim and the fork of the program that ends it are one
     // uninterruptible step, as a launch's are.
     Effect.uninterruptibleMask((restore) =>
@@ -535,16 +568,9 @@ export function createChatSessionController(
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`);
             yield* endWithout(CliExitCode.Success);
             yield* Effect.forkDetach(
-              resumeRun(runSession, id).pipe(
-                Effect.catch((refused) =>
-                  Effect.sync(() =>
-                    showFailure(
-                      refused,
-                      isRequestRefusal(refused)
-                        ? requestErrorText(refused)
-                        : refused.message,
-                    ),
-                  ),
+              resumeTask(id).pipe(
+                Effect.catch((refusal) =>
+                  Effect.sync(() => appendLocalRequestRefusal(refusal, id)),
                 ),
               ),
             );
@@ -606,10 +632,17 @@ export function createChatSessionController(
         // without one; the run itself goes on. Every path above ends the
         // launch with its own code, so the `ensuring` counts only for a
         // resume interrupted before it did (the chat is leaving).
-        return recoverRun(attemptResume, (error) => {
-          reportRunFailure(error);
-          session.endLaunch(launched, { exitCode: CliExitCode.AgentError });
-        }).pipe(
+        return recoverRun(attemptResume, (error) =>
+          showFailure(error).pipe(
+            Effect.andThen(
+              Effect.sync(() =>
+                session.endLaunch(launched, {
+                  exitCode: CliExitCode.AgentError,
+                }),
+              ),
+            ),
+          ),
+        ).pipe(
           Effect.ensuring(endWithout(CliExitCode.Interrupted)),
           Effect.forkIn(shutdownScope),
           Effect.andThen(restore(Deferred.await(launched))),
@@ -973,8 +1006,8 @@ export function createChatSessionController(
   };
 
   return {
-    startRootRun,
     resume,
+    resumeTask,
     stop,
     submit,
     submitted: Effect.andThen(

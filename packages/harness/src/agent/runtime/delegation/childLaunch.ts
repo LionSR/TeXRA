@@ -33,6 +33,7 @@ import {
 import { getRunRecords } from '@agent/storage/runOwnership';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
+  runEndErrorMessage,
   AgentConfigSchema,
   RUN_OUTCOME,
   type CommitOrdinal,
@@ -184,7 +185,9 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
   if (result.outcome === RUN_OUTCOME.FAILED)
     return yield* Effect.fail(
       new Error(
-        result.error?.message ?? `Subagent ${runId} ended with failed outcome.`,
+        result.error === undefined
+          ? `Subagent ${runId} ended with failed outcome.`
+          : runEndErrorMessage(result.error),
       ),
     );
   return { runId, result };

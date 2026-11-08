@@ -15,10 +15,9 @@ export const ModelAvailabilityKindSchema = Schema.Literals([
   // Only OpenRouter or GitHub Copilot serves the model, and TeXRA calls
   // neither.
   'unserved',
-  // ChatGPT-subscription (Codex) access via the user's own OAuth session.
+  // Access through the user's own subscription session (ChatGPT, Grok):
+  // which one is the option's `usageRoute`.
   'subscription-access',
-  // The same, on the user's Grok (xAI) subscription.
-  'xai-subscription-access',
   // The model id survives in a host's enabled-models list but the live
   // registry no longer describes it, so nothing can route a request for it.
   'unknown-model',
@@ -27,8 +26,8 @@ export const ModelAvailabilityKindSchema = Schema.Literals([
 export type ModelAvailabilityKind = typeof ModelAvailabilityKindSchema.Type;
 
 /**
- * What a kind means: whether a run can use the model, and whether the block is
- * a missing key (a surface's words for each kind are the app's). Declared once
+ * What a kind means: whether a run can use the model (a surface's words for
+ * each kind are the app's). Declared once
  * here, next to the kind, so the answer is carried on the wire as the kind
  * alone and every host reads the same table instead of pre-fanned fields.
  *
@@ -39,17 +38,16 @@ export type ModelAvailabilityKind = typeof ModelAvailabilityKindSchema.Type;
  * run, and `readonly` is compile-time only.
  */
 export const MODEL_AVAILABILITY_STATUS = {
-  'provider-key': { available: true, requiresKey: false },
-  'missing-key': { available: false, requiresKey: true },
-  'key-unreadable': { available: false, requiresKey: false },
-  'subscription-access': { available: true, requiresKey: false },
-  'xai-subscription-access': { available: true, requiresKey: false },
-  retired: { available: false, requiresKey: false },
-  unserved: { available: false, requiresKey: false },
-  'unknown-model': { available: false, requiresKey: false },
+  'provider-key': { available: true },
+  'missing-key': { available: false },
+  'key-unreadable': { available: false },
+  'subscription-access': { available: true },
+  retired: { available: false },
+  unserved: { available: false },
+  'unknown-model': { available: false },
 } as const satisfies Record<
   ModelAvailabilityKind,
-  { readonly available: boolean; readonly requiresKey: boolean }
+  { readonly available: boolean }
 >;
 for (const status of Object.values(MODEL_AVAILABILITY_STATUS))
   Object.freeze(status);

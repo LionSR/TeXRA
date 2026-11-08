@@ -7,6 +7,7 @@ import { Effect, Schema, Struct } from 'effect';
 
 import {
   AgentSourceSchema,
+  DeclinableUsageRouteSchema,
   ModelAvailabilityKindSchema,
 } from '@texra-ai/harness/schemas';
 
@@ -25,11 +26,14 @@ const PickerOptionBaseSchema = Schema.Struct({
 /**
  * Resolved per-model access. Computed once by `readModelOptions` and
  * shared verbatim across hosts (CLI picker, extension Models tab) so
- * availability and routing are never re-derived at render time: the kind is
- * the whole verdict, and `MODEL_AVAILABILITY_STATUS` reads it.
+ * availability and routing are never re-derived at render time: the kind and
+ * the subscription that pays are the whole verdict, and
+ * `MODEL_AVAILABILITY_STATUS` reads the kind.
  */
 export const ModelAvailabilityFieldsSchema = Schema.Struct({
   availability: Schema.optional(ModelAvailabilityKindSchema),
+  /** The subscription paying for the next request; absent means own keys. */
+  usageRoute: Schema.optional(DeclinableUsageRouteSchema),
   /** Effective request route for a model that can use multiple backends. */
   routeLabel: Schema.optional(Schema.String),
 });

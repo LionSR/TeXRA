@@ -11,13 +11,13 @@ import {
   type Cause,
   Duration,
   Effect,
-  Exit,
   FileSystem,
   Predicate,
   Schedule,
 } from 'effect';
-import { isSqlError, type SqlError } from 'effect/sql/SqlError';
+import { isSqlError } from 'effect/sql/SqlError';
 import type * as SqlClient from 'effect/sql/SqlClient';
+import { causeChain } from '@utils/errors/errorMessage';
 
 export type Sql = SqlClient.SqlClient;
 
@@ -35,28 +35,6 @@ export const asideName = Object.freeze({
 });
 
 export const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
-
-/** Run `body` in a `BEGIN IMMEDIATE` transaction. The ending is
- *  uninterruptible, so the transaction never stays open: a body that
- *  succeeds commits when `keep` holds its value and rolls back otherwise;
- *  a body that fails, or a COMMIT that fails, rolls back and keeps its own
- *  failure. */
-export const inImmediateTransaction =
-  <A>(sql: Sql, keep: (value: A) => boolean = () => true) =>
-  <E, R>(body: Effect.Effect<A, E, R>): Effect.Effect<A, E | SqlError, R> =>
-    Effect.acquireUseRelease(
-      run(sql, 'BEGIN IMMEDIATE'),
-      () => body,
-      (_, exit) => {
-        const rollback = run(sql, 'ROLLBACK');
-        const abandon = rollback.pipe(
-          Effect.ignore({ log: 'Warn', message: 'A ROLLBACK failed' }),
-        );
-        if (Exit.isFailure(exit)) return abandon;
-        if (!keep(exit.value)) return rollback;
-        return run(sql, 'COMMIT').pipe(Effect.onError(() => abandon));
-      },
-    );
 
 export const pragmaValue = (sql: Sql, pragma: string) =>
   sql
@@ -117,7 +95,7 @@ export const underCopy = Effect.fnUntraced(function* <E>(
   const version = yield* pragmaValue(sql, 'data_version');
   const staged = asideName.staged(base);
   yield* sql.unsafe('VACUUM INTO ?', [staged]);
-  // A move commits; a store that changed since the copy rolls back.
+  // A changed store leaves this transaction before any rename or write.
   const moved = yield* Effect.gen(function* () {
     if (
       (yield* pragmaValue(sql, 'user_version')) !== stamp ||
@@ -130,7 +108,7 @@ export const underCopy = Effect.fnUntraced(function* <E>(
     yield* body;
     return aside;
   }).pipe(
-    inImmediateTransaction(sql, (aside: string | null) => aside !== null),
+    sql.withTransaction,
     Effect.onError(() =>
       fs.remove(staged, { force: true }).pipe(
         Effect.ignore({
@@ -178,21 +156,14 @@ function hasSqliteCode(
 ): boolean {
   return cause.reasons.some((reason) => {
     if (reason._tag === 'Interrupt') return false;
-    let error: unknown = reason._tag === 'Fail' ? reason.error : reason.defect;
-    while (Predicate.isObjectOrArray(error)) {
-      if (
+    return causeChain(
+      reason._tag === 'Fail' ? reason.error : reason.defect,
+    ).some(
+      (error) =>
         Predicate.hasProperty(error, 'errcode') &&
-        Predicate.isNumber(error.errcode)
-      )
-        return codes.includes(error.errcode & 0xff);
-      const wrapped = Predicate.hasProperty(error, 'reason')
-        ? error.reason
-        : undefined;
-      error =
-        (Predicate.hasProperty(wrapped, 'cause') ? wrapped.cause : undefined) ??
-        (Predicate.hasProperty(error, 'cause') ? error.cause : undefined);
-    }
-    return false;
+        Predicate.isNumber(error.errcode) &&
+        codes.includes(error.errcode & 0xff),
+    );
   });
 }
 

@@ -2,6 +2,7 @@ import { defineCommand } from 'citty';
 import { Deferred, Effect, Exit } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
 import { holdSignals } from '@cli/runtime/platform/processSignals';
 import { stopService } from '@texra/controllers/server/client';
@@ -158,7 +159,7 @@ function statusText(info: ServiceInfo | null, context: CliContext): string {
     `  socket:   ${info.socket}`,
     `  started:  ${new Date(info.startedAt).toISOString()}`,
     `  clients:  ${info.clients}`,
-    `  running:  ${info.running} task${info.running === 1 ? '' : 's'}${info.draining ? ' (draining)' : ''}`,
+    `  running:  ${formatResultCount(info.running, 'task')}${info.draining ? ' (draining)' : ''}`,
     `  log:      ${servicePaths(context.storageRoot).log}`,
   ].join('\n');
 }

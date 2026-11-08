@@ -67,8 +67,12 @@ interface DocumentTaskFileOperationResult {
 }
 
 /** The launch facts an action adds to a validated request, as the
- *  session's `start` takes them. */
-type RunValidatedOptions = Pick<StartInput, 'helperModel' | 'approval'>;
+ *  session's `start` takes them: the run's id when the host minted it, and
+ *  the run a chat's new round continues. */
+type RunValidatedOptions = Pick<
+  StartInput,
+  'helperModel' | 'approval' | 'runId' | 'continues'
+>;
 
 /** What reading the model options fails with: what its reads fail with. */
 type ModelOptionsUnreadable = Effect.Error<ReturnType<typeof readModelOptions>>;
@@ -337,13 +341,13 @@ export const createHostRunActions = Effect.fn(
     followUpLauncher(runId, text) {
       // A background script replays its recorded program and reads no new
       // input, so the note goes to the conversation that started the script.
-      let launcher = runView(runId)?.launchParentId ?? null;
+      let launcher = runView(runId)?.launch?.id ?? null;
       for (
         let parent = launcher === null ? undefined : runView(launcher);
         parent?.identity.kind === 'script';
         parent = launcher === null ? undefined : runView(launcher)
       )
-        launcher = parent.launchParentId;
+        launcher = parent.launch?.id ?? null;
       if (launcher === null) return Effect.void;
       const present = (message: string) => ports.notify('warning', message);
       const deliver = session

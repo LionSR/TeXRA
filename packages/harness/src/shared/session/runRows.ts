@@ -107,7 +107,6 @@ export function ownCopy<T extends object, W extends T>(
 export const freshRunRowState = (): RunRowState => ({
   family: null,
   at: null,
-  outcome: null,
   turn: 0,
   requests: byId([]),
 });
