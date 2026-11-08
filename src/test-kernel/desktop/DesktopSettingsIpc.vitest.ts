@@ -1,5 +1,5 @@
 import { layer } from '@effect/vitest';
-import { Effect, Result, Schema } from 'effect';
+import { Effect, FiberSet, Result, Schema } from 'effect';
 import { expect, vi } from 'vitest';
 import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
@@ -10,7 +10,7 @@ import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   SettingsViewInboundMessageSchema,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ConfigProvider } from '@texra-ai/harness/host';
+import type { ConfigProvider, ProcessServices } from '@texra-ai/harness/host';
 
 // The LaTeX page spawns the LaTeX probes; a fixed status keeps the suite off
 // the machine's tools, as the harness's unprobed tool availability does for
@@ -69,12 +69,17 @@ const createSettingsFixture = (config: ConfigProvider) =>
       globalState: new FakeStateStore(),
     });
     const runtime = yield* SessionGraph.runtime;
+    // What the IPC spawns runs in the case's scope, which interrupts it on
+    // close, instead of on the runtime where nothing joins it.
+    const spawn = yield* FiberSet.makeRuntime<ProcessServices>().pipe(
+      Effect.provide(yield* runtime.contextEffect),
+    );
     const { createDesktopSettingsIpc } = yield* Effect.promise(
       () => import('@desktop/main/desktopSettingsIpc'),
     );
     const ipc = yield* createDesktopSettingsIpc({
       spawn: (program) => {
-        runtime.runFork(program);
+        spawn(program);
       },
       bindings: createStubSettingsBindings(),
       signInPresentation: {
@@ -92,7 +97,7 @@ const createSettingsFixture = (config: ConfigProvider) =>
         // rejects runs a warning and nothing else. Runs an owned command's
         // program the way the window's router does.
         handleMessage(message: Parameters<typeof ipc.route>[0]) {
-          runtime.runFork(ipc.route(message));
+          spawn(ipc.route(message));
           return Result.isSuccess(
             Schema.decodeUnknownResult(SettingsViewInboundMessageSchema)(
               message,

@@ -231,8 +231,8 @@ inside `ModelInvoker` (an automatic route-scoped batch under the session's
 Every consumer imports `@texra-ai/llm` or `@texra-ai/llm/node`, so
 `package.json`'s `exports` map is the boundary the resolver enforces: a module
 this package does not export cannot be reached from outside it. Tests are the
-one exception: the protocol suites in `src/test-kernel/llm/` reach `src/api/`
-and the sign-in suites in `src/test-kernel/auth/` reach `src/oauth/` by
+one exception: the protocol suites in `test/api/` and `test/llm/` reach
+`src/api/` and the sign-in suites in `test/auth/` reach `src/oauth/` by
 relative path, as `test-live/` does. Inside the package a module imports the file that defines a
 symbol, in one acyclic direction — `protocol` ← `errors` ← `message` ←
 `api/transport` ← `turn`, with each protocol's own modules below its entry —
@@ -262,8 +262,8 @@ media or evidence it cannot represent. The current explicit failures:
 
 Two tiers, deliberately separate.
 
-`src/test-kernel/llm/` is three synthetic-transport suites, one per protocol
-family, about 1 500 lines and eight cases: they pin lowering, decoding, ordering
+`test/api/` and `test/llm/` hold three synthetic-transport suites, one per
+protocol family, about 1 500 lines and eight cases: they pin lowering, decoding, ordering
 and the explicit failures they name, against fixtures. They stay hermetic and free, so no suite in them calls a provider, and they run
 in `npm test`.
 
