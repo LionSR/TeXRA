@@ -41,7 +41,7 @@ import {
   instructionActions,
   type InstructionAction,
 } from '@ui/copy/instructionActions';
-import { modelFailureText } from '@ui/copy/modelAccess';
+import { shownFailureText } from '@ui/copy/modelAccess';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { StateStore } from '@texra-ai/harness/host';
 
@@ -100,7 +100,7 @@ function handleRequestShowError(
   // (the extension host tearing down) are reported there rather than
   // becoming an unhandled rejection. A docs page is offered as a button.
   return vscodeUi
-    .ask('error', modelFailureText(failure), {
+    .ask('error', shownFailureText(failure), {
       items: docsPage ? ['View Docs'] : [],
     })
     .pipe(

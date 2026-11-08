@@ -7,7 +7,9 @@
  * gated by `rowCodec.ts`, so it moves only for a change an older build
  * cannot write around. The 1.0 baseline is 102; a file below it holding
  * tables is pre-1.0 (100 and 101 were pre-releases that never shipped),
- * read by no build and moved aside whole. This module knows no row kind or payload field.
+ * read by no build and moved aside whole. A file at or above it that is not
+ * this build's schema is refused untouched: an earlier one has no step to
+ * this one (there is no migration), a later one is a newer build's. This module knows no row kind or payload field.
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
@@ -29,7 +31,7 @@ import {
 const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
-const SCHEMA_VERSION = 102;
+const SCHEMA_VERSION = 103;
 /** The first stamp a released build wrote. Fixed for good: a store stamped
  *  below it is pre-1.0 and moved aside; one at or above it is kept. */
 const BASELINE_1_0 = 102;
@@ -112,25 +114,8 @@ const TABLES = [
  * open): the projection tables, which carry their own versions in
  * `projection_state` (`projections.ts`), and the indexes, each serving one
  * lookup the reads make, named for the columns it keys.
- *
- * `aggregate_change` and its triggers are dead: nothing reads them since the
- * publisher publishes what it commits. They stay in the 1.0 baseline's DDL,
- * because an open never alters a stamped store, and go with the next stamp
- * bump.
  */
 const ADDITIVE = [
-  `CREATE TABLE IF NOT EXISTS aggregate_change (change INTEGER PRIMARY KEY
-    AUTOINCREMENT, kind TEXT NOT NULL, logical_id TEXT NOT NULL,
-    UNIQUE (kind, logical_id)) STRICT`,
-  ...[
-    ['inserted', 'INSERT', 'NEW'],
-    ['closed', 'UPDATE OF closed_by', 'NEW'],
-    ['collected', 'DELETE', 'OLD'],
-  ].map(
-    ([name, on, row]) => `CREATE TRIGGER IF NOT EXISTS aggregate_${name}
-    AFTER ${on} ON event_sequence BEGIN INSERT OR REPLACE INTO aggregate_change
-    (kind, logical_id) VALUES (${row}.kind, ${row}.logical_id); END`,
-  ),
   `CREATE TABLE IF NOT EXISTS projection_state (
     name           TEXT PRIMARY KEY,
     version        INTEGER NOT NULL,
@@ -232,7 +217,9 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   if (stored >= BASELINE_1_0 && stored !== SCHEMA_VERSION)
     return yield* refused(
       path,
-      `has schema ${stored} and this build writes ${SCHEMA_VERSION}: ${stored > SCHEMA_VERSION ? 'a newer build opens it' : 'no step from it exists'}`,
+      stored > SCHEMA_VERSION
+        ? `has schema ${stored}, newer than this build's ${SCHEMA_VERSION}: a newer build opens it`
+        : `was written by an earlier build (schema ${stored}; this build writes ${SCHEMA_VERSION}) and this build keeps no compatibility with it; move it away to create a fresh store there`,
     );
   return pre1;
 });

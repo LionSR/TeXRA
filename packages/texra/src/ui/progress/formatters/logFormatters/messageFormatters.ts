@@ -72,8 +72,8 @@ export function formatProgressStatusTemplate(
 
 /**
  * Format error message as TemplateResult. The detail field set and its display
- * order are the row's — see `ERROR_DETAIL_FIELDS` in `@texra-ai/harness/transcript`
- * — and a classified failure reads in the app's words (`errorRowText`).
+ * order are the row's, and a model failure reads in the app's words
+ * (`errorRowText`).
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const { id, timestamp } = row;
