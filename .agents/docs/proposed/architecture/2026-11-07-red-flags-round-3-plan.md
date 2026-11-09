@@ -314,6 +314,12 @@ NM1 ("settle" for eight things) and the banned-word counts (NM9) are not a
 mass rename. Each owner renames what it touches, as root `AGENTS.md`
 "Terminology" asks.
 
+**Status (main `433d874`):** the lens ids are catalogue rows now (the last
+appendix group). 36 landed; 9 are open with no owner: GS4, GS7 a, TC7's two
+remaining parts, IC6's rest, IC7, NM10's eleven parts, NC-B, and NM1 and
+NM9 as a rule. The catalogue's "Status at main `433d874`" lists them by
+package.
+
 ## 5. Round 4: unaudited areas, today's compromises, and what today's code added
 
 Round 4 (`.agents/docs/evidence/2026-11-07-design-red-flags-round-4/`, read

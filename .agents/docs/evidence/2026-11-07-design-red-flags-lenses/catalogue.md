@@ -1,4 +1,4 @@
-# The catalogue: every red-flag finding of rounds 1 to 7, by flag, package and status
+# The catalogue: every red-flag finding of rounds 1 to 7 and the lens audits, by flag, package and status
 
 This is the `catalogue.md` row of the [lens brief](./BRIEF.md). It adds no new code
 search. It is compiled from the round-1, round-2 and round-3 reports, the roots
@@ -19,6 +19,107 @@ R1–R10, the round-2 order and the round-3 plan, `refuted-candidates.json`, and
   and #14797 (F, R3-S). Both have since merged, with #14800; the rows they
   closed are updated below and in "Status at main `ca1431e`". Later waves
   have their own "Status at main" sections, newest first.
+
+## Status at main `433d874`
+
+After #14884 to #14888 merged (one fix and three dependency bumps, which
+close no row), the ids stand at:
+
+| Status         | Rounds 1–4 | Round 5 | Round 6 | Round 7 | Lenses | All | Change from `453cd41` |
+| -------------- | ---------: | ------: | ------: | ------: | -----: | --: | --------------------- |
+| landed         |        243 |      35 |      15 |      10 |     36 | 339 | +36, all lens ids     |
+| assigned       |          0 |       0 |       0 |       0 |      0 |   0 | +0                    |
+| refused        |          8 |       0 |       1 |       0 |      0 |   9 | +0                    |
+| held           |          6 |       4 |       1 |       0 |      0 |  11 | +0                    |
+| open, no owner |          0 |       1 |       0 |       0 |      9 |  10 | +9, all lens ids      |
+
+**The lens ids become rows.** The six lens reports (`pass-through.md`,
+`interface-comments.md`, `names.md`, `nonobvious-code.md`,
+`temporal-conjoined.md`, `general-special.md`) gave 45 ids: PT1–PT6,
+IC1–IC7, NM1–NM10, NC1–NC7 with the batched NC-B, TC1–TC7 and GS1–GS7. The
+round-3 plan's §4.2 gave each to a package, and the status sections from
+`ed2004a` on recorded the ones that landed as "not rows here". Nothing
+counted the rest, so the lens audits were the one part of the campaign
+that could fall through without a trace. They are rows now, the last
+group of the appendix, with their status read from the tree at `433d874`
+(`grep` for each finding's symbols), not from PR bodies. The counting rules
+of `eb887b5` hold: a row whose remainder is open counts as open.
+
+**Landed,** 36 ids, as the earlier status sections recorded them: PT1–PT6;
+IC1–IC5 (#14804's false comments); NM2–NM8; NC1–NC7; TC1–TC6; GS1, GS2,
+GS3, GS5 and GS6. Spot checks hold: the replacement rules run longest key
+first (NC1), no CLI function takes a `CliContext` parameter (PT3), no
+`showInputBox` or `show*Message` port is left in the app or the harness
+(GS2), a tool's card is declared on the tool contract (GS1).
+
+**Open,** with no owner, 9 ids. Each is in the tree at `433d874`:
+
+- **GS4**, the "outside any run" tool case. `RunCall` is still a nullable
+  `Context.Reference`, `requireRun` and `requireToolRun` are called at 13
+  sites, `callerRun` at 14, and `noRunChildRuns` stands. The plan gave it
+  to E with `ToolEnv.run`; E5 (#14878) removed `RunCallShape.session` and
+  left the nullable case. The SDK exports `ToolContext`, so this narrows a
+  public type at 0.x.
+- **GS7**, two of three parts: (a) the harness's follow-up row still names
+  one app plugin, `source: Schema.Literal('github')`
+  (`packages/harness/src/shared/schemas/followUp.ts`), with one producer
+  and no reader of `source`; (b) `StartOptions.continues` is a product
+  call the report made without a design, the owner's. (c) landed with GS2.
+- **TC7**, two of four parts: `StreamedToolCards.failOpen` is still called
+  by hand by both agent-CLI drivers
+  (`packages/texra/src/tools/agentCli/agentCliShared.ts`), and
+  `SettingsViewProvider` still hands a panel's ready state across
+  `viewReady` and `pendingTab`
+  (`packages/extension/src/settingsView/SettingsViewProvider.ts`). The
+  workflow-input expansion and the root description's teardown are no
+  longer in the tree.
+- **IC6**, the rest: `ModelInvoker`'s header still narrates its steps (and
+  uses two words the plain-names table refuses), `withPerKeyLane`'s doc is
+  29 lines, `fetchAllCheckRuns` explains its pagination at three places,
+  and the shipped API reference names internal files on 21 lines
+  (`packages/harness/docs/api/`). `ITool.describe` is gone.
+- **IC7**, untouched: 10 lines cite four notes that are not in the repo
+  (`2026-05-14-10-architecture.md` and three others), and 9 more cite a
+  PRD section, `§7`, `G4`, an `R1 entry`, `LAY-1` or a ruling in place of a
+  reason.
+- **NM10**, eleven of twelve parts: `ScriptCallStatus`, `CallResult`,
+  `PluginRow` and `openStore` each still name two things; `RunLabels` is
+  still a boolean; `Draft` keeps its four senses; the view types are still
+  declared twice; `helpers.ts`, two `utils.ts`, `progressView/data.ts` and
+  `schemas/output.ts` keep their names; `absentReason` (124 references)
+  and `copyOrRemoveRunDir` stand. Part (i) landed: `shared/runs/runStatus.ts`
+  is gone.
+- **NC-B**, all six batched items: the two whole-context re-provisions
+  (`agentCatalog.ts`, `toolAvailability.ts`), `launches.count` on a shared
+  script value, the `TemplateVars` string index, the nine comments whose
+  reason is a ticket, the `[method, params]` tuple and the two unreasoned
+  casts.
+- **NM1** and **NM9**, the words. The plan ruled them out as a mass
+  rename: each owner renames what it touches. At `433d874` the source
+  still says "settle" 491 times (33 in `toolUseDispatch.ts`, 22 in
+  `codeSandbox.ts`), "fold" 204, "admit" 194, "park" 22, "tombstone" 12,
+  "seam" 7 and "hydrat" 5. They stay open as a rule, not as a PR.
+
+**The remainder by package,** applying `9c54678`'s rule (the package that
+owns the files):
+
+| Package          | Lens remainder                                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
+| harness          | GS4; GS7 a; IC6's `ModelInvoker` and `withPerKeyLane` docs; NM10 a, b, d, f, h, j (two files), k; NC-B 2, 3, 5, 6 |
+| texra            | TC7's `StreamedToolCards`; IC6's `fetchAllCheckRuns`; NM10 c, g, j (three files), l; NC-B 1 and its 6             |
+| extension        | TC7's `SettingsViewProvider`                                                                                      |
+| cross-package    | IC7 and NC-B 4: 28 comment lines, one mechanical PR; IC6's API reference lines follow `npm run docgen`            |
+| the owner's call | GS7 b                                                                                                             |
+
+**Held for the owner,** unchanged. **Open,** with no owner: R5-8 (its
+design, `2026-11-08-process-spawner-as-a-requirement.md`, waits for the
+owner's call on `processLayer`'s type), the nine lens ids above, and the
+three items with no row as at `453cd41`: the desktop e2e's agent-picker
+click, `texraProcessLayer.vitest.ts`'s two-second live wait, and a nightly
+job for the full `validate:tui` run (CI still runs `--smoke`).
+
+The appendix gains its last group. The sections from "Status at main
+`453cd41`" on are kept as they were written.
 
 ## Status at main `453cd41`
 
@@ -1404,3 +1505,58 @@ PR per cause, three sessions.
 | FB8  | A host's policy written as a condition on which host it is (G11 i's residue)                                                                 | texra, cli          | special-general mixture, repetition/two representations                                                       | landed (#14850: `runDailyUpdateCheck` has no host branch, the CLI composes the ignore at its call site; a missing terminal token is named once per terminal owner and none is invented; `width` is required in the TUI renderers)                                                                                                                                                                                                      |
 | FB9  | A refusal's reason rebuilt by the catcher                                                                                                    | cli, texra          | information leakage, errors not defined out of existence                                                      | landed (#14850: both hosts show `refused.message`)                                                                                                                                                                                                                                                                                                                                                                                     |
 | FB10 | Batched: lone catches with no cluster behind them                                                                                            | cross-package       | nonobvious code                                                                                               | landed (a with FB7, #14849; d and e, #14850); b dropped (the JSDoc on `copyTextToClipboard` already says why the catch returns `false`, #14850); c left as harmless, its caller warns                                                                                                                                                                                                                                                  |
+
+### The lens audits: PT, IC, NM, NC, TC and GS
+
+The reports are the six lens files beside this one, read at main
+`03c2f51` (TC at `9c54678`). The round-3 plan's §4.2 gave each id to a
+package; the status here is read from the tree at main `433d874`. An id
+with a part landed and a part open counts as open.
+
+| Id   | Title                                                                                                                                    | Package                        | Red flags                                                               | Status                                                                                                                                                                                    |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PT1  | A launch's API keys ride on the run record, open to every plugin tool, to reach a child's environment                                    | harness                        | pass-through variable, information leakage                              | landed (#14801; the keyless wake #14813)                                                                                                                                                  |
+| PT2  | `Sessions` hands the whole process context four calls down to read one service                                                           | harness                        | pass-through variable                                                   | landed (#14813)                                                                                                                                                                           |
+| PT3  | `CliContext` is a parameter of 71 CLI functions, 30 of which only forward it                                                             | cli                            | pass-through variable                                                   | landed (#14809)                                                                                                                                                                           |
+| PT4  | Log channels passed as strings through helpers, a port and two options                                                                   | texra, extension               | pass-through variable, repetition/two representations                   | landed (#14818)                                                                                                                                                                           |
+| PT5  | The Zotero port goes through every Zotero tool's program to reach the URL builder                                                        | texra                          | pass-through variable                                                   | landed (#14805, #14807)                                                                                                                                                                   |
+| PT6  | The agent catalog's per-workspace methods take the stores and restate `workspaceAgents(stores)`                                          | texra                          | pass-through method                                                     | landed (#14818)                                                                                                                                                                           |
+| IC1  | Eight comments cite checks that do not run                                                                                               | cross-package                  | false comment                                                           | landed (#14804)                                                                                                                                                                           |
+| IC2  | The tool error contract is written three ways; the two in the public plugin API are false                                                | harness                        | false comment, repetition/two representations                           | landed (#14804)                                                                                                                                                                           |
+| IC3  | "The only writer": the run cell's contract is false after B5 landed halfway                                                              | harness                        | false comment                                                           | landed (#14804)                                                                                                                                                                           |
+| IC4  | `AppSignals`' consumer registry is false in four places                                                                                  | harness                        | false comment, implementation documentation contaminates interface      | landed (#14804: the four notes; the registry convention stands)                                                                                                                           |
+| IC5  | `processLayer`'s shipped doc restates two owners' facts and gets both wrong                                                              | harness                        | false comment, information leakage                                      | landed (#14804)                                                                                                                                                                           |
+| IC6  | Interface comments that narrate the implementation                                                                                       | harness, texra                 | implementation documentation contaminates interface, hard to describe   | open, no owner: `ModelInvoker`'s header, `withPerKeyLane`'s 29-line doc, `fetchAllCheckRuns`'s three explanations, 21 API-reference lines naming internal files; `ITool.describe` is gone |
+| IC7  | Document citations in code: four notes not in the repo, PRD sections, finding ids, rulings                                               | cross-package                  | document citation, false comment                                        | open, no owner: 19 lines at `433d874`                                                                                                                                                     |
+| NM1  | "Settle" names eight different operations across six packages                                                                            | cross-package                  | vague name, one name for two things                                     | open, no owner, as a rule not a PR (plan §4.2: each owner renames what it touches); 491 occurrences at `433d874`                                                                          |
+| NM2  | A durable row is a `SessionEvent` to its type and a row to everyone else                                                                 | harness                        | one name for two things, two names for one thing                        | landed (#14813)                                                                                                                                                                           |
+| NM3  | `RunPosition` names two types; "phase" names three things                                                                                | harness, cli                   | one name for two things                                                 | landed (#14809, written there as "N3")                                                                                                                                                    |
+| NM4  | "task" and "workflow" each name three things                                                                                             | cross-package                  | hard to pick name                                                       | landed (#14805, #14807, #14836; its rest is X-R5)                                                                                                                                         |
+| NM5  | A pending request a person answers has four names                                                                                        | harness, cli                   | two names for one thing                                                 | landed (#14809; the `*Command` half #14811, written there as "N5")                                                                                                                        |
+| NM6  | `RunInput` is a recorded struct and a follow-up reader; `runInput.ts` holds six things                                                   | harness                        | one name for two things, vague name                                     | landed (#14825)                                                                                                                                                                           |
+| NM7  | Contract and implementation share a basename: twelve module pairs                                                                        | cross-package                  | two names for one thing                                                 | landed (#14836)                                                                                                                                                                           |
+| NM8  | The project folder is spelled five ways                                                                                                  | cross-package                  | two names for one thing                                                 | landed (#14836)                                                                                                                                                                           |
+| NM9  | Banned words, counted                                                                                                                    | cross-package                  | vague name                                                              | open, no owner, as a rule not a PR (with NM1); at `433d874`: fold 204, admit 194, park 22, tombstone 12, seam 7, hydrat 5                                                                 |
+| NM10 | Batched smaller names (a–l)                                                                                                              | harness, texra                 | one name for two things, vague name                                     | open, no owner: a–h, j, k and l stand at `433d874`; (i) landed (`shared/runs/runStatus.ts` is gone)                                                                                       |
+| NC1  | Text replacement rules run in object-key order; 318 of 2,535 default rules can never fire                                                | texra                          | nonobvious code, defect                                                 | landed (#14805, #14807)                                                                                                                                                                   |
+| NC2  | `HistoryWrite` is a positional list bound to `?` placeholders in another file                                                            | harness                        | nonobvious code, generic container                                      | landed (#14813)                                                                                                                                                                           |
+| NC3  | A tool result names its call by position; three lowerers re-derive the pairing                                                           | harness                        | nonobvious code, repetition/two representations                         | landed (#14813)                                                                                                                                                                           |
+| NC4  | The `plugin/kind` fact name is spelled at 14 sites; the maps keyed by it take any string                                                 | harness, texra                 | nonobvious code, repetition/two representations                         | landed (#14825; the eighth spelling in Y-B)                                                                                                                                               |
+| NC5  | `submit_output` accepts once per activation while it says once per run                                                                   | harness                        | nonobvious code, defect                                                 | landed (#14801)                                                                                                                                                                           |
+| NC6  | GitHub REST bodies are cast to caller-named types while their schemas sit unused                                                         | texra                          | nonobvious code, cast                                                   | landed (#14805, #14807)                                                                                                                                                                   |
+| NC7  | The LaTeX viewer opens after a fixed 5 seconds, standing in for "the build finished"                                                     | texra                          | nonobvious code, temporal coupling                                      | landed (#14818)                                                                                                                                                                           |
+| NC-B | Batched: two whole-context re-provisions, a shared counter, a string index, nine ticket comments, a tuple, two casts                     | harness, texra, cli, desktop   | nonobvious code, document citation                                      | open, no owner: all six parts stand at `433d874`                                                                                                                                          |
+| TC1  | Showing a built PDF is two phases the one batch caller must sequence                                                                     | texra, extension               | temporal decomposition                                                  | landed (#14818)                                                                                                                                                                           |
+| TC2  | The extension's progress view is built in its constructor, wired in `initialize()`, torn down by a `dispose`                             | extension                      | temporal decomposition                                                  | landed (#14818)                                                                                                                                                                           |
+| TC3  | A model attempt is opened, consumed and finished by three functions over a mutable record                                                | harness                        | temporal decomposition, conjoined methods                               | landed (#14813)                                                                                                                                                                           |
+| TC4  | Background compaction is four entry points named for the loop's moments over a polled `let`                                              | harness                        | temporal decomposition                                                  | landed (#14813)                                                                                                                                                                           |
+| TC5  | A fresh run's trace is held by three closures over two `let`s                                                                            | harness                        | temporal decomposition, conjoined methods                               | landed (#14813)                                                                                                                                                                           |
+| TC6  | The upload cache's end of life is a method on the public `Model` the one binder must call                                                | llm, harness                   | temporal decomposition                                                  | landed (#14813)                                                                                                                                                                           |
+| TC7  | Batched: agent-CLI tool cards torn down by hand, the workflow-input expansion, the root description, the settings panel's ready hand-off | texra, cli, harness, extension | temporal decomposition, conjoined methods                               | open, no owner: `StreamedToolCards.failOpen` (texra) and `SettingsViewProvider`'s `viewReady`/`pendingTab` (extension) stand; the expansion and the description teardown are gone         |
+| GS1  | How a tool call is painted is decided by tool name in the general fold and in each host                                                  | harness, texra, cli            | special-general mixture                                                 | landed (#14843, R3-E2)                                                                                                                                                                    |
+| GS2  | The host dialog ports are VS Code's `window.show*` members; every implementation reduces them to two primitives                          | texra, extension, desktop, cli | interface shaped around one caller                                      | landed (#14818)                                                                                                                                                                           |
+| GS3  | The shared settings view asks "which host am I" instead of "what can this editor do"                                                     | texra                          | special-general mixture                                                 | landed (#14818)                                                                                                                                                                           |
+| GS4  | The tool-call contract carries an "outside any run" case only a test layer builds; 30 production sites branch on it                      | harness                        | interface shaped around one caller, errors not defined out of existence | open, no owner: `RunCall` is a nullable `Context.Reference`, 13 `requireRun`/`requireToolRun` sites, 14 `callerRun`, `noRunChildRuns`; narrows the exported `ToolContext` at 0.x          |
+| GS5  | `WorkspaceAgentsController` has one setter per selection kind                                                                            | texra                          | interface shaped around one caller                                      | landed (#14818)                                                                                                                                                                           |
+| GS6  | The desktop workbench knows every pane kind in six functions                                                                             | desktop                        | special-general mixture                                                 | landed (#14818)                                                                                                                                                                           |
+| GS7  | Batched: the follow-up row names one plugin (a), `StartOptions.continues` for one host (b), `password` (c)                               | harness, cli                   | special-general mixture                                                 | open: (a) `source: Schema.Literal('github')` stands; (b) a product call, the owner's; (c) landed with GS2                                                                                 |
