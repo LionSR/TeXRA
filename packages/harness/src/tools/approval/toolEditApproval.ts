@@ -81,7 +81,6 @@ export const requestToolEditApproval = (
   request: ToolEditProposal,
 ): Effect.Effect<ToolEditApprovalResult, Error, ToolContext> =>
   inRunSession(
-    'A tool-edit approval',
     Effect.fn('requestToolEditApproval')(function* (call: RunToolCall) {
       const { run, requests, hook } = call;
       const { runId } = run;

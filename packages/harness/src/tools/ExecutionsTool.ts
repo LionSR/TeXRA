@@ -727,7 +727,7 @@ ${HISTORY_VIEW_SUMMARY}
 Delegated subagent and document task results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,
   execute: (input: ExecutionsToolInput) =>
-    inRunSession('executions', (call) => executeExecutionsTool(call, input)),
+    inRunSession((call) => executeExecutionsTool(call, input)),
 });
 
 /**

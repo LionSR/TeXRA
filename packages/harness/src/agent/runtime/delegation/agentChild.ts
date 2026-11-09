@@ -24,7 +24,7 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
 import { getRunRecords, callChildRunId } from '@agent/storage/runOwnership';
-import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
+import type { RunCall, RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -154,7 +154,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
       work: Effect.Effect<A, Error, R>,
     ) => Effect.Effect<A, Error, R>;
   },
-): Effect.fn.Return<Recovered, Error, AgentRunServices> {
+): Effect.fn.Return<Recovered, Error, AgentRunServices | RunCall> {
   const { runId: parentRunId } = call.run;
   const earlier = yield* earlierChild(call);
   if (earlier === null) return { kind: 'launch' };

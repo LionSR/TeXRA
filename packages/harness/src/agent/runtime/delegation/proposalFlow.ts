@@ -14,7 +14,7 @@ import {
   findAgentByIdentifier,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
-import { RunCall, type RunToolCall } from '@agent/runtime/RunCall';
+import type { RunToolCall } from '@agent/runtime/RunCall';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { recordedDecision } from '@agent/runtime/requests';
 import { isTaskConfig } from '@shared/schemas';
@@ -162,7 +162,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   > {
     const { runId, config } = parent.run;
     const approvals = yield* Approvals;
-    const hook = (yield* RunCall)?.hook;
+    const { hook } = parent;
     // A task's recipe's delegation is approved unless a hook asked for it.
     if (isTaskConfig(config) && hook !== 'ask')
       return { result: { action: 'approve' }, childApproval: 'inherit' };

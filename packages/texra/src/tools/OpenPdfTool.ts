@@ -17,7 +17,6 @@ import {
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 import {
-  callerRun,
   resolveToolPath,
   nullishWithDefault,
   executed,
@@ -51,8 +50,7 @@ export const OpenPdfTool = defineTool({
   schema: OpenPdfInputSchema,
   execute: Effect.fn('OpenPdfTool.call')(function* (input: OpenPdfInput) {
     const { env } = yield* ToolContext;
-    const run = yield* callerRun;
-    const runId = run?.runId;
+    const { runId } = env.run;
     const openPdf = (yield* EditorHost).at(env.roots.storage).openPdf;
     if (!openPdf) {
       return yield* Effect.fail(
@@ -68,21 +66,17 @@ export const OpenPdfTool = defineTool({
     }
     // An absolute path inside this run's own storage directory names a
     // run-storage file; anything else resolves as a tool path.
-    const runDirectory =
-      runId && new RunFileService(runId, env.roots).runDirectory;
+    const { runDirectory } = new RunFileService(runId, env.roots);
     const runRelative =
-      runDirectory &&
-      path.isAbsolute(trimmedPath) &&
-      isPathWithin(runDirectory, trimmedPath)
+      path.isAbsolute(trimmedPath) && isPathWithin(runDirectory, trimmedPath)
         ? normalizeFilePath(path.relative(runDirectory, trimmedPath))
         : '';
-    const location: FileLocation =
-      runId && runRelative
-        ? createRunStorageLocation(trimmedPath, runRelative, runId)
-        : pathToLocationIn(
-            env.roots.workspace,
-            (yield* resolveToolPath(env, trimmedPath)).absolute,
-          );
+    const location: FileLocation = runRelative
+      ? createRunStorageLocation(trimmedPath, runRelative, runId)
+      : pathToLocationIn(
+          env.roots.workspace,
+          (yield* resolveToolPath(env, trimmedPath)).absolute,
+        );
     const displayPath = fileLocationDisplayPath(location);
 
     if (!hasExtension(location.absolutePath, '.pdf')) {

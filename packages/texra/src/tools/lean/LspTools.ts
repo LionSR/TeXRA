@@ -2,7 +2,6 @@ import { Cause, Effect, Result, Schema, Scope, Struct } from 'effect';
 
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
 import {
-  callerRun,
   resolveToolPath,
   errorResult,
   executed,
@@ -457,13 +456,12 @@ function leanFilePath(file: string, call: ToolContextShape) {
 
 /**
  * Run a port call with the scope the resources it starts stay held in: the
- * run's, so a Lean server it starts for the run stays up until the run ends,
- * or, outside a run, the call's own.
+ * run's, so a Lean server it starts for the run stays up until the run ends.
  */
 function forCallerRun<A, E>(
   call: Effect.Effect<A, E, Scope.Scope>,
 ): Effect.Effect<A, E, ToolContext> {
-  return Effect.flatMap(callerRun, (run) =>
-    run ? call.pipe(Scope.provide(run.scope)) : Effect.scoped(call),
+  return Effect.flatMap(ToolContext, ({ env }) =>
+    call.pipe(Scope.provide(env.run.scope)),
   );
 }

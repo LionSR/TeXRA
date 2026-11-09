@@ -69,11 +69,10 @@ type DocumentRun = Pick<
   'config' | 'logger' | 'fileService' | 'runId' | 'opening' | 'model'
 >;
 
-/** The tool call the documents are opened for: its run, its roots, and
+/** The tool call the documents are opened for: its roots and run, and
  *  where it shows the person a file or notice. */
 interface DocumentCall {
-  readonly run: DocumentRun;
-  readonly env: Pick<ToolEnv, 'roots'>;
+  readonly env: Pick<ToolEnv, 'roots'> & { readonly run: DocumentRun };
   readonly requests: Pick<CallRequests, 'present'>;
 }
 
@@ -135,8 +134,7 @@ const replyLocation = (docs: Documents, revision: number) =>
  * Fails for a run that is no document task's.
  */
 export const openDocuments = Effect.fn('documents.open')(function* ({
-  run,
-  env: { roots },
+  env: { roots, run },
   requests,
 }: DocumentCall) {
   const { config, logger, fileService, runId } = run;

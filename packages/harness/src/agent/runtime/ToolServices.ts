@@ -55,16 +55,16 @@ export type RunServices =
 
 /** The services the runtime supplies to a tool's call, a plugin's and a
  *  built-in's alike: the process's, the rooted filesystems of the session
- *  the call works in, and the call (`ToolContext`, the run included). A
- *  tool takes `WorkspaceFs` from context instead of resolving a static
- *  against whichever roots its fiber happens to carry. The child-launch
- *  door (`ChildRuns`) and the call's place in its run (`RunCall`) are
- *  references with defaults, never requirements; a plugin's tool reads the
- *  door and never the session's own services, which only the harness's
- *  built-ins name (`builtinPlugins.ts`). */
+ *  the call works in, the call (`ToolContext`, the run included) and its
+ *  child-launch door (`ChildRuns`). A tool takes `WorkspaceFs` from context
+ *  instead of resolving a static against whichever roots its fiber happens
+ *  to carry. A plugin's tool reads the door and never the session's own
+ *  services or the call's place in its run (`RunCall`), which only the
+ *  harness's built-ins reach (`inRunSession`). */
 export type PluginToolServices =
   | RunServices
   | ToolContext
+  | ChildRuns
   | WorkspaceFs
   | StorageFs
   | Scope.Scope;
@@ -76,8 +76,8 @@ export type PluginToolServices =
  * run id, outside the child-run budget); a plugin's tool reaches no other
  * launch. And it reaches a
  * run of the session by id: its input, live parent edge, records, whether
- * it holds a request, and the plugin's own facts on it. Each needs the
- * call's run; a standalone host call has none.
+ * it holds a request, and the plugin's own facts on it, each over the
+ * call's run.
  */
 export interface ChildRunsShape {
   readonly launch: (
@@ -120,23 +120,6 @@ export interface ChildRunsShape {
   ) => Effect.Effect<boolean, Error>;
 }
 
-const noRun = Effect.fail(
-  new Error('This call is under no run, so it launches and reads none.'),
-);
-
-/** The door outside a run (a host's standalone call): every door refuses.
- *  One frozen value, handed to every standalone caller. */
-const noRunChildRuns: ChildRunsShape = Object.freeze({
-  launch: () => noRun,
-  launchProcess: () => noRun,
-  inbox: () => noRun,
-  parent: () => noRun,
-  records: () => ({ exists: noRun, end: noRun }),
-  fact: () => noRun,
-  autoApproved: noRun,
-  requested: () => noRun,
-});
-
 /** The session's services, picked from its run's fiber where the loop
  *  dispatches a response: what the doors a plugin's tool calls through
  *  ({@link childRuns}, its requests) run over. */
@@ -159,12 +142,10 @@ export const sessionServices = Effect.map(
   ),
 );
 
-/** The door, as the run loop provides it beside each call ({@link childRuns});
- *  outside a run it is the refusal, which is the reference's default. */
-export const ChildRuns = Context.Reference<ChildRunsShape>(
+/** The door, as the run loop provides it beside each call ({@link childRuns}). */
+export class ChildRuns extends Context.Service<ChildRuns, ChildRunsShape>()(
   '@texra-ai/harness/agent/ChildRuns',
-  { defaultValue: () => noRunChildRuns },
-);
+) {}
 
 /** The door of one call: over the call's place in its run and the
  *  session's services, which the loop picked where it dispatched the call.

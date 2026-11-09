@@ -301,7 +301,5 @@ export const PlanTool = defineTool({
   description: `Propose or replace the plan: \`objective\` is a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Every proposal is presented to the user, who may approve it, run it as a goal (a goal run then works on it in rounds until it verifies the stopping condition), or reject it. Propose a new plan only when the objective or approach genuinely changes.`,
   schema: PlanToolInputSchema,
   execute: (input: PlanToolInput) =>
-    inRunSession('plan', (call) =>
-      executeUpdate(call, { objective: input.objective }),
-    ),
+    inRunSession((call) => executeUpdate(call, { objective: input.objective })),
 });

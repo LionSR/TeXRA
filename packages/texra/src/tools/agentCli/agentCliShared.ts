@@ -9,7 +9,6 @@ import { ToolContext } from '@texra-ai/harness/plugins';
 import {
   ChildRuns,
   noLaterTurn,
-  requireRun,
   type AgentTrace,
   type PluginToolServices,
   type ProcessTurn,
@@ -169,11 +168,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
 }): Effect.Effect<ToolResult, ToolError, R | S | ToolContext> {
   const { agentName, store, resumeId, threadLabel, launch } = params;
   return Effect.gen(function* () {
-    // The run check is the one place either tool asks it: an agent-CLI child
-    // is registered under its parent run and delivers its turn as a
-    // follow-up to it, so a standalone host invocation has nowhere to put the
-    // child.
-    const { run } = yield* requireRun(agentName);
+    const { run } = (yield* ToolContext).env;
     // The turn is delivered as a follow-up message. A one-shot run has no
     // later turn to take it: refuse rather than launch work nobody collects.
     if (noLaterTurn(run)) {

@@ -20,9 +20,7 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   noLaterTurn,
   inRunSession,
-  RunCall,
   type ScriptDoor,
-  callerRun,
 } from '@agent/runtime/RunCall';
 import {
   JsonValueSchema,
@@ -168,15 +166,10 @@ const shown = (value: unknown): string =>
   value === undefined ? 'undefined' : JSON.stringify(value, null, 2);
 
 const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
-  const { emit } = yield* ToolContext;
-  const run = yield* callerRun;
+  const { emit, env } = yield* ToolContext;
   // A one-shot run has no later turn for a follow-up to reach.
-  if (
-    input.run_in_background === true &&
-    run !== undefined &&
-    !noLaterTurn(run)
-  )
-    return yield* inRunSession('script run_in_background', (call) =>
+  if (input.run_in_background === true && !noLaterTurn(env.run))
+    return yield* inRunSession((call) =>
       launchBackgroundScript(
         call,
         {
@@ -186,13 +179,13 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
         input.title ?? 'Script',
       ),
     );
-  const runCall = yield* RunCall;
-  const issued = runCall?.scriptCalls;
-  if (runCall == null || issued == null)
-    return yield* Effect.fail(
-      new ToolError('A script runs only as a call of an agent run.'),
-    );
-  const scriptCalls = yield* inRunSession('script', () => issued);
+  const scriptCalls = yield* inRunSession(({ scriptCalls: issued }) =>
+    issued === null
+      ? Effect.fail(
+          new ToolError('A script runs only as a call of an agent run.'),
+        )
+      : issued,
+  );
   const sandbox = yield* CodeSandbox;
   // The last `RUN_LOG_MAX_LINES` lines the guest logged, for the result.
   const tail: string[] = [];

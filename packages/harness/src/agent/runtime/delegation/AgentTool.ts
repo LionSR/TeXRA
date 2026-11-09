@@ -17,7 +17,7 @@ import { Effect, Result, Schema, ScopedRef } from 'effect';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runOwnership';
-import { RunCall, inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
+import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
@@ -225,7 +225,7 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
       kind: 'proposal',
       data: {
         requestId: callRequestId(shared, raised + 1),
-        offersGrant: (yield* RunCall)?.hook !== 'ask',
+        offersGrant: call.hook !== 'ask',
         runId,
         ...proposal,
         script: {
@@ -287,7 +287,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
 
 /** One call, launched over its call's session. */
 export const launchChildAgent = (launch: ChildLaunch) =>
-  inRunSession(launch.tool, (call) => agentCall(call, launch)).pipe(
+  inRunSession((call) => agentCall(call, launch)).pipe(
     Effect.withSpan('AgentTool.call'),
   );
 

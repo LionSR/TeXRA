@@ -40,7 +40,7 @@ import type {
  *
  * Every call requires the `Scope` the resources it starts stay held in: the
  * calling tool provides its run's scope, so a server the direct pool starts
- * for a run stays up until the run ends; outside a run, the call's own.
+ * for a run stays up until the run ends.
  *
  * Every file parameter is an absolute path: the calling tool resolves the
  * model's input against the run's working directory (`leanFilePath` in

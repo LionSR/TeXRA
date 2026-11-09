@@ -17,9 +17,8 @@
 
 import { Cause, Effect, Schema } from 'effect';
 import {
-  callerRun,
   ChildRuns,
-  requireRun,
+  ToolContext,
   type PluginToolServices,
   nullishWithDefault,
   executed,
@@ -231,7 +230,7 @@ const executeExternalInquiryTool = Effect.fn('executeExternalInquiryTool')(
       case 'read':
         return yield* executeRead(input);
       case 'list':
-        return yield* executeList(input, (yield* callerRun)?.runId);
+        return yield* executeList(input, (yield* ToolContext).env.run.runId);
     }
   },
   Effect.provide(inquiryRecordsLayer),
@@ -242,9 +241,11 @@ const executeAsk = Effect.fn('executeAsk')(function* (
 ): Effect.fn.Return<ToolResult, Error, InquiryRecords | PluginToolServices> {
   const records = yield* InquiryRecords;
   const {
-    run: { runId },
+    env: {
+      run: { runId },
+    },
     requests,
-  } = yield* requireRun('inquiry { command: "ask" }');
+  } = yield* ToolContext;
   const runs = yield* ChildRuns;
   const questionContext = input.context ?? undefined;
   const suggestSearch = input.suggestSearch ?? undefined;
@@ -367,18 +368,9 @@ const executeRead = Effect.fn('executeRead')(function* (
 
 const executeList = Effect.fn('executeList')(function* (
   input: Extract<InquiryInput, { command: 'list' }>,
-  runId: RunId | undefined,
+  runId: RunId,
 ): Effect.fn.Return<ToolResult, Error, InquiryRecords> {
   const records = yield* InquiryRecords;
-  if (input.scope === 'run' && !runId) {
-    return yield* Effect.fail(
-      new ToolError(
-        'inquiry { command: "list", scope: "run" } requires an active run context. ' +
-          'Use scope: "all" to list across runs.',
-      ),
-    );
-  }
-
   const summaries = yield* records.listThreadsByStatus({
     status: input.status,
     scope: input.scope,

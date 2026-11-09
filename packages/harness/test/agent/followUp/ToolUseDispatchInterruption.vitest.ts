@@ -41,7 +41,12 @@ const settledIds = (state: RunState | null | undefined): string[] =>
   );
 
 function loopLayer(init: HarnessInit) {
-  return Layer.mergeAll(scriptedInvokerLayer, nativeToolTestLayer()).pipe(
+  return Layer.mergeAll(
+    scriptedInvokerLayer,
+    nativeToolTestLayer({
+      run: { runId: init.runId, session: init.session, toolPolicy: {} },
+    }),
+  ).pipe(
     Layer.provideMerge(
       agentRunTestLayer({ ...init, model: scriptedModel(init.turns).model }),
     ),

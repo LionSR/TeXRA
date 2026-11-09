@@ -24,7 +24,6 @@ import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
 import { pathToLocationIn } from '@texra-ai/harness/host';
 import {
   ChildRuns,
-  requireRun,
   assertNoParentTraversal,
   RunFileService,
   ToolError,
@@ -175,7 +174,6 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   input: AcceptRunFilesInput,
 ): Effect.fn.Return<ToolResult, Error, PluginToolServices> {
   const call = yield* ToolContext;
-  yield* requireRun('accept_run_files');
   // The run whose files are accepted, which is not the calling run.
   const runFiles = new RunFileService(input.execution_id, call.env.roots);
   if (

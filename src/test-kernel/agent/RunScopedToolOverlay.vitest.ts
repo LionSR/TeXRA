@@ -87,7 +87,9 @@ function runLayer(
 ) {
   return Layer.mergeAll(
     observingInvokerLayer(seen),
-    nativeToolTestLayer(),
+    nativeToolTestLayer({
+      run: { runId: ctx.runId, session, toolPolicy: {} },
+    }),
   ).pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {

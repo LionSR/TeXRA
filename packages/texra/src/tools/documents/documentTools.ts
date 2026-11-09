@@ -16,7 +16,7 @@ import { Effect, FileSystem, Schema } from 'effect';
 import {
   boundFile,
   ChildRuns,
-  requireRun,
+  ToolContext,
   executed,
   ToolError,
   defineTool,
@@ -76,9 +76,9 @@ export const RevisionSchema = Schema.Int.check(
 
 /** The documents of the run the calling tool `tool` serves. */
 export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
-  tool: string,
+  _tool: string,
 ) {
-  return yield* openDocuments(yield* requireRun(tool));
+  return yield* openDocuments(yield* ToolContext);
 });
 
 /** Open `locations` for the user, beside what they are looking at. */

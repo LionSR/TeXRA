@@ -3,8 +3,8 @@
  * its body reads of its own call (`ToolContext`: its id, where it works, how
  * it asks a person, the run it works for, where its transient output goes).
  * The run's window (`ToolRun`) is declared here with its id; the runtime
- * adds the rest of it, and the helpers over it (`requireRun`, `callerRun`),
- * published to plugin authors on `@texra-ai/harness/plugins`.
+ * adds the rest of it. A tool is only ever called under a run: its call
+ * always carries the run and where its requests open.
  */
 
 import { Context, type Effect } from 'effect';
@@ -194,8 +194,8 @@ export interface ToolEnv {
   readonly roots: WorkspaceRoots;
   readonly workingDirectory?: string;
   readonly stepRoots?: readonly StepRoot[];
-  /** The run the call works for; absent for a standalone host invocation. */
-  readonly run?: ToolRun;
+  /** The run the call works for. */
+  readonly run: ToolRun;
 }
 
 /**
@@ -213,9 +213,8 @@ export interface ToolContextShape {
   readonly callId: string;
   /** Where the call works. */
   readonly env: ToolEnv;
-  /** Where the call's requests to a person open; absent for a standalone
-   *  host invocation outside an agent run, which has nobody to ask. */
-  readonly requests?: CallRequests;
+  /** Where the call's requests to a person open. */
+  readonly requests: CallRequests;
   /** Transient output for the call's card while it runs, never a row. */
   readonly emit: (text: string) => void;
 }
