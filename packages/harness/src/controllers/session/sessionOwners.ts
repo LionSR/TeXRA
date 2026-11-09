@@ -50,7 +50,6 @@ import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
 import { withLogChannel } from '@logger/effectLog';
-import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 import { SessionRoots, sessionFsLayer } from '@platform/rootedFs';
 import type { RunId, SessionCloseReport } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
@@ -244,8 +243,6 @@ export const sessionOwnersLayer = (
       const forkRun = yield* FiberMap.runtime(runFibers)<
         Exclude<AgentRunServices, Runs>
       >().pipe(Effect.provide(services));
-      // Each run's `.env`, read as it launches.
-      const env = workspaceEnvironmentLayer(roots.workspace);
       const local = (yield* LocalRuntimeSource).ref;
       const runs: RunRegistry = new RunRegistry({
         view,
@@ -255,9 +252,8 @@ export const sessionOwnersLayer = (
         runsHere: (runIds) =>
           void fork(SubscriptionRef.set(local, { runsHere: [...runIds] })),
         roots,
-        inSession: (effect) =>
-          Effect.provide(Effect.provide(effect, env), services),
-        fork: (runId, run) => forkRun(runId, Effect.provide(run, env)),
+        inSession: (effect) => Effect.provide(effect, services),
+        fork: forkRun,
         programs: { executeAgent, stop: stopRun },
         wake: (id) =>
           void fork(wakeIfOwed(id).pipe(Effect.provideService(Runs, runs))),
