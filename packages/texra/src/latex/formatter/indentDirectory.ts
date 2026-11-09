@@ -13,6 +13,7 @@ import { EXCLUDED_DIRS } from '@texra/shared/constants/excludedDirs';
 
 import type { ToolMissing } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
+import { LatexProgress } from '../progress';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { LatexFormatter } from './texFormatter';
 
@@ -48,7 +49,6 @@ export type IndentLatexResult =
  * (`resolveLatexFormatter(roots)`), so this never reads the roots the
  * calling fiber happens to carry.
  * @param directory The directory to process (relative to workspace). If not provided, uses the root.
- * @param progressCallback Optional callback for progress updates
  * @returns The formatting outcome
  */
 export const indentLatexFilesInDirectory = Effect.fn(
@@ -57,7 +57,6 @@ export const indentLatexFilesInDirectory = Effect.fn(
   workspaceRoot: string | undefined,
   formatter: LatexFormatter | null,
   directory: string = '.',
-  progressCallback?: (message: string, increment?: number) => void,
 ): Effect.fn.Return<
   IndentLatexResult,
   PlatformError.PlatformError,
@@ -77,6 +76,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
   yield* Effect.logDebug(`Formatter: ${id}, Config: ${config}`).pipe(
     withLogChannel(CHANNEL),
   );
+  const progress = yield* LatexProgress;
 
   const fs = yield* FileSystem.FileSystem;
   if (config && (yield* entryTypeIn(fs, config)) === undefined) {
@@ -125,7 +125,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
         continue;
       }
 
-      progressCallback?.(`Indenting ${path.basename(fullPath)}...`, 0);
+      progress(`Indenting ${path.basename(fullPath)}...`, 0);
       yield* Effect.logDebug(`Processing file: ${fullPath}`).pipe(
         withLogChannel(CHANNEL),
       );
