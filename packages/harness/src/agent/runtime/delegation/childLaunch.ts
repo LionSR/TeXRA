@@ -149,13 +149,10 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
   if (live !== undefined)
     yield* live.drained.pipe(
       Effect.onInterrupt(() =>
-        Effect.suspend(() => {
+        Effect.flatMap(runs.attachedParent(runId), (parent) => {
           // A child the registry holds with no parent edge was detached:
           // it runs on as a root, and only this wait ends.
-          if (
-            runs.get(runId) !== undefined &&
-            runs.attachedParent(runId) === null
-          )
+          if (runs.get(runId) !== undefined && parent === null)
             return Effect.void;
           // The call let go: the child's stop says so, unless a stop of it
           // (its parent's cascade) already did.

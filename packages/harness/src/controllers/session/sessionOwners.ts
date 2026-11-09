@@ -245,7 +245,6 @@ export const sessionOwnersLayer = (
       >().pipe(Effect.provide(services));
       const local = (yield* LocalRuntimeSource).ref;
       const runs: RunRegistry = new RunRegistry({
-        view,
         log,
         // Set, never updated from a read: each call carries the whole set,
         // and the fork runs it before this fiber goes on.
@@ -256,7 +255,15 @@ export const sessionOwnersLayer = (
         fork: forkRun,
         programs: { executeAgent, stop: stopRun },
         wake: (id) =>
-          void fork(wakeIfOwed(id).pipe(Effect.provideService(Runs, runs))),
+          void fork(
+            Effect.gen(function* () {
+              // The parent its last batch delivered to, as the store holds
+              // the edge: it outlives the run's fiber.
+              const parent = yield* runs.attachedParent(id);
+              yield* wakeIfOwed(id);
+              if (parent !== null) yield* wakeIfOwed(parent);
+            }).pipe(Effect.provideService(Runs, runs)),
+          ),
       });
       yield* Effect.addFinalizer(() => Effect.sync(() => runs.dispose()));
       const session: Context.Context<SessionServices> = Context.add(

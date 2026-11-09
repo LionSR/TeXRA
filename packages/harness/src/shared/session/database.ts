@@ -253,6 +253,11 @@ export class Database extends Context.Service<
     readonly readRunRecord: (
       id: AggregateId,
     ) => Effect.Effect<RunRows | null, DatabaseReadFailed>;
+    /** The open runs attached to `id` (its parent edge, which a
+     *  `run.detach` severs), oldest first. */
+    readonly readChildren: (
+      id: AggregateId,
+    ) => Effect.Effect<readonly RunId[], DatabaseReadFailed>;
     readonly inputHistory: GlobalDatabase['Service']['inputHistory'];
     readonly values: GlobalDatabase['Service']['values'];
     /** One aggregate's rows of `types` from `fromSeq` (through `toSeq`, a

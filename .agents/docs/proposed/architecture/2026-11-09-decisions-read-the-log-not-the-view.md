@@ -94,14 +94,39 @@ the rule the three fixes already applied one site at a time.
 
 ## Progress
 
-Done, the first group: `requireRunAction` reads the run from `view.read`
-(the view rebuilt from the log as of the call, which `pendingOf` already
-used), and `submitFollowUp` and `wakeRun` read `SessionLog.facts`. The
-follow-up path no longer requires `SessionViewAccess`. No new read was
-needed, so step 1 is not: `view.read` and `facts` cover these three.
+Done, nine of the ten sites:
 
-Still open: the other seven sites (the parent and ancestry reads, the two
-tool reads, the cost total), and step 3.
+- `requireRunAction` and `showOutput` read the run from `view.read` (the
+  view rebuilt from the log as of the call, which `pendingOf` already
+  used): both need what only the view's updater derives (`actions`, the
+  status wording).
+- `submitFollowUp`, `wakeRun`, `presentTerminalResult`, the hooks' session
+  id and the child-output check read `SessionLog.facts`, whose `parent` is
+  the attached edge.
+- A task's cost reads its children from the store: `SessionLog.children`,
+  the one new read (`event_sequence.parent_id`, already indexed).
+- The run registry reads every parent edge from the store
+  (`attachedParent` is an Effect), so a stop's cascade, a detach and the
+  shutdown's roots no longer depend on what the view has applied. It holds
+  no view. The wake of an ended run's parent reads the edge in the wake
+  itself, where it read it in the fiber's observer before.
+
+Left as it is: `runNoun` words a refusal ("task" or "agent") and decides
+nothing, so it is rendering and reads the view.
+
+Step 3 found nothing to delete. The seven production `settled` awaits wait
+for the publisher's queued rows to commit before a log read (`bash`'s
+output rows, the turn boundary, an inbox's wake), not for the view; the
+text above overstated that. What the change removes is the dependency:
+none of the nine sites is correct only because some other module waited.
+
+Not done: `SessionViewAccessShape.run` is still offered (`runNoun` and the
+hosts read it). No regression test was added: a writer's `transact`
+returns only once the view shows its commit, so a suite that holds the
+view's updater back (`holdNext('readInputBatch')`) holds every writer with
+it. The same fact bounds how the lag is reached: by a reader on another
+fiber, after a detached `publish`, or from a window ahead of the service,
+not by a writer reading its own commit.
 
 ## Smaller items found on the same pass
 

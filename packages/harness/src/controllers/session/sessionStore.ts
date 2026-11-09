@@ -196,6 +196,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       blobs: database.readBlobs,
       facts: (runId) =>
         database.readRunRecord(qualifyAggregateId('run', runId)),
+      children: (runId) =>
+        database.readChildren(qualifyAggregateId('run', runId)),
       // A removed run's rows end with its deletion marker: none to show.
       display: (runId) =>
         Effect.map(

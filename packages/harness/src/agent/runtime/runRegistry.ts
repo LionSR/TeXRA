@@ -42,7 +42,7 @@ import {
   type RunId,
   type RunStopReason,
 } from '@shared/schemas';
-import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import type { SessionLog } from '@shared/session/runHistory';
 
 import type { LiveRun, RunControls, RunsShape } from './runs';
 import type { executeAgent } from './executeAgent';
@@ -65,12 +65,10 @@ class RunAdmissionClosed extends Schema.TaggedError<RunAdmissionClosed>()(
   { message: Schema.String },
 ) {}
 
-/** What the session hands its runs. They read a run's phase and parent
- *  from the session's view and keep no copy of their own. */
+/** What the session hands its runs. They read a run's parent from the
+ *  session's log and keep no copy of their own. */
 export interface RunRegistryInit {
-  /** The session's view: each run's parent edge and phase. */
-  readonly view: SessionViewAccess['Service'];
-  /** The session's log: each run's detach batch. */
+  /** The session's log: each run's parent edge and its detach batch. */
   readonly log: SessionLog['Service'];
   /** Tell the session's view which runs are driven here (`runsHere`),
    *  called with the whole set as a fiber is forked or exits. */
@@ -201,43 +199,51 @@ export class RunRegistry implements RunsShape {
   }
 
   /** The children one parent's detach covers: each run held here whose
-   *  edge, as the view holds it, names the parent. */
-  private childRunIds(parentRunId: RunId): readonly RunId[] {
-    return this.heldIds().filter(
-      (id) => this.attachedParent(id) === parentRunId,
+   *  edge names the parent. */
+  private childRunIds(parentRunId: RunId): Effect.Effect<readonly RunId[]> {
+    return Effect.filter(this.heldIds(), (id) =>
+      Effect.map(this.attachedParent(id), (parent) => parent === parentRunId),
     );
   }
 
-  /** The run's attached parent, as the view holds it. */
-  attachedParent(runId: RunId): RunId | null {
-    return this.init.view.run(runId)?.parentId ?? null;
+  /** The run's attached parent, as the store holds it at this call (the
+   *  view trails the log, and would not know a child launched a moment
+   *  ago, which a stop must still reach). A store that cannot be read is a
+   *  defect: no cascade can be decided without it. */
+  attachedParent(runId: RunId): Effect.Effect<RunId | null> {
+    return this.init.log.facts(runId).pipe(
+      Effect.orDie,
+      Effect.map((facts) => facts?.parent?.id ?? null),
+    );
   }
 
-  /** The run's attached ancestors, nearest first, as the view holds them. */
-  private *ancestorsOf(runId: RunId): Generator<RunId> {
-    const seen = new Set<RunId>();
-    for (
-      let id = this.attachedParent(runId);
-      id !== null && !seen.has(id);
-      id = this.attachedParent(id)
-    ) {
-      seen.add(id);
-      yield id;
-    }
-  }
+  /** The run's attached ancestors, nearest first. */
+  private ancestorsOf = Effect.fnUntraced(
+    { self: this },
+    function* (runId: RunId) {
+      const line: RunId[] = [];
+      for (
+        let id = yield* this.attachedParent(runId);
+        id !== null && !line.includes(id);
+        id = yield* this.attachedParent(id)
+      )
+        line.push(id);
+      return line;
+    },
+  );
 
   /** The runs held here under `runId`, at any depth, by the stored parent
    *  edges: an ended run between them hides none. What a stop covers, and
    *  what keeps a run's input open and its rows in place. */
-  private heldUnder(runId: RunId): readonly RunId[] {
-    return this.heldIds().filter((id) =>
-      [...this.ancestorsOf(id)].includes(runId),
+  private heldUnder(runId: RunId): Effect.Effect<readonly RunId[]> {
+    return Effect.filter(this.heldIds(), (id) =>
+      Effect.map(this.ancestorsOf(id), (line) => line.includes(runId)),
     );
   }
 
   /** Whether a run held here is under `runId`: its work goes on. */
-  hasLiveDescendants = (runId: RunId): boolean =>
-    this.heldUnder(runId).length > 0;
+  hasLiveDescendants = (runId: RunId): Effect.Effect<boolean> =>
+    Effect.map(this.heldUnder(runId), (held) => held.length > 0);
 
   /**
    * `operation` on `runId` while no launch here drives it or any run under
@@ -250,8 +256,8 @@ export class RunRegistry implements RunsShape {
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | RunLive, R> {
-    return Effect.suspend(() => {
-      if (this.liveRun(runId) !== undefined || this.hasLiveDescendants(runId))
+    return Effect.flatMap(this.hasLiveDescendants(runId), (descendants) => {
+      if (this.liveRun(runId) !== undefined || descendants)
         return Effect.fail(new RunLive({ runId }));
       const held = this.busy.get(runId);
       if (held !== undefined)
@@ -405,14 +411,11 @@ export class RunRegistry implements RunsShape {
                 this.live.set(runId, fiber);
                 fiber.addObserver(() => {
                   if (this.live.get(runId) !== fiber) return;
-                  // Its parent's edge, read before the run leaves here.
-                  const parent = this.attachedParent(runId);
                   this.live.delete(runId);
                   this.stopped.delete(runId);
                   this.controls.delete(runId);
                   this.publishHeld();
                   this.init.wake(runId);
-                  if (parent !== null) this.init.wake(parent);
                 });
                 // A stop asked meanwhile: the run's stop row is in, and the
                 // run is interrupted before its first step, so its one
@@ -512,7 +515,7 @@ export class RunRegistry implements RunsShape {
           ));
         if (detach) yield* this.detachActiveChildren(runId);
         else
-          for (const id of this.heldUnder(runId))
+          for (const id of yield* this.heldUnder(runId))
             yield* this.stopHeld(id, reason);
         if (fiber !== undefined) fiber.interruptUnsafe();
         return fiber !== undefined;
@@ -580,23 +583,39 @@ export class RunRegistry implements RunsShape {
       this.stoppedBeforeStart.clear();
       const held = this.heldIds();
       // The held forest's roots: each run's cascade covers what is under it.
-      const roots = held.filter(
-        (id) => ![...this.ancestorsOf(id)].some((an) => held.includes(an)),
+      const roots = Effect.filter(held, (id) =>
+        Effect.map(
+          this.ancestorsOf(id),
+          (line) => !line.some((an) => held.includes(an)),
+        ),
+      ).pipe(
+        // A store that cannot say which run is under which: each held run
+        // is stopped by name.
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            "The held runs' parents could not be read at shutdown; stopping each",
+          ).pipe(
+            Effect.annotateLogs({ data: Cause.squash(cause) }),
+            Effect.as(held),
+          ),
+        ),
       );
-      return Effect.forEach(
-        roots,
-        (runId) =>
-          this.stop(runId, 'shutdown').pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning(
-                `Run ${runId}: its shutdown stop was not recorded`,
-              ).pipe(
-                Effect.annotateLogs({ data: Cause.squash(cause) }),
-                Effect.andThen(Effect.sync(() => this.interrupt(runId))),
+      return Effect.flatMap(roots, (roots) =>
+        Effect.forEach(
+          roots,
+          (runId) =>
+            this.stop(runId, 'shutdown').pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning(
+                  `Run ${runId}: its shutdown stop was not recorded`,
+                ).pipe(
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
+                  Effect.andThen(Effect.sync(() => this.interrupt(runId))),
+                ),
               ),
             ),
-          ),
-        { discard: true },
+          { discard: true },
+        ),
       );
     });
   }
@@ -629,7 +648,7 @@ export class RunRegistry implements RunsShape {
       Effect.gen({ self: this }, function* () {
         // Each child's kept grants, from its rows and its ancestors'.
         const kept = new Map<RunId, ApprovalGrants>();
-        for (const id of this.childRunIds(parentRunId)) {
+        for (const id of yield* this.childRunIds(parentRunId)) {
           const facts = yield* log.facts(id);
           if (facts?.start == null || facts.grants === null) continue;
           const parent = facts.start.parent?.id ?? parentRunId;
