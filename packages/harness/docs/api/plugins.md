@@ -1129,11 +1129,11 @@ const makeJsonRpcConnection: (options: JsonRpcConnectionOptions) => Effect<JsonR
 
 ## MemoryPinResult
 
-What a pin toggle did: `cap-reached` names the cap it hit.
+What a pin did: `cap-reached` names the cap it hit.
 
 ```ts
 type MemoryPinResult =
-  | { readonly status: 'changed'; readonly pinnedCount: number }
+  | { readonly status: 'pinned'; readonly pinnedCount: number }
   | { readonly status: 'already' }
   | { readonly status: 'cap-reached'; readonly max: number };
 ```
@@ -1158,7 +1158,7 @@ The memory tree's host-facing reads and edits, over the caller's
 `StorageFs`.
 
 ```ts
-const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, Error, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly displayPath: string; readonly storagePath: string; readonly size: number; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, Error | PlatformError, StorageFs>; delete: (input: string) => Effect<void, Error | PlatformError, StorageFs>; pin: (input: string, pinned: boolean) => Effect<MemoryPinResult, Error | PlatformError, StorageFs>; }
+const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, Error, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly displayPath: string; readonly storagePath: string; readonly size: number; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, Error | PlatformError, StorageFs>; delete: (input: string) => Effect<void, Error | PlatformError, StorageFs>; pin: (input: string) => Effect<MemoryPinResult, Error | PlatformError, StorageFs>; unpin: (input: string) => Effect<void, Error | PlatformError, StorageFs>; }
 ```
 
 ## memoryWorkflow

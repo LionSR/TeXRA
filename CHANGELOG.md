@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: `readMcpConfig` reads through the `FileSystem` in context, and
+  `MemoryStore` pins and unpins in two calls.** `readMcpConfig(file)` takes
+  no file system and requires `FileSystem` instead. `MemoryStore.pin(input)`
+  answers `pinned` (with the pinned count), `already` or `cap-reached`, and
+  `MemoryStore.unpin(input)` is its own call; `MemoryPinResult`'s `changed`
+  case is `pinned`.
 - **Imported skills are a source group, not a CLI flag.** The `.agents`,
   `.claude`, `.codex` and `.gemini` skill folders beside the workspace and in
   the home directory are always discovered, in the `interop` scope that the
