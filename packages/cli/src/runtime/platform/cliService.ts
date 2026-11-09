@@ -322,10 +322,9 @@ export const linkCliService = Effect.fn('linkCliService')(function* (
   if (info === null && !start) return { none: NONE_RUNNING };
   const linked = yield* Effect.result(
     linkService(
-      storageRoot,
       start || (info !== null && isOlder(info))
         ? spawnOwnService(storageRoot)
-        : Effect.fail(new Error(NONE_RUNNING)),
+        : { storageRoot, start: Effect.fail(new Error(NONE_RUNNING)) },
       // The wait lasts as long as the older build's tasks, so the command
       // says what it waits for and how to stop waiting.
       (waitingFor) =>
