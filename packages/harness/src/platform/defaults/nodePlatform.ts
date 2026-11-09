@@ -1,8 +1,9 @@
 /**
  * The Node standard-library services every process serves once: the
  * filesystem, path, and child-process spawner; and, last in this file, the
- * environment a project's work reads (`workspaceEnvironmentLayer`). `processLayer` merges
- * this layer into every root's runtime, so a program that reads a file or
+ * environment a project's work reads (`workspaceEnvironmentLayer`). A
+ * composition root provides this layer to `processLayer`, which serves it to
+ * every root's runtime, so a program that reads a file or
  * starts a child process takes the service from context instead of building a
  * Node layer of its own. Module paths, never the `@effect/platform-node`
  * barrel, so loading this pulls in only these three services.

@@ -11,6 +11,7 @@ import {
   FileSystem,
   Layer,
   type ManagedRuntime,
+  type Path,
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -24,10 +25,12 @@ import {
   type ProjectView,
 } from '@controllers/session/readSessionView';
 import {
+  type NodeServices,
   ownerProcessLayer,
   type ProcessServicesOptions,
 } from '@controllers/session/sessionLayer';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
+import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalValues } from '@platform/processRuntime';
@@ -173,7 +176,7 @@ export class Sessions extends Context.Service<
       ),
       // No logger of the harness's own: the embedder's logger layer,
       // level and tracer decide where the harness's lines go.
-    });
+    }).pipe(Layer.provide(nodePlatformServices));
   }
 }
 
@@ -200,10 +203,19 @@ export class Sessions extends Context.Service<
  * it is. Every root run is labelled with a short title from the helper model
  * (its `run.description`): an extra model request per root run, counted in
  * the run's usage, which every host's run list shows.
+ *
+ * The filesystem, path and child-process spawner are a requirement, as the
+ * model is: the root provides `nodePlatformServices`
+ * (`@texra-ai/harness/node`) once, and every session and run of the process
+ * reads the files and starts the children that layer gives it.
  */
 export function processLayer(
   options: ProcessLayerOptions,
-): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
+): Layer.Layer<
+  ProcessServices | Sessions,
+  PluginsRefused,
+  FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+> {
   // Labels are read from the runtime's own context, so they are merged
   // into this layer's output, not provided to the sessions' construction.
   return Layer.mergeAll(
@@ -232,7 +244,7 @@ const seeded = (
 
 function sessionsLayer(
   options: ProcessLayerOptions,
-): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
+): Layer.Layer<ProcessServices | Sessions, PluginsRefused, NodeServices> {
   const appState =
     options.appState ??
     seeded(

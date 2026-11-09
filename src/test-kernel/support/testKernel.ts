@@ -54,6 +54,7 @@ import {
   type ProcessServices,
   type ValidationModel,
 } from '@texra-ai/harness/host';
+import { nodePlatformServices } from '@texra-ai/harness/node';
 import { AppSignals, Secrets } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
@@ -229,10 +230,15 @@ type KernelProcess =
   | ProcessIdentity;
 
 /** The process over the host's app (its settings and plugins) and `extra`, its validation route
- *  served by `model`, built over the block's host. */
+ *  served by `model` and its files and child processes by `platform` (the
+ *  Node ones unless a block scripts the spawner), built over the block's
+ *  host. */
 const composedProcess = (
   extra: readonly Plugin[],
   model: Layer.Layer<ValidationModel>,
+  platform: Layer.Layer<
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+  > = nodePlatformServices,
 ) =>
   // `processLayer` serves the internal `SessionOwner` beside `Sessions`
   // (provideMerge); the suites' root launches and `sessionHandleOf` ask it.
@@ -260,7 +266,7 @@ const composedProcess = (
         // The suite's captured entries are the assertion surface: emit every
         // level the programs run and let each test filter what it reads.
         minimumLogLevel: 'Trace',
-      }).pipe(Layer.provide(model));
+      }).pipe(Layer.provide(Layer.merge(model, platform)));
     }),
   ) as Layer.Layer<KernelProcess, never, FakeHost | CurrentHost>;
 
@@ -292,7 +298,9 @@ export const SessionGraph = {
   /**
    * The same process with `plugins` beside the app's and `model` answering
    * every model call: for a case that composes two processes in turn, as a
-   * restart with a changed plugin does.
+   * restart with a changed plugin does. A third argument replaces the Node
+   * filesystem, path and spawner, for a block whose runs start scripted
+   * processes.
    */
   with: composedProcess,
 

@@ -1,13 +1,26 @@
+---
+created: 2026-11-08
+status: implemented
+---
+
 # The process spawner as a requirement of `processLayer`
 
-Status: proposed, 2026-11-08. Closes the rest of R5-8 (round 5 tests, L1
-F1.6): the background cases of `packages/harness/test/tools/BashTool.vitest.ts`
-and `packages/harness/test/tools/ExecutionsToolOutput.vitest.ts`, which still
-stub `executeCommand` with `vi.spyOn` because no suite can give a session's
+Closes the rest of R5-8 (round 5 tests, L1 F1.6): the background cases of
+`packages/harness/test/tools/BashTool.vitest.ts` and
+`packages/harness/test/tools/ExecutionsToolOutput.vitest.ts` stubbed
+`executeCommand` with `vi.spyOn` because no suite could give a session's
 runs a spawner. #14844 declined a `processLayer` option for this as a
 test-only knob; this note is the design without one.
 
-## Where the spawner comes from today
+**As built.** Three differences from the design below: `Sessions.layer`
+(the embedder's composition, which takes a `platform`) provides
+`nodePlatformServices` itself, so only a `processLayer` caller composes the
+line; `processLayer` still serves the three services to its runtime, by
+forwarding the ones it is given; and the killed-command case answers
+`'hang'` and asserts the scripted process was ended, so only
+ExecutionsToolOutput's process uses the effect exit code.
+
+## Where the spawner came from before
 
 A background `bash` call is a process child (`processRun`,
 `packages/harness/src/agent/runtime/processRun.ts`) whose turn needs

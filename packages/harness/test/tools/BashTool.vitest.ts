@@ -26,6 +26,7 @@ import {
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import * as resumeRunModule from '@agent/runtime/resumeRun';
+import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runOwnership';
@@ -44,24 +45,12 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 import { BashTool } from '@tools/bash';
-import * as execUtils from '@utils/system/execUtils';
+import { nodeFileServices } from '@utils/files/fsDurability';
 import type { ToolResult } from '@texra-ai/harness/plugins';
-import type { ExecResult } from '@texra-ai/harness/node';
 
-/**
- * Stub `executeCommand` to park until the test settles it. Returns the
- * resolver so the case can interleave assertions before the (mocked) process
- * settles.
- */
-function holdCommand(): (result: ExecResult) => void {
-  const command = Deferred.makeUnsafe<ExecResult>();
-  vi.spyOn(execUtils, 'executeCommand').mockImplementation(() =>
-    Deferred.await(command),
-  );
-  return (result) => {
-    Deferred.doneUnsafe(command, Effect.succeed(result));
-  };
-}
+/** What the block's scripted processes do; each case sets its own. */
+let answer: ReturnType<Parameters<typeof scriptedSpawnerLayer>[0]> = {};
+const scripted = scriptedSpawnerLayer(() => answer);
 
 /** Close the parent's input so the background run's delivery ends. */
 const detachBackgroundRun = (
@@ -134,7 +123,14 @@ function launchBackgroundBash(
 const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 
 // Live clock: the background runs settle on real turns.
-layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
+layer(
+  SessionGraph.with(
+    [],
+    validationModelLayer,
+    Layer.provideMerge(scripted.layer, nodeFileServices),
+  ).pipe(Layer.provideMerge(FakeHost.layer())),
+  { excludeTestServices: true },
+)('BashTool', (it) => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -158,15 +154,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           // only once the run's fiber, which wrote the run's end, has left
           // it: prove the order by reading, as the wake's resume begins,
           // whether a wait would skip the run.
-          vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
-            Effect.succeed({
-              success: true,
-              stdout: 'done\n',
-              stderr: '',
-              timedOut: false,
-              exitCode: 0,
-            }),
-          );
+          answer = { stdout: 'done\n' };
 
           const session = yield* sessionHandle;
           const parentRunId = yield* publishTestRunStart(session);
@@ -240,7 +228,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
       'persists a killed background command as interrupted, not failed',
       () =>
         Effect.gen(function* () {
-          const resolveCommand = holdCommand();
+          answer = 'hang';
           const session = yield* sessionHandle;
           const parentRunId = yield* publishTestRunStart(session);
 
@@ -249,20 +237,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           );
           assert.ok(runId, 'Launch output should report a run id');
 
-          // The user stop records its reason and interrupts the run's loop;
-          // the killed process's non-zero exit, reported after, is not the
-          // run's outcome.
+          // The user stop records its reason and interrupts the run's loop,
+          // which ends the process; the run's outcome is the stop, not the
+          // killed process's exit.
           assert.equal(
             yield* Context.get(session, Runs).stop(runId, 'user'),
             true,
           );
-          resolveCommand({
-            success: false,
-            stdout: '',
-            stderr: 'Terminated\n',
-            timedOut: false,
-            exitCode: 143,
-          });
 
           yield* getRunRecords(runId)
             .readRunEnd()
@@ -274,6 +255,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
               Effect.timeout('1 second'),
               Effect.provide(session),
             );
+          assert.equal(scripted.killed.length, 1, 'The stop ends the process');
           yield* detachBackgroundRun(session, parentRunId);
         }),
     );
