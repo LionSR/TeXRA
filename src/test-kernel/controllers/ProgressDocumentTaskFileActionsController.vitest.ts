@@ -97,7 +97,7 @@ layer(SessionGraph.hosted)(
                 // changed before accepting.
                 readFileString: (path) =>
                   Effect.succeed(
-                    path.includes('/model/r0/')
+                    /[/\\]model[/\\]r0[/\\]/.test(path)
                       ? 'original model output\n'
                       : 'user edited output\n',
                   ),
