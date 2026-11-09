@@ -26,6 +26,7 @@ import {
   type InquiryThreadId,
   type InquiryThreadRecord,
   type InquiryThreadSummary,
+  type InquiryTurnOutcome,
 } from '@texra/shared/plugins/externalInquiry';
 import {
   type RunInbox,
@@ -129,18 +130,6 @@ const publishThreadUpdate = Effect.fn('publishInquiryThreadUpdate')(function* (
  * continuation carries is on the closed turn itself, so nothing else has to
  * be kept to re-deliver it.
  */
-const closedByEarlierAttempt = Effect.fn('inquiryClosedByEarlierAttempt')(
-  function* (
-    threadId: InquiryThreadId,
-    turnIndex: number,
-  ): Effect.fn.Return<InquiryThreadRecord | null, Error, InquiryRecords> {
-    const records = yield* InquiryRecords;
-    const manifest = yield* records.readExternalInquiryThread(threadId);
-    if (!manifest || manifest.status === 'open') return null;
-    return manifest.turns.at(-1)?.turnIndex === turnIndex ? manifest : null;
-  },
-);
-
 /**
  * Record one inquiry decision on its thread and deliver the continuation to
  * the run that asked (`inbox`), and commit the thread's panel row. The run
@@ -166,10 +155,10 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     const records = yield* InquiryRecords;
     const { threadId } = permission;
     const turnIndex = permission.transcript?.at(-1)?.turnIndex ?? 1;
-    let manifest: InquiryThreadRecord | null;
+    let outcome: InquiryTurnOutcome;
     let event: 'answered' | 'dropped';
     if (decision.action === 'answer') {
-      manifest = yield* records.recordAnswerForOpenTurn({
+      outcome = yield* records.recordAnswerForOpenTurn({
         threadId,
         turnIndex,
         answer: decision.answer,
@@ -180,11 +169,22 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
       yield* Effect.logInfo(
         `Inquiry ${threadId} dropped (${decision.action})`,
       ).pipe(withLogChannel(CHANNEL));
-      manifest = yield* records.markDropped({ threadId, turnIndex });
+      outcome = yield* records.markDropped({ threadId, turnIndex });
       event = 'dropped';
     }
-    if (!manifest) {
-      const closed = yield* closedByEarlierAttempt(threadId, turnIndex);
+    let manifest: InquiryThreadRecord;
+    if ('changed' in outcome) {
+      manifest = outcome.changed;
+    } else {
+      // The thread as it stands says why nothing changed: closed at this
+      // very turn by an earlier attempt, or no longer at this turn.
+      const existing = outcome.unchanged;
+      const closed =
+        existing !== null &&
+        existing.status !== 'open' &&
+        existing.turns.at(-1)?.turnIndex === turnIndex
+          ? existing
+          : null;
       if (!closed) {
         yield* Effect.logWarning(
           `Inquiry ${event === 'answered' ? 'answer' : 'drop'} ignored: thread ${threadId} has no open turn ${turnIndex}.`,
