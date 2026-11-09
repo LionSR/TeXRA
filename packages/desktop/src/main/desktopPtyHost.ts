@@ -16,10 +16,9 @@ import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Effect } from 'effect';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { withExtendedPath } from '@texra-ai/harness/node';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
-import { HostFailed } from '@texra/hosts/uiHosts';
 
 /**
  * The subset of node-pty this host depends on: node-pty's own module type
@@ -65,9 +64,10 @@ interface DesktopPtyHostOptions {
 
 export interface DesktopPtyHost {
   /**
-   * Starts a session. Fails with {@link HostFailed} when the native module or
-   * the shell cannot start, so the caller can report "terminal unavailable"
-   * rather than hanging on a terminal that will never produce output.
+   * Starts a session. Fails with the load or spawn error when the native
+   * module or the shell cannot start, so the caller can report "terminal
+   * unavailable" rather than hanging on a terminal that will never produce
+   * output.
    * Succeeds with `undefined` when the session was disposed while the native
    * module was loading: there is no terminal to start and nothing failed.
    */
@@ -75,7 +75,7 @@ export interface DesktopPtyHost {
     id: string;
     cols: number;
     rows: number;
-  }): Effect.Effect<PtySessionHandle | undefined, HostFailed>;
+  }): Effect.Effect<PtySessionHandle | undefined, Error>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
 }
@@ -154,14 +154,6 @@ function ensureSpawnHelperExecutable(): void {
   }
 }
 
-/** A terminal that could not start, as the caller reports it. */
-const startFailed = (cause: unknown) =>
-  new HostFailed({
-    member: 'ptyHost.create',
-    message: toErrorMessage(cause),
-    cause,
-  });
-
 export function createDesktopPtyHost(
   options: DesktopPtyHostOptions,
 ): DesktopPtyHost {
@@ -229,7 +221,7 @@ export function createDesktopPtyHost(
         // restarts.
         return Effect.tryPromise({
           try: (): Promise<NodePtyModule> => import('node-pty'),
-          catch: startFailed,
+          catch: ensureError,
         }).pipe(
           Effect.flatMap((pty) => {
             ensureSpawnHelperExecutable();
@@ -243,7 +235,7 @@ export function createDesktopPtyHost(
                   cwd: options.cwd,
                   env: ptyEnvironment(),
                 }),
-              catch: startFailed,
+              catch: ensureError,
             });
           }),
           Effect.map((spawned) => {
@@ -261,7 +253,7 @@ export function createDesktopPtyHost(
             for (const data of heldInput.splice(0)) spawned.write(data);
             return handle;
           }),
-          Effect.catch((error: HostFailed) => {
+          Effect.catch((error: Error) => {
             if (sessions.get(id) === handle) sessions.delete(id);
             return disposed ? Effect.succeed(undefined) : Effect.fail(error);
           }),
