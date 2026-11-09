@@ -92,6 +92,17 @@ the rule the three fixes already applied one site at a time.
    the terminal-result presenter and `Run.result` need theirs), and narrow
    `SessionViewAccessShape` so `run` is not offered to decision code.
 
+## Progress
+
+Done, the first group: `requireRunAction` reads the run from `view.read`
+(the view rebuilt from the log as of the call, which `pendingOf` already
+used), and `submitFollowUp` and `wakeRun` read `SessionLog.facts`. The
+follow-up path no longer requires `SessionViewAccess`. No new read was
+needed, so step 1 is not: `view.read` and `facts` cover these three.
+
+Still open: the other seven sites (the parent and ancestry reads, the two
+tool reads, the cost total), and step 3.
+
 ## Smaller items found on the same pass
 
 - **`Session.records` is written four times.** Each of its eleven reads is a

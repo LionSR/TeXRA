@@ -8,24 +8,19 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { type ResumeRefusal, type RunId } from '@shared/schemas';
-import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
+import { SessionLog } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import { sentBefore } from './followUpMessages';
 import { Inbox, type InboxItem } from './Inbox';
 
 /** What a follow-up's admission and its wake read of the session. */
-export type FollowUpServices =
-  | Inbox
-  | Runs
-  | SessionLog
-  | SessionViewAccess
-  | Interactions;
+export type FollowUpServices = Inbox | Runs | SessionLog | Interactions;
 
 /** The caller's {@link FollowUpServices}, for a run's inbox kept past the
  *  caller's fiber ({@link runInbox}). */
 export const followUpServices = Effect.map(
   Effect.context<FollowUpServices>(),
-  Context.pick(Inbox, Runs, SessionLog, SessionViewAccess, Interactions),
+  Context.pick(Inbox, Runs, SessionLog, Interactions),
 );
 
 /**
@@ -117,12 +112,25 @@ export const REFUSED: { readonly failed: ResumeRefusal } = {
  * Resume `runId` for the input it holds (a wake, an interrupted task), with
  * no caller to hand the run to: a refused wake is logged, and the queued
  * row waits for the next explicit resume; an owning parent is followed; a
- * run gone from the view is not resumed. Never fails.
+ * run the store no longer holds is not resumed. Never fails.
  */
 export const wakeRun = Effect.fn('wakeRun')(function* (
   runId: RunId,
-): Effect.fn.Return<void, never, Runs | SessionViewAccess> {
-  if ((yield* SessionViewAccess).run(runId) === undefined) return;
+): Effect.fn.Return<void, never, Runs | SessionLog> {
+  // The store's answer, not the view's: the view trails the log, and a run
+  // it has not applied yet would lose its wake.
+  const facts = yield* (yield* SessionLog)
+    .facts(runId)
+    .pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`Cannot read whether ${runId} still exists`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+          Effect.as(null),
+        ),
+      ),
+    );
+  if (facts === null) return;
   const resumed = yield* Effect.exit(resumeRun(runId, {}));
   if (Exit.isFailure(resumed)) {
     if (Cause.hasInterruptsOnly(resumed.cause)) return;
@@ -149,7 +157,7 @@ export const wakeRun = Effect.fn('wakeRun')(function* (
 export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
   runId: RunId,
   apiKeys: Readonly<Record<string, string>> = {},
-): Effect.fn.Return<boolean, never, Inbox | Runs | SessionViewAccess> {
+): Effect.fn.Return<boolean, never, Inbox | Runs | SessionLog> {
   const owed = yield* (yield* Inbox).owesResume(runId);
   if (owed === undefined) return false;
   // The wake's own keys, never the fiber's: the sender may be another
@@ -183,7 +191,6 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   const log = yield* SessionLog;
-  const view = yield* SessionViewAccess;
   // From the checks to the row's commit, one send to a run at a time, so a
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
@@ -192,7 +199,9 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       return { status: 'sent' } as const;
     // A run that takes no input (a process run, a one-shot root) reads
     // none, live or not: nothing would read the row.
-    if (view.run(runId)?.takesFollowUps === false)
+    // Read from the store: the view trails it.
+    const started = (yield* log.facts(runId))?.start;
+    if (started?.takesFollowUps === false)
       return { status: 'failed', reason: 'notResumable' } as const;
     const live = runs.get(runId);
     if (live === undefined) {

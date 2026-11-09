@@ -101,8 +101,10 @@ interface RequestDeps extends SessionRequestsInit {
   readonly decisionLanes: Map<string, PerKeyLane>;
 }
 
-/** Refuse a gated request the run's `actions` no longer hold; a run not
- *  folded yet is left to `admit`. */
+/** Refuse a gated request the run's `actions` no longer hold, read from
+ *  the log as of the call (the current view trails it, and a window fed by
+ *  the log can ask before the view has applied a row); a run the log does
+ *  not hold is left to `admit`. */
 const requireRunAction = (
   deps: RequestDeps,
   req: RuntimeCommand,
@@ -111,11 +113,14 @@ const requireRunAction = (
   if (req.kind === 'policy.set' && narrows(req.change)) action = undefined;
   if (req.kind === 'request.decide' && req.grant != null) action = 'grant';
   if (action === undefined) return Effect.void;
+  const gated = action;
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
-  const run = deps.view.run(runId);
-  return run === undefined || run.actions.includes(action)
-    ? Effect.void
-    : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
+  return Effect.flatMap(deps.view.read([runId]), (view) => {
+    const run = view.runs.get(runId);
+    return run === undefined || run.actions.includes(gated)
+      ? Effect.void
+      : Effect.fail(new Rejected({ reason: runActionRefusal(run, gated) }));
+  });
 };
 
 /** The run's stored aggregate state; `undefined` while it has no rows. */
