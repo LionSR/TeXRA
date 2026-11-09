@@ -45,7 +45,7 @@ export * from './toolDependencyStatus';
 export * from './modelAvailability';
 
 // Layer 5: ProgressView schemas
-export * from './progressView/data';
+export * from './toolCard';
 
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './runInput';

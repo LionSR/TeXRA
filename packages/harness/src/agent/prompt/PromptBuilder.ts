@@ -5,7 +5,7 @@ import { Effect, FileSystem } from 'effect';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import { delegationUpdate } from '@agent/runtime/delegation/delegationAvailability';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { RunContext } from '@shared/schemas';
+import type { PromptSections } from '@shared/schemas';
 import type { SkillCatalogEntry } from '@skills/runtimeSkills';
 import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
@@ -61,7 +61,7 @@ export function stepInstructions(
   plugins: readonly Pick<Plugin, 'id' | 'prompt'>[],
   skills: readonly SkillCatalogEntry[],
   ctx: Parameters<PromptSection>[0],
-): RunContext {
+): PromptSections {
   const sections = Object.fromEntries([
     // A step that offers no tool (a document reviser, the critic) has no
     // calls to make.
@@ -93,7 +93,10 @@ export function stepInstructions(
  *  of the system message that tells it: each section added or reworded,
  *  each one withdrawn, the tools that came and went, and the delegation
  *  targets that did. '' for none. */
-export function contextUpdate(told: RunContext, now: RunContext): string {
+export function contextUpdate(
+  told: PromptSections,
+  now: PromptSections,
+): string {
   const lines = Object.entries(now.sections).flatMap(([name, text]) =>
     told.sections[name] === text ? [] : [text],
   );

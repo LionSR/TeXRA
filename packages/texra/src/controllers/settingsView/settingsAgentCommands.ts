@@ -19,6 +19,7 @@ import {
 } from '@texra-ai/harness/host';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
 import {
+  AGENT_FILE_EXTENSION,
   agentKey,
   isPackagedAgentSource,
   toErrorMessage,
@@ -66,11 +67,11 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
     input: { task: boolean; name: string; customDir: string },
     resourcesRoot: string,
   ) {
-    const fileName = input.name.endsWith('.yaml')
-      ? input.name
-      : `${input.name}.yaml`;
+    const baseName = input.name.endsWith(AGENT_FILE_EXTENSION)
+      ? input.name.slice(0, -AGENT_FILE_EXTENSION.length)
+      : input.name;
+    const fileName = `${baseName}${AGENT_FILE_EXTENSION}`;
     const filePath = path.join(input.customDir, fileName);
-    const baseName = input.name.replace(/\.yaml$/, '');
     const description = input.task
       ? `${baseName} — document task`
       : `${baseName} — chat agent`;

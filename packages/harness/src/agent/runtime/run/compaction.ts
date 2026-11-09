@@ -15,7 +15,7 @@ import type { AgentTrace } from '@agent/trace/AgentTrace';
 import {
   logContextManagementEvent,
   startCompactionActivity,
-} from '@agent/trace/helpers';
+} from '@agent/trace/traceLogs';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import type { StateReadFailed } from '@shared/config/settings';
@@ -27,7 +27,7 @@ import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { contextTokens, estimateMessageTokens } from './contextTokens';
 import type { ModelInvoker } from '../ModelInvoker';
-import type { CallResult } from './modelCall';
+import type { ModelCallResult } from './modelCall';
 import { MODEL_COMPACTION_THRESHOLD_SETTING } from '@shared/state/stateSettings';
 
 /** Prepended to a summary folded back into the conversation as a user
@@ -80,7 +80,7 @@ type Reason = keyof typeof COMPACTION_REASONS;
 /** A summary the bound model produced of messages `[0, to)`. */
 interface Summary {
   readonly replacement: RunState['messages'][number];
-  readonly usage: CallResult['usage'];
+  readonly usage: ModelCallResult['usage'];
   readonly to: number;
   readonly contextWindow: number;
   readonly activity: ReturnType<typeof startCompactionActivity>;

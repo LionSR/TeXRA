@@ -18,6 +18,10 @@ export const AgentSourceSchema = Schema.Enum(AGENT_SOURCE);
 
 export type AgentSource = typeof AgentSourceSchema.Type;
 
+/** The extension of an agent definition file: the agent index reads only
+ *  files that carry it. */
+export const AGENT_FILE_EXTENSION = '.yaml';
+
 /**
  * True for the sources whose definitions are read in place and are not the
  * user's to edit: the bundled one, and an installed

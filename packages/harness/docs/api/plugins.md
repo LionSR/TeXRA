@@ -144,13 +144,14 @@ interface AgentTrace {
     use: (trace: AgentTrace) => Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E, R>;
   /**
-   * Open a streaming message. `stream.start` marks the moment the phase the
-   * stream represents actually began — emit it at the provider's phase
-   * signal, or use `deferStart` when the first content chunk is the only
-   * signal — so subscribers can surface liveness ("thinking…", "responding…")
-   * from the start event alone.
+   * Open a streaming message. Its `stream.start` waits for the first
+   * non-empty chunk (or a finalize that carries text): subscribers read
+   * `stream.start` as "this phase began" (a thinking stream drives a "model
+   * is thinking" indicator), so a stream opened at request setup announces
+   * no phase that never happens. A stream that ends without content emits
+   * nothing at all.
    */
-  openRun(kind: MessageType, options?: StreamOptions): StreamHandle;
+  openRun(kind: MessageType): StreamHandle;
   /**
    * Open a tool call's card with its first log (`tool.start`). A log whose
    * status is already terminal opens and closes the card at once; one without
@@ -1078,9 +1079,12 @@ interface JsonRpcConnectionOptions {
     method: string,
     params: unknown,
   ) => Effect.Effect<unknown> | undefined;
-  /** The `[method, params]` notification telling the peer we stopped waiting
-   *  for unanswered request `id` (its caller was interrupted, a timeout too). */
-  cancel?(id: number, method: string): readonly [string, unknown] | undefined;
+  /** The notification telling the peer we stopped waiting for unanswered
+   *  request `id` (its caller was interrupted, a timeout too). */
+  cancel?(
+    id: number,
+    method: string,
+  ): { readonly method: string; readonly params: unknown } | undefined;
 }
 ```
 
@@ -1925,24 +1929,6 @@ interface StreamHandle {
 }
 ```
 
-## StreamOptions
-
-Options accepted by `openRun`.
-
-```ts
-interface StreamOptions {
-  /**
-   * Defer the `stream.start` emission until the first non-empty chunk (or a
-   * finalize that carries text). Subscribers treat `stream.start` as "this
-   * phase began" — e.g. thinking streams drive a "model is thinking" liveness
-   * indicator — so a stream opened eagerly at request setup must not announce
-   * a phase that may never happen. A deferred stream that ends without
-   * content emits nothing at all.
-   */
-  readonly deferStart?: boolean;
-}
-```
-
 ## SubmitFollowUpResult
 
 Three outcomes: the input reached a running loop, it waits in the run's
@@ -1994,13 +1980,13 @@ interface TemplateOpening {
 
 ## TemplateVars
 
-The template-variable map accepted at the render boundary (PromptBuilder):
-fixed variables may be absent (template rendering keeps `throwOnUndefined`
-off, so templates must tolerate absence), and a plugin's own variables add
-custom keys beside the fixed ones.
+The template-variable map a launch opens with: fixed variables may be
+absent (template rendering keeps `throwOnUndefined` off, so templates
+must tolerate absence). A plugin renders its own variables beside these
+by spreading this map into its own (`TEMPLATE_INPUT_NAMES`).
 
 ```ts
-type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
+type TemplateVars = Partial<TemplateInputs>;
 ```
 
 ## ToolAvailabilityChecks

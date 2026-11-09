@@ -1,7 +1,7 @@
 /**
  * The query store's process, both sides: the in-memory SQLite database it
  * runs, answering one JSON line per request line on stdio, and the session
- * side's door to it ({@link openStore}, {@link request}). It runs as its own
+ * side's door to it ({@link spawnQueryStore}, {@link request}). It runs as its own
  * process so a runaway statement ends with a kill: `node:sqlite` has no
  * interrupt or progress handler, and a thread cannot be stopped inside
  * SQLite's native loop.
@@ -184,7 +184,7 @@ export const failedStep =
       : Effect.void;
 
 /** Start a store process in a scope forked from `parent`, its schema made. */
-export const openStore = Effect.fn('HistoryQuery.open')(function* (
+export const spawnQueryStore = Effect.fn('HistoryQuery.spawn')(function* (
   parent: Scope.Scope,
   spawner: ChildProcessSpawner['Service'],
 ) {

@@ -5,7 +5,7 @@
  */
 import { Cause, Clock, Effect, Exit } from 'effect';
 
-import { logSdkError } from '@agent/trace/helpers';
+import { logSdkError } from '@agent/trace/traceLogs';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';

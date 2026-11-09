@@ -19,19 +19,6 @@ import type { AgentEvent } from '@shared/session/agentEvent';
  *  trace until the trace closes. */
 export type AgentTraceSink = (event: AgentEvent) => void;
 
-/** Options accepted by `openRun`. */
-export interface StreamOptions {
-  /**
-   * Defer the `stream.start` emission until the first non-empty chunk (or a
-   * finalize that carries text). Subscribers treat `stream.start` as "this
-   * phase began" — e.g. thinking streams drive a "model is thinking" liveness
-   * indicator — so a stream opened eagerly at request setup must not announce
-   * a phase that may never happen. A deferred stream that ends without
-   * content emits nothing at all.
-   */
-  readonly deferStart?: boolean;
-}
-
 /** Handle returned by `openRun` — append chunks then finalize. */
 export interface StreamHandle {
   readonly id: string;
@@ -100,13 +87,14 @@ export interface AgentTrace {
     use: (trace: AgentTrace) => Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E, R>;
   /**
-   * Open a streaming message. `stream.start` marks the moment the phase the
-   * stream represents actually began — emit it at the provider's phase
-   * signal, or use `deferStart` when the first content chunk is the only
-   * signal — so subscribers can surface liveness ("thinking…", "responding…")
-   * from the start event alone.
+   * Open a streaming message. Its `stream.start` waits for the first
+   * non-empty chunk (or a finalize that carries text): subscribers read
+   * `stream.start` as "this phase began" (a thinking stream drives a "model
+   * is thinking" indicator), so a stream opened at request setup announces
+   * no phase that never happens. A stream that ends without content emits
+   * nothing at all.
    */
-  openRun(kind: MessageType, options?: StreamOptions): StreamHandle;
+  openRun(kind: MessageType): StreamHandle;
   /**
    * Open a tool call's card with its first log (`tool.start`). A log whose
    * status is already terminal opens and closes the card at once; one without

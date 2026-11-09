@@ -7,7 +7,7 @@ import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
 // Local imports - common
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
-import { SkillNameSchema } from '@shared/schemas';
+import { SKILL_FILE_NAME, SkillNameSchema } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
@@ -291,7 +291,7 @@ export function loadSkillDirectory(
   skillDir: string,
   directoryName: string,
 ): Effect.Effect<LoadedSkill, never, FileSystem.FileSystem> {
-  const skillPath = path.join(skillDir, 'SKILL.md');
+  const skillPath = path.join(skillDir, SKILL_FILE_NAME);
 
   return FileSystem.FileSystem.use((fs) => fs.readFileString(skillPath)).pipe(
     Effect.flatMap((content) => Effect.fromResult(extractFrontmatter(content))),

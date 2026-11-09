@@ -24,7 +24,7 @@ import {
 import { scriptSummaryElement } from '@shared/subagentFollowup';
 
 /** What became of one call a script issued, as its rows say. */
-type ScriptCallStatus =
+type ScriptCallOutcome =
   | 'completed'
   | 'failed'
   | 'skipped'
@@ -36,7 +36,7 @@ export interface ScriptCallCard {
   readonly toolName: string;
   readonly section: string | null;
   readonly attempt: number;
-  readonly status: ScriptCallStatus;
+  readonly status: ScriptCallOutcome;
   readonly reusedFrom: string | null;
   /** The call's error, when it failed or was skipped. */
   readonly error: string | null;
@@ -44,7 +44,9 @@ export interface ScriptCallCard {
   readonly value: unknown;
 }
 
-const statusOf = (settled: ToolResultPayload | undefined): ScriptCallStatus => {
+const statusOf = (
+  settled: ToolResultPayload | undefined,
+): ScriptCallOutcome => {
   if (settled === undefined) return 'unsettled';
   if (settled.result.status === 'executed') return 'completed';
   if (settled.disposition === 'skipped' || settled.result.name === 'Skipped')

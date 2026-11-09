@@ -34,7 +34,7 @@ interface SaveDebugParams {
  * built from the run's own roots, and the write is a plain (non-atomic) one.
  * A failure is caught and logged and never propagates into the run.
  */
-export function maybeSaveDebugObject({
+export function saveModelIOIfEnabled({
   object,
   objectType,
   invocation,

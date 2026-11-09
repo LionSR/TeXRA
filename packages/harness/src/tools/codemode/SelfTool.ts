@@ -34,7 +34,6 @@ import {
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { errorResult } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -116,8 +115,10 @@ const runSelf = Effect.fn('self.call')(function* (
   const { runId: parentRunId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
-    return errorResult(
-      "A task's script has no conversation to fork: call self() with `fork: false`.",
+    return yield* Effect.fail(
+      new ToolError(
+        "A task's script has no conversation to fork: call self() with `fork: false`.",
+      ),
     );
   const name = config.agent;
   const outputSchema =
@@ -218,7 +219,7 @@ Forked (the default), the child continues this conversation as it stood when the
   execute: Effect.fn('SelfTool.execute')(function* (input: SelfInput) {
     return yield* inRunSession('self', (call) =>
       call.script === null
-        ? Effect.succeed(errorResult('self() runs only inside a script.'))
+        ? Effect.fail(new ToolError('self() runs only inside a script.'))
         : runSelf(call, input, call.script),
     );
   }),

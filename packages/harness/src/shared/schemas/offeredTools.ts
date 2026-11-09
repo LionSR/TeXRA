@@ -52,7 +52,7 @@ export const ToolsOfferedPayloadSchema = Schema.Struct({
    *  none. */
   system: Schema.NullOr(Sha256Schema),
   /** The address of the context the model has been told, its sections by
-   *  name and its tools' names (`RunContextSchema`): what a later step
+   *  name and its tools' names (`PromptSectionsSchema`): what a later step
    *  appends to the history as a system message is the change from it. */
   context: Sha256Schema,
   /** The installed plugins' hooks the step pinned, each as
@@ -87,12 +87,12 @@ export type DelegationTargets = typeof DelegationTargetsSchema.Type;
 /** The context a run's model has been told, as a `tools.offered` row names
  *  it: the sections and the delegation targets its system text renders at
  *  the freeze, and the names of the tools it offers. */
-export const RunContextSchema = Schema.Struct({
+export const PromptSectionsSchema = Schema.Struct({
   sections: Schema.Record(Schema.String, Schema.String),
   tools: Schema.Array(Schema.String),
   delegation: Schema.optional(DelegationTargetsSchema),
 });
-export type RunContext = typeof RunContextSchema.Type;
+export type PromptSections = typeof PromptSectionsSchema.Type;
 
 /**
  * One piece of model-facing content: a tool declaration, a system text, a

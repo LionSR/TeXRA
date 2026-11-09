@@ -28,7 +28,7 @@ interface XmlFormatFromFilesResult {
 }
 
 /**
- * Get XML formatted string from multiple files
+ * Read files as prompt XML
  *
  * Best-effort: a file that cannot be read (moved, renamed, or deleted since the
  * config was saved) is skipped rather than rejecting the whole batch, which
@@ -41,8 +41,8 @@ interface XmlFormatFromFilesResult {
  * @param files List of file paths
  * @returns XML formatted string of the readable files, or null if none are readable
  */
-export const getXmlFormatFromReadableFiles = Effect.fn(
-  'varsUtils.getXmlFormatFromReadableFiles',
+export const readFilesAsPromptXml = Effect.fn(
+  'promptFilesXml.readFilesAsPromptXml',
 )(function* (
   workspaceRoot: string | undefined,
   files: string[],

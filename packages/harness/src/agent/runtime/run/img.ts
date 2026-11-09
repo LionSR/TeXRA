@@ -315,7 +315,7 @@ const PDF_PAGE_CONCURRENCY = 4;
  * can say when pages were left out. A missing, unreadable, empty or
  * unrasterizable PDF fails with the reason.
  */
-export const processPdf2Png = Effect.fn('img.processPdf2Png')(function* (
+export const rasterizePdfPages = Effect.fn('img.rasterizePdfPages')(function* (
   pdfPath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;

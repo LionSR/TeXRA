@@ -89,8 +89,8 @@ export function getDisplayedInstruction(
  * does; `Sessions.layer` does not); a child
  * run is never labelled and keeps its agent name.
  */
-export const RunLabels = Context.Reference<boolean>(
-  '@texra-ai/harness/agent/RunLabels',
+export const LabelsRootRuns = Context.Reference<boolean>(
+  '@texra-ai/harness/agent/LabelsRootRuns',
   { defaultValue: () => false },
 );
 
@@ -105,7 +105,7 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  * warned about and the run keeps its agent-name label. Stopping the run
  * interrupts it.
  *
- * Only a root run of a session that labels its runs ({@link RunLabels})
+ * Only a root run of a session that labels its runs ({@link LabelsRootRuns})
  * qualifies. A resumed run (`resumed`) is described only while it has no
  * `run.description` row, as when its process died before the helper
  * answered, so no run is described twice.

@@ -54,7 +54,7 @@ import {
   type CallPositions,
   failedStep,
   failedWith,
-  openStore,
+  spawnQueryStore,
   request,
   type Store,
 } from './childSource';
@@ -341,7 +341,8 @@ export class HistoryQueryStore implements Context.Service.Shape<
       if (this.store && target < this.store.cursor) {
         yield* this.discard('the session database was cleared');
       }
-      const store = this.store ?? (yield* openStore(this.scope, this.spawner));
+      const store =
+        this.store ?? (yield* spawnQueryStore(this.scope, this.spawner));
       this.store = store;
       // View snapshots are immutable: the same `runs` at the same cursor is
       // already in the store.

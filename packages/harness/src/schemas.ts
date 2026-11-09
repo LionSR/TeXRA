@@ -310,6 +310,7 @@ export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 export {
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
+  AGENT_FILE_EXTENSION,
   AGENT_SOURCE,
   AgentConfigSchema,
   agentFileName,

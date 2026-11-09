@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
 
-import type { ToolCard } from './progressView/data';
+import type { ToolCard } from './toolCard';
 
 /**
  * The shape of a tool definition; the type is derived from it.

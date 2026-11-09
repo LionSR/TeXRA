@@ -20,7 +20,7 @@ import {
 } from 'effect';
 
 // Local imports - common
-import { SkillNameSchema } from '@shared/schemas';
+import { SKILL_FILE_NAME, SkillNameSchema } from '@shared/schemas';
 import { absentReason, pathExists } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
 
@@ -557,7 +557,7 @@ export function countSkills(root: string) {
     Effect.flatMap((names) =>
       Effect.forEach(
         names,
-        (name) => exists(path.join(root, name, 'SKILL.md')),
+        (name) => exists(path.join(root, name, SKILL_FILE_NAME)),
         { concurrency: 8 },
       ),
     ),

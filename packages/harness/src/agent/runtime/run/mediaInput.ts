@@ -33,7 +33,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getBasename } from '@utils/core/pathBasics';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
-import { getBase64EncodedMedia, processPdf2Png } from './img';
+import { getBase64EncodedMedia, rasterizePdfPages } from './img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { MessageSchema } from '@texra-ai/llm';
 
@@ -68,7 +68,7 @@ const pdfPageParts = Effect.fn('mediaInput.pdfPages')(function* (
   path: string,
   display: string,
 ) {
-  const { pages, pageCount } = yield* processPdf2Png(path).pipe(
+  const { pages, pageCount } = yield* rasterizePdfPages(path).pipe(
     Effect.mapError(
       (cause) =>
         new Error(

@@ -18,7 +18,7 @@ import {
   type ExternalRootKind,
 } from '@utils/files/externalRoots';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
+import { readFilesAsPromptXml } from '@utils/files/promptFilesXml';
 
 /**
  * The fixed template vocabulary {@link buildTemplateInputs} produces to
@@ -30,8 +30,8 @@ import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
  * what follows the step (the tool-call mechanics, the skills) is rendered
  * per request (`stepInstructions`).
  *
- * A plugin may render its own templates with more variables beside these
- * (see {@link TemplateVars}); they are not in this vocabulary.
+ * A plugin may render its own templates with more variables beside these;
+ * they are not in this vocabulary.
  */
 const TemplateInputsSchema = Schema.Struct({
   /** The launch instruction. */
@@ -73,12 +73,12 @@ const TemplateInputsSchema = Schema.Struct({
 export type TemplateInputs = typeof TemplateInputsSchema.Type;
 
 /**
- * The template-variable map accepted at the render boundary (PromptBuilder):
- * fixed variables may be absent (template rendering keeps `throwOnUndefined`
- * off, so templates must tolerate absence), and a plugin's own variables add
- * custom keys beside the fixed ones.
+ * The template-variable map a launch opens with: fixed variables may be
+ * absent (template rendering keeps `throwOnUndefined` off, so templates
+ * must tolerate absence). A plugin renders its own variables beside these
+ * by spreading this map into its own (`TEMPLATE_INPUT_NAMES`).
  */
-export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
+export type TemplateVars = Partial<TemplateInputs>;
 
 /**
  * The names of the fixed template variables, the keys of
@@ -291,7 +291,7 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
   const reads = yield* Effect.forEach(
     FILE_VAR_CATEGORIES,
     (prefix) =>
-      getXmlFormatFromReadableFiles(
+      readFilesAsPromptXml(
         workspaceRoot,
         getCategoryFiles(agentConfig, prefix),
       ).pipe(Effect.map((read) => ({ prefix, ...read }))),

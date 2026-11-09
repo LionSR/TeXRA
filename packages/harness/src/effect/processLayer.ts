@@ -17,7 +17,7 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
-import { RunLabels } from '@agent/runtime/sessionDescription';
+import { LabelsRootRuns } from '@agent/runtime/sessionDescription';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
 import {
   projectViews,
@@ -208,7 +208,7 @@ export function processLayer(
   // into this layer's output, not provided to the sessions' construction.
   return Layer.mergeAll(
     sessionsLayer(options),
-    Layer.succeed(RunLabels)(true),
+    Layer.succeed(LabelsRootRuns)(true),
     Layer.effectDiscard(installProcessHttpDispatcher),
   );
 }

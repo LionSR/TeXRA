@@ -36,7 +36,7 @@ import {
 // Local imports
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
-import type { InvokeRequest } from '@agent/runtime/run/requestContext';
+import type { InvokeRequest } from '@agent/runtime/run/recordedRequest';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {

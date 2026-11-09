@@ -213,7 +213,6 @@ export type {
   AgentTrace,
   LogOptions,
   StreamHandle,
-  StreamOptions,
   ToolCardHandle,
 } from '@agent/trace/AgentTrace';
 export type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';

@@ -103,9 +103,12 @@ export interface JsonRpcConnectionOptions {
     method: string,
     params: unknown,
   ) => Effect.Effect<unknown> | undefined;
-  /** The `[method, params]` notification telling the peer we stopped waiting
-   *  for unanswered request `id` (its caller was interrupted, a timeout too). */
-  cancel?(id: number, method: string): readonly [string, unknown] | undefined;
+  /** The notification telling the peer we stopped waiting for unanswered
+   *  request `id` (its caller was interrupted, a timeout too). */
+  cancel?(
+    id: number,
+    method: string,
+  ): { readonly method: string; readonly params: unknown } | undefined;
 }
 
 type PendingError = JsonRpcRequestError | JsonRpcConnectionDisposed;
@@ -388,7 +391,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     return yield* Deferred.await(deferred).pipe(
       Effect.onInterrupt(() =>
         Effect.flatMap(takePending(id), (entry) =>
-          entry && notice ? notify(...notice) : Effect.void,
+          entry && notice ? notify(notice.method, notice.params) : Effect.void,
         ),
       ),
     );

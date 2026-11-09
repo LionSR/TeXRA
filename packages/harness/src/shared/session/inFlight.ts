@@ -11,7 +11,7 @@ import type {
   CommitOrdinal,
   DeclinableUsageRoute,
   DispatchFacts,
-  FailedNext,
+  StepAfterFailure,
   InvocationRef,
   RequestDecision,
   ModelFailure,
@@ -28,7 +28,7 @@ import type { RowRejection } from './runState';
 /** How an attempt ended, as its `failed` row records it. */
 export type Failure = {
   readonly error: ModelFailure;
-  readonly next: FailedNext;
+  readonly next: StepAfterFailure;
 };
 
 /** One attempt, as its rows left it. */
@@ -308,7 +308,7 @@ export function failedNext(
   facts: FailureFacts,
   retries: number,
   requestId: string | null,
-): FailedNext {
+): StepAfterFailure {
   // Once per invocation: the resend after it carries no continuation.
   if (
     facts.unchain &&
@@ -323,7 +323,7 @@ export function failedNext(
 }
 
 /** A call's result, as its `tool.result` row records it. */
-export type CallResult = Pick<
+export type ToolCallResult = Pick<
   ToolResultPayload,
   'attempt' | 'disposition' | 'duplicateOf' | 'result' | 'attachments'
 >;
@@ -334,7 +334,7 @@ export type CallResult = Pick<
 export type CallStatus =
   | { readonly kind: 'issued' }
   | { readonly kind: 'started'; readonly attempt: number }
-  | ({ readonly kind: 'settled'; readonly at: CommitOrdinal } & CallResult);
+  | ({ readonly kind: 'settled'; readonly at: CommitOrdinal } & ToolCallResult);
 
 /** One call of the pending response, the same record whichever issued it:
  *  the response (`script` null) or one of its `script` calls' guests, whose
