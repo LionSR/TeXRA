@@ -124,7 +124,7 @@ primitives make that one mechanism instead of one per pluggable kind.
    - What reached the model can be rebuilt from the run's rows: the system text,
      the exact tool declarations offered, the composition with plugin revisions,
      and the agent definition, stored once as `context.blob` rows
-     (`run/requestContext.ts`). In development and CI the invoker checks, before
+     (`run/recordedRequest.ts`). In development and CI the invoker checks, before
      a request leaves the process, that the rows it committed rebuild the turn
      it sends (`checkRecordedRequest`).
    - A refused or failed run-history write ends the run (`findStorageRefusal`,

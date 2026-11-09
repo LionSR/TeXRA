@@ -15,7 +15,7 @@ history (`RunCell.append`), never through the trace.
                                       │
                                       ▼
             ┌───────────────────────────────────────────────────┐
-            │ packages/harness/src/agent/trace/helpers.ts        │
+            │ packages/harness/src/agent/trace/traceLogs.ts      │
             │ TeXRA helpers, plain functions over an AgentTrace: │
             │ logSdkError / logProviderError / logUserMessage /  │
             │ logContextManagementEvent /                        │
