@@ -82,9 +82,9 @@ export function createDesktopWindowHost(options: {
     program.pipe(Effect.tapError((error) => notify('error', error.message)));
 
   /**
-   * Open a documentation URL without keeping the caller waiting; the browser
-   * never opening is shown in the window and logged, not swallowed. The log
-   * names the documentation URL rather than the address the shell refused.
+   * Open a URL in the browser without keeping the caller waiting; the
+   * browser never opening is shown in the window and logged, not swallowed.
+   * The log names the link rather than the address the shell refused.
    */
   const openExternalInBackground = (url: string): void => {
     spawn(
@@ -93,7 +93,7 @@ export function createDesktopWindowHost(options: {
           (cause) =>
             new HostFailed({
               member: 'openExternal',
-              message: 'The documentation URL could not be opened.',
+              message: 'The link could not be opened.',
               cause,
             }),
         ),
@@ -143,6 +143,7 @@ export function createDesktopWindowHost(options: {
     previewHost,
     /** `openExternal`, its failure the caller's to present. */
     openExternalUrl: previewHost.openExternal,
+    openExternalInBackground,
     presented,
     reportAsyncError,
     reported,

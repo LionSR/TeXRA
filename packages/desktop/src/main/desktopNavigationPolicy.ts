@@ -1,4 +1,4 @@
-import { shell, type WebContents } from 'electron';
+import type { WebContents } from 'electron';
 
 const ALLOWED_HTTPS_HOSTS = new Set<string>([
   'github.com',
@@ -18,37 +18,37 @@ export function isAllowedExternalUrl(url: string): boolean {
   return ALLOWED_HTTPS_HOSTS.has(host);
 }
 
-function routeOrDeny(
-  url: string,
-  onAsyncError: (error: unknown) => void,
-): void {
-  if (!isAllowedExternalUrl(url)) return;
-  shell.openExternal(url).catch(onAsyncError);
-}
-
 interface DesktopNavigationPolicyOptions {
-  onAsyncError: (error: unknown) => void;
+  /** Opens an allowed link in the browser, reporting its own failure. */
+  openExternal: (url: string) => void;
 }
 
+/**
+ * The window never navigates or opens a window of its own: a link to an
+ * allowed host opens in the browser, any other is dropped.
+ */
 export function installDesktopNavigationPolicy(
   webContents: WebContents,
-  { onAsyncError }: DesktopNavigationPolicyOptions,
+  { openExternal }: DesktopNavigationPolicyOptions,
 ): void {
+  const openIfAllowed = (url: string): void => {
+    if (isAllowedExternalUrl(url)) openExternal(url);
+  };
   webContents.setWindowOpenHandler(({ url }) => {
-    routeOrDeny(url, onAsyncError);
+    openIfAllowed(url);
     return { action: 'deny' };
   });
 
-  // will-navigate and will-redirect share one deny-then-route handler.
-  const denyAndRoute = (
+  // will-navigate and will-redirect share one handler.
+  const blockAndOpenIfAllowed = (
     event: { preventDefault(): void },
     url: string,
   ): void => {
     event.preventDefault();
-    routeOrDeny(url, onAsyncError);
+    openIfAllowed(url);
   };
-  webContents.on('will-navigate', denyAndRoute);
-  webContents.on('will-redirect', denyAndRoute);
+  webContents.on('will-navigate', blockAndOpenIfAllowed);
+  webContents.on('will-redirect', blockAndOpenIfAllowed);
 
   webContents.on('will-attach-webview', (event) => {
     event.preventDefault();
