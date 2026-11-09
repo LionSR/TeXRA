@@ -89,7 +89,7 @@ The store is one SQLite file named `texra.db` under the storage root
 application id (`TeXR`) carry the product's name. An ephemeral session runs the
 same schema in memory (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
-The store MUST carry application id `0x54655852` and schema version 102 in
+The store MUST carry application id `0x54655852` and schema version 103 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts#APPLICATION_ID`,
 `#SCHEMA_VERSION`). A process MUST refuse, unchanged, a file with another
 application id or a schema stamp at or above 102 other than its own
