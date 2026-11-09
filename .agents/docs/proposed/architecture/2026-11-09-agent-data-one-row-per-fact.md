@@ -5,7 +5,7 @@ status: proposed
 
 # Agent 数据：一个事实只存一行，展示由推导产生
 
-这是一份只读评审后的设计提案，基线是 `main` 的 `db09959`。没有改动任何代码，也没有做原型；文中的数字都是对源码的静态统计。唯一运行过的是一个临时测试，用来确认 §3.1 里“两条展示事件共用一个 `seq`”的后果，测试没有提交。范围是一次运行（run）的数据怎么存、怎么读，不含设置和其他当前值。
+这是一份评审后的设计提案，基线是 `main` 的 `db09959`。提案本身没有实现，也没有做原型；文中的数字都是对源码的静态统计。评审中发现的一个缺陷和几处过时陈述已在同一分支修掉，见 §8。范围是一次运行（run）的数据怎么存、怎么读，不含设置和其他当前值。
 
 与已定案规则的关系：
 
@@ -28,7 +28,7 @@ status: proposed
 
 不推荐的两种设计：把行统一成“开/关”成对的 op 行（只是改名，且和 PRD 的决定冲突）；用可变的状态表当真相（和“历史是唯一真相”冲突）。对比见 §2。
 
-可以清除的过时设计见 §3.4。复读代码时还发现一个和本提案无关、现在就存在的缺陷，见 §8。
+可以清除的过时设计见 §3.4。复读代码时还发现一个和本提案无关的缺陷，已在同一分支修复，见 §8。
 
 ## 1. 设计问题
 
@@ -109,7 +109,7 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 
 事件词汇不变。渲染端、NDJSON、SDK 事件流和 trace 导出看到的仍是 `tool.start`、`tool.end`、`usage`；变的只是这些事件在有运行历史的 run 上不再是存下来的行。
 
-**一条硬约束：一条存储行最多产生一条转录事件。** 两个读者按 `seq` 去重：视图的转录（`shared/session/sessionViewUpdate.ts:1011-1012`）和 `Run.events` 背后的 `replayTrace`（`controllers/session/runTrace.ts:268-270`）。共用一个 `seq` 的第二条事件会被丢掉。现有代码已经碰到了这一点，见 §8。
+**一条硬约束：一条存储行最多产生一条转录事件。** 视图的转录按 `seq` 去重（`shared/session/sessionViewUpdate.ts:1011-1012`），共用一个 `seq` 的第二条转录事件会被丢掉。`Run.events` 背后的 `replayTrace` 原来也只按 `seq` 去重，并且已经因此丢过事件，见 §8。
 
 **第一片：工具卡片。**
 
@@ -180,7 +180,7 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 | 2   | 每行的 `origin` 列、`OwnerId`、`ProcessIdentity`、`platform/defaults/nodeProcesses.ts`（215 行） | 只在 `databaseLayer.ts:629, 664` 写入；代码里没有读取方。它原本供 claim 的存活证明使用；ownership 那一片删掉了 `ProcessIdentity.owners` 和 claim，盖戳这一半留了下来。为了盖这个戳，每个进程在建 process layer 时要读一次 `/proc`（Linux）或起一次 `ps` / PowerShell（`controllers/session/sessionLayer.ts:362-367`）。pi-durable 没有任何主机名、pid 或进程身份。但它写在规范（spec §1、§2.2）和对外指南（`docs/api/durable-protocol.md`）里，剩下的用处是人工排查 | 格式：DDL 少一列；NDJSON 和 trace 的载荷少一个字段；规范和指南各改一处 |
 | 3   | `run.position` 的 `family`                                                                       | 只有一个值 `'toolUse'`（`shared/schemas/runHistoryEvent.ts:36`），唯一的写入是常量（`agent/runtime/loop/rows.ts:79`），唯一的读取是判空（`sessionViewUpdate.ts:749`）                                                                                                                                                                                                                                                                                               | 格式：`run.position` 升版                                              |
 | 4   | 按 `at` 相等推断批次边界                                                                         | 随第 1 项消失                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 无                                                                     |
-| 5   | 提到 claim 的注释和三份已过时的 implemented 说明                                                 | 注释：`sessionEvent.ts:81, 329-330`、`identifiers.ts:28`、`database.ts:149`、`currentValues.ts:5`、`nodeProcesses.ts:19-21`、`runProgram.ts:74`、`Inbox.ts:110`、`ToolUseFollowUp.ts:39`、`sessionPrograms.ts:206`、`sessionReads.ts:6`、`toolUseDispatch.ts:618`。说明：single-owner liveness §2 和 §3、storage v1 §8 和 Q6、core concepts 的 Claim 和不变量 1，都还在描述 `owner_id`、claim 和多进程共享一个库；规范 §7 已经写明“没有 daemon，也没有 claim”       | 无格式变化                                                             |
+| 5   | 三份已过时的 implemented 说明（代码注释里的同类描述已改）                                        | single-owner liveness §2 和 §3、storage v1 §8 和 Q6、core concepts 的 Claim 和不变量 1，都还在描述 `owner_id`、claim 和多进程共享一个库；规范 §7 已经写明“没有 daemon，也没有 claim”。代码里十三处提到 claim 的注释已在同一分支改掉                                                                                                                                                                                                                                 | 无格式变化                                                             |
 | 6   | 冻结时归零：行版本号、17 个退役行种类、1 个退役插件事实                                          | 按 AGENTS.md，1.0 的格式还没有发布，`config/storage/frozen/` 也不存在；需要负责人确认没有已发布的构建写过这些版本                                                                                                                                                                                                                                                                                                                                                   | 需要负责人决定：现有的开发库在归零时会被整体拒绝一次                   |
 
 关于第 2 项的两种做法：整个删掉；或者保留这一列供人工排查，但只盖主机名和 pid，删掉进程启动时间的探测。后者不改格式，也去掉了每次启动的子进程。
@@ -201,10 +201,10 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 
 ## 5. 顺序
 
-1. **修 §8 的缺陷。** 和本提案无关，小，可以先做。
+1. **修 §8 的缺陷。** 已在同一分支完成。
 2. **格式批（冻结前，一次重生成 golden）。** §3.4 的第 1、3 项，以及第 2 项和 §3.3（如果负责人决定做）。它们互不依赖，但共用一次重生成。规范的 W3、W4 和 AGENTS.md 的卡片段落在同一个 PR 里改写。
 3. **记录归约函数（§3.2）。** 没有格式变化，不受冻结约束。
-4. **注释和说明（第 5 项）。** 任何时候。
+4. **注释和说明（第 5 项）。** 注释已在同一分支改完；三份 implemented 说明还没有动。
 5. **冻结时归零（第 6 项）。** 只在冻结那一刻有意义，由负责人决定。
 
 ## 6. 验收标准
@@ -214,7 +214,7 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 - 规范 §4 里没有关于卡片和调用行同批提交的 MUST。
 - “activation 清除 end 和 stop”只有一个实现：按 `'run.activate'` 搜索，处理它的归约只剩 `shared/session/` 里的那个纯函数和 `runState.ts`。
 - 如果删掉 `origin`：`platform/defaults/nodeProcesses.ts` 不存在；打开会话不再起 `ps` 或 PowerShell。
-- 按测试规则，这些片不加新的单元测试；格式变更由 golden 和崩溃一致性回放覆盖。§8 的缺陷修复带一个先失败的回归测试。
+- 按测试规则，这些片不加新的单元测试；格式变更由 golden 和崩溃一致性回放覆盖。
 
 ## 7. 风险和没有验证的部分
 
@@ -227,22 +227,22 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 
 ## 8. 复读时发现的缺陷和过时陈述
 
-和本提案无关，现在就存在：
+和本提案无关。三项都已在同一分支修掉，各是一个提交：
 
-1. **`Run.events` 丢掉模型标题的 `usage` 事件。** 模型写的 `run.description` 带着它那次请求的计费用量，`displayRows` 为它再投影一条 `usage`，两条共用一个 `seq`（`controllers/session/projections.ts:291-307`）。`replayTrace` 对每一行都先推进 `seq` 再判断它是不是 trace 行（`controllers/session/runTrace.ts:268-273`），所以先到的 `run.description` 占掉了这个 `seq`，后到的 `usage` 被当成已读。用一个临时测试确认：依次送入同一个 `seq` 的 `run.description` 和 `usage`，再送一条 `log`，读出的事件只有 `log`。影响：只在给根 run 起标题的进程里出现（`processLayer` 提供 `LabelsRootRuns`）；从 `Run.events` 累加 `usage` 的读者会少算这一次请求；视图的总用量不受影响，它按 commit 而不是 `seq` 去重。冷读时两行的先后由 `ORDER BY seq` 的并列顺序决定，没有定义。
-2. **规范里的 schema 版本号过时。** `packages/harness/docs/spec.md` 第 92 行写的是 “The store MUST carry … schema version 102”，代码是 103（`controllers/session/storeSchema.ts` 的 `SCHEMA_VERSION`）。同一段里“102 及以上”和“102 以下”说的是 1.0 基线，是对的。这一处已在本分支随本说明一起改成 103。
-3. **`scripts/check-fact-spread.mjs` 的谓词表里还有 `ownedHere`。** 仓库里已经没有这个名字。
+1. **`Run.events` 丢掉模型标题的 `usage` 事件。** 模型写的 `run.description` 带着它那次请求的计费用量，`displayRows` 为它再投影一条 `usage`，两条共用一个 `seq`（`controllers/session/projections.ts:291-307`）。`replayTrace` 原来把一个 `seq` 的第一行读完就当整个 `seq` 已读，所以先到的 `run.description` 占掉了它，后到的 `usage` 被丢掉。影响：只在给根 run 起标题的进程里出现（`processLayer` 提供 `LabelsRootRuns`）；从 `Run.events` 累加 `usage` 的读者会少算这一次请求；视图的总用量不受影响，它按 commit 而不是 `seq` 去重。修法：`replayTrace` 记下最新 `seq` 上已读的行种类（`controllers/session/runTrace.ts` 的 `kinds`）。一个 `seq` 上每种行最多一条（一条事件行，每种投影行一条），所以另一种行会被读到，重复送达的行仍然不会。回归测试在 `packages/harness/test/controllers/session/runTrace.vitest.ts`，修复前失败。
+2. **规范里的 schema 版本号过时。** `packages/harness/docs/spec.md` 写的是 “The store MUST carry … schema version 102”，代码是 103（`controllers/session/storeSchema.ts` 的 `SCHEMA_VERSION`）。已改成 103。同一段里“102 及以上”和“102 以下”说的是 1.0 基线，没有动。
+3. **`scripts/check-fact-spread.mjs` 的谓词表里还有 `ownedHere`。** 仓库里已经没有这个名字，其他被删掉的谓词都随删除离开了这张表。已从表里和 `packages/harness/AGENTS.md` 的示例里去掉。
 
 ## Verified
 
-在 `main` 的 `db09959` 上核对。除 §8 第 1 项用一个临时测试确认外，全部是读代码和 `grep`：
+在 `main` 的 `db09959` 上核对。设计部分全部是读代码和 `grep`。§8 的修复跑过 `npm run typecheck`、`npm run lint`、`npm run format:check`、`npm run gate:docs` 的三个脚本、`node scripts/check-api-report.mjs` 和 `npm test`（253 个文件、569 个测试通过）：
 
 - 37 种行、26 种展示行、11 种私有行：`shared/schemas/sessionEvent.ts` 的三个 union 和 `shared/schemas/rowVersions.ts` 的 `ROW_KINDS`。
 - 一次工具调用写的行，以及哪些调用有卡片：`agent/runtime/loop/toolUseDispatch.ts` 的 `commit`、`cardRows`、`bodyStarts`、`skipCall` 和结果提交；规范 §4 的 W3、W4 与代码一致。
 - `tool.end` 和 `usage` 在两类 run 上的不同含义：`shared/schemas/traceEvent.ts:65-85`。
 - 编辑过的文件可以从已存的结果推出：`SettledToolResultSchema` 保留 `edits`（`shared/schemas/toolResult.ts:256-265`）。
 - 读取 `tool.start`、`tool.end` 的地方都在展示事件一侧（转录、视图、`runTrace`、压缩活动投影）；写入只有 dispatch 和外部 agent 的 `openToolCard`。
-- 两个按 `seq` 去重的读者：`sessionViewUpdate.ts:1011-1012` 和 `runTrace.ts:268-270`；`tool.end` 找不到卡片时被忽略：`shared/session/transcriptUpdate.ts:200-203`。
+- 视图的转录按 `seq` 去重：`sessionViewUpdate.ts:1011-1012`；`tool.end` 找不到卡片时被忽略：`shared/session/transcriptUpdate.ts:200-203`。
 - `origin` 没有读取方：在 `packages/*/src` 里搜索行信封的 `.origin`，命中的都是别的字段（模型的 origin、转录行的 `origin === 'local'`）；`OwnerId`、`ProcessIdentity`、`processStartIdentity` 的全部使用点都在写入路径上。
 - `family` 的读写点：`rows.ts:79`、`runRows.ts:108`、`sessionViewUpdate.ts:749`。
 - 版本升级次数：逐条读 `rowVersions.ts` 的注释后计数。
