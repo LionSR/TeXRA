@@ -61,10 +61,8 @@ const VERSION_CONTROL_DIFF_PATTERN = new RegExp(
   'i',
 );
 
-/**
- * Ordered from most specific to least so the VC/between-round hashes are
- * recognized before the bare `_diff` suffix that they also end with.
- */
+/** The three generated-artifact shapes; their patterns are mutually
+ *  exclusive, so the order only names which kind a path is tried as first. */
 const GENERATED_LATEXDIFF_ARTIFACT_PATTERNS: {
   kind: GeneratedLatexdiffArtifactKind;
   regex: RegExp;

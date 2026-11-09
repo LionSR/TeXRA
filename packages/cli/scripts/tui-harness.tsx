@@ -475,7 +475,7 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
   draft.type === 'run.position' ||
   draft.type === 'request.decided';
 
-// The TUI reads the session fold (PRD 10.1): bind it and subscribe every
+// The TUI reads the session fold: bind it and subscribe every
 // run's transcript tier the way `runChat` does.
 HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 {
@@ -544,8 +544,8 @@ HARNESS_DISPOSERS.push(announceForegroundApprovals());
  */
 const harnessRuns = new Set<RunId>();
 
-/** Mint a run, held here from its birth: its `run.start` existence fact
- *  (PRD 6, item 2), then the `run.config` launch fact a real run publishes
+/** Mint a run, held here from its birth: its `run.start` existence fact,
+ *  then the `run.config` launch fact a real run publishes
  *  next, which names the model an agent runs on (a child's scrollback
  *  header waits for it). */
 function seedRun(
