@@ -31,6 +31,16 @@ import type { TranscriptView } from './sessionView';
 // Live text
 // ---------------------------------------------------------------------------
 
+/** What a live chunk did: nothing, moved the held text of a row not yet
+ *  painted, or repainted a row into `transcript`. */
+export type LiveTextOutcome =
+  | { readonly outcome: 'ignored' }
+  | { readonly outcome: 'held' }
+  | { readonly outcome: 'repainted'; readonly transcript: TranscriptView };
+
+const IGNORED: LiveTextOutcome = { outcome: 'ignored' };
+const HELD: LiveTextOutcome = { outcome: 'held' };
+
 /**
  * Apply one live chunk: ignored when its `to` is not past the text held,
  * otherwise the held text is truncated at `from` and the chunk appended, so a
@@ -38,21 +48,19 @@ import type { TranscriptView } from './sessionView';
  * An append costs the chunk, never the row; the embedded-followup flag is the
  * one whole-text scan, and it runs only while a block is open or the chunk
  * could open one. Durable text wins: a row whose finalizing event has been
- * applied is never reopened. Returns null when the chunk changed nothing, the
- * same value when it only moved the held text of a row not yet applied, and a
- * new value when a row repainted.
+ * applied is never reopened.
  */
 export function applyLiveText(
   transcript: TranscriptView,
   work: TranscriptWork,
   chunk: TextChunk,
   runLabels: RunLabels,
-): TranscriptView | null {
+): LiveTextOutcome {
   const { ix } = work;
   const cursor = ix.cursors.get(chunk.rowId);
-  if (!cursor && rowById(transcript, ix, chunk.rowId)) return null;
+  if (!cursor && rowById(transcript, ix, chunk.rowId)) return IGNORED;
   const held = ix.live.get(chunk.rowId) ?? '';
-  if (chunk.to <= held.length) return null;
+  if (chunk.to <= held.length) return IGNORED;
   if (chunk.from > held.length) {
     throw new Error(
       `text chunk for ${chunk.runId}/${chunk.rowId} starts at ${chunk.from}, past the ${held.length} characters held`,
@@ -61,7 +69,7 @@ export function applyLiveText(
   const text = held.slice(0, chunk.from) + chunk.text;
   ix.live.set(chunk.rowId, text);
   // The row paints when its event is applied, joined with this text.
-  if (!cursor) return transcript;
+  if (!cursor) return HELD;
   const slot = ix.slots.get(chunk.rowId);
   const next: TranscriptDraft = { ...transcript };
   if (slot?.kind === 'tool') {
@@ -70,7 +78,7 @@ export function applyLiveText(
       next,
       toolRow(slot.base, slot.log, text, runLabels, slot.call),
     );
-    return next;
+    return { outcome: 'repainted', transcript: next };
   }
   const measured =
     chunk.from === held.length
@@ -101,7 +109,7 @@ export function applyLiveText(
     );
     if (painted) upsertRow(work, next, painted);
   }
-  return next;
+  return { outcome: 'repainted', transcript: next };
 }
 
 /** Drop a run's live text and its streaming cursors: the run ended. */
