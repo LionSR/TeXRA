@@ -11,9 +11,8 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { type ToolProbeInputs, type Plugin } from '@texra-ai/harness/plugins';
+import type { Plugin } from '@texra-ai/harness/plugins';
 import {
-  ToolAvailability,
   ToolCatalog,
   type ExternalToolCheckResult,
 } from '@texra-ai/harness/host';
@@ -100,30 +99,16 @@ export function visibleToolPlugins(
   });
 }
 
-/** The asking workspace, and its host's code editor where it has one
- *  (VS Code's settings view; not the desktop app or the CLI). */
-export type DashboardInputs = ToolProbeInputs & {
-  readonly editor?: EditorIntegrationShape;
-};
-
 /**
- * Build the complete tool dashboard items list.
- *
- * Built-in plugins come first, then the probed plugins, each in list order.
- *
- * @param probeInputs - the asking workspace folder and configuration,
- *   carried as data for the probes that need them (the GitHub group asks
- *   whether the folder is a git repository, the Zotero group reads its port),
- *   and the host's editor. The probes are skipped
- *   when `cachedResults` is given.
- * @param cachedResults - when provided, skips network probes and uses
- *   these results (including their `statusDetail`). Used by the toggle
- *   handler for instant UI updates.
+ * The tool dashboard's items: the built-in plugins first, then the probed
+ * plugins as `results` found them (their `statusDetail` included), each in
+ * list order. Only a host with a code editor (VS Code's settings view; not
+ * the desktop app or the CLI) gets an "Install Extension" action.
  */
 export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
   function* (
-    probeInputs: DashboardInputs,
-    cachedResults?: readonly ExternalToolCheckResult[],
+    results: readonly ExternalToolCheckResult[],
+    editor: EditorIntegrationShape | undefined,
   ) {
     const visible = visibleToolPlugins((yield* ToolRegistry).entries);
     const builtinItems: ToolDashboardItem[] = visible
@@ -141,11 +126,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         ...settingRows(card),
       }));
 
-    const results = new Map(
-      (
-        cachedResults ?? (yield* (yield* ToolAvailability).refresh(probeInputs))
-      ).map((result) => [result.id, result]),
-    );
+    const resultById = new Map(results.map((result) => [result.id, result]));
 
     const disabledIds = yield* Effect.flatMap(
       ToolCatalog,
@@ -153,7 +134,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     );
     const externalItems: ToolDashboardItem[] = [];
     for (const { card, plugin } of visible) {
-      const result = results.get(plugin.id);
+      const result = resultById.get(plugin.id);
       if (result === undefined) continue;
       const { tools, status, statusLabel, statusDetail } = result;
       const {
@@ -186,7 +167,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
           // Only a host with an editor gets an "Install Extension" button;
           // the install guide and URL still describe the standalone path
           // (Lean 4's `lake` build, for one).
-          ...(installExtensionId && probeInputs.editor
+          ...(installExtensionId && editor
             ? [
                 {
                   kind: 'extension' as const,

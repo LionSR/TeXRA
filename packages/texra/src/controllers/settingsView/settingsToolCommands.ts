@@ -49,18 +49,21 @@ export function settingsToolCommands(ports: {
   );
 
   const pages = [
-    // Results no probe has produced yet stay `undefined` so the build runs
-    // the probes; coercing them to `[]` would render "zero external tools".
-    // The view shows a spinner until data arrives, so a failed build still
-    // sends an empty page to end it.
+    // Results no probe has produced yet are probed now, never coerced to
+    // `[]`, which would render "zero external tools"; the held ones are
+    // what a toggle repaints from at once. The view shows a spinner until
+    // data arrives, so a failed build still sends an empty page to end it.
     hostStatePage(
       'plugins',
       ['plugins'],
-      Effect.flatMap(ToolAvailability, (availability) =>
-        Effect.flatMap(SubscriptionRef.get(availability.results), (held) =>
-          buildPluginRows({ ...roots, editor }, held.get(roots.workspace)),
-        ),
-      ).pipe(
+      Effect.gen(function* () {
+        const availability = yield* ToolAvailability;
+        const held = yield* SubscriptionRef.get(availability.results);
+        return yield* buildPluginRows(
+          { ...roots, editor },
+          held.get(roots.workspace) ?? (yield* availability.refresh(roots)),
+        );
+      }).pipe(
         Effect.catch((error) =>
           Effect.logWarning(
             'The plugin rows could not be built; showing the page empty.',
