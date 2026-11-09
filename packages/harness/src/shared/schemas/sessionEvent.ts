@@ -78,8 +78,8 @@ export type CommitOrdinal = typeof CommitOrdinalSchema.Type;
 const envelope = {
   seq: SeqSchema,
   commit: CommitOrdinalSchema,
-  /** The process that appended the row (not the aggregate's claim holder);
-   *  null for the trace viewer's reconstruction, which has no writer. */
+  /** The process that appended the row; null for the trace viewer's
+   *  reconstruction, which has no writer. */
   origin: Schema.NullOr(OwnerIdSchema),
   /** The publish clock in whole milliseconds: the store keeps it in an
    *  `INTEGER` column of a `STRICT` table, so the vocabulary states that
@@ -326,8 +326,8 @@ const DisplaySessionEventDraftSchema = Schema.Union([
   ...DisplayRowDraftSchema.members,
 ]);
 /** The run's private records, read by the runtime and never by a renderer
- *  (`isDisplayRow`). `followup.closed`: its input is closed until a
- *  claim reopens it or it activates again. */
+ *  (`isDisplayRow`). `followup.closed`: its input is closed until it
+ *  activates again. */
 const RunRecordEventDraftSchema = Schema.Union([
   durable('run.report', { report: Schema.NullOr(Schema.String) }),
   /** How a process run's command exited, written with its end; a stop

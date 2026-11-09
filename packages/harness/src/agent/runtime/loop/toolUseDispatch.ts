@@ -615,8 +615,8 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   const answered =
     sanitized.status === 'executed' ? (sanitized.consumedFollowUps ?? []) : [];
   const facts = factRows(extracted.facts, runId, plugin, log);
-  // A retirement refused outside the run history is the claim's refusal,
-  // worded as the cell words one of its own.
+  // A retirement refused outside the run history names a closed aggregate;
+  // it is worded as the cell words one of its own.
   yield* retireStanding.pipe(
     Effect.catchTag('DatabaseAggregateClosed', (refused) =>
       Effect.fail(runRefusal(runId, refused)),

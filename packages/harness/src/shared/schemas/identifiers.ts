@@ -25,7 +25,7 @@ export function generateRunId(): RunId {
 // The aggregate key every durable session event rides on: the kind and
 // logical id of the lifecycle it belongs to (`run` by run id, `plugin` by a
 // plugin's own key), encoded canonically as JSON so one string names it in
-// the event table, and the process identity that holds a claim on it.
+// the event table, and the identity of the process that writes a row.
 
 /** The complete process identity, encoded canonically without losing null. */
 const OwnerIdentitySchema = Schema.Tuple([
@@ -39,8 +39,8 @@ const decodeOwnerIdentityJson = Schema.decodeUnknownResult(
 );
 
 /**
- * JSON.stringify([hostname.toLowerCase(), pid, processStart]). Liveness
- * proofs read the pid and start; the hostname is kept for diagnostics.
+ * JSON.stringify([hostname.toLowerCase(), pid, processStart]), kept for
+ * diagnostics.
  */
 export const OwnerIdSchema = Schema.String.check(
   Schema.makeFilter(

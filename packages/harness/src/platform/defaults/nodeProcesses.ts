@@ -16,9 +16,8 @@ import { withLogChannel } from '@logger/effectLog';
 import type { OwnerId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-/** This process's owner identity: hostname, pid and process start. Liveness
- *  proofs read only the pid and start; the hostname is the one the process
- *  started under, for diagnostics. */
+/** This process's identity, stamped on every row it writes: the hostname it
+ *  started under, its pid and its process start. */
 export function processOwnerId(processStart: string | undefined): OwnerId {
   return JSON.stringify([
     hostname().toLowerCase(),

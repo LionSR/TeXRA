@@ -796,7 +796,7 @@ function createWorkspaceLocation(
 
 A root's current values (`current_value`): one row per family and key,
 replaced in place, outside the event history, so an event-format bump
-leaves them. Every write is one `BEGIN IMMEDIATE` with no aggregate claim;
+leaves them. Every write is one `BEGIN IMMEDIATE`;
 a value decodes with its family's schema where it is read, and a row that
 no longer decodes fails that read.
 
