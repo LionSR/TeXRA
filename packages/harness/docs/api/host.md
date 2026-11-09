@@ -1810,9 +1810,12 @@ read-only from here, and the CLI warns of a broken file at startup.
 
 ```ts
 const readMcpConfig: (
-  fs: FileSystem.FileSystem,
   file: string,
-) => Effect.Effect<ReturnType<typeof parseMcpServers> | null>
+) => Effect.Effect<
+  ReturnType<typeof parseMcpServers> | null,
+  never,
+  FileSystem.FileSystem
+>
 ```
 
 ## readModelOptions

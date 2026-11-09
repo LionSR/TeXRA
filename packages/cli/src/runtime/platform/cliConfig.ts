@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
+import { Effect, Predicate, Result, Schema } from 'effect';
 
 // Local imports - platform
 import { modelConfig, MODELS } from '@texra-ai/llm';
@@ -255,10 +255,7 @@ export function loadCliStartupConfig(
       );
       // The user's MCP server config, which only a run declaring MCP tools
       // otherwise reads: a broken file warns here, not first mid-run.
-      const mcpConfig = yield* readMcpConfig(
-        yield* FileSystem.FileSystem,
-        mcpConfigPathOf(storageRoot),
-      );
+      const mcpConfig = yield* readMcpConfig(mcpConfigPathOf(storageRoot));
       // A value its catalog row rejects stays in its tier, as in the other
       // hosts: a read of it gets the row's default (and a fail-closed row its
       // own reading), never a looser tier's value. `warnings` below names it

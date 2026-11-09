@@ -6,7 +6,7 @@
  * `~/.texra/mcp.json`, listed read-only. Each row names the agents whose
  * tool lists reach it; nothing here turns another row on.
  */
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
@@ -18,10 +18,8 @@ import {
   type PluginEnv,
 } from '@texra-ai/harness/host';
 import { mcpServerOfToolName } from '@texra-ai/harness/transcript';
-import {
-  buildToolDashboardItems,
-  type DashboardInputs,
-} from '@texra/controllers/settingsView/ToolDashboardData';
+import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
+import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 
 /** The roots a plugins page reads: the install record and switches in its
@@ -33,14 +31,18 @@ export type PluginPageRoots = Pick<
 >;
 
 /**
- * Build the rows and what the MCP config file's invalid entries raise.
- * `cachedResults` skips the availability probes, as the dashboard's own
- * build does (`buildToolDashboardItems`); an unreadable or invalid
- * `mcp.json` lists no servers and says why in `mcpWarnings`.
+ * Build the rows from the availability `results` the caller holds or
+ * probed, and what the MCP config file's invalid entries raise; an
+ * unreadable or invalid `mcp.json` lists no servers and says why in
+ * `mcpWarnings`.
  */
 export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
-  inputs: DashboardInputs & PluginEnv & Pick<WorkspaceRoots, 'storageRoot'>,
-  cachedResults?: readonly ExternalToolCheckResult[],
+  inputs: PluginEnv &
+    Pick<WorkspaceRoots, 'storageRoot'> & {
+      /** The host's code editor, where it has one. */
+      readonly editor?: EditorIntegrationShape;
+    },
+  results: readonly ExternalToolCheckResult[],
 ) {
   const agents = (yield* AgentCatalog).list().map((agent) => ({
     name: agent.name,
@@ -58,13 +60,12 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
     return server !== undefined && servers.includes(server);
   };
 
-  const fs = yield* FileSystem.FileSystem;
   // The three loads are independent.
   const [items, installed, mcp] = yield* Effect.all(
     [
-      buildToolDashboardItems(inputs, cachedResults),
+      buildToolDashboardItems(results, inputs.editor),
       InstalledPlugins.list(inputs),
-      readMcpConfig(fs, mcpConfigPathOf(inputs.storageRoot)),
+      readMcpConfig(mcpConfigPathOf(inputs.storageRoot)),
     ],
     { concurrency: 'unbounded' },
   );
