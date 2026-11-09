@@ -190,13 +190,12 @@ function textInputDisplayRowCount(value: string, width: number): number {
 }
 
 /**
- * Height to allocate for a height-capped text input (e.g. InputBar). Includes
- * the end-of-value caret wrap when it fits under `maxRows`.
- *
- * When the uncapped need exceeds `maxRows`, returns `maxRows` — callers must
- * pass the **same** value as `maxDisplayRows` so {@link textInputDisplayWindow}
- * can reserve one of those rows for the caret instead of painting five full
- * content rows and clipping the wrap under `overflowY="hidden"`.
+ * The rows a height-capped text input (the InputBar) takes: the rows its
+ * value needs, with the end-of-value caret wrap, up to `maxRows`. The
+ * result is both the Box's height and the `maxDisplayRows` the input's
+ * {@link textInputDisplayWindow} windows into, which is how the window
+ * knows to give the caret one of those rows rather than paint `maxRows`
+ * full content rows and clip the wrap under `overflowY="hidden"`.
  */
 export function textInputCappedRowCount(
   value: string,
