@@ -16,6 +16,7 @@
 
 import {
   Cause,
+  ConfigProvider,
   Context,
   Deferred,
   Effect,
@@ -27,6 +28,8 @@ import {
 
 import type { stopRun } from '@agent/storage/runLifecycle';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
+import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import {
   grantSource,
   grantsKept,
@@ -353,8 +356,21 @@ export class RunRegistry implements RunsShape {
             ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
           ),
         );
+      // Resolve the launch's environment before its opening acquires
+      // resources, then carry only those values into the run's fiber.
+      // Management stays on the session's stable services.
+      const open = Effect.gen(function* () {
+        const environment = Context.pick(
+          ConfigProvider.ConfigProvider,
+          ProjectEnvironment,
+        )(yield* Effect.context());
+        const opened = yield* launch.open;
+        return { opened, environment };
+      }).pipe(
+        Effect.provide(workspaceEnvironmentLayer(this.init.roots.workspace)),
+      );
       return Effect.uninterruptibleMask((restore) =>
-        restore(this.inSession(launch.open)).pipe(
+        restore(this.inSession(open)).pipe(
           // A stop asked meanwhile, or the caller's own interruption (its
           // parent stopped as the child's rows committed): the run the
           // opening registered ends on its rows, so none is left with
@@ -371,7 +387,7 @@ export class RunRegistry implements RunsShape {
               return stop === null ? Effect.void : stopRows(stop, true);
             }),
           ),
-          Effect.flatMap((opened) =>
+          Effect.flatMap(({ opened, environment }) =>
             Effect.suspend(() => {
               const stop =
                 opening.stop ??
@@ -379,7 +395,12 @@ export class RunRegistry implements RunsShape {
               const forked = () => {
                 const fiber = this.init.fork(
                   runId,
-                  launch.run(opened).pipe(Effect.provideService(Runs, this)),
+                  launch
+                    .run(opened)
+                    .pipe(
+                      Effect.provide(environment),
+                      Effect.provideService(Runs, this),
+                    ),
                 );
                 this.live.set(runId, fiber);
                 fiber.addObserver(() => {
