@@ -49,13 +49,15 @@ const missingEvidence = (round: Round, revision: number): string | null => {
  *  least which outputs failed. */
 const compileEvidence = Effect.fn('document_review.compile')(function* (
   round: Round,
-  logger: Documents['deps']['logger'],
+  logger: Documents['run']['logger'],
 ) {
   const compile = round?.compile;
   if (compile?._tag !== 'checked')
     return `No compile check ran${compile ? `: ${compile.reason}` : ''}. The documents are unverified.`;
   const failed = compile.failures;
-  const context = yield* failureContextFromLogs(failed, logger);
+  const read = yield* failureContextFromLogs(failed);
+  if (read.kind === 'unreadable') logger.warn(read.warning);
+  const context = read.kind === 'context' ? read.text : undefined;
   const listed = failed
     .map((f) => `${f.displayName} failed to compile (log ${f.logRelativePath})`)
     .join('\n');
@@ -120,7 +122,7 @@ export const DocumentReviewTool = defineTool({
       parts.push(`<diff path="${path}">\n${shown}\n</diff>`);
     }
     parts.push(
-      `<compile>\n${yield* compileEvidence(round, docs.deps.logger)}\n</compile>`,
+      `<compile>\n${yield* compileEvidence(round, docs.run.logger)}\n</compile>`,
     );
     const prompt = parts.join('\n\n');
     return {

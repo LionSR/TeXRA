@@ -45,9 +45,12 @@ import {
   DOCUMENTS_COMPILE_TIMEOUT_SETTING,
 } from '@texra/shared/settingsView/documentsSettings';
 
-/** What a diff pass reads of the run: its trace, its storage and its
- *  session roots (the workspace and setting stores). */
-type DiffRun = Pick<OutputDependencies, 'logger' | 'fileService' | 'roots'>;
+/** What a diff pass reads of the documents: their run (its trace and its
+ *  storage) and its session roots (the workspace and setting stores). */
+type DiffRun = {
+  readonly run: Pick<OutputDependencies['run'], 'logger' | 'fileService'>;
+  readonly roots: OutputDependencies['roots'];
+};
 
 /** The services a diff pass checks, runs and records on. */
 type DiffServices = FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
@@ -89,7 +92,7 @@ const notRun = (reason: string): RoundLatexdiffs => ({
  * diff, and this diff still runs and names whatever it could not resolve.
  */
 const mirrorDependency = (
-  { logger, fileService }: DiffRun,
+  { run: { logger, fileService } }: DiffRun,
   target: FileLocation,
 ): Effect.Effect<void, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
@@ -116,12 +119,13 @@ const mirrorDependency = (
  */
 export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
   function* (
-    run: DiffRun,
+    docs: DiffRun,
     currRound: number,
     outputFiles: readonly OutputFileInfo[],
     previousOutputs: readonly OutputFileInfo[],
   ): Effect.fn.Return<RoundLatexdiffs, Error, DiffServices> {
-    const { logger, fileService, roots } = run;
+    const { logger, fileService } = docs.run;
+    const { roots } = docs;
     if (outputFiles.length === 0) {
       logger.warn(
         `No output files found for round ${currRound}, skipping latexdiff operations`,
@@ -197,13 +201,13 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
     const entries: LatexdiffEntry[] = [];
     const artifacts: RunStorageFileLocation[] = [];
     for (const pair of pairs) {
-      const outcome = yield* diffPair(run, pair, layout.diffDir, mathMarkup);
+      const outcome = yield* diffPair(docs, pair, layout.diffDir, mathMarkup);
       entries.push(outcome.entry);
       if (outcome.artifact) artifacts.push(outcome.artifact);
     }
     return { artifacts, entries, notRun: null };
   },
-  (effect, { logger }) =>
+  (effect, { run: { logger } }) =>
     // A failed pass is an error on the transcript, and the round records
     // that its diffs did not run.
     Effect.catch(effect, (error) => {
@@ -224,12 +228,13 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
  * round's: the other pairs keep their diffs.
  */
 const diffPair = (
-  run: DiffRun,
+  docs: DiffRun,
   { revised, document, base, baseRound, suffix }: LatexdiffPair,
   roundDiffDirectory: string,
   mathMarkup: LatexdiffMathMarkupValue,
 ): Effect.Effect<SingleDiffOutcome, never, DiffServices> => {
-  const { logger, fileService, roots } = run;
+  const { logger, fileService } = docs.run;
+  const { roots } = docs;
   const relativePath = path.join(roundDiffDirectory, path.dirname(document));
   const diffDirectory: DiffOutputDirectory = {
     absolutePath: path.join(fileService.runDirectory, relativePath),
@@ -245,8 +250,8 @@ const diffPair = (
   };
   const label = baseRound === null ? 'round-diff' : 'between-rounds-diff';
   return Effect.gen(function* () {
-    yield* mirrorDependency(run, base);
-    yield* mirrorDependency(run, revised.location);
+    yield* mirrorDependency(docs, base);
+    yield* mirrorDependency(docs, revised.location);
 
     // latexdiff runs in the revised file's own folder, with symlinks
     // resolved so a mirrored dependency's relative `\input{}` still points
@@ -281,7 +286,7 @@ const diffPair = (
     });
 
     const compiled = yield* compileDiff(
-      run,
+      docs,
       diffPath,
       base,
       diffDirectory,
@@ -314,7 +319,7 @@ const diffPair = (
 };
 
 const compileDiff = Effect.fn('documents.compileDiff')(function* (
-  { logger, fileService, roots }: DiffRun,
+  { run: { logger, fileService }, roots }: DiffRun,
   diffPath: string,
   referenceLocation: FileLocation,
   diffDirectory: DiffOutputDirectory,

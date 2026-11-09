@@ -104,8 +104,10 @@ layer(
       });
       const { entries } = yield* revisionLatexdiffs(
         {
-          logger: spiedTrace(),
-          fileService: new RunFileService(runId, roots),
+          run: {
+            logger: spiedTrace(),
+            fileService: new RunFileService(runId, roots),
+          },
           roots,
         },
         1,

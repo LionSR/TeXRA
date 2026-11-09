@@ -77,8 +77,9 @@ interface DocumentCall {
   readonly requests: Pick<CallRequests, 'present'>;
 }
 
-/** One document task run's documents, opened for one tool call. */
-export interface Documents {
+/** One document task run's documents, opened for one tool call: what the
+ *  output pipeline reads of the run, and the task's own state. */
+export interface Documents extends OutputDependencies {
   readonly run: DocumentRun;
   /** Where the call shows the person what the step wrote. */
   readonly requests: DocumentCall['requests'];
@@ -86,7 +87,6 @@ export interface Documents {
   /** The catalog entry whose `task:` block it is: its file's directory holds
    *  the task's `files`. */
   readonly entry: AgentEntry;
-  readonly deps: OutputDependencies;
   /** The revisions so far, by `round`, as the run's latest documents fact
    *  records them. A step commits the next list
    *  (`documentsOutputFact(withRound(...))`) in its result's facts; a call
@@ -115,7 +115,7 @@ export const withRound = (
 
 /** The files a revision works on: the inputs, then the last outputs. */
 function revisionFiles(docs: Documents, revision: number): FileLocation[] {
-  const { config, fileService } = docs.deps;
+  const { config, fileService } = docs.run;
   if (revision === 0)
     return config.inputFiles.map((file) => fileService.createLocation(file));
   const previous = roundOf(docs.rounds, revision - 1);
@@ -128,7 +128,7 @@ function revisionFiles(docs: Documents, revision: number): FileLocation[] {
  *  run's storage, whose per-run directory keeps the fixed name from
  *  colliding across runs. */
 const replyLocation = (docs: Documents, revision: number) =>
-  docs.deps.fileService.createLocation(revisionLayout(revision).reply);
+  docs.run.fileService.createLocation(revisionLayout(revision).reply);
 
 /**
  * Open the documents of `run`, the document task the calling tool serves.
@@ -139,7 +139,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
   env: { roots },
   requests,
 }: DocumentCall) {
-  const { config, logger, fileService, runId } = run;
+  const { config, fileService, runId } = run;
   // The block as the catalog holds it now: the run's exact entry, which its
   // launch stamped.
   const entry = (yield* AgentCatalog).get(documentTaskKey(config));
@@ -153,14 +153,6 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
   const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
   const expected = expectedDocuments(config);
   const sources = expected.names.map((file) => fileService.locateSource(file));
-  const deps: OutputDependencies = {
-    config,
-    expected,
-    sources,
-    logger,
-    fileService,
-    roots,
-  };
   // Snapshots the base files once per run (an earlier call's or attempt's
   // stand). The snapshots are the run's restore point and the diff base an
   // in-place rewrite is compared against, so a failed capture stops the task
@@ -184,7 +176,9 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
     requests,
     task,
     entry,
-    deps,
+    expected,
+    sources,
+    roots,
     rounds: output?.rounds ?? [],
     baseFiles,
   } satisfies Documents;
@@ -200,7 +194,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   revision: number,
   critique?: string | null,
 ) {
-  const { task, run, deps } = docs;
+  const { task, run } = docs;
   const { inputs, entries } = yield* taskInputs(docs);
   const fs = yield* FileSystem.FileSystem;
   const parts: string[] = [];
@@ -229,10 +223,12 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   // The compile failures that rejected the last revision, from the logs its
   // check wrote.
   const compiled = roundOf(docs.rounds, revision - 1)?.compile;
-  const feedback =
-    compiled?._tag === 'checked' && compiled.rejected
-      ? yield* failureContextFromLogs(compiled.failures, deps.logger)
-      : undefined;
+  let feedback: string | undefined;
+  if (compiled?._tag === 'checked' && compiled.rejected) {
+    const read = yield* failureContextFromLogs(compiled.failures);
+    if (read.kind === 'unreadable') run.logger.warn(read.warning);
+    else feedback = read.text;
+  }
   const request = (yield* renderPrompt(
     task.requests[revision] ?? '',
     inputs,
@@ -241,7 +237,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   // it: one document per name the revision writes (its outputs, or the
   // inputs it rewrites), in order.
   const names =
-    (deps.expected.rewritesInputs ? inputs.INPUT_FILES : inputs.OUTPUT_FILES) ??
+    (docs.expected.rewritesInputs ? inputs.INPUT_FILES : inputs.OUTPUT_FILES) ??
     [];
   const reply = [
     `Output the documents, complete and in this order, as:`,
@@ -305,16 +301,17 @@ const texCount = Effect.fn('documents.texCount')(function* (
   docs: Documents,
   files: readonly FileLocation[],
 ) {
-  const { deps } = docs;
   const counted = yield* Effect.exit(
     getTeXCountStats(
-      deps.roots.workspace,
+      docs.roots.workspace,
       files.map((file) => file.absolutePath),
     ),
   );
   if (Exit.isSuccess(counted)) return counted.value;
   if (Cause.hasInterrupts(counted.cause)) return yield* Effect.interrupt;
-  deps.logger.debug('TeXCount skipped', { data: Cause.squash(counted.cause) });
+  docs.run.logger.debug('TeXCount skipped', {
+    data: Cause.squash(counted.cause),
+  });
   return undefined;
 });
 
@@ -329,28 +326,24 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   revision: number,
   files: readonly FileLocation[],
 ) {
-  const { run, deps } = docs;
+  const { run, roots } = docs;
   const bound = yield* ScopedRef.get(run.model);
   // The launch's media, as absolute paths: the revision's agent run reads
   // them from wherever the launch named them.
   const configuredLocations = run.config.mediaFiles.map((file) =>
-    deps.fileService.createLocation(file),
+    run.fileService.createLocation(file),
   );
   const configured = configuredLocations.map(
     (location) => location.absolutePath,
   );
   if (!bound.config.capabilities.supportsVision) return configured;
-  const media = new LatexMediaManager(
-    deps.logger,
-    deps.roots,
-    deps.fileService,
-  );
+  const media = new LatexMediaManager(run.logger, roots, run.fileService);
   // Each revision is a fresh conversation: it gets the figures of the files
   // it works on (the last outputs, mirrored so their references resolve).
   const extracted = yield* Effect.exit(
     Effect.gen(function* () {
       if (revision > 0)
-        yield* deps.fileService.ensureMirroredInRunSubdir(
+        yield* run.fileService.ensureMirroredInRunSubdir(
           revisionLayout(revision).dir,
           { protectedStem: DOCUMENT_OUTPUT_BASENAME },
         );
@@ -363,7 +356,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   );
   if (Exit.isFailure(extracted)) {
     if (Cause.hasInterrupts(extracted.cause)) return yield* Effect.interrupt;
-    deps.logger.warn('Figure extraction failed; the revision goes without it', {
+    run.logger.warn('Figure extraction failed; the revision goes without it', {
       data: Cause.squash(extracted.cause),
     });
     return configured;

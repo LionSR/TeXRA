@@ -32,14 +32,17 @@ import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** What the output pipeline reads of the document task's run. */
 export interface OutputDependencies {
-  readonly config: AgentConfig;
+  /** The run: its launch, its trace and its storage. */
+  readonly run: {
+    readonly config: AgentConfig;
+    readonly logger: AgentTrace;
+    readonly fileService: RunFileService;
+  };
   /** The documents the launch expects a reply to name. */
   readonly expected: ExpectedDocuments;
   /** Those documents where the launch named them: what an unlabeled reply
    *  is matched against and its `\input`s are rewritten from. */
   readonly sources: FileLocation[];
-  readonly logger: AgentTrace;
-  readonly fileService: RunFileService;
   /** The run's session roots, held as data: the pipeline runs on the run's
    *  fiber, and nothing about a fiber names the project it works on. */
   readonly roots: WorkspaceRoots;
@@ -113,7 +116,7 @@ const warnNoOutputs = Effect.fn('documents.warnNoOutputs')(function* (
     Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
     Effect.catch((error) =>
       Effect.sync(() => {
-        deps.logger.warn(
+        deps.run.logger.warn(
           `The raw response at ${outputLocation.absolutePath} could not be read: ${error.message}`,
         );
         return '';
@@ -121,7 +124,7 @@ const warnNoOutputs = Effect.fn('documents.warnNoOutputs')(function* (
     ),
   );
   if (rawText.trim().length > 0) {
-    deps.logger.warn(
+    deps.run.logger.warn(
       `The model returned output but no files could be extracted from it: it likely did not wrap each document in <${OUTPUT_DOCUMENTS_TAG}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
       {
         data: {
@@ -144,7 +147,7 @@ function withMissingExpected(
   currRound: number,
   { outputs, missing }: ExtractedRevision,
 ): string[] {
-  const expected = deps.config.outputFiles;
+  const expected = deps.run.config.outputFiles;
   // The round writes its outputs into its own directory; the run-root entry
   // of the same name is the workspace file, delivered only later.
   const written = new Set(
@@ -154,11 +157,11 @@ function withMissingExpected(
   const lacking = expected.filter(
     (file) =>
       !written.has(
-        deps.fileService.createLocation(`${dir}/${file}`).absolutePath,
+        deps.run.fileService.createLocation(`${dir}/${file}`).absolutePath,
       ),
   );
   if (expected.length > 0)
-    deps.logger.debug(
+    deps.run.logger.debug(
       lacking.length > 0
         ? `Missing expected outputs for round ${currRound}`
         : `All ${expected.length} expected outputs written in round ${currRound}`,
@@ -184,7 +187,7 @@ export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
     /** The outputs of the revision before it, which this one revises. */
     previousOutputs: readonly OutputFileInfo[],
   ) {
-    const { logger } = deps;
+    const { logger } = deps.run;
     logger.debug(
       `Processing multiple outputs for ${outputLocation.absolutePath}`,
     );

@@ -94,7 +94,7 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
   );
 
 const autoOpensPdf = (docs: Documents) =>
-  Settings.get(docs.deps.roots, DOCUMENTS_OPEN_PDF_SETTING);
+  Settings.get(docs.roots, DOCUMENTS_OPEN_PDF_SETTING);
 
 /**
  * What the first revision checks before the task does any work, whichever
@@ -108,8 +108,7 @@ const openTask = Effect.fn('documents.openTask')(function* (
   docs: Documents,
   logger: AgentTrace,
 ) {
-  const { config } = docs.run;
-  const { fileService } = docs.deps;
+  const { config, fileService } = docs.run;
   const fs = yield* FileSystem.FileSystem;
   // A file is loaded when it reads: a directory or an unreadable path is
   // not, though it exists. Why it did not read is kept for the refusal. The
@@ -154,7 +153,7 @@ const openTask = Effect.fn('documents.openTask')(function* (
   // A missing context file is skipped, as the prompt skips it; only the
   // files found are measured.
   yield* rejectOversizedBibAttachments(
-    docs.deps.roots.workspace,
+    docs.roots.workspace,
     contexts.filter((context) => context.ok).map((c) => c.absolutePath),
   );
   // One files-loaded card per category, its label each file's source.
@@ -253,7 +252,7 @@ export const DocumentExtractTool = defineTool({
     // the workspace this run belongs to.
     const replaced = replacementEngine.applyAll(
       end?.output.response ?? '',
-      docs.deps.roots.config,
+      docs.roots.config,
     );
     yield* logReplacementDiagnostics(replaced.diagnostics);
     const reply = replaced.text;
@@ -261,7 +260,8 @@ export const DocumentExtractTool = defineTool({
       return yield* Effect.fail(
         new ToolError(`Run ${run} gave no reply to take documents from.`),
       );
-    const { logger, fileService, roots } = docs.deps;
+    const { logger, fileService } = docs.run;
+    const { roots } = docs;
     const location = yield* keepReply(docs, revision, reply);
     // A broken structure costs the repair, not the revision: reported, and
     // extraction reads the reply as it is.
@@ -273,7 +273,7 @@ export const DocumentExtractTool = defineTool({
       }),
     );
     const extracted = yield* extractFilesFromXml(
-      docs.deps,
+      docs,
       location,
       revision,
       roundOf(docs.rounds, revision - 1)?.outputs ?? [],
@@ -365,7 +365,8 @@ export const DocumentCompileTool = defineTool({
   schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_compile')(function* ({ revision }) {
     const docs = yield* documentsOfCall('document_compile');
-    const { roots, fileService, logger } = docs.deps;
+    const { logger, fileService } = docs.run;
+    const { roots } = docs;
     const recorded = roundOf(docs.rounds, revision);
     // The compile searches where the task's bound files live (`task.files`,
     // read from beside its agent file), so a template's theme files resolve
@@ -489,7 +490,7 @@ export const DocumentDiffTool = defineTool({
         value: { diffs: [], failed: [], notRun: null },
       };
     const { artifacts, entries, notRun } = yield* revisionLatexdiffs(
-      docs.deps,
+      docs,
       revision,
       outputs,
       roundOf(docs.rounds, revision - 1)?.outputs ?? [],
@@ -566,7 +567,7 @@ export const DocumentProposeTool = defineTool({
     // fact commits with this call's result, so a rerun after a crash
     // rewrites the same files and commits the fact once.
     const diffs = yield* computeDocumentDiffs(
-      docs.deps.roots.storage,
+      docs.roots.storage,
       docs.run.runId,
       roundOutputsToOutputSummaries([last]),
     );
