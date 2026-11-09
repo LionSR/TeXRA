@@ -70,7 +70,6 @@ const LeanDiagnosticsInputSchema = Schema.Struct({
     'list',
     'Use "list" for full messages or "count" for summary only',
   ),
-  /** Path to the Lean file */
   file: Schema.String.annotate({ description: 'Path to the .lean file' }),
 });
 
@@ -81,7 +80,6 @@ const LeanFileInputSchema = Schema.Struct({
   command: Schema.Literals(FILE_COMMAND_NAMES).annotate({
     description: `Command: ${FILE_COMMAND_NAMES.map((name) => `"${name}"`).join(' or ')}`,
   }),
-  /** Path to the Lean file */
   file: Schema.String.annotate({ description: 'Path to the .lean file' }),
 });
 
@@ -104,7 +102,6 @@ const LeanInspectInputSchema = Schema.Struct({
     description:
       'What to inspect: "goal" for tactic proof state, "term_goal" for expected type in term mode, "hover" for type/docs',
   }),
-  /** Path to the Lean file */
   file: Schema.String.annotate({ description: 'Path to the .lean file' }),
   /** 1-indexed line number */
   line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({

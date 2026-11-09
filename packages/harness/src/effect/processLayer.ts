@@ -58,23 +58,22 @@ import type { Composition, LocalSession, OpenOptions } from './sessions.js';
  * The process services a composition root runs on, the public name every
  * host writes against: what a run's program requires of the process
  * ({@link RunServices}) and `ToolCatalog`, the tool catalog each session's
- * steps pin their tools in (its owner's view, `ToolCatalogOwner`, stays
- * inside the composition). Every run and session of the process is provided
+ * steps pin their tools in. Every run and session of the process is provided
  * these; the {@link Sessions} above them is the composition root's alone
  * ({@link ProcessRuntime}).
  */
 export type ProcessServices = RunServices | ToolCatalog;
 
 /** What a composition root composes its process from: the services' options
- *  (`ownerProcessLayer`) and its skill sources. */
+ *  and its skill sources. */
 export interface ProcessLayerOptions extends Omit<
   ProcessServicesOptions,
   'appState'
 > {
   /** The host's skill sources; absent, the process discovers no skills. */
   readonly skills?: HostSkillOptions;
-  /** The global store: absent, the global root's (`globalAppStateLayer`);
-   *  else the SDK's embedder store, or a platform-less CLI entry's refusal. */
+  /** The global store; absent, the one under the process's global storage
+   *  root. */
   readonly appState?: ProcessServicesOptions['appState'];
 }
 

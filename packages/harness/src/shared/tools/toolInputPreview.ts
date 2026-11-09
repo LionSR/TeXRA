@@ -43,9 +43,8 @@ const GENERIC_PREVIEW_INPUT_KEYS: readonly string[] = [
 /** Derive a one-line preview of `input` for the named tool. The name is
  *  normalized here (`claude:Bash` -> `bash`), so hosts pass whatever name the
  *  log carries. Falls back to a generic scan of the keys that name a call's
- *  target, and returns `''` only when the input names nothing — never a raw
- *  `JSON.stringify` of the whole input, which is what the CLI used to show
- *  for every delegation call. */
+ *  target, and returns `''` only when the input names nothing, never a raw
+ *  `JSON.stringify` of the whole input. */
 export function deriveToolInputPreview(
   toolName: string,
   input: unknown,

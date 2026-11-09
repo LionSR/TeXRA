@@ -555,10 +555,9 @@ async function usageParentWithFullPath({
 /**
  * What a citty argument error (missing required argument, invalid enum value)
  * prints on stderr: the error, then where the usage lives — the same shape as
- * {@link formatUnknownCliFlag}. The full help screen used to follow instead
- * and pushed the one line that says what went wrong off the screen. citty
- * colors its own message regardless of the stream, so stderr's color decision
- * (`--no-color`, `NO_COLOR`, `FORCE_COLOR`, TTY) is applied here.
+ * {@link formatUnknownCliFlag}. citty colors its own message regardless of
+ * the stream, so stderr's color decision (`--no-color`, `NO_COLOR`,
+ * `FORCE_COLOR`, TTY) is applied here.
  */
 export function formatCliArgumentError(
   message: string,

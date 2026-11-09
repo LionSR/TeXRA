@@ -108,7 +108,6 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
   return launched;
 });
 
-/** The `document_task` tool. */
 export const DocumentTaskTool = defineTool({
   name: 'document_task',
   launchesTasks: true,

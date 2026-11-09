@@ -1,16 +1,15 @@
-// Terminal notification dispatcher per
-// 2026-05-14-10-architecture.md (Terminal notifications).
+// Terminal notification dispatcher.
 //
-// Phase 1 ships `agentFinished` + `approvalNeeded`; progress (OSC 9;4) lands
-// in Phase 4 when long-running activity surfaces.
+// Emits `agentFinished` and `approvalNeeded`. Progress (OSC 9;4) is not
+// emitted: no long-running activity surfaces in the TUI yet.
 //
 // Each emission is capability-gated by the `terminalCapabilities` signal:
 // terminals that didn't acknowledge OSC support during DA1 discovery get the
 // fallback `BEL` only, not full OSC sequences (silent terminals on macOS
 // Terminal in particular gain nothing from OSC 9 / 99 and may even garble).
 //
-// Multiplexer-aware DCS wrapping for tmux/screen is deferred per
-// 2026-05-14-30-reference.md (R9).
+// The sequences are not DCS-wrapped for tmux or screen, so a multiplexer
+// that does not pass OSC through drops them.
 
 import { ANSI_BEL, osc } from '@cli/runtime/terminal/ansiEscapes';
 import { writeTerminalSequence } from '@cli/tui/terminalCleanup';

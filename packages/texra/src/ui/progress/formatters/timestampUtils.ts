@@ -19,12 +19,10 @@ const TIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   second: '2-digit',
 };
 
-/** Get the time-only formatter. */
 export function getTimeFormatter(): Intl.DateTimeFormat {
   return cachedDateTimeFormat(TIME_FORMAT_OPTIONS);
 }
 
-/** Format a timestamp for display. */
 export function formatDisplayTimestamp(
   date: Date,
   precision: 'minute' | 'second' = 'second',

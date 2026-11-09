@@ -13,8 +13,7 @@ export type SubscriptionAuthProvider =
 
 /**
  * The route each provider's session bills, which names its account
- * (`SubscriptionAccounts`). The ids stay as they are: the CLI's commands and
- * the settings views' messages spell them.
+ * (`SubscriptionAccounts`). The ids are stable.
  */
 export const SUBSCRIPTION_ROUTES = Object.freeze({
   chatgpt: 'chatgpt-subscription',

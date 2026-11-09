@@ -78,8 +78,8 @@ export function installDesktopBeforeQuitWiring(options: {
       window.close();
       return;
     }
-    // Electron's before-quit is this host's R1 entry, so the drain is run
-    // here and the quit follows it however it ends. A before-quit arriving
+    // Electron's before-quit is where this host runs its shutdown drain, and
+    // the quit follows it however it ends. A before-quit arriving
     // while the drain is in flight joins that same drain, and `quitting`
     // arbitrates the quit the join lands on.
     void Effect.runPromise(

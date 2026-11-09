@@ -502,10 +502,10 @@ function countLines(text: string): number
 
 ## CredentialSwitchSchema
 
-The move onto the user's own credential a failed model request offers,
-decided once by the retry owner (`ModelInvoker`) from the recorded failure
-and the route the failed model was bound on. Hosts render it; none of them
-re-derives it from the error.
+The move onto the user's own credential that a failed model request
+offers. It comes with the run's recorded failure, decided once from that
+failure and the route the model was bound on; hosts render it and never
+re-derive it from the error.
 
 ```ts
 const CredentialSwitchSchema: Union<readonly [Struct<{ readonly kind: Literal<"decline-route">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; readonly automatic: Boolean; }>, Struct<{ readonly kind: Literal<"new-key">; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; }>]>
@@ -1111,10 +1111,8 @@ const isInterrupted: (run: Pick<{ readonly title: string; readonly worktree: { r
 
 ## isModelOptionAvailable
 
-Whether an option row can be run as shipped: `readModelOptions`
-already resolved the access question, so a caller only has to read its
-verdict. Lives with the kind so delegation's model list and the CLI's
-picker can never drift apart on what "available" means.
+Whether an option row can be run as shipped. Its `availability` was
+resolved when the options were read; this only reads that verdict.
 
 ```ts
 function isModelOptionAvailable(model: {
@@ -2594,8 +2592,7 @@ const SUBSCRIPTION_AUTH_PROVIDERS: readonly ["chatgpt", "grok"]
 ## SUBSCRIPTION_ROUTES
 
 The route each provider's session bills, which names its account
-(`SubscriptionAccounts`). The ids stay as they are: the CLI's commands and
-the settings views' messages spell them.
+(`SubscriptionAccounts`). The ids are stable.
 
 ```ts
 const SUBSCRIPTION_ROUTES: Readonly<{ chatgpt: "chatgpt-subscription"; grok: "xai-subscription"; }>
@@ -2743,7 +2740,7 @@ display events in commit order, the same rows the live plane delivers to a
 subscriber. Nothing is projected on the way out and nothing is
 reconstructed on the way in.
 
-The export authors four facts rather than copying them (`assembleTrace`):
+An exported document authors four facts rather than copying them:
 no owner, no parent, no checkpoint and no follow-ups taken, because an
 exported file has no producer, no siblings and no writable host.
 

@@ -54,7 +54,7 @@ interface DesktopHostRequestsOptions {
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Effect.Effect<void, never, ProcessServices>;
-  /** The process runtime this window was handed; every request arm below runs
+  /** The process runtime this window was handed; every request handler below runs
    *  on it. */
   runtime: ProcessRuntime;
 }

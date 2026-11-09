@@ -533,7 +533,6 @@ interface Session {
   /** The session's state as immutable snapshots: its runs, their status,
    *  and the requests waiting on a person. */
   readonly view: {
-    /** The latest snapshot. */
     readonly current: () => SessionView;
     /** Every new snapshot, as the session changes. */
     readonly changes: Stream.Stream<SessionView>;

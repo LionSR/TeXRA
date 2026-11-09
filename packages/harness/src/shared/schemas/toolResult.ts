@@ -11,7 +11,6 @@ import { Sha256Schema } from './identifiers';
 const FileReferenceFieldsSchema = Schema.Struct({
   /** Workspace-relative or descriptive path for the file */
   path: Schema.String,
-  /** MIME type for the file */
   mimeType: Schema.String,
   /** Optional human readable description */
   description: Schema.optional(Schema.String),

@@ -37,10 +37,8 @@ interface DesktopShellAdapter {
 
 /**
  * The desktop's shell-facing open surface. `openExternal` and `openPath` are
- * the programs themselves: the owner ruling of 2026-09-18 retires the former
- * `Promise` face, which the 1.0 clean rule reads as an R1 adapter rather than
- * the permanent one an earlier ruling allowed. An Effect-native caller yields
- * a member; the host entries that answer a framework callback run it once.
+ * the programs themselves: an Effect-native caller yields a member, and the
+ * host entries that answer a framework callback run it once.
  *
  * `openBuildDisplayIn` answers with the core {@link BuildDisplayFn}, a
  * program like the rest: the approval controller forks it onto a fiber of its

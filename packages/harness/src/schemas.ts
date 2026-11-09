@@ -26,7 +26,7 @@ export type {
   AgentConfig,
   AgentConfigPayload,
 } from '@shared/schemas/agentConfig';
-// A run's saved record (`assembleTrace`'s): an agent's config or a task's,
+// A run's saved record: an agent's config or a task's,
 // and its JSON with the fields its category hides dropped.
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
@@ -201,7 +201,7 @@ export {
   formatError,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
-// An exported run (`assembleTrace`), as a static viewer parses it back.
+// An exported run, as a static viewer parses it back.
 export {
   readTraceFacts,
   TraceDocumentSchema,

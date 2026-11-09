@@ -46,13 +46,10 @@ export function serializeWorkspaceWrite<A, E>(
 }
 
 /**
- * Read the canonical workspace selection. The reader is deliberately pure. It
- * used to repair the stored value in place, but the read-modify-write
- * mutations (`select`, `setAgentEnabled`, `removeTeamPreset`)
- * read the selection while already holding the write mutex, so a repair
- * issued from here either races that mutation or, if serialized behind it,
- * overwrites the selection the mutation just committed. The mutations own
- * every durable write.
+ * Read the canonical workspace selection. Read-only: it never repairs the
+ * stored value, because the mutations (`select`, `setAgentEnabled`,
+ * `removeTeamPreset`) read it under their own write mutex and own every
+ * durable write.
  */
 export function readWorkspaceAgentsSelection(repoState: StateStore) {
   return Settings.state(repoState, WORKSPACE_AGENTS_KEY);

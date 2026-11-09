@@ -22,8 +22,6 @@ import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settingsView/texraSettings'
 /**
  * Create a standalone LaTeX file for a TikZ picture
  * @param template The `texra.latex.tikzTemplate` the picture is rendered into
- * @param tikzpictures TikZ picture content
- * @param label Label for the figure
  * @param buildDir Absolute build directory path
  * @param workspaceRoot The session's workspace root the file is located in
  * @param suffix Optional suffix for multiple pictures with same label
@@ -60,7 +58,6 @@ const createStandalone = Effect.fn('TikzPictureManager.createStandalone')(
 
 /**
  * Extract TikZ pictures with their labels from a LaTeX file
- * @param latexFile FileLocation of the LaTeX file
  * @returns Array of [label, tikzpictures] tuples
  */
 const extract = Effect.fn('TikzPictureManager.extract')(function* (

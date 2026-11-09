@@ -808,7 +808,6 @@ One model provider plugin, by what TeXRA does with it:
 type ModelProviderPlugin = {
   /** Stable, persisted identifier: the llm-zoo provider or API-key id. */
   readonly id: string;
-  /** The provider's own name. */
   readonly displayName: string;
 } & (
   | {

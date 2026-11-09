@@ -250,10 +250,11 @@ const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS: 300
 
 ## executionsWaitTimeoutSeconds
 
-The `executions wait` timeout the tool will actually honour, in seconds.
-Sole owner of the clamp: the tool's own input schema normalizes through it,
-and both transcript surfaces read it back so no host can invent a different
-number than the one the wait enforces.
+The `executions wait` timeout the tool honours, in seconds: `timeout`
+clamped to [{@link EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS},
+{@link EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS}], or
+{@link EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS} when it is not a finite
+number.
 
 ```ts
 function executionsWaitTimeoutSeconds(timeout: unknown): number

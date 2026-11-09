@@ -15,7 +15,7 @@
  *
  * The conversation comes from the completed-run archive facade
  * (`readCompletedRunConversation`): the canonical transcript view owns completed-run
- * display/export per #7246 Decision 1.
+ * display and export.
  *
  */
 

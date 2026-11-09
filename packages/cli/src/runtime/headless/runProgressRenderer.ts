@@ -314,7 +314,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 }
 
-/** The session view's label (G4, one table) for every state but a running run,
+/** The session view's label for every state but a running run,
  *  whose live task is its description once the AI one-liner has arrived. */
 function livePhaseText(root: RunView): string | undefined {
   if (root.outcome === null && root.position === 'ready') return undefined;

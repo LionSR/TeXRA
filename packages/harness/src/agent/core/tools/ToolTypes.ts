@@ -118,7 +118,7 @@ export interface ITool<E = Error, R = never> {
    * `'unsafe'`. Independent of `lane`, which is about concurrency.
    * The response row saves the declaration with each call, and a resume
    * re-runs a call only when that saved word and the current one both say
-   * `'safe'` (`toolUseDispatch.ts`).
+   * `'safe'`.
    */
   readonly replay?: 'safe' | 'unsafe';
   /**
@@ -139,8 +139,8 @@ export interface ITool<E = Error, R = never> {
    * A description rendered from the other tools the run declares and the
    * modules its scripts may import, in place of `definition.description`:
    * rendered at the step that freezes the run's system text and kept as
-   * that step recorded it until a compaction opens the freeze again
-   * (`step.ts`), so a catalog change mid-run leaves its text, and the cached
+   * that step recorded it until a compaction opens the freeze again, so a
+   * catalog change mid-run leaves its text, and the cached
    * prefix through it, as it was. The tool that has one is the script tool,
    * which reaches nothing but the run's other tools and its own agent: a
    * child is offered it, and its script-only functions, whatever its parent
