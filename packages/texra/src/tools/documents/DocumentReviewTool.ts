@@ -75,7 +75,7 @@ export const DocumentReviewTool = defineTool({
   replay: 'safe',
   schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_review')(function* ({ revision }) {
-    const docs = yield* documentsOfCall('document_review');
+    const docs = yield* documentsOfCall();
     const round = roundOf(docs.rounds, revision);
     const fs = yield* FileSystem.FileSystem;
     const { inputs } = yield* taskInputs(docs);
