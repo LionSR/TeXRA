@@ -14,6 +14,7 @@ import {
   originUrl,
   repositoryRoot,
 } from '@texra/utils/git/gitReads';
+import { texraGuideUrl } from '@ui/copy/guide';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliSecretsLayer } from '../runtime/platform/cliProcessRuntime';
@@ -39,7 +40,7 @@ const TEXRA_GITHUB_APP_INSTALL_URL =
 // template literal would try to interpolate them).
 const WORKFLOW_TEMPLATE = [
   '# Added by `texra install-github-action`. TeXRA reviews every pull request.',
-  '# Docs: https://texra.ai/guide/code-review',
+  `# Docs: ${texraGuideUrl('code-review')}`,
   'name: TeXRA Code Review',
   '',
   'on:',

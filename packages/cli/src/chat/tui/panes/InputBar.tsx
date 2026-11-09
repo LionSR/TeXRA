@@ -15,7 +15,7 @@ import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { BaseTextInput } from '../input/BaseTextInput';
+import { TextInput } from '../input/TextInput';
 import { textInputCappedRowCount } from '../input/textInputDisplay';
 import {
   EMPTY_DRAFT,
@@ -243,10 +243,10 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   );
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
-  // to every `useInput` consumer, and BaseTextInput drops unhandled ctrl
+  // to every `useInput` consumer, and TextInput drops unhandled ctrl
   // chords so this handler still fires. `isActive` (rather than an internal
   // early-return) releases the stdin subscription entirely while a foreground
-  // surface owns input, matching BaseTextInput's `isActive: focus`.
+  // surface owns input, matching TextInput's `isActive: focus`.
   useInput(
     (input, key) => {
       if (isCtrlInput(input, key, 'r') && historyRef.current) {
@@ -455,7 +455,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           {disabled && props.disabledMessage ? (
             <Text dimColor>{disabledDisplayText}</Text>
           ) : (
-            <BaseTextInput
+            <TextInput
               value={value}
               focus={keyboardActive && !disabled && !reverseSearchOpen}
               onChange={setValue}

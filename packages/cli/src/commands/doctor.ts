@@ -19,7 +19,7 @@ import { pruneStorage } from '../runtime/pruneStorage';
 
 import { getCliModelAccessList } from '../runtime/models/modelAccess';
 
-import { contextFromArgs } from './_helpers/context';
+import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
@@ -112,7 +112,7 @@ export const doctorCommand = defineCommand({
     setExitCode(
       await Effect.runPromise(
         Effect.gen(function* () {
-          const context = yield* contextFromArgs(ctx.args, ctx.rawArgs, {
+          const context = yield* loadConfigAndWarn(ctx.args, ctx.rawArgs, {
             printConfigWarnings: false,
           });
           const report = yield* doctorReport(context);

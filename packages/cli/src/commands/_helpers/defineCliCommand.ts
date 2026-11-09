@@ -32,7 +32,7 @@ import {
 } from '@cli/runtime/platform/cliContext';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 
-import { contextFromArgs } from './context';
+import { loadConfigAndWarn } from './loadConfigAndWarn';
 import { setExitCode } from './exitCode';
 
 // citty hands `run` a context whose `args` is keyed by the command's `ArgsDef`.
@@ -63,7 +63,7 @@ interface DefineCliCommandOptions<A extends ArgsDef, E, R, O> {
   readonly setup?: CommandDef<A>['setup'];
   /**
    * Core handler. Receives the already-built `CliContext` (with config
-   * warnings surfaced by `contextFromArgs`) and citty's run context, and
+   * warnings surfaced by `loadConfigAndWarn`) and citty's run context, and
    * returns the command as the program it is, run with that context as its
    * `CliInvocation`: one Effect ending in the
    * process exit code, which this helper runs on the command's runtime.
@@ -103,7 +103,7 @@ interface DefineCliCommandOptions<A extends ArgsDef, E, R, O> {
 }
 
 /**
- * Combines the `contextFromArgs` → build the command's runtime → run the
+ * Combines the `loadConfigAndWarn` → build the command's runtime → run the
  * command's program → `setExitCode` → dispose the runtime boilerplate
  * (optionally with the error→stderr+exit-code catch) that every headless
  * command repeats into one declaration.
@@ -169,7 +169,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       // A pre-runtime run: the context program opens the config stores
       // before the command's runtime exists.
       const context = await Effect.runPromise(
-        contextFromArgs(ctx.args, ctx.rawArgs),
+        loadConfigAndWarn(ctx.args, ctx.rawArgs),
       );
       // Built before the run below, not inside it: a `CliUsageError` the
       // builder throws is the command refusing its arguments, which `runCli`

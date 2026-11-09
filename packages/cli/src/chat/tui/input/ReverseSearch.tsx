@@ -11,7 +11,7 @@ import { isCtrlInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { COLOR_ACCENT } from '@cli/tui/ui/colors';
-import { BaseTextInput } from './BaseTextInput';
+import { TextInput } from './TextInput';
 import type { InputHistory } from '../history/inputHistory';
 
 interface ReverseSearchProps {
@@ -62,7 +62,7 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
     >
       <Box>
         <Text color={COLOR_ACCENT}>(reverse-i-search)`</Text>
-        <BaseTextInput
+        <TextInput
           value={query}
           onEscape={props.onCancel}
           onChange={(value) => {

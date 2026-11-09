@@ -5,6 +5,7 @@ import { type ProcessRuntime } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { TEXRA_SITE_URL } from '@ui/copy/guide';
 import { ONBOARDING_CARD_TITLE } from '@ui/copy/onboarding';
 
 /**
@@ -29,7 +30,6 @@ function renderWelcomeHtml(): string {
   const cloneRepo = 'command:git.clone';
   const createSample = `command:${'texra.createSampleProject' satisfies CommandId}`;
   const openWalkthrough = `command:${'texra.openGettingStarted' satisfies CommandId}`;
-  const docs = 'https://texra.ai';
 
   return /* html */ `
 <!DOCTYPE html>
@@ -130,7 +130,7 @@ function renderWelcomeHtml(): string {
   <div class="link-list">
     <a href="${openWalkthrough}">Open walkthrough</a>
     <a href="${cloneRepo}">Clone repository</a>
-    <a href="${docs}">Read docs</a>
+    <a href="${TEXRA_SITE_URL}">Read docs</a>
   </div>
   <p class="muted">
     TeXRA needs a single-folder workspace. Multi-root workspaces aren't

@@ -29,6 +29,7 @@ import {
   canonicalizeWorkspaceRoot,
 } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
   projectDisplayOf,
@@ -238,15 +239,18 @@ export const readRememberedDesktopProjects = Effect.fn(
   } satisfies RememberedDesktopProjects;
 });
 
-/** Show `message` in a warning dialog, unawaited: a dialog that cannot be
- *  shown is logged, with the message it carried. */
-const warnInDialog = (message: string): void => {
-  showDesktopWarningDialog(message).catch((error: unknown) =>
-    console.warn(
-      `[desktop] A warning dialog could not be shown (${toErrorMessage(error)}): ${message}`,
+/** Show `message` in a warning dialog without waiting on the user: a dialog
+ *  that cannot be shown is logged, with the message it carried. */
+const warnInDialog = (message: string): Effect.Effect<void> =>
+  showDesktopWarningDialog(message).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `A warning dialog could not be shown (${toErrorMessage(error)}): ${message}`,
+      ).pipe(withLogChannel('desktop')),
     ),
+    Effect.forkDetach,
+    Effect.asVoid,
   );
-};
 
 /**
  * Open one session over `roots`. Every fact this project's services answer
@@ -264,9 +268,7 @@ const openDesktopProject = Effect.fn('openDesktopProject')(function* (
   Error,
   Scope.Scope | Sessions | HostWindows
 > {
-  const opened = yield* openProjectSession(roots, service, (message) =>
-    Effect.sync(() => warnInDialog(message)),
-  );
+  const opened = yield* openProjectSession(roots, service, warnInDialog);
   return {
     key: roots.storage,
     display: projectDisplayOf(roots.storage, root),
@@ -351,15 +353,21 @@ export const openDesktopProjectRegistry: (
           yield* records.remember(root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
+            // The stores report while they open, through a plain callback:
+            // their warnings are logged and shown once the open returns.
+            const configWarnings: string[] = [];
             const workspaceConfigs = yield* openTexraWorkspaceConfigStores(
               TEXRA_SETTINGS.catalog,
               options.dataRoot,
               root,
               (message) => {
-                console.warn(`[desktop] ${message}`);
-                warnInDialog(message);
+                configWarnings.push(message);
               },
             );
+            for (const message of configWarnings) {
+              yield* Effect.logWarning(message).pipe(withLogChannel('desktop'));
+              yield* warnInDialog(message);
+            }
             const roots = yield* openNodeWorkspaceRoots({
               workspaceRoot: root,
               storageRoot: options.dataRoot,

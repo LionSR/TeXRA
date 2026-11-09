@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, Fiber, Result, Schema } from 'effect';
+import { Effect, Fiber, Latch, Result, Schema } from 'effect';
 
 import { Skills, hasExtension } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -24,7 +24,7 @@ import {
   SettingsViewInboundMessageSchema,
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
+import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsViewBody';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -58,17 +58,20 @@ const showDocument = (
 
 const CHANNEL = 'SettingsViewProvider';
 
+/** The open settings panel. */
+interface SettingsPanel {
+  readonly view: vscode.WebviewPanel;
+  /** The panel's message and dispose listeners. */
+  readonly listeners: vscode.Disposable[];
+  /** Opens when the panel's frontend posts `WEBVIEW_READY`. Until then a
+   *  message posted to it is dropped, since its document may not have
+   *  loaded or mounted a listener yet (#12495), and a tab asked for waits. */
+  readonly ready: Latch.Latch;
+}
+
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
-  private _view?: vscode.WebviewPanel;
-  /** The open panel's message and dispose listeners. */
-  private viewListeners?: vscode.Disposable;
-  /** Whether the panel's frontend has posted `WEBVIEW_READY`. Until then a
-   *  message posted to it is dropped, since its document may not have
-   *  loaded or mounted a listener yet (#12495). */
-  private viewReady = false;
-  /** The latest tab asked for before the panel was ready, posted on ready. */
-  private pendingTab?: SettingsTarget;
+  private panel?: SettingsPanel;
   private readonly contentProvider: BundledViewContentProvider;
   private readonly body: Effect.Success<
     ReturnType<typeof makeSettingsViewBody>
@@ -99,11 +102,11 @@ export class SettingsViewProvider {
           // dropped; one disposed during `postMessage` still fails.
           post: (message) =>
             Effect.suspend(() => {
-              const panel = this._view;
-              return panel && this.viewReady
+              const panel = this.panel;
+              return panel && Latch.isOpen(panel.ready)
                 ? Effect.flatMap(message, (built) =>
-                    this._view === panel && this.viewReady
-                      ? postToWebview(panel.webview, built)
+                    this.panel === panel
+                      ? postToWebview(panel.view.webview, built)
                       : Effect.void,
                   )
                 : Effect.void;
@@ -186,12 +189,11 @@ export class SettingsViewProvider {
     Error,
     ProcessServices
   > {
-    if (this._view) {
-      const panel = this._view;
-      panel.reveal(vscode.ViewColumn.One);
+    if (this.panel) {
+      this.panel.view.reveal(vscode.ViewColumn.One);
       yield* this.body.changed('view');
     } else {
-      const panel = vscode.window.createWebviewPanel(
+      const view = vscode.window.createWebviewPanel(
         SettingsViewProvider.viewType,
         'TeXRA Settings',
         vscode.ViewColumn.One,
@@ -201,25 +203,39 @@ export class SettingsViewProvider {
           localResourceRoots: this.contentProvider.localResourceRoots,
         },
       );
-      panel.iconPath = new vscode.ThemeIcon('gear');
+      view.iconPath = new vscode.ThemeIcon('gear');
 
       this.cleanupView();
-      this._view = panel;
-      this.viewListeners = vscode.Disposable.from(
-        this.setupWebviewContent(panel),
-        panel.onDidDispose(this.cleanupView.bind(this)),
+      const opened: SettingsPanel = {
+        view,
+        ready: Latch.makeUnsafe(false),
+        listeners: [],
+      };
+      this.panel = opened;
+      opened.listeners.push(
+        this.setupWebviewContent(opened),
+        view.onDidDispose(this.cleanupView.bind(this)),
       );
     }
 
-    // this._view can be undefined here: the `changed(view)` above yields, and
+    // this.panel can be undefined here: the `changed(view)` above yields, and
     // disposing the dashboard panel meanwhile runs cleanupView.
-    if (tab == null || !this._view) return;
-    if (this.viewReady) {
-      this.pendingTab = undefined;
-      yield* this.postTab(this._view.webview, tab);
-    } else {
-      this.pendingTab = tab;
+    const panel = this.panel;
+    if (tab == null || !panel) return;
+    const postTab = Effect.suspend(() =>
+      this.panel === panel
+        ? this.postTab(panel.view.webview, tab)
+        : Effect.void,
+    );
+    if (Latch.isOpen(panel.ready)) {
+      yield* postTab;
+      return;
     }
+    // The tab goes once the frontend is ready, off this command. Waiting
+    // requests post in the order they were made, so the latest one wins.
+    this.runtime.runFork(
+      panel.ready.whenOpen(postTab).pipe(withLogChannel(CHANNEL)),
+    );
   });
 
   /**
@@ -227,14 +243,17 @@ export class SettingsViewProvider {
    * messages to the shared settings body. The returned disposable removes that
    * listener; the caller keeps it with the view's listeners.
    */
-  private setupWebviewContent(panel: vscode.WebviewPanel): vscode.Disposable {
+  private setupWebviewContent({
+    view: panel,
+    ready,
+  }: SettingsPanel): vscode.Disposable {
     // The template is read off this tick (it never rejects: a failed render
     // is a logged error page); a panel closed before it lands is not painted.
     this.runtime.runFork(
       this.contentProvider.getHtmlContent(panel.webview).pipe(
         Effect.flatMap((html) =>
           Effect.sync(() => {
-            if (this._view === panel) panel.webview.html = html;
+            if (this.panel?.view === panel) panel.webview.html = html;
           }),
         ),
         withLogChannel(CHANNEL),
@@ -243,7 +262,7 @@ export class SettingsViewProvider {
     return panel.webview.onDidReceiveMessage((message) => {
       this.runtime.runFork(
         Effect.gen({ self: this }, function* () {
-          if (this._view !== panel) return;
+          if (this.panel?.view !== panel) return;
           const parsed = Schema.decodeUnknownResult(
             SettingsViewInboundMessageSchema,
           )(message);
@@ -262,22 +281,12 @@ export class SettingsViewProvider {
             );
             return;
           }
-          // Initial page refreshes must be able to post during ready dispatch.
+          // Initial page refreshes must be able to post during ready
+          // dispatch; a tab asked for while the panel loaded goes now too.
           if (parsed.success.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY) {
-            this.viewReady = true;
+            yield* ready.open;
           }
           yield* this.body.handleMessage(parsed.success);
-          if (
-            this._view !== panel ||
-            parsed.success.command !== SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
-          )
-            return;
-          // The ready handler has asked every page for the view; the tab
-          // asked for while it loaded goes now, as a reveal of a live panel
-          // does.
-          const pending = this.pendingTab;
-          this.pendingTab = undefined;
-          if (pending) yield* this.postTab(panel.webview, pending);
         }).pipe(withLogChannel(CHANNEL)),
       );
     });
@@ -291,14 +300,11 @@ export class SettingsViewProvider {
   }
 
   private cleanupView(): void {
-    const listeners = this.viewListeners;
-    this.viewListeners = undefined;
-    try {
-      listeners?.dispose();
-    } finally {
-      this._view = undefined;
-      this.viewReady = false;
-      this.pendingTab = undefined;
-    }
+    const panel = this.panel;
+    this.panel = undefined;
+    if (!panel) return;
+    // A tab request still waiting finds the panel gone and posts nothing.
+    panel.ready.openUnsafe();
+    vscode.Disposable.from(...panel.listeners).dispose();
   }
 }

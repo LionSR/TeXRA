@@ -160,6 +160,8 @@ import { defaultShortcutModifierLabel } from '../src/runtime/terminal/shortcutLa
 import { updateCliModelAccess } from '../src/runtime/models/modelAccessSelection';
 import { makeCliProcessRuntime } from '../src/runtime/platform/cliProcessRuntime';
 import { cliPlatform } from '../src/runtime/platform/initPlatform';
+import { CliExitCode } from '../src/runtime/platform/exitCodes';
+import { holdSignals } from '../src/runtime/platform/processSignals';
 import { resolveCliResourcesPath } from '../src/runtime/platform/cliContext';
 import {
   createCliRuntimeHost,
@@ -335,11 +337,10 @@ if (SHOW_PROJECT_SKILL) {
 
 // The harness runs over the same runtime and platform `texra chat` builds,
 // from the harness context (its provider is the one its rows resolve
-// through), with no signal handler of its own.
-const HARNESS_PLATFORM_SERVICES = await makeCliProcessRuntime(
-  HARNESS_CLI_CONTEXT,
-  { installSignalHandlers: false },
-).runPromise(cliPlatform);
+// through). The platform holds SIGINT and SIGTERM; the harness takes them
+// above it below, as the chat TUI does.
+const HARNESS_PLATFORM_SERVICES =
+  await makeCliProcessRuntime(HARNESS_CLI_CONTEXT).runPromise(cliPlatform);
 if (RESET_MULTI_AGENT_DISABLED) {
   await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
     setCliToolEnabled('multi-agent', false),
@@ -2056,4 +2057,9 @@ async function exitHarness(exitCode: number): Promise<void> {
   }
 }
 
-process.on('SIGINT', handleHarnessCtrlC);
+// The newest holder answers, so these take the signals over from the
+// platform's own exit.
+holdSignals({
+  SIGINT: handleHarnessCtrlC,
+  SIGTERM: () => void exitHarness(CliExitCode.Terminated),
+});
