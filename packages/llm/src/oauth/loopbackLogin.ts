@@ -5,9 +5,7 @@
  * callback port(s), opens the consent URL via an injected `openBrowser`, and
  * waits for the redirect to deliver the authorization code.
  *
- * Worked exemplar for the Effect 4 runtime PRD
- * (`2026-08-26-effect-4-runtime-migration.md`): the server is a
- * scoped resource, the callback wait is a `Deferred` under a timeout, and
+ * The server is a scoped resource, the callback wait is a `Deferred` under a timeout, and
  * cancellation is fiber interruption, delivered by the host that runs the
  * program at its own edge. Error identities and HTTP responses are unchanged.
  */

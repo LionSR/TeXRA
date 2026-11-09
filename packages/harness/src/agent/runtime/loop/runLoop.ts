@@ -26,7 +26,7 @@
 import { Effect, Exit, type Scope, ScopedRef } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
-import { logUserMessage } from '@agent/trace/helpers';
+import { logUserMessage } from '@agent/trace/traceLogs';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionRoots } from '@platform/rootedFs';

@@ -187,41 +187,48 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
 /** What a `run.files` request reads from the process: its files. */
 export type RunFilesServices = FileSystem.FileSystem | Path.Path;
 
+/** A stopped run's directory under the storage root; `undefined`, with a
+ *  warning, when the run has none. */
+const existingRunDir = Effect.fn(function* (runId: RunId) {
+  const runDir = path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, runId);
+  if (yield* (yield* StorageFs).exists(runDir)) return runDir;
+  yield* Effect.logWarning(`Run directory not found for run ${runId}`);
+  return undefined;
+});
+
 /**
- * Copy a stopped run's directory to the workspace path `to`, or remove it;
- * `false` when the run has no directory. Symlinks are dereferenced so a copy
- * stands alone, and a copy onto an existing folder fails rather than merging
- * into it.
+ * Copy a stopped run's directory to the workspace path `to`; `false` when
+ * the run has no directory. Symlinks are dereferenced so a copy stands
+ * alone, and a copy onto an existing folder fails rather than merging into
+ * it.
  */
-const copyOrRemoveRunDir = Effect.fn('runStorage.copyOrRemoveRunDir')(
-  function* (
-    runId: RunId,
-    files:
-      | { readonly op: 'copy'; readonly to: string }
-      | { readonly op: 'remove' },
-  ) {
-    const storageFs = yield* StorageFs;
-    const runDir = path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, runId);
-    if (!(yield* storageFs.exists(runDir))) {
-      yield* Effect.logWarning(`Run directory not found for run ${runId}`);
-      return false;
-    }
-    if (files.op === 'remove') {
-      yield* Effect.logInfo(`Removing the run directory ${runDir}`);
-      yield* storageFs.remove(runDir, { recursive: true, force: true });
-      return true;
-    }
-    const workspaceFs = yield* WorkspaceFs;
-    const source = yield* storageFs.resolve(runDir);
-    const destination = yield* workspaceFs.resolve(files.to);
-    yield* workspaceFs.makeDirectory((yield* Path.Path).dirname(files.to), {
-      recursive: true,
-    });
-    yield* copyDereferenced(source, destination);
-    yield* Effect.logInfo(`Copied ${source} -> ${destination}`);
-    return true;
-  },
-);
+const copyRunDir = Effect.fn('runStorage.copyRunDir')(function* (
+  runId: RunId,
+  to: string,
+) {
+  const runDir = yield* existingRunDir(runId);
+  if (runDir === undefined) return false;
+  const workspaceFs = yield* WorkspaceFs;
+  const source = yield* (yield* StorageFs).resolve(runDir);
+  const destination = yield* workspaceFs.resolve(to);
+  yield* workspaceFs.makeDirectory((yield* Path.Path).dirname(to), {
+    recursive: true,
+  });
+  yield* copyDereferenced(source, destination);
+  yield* Effect.logInfo(`Copied ${source} -> ${destination}`);
+  return true;
+});
+
+/** Remove a stopped run's directory; `false` when the run has none. */
+const removeRunDir = Effect.fn('runStorage.removeRunDir')(function* (
+  runId: RunId,
+) {
+  const runDir = yield* existingRunDir(runId);
+  if (runDir === undefined) return false;
+  yield* Effect.logInfo(`Removing the run directory ${runDir}`);
+  yield* (yield* StorageFs).remove(runDir, { recursive: true, force: true });
+  return true;
+});
 
 /** The registry's step on a run nothing drives (`withInactiveRun`): it
  *  refuses a run live here or with live work under it, and a launch
@@ -292,7 +299,10 @@ export const runFiles = Effect.fn('runFiles')(function* (
   return yield* runs
     .withInactiveRun(
       req.runId,
-      copyOrRemoveRunDir(req.runId, req.files).pipe(
+      (req.files.op === 'copy'
+        ? copyRunDir(req.runId, req.files.to)
+        : removeRunDir(req.runId)
+      ).pipe(
         Effect.map((found): RunFilesResult => {
           if (!found) return { status: 'noFiles' };
           return req.files.op === 'copy'

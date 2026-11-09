@@ -60,7 +60,7 @@ export type InvocationRef = typeof InvocationRefSchema.Type;
  * of the invocation as failed (`stop`). A person's cancel is their answer
  * to the `ask`.
  */
-const FailedNextSchema = Schema.Union([
+const StepAfterFailureSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('retry') }),
   Schema.Struct({ kind: Schema.Literal('unchain') }),
   Schema.Struct({
@@ -75,8 +75,8 @@ const FailedNextSchema = Schema.Union([
     route: DeclinableUsageRouteSchema,
   }),
 ]);
-/** The move a `failed` row records after its attempt. */
-export type FailedNext = typeof FailedNextSchema.Type;
+/** The step a `failed` row records after its attempt. */
+export type StepAfterFailure = typeof StepAfterFailureSchema.Type;
 
 /** The canonical call key: `providerCallId`, never null, so a completed
  *  turn cannot carry a call without an identity. */
@@ -139,7 +139,7 @@ export type DispatchFacts = typeof DispatchFactsSchema.Type;
 
 export const ModelMessagePayloadSchema = Schema.Union([
   /** A billed request is about to leave the process. Carries no history,
-   *  only the address of the rest it sends (`requestContext.ts`). */
+   *  only the address of the rest it sends (`recordedRequest.ts`). */
   Schema.Struct({
     kind: Schema.Literal('attempt'),
     invocation: InvocationRefSchema,
@@ -159,7 +159,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
     kind: Schema.Literal('failed'),
     invocation: InvocationRefSchema,
     error: ModelFailureSchema,
-    next: FailedNextSchema,
+    next: StepAfterFailureSchema,
     /** The priced usage of a response the provider billed before refusing
      *  it (Anthropic's overflowed turn), counted like a response's. */
     usage: Schema.optional(NormalizedUsageSchema),

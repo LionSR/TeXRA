@@ -50,7 +50,7 @@ import { logStyles } from '../styles/logStyles';
 // Local imports - formatters
 import { formatLogEntry } from '../formatters';
 import { getTimeFormatter } from '../formatters/timestampUtils';
-import { dispatchDisclosureToggle } from '../utils';
+import { dispatchDisclosureToggle } from './disclosureToggle';
 import type {
   RunView,
   SessionView,

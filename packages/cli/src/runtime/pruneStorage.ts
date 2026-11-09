@@ -1,5 +1,5 @@
 /**
- * `texra doctor --prune-storage` (the storage design's §7): list the
+ * `texra doctor --prune-storage`: list the
  * workspace stores whose project is gone and the old aside copies beside the
  * stores that remain (`readStorageInventory`), and delete them once the user
  * confirms.

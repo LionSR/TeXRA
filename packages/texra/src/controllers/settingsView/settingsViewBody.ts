@@ -27,7 +27,6 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   APPROVAL_POLICY_SETTING,
-  SUBSCRIPTION_AUTH_PROVIDERS,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
@@ -58,10 +57,7 @@ import { settingsPluginCommands } from '@texra/controllers/settingsView/settings
 import { buildProfilePage } from '@texra/controllers/settingsView/profileMessage';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
-import {
-  settingsViewProgram,
-  type SettingsViewInboundHandlerRegistry,
-} from '@texra/controllers/settingsView/settingsViewDispatch';
+import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 import {
@@ -150,15 +146,12 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       hostStatePage(
         'subscriptionAuth',
         ['subscriptions'],
-        Effect.map(
-          Effect.forEach(SUBSCRIPTION_AUTH_PROVIDERS, (provider) =>
-            subscriptionAuthStatus(provider, roots),
-          ),
-          (statuses) =>
-            Object.fromEntries(
-              statuses.map((status) => [status.provider, status]),
-            ) as SettingsHostState['subscriptionAuth'],
-        ),
+        // One field per provider, so a provider added to the wire set
+        // without a status here fails to compile.
+        Effect.all({
+          chatgpt: subscriptionAuthStatus('chatgpt', roots),
+          grok: subscriptionAuthStatus('grok', roots),
+        }),
       ),
       hostStatePage(
         'subscriptionUsage',
@@ -411,7 +404,14 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         message: SettingsViewInboundMessage,
       ): Effect.Effect<void, never, ProcessServices> {
         return settle(
-          settingsViewProgram(message, handlers).pipe(Effect.asVoid),
+          Effect.suspend(() => {
+            // cast: the discriminant selects exactly this handler's member of
+            // the union.
+            const run = handlers[message.command] as (
+              message: SettingsViewInboundMessage,
+            ) => Effect.Effect<unknown, Error, ProcessServices | StorageFs>;
+            return run(message);
+          }).pipe(Effect.asVoid),
         );
       },
       /** Say an input changed; the host says the view was revealed. */

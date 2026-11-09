@@ -29,7 +29,7 @@ import {
   type ConfirmCardKeyRow,
 } from './ConfirmCardState';
 import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
-import { BaseTextInput } from '../input/BaseTextInput';
+import { TextInput } from '../input/TextInput';
 
 /** Rejection-note prompt for every ConfirmCard-based approval modal. */
 const CONFIRM_CARD_FEEDBACK_PLACEHOLDER = 'Feedback to send with rejection';
@@ -70,7 +70,7 @@ export function ConfirmCard({
     return (
       <Box marginTop={marginTop}>
         <Text>{`${POINTER} `}</Text>
-        <BaseTextInput
+        <TextInput
           value={feedback}
           placeholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
           onChange={setFeedback}

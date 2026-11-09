@@ -3,8 +3,8 @@
  * its body reads of its own call (`ToolContext`: its id, where it works, how
  * it asks a person, the run it works for, where its transient output goes).
  * The run's window (`ToolRun`) is declared here with its id; the runtime
- * adds the rest of it, and the helpers over it (`requireRun`, `callerRun`),
- * published to plugin authors on `@texra-ai/harness/plugins`.
+ * adds the rest of it. A tool is only ever called under a run: its call
+ * always carries the run and where its requests open.
  */
 
 import { Context, type Effect } from 'effect';
@@ -118,7 +118,7 @@ export interface ITool<E = Error, R = never> {
    * `'unsafe'`. Independent of `lane`, which is about concurrency.
    * The response row saves the declaration with each call, and a resume
    * re-runs a call only when that saved word and the current one both say
-   * `'safe'` (`toolUseDispatch.ts`).
+   * `'safe'`.
    */
   readonly replay?: 'safe' | 'unsafe';
   /**
@@ -139,8 +139,8 @@ export interface ITool<E = Error, R = never> {
    * A description rendered from the other tools the run declares and the
    * modules its scripts may import, in place of `definition.description`:
    * rendered at the step that freezes the run's system text and kept as
-   * that step recorded it until a compaction opens the freeze again
-   * (`step.ts`), so a catalog change mid-run leaves its text, and the cached
+   * that step recorded it until a compaction opens the freeze again, so a
+   * catalog change mid-run leaves its text, and the cached
    * prefix through it, as it was. The tool that has one is the script tool,
    * which reaches nothing but the run's other tools and its own agent: a
    * child is offered it, and its script-only functions, whatever its parent
@@ -194,8 +194,8 @@ export interface ToolEnv {
   readonly roots: WorkspaceRoots;
   readonly workingDirectory?: string;
   readonly stepRoots?: readonly StepRoot[];
-  /** The run the call works for; absent for a standalone host invocation. */
-  readonly run?: ToolRun;
+  /** The run the call works for. */
+  readonly run: ToolRun;
 }
 
 /**
@@ -213,9 +213,8 @@ export interface ToolContextShape {
   readonly callId: string;
   /** Where the call works. */
   readonly env: ToolEnv;
-  /** Where the call's requests to a person open; absent for a standalone
-   *  host invocation outside an agent run, which has nobody to ask. */
-  readonly requests?: CallRequests;
+  /** Where the call's requests to a person open. */
+  readonly requests: CallRequests;
   /** Transient output for the call's card while it runs, never a row. */
   readonly emit: (text: string) => void;
 }

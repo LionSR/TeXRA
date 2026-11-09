@@ -10,7 +10,7 @@ import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
 } from '@texra/utils/files/outputFileUtils';
-import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
+import { readFilesAsPromptXml } from '@utils/files/promptFilesXml';
 
 layer(
   FakeHost.layer({
@@ -30,10 +30,10 @@ layer(
     () =>
       Effect.gen(function* () {
         const host = yield* FakeHost;
-        const { xml, skipped } = yield* getXmlFormatFromReadableFiles(
-          undefined,
-          ['relative.tex', host.path('outside/absolute.tex')],
-        );
+        const { xml, skipped } = yield* readFilesAsPromptXml(undefined, [
+          'relative.tex',
+          host.path('outside/absolute.tex'),
+        ]);
 
         expect(xml).toContain('<document name="absolute.tex">');
         expect(skipped.map((entry) => entry.file)).toEqual(['relative.tex']);

@@ -35,7 +35,6 @@ import type {
   AgentTraceSink,
   LogOptions,
   StreamHandle,
-  StreamOptions,
   ToolCardHandle,
 } from './AgentTrace';
 
@@ -155,16 +154,11 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Streams ───────────────────────────────────────────────────────
 
-  openRun(kind: MessageType, options: StreamOptions = {}): StreamHandle {
+  openRun(kind: MessageType): StreamHandle {
     const id = crypto.randomUUID();
-    const emitStart = () => this.emit({ type: 'stream.start', id, kind });
-
-    if (options.deferStart) {
-      return new StreamHandleImpl(this, id, emitStart);
-    }
-
-    emitStart();
-    return new StreamHandleImpl(this, id, null);
+    return new StreamHandleImpl(this, id, () =>
+      this.emit({ type: 'stream.start', id, kind }),
+    );
   }
 
   // ─── Tool cards ────────────────────────────────────────────────────
@@ -240,18 +234,14 @@ class StreamHandleImpl implements StreamHandle {
   private readonly trace: TraceEmitter;
   readonly id: string;
   /**
-   * Deferred `stream.start` emission (see `StreamOptions.deferStart`); null
-   * once started — eager runs are constructed already started. A deferred
-   * stream finalized without content emits no events at all, while a
-   * finalize that carries text emits the start/end pair so reasoning that
-   * only arrives in the final response still lands as a single entry.
+   * The `stream.start` emission, waiting for content (`openRun`); null once
+   * started. A stream finalized without content emits no events at all,
+   * while a finalize that carries text emits the start/end pair so
+   * reasoning that only arrives in the final response still lands as a
+   * single entry.
    */
   private pendingStart: (() => void) | null;
-  constructor(
-    trace: TraceEmitter,
-    id: string,
-    pendingStart: (() => void) | null,
-  ) {
+  constructor(trace: TraceEmitter, id: string, pendingStart: () => void) {
     this.trace = trace;
     this.id = id;
     this.pendingStart = pendingStart;
@@ -274,8 +264,8 @@ class StreamHandleImpl implements StreamHandle {
     if (this.finalText !== undefined) return this.finalText;
     this.finalText =
       typeof finalText === 'string' ? finalText : this.chunks.join('');
-    // Deferred and nothing to say: the phase never happened, so the stream
-    // leaves no trace at all.
+    // Not started and nothing to say: the phase never happened, so the
+    // stream leaves no trace at all.
     if (this.pendingStart !== null && this.finalText.length === 0) {
       return this.finalText;
     }

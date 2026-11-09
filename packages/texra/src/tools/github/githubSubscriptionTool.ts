@@ -22,7 +22,6 @@ import { Effect, Result, Schema } from 'effect';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import {
   ChildRuns,
-  requireRun,
   type RunInbox,
   parseWorkingDirectory,
   nullishWithDefault,
@@ -506,7 +505,7 @@ export const GitHubSubscriptionTool = defineTool({
     input: GitHubSubscriptionInput,
   ) {
     const toolCall = yield* ToolContext;
-    const { run } = yield* requireRun('github_subscription');
+    const { run } = toolCall.env;
     switch (input.command) {
       case 'subscribe':
         return yield* execSubscribe(

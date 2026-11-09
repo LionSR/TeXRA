@@ -154,25 +154,18 @@ export class LatexDiffsSection extends LitElement {
     `,
   ];
 
-  /** Base file value */
   @property({ attribute: false }) baseFile = '';
 
-  /** Base file options */
   @property({ attribute: false }) baseFileOptions: string[] = [];
 
-  /** Edited file value */
   @property({ attribute: false }) editedFile = '';
 
-  /** Edited file options */
   @property({ attribute: false }) editedFileOptions: string[] = [];
 
-  /** Commit value */
   @property({ attribute: false }) commit = 'HEAD';
 
-  /** Commit options */
   @property({ attribute: false }) commitOptions: string[] = [];
 
-  /** Whether this is a git repo */
   @property({ attribute: false }) isGitRepo = true;
 
   /** A selection change on one of the three selectors: the launcher field it

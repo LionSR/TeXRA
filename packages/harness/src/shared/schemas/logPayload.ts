@@ -10,7 +10,7 @@ import {
   ToolUseLogSchema,
   UserMessagePayloadSchema,
   WebSearchPayloadSchema,
-} from './progressView/data';
+} from './toolCard';
 import { DeclinableUsageRouteSchema } from './usage';
 
 const StreamingTextDataSchema = Schema.StructWithRest(

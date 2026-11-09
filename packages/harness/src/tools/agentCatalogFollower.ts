@@ -49,6 +49,7 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { fileWatchRetrySchedule } from '@utils/files/fsEntryExists';
+import { AGENT_FILE_EXTENSION } from '@shared/schemas';
 import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 import { CUSTOM_AGENT_DIR_KEY } from '@agent/index/AgentDirectoryService';
 import { ACTIVE_TEAM_ID_KEY } from '@agent/workspaceAgents/WorkspaceAgentsController';
@@ -123,7 +124,8 @@ const watchCustomDirectory = Stream.unwrap(
       ).pipe(Stream.drain);
     return fs.watch(directory, { recursive: true }).pipe(
       Stream.filter(
-        (event) => event._tag !== 'Update' || event.path.endsWith('.yaml'),
+        (event) =>
+          event._tag !== 'Update' || event.path.endsWith(AGENT_FILE_EXTENSION),
       ),
       Stream.retry(fileWatchRetrySchedule),
       Stream.map(() => undefined),

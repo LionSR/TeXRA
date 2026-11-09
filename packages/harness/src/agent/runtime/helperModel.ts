@@ -30,9 +30,7 @@ import type { HttpClient } from 'effect/http';
 
 /** A single non-streaming helper-model text completion. */
 export interface HelperPrompt {
-  /** User message content. */
   readonly userPrompt: string;
-  /** Optional system prompt. */
   readonly systemPrompt?: string;
 }
 

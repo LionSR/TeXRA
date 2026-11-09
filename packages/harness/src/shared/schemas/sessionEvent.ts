@@ -506,7 +506,7 @@ export function pendingKeyOf(
   }
 }
 
-/** Every `AgentEvent` arm but the chunk: each is stored as a row of its run. */
+/** Every `AgentEvent` case but the chunk: each is stored as a row of its run. */
 // prettier-ignore
 export const TRACE_ROW_TYPES = Object.freeze(['log', 'process.output', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplayRow['type'][]);
 

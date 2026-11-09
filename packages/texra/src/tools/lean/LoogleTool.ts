@@ -18,6 +18,7 @@ import {
   retryTransientFetch,
   scopedOkClient,
   defineTool,
+  ToolError,
   ToolResult,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
@@ -141,9 +142,10 @@ const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
       ).pipe(
         Effect.catchTag('SchemaError', (error) =>
           Effect.fail(
-            new Error(`Unexpected Loogle response shape: ${error.message}`, {
-              cause: error,
-            }),
+            new ToolError(
+              `Unexpected Loogle response shape: ${error.message}`,
+              { cause: error },
+            ),
           ),
         ),
       );

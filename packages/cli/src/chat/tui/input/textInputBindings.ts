@@ -1,8 +1,8 @@
-// Declarative readline-style keymap for BaseTextInput.
+// Declarative readline-style keymap for TextInput.
 //
 // One entry per editing chord: the matcher that recognizes the keypress, the
 // pure editing primitive it applies, and the label/action that document it.
-// This table is the single source of truth — BaseTextInput dispatches through
+// This table is the single source of truth — TextInput dispatches through
 // it and `/help` renders the advertised rows from it, so a documented chord
 // that doesn't exist (or an implemented chord nobody can discover) is
 // structurally impossible.
@@ -13,7 +13,7 @@
 // Deliberately NOT in this table: stateful interactions that need component
 // context — Enter (submit), Ctrl-J/Shift-Enter (newline), Esc (cancel paste),
 // ↑/↓ (line motion falling back to history recall), and Ctrl-V (async image
-// paste). Those stay explicit in BaseTextInput.
+// paste). Those stay explicit in TextInput.
 
 import {
   isCtrlInput,

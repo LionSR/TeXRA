@@ -30,8 +30,7 @@ import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 // Local file imports
 import type { CliProcessRuntime } from './cliProcessRuntime';
 import {
-  flushStdout,
-  flushTextStderr,
+  flush,
   silentLogSink,
   writeTextStderr,
   writeTextStderrAndWait,
@@ -52,11 +51,6 @@ export interface CliPlatformOptions {
    *  before Ink mounts is left above its header. Otherwise the platform
    *  prints it to stderr: its log sink is always silent. */
   readonly presentsStoreMovedAside?: boolean;
-  /** `false` only where no signal handler may be installed at all (the TUI
-   *  harness). Otherwise the platform holds SIGINT and SIGTERM for as long
-   *  as it is up; the chat TUI holds its own policy above it once Ink
-   *  mounts, so the newest holder answers. */
-  readonly installSignalHandlers?: boolean;
 }
 
 /** The context fields the platform reads. */
@@ -256,21 +250,21 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
   // The platform's own answer to SIGINT and SIGTERM while it is up: leave
   // with the signal's code. Onboarding and model resolution run before Ink
   // mounts and need a graceful exit as much as a headless command does.
-  if (options.installSignalHandlers !== false) {
-    const onSignal = (code: number) => (): void => {
-      holdSignals(leaveAtOnce);
-      void runCliExit(leave(code));
-    };
-    yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        holdSignals({
-          SIGINT: onSignal(CliExitCode.Interrupted),
-          SIGTERM: onSignal(CliExitCode.Terminated),
-        }),
-      ),
-      (release) => Effect.sync(release),
-    ).pipe(Scope.provide(scope));
-  }
+  // It holds them for as long as it is up; the chat TUI holds its own policy
+  // above it once Ink mounts, so the newest holder answers.
+  const onSignal = (code: number) => (): void => {
+    holdSignals(leaveAtOnce);
+    void runCliExit(leave(code));
+  };
+  yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      holdSignals({
+        SIGINT: onSignal(CliExitCode.Interrupted),
+        SIGTERM: onSignal(CliExitCode.Terminated),
+      }),
+    ),
+    (release) => Effect.sync(release),
+  ).pipe(Scope.provide(scope));
 
   return {
     runtime: runtime(),
@@ -312,7 +306,7 @@ function leaveProcess(
   return Effect.gen(function* () {
     yield* bestEffort('closing the platform', shutdown);
     // A closed pipe must not prevent signal-based termination.
-    yield* bestEffort('flushing stderr', flushTextStderr());
-    yield* bestEffort('flushing stdout', flushStdout());
+    yield* bestEffort('flushing stderr', flush('stderr'));
+    yield* bestEffort('flushing stdout', flush('stdout'));
   });
 }

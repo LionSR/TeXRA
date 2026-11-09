@@ -3,7 +3,8 @@ import * as path from 'node:path';
 import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
 
 // Local imports
-import { callerRun, requireFileReadForEdit } from '@agent/runtime/RunCall';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { requireFileReadForEdit } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   DIRECTORY_LISTING_DEPTH,
@@ -85,10 +86,10 @@ function formatListingRow(
 const executeMemoryTool = Effect.fn('executeMemoryTool')(function* (
   input: MemoryToolInput,
 ): Effect.fn.Return<ToolResult, Error, PluginToolServices> {
-  const caller = yield* callerRun;
+  const caller = (yield* ToolContext).env.run;
   const invocation = {
-    runId: caller?.runId,
-    agentName: caller?.config.agent,
+    runId: caller.runId,
+    agentName: caller.config.agent,
   } satisfies MemoryInvocation;
   return yield* run(input, invocation).pipe(onMemoryTreeLane);
 });

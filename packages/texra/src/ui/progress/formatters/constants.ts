@@ -26,7 +26,7 @@ export const ICON_BY_LEVEL: Record<LogLevel, IconName> = {
 // The edit/read/write display-kind classification (which tools show an
 // old/new diff, a file link, or a file link + content) lives in
 // `@shared/tools/toolKind` — the single source of truth shared with the CLI chat
-// TUI's `toolRenderers.tsx` (see issue #7120). Use `toolDisplayKind()` from
+// TUI's `toolRenderers.tsx`. Use `toolDisplayKind()` from
 // that module instead of adding tool-name lists here. Friendly header labels
 // live next to it in `@shared/tools/toolDisplayName`.
 

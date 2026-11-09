@@ -51,9 +51,9 @@ import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 import { modelMenu } from './composerChipMenus';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
-import { processMarkdownContent } from '../formatters/markdownRenderer';
+import { renderMarkdownHtml } from '../formatters/markdownRenderer';
 import { proposalLaunchPatch } from '../proposalEdit';
-import { getComposedPathElement } from '../utils';
+import { getComposedPathElement } from './composedPath';
 import type { RunView } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
@@ -280,7 +280,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   }
 
   private renderInstruction(instruction: string): TemplateResult {
-    const markdownHtml = processMarkdownContent(instruction);
+    const markdownHtml = renderMarkdownHtml(instruction);
     return html`<div class="workflow-proposal__instruction markdown-content">
       ${unsafeHTML(markdownHtml)}
     </div>`;

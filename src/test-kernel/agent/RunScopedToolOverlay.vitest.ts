@@ -13,7 +13,7 @@ import {
   ValidationModel,
 } from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
-import type { InvokeRequest } from '@agent/runtime/run/requestContext';
+import type { InvokeRequest } from '@agent/runtime/run/recordedRequest';
 import { stepFor } from '@agent/runtime/loop/step';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import {
@@ -87,7 +87,9 @@ function runLayer(
 ) {
   return Layer.mergeAll(
     observingInvokerLayer(seen),
-    nativeToolTestLayer(),
+    nativeToolTestLayer({
+      run: { runId: ctx.runId, session, toolPolicy: {} },
+    }),
   ).pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {

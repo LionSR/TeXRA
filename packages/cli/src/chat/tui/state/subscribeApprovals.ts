@@ -1,4 +1,4 @@
-// TUI side of the request protocol (PRD one-fold-three-renderers, 10.1).
+// TUI side of the request protocol.
 //
 // A run asks a person with `request.opened`; the fold lists it in
 // `view.requests` until a `request.decided` answers it, and the modal reads

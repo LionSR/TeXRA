@@ -17,7 +17,6 @@ const READ_FILE_MAX_LINES = 2000;
 
 /**
  * Format lines with line numbers for display in tool output.
- * @param lines - Array of lines to format
  * @param startingLine - 1-based line number for the first line (default: 1)
  * @returns Array of formatted lines with line number prefix and tab separator
  */

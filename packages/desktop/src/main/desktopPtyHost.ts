@@ -15,13 +15,14 @@ import { chmodSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
+import { Effect } from 'effect';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { withExtendedPath } from '@texra-ai/harness/node';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 
 /**
  * The subset of node-pty this host depends on: node-pty's own module type
- * satisfies it structurally, and a test fakes only this much through
- * `loadPty`.
+ * satisfies it structurally.
  */
 interface PtyProcess {
   onData(listener: (data: string) => void): void;
@@ -59,22 +60,22 @@ interface DesktopPtyHostOptions {
   /** Reports process exit so the UI can mark the session finished. */
   onExit(sessionId: string, exitCode: number): void;
   onError(error: unknown): void;
-  /** Overrides native-module loading for a controlled host environment. */
-  loadPty?: () => Promise<NodePtyModule>;
 }
 
 export interface DesktopPtyHost {
   /**
-   * Starts a session. Rejects when the native module is unavailable, so the
-   * caller can report "terminal unavailable" rather than hanging on a
-   * terminal that will never produce output. Returns `undefined` when resource
-   * disposal invalidates the request while the native module is loading.
+   * Starts a session. Fails with the load or spawn error when the native
+   * module or the shell cannot start, so the caller can report "terminal
+   * unavailable" rather than hanging on a terminal that will never produce
+   * output.
+   * Succeeds with `undefined` when the session was disposed while the native
+   * module was loading: there is no terminal to start and nothing failed.
    */
   create(input: {
     id: string;
     cols: number;
     rows: number;
-  }): Promise<PtySessionHandle | undefined>;
+  }): Effect.Effect<PtySessionHandle | undefined, Error>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
 }
@@ -153,96 +154,112 @@ function ensureSpawnHelperExecutable(): void {
   }
 }
 
-/** The native module, loaded on the first terminal. Node keeps the module
- *  once loaded, and keeps a failed load's error for the life of the process:
- *  each later terminal reports that same error until the app restarts. */
-async function loadNodePty(): Promise<NodePtyModule> {
-  const module = await import('node-pty');
-  ensureSpawnHelperExecutable();
-  return module;
-}
-
 export function createDesktopPtyHost(
   options: DesktopPtyHostOptions,
 ): DesktopPtyHost {
   const sessions = new Map<string, PtySessionHandle>();
 
   return {
-    async create({ id, cols, rows }) {
-      const existing = sessions.get(id);
-      if (existing) return existing;
+    create: ({ id, cols, rows }) =>
+      Effect.suspend(() => {
+        const existing = sessions.get(id);
+        if (existing) return Effect.succeed(existing);
 
-      // The handle is the session's one owner from this synchronous step on,
-      // before the native module load suspends: a close (or `disposeAll`)
-      // that lands while the load is pending finds it in the map and marks
-      // it disposed, so the shell is never spawned for a tab that is gone.
-      // Input typed before the shell exists is held and replayed to it.
-      let child: PtyProcess | undefined = undefined;
-      let disposed = false;
+        // The handle is the session's one owner from this synchronous step on,
+        // before the native module load suspends: a close (or `disposeAll`)
+        // that lands while the load is pending finds it in the map and marks
+        // it disposed, so the shell is never spawned for a tab that is gone.
+        // Input typed before the shell exists is held and replayed to it.
+        let child: PtyProcess | undefined = undefined;
+        let disposed = false;
 
-      let size = { cols: Math.max(cols, 20), rows: Math.max(rows, 5) };
-      const heldInput: string[] = [];
-      const handle: PtySessionHandle = {
-        write: (data) => {
-          if (child) child.write(data);
-          else heldInput.push(data);
-        },
-        resize: (nextCols, nextRows) => {
-          // A pty spawned at 0 columns makes shells emit unusable line
-          // wrapping, so clamp to a sane minimum until the renderer reports
-          // real bounds.
-          size = { cols: Math.max(nextCols, 20), rows: Math.max(nextRows, 5) };
-          if (!child) return;
-          try {
-            child.resize(size.cols, size.rows);
-          } catch (error) {
-            // Resizing a pty whose process already exited throws; the exit
-            // handler has cleaned up, so this is not actionable.
-            options.onError(error);
-          }
-        },
-        dispose: () => {
-          disposed = true;
-          if (sessions.get(id) === handle) sessions.delete(id);
-          if (!child) return;
-          try {
-            child.kill();
-          } catch (error) {
-            options.onError(error);
-          }
-        },
-      };
-      sessions.set(id, handle);
-      // Until a shell runs, a failure (the module load, or the spawn itself:
-      // a helper that cannot execute) gives the id back, so a later start
-      // for it spawns again rather than finding a handle no shell ever backs.
-      try {
-        const pty = await (options.loadPty?.() ?? loadNodePty());
-        if (disposed) return undefined;
-        child = pty.spawn(defaultShell(), [], {
-          name: 'xterm-256color',
-          cols: size.cols,
-          rows: size.rows,
-          cwd: options.cwd,
-          env: ptyEnvironment(),
-        });
-      } catch (error) {
-        if (sessions.get(id) === handle) sessions.delete(id);
-        if (disposed) return undefined;
-        throw error;
-      }
-      child.onData((data) => {
-        if (sessions.get(id) !== handle) return;
-        options.onData(id, data);
-      });
-      child.onExit(({ exitCode }) => {
-        if (sessions.get(id) !== handle) return;
-        sessions.delete(id);
-        options.onExit(id, exitCode);
-      });
-      for (const data of heldInput.splice(0)) child.write(data);
-      return handle;
-    },
+        let size = { cols: Math.max(cols, 20), rows: Math.max(rows, 5) };
+        const heldInput: string[] = [];
+        const handle: PtySessionHandle = {
+          write: (data) => {
+            if (child) child.write(data);
+            else heldInput.push(data);
+          },
+          resize: (nextCols, nextRows) => {
+            // A pty spawned at 0 columns makes shells emit unusable line
+            // wrapping, so clamp to a sane minimum until the renderer reports
+            // real bounds.
+            size = {
+              cols: Math.max(nextCols, 20),
+              rows: Math.max(nextRows, 5),
+            };
+            if (!child) return;
+            try {
+              child.resize(size.cols, size.rows);
+            } catch (error) {
+              // Resizing a pty whose process already exited throws; the exit
+              // handler has cleaned up, so this is not actionable.
+              options.onError(error);
+            }
+          },
+          dispose: () => {
+            disposed = true;
+            if (sessions.get(id) === handle) sessions.delete(id);
+            if (!child) return;
+            try {
+              child.kill();
+            } catch (error) {
+              options.onError(error);
+            }
+          },
+        };
+        sessions.set(id, handle);
+        // Until a shell runs, a failure (the module load, or the spawn itself:
+        // a helper that cannot execute) gives the id back, so a later start
+        // for it spawns again rather than finding a handle no shell ever backs.
+        // Uninterruptible: once the handle is in the map, the start runs to
+        // its end, so an interrupted caller never leaves a handle behind that
+        // no shell backs and no failure gives back.
+        // The native module loads on the first terminal. Node keeps the module
+        // once loaded, and keeps a failed load's error for the life of the
+        // process: each later terminal reports that same error until the app
+        // restarts.
+        return Effect.tryPromise({
+          try: (): Promise<NodePtyModule> => import('node-pty'),
+          catch: ensureError,
+        }).pipe(
+          Effect.flatMap((pty) => {
+            ensureSpawnHelperExecutable();
+            if (disposed) return Effect.succeed(undefined);
+            return Effect.try({
+              try: () =>
+                pty.spawn(defaultShell(), [], {
+                  name: 'xterm-256color',
+                  cols: size.cols,
+                  rows: size.rows,
+                  cwd: options.cwd,
+                  env: ptyEnvironment(),
+                }),
+              catch: ensureError,
+            });
+          }),
+          Effect.map((spawned) => {
+            if (!spawned) return undefined;
+            child = spawned;
+            spawned.onData((data) => {
+              if (sessions.get(id) !== handle) return;
+              options.onData(id, data);
+            });
+            spawned.onExit(({ exitCode }) => {
+              if (sessions.get(id) !== handle) return;
+              sessions.delete(id);
+              options.onExit(id, exitCode);
+            });
+            for (const data of heldInput.splice(0)) spawned.write(data);
+            return handle;
+          }),
+          Effect.catch((error: Error) => {
+            if (sessions.get(id) === handle) sessions.delete(id);
+            return disposed ? Effect.succeed(undefined) : Effect.fail(error);
+          }),
+          Effect.uninterruptible,
+        );
+      }),
 
     get: (id) => sessions.get(id),
 

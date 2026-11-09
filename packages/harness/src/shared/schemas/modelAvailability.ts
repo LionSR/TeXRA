@@ -54,10 +54,8 @@ for (const status of Object.values(MODEL_AVAILABILITY_STATUS))
 Object.freeze(MODEL_AVAILABILITY_STATUS);
 
 /**
- * Whether an option row can be run as shipped: `readModelOptions`
- * already resolved the access question, so a caller only has to read its
- * verdict. Lives with the kind so delegation's model list and the CLI's
- * picker can never drift apart on what "available" means.
+ * Whether an option row can be run as shipped. Its `availability` was
+ * resolved when the options were read; this only reads that verdict.
  */
 export function isModelOptionAvailable(model: {
   readonly availability?: ModelAvailabilityKind;

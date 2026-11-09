@@ -43,7 +43,9 @@ const FollowUpSenderSchema = Schema.Union([
    *  informs the run and never becomes its instruction. */
   Schema.Struct({
     kind: Schema.Literal('notification'),
-    source: Schema.Literal('github'),
+    /** What sent it, as the sender names itself (`github`); nothing
+     *  branches on it. */
+    source: Schema.String,
   }),
 ]);
 export type FollowUpSender = typeof FollowUpSenderSchema.Type;

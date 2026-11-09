@@ -24,7 +24,7 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
 import { getRunRecords, callChildRunId } from '@agent/storage/runOwnership';
-import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
+import type { RunCall, RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -45,8 +45,9 @@ import { resumeSubagentInBand } from './childLaunch';
 const AGENT_CALL_LIMIT = 1000;
 
 /** The key of the children a script has launched (`ScriptScope.shared`). */
-const AgentLaunches =
-  Context.Service<Deferred.Deferred<{ count: number }>>('agent:launches');
+const AgentLaunches = Context.Service<Deferred.Deferred<{ count: number }>>(
+  '@texra-ai/harness/agent/AgentLaunches',
+);
 
 /**
  * Counts the child `script` is about to launch, or returns the error result
@@ -153,7 +154,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
       work: Effect.Effect<A, Error, R>,
     ) => Effect.Effect<A, Error, R>;
   },
-): Effect.fn.Return<Recovered, Error, AgentRunServices> {
+): Effect.fn.Return<Recovered, Error, AgentRunServices | RunCall> {
   const { runId: parentRunId } = call.run;
   const earlier = yield* earlierChild(call);
   if (earlier === null) return { kind: 'launch' };
@@ -242,8 +243,9 @@ const spentBy = (call: RunToolCall) =>
 
 /** The key of the reuse keys a script's calls claimed, each with the call
  *  that claimed it (`ScriptScope.shared`). */
-const AgentKeys =
-  Context.Service<Deferred.Deferred<Map<string, string>>>('agent:keys');
+const AgentKeys = Context.Service<Deferred.Deferred<Map<string, string>>>(
+  '@texra-ai/harness/agent/AgentKeys',
+);
 
 /**
  * A completed call in the reuse scope whose key is `key`, or a rejection when

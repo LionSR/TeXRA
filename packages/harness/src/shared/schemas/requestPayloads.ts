@@ -115,10 +115,10 @@ const ApiKeyProviderIdSchema = Schema.Literals([
 ]);
 
 /**
- * The move onto the user's own credential a failed model request offers,
- * decided once by the retry owner (`ModelInvoker`) from the recorded failure
- * and the route the failed model was bound on. Hosts render it; none of them
- * re-derives it from the error.
+ * The move onto the user's own credential that a failed model request
+ * offers. It comes with the run's recorded failure, decided once from that
+ * failure and the route the model was bound on; hosts render it and never
+ * re-derive it from the error.
  */
 export const CredentialSwitchSchema = Schema.Union([
   /** A subscription or coding-plan quota ran out: the run declines `route`

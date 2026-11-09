@@ -2,8 +2,7 @@
  * Markdown → HTML processor preconfigured with the TeXRA KaTeX math pipeline:
  * `markdown-it-texmath` over the KaTeX engine with the project macro set,
  * plus the shared hljs highlight hook. Single wiring point for HTML-targeting
- * hosts (the progress view webview); only the bits that legitimately differ
- * per host are exposed as options.
+ * hosts (the progress view webview).
  *
  * The texmath and KaTeX imports live here, not in `createMarkdownRenderer`,
  * so hosts that never render math (the CLI TUI) keep them out of their
@@ -25,10 +24,8 @@ import {
 } from './createMarkdownRenderer';
 import { katexMacros } from './katexMacros';
 
-interface KatexHtmlProcessorOptions {
-  /** CSS colour for KaTeX parse errors (custom property or literal). */
-  readonly errorColor: string;
-}
+/** CSS colour for KaTeX parse errors: the design system's error token. */
+const ERROR_COLOR = 'var(--color-error)';
 
 /** The delimiter set every host renders; texmath takes it verbatim. */
 const DELIMITERS = Object.freeze(['dollars', 'brackets', 'beg_end']);
@@ -58,9 +55,7 @@ function addDisplayMathParagraphInterruptions(md: MarkdownItInstance): void {
   }
 }
 
-export function createKatexHtmlProcessor(
-  options: KatexHtmlProcessorOptions,
-): MarkdownProcessor {
+export function createKatexHtmlProcessor(): MarkdownProcessor {
   const renderer = createMarkdownRenderer({
     highlight: highlightCode,
     usePlugin: (md) => {
@@ -69,7 +64,7 @@ export function createKatexHtmlProcessor(
         delimiters: [...DELIMITERS],
         katexOptions: {
           throwOnError: false,
-          errorColor: options.errorColor,
+          errorColor: ERROR_COLOR,
           macros: katexMacros,
         },
       });

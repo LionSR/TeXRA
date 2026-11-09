@@ -9,7 +9,7 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@texra-ai/harness/host';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
-import { makeSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
+import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsViewBody';
 import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import {
   subscriptionProvider,

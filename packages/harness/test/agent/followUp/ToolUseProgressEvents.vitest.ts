@@ -40,7 +40,12 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
     (opened) => runToolUse({ resume: false }, opened),
   ).pipe(
     Effect.provide(
-      Layer.mergeAll(scriptedInvokerLayer, nativeToolTestLayer()).pipe(
+      Layer.mergeAll(
+        scriptedInvokerLayer,
+        nativeToolTestLayer({
+          run: { runId: init.runId, session: init.session, toolPolicy: {} },
+        }),
+      ).pipe(
         Layer.provideMerge(
           agentRunTestLayer({ stopAfterCycle: true, ...init, model }),
         ),

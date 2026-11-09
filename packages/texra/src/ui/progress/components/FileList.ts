@@ -35,7 +35,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { getComposedPathElement } from '../utils';
+import { getComposedPathElement } from './composedPath';
 
 // Local imports - styles
 import { fileListStyles } from './FileList.styles';

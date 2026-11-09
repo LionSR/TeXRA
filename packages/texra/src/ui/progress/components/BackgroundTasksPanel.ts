@@ -50,7 +50,7 @@ import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
-import { dispatchDisclosureToggle } from '../utils';
+import { dispatchDisclosureToggle } from './disclosureToggle';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
 /** The card's key in `RunSurface.disclosures` for its run. */

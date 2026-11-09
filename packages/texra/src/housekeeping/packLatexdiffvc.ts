@@ -5,12 +5,14 @@ import { Effect } from 'effect';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 import type { FileOpResult } from '@texra/shared/session/hostRequest';
 
+import { versionControlDiffStem } from '@latex/latexdiff/diffFileNameManager';
+
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';
 import {
   collectFilesFromPatterns,
   filesystemFor,
   fileNameTimestamp,
-} from './utils';
+} from './artifactFiles';
 
 /**
  * Reuses FileOpResult's `noFiles` and `success` shapes for the outcomes this
@@ -52,7 +54,7 @@ export const runPackLatexdiffvc = Effect.fn('housekeeping.packLatexdiffvc')(
 
     const baseName = path.parse(inputFile).name;
     const inputDir = path.dirname(inputFile);
-    const filePatterns = [`${baseName}-diff${commitHash}`];
+    const filePatterns = [versionControlDiffStem(baseName, commitHash)];
 
     const mainFiles = yield* collectFilesFromPatterns(
       workspaceRoot,

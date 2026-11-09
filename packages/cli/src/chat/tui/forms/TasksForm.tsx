@@ -33,7 +33,7 @@ import type { ServiceConnection } from '@texra/controllers/server/client';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 
-import { BaseTextInput } from '../input/BaseTextInput';
+import { TextInput } from '../input/TextInput';
 import { ApprovalModal } from '../modals/ApprovalModal';
 import {
   followAttachedTask,
@@ -322,7 +322,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         {composing && (
           <Box marginTop={1}>
             <Text>{`${POINTER} `}</Text>
-            <BaseTextInput
+            <TextInput
               value={draft}
               placeholder="Message this task"
               onChange={setDraft}

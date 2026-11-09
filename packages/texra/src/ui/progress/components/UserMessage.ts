@@ -33,7 +33,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 // Local imports - formatter helpers
-import { processMarkdownContent } from '../formatters/markdownRenderer';
+import { renderMarkdownHtml } from '../formatters/markdownRenderer';
 import { formatDisplayTimestamp } from '../formatters/timestampUtils';
 import type {
   ScriptDeliverySummary,
@@ -185,7 +185,7 @@ export class UserMessage extends LitElement {
     if (this.markdownCache.text !== this.text) {
       this.markdownCache = {
         text: this.text,
-        html: processMarkdownContent(this.text),
+        html: renderMarkdownHtml(this.text),
       };
     }
     return this.markdownCache.html;
@@ -266,7 +266,7 @@ export class UserMessage extends LitElement {
                   aria-label="User message details"
                 >
                   ${
-                    // processMarkdownContent uses MarkdownIt with html:false
+                    // renderMarkdownHtml uses MarkdownIt with html:false
                     // and escapes restored LaTeX reference labels.
                     unsafeHTML(this.markdownHtml())
                   }

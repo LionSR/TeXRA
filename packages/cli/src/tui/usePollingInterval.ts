@@ -50,8 +50,7 @@ export function subscribeToPolling(
  * Poll `fn` every `intervalMs`, firing once immediately on mount. The latest
  * `fn` is always used (held in a ref, not a dependency), so callers may pass a
  * fresh closure each render. Changing `resetKey` re-fires immediately and
- * re-arms the interval — use it for the dependencies that previously lived in
- * a `useEffect` dependency array.
+ * restarts the interval.
  */
 export function usePollingInterval(
   fn: () => void,

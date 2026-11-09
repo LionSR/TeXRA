@@ -79,7 +79,7 @@ export class ServiceProjects extends Context.Service<
     /** The load the projects carry now, as it changes. */
     readonly load: SubscriptionRef.SubscriptionRef<ServiceLoad>;
   }
->()('@texra/server/ServiceProjects') {}
+>()('@texra-ai/texra/server/ServiceProjects') {}
 
 /** The service's own state, kept by the transport that serves it. */
 export class ServiceControl extends Context.Service<
@@ -101,10 +101,10 @@ export class ServiceControl extends Context.Service<
     /** Stop now, or drain first; returns once the stop is asked. */
     readonly stop: (drain: boolean) => Effect.Effect<void>;
   }
->()('@texra/server/ServiceControl') {}
+>()('@texra-ai/texra/server/ServiceControl') {}
 
 /** The tasks the service runs now, across its open projects: what its
- *  registry holds live, which an admitted run is before the view applies
+ *  registry holds live, which a started run is before the view applies
  *  it. `atWork`: only those not waiting for their next message, a run the
  *  view does not show yet counted as at work. */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
@@ -131,17 +131,17 @@ const internal = Effect.fn('handlers.internal')(function* (
 });
 
 /**
- * Run `admission` (a start or a resume) in the service's fiber set, so a
- * client that disconnects never aborts it, and answer once its run is
- * admitted. A start that fails before its run opens has no row to show it:
+ * Run `start` (a start or a resume) in the service's fiber set, so a
+ * client that disconnects never aborts it, and answer once its run has
+ * started. A start that fails before its run opens has no row to show it:
  * the window that asked shows it. The service stopping first is no failure
  * of the task's.
  */
-function admit<A, E extends { readonly message: string }>(
+function startDetached<A, E extends { readonly message: string }>(
   runs: FiberSet.FiberSet,
-  admission: Effect.Effect<A, E>,
+  start: Effect.Effect<A, E>,
 ): Effect.Effect<A, TaskFailed | LaunchRefused> {
-  return FiberSet.run(runs, admission).pipe(
+  return FiberSet.run(runs, start).pipe(
     Effect.flatMap(Fiber.await),
     Effect.flatMap(
       Exit.match({
@@ -317,7 +317,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
           Effect.gen(function* () {
             yield* refuseWhileDraining;
             const { session } = yield* open(workspace);
-            const run = yield* admit(
+            const run = yield* startDetached(
               runs,
               // A service task stays open for its windows' follow-ups.
               session.start({ ...start, interactive: true }),
@@ -390,7 +390,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
             // A run this service is running is answered as it runs: the
             // client takes up the conversation it belongs to (a chat left
             // it waiting here), which the session names.
-            const run = yield* admit(
+            const run = yield* startDetached(
               runs,
               session.resume(runId, { interactive: true, apiKeys }),
             );

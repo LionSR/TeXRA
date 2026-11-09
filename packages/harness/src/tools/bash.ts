@@ -299,7 +299,7 @@ const executeBashTool = Effect.fn('executeBashTool')(function* (
     // A background shell delivers its result as a follow-up message; a
     // one-shot run has no later turn to take it, and the session's close
     // would kill the command and discard its result with nothing reported.
-    return yield* inRunSession('bash run_in_background', (call) =>
+    return yield* inRunSession((call) =>
       noLaterTurn(call.run)
         ? Effect.fail(
             new ToolError(

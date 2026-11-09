@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - common
-import type { ActiveSkillSourceScope } from '@shared/schemas';
+import { SKILL_FILE_NAME, type ActiveSkillSourceScope } from '@shared/schemas';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 // Local imports - skill parsing
@@ -127,7 +127,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   const entries = yield* Effect.forEach(
     names.toSorted((a, b) => a.localeCompare(b)),
     (name) => {
-      const skillPath = path.join(root, name, 'SKILL.md');
+      const skillPath = path.join(root, name, SKILL_FILE_NAME);
       return fs.realPath(skillPath).pipe(
         Effect.flatMap((realSkillPath) =>
           Effect.map(

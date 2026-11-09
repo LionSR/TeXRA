@@ -83,7 +83,7 @@ import {
   attemptOf,
   callSettlementOf,
   resumedAttempt,
-  type CallResult,
+  type ToolCallResult,
   type CallStatus,
 } from '@shared/session/inFlight';
 import { checkOwnFacts, factRows } from '@tools/plugins';
@@ -97,7 +97,7 @@ import {
   storedMediaPart,
   type InputPart,
 } from '../run/mediaInput';
-import { stored } from '../run/requestContext';
+import { stored } from '../run/recordedRequest';
 import {
   localCallsOf,
   parseCallArguments,
@@ -187,22 +187,24 @@ const issuedBy = (state: RunState, scriptCallId: string) =>
 /** A sanitized result as the run history stores it: `consumedFollowUps`
  *  (own rows) and `facts` dropped, `files` without their bytes, `diagnostics`
  *  narrowed to JSON; a non-JSON value here is a defect, refused not stored. */
-const storedResult = (result: ToolResult): CallResult['result'] =>
+const storedResult = (result: ToolResult): ToolCallResult['result'] =>
   Schema.decodeUnknownSync(SettledToolResultSchema)(result);
 
 /** A duplicate's copy of its primary's result: no edits, no files. */
-const withoutEffects = (result: CallResult['result']): CallResult['result'] => {
+const withoutEffects = (
+  result: ToolCallResult['result'],
+): ToolCallResult['result'] => {
   if (result.status !== 'executed') return result;
   const { edits: _edits, files: _files, ...rest } = result;
   return rest;
 };
 
-const endsTurn = (recorded: Pick<CallResult, 'result'> | null): boolean =>
+const endsTurn = (recorded: Pick<ToolCallResult, 'result'> | null): boolean =>
   recorded?.result.status === 'executed' && recorded.result.endTurn === true;
 
 const dispositionOf = (
   result: Pick<ToolResult, 'status'>,
-): CallResult['disposition'] =>
+): ToolCallResult['disposition'] =>
   result.status === 'executed' ? 'executed' : 'failed';
 
 /** How long delivery waits on the provider to take the uploads, an
@@ -216,7 +218,7 @@ const UPLOAD_DEADLINE = '5 seconds';
  *  its row records) or that the binding cannot carry inline reaches the
  *  model as its mention, which says why. */
 function resultContent(
-  recorded: Pick<CallResult, 'result' | 'attachments'>,
+  recorded: Pick<ToolCallResult, 'result' | 'attachments'>,
   capabilities: Parameters<typeof storedMediaPart>[2],
 ): {
   readonly text: InputPart;
@@ -272,7 +274,7 @@ const commit = (
 const resultRow = (
   { dispatch, fact }: Call,
   attempt: number,
-  result: Omit<CallResult, 'attempt'>,
+  result: Omit<ToolCallResult, 'attempt'>,
   blobs: readonly DraftBlob[] = [],
 ): RunHistoryDraft => ({
   type: 'tool.result',
@@ -290,7 +292,7 @@ const resultRow = (
 const commitResult = (
   call: Call,
   attempt: number,
-  result: Omit<CallResult, 'attempt'>,
+  result: Omit<ToolCallResult, 'attempt'>,
   rows: readonly RunHistoryDraft[] = [],
 ) => commit(call, [resultRow(call, attempt, result), ...rows]);
 
@@ -522,7 +524,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
               roots,
               workingDirectory: run.workingDirectory,
               stepRoots: step.stepRoots,
-              run,
+              run: runCall.run,
             },
             requests,
             emit: onToolOutput,

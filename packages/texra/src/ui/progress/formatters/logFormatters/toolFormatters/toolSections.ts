@@ -6,7 +6,9 @@
  * `@texra-ai/harness/transcript` (`toolRowModel`). This module only turns those data
  * sections into Lit templates, and picks the two presentation details the
  * model deliberately leaves to a host: the highlight language behind the
- * `file`/`shell` hints, and the glyph on a badge.
+ * `file`/`shell` hints, and the glyph on a badge. The code and terminal
+ * section builders here are also what the tool-use formatter paints its
+ * input and output with.
  */
 
 import { absurd } from 'effect';
@@ -16,15 +18,18 @@ import { getBasename } from '@texra-ai/harness/schemas';
 import {
   buildToolUseSection,
   wrapInPre,
+  buildCodeBlock,
   buildFileLinkSpan,
   buildEditDiffSection,
   buildStatusBadge,
 } from '@ui/progress/formatters/htmlBuilders';
-import { getLanguageFromPath } from '@ui/progress/formatters/constants';
+import {
+  getLanguageFromPath,
+  TOOL_OUTPUT_LANGUAGES,
+} from '@ui/progress/formatters/constants';
 import { TOOL_STATUS_WORD } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-import { buildToolSection } from './helpers';
 import type {
   ToolFileGroupsSection,
   ToolFileListSection,
@@ -32,6 +37,58 @@ import type {
   ToolSection,
 } from '@texra-ai/harness/transcript';
 import { pluralize } from '@texra-ai/harness/schemas';
+
+// Side-effect import to register <terminal-output> custom element
+import '@ui/progress/components/TerminalOutput';
+
+type ToolSectionOptions = {
+  toolName?: string;
+  language?: string;
+  extraClass?: string;
+};
+
+function toolDisplayText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  return String(value);
+}
+
+/**
+ * Build a tool section with appropriate code highlighting based on tool type.
+ */
+export function buildToolSection(
+  label: string,
+  text: unknown,
+  options: ToolSectionOptions = {},
+): TemplateResult {
+  const { toolName = '', language: contentLanguage, extraClass = '' } = options;
+  const displayText = toolDisplayText(text);
+
+  // Determine language: tool config > content metadata > plaintext
+  const language =
+    TOOL_OUTPUT_LANGUAGES.get(toolName) || contentLanguage || 'plaintext';
+  const shouldHighlight = language !== 'plaintext';
+
+  const content = shouldHighlight
+    ? buildCodeBlock(displayText, language, extraClass)
+    : wrapInPre(displayText, extraClass);
+
+  return buildToolUseSection(label, content);
+}
+
+/** Build a read-only terminal section for shell output. */
+export function buildTerminalSection(
+  label: string,
+  text: unknown,
+): TemplateResult {
+  return buildToolUseSection(
+    label,
+    html`<terminal-output
+      class="tool-output-terminal"
+      .text=${toolDisplayText(text)}
+    ></terminal-output>`,
+  );
+}
 
 /** Line count past which a text section becomes a fixed-height scroll box. */
 const TEXT_SECTION_SCROLL_LINES = 20;

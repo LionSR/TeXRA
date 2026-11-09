@@ -602,12 +602,9 @@ const readNormalizedFile: (fs: FileSystem, target: string) => Effect<string, Pla
 
 ## relativeToRoot
 
-Symlink-aware workspace-relative path: a fast `resolve`-then-compare pass,
-then a canonicalize-then-compare fallback for paths that resolve through a
-symlink (e.g. a symlinked folder inside the workspace). Shared by
-`workspaceRelativePath` and the desktop native-picker path so the two
-stay in sync. Returns `undefined` when `filePath` resolves outside `root`;
-the caller owns its outside-root fallback (identity vs normalized absolute).
+The path of `filePath` relative to `root`, following symlinks on either
+side, or `undefined` when it resolves outside `root`. The caller decides
+what an outside path becomes.
 
 ```ts
 function relativeToRoot(
@@ -739,15 +736,9 @@ function whichOnExtendedPath(
 ## withExtendedPath
 
 Return a copy of `env` whose PATH is {@link extendEnvPath}'s, written under
-the key the environment already uses.
-
-Windows spells the variable `Path`, and a plain object copied out of
-`process.env` keeps that spelling: `process.env` itself is case-insensitive
-there, but an ordinary object is not. Assigning `.PATH` on the copy
-therefore leaves the original `Path` beside it and hands the child both
-spellings of one variable, with no defined rule for which survives — so on
-Windows the extension silently applied or did not, per spawn. Writing the
-key that is already present is the whole fix.
+the key the environment already uses. Windows spells it `Path`, and a
+plain object copied out of `process.env` is case-sensitive, so writing
+`PATH` beside it would hand a child two spellings of one variable.
 
 ```ts
 function withExtendedPath<T extends NodeJS.ProcessEnv>(

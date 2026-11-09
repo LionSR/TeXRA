@@ -29,9 +29,8 @@ const createIpc = Effect.gen(function* () {
     { postToRenderer: () => {} },
     {
       ptyHost: {
-        create: async () => {
-          throw new Error('Terminal is not used in this test.');
-        },
+        create: () =>
+          Effect.die(new Error('Terminal is not used in this test.')),
         get: () => undefined,
         disposeAll: () => {},
       },

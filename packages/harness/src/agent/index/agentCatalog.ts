@@ -9,6 +9,7 @@ import {
   Clock,
   Context,
   Effect,
+  FileSystem,
   Layer,
   type PlatformError,
   Schema,
@@ -19,8 +20,10 @@ import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgent
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectories,
+  AppState,
   type AgentDirectoriesFailed,
 } from '@platform/interfaces';
+import { GlobalStorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { StateReadFailed } from '@shared/config/settings';
 import type {
@@ -34,6 +37,7 @@ import {
   agentMatchesIdentifier,
   agentName,
 } from '@shared/schemas';
+import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
@@ -306,7 +310,14 @@ export class AgentCatalog extends Context.Service<
   > = Layer.effect(
     AgentCatalog,
     Effect.gen(function* () {
-      const services = yield* Effect.context<AgentCatalogServices>();
+      // Exactly the load's services, never the layer's scope or references.
+      const services = Context.pick(
+        GlobalStorageFs,
+        FileSystem.FileSystem,
+        AgentDirectories,
+        AppState,
+        ToolRegistry,
+      )(yield* Effect.context<AgentCatalogServices>());
       const state: CatalogState = {
         entries: new Map(),
         customScanIssues: Object.freeze([]),

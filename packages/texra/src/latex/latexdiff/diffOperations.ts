@@ -11,7 +11,10 @@ import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 
 // Local file imports
-import { buildBetweenRoundDiffSuffix } from './diffFileNameManager';
+import {
+  buildBetweenRoundDiffSuffix,
+  WORKSPACE_DIFF_SUFFIX,
+} from './diffFileNameManager';
 
 /** One latexdiff a round's recorded outputs call for. */
 export interface LatexdiffPair {
@@ -48,7 +51,15 @@ export function latexdiffPairs(
     ({ revised, document }): LatexdiffPair[] => {
       const base = revised.lineage?.base;
       return base
-        ? [{ revised, document, base, baseRound: null, suffix: '_diff' }]
+        ? [
+            {
+              revised,
+              document,
+              base,
+              baseRound: null,
+              suffix: WORKSPACE_DIFF_SUFFIX,
+            },
+          ]
         : [];
     },
   );

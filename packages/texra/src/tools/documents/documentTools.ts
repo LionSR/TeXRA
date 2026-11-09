@@ -16,7 +16,7 @@ import { Effect, FileSystem, Schema } from 'effect';
 import {
   boundFile,
   ChildRuns,
-  requireRun,
+  ToolContext,
   executed,
   ToolError,
   defineTool,
@@ -74,11 +74,9 @@ export const RevisionSchema = Schema.Int.check(
   description: 'The revision, from 0, in the order the task runs them.',
 });
 
-/** The documents of the run the calling tool `tool` serves. */
-export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
-  tool: string,
-) {
-  return yield* openDocuments(yield* requireRun(tool));
+/** The documents of the run the calling tool serves. */
+export const documentsOfCall = Effect.fn('documents.ofCall')(function* () {
+  return yield* openDocuments(yield* ToolContext);
 });
 
 /** Open `locations` for the user, beside what they are looking at. */
@@ -187,7 +185,7 @@ export const DocumentContextTool = defineTool({
     }),
   }),
   execute: Effect.fn('document_context')(function* ({ revision, critique }) {
-    const docs = yield* documentsOfCall('document_context');
+    const docs = yield* documentsOfCall();
     if (revision !== 0)
       return yield* revisionContext(docs, revision, critique, null);
     // The first revision's checks and file cards nest under a stage that
@@ -247,7 +245,7 @@ export const DocumentExtractTool = defineTool({
     run: RunIdSchema.annotate({ description: "The revision's agent run." }),
   }),
   execute: Effect.fn('document_extract')(function* ({ revision, run }) {
-    const docs = yield* documentsOfCall('document_extract');
+    const docs = yield* documentsOfCall();
     const end = yield* (yield* ChildRuns).records(run).end;
     // TeXRA's LaTeX replacements over the provider text, with the rules of
     // the workspace this run belongs to.
@@ -364,7 +362,7 @@ export const DocumentCompileTool = defineTool({
   replay: 'safe',
   schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_compile')(function* ({ revision }) {
-    const docs = yield* documentsOfCall('document_compile');
+    const docs = yield* documentsOfCall();
     const { roots, fileService, logger } = docs.deps;
     const recorded = roundOf(docs.rounds, revision);
     // The compile searches where the task's bound files live (`task.files`,
@@ -477,7 +475,7 @@ export const DocumentDiffTool = defineTool({
   replay: 'safe',
   schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_diff')(function* ({ revision }) {
-    const docs = yield* documentsOfCall('document_diff');
+    const docs = yield* documentsOfCall();
     const recorded = roundOf(docs.rounds, revision);
     const outputs = recorded?.outputs ?? [];
     if (recorded === undefined || outputs.length === 0)
@@ -544,7 +542,7 @@ export const DocumentProposeTool = defineTool({
   replay: 'safe',
   schema: Schema.Struct({}),
   execute: Effect.fn('document_propose')(function* () {
-    const docs = yield* documentsOfCall('document_propose');
+    const docs = yield* documentsOfCall();
     const last = docs.rounds.findLast((round) => round.outputs.length > 0);
     if (last === undefined)
       return yield* Effect.fail(

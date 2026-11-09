@@ -16,7 +16,7 @@ import {
  * subscriber. Nothing is projected on the way out and nothing is
  * reconstructed on the way in.
  *
- * The export authors four facts rather than copying them (`assembleTrace`):
+ * An exported document authors four facts rather than copying them:
  * no owner, no parent, no checkpoint and no follow-ups taken, because an
  * exported file has no producer, no siblings and no writable host.
  */

@@ -23,13 +23,13 @@ export type ClaimThread = (
  * living as a process singleton.
  */
 export class CodexThreads extends Context.Service<CodexThreads, ClaimThread>()(
-  '@texra/tools/CodexThreads',
+  '@texra-ai/texra/tools/CodexThreads',
 ) {}
 
 export class ClaudeAgentSessions extends Context.Service<
   ClaudeAgentSessions,
   ClaimThread
->()('@texra/tools/ClaudeAgentSessions') {}
+>()('@texra-ai/texra/tools/ClaudeAgentSessions') {}
 
 const claimThread = Effect.gen(function* () {
   const hold = yield* PluginHold;

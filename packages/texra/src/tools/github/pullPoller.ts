@@ -27,10 +27,10 @@ import {
   formatMergeConflictDetected,
   formatMergeConflictResolved,
   formatPRClosed,
-  formatPRIssueComment,
   formatReview,
   formatReviewComment,
 } from './formatPREvent';
+import { formatCommentEvent } from './formatUtils';
 import { withSince } from './githubPaths';
 import {
   checkKey,
@@ -246,7 +246,7 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
     commentsRes,
     dedupeComments<GhIssueComment>,
   );
-  events.push(...issueComments.fresh.map((c) => formatPRIssueComment(pr, c)));
+  events.push(...issueComments.fresh.map((c) => formatCommentEvent(pr, c)));
   const reviewComments = readNewItems(
     prior?.reviewComments,
     reviewCommentsRes,

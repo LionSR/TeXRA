@@ -9,7 +9,7 @@ import { Effect, Record as Rec, Schema } from 'effect';
 
 import { AgentCatalog } from '@texra-ai/harness/host';
 import {
-  requireRun,
+  ToolContext,
   errorResult,
   ChildRuns,
   CALL_FIELDS,
@@ -54,9 +54,9 @@ type DocumentTaskInput = typeof DocumentTaskInputSchema.Type;
 const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
   input: DocumentTaskInput,
 ) {
-  const call = yield* requireRun('document_task');
+  const call = yield* ToolContext;
   const catalog = yield* AgentCatalog;
-  const scope = call.run.config.delegationAgentScope;
+  const scope = call.env.run.config.delegationAgentScope;
   const agent = (
     scope
       ? catalog.pinned(scope)
@@ -108,7 +108,6 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
   return launched;
 });
 
-/** The `document_task` tool. */
 export const DocumentTaskTool = defineTool({
   name: 'document_task',
   launchesTasks: true,

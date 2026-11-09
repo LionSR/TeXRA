@@ -11,8 +11,8 @@
 
 import {
   authorOf,
-  formatCommentEvent,
   formatPreviousStateHint,
+  MAX_BODY,
   makeTruncator,
   sections,
   truncate as truncateBody,
@@ -27,13 +27,11 @@ import { isPassingConclusion } from './prCheckRunDomain';
 import type {
   GhCheckAnnotation,
   GhCheckRun,
-  GhIssueComment,
   GhReview,
   GhReviewComment,
 } from './prTypes';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 
-const MAX_BODY = 500;
 // A single linter run can emit hundreds; show the first N + overflow hint.
 const MAX_ANNOTATIONS_PER_RUN = 20;
 const MAX_CI_STARTED_CHECK_NAMES = 20;
@@ -87,20 +85,6 @@ const annotationBlock = (a: GhCheckAnnotation): string => {
   const message = truncateBody(a.message, MAX_ANNOTATION_MESSAGE);
   return `[${level}] ${annotationLocation(a)}\n${title}${message}`;
 };
-
-/**
- * GitHub delivers general PR comments over the same `issue_comment` webhook
- * as plain-issue comments (a PR *is* an issue under the REST API). Named
- * `formatPRIssueComment` — not `formatIssueComment` — to stay distinct from
- * `formatIssueEvent.ts`'s same-signature `formatIssueComment`; it takes
- * the pull request's target, so the reference renders as `pulls/N`.
- */
-export function formatPRIssueComment(
-  pr: PullTarget,
-  c: GhIssueComment,
-): string {
-  return formatCommentEvent(targetPath(pr), c, MAX_BODY);
-}
 
 export function formatReviewComment(
   pr: PullTarget,

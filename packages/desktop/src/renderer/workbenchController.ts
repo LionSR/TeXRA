@@ -8,6 +8,7 @@ import {
 } from 'dockview';
 import { html, nothing, render } from 'lit';
 
+import { TEXRA_SITE_URL } from '@ui/copy/guide';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
@@ -239,7 +240,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     openingGroup = group;
     const request =
       kind === 'browser'
-        ? { kind, target: 'https://texra.ai/', title: 'texra.ai' }
+        ? { kind, target: `${TEXRA_SITE_URL}/`, title: 'texra.ai' }
         : { kind };
     updateShell(openWorkbenchTab(getState(), request));
     syncState();

@@ -53,7 +53,7 @@ export interface TranscriptContext {
 /** The current state of one row id (a text stream, a tool card or a log
  *  row): what a later event for the same id updates, and what `paint` turns
  *  into the row. */
-export type Slot =
+export type RowState =
   | {
       readonly kind: 'text';
       base: TranscriptRowBase;
@@ -88,7 +88,7 @@ export interface TranscriptIndexes {
   readonly stageIndex: Map<string, number>;
   /** The compaction projection's working state. */
   readonly compactionState: CompactionActivityProjection;
-  readonly slots: Map<string, Slot>;
+  readonly slots: Map<string, RowState>;
   /** Slots opened so far and slots settled so far: the last `seqNo` (first
    *  appearance) and `settlementSeqNo` (became printable) handed out. */
   appended: number;
@@ -272,7 +272,7 @@ export interface Draft extends TranscriptWork {
   readonly at: number;
   /** The event's durable coordinates: the id of a row it appends. */
   readonly stampId: string;
-  readonly written: Slot[];
+  readonly written: RowState[];
   touched: boolean;
 }
 
@@ -306,14 +306,14 @@ export function settle(ix: TranscriptIndexes, base: TranscriptRowBase) {
     : base;
 }
 
-export function write(d: Draft, slot: Slot): void {
+export function write(d: Draft, slot: RowState): void {
   d.ix.slots.set(slot.base.id, slot);
   d.written.push(slot);
   d.touched = true;
 }
 
 function rowOf(
-  slot: Slot,
+  slot: RowState,
   live: string | undefined,
   ctx: TranscriptContext,
 ): TranscriptRow | undefined {
@@ -342,7 +342,7 @@ function rowOf(
  * live text, which may have arrived first; a finalizing row drops that text,
  * so a late chunk cannot reopen it.
  */
-export function paint(d: Draft, slot: Slot): void {
+export function paint(d: Draft, slot: RowState): void {
   const { ix, next } = d;
   const id = slot.base.id;
   const streamingText =

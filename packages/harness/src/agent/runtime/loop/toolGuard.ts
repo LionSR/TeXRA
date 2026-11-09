@@ -12,7 +12,7 @@
  */
 import { isDeepStrictEqual } from 'node:util';
 
-import { Context, Effect, Result, Schema } from 'effect';
+import { Context, Effect, Option, Result, Schema } from 'effect';
 
 import {
   ToolContext,
@@ -60,7 +60,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { Interactions } from '../HostInteractions';
 import { decideRequest, openRequest, recordedDecision } from '../requests';
-import { RunCall, requireToolRun } from '../RunCall';
+import { RunCall } from '../RunCall';
 import { askCommandApproval, commandRejectedResult } from './commandApproval';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionServices } from '../rootLaunch';
@@ -235,7 +235,8 @@ const rejection = Effect.fn('toolUse.guard')(function* (
       : undefined;
 
   const operation = guard?.command?.grant ?? 'call';
-  const { run, requests } = yield* requireToolRun('A call the loop asks about');
+  const { run } = call.env;
+  const { requests } = call;
   const approvals = yield* Approvals;
   const answer = approvals.permission(run.runId, operation, hook);
   if (answer === 'allow') return undefined;
@@ -261,7 +262,9 @@ export const guardedToolCall = (
   hooks: CallHooks = { outcomes: [], fromHook: (input) => input },
   bodyStarts: (input: unknown) => Effect.Effect<void, Error> = () =>
     Effect.void,
-): ReturnType<ITool<Error, PluginToolServices | SessionServices>['call']> => {
+): ReturnType<
+  ITool<Error, PluginToolServices | SessionServices | RunCall>['call']
+> => {
   const { deny, hook, rewritten } = answerOf(hooks.outcomes);
   if (deny !== null)
     return Effect.succeed(hookDenied(tool.definition.name, deny));
@@ -271,7 +274,7 @@ export const guardedToolCall = (
       rejected
         ? Effect.succeed(rejected)
         : Effect.andThen(bodyStarts(input), tool.call(input)).pipe(
-            Effect.updateService(RunCall, (call) => call && { ...call, hook }),
+            Effect.updateService(RunCall, (call) => ({ ...call, hook })),
           ),
     ),
   );
@@ -355,10 +358,13 @@ export const callRequests = (call: {
           return recordedDecision(payload, reentered.request.decision).pipe(
             Effect.map(answered),
           );
-        return Effect.flatMap(RunCall, (call) =>
+        // The hook of the call the request opens in, read from its fiber:
+        // `CallRequests` is public and requires nothing of its caller.
+        return Effect.flatMap(Effect.serviceOption(RunCall), (call) =>
           openRequest(runId, payload, {
             ...(blobs && { blobs }),
-            ...(call?.hook && { hook: call.hook }),
+            ...(Option.isSome(call) &&
+              call.value.hook && { hook: call.value.hook }),
             reentered: reentered !== null,
             // Open already: only what the policy decides commits, and the
             // decision is read from where the resume read the run. Fresh:

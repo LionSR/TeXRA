@@ -25,8 +25,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   ([`requestToolEditApproval`](#requesttooleditapproval),
   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
   [`approvedWriteConflict`](#approvedwriteconflict)).
-- **Runtime callbacks inside a tool**: [`requireRun`](#requirerun),
-  [`callerRun`](#callerrun), [`ChildRuns`](#childruns), and
+- **Runtime callbacks inside a tool**: the call's run and requests on
+  [`ToolContext`](#toolcontext), [`ChildRuns`](#childruns), and
   [`RunInbox`](#runinbox).
 - **Lifetimes, prompt sections & durable rows**:
   [`PromptSection`](#promptsection),
@@ -144,13 +144,14 @@ interface AgentTrace {
     use: (trace: AgentTrace) => Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E, R>;
   /**
-   * Open a streaming message. `stream.start` marks the moment the phase the
-   * stream represents actually began — emit it at the provider's phase
-   * signal, or use `deferStart` when the first content chunk is the only
-   * signal — so subscribers can surface liveness ("thinking…", "responding…")
-   * from the start event alone.
+   * Open a streaming message. Its `stream.start` waits for the first
+   * non-empty chunk (or a finalize that carries text): subscribers read
+   * `stream.start` as "this phase began" (a thinking stream drives a "model
+   * is thinking" indicator), so a stream opened at request setup announces
+   * no phase that never happens. A stream that ends without content emits
+   * nothing at all.
    */
-  openRun(kind: MessageType, options?: StreamOptions): StreamHandle;
+  openRun(kind: MessageType): StreamHandle;
   /**
    * Open a tool call's card with its first log (`tool.start`). A log whose
    * status is already terminal opens and closes the card at once; one without
@@ -329,14 +330,6 @@ reuse id and card label, its time limit, and whether a script waits.
 const CALL_FIELDS: Readonly<{ memories: decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>; working_directory: decodeTo<optional<String>, optional<NullOr<String>>, never, never>; id: optional<NullOr<String>>; label: optional<NullOr<String>>; timeoutMs: optional<NullOr<Int>>; background: optional<NullOr<Boolean>>; }>
 ```
 
-## callerRun
-
-The run the current call works for; none for a standalone host call.
-
-```ts
-const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext>
-```
-
 ## CallRequests
 
 The requests one tool call raises, opened through its run's loop. Each
@@ -468,11 +461,12 @@ interface ChildRunDelivery {
 
 ## ChildRuns
 
-The door, as the run loop provides it beside each call ({@link childRuns});
-outside a run it is the refusal, which is the reference's default.
+The door, as the run loop provides it beside each call ({@link childRuns}).
 
 ```ts
-const ChildRuns: Reference<ChildRunsShape>
+class ChildRuns extends Context.Service<ChildRuns, ChildRunsShape>()(
+  '@texra-ai/harness/agent/ChildRuns',
+)
 ```
 
 ## ChildRunsShape
@@ -483,8 +477,8 @@ for a background launch) or an external process's (`launchProcess`: its
 run id, outside the child-run budget); a plugin's tool reaches no other
 launch. And it reaches a
 run of the session by id: its input, live parent edge, records, whether
-it holds a request, and the plugin's own facts on it. Each needs the
-call's run; a standalone host call has none.
+it holds a request, and the plugin's own facts on it, each over the
+call's run.
 
 ```ts
 interface ChildRunsShape {
@@ -965,7 +959,7 @@ interface ITool<E = Error, R = never> {
    * `'unsafe'`. Independent of `lane`, which is about concurrency.
    * The response row saves the declaration with each call, and a resume
    * re-runs a call only when that saved word and the current one both say
-   * `'safe'` (`toolUseDispatch.ts`).
+   * `'safe'`.
    */
   readonly replay?: 'safe' | 'unsafe';
   /**
@@ -986,8 +980,8 @@ interface ITool<E = Error, R = never> {
    * A description rendered from the other tools the run declares and the
    * modules its scripts may import, in place of `definition.description`:
    * rendered at the step that freezes the run's system text and kept as
-   * that step recorded it until a compaction opens the freeze again
-   * (`step.ts`), so a catalog change mid-run leaves its text, and the cached
+   * that step recorded it until a compaction opens the freeze again, so a
+   * catalog change mid-run leaves its text, and the cached
    * prefix through it, as it was. The tool that has one is the script tool,
    * which reaches nothing but the run's other tools and its own agent: a
    * child is offered it, and its script-only functions, whatever its parent
@@ -1078,9 +1072,12 @@ interface JsonRpcConnectionOptions {
     method: string,
     params: unknown,
   ) => Effect.Effect<unknown> | undefined;
-  /** The `[method, params]` notification telling the peer we stopped waiting
-   *  for unanswered request `id` (its caller was interrupted, a timeout too). */
-  cancel?(id: number, method: string): readonly [string, unknown] | undefined;
+  /** The notification telling the peer we stopped waiting for unanswered
+   *  request `id` (its caller was interrupted, a timeout too). */
+  cancel?(
+    id: number,
+    method: string,
+  ): { readonly method: string; readonly params: unknown } | undefined;
 }
 ```
 
@@ -1410,18 +1407,18 @@ interface PluginRow {
 
 The services the runtime supplies to a tool's call, a plugin's and a
 built-in's alike: the process's, the rooted filesystems of the session
-the call works in, and the call (`ToolContext`, the run included). A
-tool takes `WorkspaceFs` from context instead of resolving a static
-against whichever roots its fiber happens to carry. The child-launch
-door (`ChildRuns`) and the call's place in its run (`RunCall`) are
-references with defaults, never requirements; a plugin's tool reads the
-door and never the session's own services, which only the harness's
-built-ins name (`builtinPlugins.ts`).
+the call works in, the call (`ToolContext`, the run included) and its
+child-launch door (`ChildRuns`). A tool takes `WorkspaceFs` from context
+instead of resolving a static against whichever roots its fiber happens
+to carry. A plugin's tool reads the door and never the session's own
+services or the call's place in its run (`RunCall`), which only the
+harness's built-ins reach (`inRunSession`).
 
 ```ts
 type PluginToolServices =
   | RunServices
   | ToolContext
+  | ChildRuns
   | WorkspaceFs
   | StorageFs
   | Scope.Scope;
@@ -1600,17 +1597,6 @@ person left it: the decision's content, else the proposal.
 
 ```ts
 const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>
-```
-
-## requireRun
-
-The current call, narrowed to one made under a run, or the shared refusal:
-the one place it is worded, so the model reads the same sentence whichever
-tool it reached for. `toolName` names what needs the run, which can be
-narrower than the tool (`'bash run_in_background'`).
-
-```ts
-const requireRun: (toolName: string) => Effect<ToolContextShape & { readonly run: ToolRun; readonly requests: CallRequests; }, ToolError, ToolContext>
 ```
 
 ## resolveToolPath
@@ -1925,24 +1911,6 @@ interface StreamHandle {
 }
 ```
 
-## StreamOptions
-
-Options accepted by `openRun`.
-
-```ts
-interface StreamOptions {
-  /**
-   * Defer the `stream.start` emission until the first non-empty chunk (or a
-   * finalize that carries text). Subscribers treat `stream.start` as "this
-   * phase began" — e.g. thinking streams drive a "model is thinking" liveness
-   * indicator — so a stream opened eagerly at request setup must not announce
-   * a phase that may never happen. A deferred stream that ends without
-   * content emits nothing at all.
-   */
-  readonly deferStart?: boolean;
-}
-```
-
 ## SubmitFollowUpResult
 
 Three outcomes: the input reached a running loop, it waits in the run's
@@ -1994,13 +1962,13 @@ interface TemplateOpening {
 
 ## TemplateVars
 
-The template-variable map accepted at the render boundary (PromptBuilder):
-fixed variables may be absent (template rendering keeps `throwOnUndefined`
-off, so templates must tolerate absence), and a plugin's own variables add
-custom keys beside the fixed ones.
+The template-variable map a launch opens with: fixed variables may be
+absent (template rendering keeps `throwOnUndefined` off, so templates
+must tolerate absence). A plugin renders its own variables beside these
+by spreading this map into its own (`TEMPLATE_INPUT_NAMES`).
 
 ```ts
-type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
+type TemplateVars = Partial<TemplateInputs>;
 ```
 
 ## ToolAvailabilityChecks
@@ -2078,9 +2046,8 @@ interface ToolContextShape {
   readonly callId: string;
   /** Where the call works. */
   readonly env: ToolEnv;
-  /** Where the call's requests to a person open; absent for a standalone
-   *  host invocation outside an agent run, which has nobody to ask. */
-  readonly requests?: CallRequests;
+  /** Where the call's requests to a person open. */
+  readonly requests: CallRequests;
   /** Transient output for the call's card while it runs, never a row. */
   readonly emit: (text: string) => void;
 }
@@ -2140,8 +2107,8 @@ interface ToolEnv {
   readonly roots: WorkspaceRoots;
   readonly workingDirectory?: string;
   readonly stepRoots?: readonly StepRoot[];
-  /** The run the call works for; absent for a standalone host invocation. */
-  readonly run?: ToolRun;
+  /** The run the call works for. */
+  readonly run: ToolRun;
 }
 ```
 
@@ -2241,8 +2208,8 @@ anywhere beneath it — the property an SDK embedder wants.
 ```ts
 interface ToolPolicy {
   /** Stop a tool-use run after one model/tool cycle instead of waiting.
-   *  Whether a later turn can still reach the run is `noLaterTurn`
-   *  (`RunCall.ts`), read off this and the launch's parent edge. */
+   *  Whether a later turn can still reach the run is read off this and the
+   *  launch's parent edge. */
   readonly stopAfterCycle?: boolean;
 }
 ```

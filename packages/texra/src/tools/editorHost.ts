@@ -91,7 +91,7 @@ export interface EditorHostShape {
 /** The composition's editor registry, served to the editor tools through
  *  their plugins' process layers. */
 export class EditorHost extends Context.Service<EditorHost, EditorHostShape>()(
-  '@texra/tools/EditorHost',
+  '@texra-ai/texra/tools/EditorHost',
 ) {}
 
 /** A composition's editor registry (`makeEditorHost`). */

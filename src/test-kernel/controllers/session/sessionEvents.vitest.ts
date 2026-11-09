@@ -1,6 +1,5 @@
 /**
- * The session graph's durable boundary (PRD one-fold-three-renderers, 7.1
- * and 7.2, acceptance for lane 2): replay framing and the live-owner
+ * The session graph's durable boundary: replay framing and the live-owner
  * waiting rule.
  *
  * Framing: the log a graph is built over is history under the plane's

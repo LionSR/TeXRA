@@ -32,7 +32,7 @@ import './WorktreeChip';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
-import { getComposedPathElement } from '../utils';
+import { getComposedPathElement } from './composedPath';
 import { RunTab } from './RunTab';
 import {
   needsUser,

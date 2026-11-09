@@ -5,7 +5,7 @@ import { Schema } from 'effect';
 import { ContextStateDataSchema } from './contextManagement';
 import { JsonValueSchema } from './jsonValue';
 import { FileListEntrySchema, LogLevelSchema, MessageTypeSchema } from './log';
-import { ToolCallStatusSchema, ToolCardSchema } from './progressView/data';
+import { ToolCallStatusSchema, ToolCardSchema } from './toolCard';
 import { RunOutcomeSchema } from './run';
 import { TokenUsageStatsSchema } from './usage';
 

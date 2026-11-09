@@ -97,8 +97,8 @@ interface LaunchEntry {
  */
 export interface ToolPolicy {
   /** Stop a tool-use run after one model/tool cycle instead of waiting.
-   *  Whether a later turn can still reach the run is `noLaterTurn`
-   *  (`RunCall.ts`), read off this and the launch's parent edge. */
+   *  Whether a later turn can still reach the run is read off this and the
+   *  launch's parent edge. */
   readonly stopAfterCycle?: boolean;
 }
 

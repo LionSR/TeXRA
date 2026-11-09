@@ -1,4 +1,5 @@
 import { defineCommand, parseArgs } from 'citty';
+import { TEXRA_SITE_URL } from '@ui/copy/guide';
 
 import {
   isInteractiveCli,
@@ -146,7 +147,7 @@ export const rootCommand = withUsageSections(
       ],
     },
     // Footer rows are empty, so `formatUsageSection` renders just this title.
-    { title: 'Learn more: https://texra.ai', rows: [] },
+    { title: `Learn more: ${TEXRA_SITE_URL}`, rows: [] },
   ],
 );
 

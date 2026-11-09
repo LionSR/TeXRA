@@ -3,14 +3,14 @@ import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view
-import { processMarkdownContent } from '@ui/progress/formatters/markdownRenderer';
+import { renderMarkdownHtml } from '@ui/progress/formatters/markdownRenderer';
 
 function renderToDocument(markdown: string): Document {
-  const rendered = processMarkdownContent(markdown);
+  const rendered = renderMarkdownHtml(markdown);
   return new JSDOM(`<main>${rendered}</main>`).window.document;
 }
 
-describe('processMarkdownContent security', () => {
+describe('renderMarkdownHtml security', () => {
   it('escapes raw HTML before rendering markdown output', () => {
     const doc = renderToDocument('<script>alert(1)</script>');
 

@@ -22,7 +22,10 @@ import {
   emitAppSignal,
   type AppSignals,
 } from '@texra-ai/harness/plugins';
-import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+import {
+  generateDiffFileName,
+  WORKSPACE_DIFF_SUFFIX,
+} from '@latex/latexdiff/diffFileNameManager';
 
 const CHANNEL = 'AcceptedFileTarget';
 
@@ -296,7 +299,7 @@ function staleDiffFileLocation(
 ): FileLocation | undefined {
   const diffLocation = siblingLocation(
     baseLocation,
-    generateDiffFileName(editedPath, '_diff'),
+    generateDiffFileName(editedPath, WORKSPACE_DIFF_SUFFIX),
   );
   return diffLocation.absolutePath === baseLocation.absolutePath
     ? undefined

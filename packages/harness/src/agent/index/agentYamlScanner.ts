@@ -15,6 +15,7 @@ import {
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  AGENT_FILE_EXTENSION,
   AgentDefinitionSchema,
   PersonaSchema,
   type AgentDefinition,
@@ -110,7 +111,11 @@ export function scanDirectory(
           Effect.result(
             Effect.tryPromise({
               try: () =>
-                glob('**/*.yaml', { cwd: root, absolute: true, nodir: true }),
+                glob(`**/*${AGENT_FILE_EXTENSION}`, {
+                  cwd: root,
+                  absolute: true,
+                  nodir: true,
+                }),
               catch: (cause) =>
                 new AgentScanError({
                   path: root,

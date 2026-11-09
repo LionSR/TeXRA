@@ -426,7 +426,7 @@ write points are normative:
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
 context and the `attempt` row, before it streams or submits the request
 (`agent/runtime/ModelInvoker.ts#'ModelInvoker.attempt'`,
-`agent/runtime/run/requestContext.ts#attemptRows`). A call off the rows (a
+`agent/runtime/run/recordedRequest.ts#attemptRows`). A call off the rows (a
 compaction summary, a helper call) records no row, its attempts and failures
 included (`agent/runtime/run/modelCall.ts#'modelCall.attempt'`); a summary's
 usage rides the `context.edit` that lands it

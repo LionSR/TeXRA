@@ -95,7 +95,7 @@ interface OpenedProcess {
  * report ({@link endRunRows}); one that never wrote fails the fiber, its
  * terminal fact gone.
  */
-const processRun = (
+const runProcessChild = (
   runId: RunId,
   { logger, turn }: OpenedProcess,
 ): Effect.Effect<void, Error, AgentRunServices> =>
@@ -191,7 +191,7 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
   });
   yield* registryOf(yield* Runs).start(runId, {
     open,
-    run: (opened) => processRun(runId, opened),
+    run: (opened) => runProcessChild(runId, opened),
   });
   return runId;
 });

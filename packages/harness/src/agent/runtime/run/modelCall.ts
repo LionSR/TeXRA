@@ -29,7 +29,7 @@ import { UsageLog } from '@shared/usageLog';
 import { priceTurnUsage, reportUsage, type UsageAttribution } from './pricing';
 
 /** A completed call and its priced usage (`null`: none reported). */
-export interface CallResult {
+export interface ModelCallResult {
   readonly turn: TurnResult;
   readonly usage: NormalizedUsage | null;
 }
@@ -54,7 +54,11 @@ interface ModelCall {
  */
 export const callModel = Effect.fn('ModelInvoker.call')(function* (
   call: ModelCall,
-): Effect.fn.Return<CallResult, CallFailure | Error, UsageLog | RouteRetries> {
+): Effect.fn.Return<
+  ModelCallResult,
+  CallFailure | Error,
+  UsageLog | RouteRetries
+> {
   const usageLog = yield* UsageLog;
   const gate = yield* RouteRetries;
   const retries = call.retries ?? (yield* call.binding).automaticRetries;
