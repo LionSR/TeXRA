@@ -348,9 +348,8 @@ export function rowHeadline(row: ReadonlyDeep<TranscriptRow>): string {
 // ---------------------------------------------------------------------------
 
 /**
- * The row for one projected compaction block. Both hosts previously wrote
- * this constructor by hand from the same projection; it lives here so the id,
- * ordering key and label are stated once.
+ * The row for one projected compaction block: its id, ordering key and label,
+ * stated once for every host.
  */
 export function compactionActivityRow(
   block: CompactionActivityBlock,

@@ -19,24 +19,20 @@ export interface PageChangeDetail {
   page: number;
 }
 
-/** Default number of items per page. */
-export const DEFAULT_PAGE_SIZE = 100;
+/** Number of items per page. */
+const PAGE_SIZE = 100;
 
 /**
  * The current page's items for a given items array, clamped to the last page.
  */
-export function paginate<T>(
-  items: readonly T[],
-  page: number,
-  pageSize: number,
-): T[] {
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+export function paginate<T>(items: readonly T[], page: number): T[] {
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
   const safePage = Num.clamp(page, {
     minimum: 0,
     maximum: Math.max(0, totalPages - 1),
   });
-  const start = safePage * pageSize;
-  return items.slice(start, start + pageSize);
+  const start = safePage * PAGE_SIZE;
+  return items.slice(start, start + PAGE_SIZE);
 }
 
 @customElement('list-pagination')
@@ -84,19 +80,16 @@ export class Pagination extends LitElement {
   /** Total number of items across all pages. */
   @property({ type: Number }) totalItems = 0;
 
-  /** Items per page. */
-  @property({ type: Number }) pageSize = DEFAULT_PAGE_SIZE;
-
   private get totalPages(): number {
-    return Math.max(1, Math.ceil(this.totalItems / this.pageSize));
+    return Math.max(1, Math.ceil(this.totalItems / PAGE_SIZE));
   }
 
   private get rangeStart(): number {
-    return this.totalItems === 0 ? 0 : this.page * this.pageSize + 1;
+    return this.totalItems === 0 ? 0 : this.page * PAGE_SIZE + 1;
   }
 
   private get rangeEnd(): number {
-    return Math.min((this.page + 1) * this.pageSize, this.totalItems);
+    return Math.min((this.page + 1) * PAGE_SIZE, this.totalItems);
   }
 
   private goTo(target: number): void {

@@ -22,8 +22,8 @@
  *   ([`requestToolEditApproval`](#requesttooleditapproval),
  *   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
  *   [`approvedWriteConflict`](#approvedwriteconflict)).
- * - **Runtime callbacks inside a tool**: [`requireRun`](#requirerun),
- *   [`callerRun`](#callerrun), [`ChildRuns`](#childruns), and
+ * - **Runtime callbacks inside a tool**: the call's run and requests on
+ *   [`ToolContext`](#toolcontext), [`ChildRuns`](#childruns), and
  *   [`RunInbox`](#runinbox).
  * - **Lifetimes, prompt sections & durable rows**:
  *   [`PromptSection`](#promptsection),
@@ -148,7 +148,7 @@ export {
   type MemoryPinResult,
   type MemoryPreview,
 } from '@tools/memory/memoryStore';
-export { callerRun, noLaterTurn, requireRun } from '@agent/runtime/RunCall';
+export { noLaterTurn } from '@agent/runtime/RunCall';
 export {
   ChildRuns,
   type ChildRunsShape,
@@ -213,7 +213,6 @@ export type {
   AgentTrace,
   LogOptions,
   StreamHandle,
-  StreamOptions,
   ToolCardHandle,
 } from '@agent/trace/AgentTrace';
 export type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';

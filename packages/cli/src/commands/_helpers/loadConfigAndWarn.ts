@@ -16,7 +16,7 @@ import { pickGlobalArgs, type ParsedGlobalArgs } from './globalArgs';
  * tier reads the live process environment. A citty action runs it once
  * (`defineCliCommand`, and `texra doctor` inside its own program).
  */
-export const contextFromArgs = Effect.fn('contextFromArgs')(function* (
+export const loadConfigAndWarn = Effect.fn('loadConfigAndWarn')(function* (
   args: ParsedGlobalArgs,
   rawArgs: readonly string[] = [],
   options: { readonly printConfigWarnings?: boolean } = {},

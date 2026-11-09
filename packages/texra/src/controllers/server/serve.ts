@@ -57,7 +57,7 @@ import {
   serviceHandlers,
   ServiceProjects,
   runningTasks,
-} from './handlers';
+} from './service';
 import {
   BUILD_VERSION,
   ServiceInfoSchema,

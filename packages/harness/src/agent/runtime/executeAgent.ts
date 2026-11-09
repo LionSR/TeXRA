@@ -24,7 +24,7 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
-import { logUserMessage } from '@agent/trace/helpers';
+import { logUserMessage } from '@agent/trace/traceLogs';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
@@ -49,7 +49,7 @@ import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, type RunLaunch } from './run/AgentRun';
 import {
   getDisplayedInstruction,
-  RunLabels,
+  LabelsRootRuns,
   withSessionDescription,
 } from './sessionDescription';
 import type { AgentRunServices } from './runRegistry';
@@ -333,7 +333,7 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
     // A root run of a session that labels its runs gets its description
     // beside the run (`withSessionDescription`); a resumed run whose process
     // died before its description was written gets one now.
-    const labelled = launch.entry.parent === null && (yield* RunLabels);
+    const labelled = launch.entry.parent === null && (yield* LabelsRootRuns);
     const flow = runToolUse({ resume }, opening).pipe(Effect.provide(services));
     // The flow is an Effect: a fiber interruption reaches its provider work
     // directly, and its finalizers run before the resources above are

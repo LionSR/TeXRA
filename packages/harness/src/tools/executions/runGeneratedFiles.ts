@@ -2,11 +2,8 @@
  * The generated files under a run's storage directory.
  *
  * One walk, two renderings: the agent-facing `/executions/{id}/files` listing
- * in `ExecutionsTool` and the CLI's history detail view both need "what did
- * this run produce", and previously each walked the directory itself. The two
- * walks agreed on depth but disagreed on order, on stat/readDir failure
- * policy, and on how deep they descended — so the same run listed
- * differently depending on who asked.
+ * in `ExecutionsTool` and the CLI's history detail view share it, so a run
+ * lists the same files in the same order whoever asks.
  *
  * A run's records live in the event table, so everything left in the
  * directory is the run's own output.

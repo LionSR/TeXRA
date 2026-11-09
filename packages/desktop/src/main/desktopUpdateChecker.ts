@@ -9,7 +9,7 @@ import {
 } from '@texra/utils/system/updateCheck';
 
 /**
- * Lightweight desktop update check (issue #7682, decision: arm b).
+ * Lightweight desktop update check.
  *
  * Polls the public `texra-ai/texra-desktop-releases` repo's latest GitHub
  * release and, when it is newer than the running build, hands the release

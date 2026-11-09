@@ -45,10 +45,9 @@ import {
   DOCUMENTS_COMPILE_TIMEOUT_SETTING,
 } from '@texra/shared/settingsView/documentsSettings';
 
-/** What a diff pass reads of the documents: their run (its trace and its
- *  storage) and its session roots (the workspace and setting stores). */
+/** What a diff pass reads of the documents: their run and session roots. */
 type DiffRun = {
-  readonly run: Pick<OutputDependencies['run'], 'logger' | 'fileService'>;
+  readonly run: Pick<OutputDependencies, 'logger' | 'fileService'>;
   readonly roots: OutputDependencies['roots'];
 };
 

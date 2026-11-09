@@ -1,12 +1,12 @@
 /**
- * ProgressView shared field schemas and data payload schemas. These carry no
- * IPC `command` wrapper so both the outbound and inbound message modules can
+ * The tool card and tool-use log schemas every host reads. They carry no IPC
+ * `command` wrapper, so both the outbound and inbound message modules can
  * compose them without a circular import.
  */
 import { Schema } from 'effect';
 
-import { ScriptDeliverySummarySchema } from '../scriptDelivery';
-import { StoredMediaSchema } from '../storedTurn';
+import { ScriptDeliverySummarySchema } from './scriptDelivery';
+import { StoredMediaSchema } from './storedTurn';
 
 // ============================================================
 // Shared Field Schemas

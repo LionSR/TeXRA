@@ -149,7 +149,7 @@ export interface ChatSessionController {
   stop(reason: RunStopReason): void;
 
   /**
-   * The composer's submit path (PRD 10.1): a slash command, the first
+   * The composer's submit path: a slash command, the first
    * instruction of a fresh root run, or a `followUp.send` request onto the
    * focused run or the conversation's root, which the session continues if
    * the user stopped it.
@@ -284,7 +284,7 @@ export function createChatSessionController(
     );
 
   /** Issue one request to the session's runtime and read its Effect result
-   *  as the response (PRD 7.6): the refusal text, or undefined on success. */
+   *  as the response: the refusal text, or undefined on success. */
   const request = (req: RuntimeCommand): Effect.Effect<string | undefined> =>
     requests.request(req).pipe(
       Effect.match({

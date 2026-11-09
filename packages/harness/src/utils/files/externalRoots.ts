@@ -60,7 +60,6 @@ interface ExternalRoot {
   readonly kind: ExternalRootKind;
   /** Absolute, canonical filesystem path. */
   readonly absolutePath: string;
-  /** Whether writes are permitted. */
   readonly writable: boolean;
   /** Human-readable label shown in workspace_info. */
   readonly label: string;

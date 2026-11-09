@@ -4,7 +4,7 @@ import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { TraceEmitter, runEventDraft } from '@agent/trace/TraceEmitter';
-import { logUserMessage } from '@agent/trace/helpers';
+import { logUserMessage } from '@agent/trace/traceLogs';
 import { prepareEventDraft } from '@controllers/session/rowCodec';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';

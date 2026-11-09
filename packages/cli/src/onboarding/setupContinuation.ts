@@ -1,4 +1,4 @@
-// State 1 continuation for the CLI (2026-06-11-agent-native-onboarding.md).
+// The CLI's first-run continuation.
 //
 // The moment a credential lands on a true first run (the chat's "Connect a
 // model" panel), the setup agent owns the session: the continuation selects

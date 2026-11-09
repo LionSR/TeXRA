@@ -126,10 +126,10 @@ export interface SettingsNumberRowOptions {
   /** Optional unit text rendered beside the input. */
   readonly unit?: string;
   /**
-   * What a cleared field means. Defaults to `true` (revert to the last
-   * committed value). Pass `false` for the provider reliability section's
-   * legacy behavior: `Number('')` is 0, then the normal step/clamp math runs
-   * and posts that value.
+   * What a cleared field means when no {@link onClear} takes it. Defaults to
+   * `true` (revert to the last committed value). `false` commits 0 through
+   * the normal step/clamp math, so a row with a positive `min` commits that
+   * minimum: for a setting where 0 is a meaningful value.
    */
   readonly revertOnEmpty?: boolean;
   /** Present when a cleared field resets the setting; it wins over `revertOnEmpty`. */
@@ -142,9 +142,10 @@ export interface SettingsNumberRowOptions {
 }
 
 /**
- * Shared numeric settings row used by the catalog-bound rows and the provider
- * reliability section. Cleared input reverts to the last committed value by
- * default; `revertOnEmpty: false` opts into the legacy commit-zero/min path.
+ * Shared numeric settings row used by the catalog-bound rows and the
+ * subscription section. Cleared input reverts to the last committed value by
+ * default; `onClear` resets the setting instead, and `revertOnEmpty: false`
+ * commits zero (or the minimum).
  * `onChange` receives the parsed, stepped, and clamped value. The visible label
  * is a real `<label for>` (see the toggle row for the accessibility rationale).
  */

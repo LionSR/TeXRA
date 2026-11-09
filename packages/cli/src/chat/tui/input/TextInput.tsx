@@ -39,7 +39,7 @@ const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
 const ESC_SLASH_PREFIX = '\u001B/';
 
-interface BaseTextInputProps {
+interface TextInputProps {
   readonly value: string;
   readonly placeholder?: string;
   readonly focus?: boolean;
@@ -100,7 +100,7 @@ interface BaseTextInputProps {
   readonly masked?: boolean;
 }
 
-export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
+export function TextInput(props: TextInputProps): React.JSX.Element {
   const {
     displayWidth,
     value,

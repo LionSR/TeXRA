@@ -77,7 +77,7 @@ import {
   type ResolvedTools,
 } from '../agentToolResolution';
 import { hostCapabilitiesOf, liveToolGates } from '../requests';
-import { blobRows, contextAt, stored } from '../run/requestContext';
+import { blobRows, systemTextAt, stored } from '../run/recordedRequest';
 import { appendRow, SCRIPT_TOOL_NAME } from './rows';
 import { stepHooks, type StepHooks } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
@@ -460,7 +460,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     state.input.system === undefined
       ? openingSystem
       : stored(state, state.input.system, Schema.String);
-  const { system, update } = contextAt(state, base, context);
+  const { system, update } = systemTextAt(state, base, context);
   const modules = Record.map(tools.modules, sha256);
   const changed =
     step.changed ||

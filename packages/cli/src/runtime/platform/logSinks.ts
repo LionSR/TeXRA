@@ -132,14 +132,9 @@ export function writeTextStderrAndWait(text: string): Effect.Effect<void> {
   return writeRawAndWait('stderr', `${text}\n`);
 }
 
-/** Wait until every stderr write queued before this call has completed. */
-export function flushTextStderr(): Effect.Effect<void> {
-  return writeRawAndWait('stderr', '');
-}
-
-/** Wait until every stdout write queued before this call has completed. */
-export function flushStdout(): Effect.Effect<void> {
-  return writeRawAndWait('stdout', '');
+/** Wait until every write queued on `stream` before this call has completed. */
+export function flush(stream: StreamKey): Effect.Effect<void> {
+  return writeRawAndWait(stream, '');
 }
 
 /**

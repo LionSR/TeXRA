@@ -294,7 +294,7 @@ function getConfig<A>(config: ConfigProvider, row: SettingRow<A>): A {
   const stored = classifyStored(entry.schema, config.get<unknown>(entry.key));
   // cast: the catalog's row under this key has `row`'s schema, which parsed it.
   if (stored.kind === 'value') return stored.value as A;
-  // Direct sink write: config reads are synchronous by ruling and this one
+  // Direct sink write: config reads are synchronous, and this one
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
   writeLogLine(CHANNEL, invalidStoredMessage(entry.key, stored.cause));
   return defaultOf(config.catalog, row);

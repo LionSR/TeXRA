@@ -244,18 +244,17 @@ void Effect.runPromise(
         if (unopenedProjects.length > 0) {
           // Forked: startup does not wait on the user dismissing it; the
           // process scope's close ends it with everything else.
-          yield* Effect.tryPromise({
-            try: () =>
-              showDesktopWarningDialog(
-                `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
-              ),
-            catch: (cause) =>
-              new HostFailed({
-                member: 'dialog.showMessageBox',
-                message: 'The unopened-projects warning could not be shown.',
-                cause,
-              }),
-          }).pipe(
+          yield* showDesktopWarningDialog(
+            `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
+          ).pipe(
+            Effect.mapError(
+              (cause) =>
+                new HostFailed({
+                  member: 'dialog.showMessageBox',
+                  message: 'The unopened-projects warning could not be shown.',
+                  cause,
+                }),
+            ),
             // Its failure or a defect: forked, nothing else reports it.
             // The scope's close interrupts it; that is not a failure.
             Effect.catchCause((cause) =>

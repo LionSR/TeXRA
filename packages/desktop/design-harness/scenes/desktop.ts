@@ -314,8 +314,8 @@ function sceneDesktopOneProject(): TemplateResult {
   );
 }
 
-/** A project with no runs is a distinct Surface with its own composer
- *  (PRD 9): its section is empty, the conversation is the launch state, and
+/** A project with no runs is a distinct Surface with its own composer:
+ *  its section is empty, the conversation is the launch state, and
  *  the other projects keep their badges. The running project's row is folded so
  *  its badge shows beside the waiting project's amber one. */
 function sceneDesktopEmptyProject(): TemplateResult {

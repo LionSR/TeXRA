@@ -69,16 +69,6 @@ type CommandProgram = Effect.Effect<
  */
 type RegisteredCommandId = Exclude<ExtensionCommandId, CommentCommandId>;
 
-/*
- * Duplicate-registration audit (#3787 follow-up):
- * Every command id in the handler map below has been verified to have no
- * stale `vscode.commands.registerCommand(...)` call on the single-folder path
- * that installs it; the other direct `registerCommand` call sites there are
- * the comment threads' commands and the walkthrough action. The no-folder
- * welcome path installs its own standalone variants of a few ids, since this
- * map is not installed there.
- */
-
 /**
  * Register every catalog command against `vscode.commands`, routing each
  * invocation through `dispatchCommandFromRegistry` so the dispatch path is

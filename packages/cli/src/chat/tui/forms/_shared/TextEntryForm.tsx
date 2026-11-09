@@ -1,6 +1,6 @@
 // One-line text entry for `/` forms: credentials (masked), `/config` string
 // and number settings, and the TUI prompt host's `input`. A masked value lives
-// in local state and is never rendered (BaseTextInput `masked`) or logged.
+// in local state and is never rendered (TextInput `masked`) or logged.
 
 import { Box, Text } from 'ink';
 import { useState, type ReactNode } from 'react';
@@ -9,7 +9,7 @@ import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
 
-import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
+import { TextInput } from '@cli/chat/tui/input/TextInput';
 import { FormFrame } from './FormFrame';
 
 interface TextEntryFormProps {
@@ -49,7 +49,7 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
       {props.helper}
       <Box marginTop={props.helper === undefined ? 0 : 1}>
         <Text>{`${POINTER} `}</Text>
-        <BaseTextInput
+        <TextInput
           value={value}
           masked={props.masked ?? true}
           placeholder={props.placeholder}

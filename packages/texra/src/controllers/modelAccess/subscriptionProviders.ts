@@ -1,16 +1,11 @@
 /**
- * Canonical catalog of the OAuth subscription providers — "Sign in with
- * ChatGPT" (OpenAI's token sharing) and "Sign in with Grok" (xAI).
+ * Canonical catalog of the OAuth subscription providers: "Sign in with
+ * ChatGPT" (OpenAI's token sharing) and "Sign in with Grok" (xAI). A row
+ * holds everything but the presentation, which the host supplies as a
+ * {@link SubscriptionSignInPresenter}; a third provider is one row here.
  *
- * Every host used to restate the same descriptor per provider (coordinator,
- * both login transports, account label, preference setter, display name) and
- * then re-write the same device-code-vs-loopback runner around it. Only the
- * *presentation* actually differs, so that is the one thing a host supplies:
- * a {@link SubscriptionSignInPresenter}. Adding a third provider is one row
- * here, not another descriptor in each host.
- *
- * Lives in `packages/harness/src/controllers/` rather than in `@texra-ai/llm` because a row
- * binds a sign-in flow to its model-layer routing preference, a setting the
+ * Lives in the app rather than in `@texra-ai/llm` because a row binds a
+ * sign-in flow to its model-layer routing preference, a setting the llm
  * package never reads; {@link subscriptionAuthStatus} joins the same two
  * facts for the settings views.
  */

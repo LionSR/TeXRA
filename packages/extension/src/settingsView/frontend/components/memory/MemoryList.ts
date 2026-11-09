@@ -18,11 +18,7 @@ import { renderEmptyState } from '@ui/wa/emptyState';
 import './MemoryItem';
 
 // Local imports - pagination
-import {
-  paginate,
-  DEFAULT_PAGE_SIZE,
-  type PageChangeDetail,
-} from '../shared/Pagination';
+import { paginate, type PageChangeDetail } from '../shared/Pagination';
 import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 function hasSameMemoryOrder(
@@ -77,7 +73,6 @@ export class MemoryList extends LitElement {
     return html`<list-pagination
       .page=${this.page}
       .totalItems=${this.items.length}
-      .pageSize=${DEFAULT_PAGE_SIZE}
       @page-change=${this.handlePageChange}
     ></list-pagination>`;
   }
@@ -93,7 +88,7 @@ export class MemoryList extends LitElement {
       });
     }
 
-    const paged = paginate(this.items, this.page, DEFAULT_PAGE_SIZE);
+    const paged = paginate(this.items, this.page);
 
     return html`
       ${this.renderPagination()}

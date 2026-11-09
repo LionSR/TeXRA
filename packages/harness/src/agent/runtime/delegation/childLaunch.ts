@@ -133,12 +133,8 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
 const awaitChildRun = Effect.fn('awaitChildRun')(function* (
   runId: RunId,
   start: Effect.Effect<unknown, Error, AgentRunServices>,
-): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices> {
+): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices | RunCall> {
   const call = yield* RunCall;
-  if (call === null)
-    return yield* Effect.fail(
-      new Error(`Subagent ${runId} is awaited outside a tool call.`),
-    );
   return yield* call.run.awaitedCalls.withPermits(1)(childRunEnd(runId, start));
 }, defectsAsErrors);
 
@@ -217,7 +213,7 @@ interface AwaitedChildLaunch {
  *  calling run's launch brought. */
 export const executeSubagentInBand = (
   launch: AwaitedChildLaunch,
-): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
+): Effect.Effect<ChildRunEnd, Error, AgentRunServices | RunCall> =>
   awaitChildRun(
     launch.runId,
     Effect.gen(function* () {
@@ -248,7 +244,7 @@ export const executeSubagentInBand = (
  *  as {@link executeSubagentInBand} awaits a launch. */
 export const resumeSubagentInBand = (
   launch: Pick<AwaitedChildLaunch, 'runId' | 'parentRunId' | 'notify'>,
-): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
+): Effect.Effect<ChildRunEnd, Error, AgentRunServices | RunCall> =>
   awaitChildRun(
     launch.runId,
     resumeOwnedChild(launch.runId, launch.parentRunId, {

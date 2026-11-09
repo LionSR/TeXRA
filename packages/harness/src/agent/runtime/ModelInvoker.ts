@@ -41,11 +41,11 @@ import {
   type TurnResult,
 } from '@texra-ai/llm';
 
-import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
+import { saveModelIOIfEnabled } from '@agent/debug/debugMessageSaver';
 import {
   logContextManagementEvent,
   logProviderError,
-} from '@agent/trace/helpers';
+} from '@agent/trace/traceLogs';
 import {
   routeFailureOf,
   type CallFailure,
@@ -64,7 +64,7 @@ import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MESSAGE_TYPES,
   qualifyAggregateId,
-  type FailedNext,
+  type StepAfterFailure,
   type InvocationRef,
   type ModelFailure,
   type NormalizedUsage,
@@ -95,7 +95,7 @@ import { UsageLog, usageAgentName } from '@shared/usageLog';
 import { resendDelayMs, RouteRetries } from './ModelRetryGate';
 import { decisionOf, policyDecidedRows } from './requests';
 import { AgentRun } from './run/AgentRun';
-import { callModel, type CallResult } from './run/modelCall';
+import { callModel, type ModelCallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens, outputBudget } from './run/contextTokens';
 import { priceTurnUsage, reportUsage } from './run/pricing';
@@ -105,7 +105,7 @@ import {
   chainedContinuation,
   checkRecordedRequest,
   type InvokeRequest,
-} from './run/requestContext';
+} from './run/recordedRequest';
 import { providerMessages } from './providerMessages';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
 import { configRow, positionRow } from './loop/rows';
@@ -187,7 +187,7 @@ export class ModelInvoker extends Context.Service<
       request: Omit<TurnRequest, 'messages'> & {
         readonly messages: readonly HistoryMessage[];
       },
-    ) => Effect.Effect<CallResult, Error>;
+    ) => Effect.Effect<ModelCallResult, Error>;
   }
 >()('@texra-ai/harness/agent/ModelInvoker') {}
 
@@ -225,7 +225,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         invocation: InvocationRef,
         bound: BoundModel,
       ) =>
-        maybeSaveDebugObject({
+        saveModelIOIfEnabled({
           object,
           objectType,
           invocation,
@@ -258,12 +258,8 @@ export const modelInvokerLayer = (): Layer.Layer<
         FileSystem.FileSystem | SessionLog
       > {
         const trace = {
-          thinking: logger.openRun(MESSAGE_TYPES.THINKING, {
-            deferStart: true,
-          }),
-          output: logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
-            deferStart: true,
-          }),
+          thinking: logger.openRun(MESSAGE_TYPES.THINKING),
+          output: logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE),
         };
         // What the events leave behind: the completed turn if it arrived,
         // and the tail of the output text seen so far.
@@ -579,11 +575,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         cell: RunCell,
         ref: InvocationRef,
         error: ModelFailure,
-        next: FailedNext,
+        next: StepAfterFailure,
         bound: BoundModel,
         usage: NormalizedUsage | null,
       ): Effect.fn.Return<readonly RunHistoryDraft[], never, SessionServices> {
-        const failedRow = (next: FailedNext): RunHistoryDraft => ({
+        const failedRow = (next: StepAfterFailure): RunHistoryDraft => ({
           type: 'model.message',
           aggregateId,
           payload: {
@@ -643,7 +639,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         cell: RunCell,
         ref: InvocationRef,
         { error }: AttemptFailure,
-        next: FailedNext,
+        next: StepAfterFailure,
         bound: BoundModel,
       ): Effect.fn.Return<void, InvokeError, SessionServices> {
         const failure = modelFailureOf(error, bound.config.provider);
@@ -694,7 +690,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         ref: InvocationRef,
         observed: boolean,
         retries: number,
-      ): Effect.Effect<FailedNext> =>
+      ): Effect.Effect<StepAfterFailure> =>
         Effect.map(cell.current, ({ invocation }) =>
           failedNext(
             failuresBefore(invocation, ref),

@@ -1,5 +1,6 @@
 import { Effect, Result, Schema } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 
 /** A renderer command: a named command and whatever fields it carries. */
 export const DesktopCommandMessageSchema = Schema.StructWithRest(
@@ -30,11 +31,9 @@ export function parsedRoute<T>(
     const parsed = Schema.decodeUnknownResult(schema)(message);
     return Result.isSuccess(parsed)
       ? handle(parsed.success)
-      : Effect.sync(() =>
-          console.warn(
-            `Dropped a malformed ${message.command} message: ${parsed.failure.message}`,
-          ),
-        );
+      : Effect.logWarning(
+          `Dropped a malformed ${message.command} message: ${parsed.failure.message}`,
+        ).pipe(withLogChannel('desktop'));
   };
 }
 

@@ -72,7 +72,7 @@ export class UpdateCheckRecords extends Context.Service<
       version: string,
     ) => Effect.Effect<void, Error>;
   }
->()('@texra/UpdateCheckRecords') {}
+>()('@texra-ai/texra/utils/UpdateCheckRecords') {}
 
 /** Result of consulting an update source. */
 export interface UpdateCheckFetchResult {

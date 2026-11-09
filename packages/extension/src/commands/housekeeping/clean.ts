@@ -7,7 +7,7 @@ import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 
 // Local file imports
 import { CHANNEL } from '@housekeeping/constants';
-import { GlobFailed } from '@housekeeping/utils';
+import { GlobFailed } from '@housekeeping/artifactFiles';
 import { EXCLUDED_DIRS } from '@texra/shared/constants/excludedDirs';
 
 /**

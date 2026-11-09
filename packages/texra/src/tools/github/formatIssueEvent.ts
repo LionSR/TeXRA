@@ -7,24 +7,15 @@
  */
 
 import {
-  formatCommentEvent,
+  MAX_BODY,
   makeTruncator,
   sections,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
 import { targetPath, type IssueTarget } from './subscriptionTarget';
-import type { GhIssue, GhIssueComment } from './prTypes';
-
-const MAX_BODY = 500;
+import type { GhIssue } from './prTypes';
 
 const truncate = makeTruncator(MAX_BODY);
-
-export function formatIssueComment(
-  issue: IssueTarget,
-  c: GhIssueComment,
-): string {
-  return formatCommentEvent(targetPath(issue), c, MAX_BODY);
-}
 
 export function formatIssueClosed(issue: IssueTarget, data: GhIssue): string {
   const reason = data.state_reason

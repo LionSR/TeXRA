@@ -4,9 +4,12 @@
  * is its `.html` file.
  */
 
+/** The TeXRA site's home page. */
+export const TEXRA_SITE_URL = 'https://texra.ai';
+
 /** The guide page `page` (a file name under `docs/guide/` without `.md`),
  *  at its section `anchor` when one is named. */
 export function texraGuideUrl(page: string, anchor?: string): string {
-  const url = `https://texra.ai/guide/${page}.html`;
+  const url = `${TEXRA_SITE_URL}/guide/${page}.html`;
   return anchor === undefined ? url : `${url}#${anchor}`;
 }

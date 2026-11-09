@@ -34,7 +34,6 @@ import {
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { errorResult } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -116,8 +115,10 @@ const runSelf = Effect.fn('self.call')(function* (
   const { runId: parentRunId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
-    return errorResult(
-      "A task's script has no conversation to fork: call self() with `fork: false`.",
+    return yield* Effect.fail(
+      new ToolError(
+        "A task's script has no conversation to fork: call self() with `fork: false`.",
+      ),
     );
   const name = config.agent;
   const outputSchema =
@@ -216,9 +217,9 @@ export const SelfTool = defineTool({
 Forked (the default), the child continues this conversation as it stood when the script started (the message of the turn that started it, not that turn's work so far), with \`prompt\` added to that message; with \`fork: false\` it starts with no earlier conversation. Either way the child is told \`prompt\` is the one part of the script's work it does, and not to take on the rest. It is you with your tools and model: nothing is proposed or approved again. It rejects with an Error named \`AgentFailed\` or \`Skipped\` (the user stopped it). Call it from a script; called directly, it runs nothing.`,
   schema: SelfInputSchema,
   execute: Effect.fn('SelfTool.execute')(function* (input: SelfInput) {
-    return yield* inRunSession('self', (call) =>
+    return yield* inRunSession((call) =>
       call.script === null
-        ? Effect.succeed(errorResult('self() runs only inside a script.'))
+        ? Effect.fail(new ToolError('self() runs only inside a script.'))
         : runSelf(call, input, call.script),
     );
   }),

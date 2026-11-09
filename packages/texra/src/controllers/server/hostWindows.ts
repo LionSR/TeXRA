@@ -402,7 +402,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
 export class HostWindows extends Context.Service<
   HostWindows,
   Effect.Success<ReturnType<typeof make>>
->()('@texra/server/HostWindows') {
+>()('@texra-ai/texra/server/HostWindows') {
   static readonly layer = (editors: EditorHostShape) =>
     Layer.effect(HostWindows, make(editors));
 }

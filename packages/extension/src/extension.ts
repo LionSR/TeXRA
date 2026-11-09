@@ -310,7 +310,7 @@ function registerWalkthroughWorkspaceAction(
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  // This host's R1 entry: one program from `activate` to the last
+  // This host's one root program, from `activate` to the last
   // registration, on the context-free runner because it is what installs the
   // process runtime. A failed activation closes its scope, which runs the
   // same shutdown drain deactivation does, and re-fails with the same cause.

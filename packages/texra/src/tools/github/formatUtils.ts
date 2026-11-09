@@ -19,6 +19,9 @@ import {
  *  render surfaces recognize by that shape. */
 const WEBHOOK_TAG = 'github-webhook-activity';
 
+/** The cap on a comment or title quoted in an issue or pull request event. */
+export const MAX_BODY = 500;
+
 /**
  * Matches `</tag>` and `<tag>` liberally — whitespace inside the tag,
  * case-insensitive — because LLMs and HTML parsers both accept variants like
@@ -100,20 +103,20 @@ export function makeTruncator(
 }
 
 /**
- * "New comment on <ref> by <author>:" event, shared by the issue- and
- * PR-comment formatters — they differ only in whether `ref` is an issue or
- * pull path. The repo-level formatter uses a denser single-line shape and
- * intentionally does not route through here.
+ * "New comment on <ref> by <author>:" event for a subscribed issue or pull
+ * request. GitHub delivers general PR comments over the same `issue_comment`
+ * webhook as plain-issue comments; the target decides whether the reference
+ * renders as `issues/N` or `pulls/N`. The repo-level formatter uses a denser
+ * single-line shape and intentionally does not route through here.
  */
 export function formatCommentEvent(
-  ref: string,
+  target: SubscriptionTarget,
   c: GhIssueComment,
-  maxBody: number,
 ): string {
   return wrapWebhookEvent(
     sections(
-      `New comment on ${ref} by ${authorOf(c.user)}:`,
-      truncate(c.body, maxBody),
+      `New comment on ${targetPath(target)} by ${authorOf(c.user)}:`,
+      truncate(c.body, MAX_BODY),
       c.html_url,
     ),
   );

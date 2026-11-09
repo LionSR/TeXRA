@@ -44,7 +44,7 @@ import {
   writableArray,
   write,
   type Draft,
-  type Slot,
+  type RowState,
   type TranscriptContext,
   type TranscriptWork,
 } from './transcriptState';
@@ -305,7 +305,7 @@ function record(d: Draft, event: TraceRowFields): void {
 /** Close a text row, now printable, with its final text when one is given. */
 function closeText(
   d: Draft,
-  slot: Extract<Slot, { kind: 'text' }>,
+  slot: Extract<RowState, { kind: 'text' }>,
   finalText: string | undefined,
 ): void {
   slot.base = settle(d.ix, slot.base);

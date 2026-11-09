@@ -17,9 +17,7 @@ const ExecResultSchema = Schema.Struct({
    * normalized to the empty string, matching {@link ExecResult.stdout}.
    */
   stderr: Schema.String,
-  /** True if the command timed out */
   timedOut: Schema.Boolean,
-  /** Exit code from the command */
   exitCode: Schema.Int,
   /** True when subprocess output exceeded the configured retained-output limit. */
   outputLimitExceeded: Schema.optional(Schema.Boolean),

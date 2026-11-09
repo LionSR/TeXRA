@@ -1,3 +1,8 @@
+/**
+ * The files a housekeeping command packs or cleans: the filesystem a path is
+ * handled through, the artifacts a pattern names, the timestamp a packed name
+ * carries, and the error a failed listing raises.
+ */
 // Standard library imports
 import * as path from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';

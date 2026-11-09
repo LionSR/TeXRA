@@ -8,8 +8,8 @@ import {
 } from 'effect';
 
 // Internal imports
-import type { ITool } from '@agent/core/tools/ToolTypes';
-import { RunCall } from '@agent/runtime/RunCall';
+import type { ITool, ToolContext } from '@agent/core/tools/ToolTypes';
+import { inRunSession } from '@agent/runtime/RunCall';
 import {
   convertToolSchema,
   type JSONSchemaObject,
@@ -194,10 +194,10 @@ export function normalizeStructuredOutputSchema(
  */
 export function buildTerminalTool(
   input: Schema.Codec<unknown, unknown> | Record<string, unknown>,
-): ITool<Error, never> {
+): ITool<Error, ToolContext> {
   const { schema } = normalizeStructuredOutputSchema(input);
 
-  return defineTool<unknown, never>({
+  return defineTool<unknown, ToolContext>({
     name: STRUCTURED_OUTPUT_TOOL_NAME,
     description:
       'Submit the final result. Call this exactly once, with the complete result, when the task is done.',
@@ -207,9 +207,8 @@ export function buildTerminalTool(
     // Whether the run has submitted is its rows' answer, so a resumed run
     // refuses a second submission as the live one does.
     execute: Effect.fn('structuredOutput.execute')(function* (input) {
-      const call = yield* RunCall;
-      const facts = call === null ? null : yield* call.facts;
-      if (facts?.structured != null) {
+      const facts = yield* inRunSession((call) => call.facts);
+      if (facts.structured != null) {
         return yield* Effect.fail(
           new ToolError('submit_output can only be accepted once per run.'),
         );

@@ -58,8 +58,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.test-live.json && node scripts/build.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "1.5.0",
-    "@google/genai": "2.32.0",
+    "@anthropic-ai/sdk": "1.6.0",
+    "@google/genai": "3.0.0",
     "llm-zoo": "4.2.0",
     "ws": "8.22.1"
   },
@@ -72,7 +72,7 @@
     "@typescript/native": "catalog:",
     "effect": "catalog:",
     "esbuild": "catalog:",
-    "openai": "7.51.0",
+    "openai": "7.53.0",
     "vitest": "^5.1.0"
   }
 }

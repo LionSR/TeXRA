@@ -2,10 +2,10 @@
  * A tool call made under a run, as only the harness's built-in tools read
  * it (`RunCall`): the run's step and callbacks, the session's runs, the response and attempt the call belongs to, the script that
  * issued it, and, for a `script` call, the door its guest calls the run's
- * tools through. `RunCall` is a `Context.Reference` whose default is null,
- * so a standalone host invocation outside a run provides nothing. The
- * public contract every tool reads, the run included, is `ToolContext`; an
- * app's tool reads nothing else. `requireFileReadForEdit` here answers an
+ * tools through. The run loop provides it beside every call's `ToolContext`,
+ * whose `env.run` is the same run, as a plugin's tool sees it. The public
+ * contract every tool reads, the run included, is `ToolContext`; an app's
+ * tool reads nothing else. `requireFileReadForEdit` here answers an
  * edit's read prerequisite from the run's facts (`RunCallShape.facts`), so
  * a resumed run counts the reads its rows record.
  */
@@ -21,7 +21,6 @@ import {
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import {
   ToolContext,
-  type CallRequests,
   type ToolContextShape,
   type ToolRun,
 } from '@agent/core/tools/ToolTypes';
@@ -29,7 +28,6 @@ import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { RunFileService } from '@common/storage/runStorage';
 import {
-  ToolError,
   type PluginRequest,
   type RunId,
   type ToolResult,
@@ -251,99 +249,49 @@ export const noLaterTurn = (
   (run.entry.parent === null || run.entry.awaited);
 
 /** The current call's place in its run, which the run loop provides beside
- *  each call; null outside a run (a standalone host invocation), which is
- *  the reference's default, so nothing provides the null. */
-export const RunCall = Context.Reference<RunCallShape | null>(
+ *  each call. */
+export class RunCall extends Context.Service<RunCall, RunCallShape>()(
   '@texra-ai/harness/agent/RunCall',
-  { defaultValue: () => null },
-);
-
-/** The run the current call works for; none for a standalone host call. */
-export const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext> =
-  Effect.gen(function* () {
-    return (yield* ToolContext).env.run;
-  });
+) {}
 
 /**
- * The current call, narrowed to one made under a run, or the shared refusal:
- * the one place it is worded, so the model reads the same sentence whichever
- * tool it reached for. `toolName` names what needs the run, which can be
- * narrower than the tool (`'bash run_in_background'`).
- */
-export const requireRun = Effect.fn('RunCall.requireRun')(function* (
-  toolName: string,
-): Effect.fn.Return<
-  ToolContextShape & {
-    readonly run: ToolRun;
-    readonly requests: CallRequests;
-  },
-  ToolError,
-  ToolContext
-> {
-  const call = yield* ToolContext;
-  const { run } = call.env;
-  const { requests } = call;
-  if (run === undefined || requests === undefined)
-    return yield* Effect.fail(
-      new ToolError(`${toolName} requires an active run context.`),
-    );
-  return { ...call, run, requests };
-});
-
-/**
- * `body` over the current call's run, with the session's own services
- * (`SessionServices`): the one place a requirement on them is dropped from
- * a type, so no tool's type (`PluginToolServices`) and no public entry
- * names a session service. It is sound because the run loop dispatches a
- * run's every call in its session's fiber, which holds them, and only
- * there provides the call's place in its run; the shared refusal runs
- * first, so a call outside a run fails with it before `body` can reach a
- * session service the fiber lacks.
+ * `body` over the current call and its place in its run (`RunCall`), with
+ * the session's own services (`SessionServices`): the one place a
+ * requirement on either is dropped from a type, so no tool's type
+ * (`PluginToolServices`) and no public entry names them. It is sound because
+ * the run loop provides a call's place in its run beside its `ToolContext`,
+ * and dispatches a run's every call in its session's fiber, which holds the
+ * session's services.
  */
 export const inRunSession = <A, E, R>(
-  toolName: string,
   body: (call: RunToolCall) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | ToolError, Exclude<R, SessionServices> | ToolContext> =>
-  // cast: past `requireToolRun` the fiber is the dispatch's, which serves
-  // every `SessionServices` tag `R` names.
-  Effect.flatMap(requireToolRun(toolName), body) as Effect.Effect<
-    A,
-    E | ToolError,
-    Exclude<R, SessionServices> | ToolContext
-  >;
+): Effect.Effect<A, E, Exclude<R, SessionServices | RunCall> | ToolContext> =>
+  // cast: a fiber that serves `ToolContext` is the dispatch's, which serves
+  // `RunCall` and every `SessionServices` tag `R` names.
+  Effect.flatMap(
+    Effect.gen(function* () {
+      return { ...(yield* ToolContext), ...(yield* RunCall) };
+    }),
+    body,
+  ) as Effect.Effect<A, E, Exclude<R, SessionServices | RunCall> | ToolContext>;
 
-/** A built-in's call made under a run: the call, the run, where its
- *  requests open, and its place in the run. */
-export type RunToolCall = ToolContextShape &
-  RunCallShape & { readonly requests: CallRequests };
-
-/** {@link requireRun}, with the call's place in its run, for built-ins. */
-export const requireToolRun = Effect.fn('RunCall.requireToolRun')(function* (
-  toolName: string,
-): Effect.fn.Return<RunToolCall, ToolError, ToolContext> {
-  const call = yield* requireRun(toolName);
-  const runCall = yield* RunCall;
-  if (runCall === null)
-    return yield* Effect.fail(
-      new ToolError(`${toolName} requires an active run context.`),
-    );
-  return { ...call, ...runCall };
-});
+/** A built-in's call: the call, where its requests open, the run, and its
+ *  place in the run. */
+export type RunToolCall = ToolContextShape & RunCallShape;
 
 /** The refusal an edit of an existing file gets when the run never read it,
  *  or null. `path` is the file as the results spell it (`reads`,
  *  `edits[].path`): the run has read it once a settled call's result names
- *  it, in this process or in the one that ran the read (`RunCallShape.facts`);
- *  outside a run nothing has. */
+ *  it, in this process or in the one that ran the read (`RunCallShape.facts`). */
 export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
   function* (
     path: string,
     exists: boolean,
     errorMessage?: string,
-  ): Effect.fn.Return<ToolResult | null> {
+  ): Effect.fn.Return<ToolResult | null, never, ToolContext> {
     if (!exists) return null;
-    const call = yield* RunCall;
-    if (call !== null && (yield* call.facts).read.includes(path)) return null;
+    const facts = yield* inRunSession((call) => call.facts);
+    if (facts.read.includes(path)) return null;
     return errorResult(
       errorMessage ??
         'Edits to existing files require a prior read in this session. Please call read_file first.',

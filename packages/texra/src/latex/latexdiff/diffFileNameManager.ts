@@ -16,17 +16,31 @@ interface GeneratedLatexdiffArtifact {
   sourcePath: string;
 }
 
-/**
- * Build the `_diffr{newer}r{older}` suffix used to name a between-round diff
- * artifact. Sole owner of this grammar — other call sites that need this
- * suffix (rather than the full filename from `generateDiffFileName`) should
- * import this instead of re-encoding the template themselves.
+/*
+ * The latexdiff output filename grammar, built and parsed here only:
+ *   - `<stem>_diff`: a workspace diff TeXRA names (`main_diff.tex`);
+ *   - `<stem>_diffr{newer}r{older}`: a diff between two rounds;
+ *   - `<stem>-diff<commit>`: latexdiff-vc's own naming, which TeXRA reads
+ *     back and packs but does not choose.
  */
+
+/** The suffix a workspace diff carries after the edited file's stem. */
+export const WORKSPACE_DIFF_SUFFIX = '_diff';
+
+/** What latexdiff-vc inserts between the stem and the commit hash. */
+const VERSION_CONTROL_DIFF_INFIX = '-diff';
+
+/** The `_diffr{newer}r{older}` suffix of a between-round diff artifact. */
 export function buildBetweenRoundDiffSuffix(
   newerRound: number | string,
   olderRound: number | string,
 ): string {
-  return `_diffr${newerRound}r${olderRound}`;
+  return `${WORKSPACE_DIFF_SUFFIX}r${newerRound}r${olderRound}`;
+}
+
+/** The stem latexdiff-vc gives its output for `stem` against `commit`. */
+export function versionControlDiffStem(stem: string, commit: string): string {
+  return `${stem}${VERSION_CONTROL_DIFF_INFIX}${commit}`;
 }
 
 /**
@@ -43,14 +57,12 @@ export function generateDiffFileName(
 
 /** Hash group sourced from `@texra/utils/git/commitHashPattern` so it can't drift from the git-commit validator. */
 const VERSION_CONTROL_DIFF_PATTERN = new RegExp(
-  `^(.+)-diff(${COMMIT_HASH_HEX_RANGE})$`,
+  `^(.+)${VERSION_CONTROL_DIFF_INFIX}(${COMMIT_HASH_HEX_RANGE})$`,
   'i',
 );
 
-/**
- * Ordered from most specific to least so the VC/between-round hashes are
- * recognized before the bare `_diff` suffix that they also end with.
- */
+/** The three generated-artifact shapes; their patterns are mutually
+ *  exclusive, so the order only names which kind a path is tried as first. */
 const GENERATED_LATEXDIFF_ARTIFACT_PATTERNS: {
   kind: GeneratedLatexdiffArtifactKind;
   regex: RegExp;
@@ -58,9 +70,12 @@ const GENERATED_LATEXDIFF_ARTIFACT_PATTERNS: {
   { kind: 'versionControlDiff', regex: VERSION_CONTROL_DIFF_PATTERN },
   {
     kind: 'betweenRoundDiff',
-    regex: /^(.+)_diffr\d+r\d+$/i,
+    regex: new RegExp(`^(.+)${WORKSPACE_DIFF_SUFFIX}r\\d+r\\d+$`, 'i'),
   },
-  { kind: 'workspaceDiff', regex: /^(.+)_diff$/i },
+  {
+    kind: 'workspaceDiff',
+    regex: new RegExp(`^(.+)${WORKSPACE_DIFF_SUFFIX}$`, 'i'),
+  },
 ];
 
 /**

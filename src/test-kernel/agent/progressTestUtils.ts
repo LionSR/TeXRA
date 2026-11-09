@@ -89,7 +89,7 @@ export function recordSessionEvents(
 
 /**
  * A host that records what the runtime presents to it. The port answers
- * nothing (ruling A9-3): a request a run opens is a `request.opened` row, so
+ * nothing: a request a run opens is a `request.opened` row, so
  * a test that must answer one uses {@link decideRequest} or
  * {@link autoDecideRequests}.
  */

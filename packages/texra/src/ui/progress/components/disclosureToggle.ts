@@ -1,24 +1,6 @@
-// Shared utility functions for the progress view frontend.
-
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { isOwnDetailsToggle } from '@ui/litControllers/detailsToggle';
 import type { RunId } from '@texra-ai/harness/schemas';
-
-/**
- * Find the first element of `type` matching `selector` in a composed event
- * path.
- */
-export function getComposedPathElement<T extends Element>(
-  event: Event,
-  selector: string,
-  type: abstract new (...args: never[]) => T,
-): T | null {
-  const path = event.composedPath?.() ?? [];
-  for (const entry of path) {
-    if (entry instanceof type && entry.matches(selector)) return entry;
-  }
-  return null;
-}
 
 /**
  * Dispatch a `<wa-details>` disclosure's open/close as a surface action. Wired to

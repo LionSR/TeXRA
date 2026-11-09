@@ -3,9 +3,7 @@ import { Context, Effect, Semaphore } from 'effect';
 /**
  * One child-run concurrency budget per session: the cap on concurrently live
  * native child model conversations, one semaphore the session layer
- * provides ({@link ChildRunBudget}). Design and rulings (what is budgeted,
- * what inherits):
- * `.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`.
+ * provides ({@link ChildRunBudget}).
  *
  * Root runs, process children, and awaited children (which run while their
  * parent is blocked awaiting them, so physical concurrency is unchanged)

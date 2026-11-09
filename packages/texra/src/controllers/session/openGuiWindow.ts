@@ -715,7 +715,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           reason: `${OWN_REQUEST_LABEL[request.kind]} is not available in this app.`,
         }),
       );
-    // cast: the arm bound under `request.kind` takes a request of that kind.
+    // cast: the handler bound under `request.kind` takes a request of that kind.
     return (
       arm as (request: OwnHostCommand, port: string) => HostVerb<HostOutcome>
     )(request, port);

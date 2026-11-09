@@ -30,7 +30,10 @@ import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { filesByPrefix } from '@latex/formatter/latexindentpt';
 import { latexdiff } from '@latex/latexdiff';
-import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+import {
+  generateDiffFileName,
+  WORKSPACE_DIFF_SUFFIX,
+} from '@latex/latexdiff/diffFileNameManager';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -79,8 +82,6 @@ export interface LatexPreviewEntry {
 
 /** Length of the random suffix for temp file names (8 nanoid chars ≈ 2^47 combinations, sufficient for uniqueness) */
 const TEMP_ID_LENGTH = 8;
-/** The suffix latexdiff's output file carries after the proposed file's stem. */
-const DIFF_SUFFIX = '_diff';
 
 /**
  * What the preview programs and the host build they call take from the
@@ -339,7 +340,7 @@ export const runLatexdiff = (
         entry,
         path.join(
           outputDirectory,
-          generateDiffFileName(proposedPath, DIFF_SUFFIX),
+          generateDiffFileName(proposedPath, WORKSPACE_DIFF_SUFFIX),
         ),
       );
 
@@ -349,7 +350,7 @@ export const runLatexdiff = (
         {
           roots: entry.request.roots,
           cwd: entry.request.roots.workspace ?? outputDirectory,
-          suffix: DIFF_SUFFIX,
+          suffix: WORKSPACE_DIFF_SUFFIX,
           mathMarkup: 'coarse',
           subtype: options.subtype,
           outputDirectory,

@@ -87,6 +87,19 @@ All notable changes to this project will be documented in this file.
   know the subscription is live before it reads the state a signal
   announces subscribes in its own scope first, with `AppSignals`'
   `subscribe`.
+- **SDK: a trace's stream always waits for content.** `AgentTrace.openRun`
+  takes no options: its `stream.start` waits for the first chunk, and
+  `StreamOptions` is gone. `JsonRpcConnectionOptions.cancel` returns
+  `{ method, params }`, not a tuple; `TemplateVars` holds only the fixed
+  variables; a `notification` follow-up's `source` is any string; and
+  `./schemas` exports `AGENT_FILE_EXTENSION`.
+- **SDK: a tool's `ToolContext` always carries its run and requests.** A
+  tool is only ever called under a run, so `ToolEnv.run` and
+  `ToolContextShape.requests` are required, and a tool reads them as fields
+  (`const { env: { run }, requests } = yield* ToolContext`). `requireRun`
+  and `callerRun` are gone, with the "requires an active run context"
+  refusal. `ChildRuns` is a required service with no refusing default, and
+  `PluginToolServices` names it.
 - **The CLI and the SDK packages need Node.js 22.22.2 or 24.15.** The
   terminal client, `@texra-ai/harness` and `@texra-ai/llm` support Node.js
   22.22.2 or later in 22.x, or 24.15 or later; `texra doctor` reports an

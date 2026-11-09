@@ -103,8 +103,8 @@ export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
           {
             key: 'a',
             action: runGrantCliAction(grant).full,
-            // Surface-only (ruling A9-6): `approvalDecisionArm` sends it as
-            // a plain approve that grants the request's own session bypass.
+            // A separate key on screen only: `approvalDecisionArm` sends it
+            // as a plain approve that grants the request's own session bypass.
             decision: { action: APPROVE_SESSION_ACTION },
           } as const,
         ]),

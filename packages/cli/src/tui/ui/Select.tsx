@@ -1,8 +1,8 @@
 // Numbered select primitive for slash forms + future palettes.
 //
 // Renders each item with the shared POINTER glyph on the focused row and the
-// TICK glyph on the currently-active value (see ./glyphs) per
-// 2026-05-14-10-architecture.md § Intuitiveness conventions.
+// TICK glyph on the currently-active value (see ./glyphs), as every list in
+// the TUI does.
 //
 // `↑/↓` walks the rows, Enter calls `onSelect`, Esc calls `onCancel`. Items
 // receive a single-key shortcut prefix so the row can be jumped to directly:

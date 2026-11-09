@@ -68,5 +68,4 @@ export type DesktopCloseDiffMessage =
 // `{ command: 'desktop:closeDiff', previewId }` inline via `window.postMessage`,
 // since that test runs in the browser context where importing this
 // module isn't worth the bundle hit. The schema remains the source of
-// truth. No `buildDesktopCloseDiffMessage` helper is defined to avoid
-// dead code (Cursor Bugbot review on PR #3815).
+// truth; a builder for the message would have no caller, so there is none.

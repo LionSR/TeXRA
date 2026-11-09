@@ -2,8 +2,7 @@
 // webview/desktop icon set) is not available in a terminal, so the TUI renders
 // these single-column glyphs directly. They are intentionally plain, stable
 // codepoints — NOT the `figures` package, whose `pointer`/`tick` resolve to
-// `❯`/`✔` and would change the established look — picked per
-// 2026-05-14-10-architecture.md § Intuitiveness conventions.
+// `❯`/`✔` and would change the established look.
 //
 // Centralized here so every list/select/prompt uses the same marker instead of
 // re-declaring the literal in each component.

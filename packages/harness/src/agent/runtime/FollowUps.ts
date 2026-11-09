@@ -31,7 +31,7 @@ import type {
   FollowUpBatch,
   FollowUpReader,
 } from '@agent/followUp/FollowUpReader';
-import { logUserMessage } from '@agent/trace/helpers';
+import { logUserMessage } from '@agent/trace/traceLogs';
 import {
   ACTIVATED_SKILLS_MAX,
   type MediaAttachmentKind,
@@ -50,7 +50,7 @@ import {
   storedPdfPages,
   type InputPart,
 } from './run/mediaInput';
-import { blobRows } from './run/requestContext';
+import { blobRows } from './run/recordedRequest';
 import { appendRow, positionRow } from './loop/rows';
 import { hooksOf } from './loop/hooks';
 import { resolveActivations } from './loop/step';

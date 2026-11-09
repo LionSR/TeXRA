@@ -32,9 +32,9 @@ import { delegationSection } from '@agent/runtime/delegation/delegationAvailabil
 import {
   JsonValueSchema,
   qualifyAggregateId,
-  RunContextSchema,
+  PromptSectionsSchema,
   Sha256Schema,
-  type RunContext,
+  type PromptSections,
   type InvocationRef,
   type RunId,
 } from '@shared/schemas';
@@ -162,10 +162,10 @@ export function attemptRows(
  * cached prefix (tools, system, history) holds, and the system message that
  * tells the model what changed since ('' for nothing).
  */
-export function contextAt(
+export function systemTextAt(
   state: RunState,
   base: string | undefined,
-  context: RunContext,
+  context: PromptSections,
 ): { readonly system: string | undefined; readonly update: string } {
   if (state.offeredContext === null)
     return {
@@ -186,7 +186,7 @@ export function contextAt(
         ? undefined
         : stored(state, state.offeredSystem, Schema.String),
     update: contextUpdate(
-      stored(state, state.offeredContext, RunContextSchema),
+      stored(state, state.offeredContext, PromptSectionsSchema),
       context,
     ),
   };
@@ -324,7 +324,7 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
  * Vitest): read the run back from the store and die, before the prepared
  * turn `sent` goes to the provider, unless its rows rebuild it exactly.
  */
-export const checkRecordedRequest = Effect.fn('requestContext.check')(
+export const checkRecordedRequest = Effect.fn('recordedRequest.check')(
   function* (run: Pick<AgentRunShape, 'runId'>, sent: ResolvedTurn) {
     const on =
       (yield* envFlag('TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT')) ||

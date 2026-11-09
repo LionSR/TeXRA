@@ -1,7 +1,7 @@
 import { Effect, Schema } from 'effect';
 
 import {
-  requireRun,
+  ToolContext,
   executed,
   defineTool,
   withLogChannel,
@@ -38,9 +38,11 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   input: AskUserQuestionInput,
 ) {
   const {
-    run: { runId },
+    env: {
+      run: { runId },
+    },
     requests,
-  } = yield* requireRun('ask_user_question');
+  } = yield* ToolContext;
   const requestId = requests.nextId('userQuestion');
 
   yield* Effect.logInfo('User question requested').pipe(

@@ -306,7 +306,7 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
     cancel: (id, method) =>
       method === 'initialize'
         ? undefined
-        : ['notifications/cancelled', { requestId: id }],
+        : { method: 'notifications/cancelled', params: { requestId: id } },
   });
   // Once its output is read ('exit' can precede it), fail what waits on
   // the process with its exit code. Its stderr (which may hold credentials)

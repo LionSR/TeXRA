@@ -86,7 +86,7 @@ export interface AppSignalPayloads {
    * Emitted by the CLI's writers of those settings. Consumed by: the CLI chat
    * TUI's status bar, which re-reads the route and quota it shows. Not the
    * extension or desktop: their settings views repaint model options in the
-   * write's own round-trip (`sharedSettingsCommands.ts`).
+   * write's own round-trip (`settingsViewBody.ts`).
    */
   modelAccessChanged: undefined;
 
