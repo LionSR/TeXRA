@@ -74,7 +74,7 @@ export type InlineCommentCapability = 'inline-comments';
 export class InlineComments extends Context.Service<
   InlineComments,
   InlineCommentProvider
->()('@texra/tools/InlineComments') {}
+>()('@texra-ai/texra/tools/InlineComments') {}
 
 /**
  * Resolve the host's provider, failing when the host serves none. The failure

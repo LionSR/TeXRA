@@ -29,7 +29,7 @@ export interface EditorIntegrationShape {
  *  from what the host passes; `undefined` on a host without one. */
 export const EditorIntegration = Context.Reference<
   EditorIntegrationShape | undefined
->('@texra/hosts/EditorIntegration', { defaultValue: () => undefined });
+>('@texra-ai/texra/hosts/EditorIntegration', { defaultValue: () => undefined });
 
 /** The host capability a tool that needs the editor's extensions names. */
 export const EDITOR_EXTENSIONS_CAPABILITY = 'extensions';

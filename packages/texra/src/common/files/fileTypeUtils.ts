@@ -15,15 +15,9 @@ export const EXTENSION_CATEGORIES = [
   'edited',
 ] as const;
 
-const INCLUDED_EXTENSIONS: Record<ExtensionCategory, readonly string[]> = {
-  input: FILE_HANDLING_RULES.included.inputExtensions,
-  context: FILE_HANDLING_RULES.included.contextExtensions,
-  media: FILE_HANDLING_RULES.included.mediaExtensions,
-  edited: FILE_HANDLING_RULES.included.editedExtensions,
-};
-
+/** The category's included extensions, as a fresh mutable copy. */
 export function getIncludedExtensions(category: ExtensionCategory): string[] {
-  return [...INCLUDED_EXTENSIONS[category]];
+  return [...FILE_HANDLING_RULES.included[category]];
 }
 
 /**

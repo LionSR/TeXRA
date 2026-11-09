@@ -1,6 +1,6 @@
 /**
  * The table a GUI host binds behind the shared settings body
- * (`sharedSettingsCommands.ts`): everything the host performs its own way,
+ * (`settingsViewBody.ts`): everything the host performs its own way,
  * and nothing it decides.
  */
 import { Cause, Effect, PubSub } from 'effect';

@@ -28,7 +28,10 @@ import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from './latexParsingUtils';
-import { generateDiffFileName } from './latexdiff/diffFileNameManager';
+import {
+  generateDiffFileName,
+  versionControlDiffStem,
+} from './latexdiff/diffFileNameManager';
 import {
   LATEXDIFF_CHANGES_ONLY_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
@@ -305,7 +308,7 @@ export const latexdiffAgainstCommit = Effect.fn('latexdiffAgainstCommit')(
     const diffPath = path.join(
       cwd,
       parsed.dir,
-      `${parsed.name}-diff${commit}${parsed.ext}`,
+      `${versionControlDiffStem(parsed.name, commit)}${parsed.ext}`,
     );
     const diffContent = yield* readNormalizedFile(fs, diffPath);
     yield* fs.writeFileString(

@@ -10,7 +10,7 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 import type { Surface } from '@texra/shared/session/surface';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import { dispatchDisclosureToggle } from '../utils';
+import { dispatchDisclosureToggle } from './disclosureToggle';
 import type { RunId, Plan } from '@texra-ai/harness/schemas';
 
 // Web Awesome native components

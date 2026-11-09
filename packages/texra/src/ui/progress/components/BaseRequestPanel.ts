@@ -345,8 +345,6 @@ export abstract class BaseRequestPanel<
       classPrefix: 'request-grant',
       triggerId: 'request-grant-trigger',
       triggerAriaLabel: 'More approve options',
-      triggerAppearance: 'accent',
-      triggerVariant: 'brand',
       tooltip: `${grant.scope ?? grant.label} (a)`,
       items: html`<wa-dropdown-item value="grant"
         >${grant.label}</wa-dropdown-item

@@ -5,8 +5,7 @@ import {
   type ExtensionCategory,
 } from '@texra/common/files/fileTypeUtils';
 
-// Edited files have their own entry point (getEditedFileListConfig), so they
-// are not listable through getFileListConfig. The surviving vocabulary matches
+// The categories a person picks files from; the vocabulary matches
 // DocumentFileTypeSchema ('input' | 'context' | 'media').
 export type ListableFileType = Exclude<ExtensionCategory, 'edited'>;
 
@@ -31,25 +30,20 @@ function normalizeList(values: readonly string[]): string[] {
 
 const { ignored } = FILE_HANDLING_RULES;
 
-function buildInputLikeConfig(
-  category: 'input' | 'context' | 'edited',
-): FileFilterConfig {
-  return {
-    include: getIncludedExtensions(category),
-    excludeExtensions: [...ignored.fileExtensions],
-    excludeDirs: [...ignored.directories],
-    excludeKeywords: [...ignored.keywords],
-    excludeFiles: [...ignored.inputFiles],
-  };
-}
-
 export function getFileListConfig(
-  fileType: ListableFileType,
+  fileType: ExtensionCategory,
 ): FileFilterConfig {
   switch (fileType) {
     case 'input':
     case 'context':
-      return buildInputLikeConfig(fileType);
+    case 'edited':
+      return {
+        include: getIncludedExtensions(fileType),
+        excludeExtensions: [...ignored.fileExtensions],
+        excludeDirs: [...ignored.directories],
+        excludeKeywords: [...ignored.keywords],
+        excludeFiles: [...ignored.inputFiles],
+      };
     case 'media':
       return {
         include: getIncludedExtensions('media'),
@@ -59,10 +53,6 @@ export function getFileListConfig(
         excludeFiles: [],
       };
   }
-}
-
-export function getEditedFileListConfig(): FileFilterConfig {
-  return buildInputLikeConfig('edited');
 }
 
 export function prepareFileFilters(config: FileFilterConfig): FileFilterConfig {

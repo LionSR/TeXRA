@@ -235,7 +235,7 @@ export class SessionFrames extends Context.Service<
      *  of another generation is dropped. */
     readonly feed: (frame: EventsFrame | HostFrame) => Effect.Effect<void>;
   }
->()('@texra/session/SessionFrames') {
+>()('@texra-ai/texra/session/SessionFrames') {
   static readonly layer = Layer.effect(
     SessionFrames,
     Effect.gen(function* () {

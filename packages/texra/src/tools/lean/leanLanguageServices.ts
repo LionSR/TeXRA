@@ -91,4 +91,4 @@ export interface LeanLanguageServicesShape {
 export class LeanLanguageServices extends Context.Service<
   LeanLanguageServices,
   LeanLanguageServicesShape
->()('@texra/tools/LeanLanguageServices') {}
+>()('@texra-ai/texra/tools/LeanLanguageServices') {}

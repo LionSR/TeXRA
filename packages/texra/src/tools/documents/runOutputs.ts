@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 
 import { agentFileName, type RunId } from '@texra-ai/harness/schemas';
 import { HISTORY_DIR } from '@housekeeping/constants';
-import { fileNameTimestamp } from '@housekeeping/utils';
+import { fileNameTimestamp } from '@housekeeping/artifactFiles';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 
 /**

@@ -1,18 +1,15 @@
 /**
  * Markdown rendering for the progress view.
  *
- * Thin webview-side adapter around the shared KaTeX-enabled processor; only
- * the webview-specific error colour lives here.
+ * Caches one instance of the shared KaTeX-enabled processor.
  */
 
 import { createKatexHtmlProcessor } from '@ui/markdown/katexHtmlProcessor';
 
 let cachedProcess: ((content: string) => string) | null = null;
 
-/** Process markdown content with LaTeX reference protection. */
-export function processMarkdownContent(content: string): string {
-  cachedProcess ??= createKatexHtmlProcessor({
-    errorColor: 'var(--color-error)',
-  });
+/** Render markdown (with KaTeX math) to HTML, protecting LaTeX references. */
+export function renderMarkdownHtml(content: string): string {
+  cachedProcess ??= createKatexHtmlProcessor();
   return cachedProcess(content);
 }

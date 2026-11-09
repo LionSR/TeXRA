@@ -27,12 +27,14 @@ import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 import { buildToolUseSection, wrapInPre } from '../htmlBuilders';
 
 import {
-  buildTerminalSection,
-  buildToolSection,
   buildToolUseDetails,
   getToolTimeoutMs,
-} from './toolFormatters/helpers';
-import { renderToolSections } from './toolFormatters/toolSections';
+} from './toolFormatters/toolCard';
+import {
+  buildTerminalSection,
+  buildToolSection,
+  renderToolSections,
+} from './toolFormatters/toolSections';
 import type { ToolRow } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 

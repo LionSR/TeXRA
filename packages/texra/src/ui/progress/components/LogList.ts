@@ -19,7 +19,7 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
-import { getComposedPathElement } from '../utils';
+import { getComposedPathElement } from './composedPath';
 import { logStyles } from '../styles/logStyles';
 import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
 import type { StageList } from './StageList';

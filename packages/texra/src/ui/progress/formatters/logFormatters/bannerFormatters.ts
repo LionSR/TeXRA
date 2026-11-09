@@ -19,7 +19,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
-import { processMarkdownContent } from '../markdownRenderer';
+import { renderMarkdownHtml } from '../markdownRenderer';
 import { buildCopyButton, buildDetailsSummary } from '../htmlBuilders';
 import type { StreamingTextRow } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
@@ -103,7 +103,7 @@ export function formatBannerContentTemplate(
   // prettier-ignore
   const contentTemplate = isRunning
     ? html`<div class="banner-content banner-content--streaming log-entry-content ${contentClass}">${trimmedContent}</div>`
-    : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
+    : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(renderMarkdownHtml(trimmedContent))}</div>`;
 
   if (kind === 'assistant') {
     const time = formatDisplayTimestamp(new Date(timestamp), 'minute');

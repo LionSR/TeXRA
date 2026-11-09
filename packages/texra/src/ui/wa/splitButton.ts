@@ -11,7 +11,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { selectedItemValue } from './selectTemplates';
 import { waIcon } from './webAwesomeIcons';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
-import type { IconActionButtonOptions } from './actionButtons';
 
 interface SplitButtonMenuOptions {
   /** Component-specific prefix for the menu and caret-trigger classes. */
@@ -19,8 +18,6 @@ interface SplitButtonMenuOptions {
   /** Trigger button id; the tooltip anchors to it via `for`. */
   readonly triggerId: string;
   readonly triggerAriaLabel: string;
-  readonly triggerAppearance?: IconActionButtonOptions['appearance'];
-  readonly triggerVariant?: IconActionButtonOptions['variant'];
   readonly tooltip: string;
   /** The `wa-dropdown-item` entries. */
   readonly items: TemplateResult;
@@ -71,14 +68,13 @@ export const splitButtonTriggerStyles: CSSResult = css`
 /**
  * Returns the dropdown and tooltip separately for a native
  * `<wa-button-group>` caller, which must keep the tooltip outside the group so
- * the dropdown remains its trailing segment.
+ * the dropdown remains its trailing segment. The caret trigger wears the
+ * primary (accent, brand) skin of the main button it extends.
  */
 export function renderSplitButtonMenuParts({
   classPrefix,
   triggerId,
   triggerAriaLabel,
-  triggerAppearance = 'plain',
-  triggerVariant = 'neutral',
   tooltip,
   items,
   onSelect,
@@ -95,8 +91,8 @@ export function renderSplitButtonMenuParts({
           id=${triggerId}
           slot="trigger"
           class="${classPrefix}-trigger split-trigger"
-          appearance=${triggerAppearance}
-          variant=${triggerVariant}
+          appearance="accent"
+          variant="brand"
           size="s"
           type="button"
           aria-label=${triggerAriaLabel}

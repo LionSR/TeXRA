@@ -129,9 +129,12 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
 
 /** The levels each binary and slug answered, kept for the process: a probe
  *  is a spawn of up to five seconds. */
-const CodexRouteEfforts = Context.Reference('@texra/tools/CodexRouteEfforts', {
-  defaultValue: () => new Map<string, readonly ReasoningEffort[]>(),
-});
+const CodexRouteEfforts = Context.Reference(
+  '@texra-ai/texra/tools/CodexRouteEfforts',
+  {
+    defaultValue: () => new Map<string, readonly ReasoningEffort[]>(),
+  },
+);
 const codexRouteEffortLanes = new Map<string, PerKeyLane>();
 
 /** Just the shape `catalogEfforts` depends on — a `models` array. Model

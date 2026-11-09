@@ -245,6 +245,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const write = (patch: Partial<Inputs>) =>
       SubscriptionRef.updateSome(inputs, (current) =>
         Object.entries(patch).some(
+          // cast: `Object.entries` widens keys to string; `patch` is a
+          // `Partial<Inputs>`, so each key is one of `Inputs`.
           ([key, value]) => current[key as keyof Inputs] !== value,
         )
           ? Option.some({ ...current, ...patch })

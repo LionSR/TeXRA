@@ -4,7 +4,7 @@ import { html } from 'lit';
 
 import { rowHeadline, type WebSearchRow } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '@ui/progress/formatters/baseLogFormatter';
-import { buildToolUseDetails } from './helpers';
+import { buildToolUseDetails } from './toolCard';
 
 export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
   return buildToolUseDetails({

@@ -63,4 +63,4 @@ export class GitHubSubscriptions extends Context.Service<
      *  closes the sessions those deliveries reach. */
     readonly drainDeliveries: Effect.Effect<void>;
   }
->()('@texra/tools/GitHubSubscriptions') {}
+>()('@texra-ai/texra/tools/GitHubSubscriptions') {}

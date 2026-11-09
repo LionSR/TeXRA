@@ -7,7 +7,7 @@ import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
 import { holdSignals } from '@cli/runtime/platform/processSignals';
 import { stopService } from '@texra/controllers/server/client';
 import { servicePaths } from '@texra/controllers/server/discovery';
-import { ServiceProjects } from '@texra/controllers/server/handlers';
+import { ServiceProjects } from '@texra/controllers/server/service';
 import { serve } from '@texra/controllers/server/serve';
 import { PROTOCOL, type ServiceInfo } from '@texra/controllers/server/protocol';
 

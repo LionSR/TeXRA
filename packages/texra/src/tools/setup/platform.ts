@@ -84,14 +84,14 @@ export interface SetupPlatformShape {
 export class SetupPlatform extends Context.Service<
   SetupPlatform,
   SetupPlatformShape
->()('@texra/setup/SetupPlatform') {}
+>()('@texra-ai/texra/tools/SetupPlatform') {}
 
 /** Which host the setup agent runs in, as the host names itself to
  *  `texraPlugins`; the environment probe reports it. */
 export class SetupHost extends Context.Service<
   SetupHost,
   'vscode' | 'desktop' | 'cli'
->()('@texra/setup/SetupHost') {}
+>()('@texra-ai/texra/tools/SetupHost') {}
 
 /**
  * Fail with a uniform, sorted-allowlist error when `id` is not a member of

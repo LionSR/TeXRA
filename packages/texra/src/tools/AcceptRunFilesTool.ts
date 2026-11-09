@@ -215,10 +215,10 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         );
       }
       const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
-      const processFs = yield* FileSystem.FileSystem;
+      const hostFs = yield* FileSystem.FileSystem;
 
       const rawContent = yield* readNormalizedFile(
-        processFs,
+        hostFs,
         sourceLocation.absolutePath,
       ).pipe(Effect.mapError(ensureError));
       const { content: proposedContent, count: strippedCount } = strip_criticize
@@ -236,11 +236,11 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       // outputs can make source and destination the same workspace file, so
       // the pre-run snapshot is the only reliable "before" image.
       const snapshotPath = runFiles.originalSnapshotPath(dest.relativePath);
-      const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
+      const snapshotExists = yield* fileAt(hostFs, snapshotPath).pipe(
         Effect.mapError(ensureError),
       );
       const snapshotContent = snapshotExists
-        ? yield* readNormalizedFile(processFs, snapshotPath).pipe(
+        ? yield* readNormalizedFile(hostFs, snapshotPath).pipe(
             Effect.mapError(ensureError),
           )
         : undefined;

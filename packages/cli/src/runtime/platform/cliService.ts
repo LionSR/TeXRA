@@ -45,7 +45,7 @@ import type {
   ServiceLoad,
   ServiceProject,
   ServiceProjects,
-} from '@texra/controllers/server/handlers';
+} from '@texra/controllers/server/service';
 import {
   isOlder,
   linkService,

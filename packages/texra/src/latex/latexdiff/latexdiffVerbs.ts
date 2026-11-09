@@ -42,6 +42,7 @@ import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import { latexdiffPairs } from './diffOperations';
+import { WORKSPACE_DIFF_SUFFIX } from './diffFileNameManager';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,
@@ -115,7 +116,7 @@ export function latexdiffVerbs(parts: {
       latexdiff(at(baseFile), at(editedFile), {
         roots,
         cwd: roots.workspace,
-        suffix: '_diff',
+        suffix: WORKSPACE_DIFF_SUFFIX,
       }),
     );
   }, withLogChannel(CHANNEL));

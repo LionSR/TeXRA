@@ -14,11 +14,8 @@
 import { Effect } from 'effect';
 
 // Local imports
-import {
-  formatIssueClosed,
-  formatIssueComment,
-  formatIssueReopened,
-} from './formatIssueEvent';
+import { formatIssueClosed, formatIssueReopened } from './formatIssueEvent';
+import { formatCommentEvent } from './formatUtils';
 import { withSince } from './githubPaths';
 import {
   pollGet,
@@ -87,7 +84,7 @@ export const pollIssue = Effect.fn('github.pollIssue')(function* (
     commentsRes,
     dedupeComments<GhIssueComment>,
   );
-  events.push(...comments.fresh.map((c) => formatIssueComment(issue, c)));
+  events.push(...comments.fresh.map((c) => formatCommentEvent(issue, c)));
 
   return {
     next: {

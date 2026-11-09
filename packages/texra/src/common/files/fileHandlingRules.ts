@@ -1,7 +1,10 @@
+import { WORKSPACE_DIFF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
+
 /** Built-in file discovery rules. These are product behavior, not settings. */
 export const FILE_HANDLING_RULES = Object.freeze({
+  /** Extensions listed per extension category (`ExtensionCategory`). */
   included: Object.freeze({
-    mediaExtensions: Object.freeze([
+    media: Object.freeze([
       '.png',
       '.pdf',
       '.jpeg',
@@ -22,8 +25,8 @@ export const FILE_HANDLING_RULES = Object.freeze({
       '.ogg',
       '.flac',
     ]),
-    inputExtensions: Object.freeze(['.txt', '.tex', '.md']),
-    contextExtensions: Object.freeze([
+    input: Object.freeze(['.txt', '.tex', '.md']),
+    context: Object.freeze([
       '.txt',
       '.tex',
       '.md',
@@ -32,7 +35,7 @@ export const FILE_HANDLING_RULES = Object.freeze({
       '.cls',
       '.sty',
     ]),
-    editedExtensions: Object.freeze(['.txt', '.tex']),
+    edited: Object.freeze(['.txt', '.tex']),
   }),
   ignored: Object.freeze({
     fileExtensions: Object.freeze([
@@ -81,7 +84,8 @@ export const FILE_HANDLING_RULES = Object.freeze({
       'Makefile',
       'template',
       '_thinking',
-      '_diff',
+      // A latexdiff output is never a source to list.
+      WORKSPACE_DIFF_SUFFIX,
       'draw',
       'versions',
       'history',

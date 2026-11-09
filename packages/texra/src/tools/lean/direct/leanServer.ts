@@ -178,7 +178,7 @@ export class LeanServer extends Context.Service<
       filePath: string,
     ) => Effect.Effect<void, LeanSessionError>;
   }
->()('@texra/lean/LeanServer') {
+>()('@texra-ai/texra/tools/LeanServer') {
   static readonly layer = (
     options: LeanServerOptions,
   ): Layer.Layer<

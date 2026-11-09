@@ -1,5 +1,6 @@
 /**
- * Shared helpers for the tool-use and web-search formatters.
+ * The tool card: the collapsible shell the tool-use and web-search entries
+ * share, and the timeout its running timer counts toward.
  */
 
 import { Predicate } from 'effect';
@@ -11,18 +12,9 @@ import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   executionsWaitTimeoutSeconds,
 } from '@texra-ai/harness/transcript';
-import { TOOL_OUTPUT_LANGUAGES } from '@ui/progress/formatters/constants';
-import {
-  buildToolUseSection,
-  buildDetailsSummary,
-  wrapInPre,
-  buildCodeBlock,
-} from '@ui/progress/formatters/htmlBuilders';
+import { buildDetailsSummary } from '@ui/progress/formatters/htmlBuilders';
 import type { IconName } from '@ui/wa/iconNames';
 import type { TranscriptRowBase } from '@texra-ai/harness/transcript';
-
-// Side-effect import to register <terminal-output> custom element
-import '@ui/progress/components/TerminalOutput';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
@@ -99,53 +91,4 @@ export function buildToolUseDetails(opts: {
   const extraContent = html`${statusText}${opts.extraContent ?? nothing}`;
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, running: opts.running, label: opts.label, labelClass: 'tool-use-title', extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)}>${opts.content}</div></wa-details>`;
-}
-
-type ToolSectionOptions = {
-  toolName?: string;
-  language?: string;
-  extraClass?: string;
-};
-
-function toolDisplayText(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value == null) return '';
-  return String(value);
-}
-
-/**
- * Build a tool section with appropriate code highlighting based on tool type.
- */
-export function buildToolSection(
-  label: string,
-  text: unknown,
-  options: ToolSectionOptions = {},
-): TemplateResult {
-  const { toolName = '', language: contentLanguage, extraClass = '' } = options;
-  const displayText = toolDisplayText(text);
-
-  // Determine language: tool config > content metadata > plaintext
-  const language =
-    TOOL_OUTPUT_LANGUAGES.get(toolName) || contentLanguage || 'plaintext';
-  const shouldHighlight = language !== 'plaintext';
-
-  const content = shouldHighlight
-    ? buildCodeBlock(displayText, language, extraClass)
-    : wrapInPre(displayText, extraClass);
-
-  return buildToolUseSection(label, content);
-}
-
-/** Build a read-only terminal section for shell output. */
-export function buildTerminalSection(
-  label: string,
-  text: unknown,
-): TemplateResult {
-  return buildToolUseSection(
-    label,
-    html`<terminal-output
-      class="tool-output-terminal"
-      .text=${toolDisplayText(text)}
-    ></terminal-output>`,
-  );
 }

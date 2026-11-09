@@ -10,10 +10,7 @@ import { Effect } from 'effect';
 
 import { WorkspaceFs } from '@texra-ai/harness/plugins';
 import { openFirstLabelMatch } from '@latex/labelSearch';
-import {
-  getEditedFileListConfig,
-  getFileListConfig,
-} from '@texra/common/files/fileListingRules';
+import { getFileListConfig } from '@texra/common/files/fileListingRules';
 import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
 
 /**
@@ -61,7 +58,7 @@ export const workspaceFileOptions = Effect.fn(
   }
   const [baseFile, editedFile] = yield* listWorkspaceFiles({
     root: workspaceRoot,
-    configs: [getFileListConfig('input'), getEditedFileListConfig()],
+    configs: [getFileListConfig('input'), getFileListConfig('edited')],
   });
   return { baseFile, editedFile, commit: ['HEAD'] };
 });
