@@ -935,8 +935,9 @@ function seedSubagentFollowupTranscript(): void {
       '</subagent-error>',
     ].join('\n'),
   ];
-  // The run's transcript stores a delivery as its queue wrote it: the
-  // envelope's summary (`FollowUpContent.displayText`), not the envelope.
+  // The run's transcript shows a delivery as its summary
+  // (`followUpDisplay`), never its envelope; built here from the envelope's
+  // text, which reads back to the same summary.
   for (const [index, text] of followups.entries()) {
     entries.push({
       id: `harness-subagent-followup-${index}`,
@@ -1108,9 +1109,14 @@ function makeAgentProposalPayload(): AgentProposalRequest {
   });
 }
 
-/** A finished `agent` call: its card's output is the delivery envelope the
- *  parent's model reads, which no surface prints. */
+/** A finished `agent` call: its card's output text is the delivery
+ *  envelope the parent's model reads, which no surface prints; the card
+ *  shows the answer its typed `value` carries. */
 function seedAgentResultTranscript(): void {
+  const answer = [
+    'Lemma 4 needs a bound on the error term.',
+    'The rest of chapter 2 reads cleanly.',
+  ].join('\n');
   seedRows(HARNESS_RUN_ID, [
     {
       id: 'agent-result-call',
@@ -1120,13 +1126,17 @@ function seedAgentResultTranscript(): void {
       data: {
         toolName: 'agent',
         input: { agentName: 'review', prompt: 'Review chapter 2.' },
-        output: [
-          '<subagent-result id="aaaa0009f10e" agent="review" status="completed">',
-          '<wall-time>2m 4s</wall-time>',
-          '<response>Lemma 4 needs a bound on the error term.',
-          'The rest of chapter 2 reads cleanly.</response>',
-          '</subagent-result>',
-        ].join('\n'),
+        output: {
+          output: [
+            '<subagent-result id="aaaa0009f10e" agent="review" status="completed">',
+            '<wall-time>124.0s</wall-time>',
+            '<response>',
+            answer,
+            '</response>',
+            '</subagent-result>',
+          ].join('\n'),
+          value: { response: answer, files: [], runId: 'aaaa0009f10e' },
+        },
         summary: "Completed 'review'",
         status: TOOL_CALL_STATUS.COMPLETED,
       },
@@ -1317,9 +1327,9 @@ seedRun(HARNESS_RUN_ID);
 focusRun(HARNESS_RUN_ID);
 rootRunId.set(HARNESS_RUN_ID);
 seedRows(HARNESS_RUN_ID, harnessInitialEntries());
-// Built as the run's inbox builds them (`queuedRow`), so a delivery carries
-// the summary (`displayText`) every surface shows and a message from the user
-// is kept as typed.
+// Built as the run's inbox builds them (`queuedRow`): a run's envelope text
+// carries the summary (`displayText`) every surface shows, and a message
+// from the user is kept as typed.
 publish(
   ...[
     ...QUEUED_FOLLOW_UPS.map((text) => ({

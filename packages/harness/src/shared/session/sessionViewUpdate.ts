@@ -46,6 +46,7 @@ import {
 import { getModelLabel } from '@shared/model/modelLabel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
+import { followUpDisplay } from '@shared/subagentFollowup';
 import { isSettledRow, rowHeadline } from '../transcript/transcriptRow';
 import {
   applyRunRow,
@@ -905,7 +906,7 @@ function projectFollowUps(u: Update, runId: RunId, rows: SharedRunRows) {
     runId,
     messages.map((f) => ({
       followUpId: f.followUpId,
-      text: f.content.displayText ?? f.content.text,
+      text: followUpDisplay(f.content).text,
     })),
   );
 }

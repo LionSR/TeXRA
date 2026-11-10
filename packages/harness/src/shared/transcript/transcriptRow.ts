@@ -91,8 +91,8 @@ export interface StreamingTextRow extends TranscriptRowBase {
 
 export interface UserRow extends TranscriptRowBase {
   readonly kind: 'user';
-  /** The message as its follow-up shows it: a delivery or notice is its
-   *  summary (`FollowUpContent.displayText`), not its envelope. */
+  /** The message as its follow-up shows it (`followUpDisplay`): a delivery
+   *  or notice is its summary, not its envelope. */
   readonly text: TranscriptText;
   /** A script delivery's facts, typed. */
   readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>;

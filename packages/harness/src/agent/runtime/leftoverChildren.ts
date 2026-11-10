@@ -18,13 +18,12 @@ import { checkpointRefusal } from '@agent/storage/resumability';
 import { deliveryId, endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runOwnership';
 import { withLogChannel } from '@logger/effectLog';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { RunView } from '@shared/session/sessionView';
 import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
 
-import { formatDelivery } from './deliveryEnvelope';
 import { resumeRun } from './resumeRun';
 import { AgentRun, type RunLaunch } from './run/AgentRun';
 import { Runs } from './runRegistry';
@@ -37,11 +36,11 @@ const warn = (message: string, data: unknown) =>
     withLogChannel(CHANNEL),
   );
 
-/** The envelope a child's kind delivers its failure in. */
-const TAG_OF = {
-  process: DELIVERY_TAG.backgroundError,
-  script: DELIVERY_TAG.scriptError,
-  agent: DELIVERY_TAG.subagentError,
+/** The family a child's kind delivers in. */
+const FAMILY_OF = {
+  process: DELIVERY_FAMILY.background,
+  script: DELIVERY_FAMILY.script,
+  agent: DELIVERY_FAMILY.subagent,
 } as const;
 
 /**
@@ -60,25 +59,26 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
 ) {
   const noun =
     child.identity.kind === 'process' ? 'command' : child.identity.kind;
-  const text = formatDelivery({
-    tag: TAG_OF[child.identity.kind],
+  const message = `The process running this ${noun} stopped before it finished${why === 'finished' ? '' : `, and it could not be resumed (${why})`}, so its outcome is unknown. Check what it changed before running it again.`;
+  const delivery = {
+    family: FAMILY_OF[child.identity.kind],
     runId: child.id,
     attributes:
       child.command === null ? [] : [{ name: 'command', value: child.command }],
-    message: `The process running this ${noun} stopped before it finished${why === 'finished' ? '' : `, and it could not be resumed (${why})`}, so its outcome is unknown. Check what it changed before running it again.`,
-  });
+    message,
+  };
   if (facts.end === null) {
     yield* endRunRows({
       runId: child.id,
       outcome: RUN_OUTCOME.FAILED,
-      error: { kind: 'unexpected', message: text },
-      report: text,
+      error: { kind: 'unexpected', message },
+      report: delivery,
     });
     return;
   }
   if (parent === null) return;
   const sent = yield* (yield* Inbox).send(parent, {
-    text,
+    delivery,
     from: { kind: 'run', runId: child.id },
     deliveryId: deliveryId(child.id, facts),
   });

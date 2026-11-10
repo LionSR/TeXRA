@@ -1,16 +1,12 @@
 /**
- * Formatting utilities for background-bash result delivery.
- *
- * Format helpers convert a completed or failed background bash run into
- * structured XML strings for follow-up delivery to the orchestrator,
- * including a tail/head excerpt of each stream projected from the run's
- * `process.output` rows.
+ * What a background bash run delivers to the orchestrator: its exit and a
+ * tail/head excerpt of each stream projected from the run's
+ * `process.output` rows, or its failure.
  */
 
-import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 
-import type { DisplayRow, ExecResult } from '@shared/schemas';
+import type { ChildRunDelivery, DisplayRow, ExecResult } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -48,8 +44,8 @@ const callAttributes = ({ command, description }: BackgroundBashCall) => [
 ];
 
 /**
- * Format a completed background bash result as a delivery message.
- * Queued as a follow-up for the orchestrator.
+ * A completed background bash result's delivery, queued as a follow-up for
+ * the orchestrator.
  *
  * Each stream's excerpt is projected from `rows`, the run's display rows
  * once every output row it published is committed: its text is its
@@ -57,21 +53,14 @@ const callAttributes = ({ command, description }: BackgroundBashCall) => [
  * the gap (`elided`) starts the stream's last window, and the rows before
  * it are the stream's first characters.
  */
-export function formatBashDelivery(
+export function bashResultDelivery(
   runId: string,
   call: BackgroundBashCall,
   wallTimeMs: number,
   result: ExecResult,
   rows: readonly DisplayRow[],
-): string {
-  const lines = [
-    `<exit-code>${result.exitCode}</exit-code>`,
-    // The code above is synthetic when the process timed out or its exit
-    // status was lost; say which, so no reader takes it for a real exit.
-    ...(result.timedOut ? ['<timed-out>true</timed-out>'] : []),
-    ...(result.noExitCode ? ['<no-exit-code>true</no-exit-code>'] : []),
-    `<wall-time>${(wallTimeMs / 1000).toFixed(1)}s</wall-time>`,
-  ];
+): ChildRunDelivery {
+  const lines: string[] = [];
   const outputStreams = [
     ['output', 'stdout'],
     ['stderr', 'stderr'],
@@ -115,26 +104,30 @@ export function formatBashDelivery(
       lines.push(`<${name}-preview>${escapeText(preview)}</${name}-preview>`);
     }
   }
-  return formatDelivery({
-    tag: DELIVERY_TAG.backgroundResult,
+  return {
+    family: DELIVERY_FAMILY.background,
     runId,
     attributes: callAttributes(call),
+    exit: {
+      code: result.exitCode,
+      timedOut: result.timedOut,
+      noExitCode: result.noExitCode === true,
+    },
+    wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
     lines,
-  });
+  };
 }
 
-/**
- * Format a failed background bash result as a delivery message.
- */
-export function formatBashError(
+/** A failed background bash run's delivery. */
+export function bashErrorDelivery(
   runId: string,
   call: BackgroundBashCall,
   err: unknown,
-): string {
-  return formatDelivery({
-    tag: DELIVERY_TAG.backgroundError,
+): ChildRunDelivery {
+  return {
+    family: DELIVERY_FAMILY.background,
     runId,
     attributes: callAttributes(call),
     message: toErrorMessage(err),
-  });
+  };
 }

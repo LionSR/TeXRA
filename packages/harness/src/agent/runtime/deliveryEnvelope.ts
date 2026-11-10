@@ -1,80 +1,54 @@
 /**
- * Shared XML envelope formatting for child-run deliveries — the one
- * result/error builder for every child path: native subagents
- * (`formatSubagentDelivery`/`formatSubagentError` in subagentResults.ts),
- * background bash (bashDelivery.ts), background scripts (scriptRun.ts)
- * and a plugin's tools that run a child of their own (an agent CLI's).
+ * The one renderer of a child run's delivery as the XML envelope its
+ * parent's model reads, for every child path: native subagents
+ * (childDelivery.ts), background bash (bashDelivery.ts), background scripts
+ * (scriptRun.ts) and a plugin's tools that run a child of their own (an
+ * agent CLI's). A delivery travels typed (`ChildRunDelivery`, on its
+ * parent's `followup.queued` row) and is rendered here where it becomes that
+ * model's message, and as the child's stored report.
  *
  * The child drivers decide what facts belong in the payload; callers differ
- * only in tag, id attributes, and the facts they pass. This module owns the
+ * only in family, attributes, and the facts they pass. This module owns the
  * repetitive boundary mechanics: ordered attributes, XML escaping,
- * opening/closing tags, and the shared body elements (wall-time, response,
- * usage, caller lines, message). A result and an error are the same envelope
- * over different facts — an error is the one that carries `message` — so
- * there is one builder rather than a result/error pair whose bodies drift.
+ * opening/closing tags, and the shared body elements. A result and an error
+ * are the same envelope over different facts — an error is the one that
+ * carries `message` — so there is one renderer rather than a result/error
+ * pair whose bodies drift.
  */
 
 // Local imports
-import { deliveryTagOf } from '@shared/subagentFollowup';
+import type { ChildRunDelivery } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 /** Maximum prompt length echoed back in a delivery/error XML attribute. */
 const DELIVERY_PROMPT_MAX = 200;
 
 /**
- * One child-run delivery: the envelope's identity followed by the facts its
- * driver selected. Every fact is optional; the body renders those present, in
- * the fixed order declared below, so two drivers reporting the same fact
- * always render it the same way and in the same place.
- */
-export interface ChildRunDelivery {
-  /** Root element name (`subagent-result`, `background-error`, …). A
-   *  plugin's is `<family>-result` or `<family>-error`, `family` being
-   *  lowercase words joined by `-`: every render surface recognizes that
-   *  shape as a delivery, so a plugin registers no tag. */
-  readonly tag: string;
-  readonly runId: string;
-  /** Echoed prompt attribute, for a child that took a prompt; truncated before escaping. */
-  readonly prompt?: string;
-  /**
-   * Attributes rendered after id/prompt (`agent`, `status`, `thread-id`, …).
-   * Null/undefined values are dropped by the envelope.
-   */
-  readonly attributes?: readonly {
-    readonly name: string;
-    readonly value: string | number | boolean | null | undefined;
-  }[];
-  /** Pre-rendered wall-time body text (`1.2s`). */
-  readonly wallTime?: string;
-  /** Final assistant response as one inline element; empty → `(no response)`. */
-  readonly response?: string;
-  /** Token usage element; omitted when null/undefined. */
-  readonly usage?: {
-    readonly inputTokens: number;
-    readonly outputTokens: number;
-  } | null;
-  /** Pre-rendered fact lines appended after the shared elements. */
-  readonly lines?: readonly string[];
-  /** Failure text; its presence is what makes this delivery an error report. */
-  readonly message?: string;
-}
-
-/**
- * Build the `<...-result>` / `<...-error>` XML delivered to the parent's
- * follow-up queue when a child run's turn settles.
+ * The `<family>-result` / `<family>-error` XML of a delivery: its id and
+ * prompt, its attributes, then the facts present, in the fixed order its
+ * schema declares, so two drivers reporting the same fact always render it
+ * the same way and in the same place.
  */
 export function formatDelivery(delivery: ChildRunDelivery): string {
-  const attributes = [
+  const tag = `${delivery.family}-${delivery.message === undefined ? 'result' : 'error'}`;
+  const attrs = [
     { name: 'id', value: delivery.runId },
     { name: 'prompt', value: delivery.prompt?.slice(0, DELIVERY_PROMPT_MAX) },
     ...(delivery.attributes ?? []),
-  ];
-  const attrs = attributes
+  ]
     .filter((attr) => attr.value != null)
     .map((attr) => `${attr.name}="${escapeAttr(String(attr.value))}"`)
     .join(' ');
 
+  const { exit, output } = delivery;
   const body: string[] = [];
+  if (exit !== undefined) {
+    body.push(`<exit-code>${exit.code}</exit-code>`);
+    // The code is a conventional one when the process timed out or its exit
+    // status was lost; say which, so no reader takes it for a real exit.
+    if (exit.timedOut) body.push('<timed-out>true</timed-out>');
+    if (exit.noExitCode) body.push('<no-exit-code>true</no-exit-code>');
+  }
   if (delivery.wallTime !== undefined) {
     body.push(`<wall-time>${delivery.wallTime}</wall-time>`);
   }
@@ -88,18 +62,27 @@ export function formatDelivery(delivery: ChildRunDelivery): string {
       `<usage input="${delivery.usage.inputTokens}" output="${delivery.usage.outputTokens}" />`,
     );
   }
+  if (delivery.summary !== undefined) {
+    body.push(
+      `<script-summary>${escapeText(JSON.stringify(delivery.summary))}</script-summary>`,
+    );
+  }
   if (delivery.lines) body.push(...delivery.lines);
+  if (output !== undefined) {
+    if (output.response) {
+      body.push('<response>', escapeText(output.response), '</response>');
+    }
+    if (output.files.length > 0) {
+      body.push(
+        '<touched-files>',
+        ...output.files.map((file) => `<file path="${escapeAttr(file)}" />`),
+        '</touched-files>',
+      );
+    }
+  }
   if (delivery.message !== undefined) {
     body.push(`<message>${escapeText(delivery.message)}</message>`);
   }
 
-  const open = attrs ? `<${delivery.tag} ${attrs}>` : `<${delivery.tag}>`;
-  const xml = [open, ...body, `</${delivery.tag}>`].join('\n');
-  // A tag outside the recognized shapes would reach every render surface as
-  // raw XML, so its producer fails at once instead.
-  if (deliveryTagOf(xml) !== delivery.tag)
-    throw new Error(
-      `"${delivery.tag}" is not a delivery tag: a plugin's is <family>-result or <family>-error, family in lowercase words joined by "-".`,
-    );
-  return xml;
+  return [`<${tag} ${attrs}>`, ...body, `</${tag}>`].join('\n');
 }

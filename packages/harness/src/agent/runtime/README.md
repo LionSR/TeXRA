@@ -63,8 +63,9 @@ is the module map by concern. Run-loop rules are in
   type); `childTurnResult` (a child turn's rows and its delivery to the
   parent, in one transaction); `childRunBudget` (per-session concurrency);
   `ModelRetryGate` (process-shared recovery probes per model route);
-  `nativeSubagentStrategy`; `scriptRun`; `recipeResult`; `subagentResults` and
-  `deliveryEnvelope` (the XML envelope every child path builds);
+  `nativeSubagentStrategy`; `scriptRun`; `recipeResult`; `childDelivery`
+  (what a child's end delivers, typed) and `deliveryEnvelope` (the one
+  renderer of a delivery's XML envelope);
   `delegation/` (the child launches: the `agent` tool and `ChildRuns`, a
   detached or process child, and which models a child may use).
 - **Control**: `runApprovalQueue` (a run's grants); `requests` (a run's

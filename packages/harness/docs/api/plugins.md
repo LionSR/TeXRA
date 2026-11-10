@@ -420,43 +420,10 @@ type ChildLaunch = {
 
 ## ChildRunDelivery
 
-One child-run delivery: the envelope's identity followed by the facts its
-driver selected. Every fact is optional; the body renders those present, in
-the fixed order declared below, so two drivers reporting the same fact
-always render it the same way and in the same place.
+A child run's report to its parent ({@link ChildRunDeliverySchema}).
 
 ```ts
-interface ChildRunDelivery {
-  /** Root element name (`subagent-result`, `background-error`, …). A
-   *  plugin's is `<family>-result` or `<family>-error`, `family` being
-   *  lowercase words joined by `-`: every render surface recognizes that
-   *  shape as a delivery, so a plugin registers no tag. */
-  readonly tag: string;
-  readonly runId: string;
-  /** Echoed prompt attribute, for a child that took a prompt; truncated before escaping. */
-  readonly prompt?: string;
-  /**
-   * Attributes rendered after id/prompt (`agent`, `status`, `thread-id`, …).
-   * Null/undefined values are dropped by the envelope.
-   */
-  readonly attributes?: readonly {
-    readonly name: string;
-    readonly value: string | number | boolean | null | undefined;
-  }[];
-  /** Pre-rendered wall-time body text (`1.2s`). */
-  readonly wallTime?: string;
-  /** Final assistant response as one inline element; empty → `(no response)`. */
-  readonly response?: string;
-  /** Token usage element; omitted when null/undefined. */
-  readonly usage?: {
-    readonly inputTokens: number;
-    readonly outputTokens: number;
-  } | null;
-  /** Pre-rendered fact lines appended after the shared elements. */
-  readonly lines?: readonly string[];
-  /** Failure text; its presence is what makes this delivery an error report. */
-  readonly message?: string;
-}
+type ChildRunDelivery = typeof ChildRunDeliverySchema.Type;
 ```
 
 ## ChildRuns
@@ -773,15 +740,6 @@ type FollowUpSenderInput =
   | { readonly kind: 'run'; readonly runId: RunId };
 ```
 
-## formatDelivery
-
-Build the `<...-result>` / `<...-error>` XML delivered to the parent's
-follow-up queue when a child run's turn settles.
-
-```ts
-function formatDelivery(delivery: ChildRunDelivery): string
-```
-
 ## formatToolOutput
 
 Format tool output with a header and content.
@@ -855,15 +813,21 @@ class HostCapabilities extends Context.Service<
 
 ## InboxItem
 
-One message a producer sends.
+One message a producer sends: a text, with what surfaces show instead
+(`displayText`) and a user's media (e.g. pasted images) with its blobs
+(`attachedMedia`); or a child's delivery to its parent, whose facts its
+row keeps typed.
 
 ```ts
-interface InboxItem {
-  readonly text: string;
-  readonly displayText?: string;
-  /** A user's media (e.g. pasted images) and its blobs (`attachedMedia`). */
-  readonly media?: QueuedFollowUp['content']['media'];
-  readonly blobs?: readonly DraftBlob[];
+type InboxItem = (
+  | {
+      readonly text: string;
+      readonly displayText?: string;
+      readonly media?: readonly StoredMedia[];
+      readonly blobs?: readonly DraftBlob[];
+    }
+  | { readonly delivery: ChildRunDelivery }
+) & {
   readonly from: FollowUpSenderInput;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
@@ -874,7 +838,7 @@ interface InboxItem {
    *  is its `sentFollowUpId`): a retry under it answers with the first
    *  send's receipt, another message under it fails `Conflict`. */
   readonly caller?: string;
-}
+};
 ```
 
 ## isTransientHttpStatus
@@ -1465,8 +1429,8 @@ What one process turn reports as it returns.
 
 ```ts
 interface ProcessReport {
-  /** The delivery its parent reads (`formatDelivery`). */
-  readonly report: string;
+  /** The delivery its parent reads, typed. */
+  readonly report: ChildRunDelivery;
   /** How a command exited, recorded as the run's `process.exit` row: a
    *  code other than 0 ends the run failed, its report still delivered. */
   readonly exit?: ProcessExit;
@@ -1489,7 +1453,7 @@ interface ProcessTurn {
    *  (`Effect.abortSignal`). */
   readonly run: Effect.Effect<ProcessReport, Error, PlatformServices>;
   /** The delivery of a turn that threw. */
-  readonly reportError: (error: Error) => string;
+  readonly reportError: (error: Error) => ChildRunDelivery;
 }
 ```
 

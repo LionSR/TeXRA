@@ -73,7 +73,10 @@ interface SubmitFollowUpOptions extends RunInboxSendOptions {
   readonly hold?: 'turn';
   /** The message's media, read in the run's send lane once the message is
    *  accepted, so a slow read never lets a later message commit first. */
-  readonly attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>;
+  readonly attach?: Effect.Effect<
+    Pick<Extract<InboxItem, { readonly text: string }>, 'media' | 'blobs'>,
+    Error
+  >;
   /** The keys the run resumes with if the message wakes it: the sending
    *  client's (`followUp.send`'s `apiKeys`), never another run's. */
   readonly apiKeys?: Readonly<Record<string, string>>;

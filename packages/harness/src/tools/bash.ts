@@ -16,8 +16,8 @@ import {
 import {
   BACKGROUND_OUTPUT_HEAD_CHARS,
   BACKGROUND_OUTPUT_TAIL_CHARS,
-  formatBashDelivery,
-  formatBashError,
+  bashErrorDelivery,
+  bashResultDelivery,
   type BackgroundBashCall,
 } from '@agent/runtime/delegation/bashDelivery';
 import {
@@ -268,7 +268,7 @@ function backgroundBashTurn(params: {
     // exit code, which the run's end reads as its failure, its output still
     // delivered. A timeout, a signal and a spawn failure answer no 0.
     return {
-      report: formatBashDelivery(runId, call, wallTimeMs, result, rows),
+      report: bashResultDelivery(runId, call, wallTimeMs, result, rows),
       exit: {
         code: result.noExitCode === true ? null : result.exitCode,
         timedOut: result.timedOut,
@@ -278,7 +278,7 @@ function backgroundBashTurn(params: {
 
   return {
     run,
-    reportError: (error) => formatBashError(runId, call, error),
+    reportError: (error) => bashErrorDelivery(runId, call, error),
   };
 }
 

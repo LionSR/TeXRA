@@ -33,7 +33,6 @@ import {
   type ToolUseLog,
 } from '@texra-ai/harness/schemas';
 import {
-  formatDelivery,
   ToolError,
   type AgentTrace,
   type PluginToolServices,
@@ -362,27 +361,23 @@ function buildClaudeAgentTurn(params: {
     turnErrorMessage: (turn) =>
       turn.errorMessage ||
       'Claude Code reported a failed turn without throwing.',
-    formatDelivery: (turn, wallTimeMs) =>
-      formatDelivery({
-        tag: 'claude-agent-result',
-        runId,
-        prompt,
-        attributes: [{ name: 'session-id', value: turn.sessionId || null }],
-        wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
-        response: turn.finalResponse,
-        usage: turn.usage,
-        lines: claudeCostLines(turn),
-      }),
-    formatError: (turn, err) =>
-      formatDelivery({
-        tag: 'claude-agent-error',
-        runId,
-        prompt,
-        lines: turn ? claudeCostLines(turn) : undefined,
-        message: toErrorMessage(
-          err ?? turn?.errorMessage ?? turn?.finalResponse,
-        ),
-      }),
+    delivery: (turn, wallTimeMs) => ({
+      family: 'claude-agent',
+      runId,
+      prompt,
+      attributes: [{ name: 'session-id', value: turn.sessionId || null }],
+      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      response: turn.finalResponse,
+      usage: turn.usage,
+      lines: claudeCostLines(turn),
+    }),
+    errorDelivery: (turn, err) => ({
+      family: 'claude-agent',
+      runId,
+      prompt,
+      lines: turn ? claudeCostLines(turn) : undefined,
+      message: toErrorMessage(err ?? turn?.errorMessage ?? turn?.finalResponse),
+    }),
   });
 }
 
