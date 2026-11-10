@@ -403,9 +403,11 @@ export function stepHooks(
         names,
         goneBefore,
       );
-      // `duration_ms` is the body's alone: timed after approval and PreToolUse.
-      let startedAt: number | undefined;
-      const bodyStarts = Effect.map(Clock.currentTimeMillis, (now) => {
+      // `duration_ms` runs from the body's start (after approval and
+      // PreToolUse) to its result's PostToolUse, on the monotonic clock,
+      // which a step of the wall clock cannot make negative.
+      let startedAt: bigint | undefined;
+      const bodyStarts = Effect.map(Clock.monotonicTimeNanos, (now) => {
         startedAt = now;
       });
       const after = Effect.fn('Hooks.postToolUse')(function* (
@@ -424,7 +426,12 @@ export function stepHooks(
             tool_response: result,
             ...(startedAt === undefined
               ? {}
-              : { duration_ms: (yield* Clock.currentTimeMillis) - startedAt }),
+              : {
+                  duration_ms: Number(
+                    ((yield* Clock.monotonicTimeNanos) - startedAt) /
+                      1_000_000n,
+                  ),
+                }),
           },
           names,
         );
