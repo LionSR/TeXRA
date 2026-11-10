@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a child run's result is data.** A process child's turn returns its
+  report as a `ChildRunDelivery` (`ProcessReport.report`), and
+  `ProcessTurn.reportError` builds one from the error. A queued message's
+  content (`FollowUpContent`) is a message or a delivery, and
+  `formatDelivery` is no longer exported: the harness renders a delivery
+  where its parent reads it.
+- **SDK: a plugin's request decision commits with its effects.**
+  `RequestDecisionHook.record` returns a `RequestDecisionRecord` (its
+  `facts` and an optional `followUp`), which the harness commits with the
+  decision in one transaction, in place of the `inbox` and `commit`
+  callbacks it was given.
+- **SDK: a request names what may answer it.** A request carries
+  `answeredBy` (`AnsweredBy`: `person`, or the grant that answers it), and
+  `offeredGrant` reads it; no request payload carries `offersGrant`.
+  `CallRequests.open` takes `{ blobs, operation }` as its second argument,
+  where it took the blobs alone.
+- **SDK: a refused message carries its words.** `SubmitFollowUpResult`'s
+  `failed` case (from `RunInbox.send`) is `{ message }`, the sentence to
+  show, in place of a `reason` kind.
 - **SDK: `readMcpConfig` reads through the `FileSystem` in context, and
   `MemoryStore` pins and unpins in two calls.** `readMcpConfig(file)` takes
   no file system and requires `FileSystem` instead. `MemoryStore.pin(input)`
@@ -1731,6 +1750,27 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A task launched to run once is never resumed to wait for messages.**
+  Resumed in a chat or a window, such a task waited for a message that
+  every send then refused with "Resume it". It now runs its cycle and ends,
+  and a message to it says it ran once and suggests continuing it as a
+  fork.
+- **A resume sent as a task ends continues it.** A resume that arrived just
+  after a task ended returned the ended task and did nothing; it now
+  resumes the task.
+- **A background command whose output could not be saved ends failed.** It
+  ended completed with part of its log missing; it now ends failed and
+  says rows it published were not written, as an agent's task does.
+- **"Approve all agent work" answers a plan or a non-shell command that is
+  already waiting.** Turned on while such an approval waited, it left the
+  approval waiting, though it approved the same request when it was on
+  before the request opened. A non-shell command's approval card now
+  offers it too. An approval still open when its window closes is asked
+  again when the task resumes, instead of ending the turn as cancelled.
+- **An answer to a plugin's question is recorded with what it causes.** A
+  plugin's question answered as its task ended could reach the task while
+  the window said there was no pending question; the answer, the facts it
+  records and the message it sends now commit together.
 - **An agent whose template file cannot be read is reported, not run
   without it.** A task that names a file in `task.files` that is missing or
   unreadable is listed as an issue on the Agents page and in `texra agents`,
