@@ -271,7 +271,7 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
         path.join(home, '.texra', 'v1', 'global-storage', 'texra.db'),
       );
       db.prepare(
-        "INSERT OR REPLACE INTO current_value (family, key, version, value, at) VALUES ('app-state', 'texra.codeMode.scriptOnly', 1, 'true', ?)",
+        "INSERT OR REPLACE INTO current_value (family, key, value, at) VALUES ('app-state', 'texra.codeMode.scriptOnly', 'true', ?)",
       ).run(Date.now());
       db.close();
     }

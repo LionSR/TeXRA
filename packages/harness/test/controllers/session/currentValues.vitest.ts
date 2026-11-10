@@ -36,8 +36,8 @@ it.live(
         disableWAL: true,
       });
       yield* sql.unsafe(
-        `CREATE TABLE current_value (family TEXT, key TEXT, version INTEGER,
-       value TEXT, at INTEGER, PRIMARY KEY (family, key))`,
+        `CREATE TABLE current_value (family TEXT, key TEXT, value TEXT,
+       at INTEGER, PRIMARY KEY (family, key))`,
       );
       const committed = yield* Deferred.make<void>();
       const releaseCommit = yield* Deferred.make<void>();

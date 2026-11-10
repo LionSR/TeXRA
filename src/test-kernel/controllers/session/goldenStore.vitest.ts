@@ -451,7 +451,6 @@ describe('the golden 1.0 store', () => {
       const stateOf = (id: RunId) =>
         Effect.map(runHistory.load(id), (state) => ({
           at: state?.at,
-          phase: state?.phase,
           modelId: state?.modelId,
           messages: state?.messages.map((message) => message.role),
           openAttempt: state?.invocation != null,
@@ -461,7 +460,6 @@ describe('the golden 1.0 store', () => {
       // no message), so no user message joined the cycle.
       expect(yield* stateOf(PARENT)).toEqual({
         at: 'waiting',
-        phase: 'waiting',
         modelId: 'openai/gpt-5.6-sol',
         messages: [
           'user',

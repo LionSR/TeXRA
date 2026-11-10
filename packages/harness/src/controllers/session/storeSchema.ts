@@ -30,7 +30,7 @@ import {
 const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
-const SCHEMA_VERSION = 104;
+const SCHEMA_VERSION = 105;
 /** The first stamp a released build wrote. Fixed for good: a store stamped
  *  below it is pre-1.0 and moved aside; one at or above it is kept. */
 const BASELINE_1_0 = 102;
@@ -95,7 +95,6 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS current_value (
     family  TEXT NOT NULL,
     key     TEXT NOT NULL,
-    version INTEGER NOT NULL CHECK (version >= 1),
     value   TEXT NOT NULL,
     at      INTEGER NOT NULL,
     PRIMARY KEY (family, key)

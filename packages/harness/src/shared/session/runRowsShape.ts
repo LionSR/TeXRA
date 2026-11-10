@@ -31,7 +31,11 @@ type RequestState = {
  * fields `applyRunRow` returns onto itself.
  */
 export type RunRowState = {
-  /** Where the loop stands. */
+  /** Where the loop stands: its newest `run.position`'s, null until the
+   *  first opens the run (its opening batch's `turn.ready`, or a fork's
+   *  `waiting`). A stop writes none, so a resume continues from the one it
+   *  names. Between turns is `waiting` or `turn.end`; `turn.ready` is input
+   *  taken while waiting, for a turn that has not begun. */
   readonly at: PositionAt | null;
   readonly turn: number;
   /** By request id, in the order the rows opened them. */

@@ -14,7 +14,6 @@ import { ancestryRows, runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow } from '@shared/session/runFacts';
-import type { Conflict } from '@shared/session/runtimeRequest';
 import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
 import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
@@ -25,11 +24,7 @@ import type {
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 import { FollowUpReader, needsWake } from './FollowUpReader';
-import {
-  queuedRow,
-  sameAsFirst,
-  type FollowUpSenderInput,
-} from './followUpMessages';
+import { queuedRow, type FollowUpSenderInput } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
@@ -115,7 +110,7 @@ export class SessionInbox {
     runId: RunId,
     item: InboxItem,
     options: SendOptions = {},
-  ): Effect.Effect<Sent, LogWriteError | DatabaseReadFailed | Conflict> {
+  ): Effect.Effect<Sent, LogWriteError | DatabaseReadFailed> {
     if (this.disposed) return Effect.succeed(CLOSED);
     return this.port.log.transact((tx) =>
       this.admit(runId, item, options, tx.append),
@@ -243,21 +238,21 @@ export class SessionInbox {
     item: InboxItem,
     options: SendOptions,
     append: Append,
-  ) => Effect.Effect<Sent, LogWriteError | DatabaseReadFailed | Conflict> =
-    Effect.fn('SessionInbox.admit')(
-      { self: this },
-      function* (
-        runId: RunId,
-        item: InboxItem,
-        options: SendOptions,
-        append: Append,
-      ) {
-        const { rows, sent } = yield* this.admission(runId, item, options);
-        if (rows.length > 0) yield* append(rows);
-        return sent;
-      },
-      Effect.scoped,
-    );
+  ) => Effect.Effect<Sent, LogWriteError | DatabaseReadFailed> = Effect.fn(
+    'SessionInbox.admit',
+  )(
+    { self: this },
+    function* (
+      runId: RunId,
+      item: InboxItem,
+      options: SendOptions,
+      append: Append,
+    ) {
+      const { rows, sent } = yield* this.admission(runId, item, options);
+      if (rows.length > 0) yield* append(rows);
+      return sent;
+    },
+  );
 
   /** One send decided in the caller's job: the row the job appends with
    *  its own, and how it landed (see {@link send}). */
@@ -265,7 +260,7 @@ export class SessionInbox {
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
-  ): Effect.Effect<Admission, DatabaseReadFailed | Conflict, Scope.Scope> {
+  ): Effect.Effect<Admission, DatabaseReadFailed> {
     const closed = (input: RunRowsRead<'input'>) =>
       this.disposed || (!this.readers.has(runId) && input.inputClosed);
     const only = (sent: Sent): Admission => ({ rows: [], sent });
@@ -299,8 +294,8 @@ export class SessionInbox {
           sent: yield* landed(false),
         };
       }
-      if (item.caller !== undefined)
-        yield* sameAsFirst(this.port.log, runId, row, item.caller);
+      // A caller's id that is queued or taken was answered before the send
+      // by `sentBefore`, in the same per-run lane.
       return queuedStill
         ? { rows: [], sent: yield* landed(true) }
         : only({ kind: 'duplicate' });

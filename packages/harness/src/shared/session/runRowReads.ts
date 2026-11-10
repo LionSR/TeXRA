@@ -139,8 +139,9 @@ export function foldRunRows<R extends RunRowRead>(
   );
 }
 
-/** The kinds a run's record reads, each handled by {@link recordAfter}:
- *  what a store selects to read a record. */
+/** The kinds a run's record reads: what a store selects to read a record.
+ *  {@link recordAfter} has a case for each and for no other, which the
+ *  compiler holds both ways. */
 export const RECORD_ROW_TYPES = [
   'run.start',
   'approval.policy',
@@ -185,6 +186,7 @@ export const NO_RUN_ROWS: RunRows = Object.freeze({
  * each title's author gives the same record as all its rows do.
  */
 export function recordAfter(record: RunRows, row: SessionRow): RunRows {
+  if (!isRecordRow(row)) return record;
   switch (row.type) {
     case 'run.start':
       return {
@@ -233,10 +235,14 @@ export function recordAfter(record: RunRows, row: SessionRow): RunRows {
             label: row,
             title: record.title?.by === 'user' ? record.title : row,
           };
-    default:
-      return record;
   }
 }
+
+const RECORD_KINDS: readonly string[] = RECORD_ROW_TYPES;
+const isRecordRow = (
+  row: SessionRow,
+): row is RowOf<(typeof RECORD_ROW_TYPES)[number]> =>
+  RECORD_KINDS.includes(row.type);
 
 /** Whether `row` decides a request: what a waiter on a request reads off
  *  the tail, and what an export redacts. */

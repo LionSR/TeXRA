@@ -1,6 +1,6 @@
 /** Run history derived from committed session events. */
 
-import { Effect, Stream, Predicate } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 import { isAgentRunRecord } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
@@ -26,7 +26,7 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
   const log = yield* SessionLog;
   const [view, listing] = yield* Effect.all([
     (yield* SessionViewAccess).read([]),
-    Stream.runCollect(log.listing()),
+    log.listing(),
   ]);
   const rows = Map.groupBy(listing, (row) => row.aggregateId);
   const results = yield* Effect.forEach(

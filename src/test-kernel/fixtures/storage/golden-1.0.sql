@@ -885,7 +885,6 @@ INSERT INTO stored_kind VALUES('usage',2);
 CREATE TABLE current_value (
     family  TEXT NOT NULL,
     key     TEXT NOT NULL,
-    version INTEGER NOT NULL CHECK (version >= 1),
     value   TEXT NOT NULL,
     at      INTEGER NOT NULL,
     PRIMARY KEY (family, key)
@@ -1102,6 +1101,6 @@ CREATE INDEX event_aggregate_type ON event(aggregate, type, seq);
 CREATE INDEX event_type_commit ON event(type, "commit");
 CREATE INDEX event_blob_digest ON event_blob(digest);
 CREATE INDEX current_value_at ON current_value(family, at);
-PRAGMA user_version=104;
+PRAGMA user_version=105;
 PRAGMA application_id=1415927890;
 COMMIT;
