@@ -27,9 +27,13 @@ Status: proposed — 一次审查的记录。大部分候选已在同一分支�
 3. **`edgesOf` 的 34 个空分支。** 37 种行里只有 3 种有聚合边；`referencedAggregates` 把这三条边又写了一遍。换成 `default` 加从 `edgesOf` 推出 `referencedAggregates` 约 −38 行，代价是“新加一种行不写边就编译不过”这条检查（一次审计说它好）。单做“推出 `referencedAggregates`”这一半（约 4 行）没有代价。
 4. **SQLite 的磁盘满不算 `disk-full`。** 核对事务那一条时看到：`isDiskFullError`（`common/errors/errorPredicates.ts`）只认原因链里的 `code: 'ENOSPC'`，而 `node:sqlite` 报磁盘满是 `errcode` 13（`SQLITE_FULL`）。所以写库时磁盘满，`run.end` 的错误大概率记成 `unexpected`。没有端到端验证；修之前要先用一个写满的库复现。
 
-## 测试设施：golden 生成脚本有一个 race
+## `history delete` 的回收是异步的，golden 的生成因此不确定
 
-`packages/cli/scripts/generate-golden-store.mjs` 最后一步 `texra history delete` 删掉一个 run 后马上退出。删除的回收在会话的一个后台 fiber 里，进程退出前有时来得及回收，有时来不及。`f9bbc17` 重新生成时第一次没来得及，第二次来得及。库里聚合的个数因此不同，所有派生的 run id 都跟着变，`goldenStore.vitest.ts` 钉住的 id 就对不上。fixture 已提交，测试本身是确定的；不确定的只是重新生成。脚本的注释说这个 run 应当留在库里（“没有后续打开会回收它”），而 `main` 上的 fixture 一直是被回收的状态。两种修法：让 `history delete` 退出前等它自己的回收（行为变化），或者在脚本里不依赖这一步的时序。
+删除请求在 `run.removed` 提交、交给回收队列之后就回答：`deletionCleanup.ts` 的 `removed` 只是把标记放进队列，回收在会话作用域里的一个 fiber 上进行。CLI 回答完就关闭会话，这个 fiber 跟着被中断，还没回收的标记要等下一次打开时由 `pending` 回收。所以这是产品本身的时序，不只是脚本的问题：`texra history delete` 返回时，run 的行和目录可能还在。#14896 那边测过：在新库上先 `texra run golden_child` 再 `texra history delete`，`28726ae9` 上 16 次里有 1 次没回收，它合并后的树上 12 次里有 2 次。
+
+对 golden 的影响：`packages/cli/scripts/generate-golden-store.mjs` 的最后一步就是 `history delete`。回收来不来得及，决定库里聚合的个数，所有派生的 run id 都跟着变，`goldenStore.vitest.ts` 钉住的 id 就对不上。`f9bbc17` 重新生成时第一次没来得及，第二次来得及。fixture 已提交，测试本身是确定的；不确定的只是重新生成。脚本的注释说这个 run 应当留在库里（“没有后续打开会回收它”），而 `main` 上的 fixture 一直是已回收的状态。
+
+修它要先定行为：要么干净的关闭先跑完已交给它的回收，要么删除等自己的回收完成再回答。两种修法都有同一个连带后果：fixture 里唯一的 `run.removed`（聚合 19，commit 777）也会消失。据 #14896 的分析，这一行是删除那次打开自己扫出的空 run 的标记，它能留在库里，只是因为关闭中断了它的回收。`goldenStore.vitest.ts` 要求 fixture 含有每一种行，所以生成脚本得另想办法留下一个待回收的标记。
 
 ## 核实后不做
 
