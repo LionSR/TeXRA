@@ -111,17 +111,10 @@ export function aggregateColumns(
   return [target.kind, target.id];
 }
 
-/** Aggregates as the two parallel JSON arrays a statement binds with
- *  `json_each(?)`, joined on the array index. */
-export function aggregateLists(
-  ids: readonly AggregateId[],
-): readonly [kinds: string, logicalIds: string] {
-  const columns = ids.map(aggregateColumns);
-  return [
-    JSON.stringify(columns.map(([kind]) => kind)),
-    JSON.stringify(columns.map(([, logicalId]) => logicalId)),
-  ];
-}
+/** Aggregates as the JSON array of `[kind, logicalId]` pairs a statement
+ *  binds with `json_each(?)`. */
+export const aggregateList = (ids: readonly AggregateId[]): string =>
+  JSON.stringify(ids.map(aggregateColumns));
 
 /** The `AggregateId` two columns name. */
 export function aggregateOf(kind: unknown, logicalId: unknown): AggregateId {
