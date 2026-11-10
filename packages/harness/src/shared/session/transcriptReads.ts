@@ -33,13 +33,13 @@ import type { TranscriptView } from './sessionView';
 
 /** What a live chunk did: nothing, moved the held text of a row not yet
  *  painted, or repainted a row into `transcript`. */
-export type LiveTextOutcome =
+type LiveTextOutcome =
   | { readonly outcome: 'ignored' }
   | { readonly outcome: 'held' }
   | { readonly outcome: 'repainted'; readonly transcript: TranscriptView };
 
-const IGNORED: LiveTextOutcome = { outcome: 'ignored' };
-const HELD: LiveTextOutcome = { outcome: 'held' };
+const IGNORED: LiveTextOutcome = Object.freeze({ outcome: 'ignored' });
+const HELD: LiveTextOutcome = Object.freeze({ outcome: 'held' });
 
 /**
  * Apply one live chunk: ignored when its `to` is not past the text held,

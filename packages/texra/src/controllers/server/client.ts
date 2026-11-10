@@ -266,7 +266,7 @@ export const probeRecordedService: Effect.Effect<
  * `serve.log` is where a service that never answers is explained, and the
  * start itself.
  */
-export interface ServiceStart {
+interface ServiceStart {
   readonly storageRoot: string;
   /** Spawns the service detached and returns; the caller waits for its
    *  hello. */

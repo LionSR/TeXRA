@@ -51,7 +51,7 @@ function combineFailureLogExcerpts(excerpts: string[]): string {
 
 /** What a rejected round's logs give the next round: its context (none
  *  for no failures), or why there is none, for the caller to report. */
-export type FailureContextRead =
+type FailureContextRead =
   | { readonly kind: 'context'; readonly text: string | undefined }
   | { readonly kind: 'unreadable'; readonly warning: string };
 

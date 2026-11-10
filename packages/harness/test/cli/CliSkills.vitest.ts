@@ -196,4 +196,45 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         );
       }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
+
+  it.effect(
+    'a skill in a switched-off imported folder does not take the name of a bundled skill',
+    () =>
+      Effect.gen(function* () {
+        const resources = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-skills-', tempRoots),
+        );
+        yield* Effect.promise(async () => {
+          await writeSkill(
+            path.join(resources, 'skills'),
+            'load-paper',
+            'The bundled copy.',
+          );
+          // The workspace's `.claude/skills`: the imported group, off until
+          // a person enables it, and ahead of the bundled tier in order.
+          await writeSkill(
+            path.join(resources, '.claude', 'skills'),
+            'load-paper',
+            'The imported copy.',
+          );
+        });
+        const stores = makeFakeSettingsStores().stores;
+        const { catalog } = yield* loadRuntimeSkillCatalog({
+          roots: {
+            ...stores,
+            workspace: resources,
+            storageRoot: path.join(resources, 'no-storage-root'),
+          },
+          plugins: yield* readInstalledPluginLoad(stores),
+        }).pipe(
+          Effect.provideService(HostSkillSources, {
+            resourcesPath: resources,
+            options: {},
+            contributions: hostSkillContributions([]),
+          }),
+        );
+        expect(catalog.map(({ name }) => name)).toEqual(['load-paper']);
+        expect(catalog[0]?.text).toContain('Source: bundled');
+      }),
+  );
 });

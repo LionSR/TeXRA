@@ -385,13 +385,13 @@ const countPinnedMemories = Effect.fn('memoryFileSystem.countPinnedMemories')(
 /** What a pin did: `pinnedCount` is the total after the write, from the
  *  cap-check walk the pin already made (a second count would rescan every
  *  file). */
-export type MemoryPinOutcome =
+type MemoryPinOutcome =
   | { readonly status: 'pinned'; readonly pinnedCount: number }
   | { readonly status: 'already' }
   | { readonly status: 'cap-reached' };
 
 /** What an unpin did. */
-export type MemoryUnpinOutcome =
+type MemoryUnpinOutcome =
   | { readonly status: 'unpinned' }
   | { readonly status: 'already' };
 
