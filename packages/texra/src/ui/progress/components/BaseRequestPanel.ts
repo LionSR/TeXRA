@@ -52,12 +52,16 @@ import {
 } from '@ui/wa/splitButton';
 import {
   offeredGrant,
+  type AnsweredBy,
   type RequestAnswerability,
   type RequestPayload,
   type RunId,
   type RuntimeCommand,
 } from '@texra-ai/harness/schemas';
-import { runGrantLabel } from '@ui/copy/delegationApproval';
+import {
+  DELEGATION_APPROVAL_COPY,
+  runGrantLabel,
+} from '@ui/copy/delegationApproval';
 
 /** The three ways a card declines, each with its one word. */
 const DECLINE_LABEL = {
@@ -106,6 +110,10 @@ export abstract class BaseRequestPanel<
     RequestPayload,
     { kind: K }
   >;
+
+  /** Who answers the request, as it opened (`PendingRequest.answeredBy`):
+   *  the grant the primary's ▾ menu offers, none for a person's. */
+  @property({ attribute: false }) answeredBy: AnsweredBy = 'person';
 
   /**
    * Whether this window can answer the request (`requestAnswerability`, the
@@ -173,11 +181,19 @@ export abstract class BaseRequestPanel<
     return 'What should the agent change?';
   }
 
-  /** The run-scoped grant on the primary's ▾ menu: the one the request
-   *  offers (`offeredGrant`), none when only a person answers it. */
+  /** The run-scoped grant on the primary's ▾ menu: the one that answers the
+   *  request (`offeredGrant`), none when a person answers it. The
+   *  delegated-work grant's scope names the edits and commands it also
+   *  turns on. */
   protected get grant(): RunGrant | null {
-    const kind = offeredGrant(this.permission);
-    return kind === null ? null : { label: runGrantLabel(kind) };
+    const kind = offeredGrant(this);
+    if (kind === null) return null;
+    return {
+      label: runGrantLabel(kind),
+      ...(kind === 'superYolo' && {
+        scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
+      }),
+    };
   }
 
   /** Kind-specific keys (d, s, r, k …). */
@@ -191,7 +207,10 @@ export abstract class BaseRequestPanel<
 
   protected emitAction(decision: SurfaceDecision): void {
     if (this.readOnly) return;
-    const arm = approvalDecisionArm(this.permission, decision);
+    const arm = approvalDecisionArm(
+      { payload: this.permission, answeredBy: this.answeredBy },
+      decision,
+    );
     if ('host' in arm) this.dispatchEvent(SessionUiEvents.host(arm.host));
     else this.emitRuntimeArm(arm.runtime);
   }

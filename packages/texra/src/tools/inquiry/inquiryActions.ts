@@ -9,11 +9,12 @@ import { Effect } from 'effect';
  * The inquiry's side of a `request.decided`: an inquiry
  * is a request whose thread names its predecessor, so it rides the one
  * request protocol; what stays here is what is specific to the kind. The
- * answer is recorded on the thread's cross-project record (the record stays,
- * cross-project scope is a real difference) and, because an inquiry never
- * makes its run wait, delivered to that run as a `[inquiry]` follow-up: "a
- * `request.decided` for a request its run is not waiting on is delivered as
- * a follow-up".
+ * answer is recorded on the thread's cross-project record before the
+ * decision commits (the record stays, cross-project scope is a real
+ * difference, and no session transaction reaches it) and, because an
+ * inquiry never makes its run wait, delivered to that run as a `[inquiry]`
+ * follow-up that commits with the decision: "a `request.decided` for a
+ * request its run is not waiting on is delivered as a follow-up".
  */
 
 // Local imports - agent
@@ -29,8 +30,7 @@ import {
   type InquiryTurnOutcome,
 } from '@texra/shared/plugins/externalInquiry';
 import {
-  type RunInbox,
-  type RequestDecisionHook,
+  type RequestDecisionRecord,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
 
@@ -99,59 +99,27 @@ function buildContinuationText(params: {
   return lines.join('\n');
 }
 
-/** Commits the decision's facts, hung under the run that asked. */
-type CommitFacts = Parameters<RequestDecisionHook['record']>[0]['commit'];
-
-/** The Background Tasks panel's row for the thread. */
-const publishThreadUpdate = Effect.fn('publishInquiryThreadUpdate')(function* (
-  threadId: InquiryThreadId,
-  commit: CommitFacts,
-): Effect.fn.Return<void, Error, InquiryRecords> {
-  const records = yield* InquiryRecords;
-  const summary = yield* records.getThreadSummary(threadId);
-  if (!summary) return;
-  // The panel's row only: the thread record is the authority, so a refused
-  // row is logged, never the action's failure.
-  yield* commit([inquiryThreadFact(summary)]).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning('The inquiry thread row was not written').pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-      ),
-    ),
-  );
-});
-
 /**
- * The record of a turn an earlier attempt at this same decision already
- * closed, or null when the turn was closed by something else (a follow-up
- * reopened the thread and closed a later turn, a decision for a turn already
- * superseded). Read only when the write found no open turn; the answer the
- * continuation carries is on the closed turn itself, so nothing else has to
- * be kept to re-deliver it.
- */
-/**
- * Record one inquiry decision on its thread and deliver the continuation to
- * the run that asked (`inbox`), and commit the thread's panel row. The run
- * either drains it at its next turn boundary or resumes from the view (the
- * inbox owns that choice); a run that refuses it has nothing left to
- * continue and the thread is archived as such. A decision for a turn no longer open (a duplicate, a decision after a
- * follow-up reopened the thread) records nothing and delivers nothing.
+ * Record one inquiry decision on its thread, and say what commits with the
+ * decision: the thread's panel row and the continuation the run that asked
+ * is sent. The run either drains it at its next turn boundary or resumes
+ * from the view (the inbox owns that choice); a run that refuses it has
+ * nothing left to continue and the thread is archived as such. A decision
+ * for a turn no longer open (a duplicate, a decision after a follow-up
+ * reopened the thread) records nothing and sends nothing.
  *
  * The one exception is the turn this decision itself closed on an earlier
- * attempt that then failed before its continuation reached the run: the
- * thread carries the answer and the request is still pending (the caller
- * decides only pending requests), so the continuation is delivered from the
- * record rather than reported as already done. Delivery is keyed on the turn,
- * so an attempt that failed after the queue admitted it re-delivers nothing.
+ * attempt whose decision then never committed: the thread carries the
+ * answer and the request is still pending (the session decides only
+ * pending requests), so the continuation is sent from the record rather
+ * than reported as already done. Delivery is keyed on the turn, so an
+ * attempt whose continuation the queue already holds sends nothing twice.
  */
 export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
   function* (
     permission: InquiryRequest,
     decision: RequestDecision,
-    inbox: (runId: RunId) => RunInbox,
-    commit: CommitFacts,
-  ): Effect.fn.Return<void, Error, InquiryRecords> {
+  ): Effect.fn.Return<RequestDecisionRecord, Error, InquiryRecords> {
     const records = yield* InquiryRecords;
     const { threadId } = permission;
     const turnIndex = permission.transcript?.at(-1)?.turnIndex ?? 1;
@@ -189,7 +157,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
         yield* Effect.logWarning(
           `Inquiry ${event === 'answered' ? 'answer' : 'drop'} ignored: thread ${threadId} has no open turn ${turnIndex}.`,
         ).pipe(withLogChannel(CHANNEL));
-        return;
+        return { facts: [] };
       }
       // What the thread says is what the run is told: the earlier attempt's
       // record is the decision that stands, whatever this attempt asked for.
@@ -199,10 +167,14 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
         `Inquiry ${threadId}: re-delivering the ${event} continuation for turn ${turnIndex}, recorded by an attempt that never delivered it.`,
       ).pipe(withLogChannel(CHANNEL));
     }
+    // The Background Tasks panel's row for the thread, as it stands: the
+    // thread record is the authority, so the session refusing the row is
+    // logged, never the decision's failure.
+    const summary = yield* records.getThreadSummary(threadId);
+    const facts = summary ? [inquiryThreadFact(summary)] : [];
     const lastTurn = manifest.turns.at(-1);
     const parentRunId: RunId | null | undefined = manifest.parentRunId;
-    if (!lastTurn || parentRunId == null)
-      return yield* publishThreadUpdate(threadId, commit);
+    if (!lastTurn || parentRunId == null) return { facts };
     const stillOpen = yield* records.listThreadsByStatus({
       status: 'open',
       scope: 'run',
@@ -221,16 +193,16 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     // Keyed on the turn: the queue admits one continuation per inquiry turn,
     // so re-delivering after a failure the queue never saw reaches the run
     // and re-delivering after one it did is a no-op.
-    const result = yield* inbox(parentRunId).send({
-      text,
-      from: { kind: 'user' },
-      deliveryId: `inquiry:${threadId}:${lastTurn.turnIndex}`,
-    });
-    if (result.status === 'failed') {
-      yield* Effect.logWarning(
-        `Inquiry continuation for ${threadId}: run ${parentRunId} refused it (${result.reason}).`,
-      ).pipe(withLogChannel(CHANNEL));
-    }
-    yield* publishThreadUpdate(threadId, commit);
+    return {
+      facts,
+      followUp: {
+        runId: parentRunId,
+        item: {
+          text,
+          from: { kind: 'user' },
+          deliveryId: `inquiry:${threadId}:${lastTurn.turnIndex}`,
+        },
+      },
+    };
   },
 );

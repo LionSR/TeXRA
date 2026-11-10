@@ -24,7 +24,7 @@ import type { HostCommand } from './hostRequest';
  * Surface-only approval action emitted by the run-grant item and `a` key on
  * the command, edit and agent-proposal prompts. It never becomes a durable
  * decision: {@link approvalDecisionArm} sends it as a plain approve that
- * grants the request kind's bypass for the run.
+ * turns on, for the run, the grant that answers the request.
  */
 export const APPROVE_SESSION_ACTION = 'approveSession';
 
@@ -115,16 +115,18 @@ type ApprovalArm =
   | { readonly host: HostCommand };
 
 /**
- * The case one decision names: a session-wide approval is the approval with
- * its bypass `grant`; a tool-edit preview verb is a host capability that
- * leaves the request pending; a retry on the user's own key is the host's
- * `useOwnApiKey`, which stores the key and then decides the retry itself.
- * Everything else is a plain `request.decide`.
+ * The case one decision names on `request`: a session-wide approval is the
+ * approval with the `grant` that answers the request; a tool-edit preview
+ * verb is a host capability that leaves the request pending; a retry on
+ * the user's own key is the host's `useOwnApiKey`, which stores the key and
+ * then decides the retry itself. Everything else is a plain
+ * `request.decide`.
  */
 export function approvalDecisionArm(
-  permission: PendingRequest['payload'],
+  request: Pick<PendingRequest, 'payload' | 'answeredBy'>,
   decision: SurfaceDecision,
 ): ApprovalArm {
+  const permission = request.payload;
   const { runId, requestId } = permission.data;
   const decide = (
     d: RequestDecision,
@@ -134,9 +136,8 @@ export function approvalDecisionArm(
   });
   switch (decision.action) {
     case APPROVE_SESSION_ACTION: {
-      // The grant the request offers, or none: a hook asked, or a command
-      // prompt for another tool's call, whose grant is not the shell's.
-      const bypass = offeredGrant(permission);
+      // The grant that answers the request, or none: a person answers it.
+      const bypass = offeredGrant(request);
       if (bypass === null) {
         throw new Error(
           `A ${permission.kind} request has no session bypass to enable.`,

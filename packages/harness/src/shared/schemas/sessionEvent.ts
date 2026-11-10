@@ -36,7 +36,11 @@ import {
 } from './runRecords';
 import { RunIdSchema } from './identifiers';
 import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
-import { RequestPayloadSchema, RequestDecisionSchema } from './request';
+import {
+  AnsweredBySchema,
+  RequestPayloadSchema,
+  RequestDecisionSchema,
+} from './request';
 import { RunIdentitySchema } from './runIdentity';
 import { RunBindingSchema } from './runInput';
 import { NormalizedUsageSchema } from './usage';
@@ -285,11 +289,12 @@ const DisplayRowDraftSchema = Schema.Union([
     followUpId: Schema.String.check(Schema.isMinLength(1)),
     disposition: FollowUpDispositionSchema,
   }),
-  /** A run asking a person: what the UI shows, never host handles.
-   *  Pending is opened without decided. */
+  /** A run asking a person: what the UI shows, never host handles, and
+   *  who answers it (`answeredBy`). Pending is opened without decided. */
   durable('request.opened', {
     requestId: Schema.String.check(Schema.isMinLength(1)),
     payload: RequestPayloadSchema,
+    answeredBy: AnsweredBySchema,
   }),
   /**
    * The answer, whatever surface gave it and whatever its provenance. The

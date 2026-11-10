@@ -93,7 +93,7 @@ import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 
 import { resendDelayMs, RouteRetries } from './ModelRetryGate';
-import { decisionOf, policyDecidedRows } from './requests';
+import { decisionOf, openRequest } from './requests';
 import { AgentRun } from './run/AgentRun';
 import { callModel, type ModelCallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
@@ -563,21 +563,22 @@ export const modelInvokerLayer = (): Layer.Layer<
         );
 
       /**
-       * The batch that ends attempt `ref` as `failed` with `error`. One that
-       * asks opens its retry request first, with the credential move a
-       * used-up `quota` offers and, where the policy answers at once, that
-       * answer, so no surface lists it pending. A used-up plan the route
-       * falls back from without asking asks nothing: its `failed` row
+       * Commit the batch that ends attempt `ref` as `failed` with `error`.
+       * One that asks opens its retry request at the request door
+       * (`openRequest`), its `failed` row beside it, with the credential
+       * move a used-up `quota` offers and, where the policy answers at once,
+       * that answer, so no surface lists it pending. A used-up plan the
+       * route falls back from without asking asks nothing: its `failed` row
        * declines the route (`next: decline`).
        */
-      const failedRows = Effect.fn('ModelInvoker.failedRows')(function* (
+      const commitFailed = Effect.fn('ModelInvoker.commitFailed')(function* (
         cell: RunCell,
         ref: InvocationRef,
         error: ModelFailure,
         next: StepAfterFailure,
         bound: BoundModel,
         usage: NormalizedUsage | null,
-      ): Effect.fn.Return<readonly RunHistoryDraft[], never, SessionServices> {
+      ): Effect.fn.Return<void, CellError, SessionServices> {
         const failedRow = (next: StepAfterFailure): RunHistoryDraft => ({
           type: 'model.message',
           aggregateId,
@@ -589,7 +590,8 @@ export const modelInvokerLayer = (): Layer.Layer<
             ...(usage === null ? {} : { usage }),
           },
         });
-        if (next.kind !== 'ask') return [failedRow(next)];
+        if (next.kind !== 'ask')
+          return yield* Effect.asVoid(cell.append([failedRow(next)]));
         const { requestId } = next;
         const credentialSwitch = yield* access.credentialSwitch(
           bound,
@@ -606,31 +608,27 @@ export const modelInvokerLayer = (): Layer.Layer<
             messageType: MESSAGE_TYPES.QUOTA_FALLBACK,
             data: { route: credentialSwitch.route },
           });
-          return [
-            failedRow({ kind: 'decline', route: credentialSwitch.route }),
-          ];
+          return yield* Effect.asVoid(
+            cell.append([
+              failedRow({ kind: 'decline', route: credentialSwitch.route }),
+            ]),
+          );
         }
-        const payload = {
-          kind: 'retry',
-          data: {
-            requestId,
-            runId,
-            operation: 'Model request',
-            model: bound.modelId,
-            failure: error,
-            credentialSwitch,
-          },
-        } as const;
-        return [
+        yield* openRequest(
+          { runId, append: (rows) => cell.append(rows) },
           {
-            type: 'request.opened',
-            aggregateId,
-            requestId,
-            payload,
+            kind: 'retry',
+            data: {
+              requestId,
+              runId,
+              operation: 'Model request',
+              model: bound.modelId,
+              failure: error,
+              credentialSwitch,
+            },
           },
-          failedRow(next),
-          ...(yield* policyDecidedRows(runId, payload)),
-        ];
+          { beside: [failedRow(next)] },
+        );
       });
 
       /** Record the failure of attempt `ref` and the move after it. */
@@ -676,9 +674,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             attribution,
             roots,
           );
-        yield* cell.append(
-          yield* failedRows(cell, ref, failure, next, bound, usage),
-        );
+        yield* commitFailed(cell, ref, failure, next, bound, usage);
       });
 
       /** The move after `failure` of attempt `ref`, read off the attempts
@@ -767,34 +763,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           ),
         );
 
-      /** Wait for the answer to the open retry request: the
-       *  `request.decided` row the decide command lands; false when nobody
-       *  will answer it (the session closed first). */
-      const awaitDecision = Effect.fn('ModelInvoker.await')(function* (
-        cell: RunCell,
-        requestId: string,
-      ): Effect.fn.Return<boolean, InvokeError> {
-        logger.debug('Waiting for manual retry');
-        const row = yield* decisionOf(
-          runId,
-          requestId,
-          (yield* cell.current).commit,
-        ).pipe(
-          Effect.provideService(SessionLog, log),
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              logger.warn('The retry prompt closed before a decision', {
-                data: error,
-              });
-              return null;
-            }),
-          ),
-        );
-        if (row === null) return false;
-        yield* cell.refresh;
-        return true;
-      });
-
       /** Ask again about `attempt`, whose outcome no row records: one a
        *  person allowed, or one past the automatic retries. */
       const reask = Effect.fn('ModelInvoker.reask')(function* (
@@ -802,15 +770,13 @@ export const modelInvokerLayer = (): Layer.Layer<
         attempt: Attempt,
       ): Effect.fn.Return<void, InvokeError, SessionServices> {
         const bound = yield* ScopedRef.get(run.model);
-        yield* cell.append(
-          yield* failedRows(
-            cell,
-            attempt.ref,
-            { source: 'interrupted', provider: bound.config.provider },
-            { kind: 'ask', requestId: `retry-${randomUUID()}` },
-            bound,
-            null,
-          ),
+        yield* commitFailed(
+          cell,
+          attempt.ref,
+          { source: 'interrupted', provider: bound.config.provider },
+          { kind: 'ask', requestId: `retry-${randomUUID()}` },
+          bound,
+          null,
         );
       });
 
@@ -843,8 +809,15 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (move.kind === 'fail') return yield* endedAs(cell, 'failed');
           if (move.kind === 'cancel') return yield* endedAs(cell, 'cancelled');
           if (move.kind === 'await') {
-            if (!(yield* awaitDecision(cell, move.requestId)))
-              return yield* endedAs(cell, 'cancelled');
+            // The open retry request's answer, the row the decide command
+            // lands, which the next move reads off the run's rows.
+            logger.debug('Waiting for manual retry');
+            yield* decisionOf(
+              runId,
+              move.requestId,
+              (yield* cell.current).commit,
+            ).pipe(Effect.provideService(SessionLog, log));
+            yield* cell.refresh;
             continue;
           }
           if (move.kind === 'reask') {

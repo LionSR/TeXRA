@@ -192,6 +192,7 @@ export function applyRunRow(
       const requests = ownCopy(copies, current.requests, copyById);
       requests[row.requestId] = {
         payload: row.payload,
+        answeredBy: row.answeredBy,
         decision: null,
         decidedAt: null,
       };

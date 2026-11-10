@@ -4,6 +4,7 @@
  * input the session view keeps; and the record the store projects.
  */
 import type {
+  AnsweredBy,
   CommitOrdinal,
   FollowUpDisposition,
   RequestPayload,
@@ -17,6 +18,8 @@ import type { QueuedFollowUp } from './runRows';
 
 type RequestState = {
   readonly payload: RequestPayload;
+  /** Who answers it, as it opened. */
+  readonly answeredBy: AnsweredBy;
   /** The recorded decision: the `request.decided` row's, null while
    *  the request is open. */
   readonly decision: RequestDecision | null;

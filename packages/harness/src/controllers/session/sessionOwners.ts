@@ -32,9 +32,8 @@ import {
   presentTerminalResult,
 } from '@agent/runtime/HostInteractions';
 import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
-import { sessionPermission } from '@agent/runtime/loop/toolGuard';
 import { sessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { SessionRequests } from '@agent/runtime/requests';
+import { SessionRequests, sessionPermission } from '@agent/runtime/requests';
 import { ProjectTools } from '@agent/runtime/loop/step';
 import { makeRunHistory } from '@agent/runtime/makeRunHistory';
 import {

@@ -314,6 +314,7 @@ export function App(props: AppProps): React.JSX.Element {
           <ApprovalModal
             availableRows={availableRows}
             payload={pending.payload}
+            grant={pending.grant}
             onDecide={(decision) =>
               pending.decide(
                 {

@@ -13,7 +13,7 @@ import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 // Local imports - base class
-import { BaseRequestPanel } from './BaseRequestPanel';
+import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 
 const planApprovalRequestPanelStyles: CSSResult = css`
   .plan-request__objective {
@@ -39,6 +39,12 @@ export class PlanApprovalRequestPanel extends BaseRequestPanel<'planApproval'> {
 
   protected override renderAsk(): string {
     return 'Approve this plan';
+  }
+
+  // A plan's broad approval is its goal's (`REQUEST_ACTIONS.planApproval`,
+  // whose `a` the CLI card binds), not the run grant that answers it.
+  protected override get grant(): RunGrant | null {
+    return null;
   }
 
   protected override handleExtraKey(key: string): boolean {

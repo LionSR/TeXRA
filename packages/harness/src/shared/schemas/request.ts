@@ -1,7 +1,8 @@
 /**
  * The one request vocabulary for everything a run asks a person: what a
- * request shows (`RequestPayload`, the payload of `request.opened`) and
- * how a surface answers it (`RequestDecision`, the decision of
+ * request shows (`RequestPayload`, the payload of `request.opened`), who
+ * answers it (`AnsweredBy`, beside the payload on that row) and how a
+ * surface answers it (`RequestDecision`, the decision of
  * `request.decided`); pending is the fold, opened without decided. Every
  * kind of request is answered with an arm of the decision union, so the
  * frontend action vocabulary, the runtime's reading, and the recovery
@@ -17,7 +18,10 @@
  */
 import { Schema } from 'effect';
 
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import {
+  APPROVAL_BYPASS_KINDS,
+  type ApprovalBypassKind,
+} from '@shared/approvalBypassKind';
 import { RunIdSchema } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 import {
@@ -206,12 +210,20 @@ export type DecisionOf<K extends RequestPayload['kind']> =
     >
   | RefusalDecision;
 
-/** The grant that answers a request of each kind a grant can answer. A
- *  question, a retry, a plan approval and a plugin's request never appear
- *  here: they need an answer, or carry their own credential semantics. */
-const GRANT_OF: Readonly<
-  Partial<Record<RequestPayload['kind'], ApprovalBypassKind>>
-> = { bash: 'bash', toolEdit: 'toolEdit', proposal: 'superYolo' };
+/**
+ * Who answers a request: a person, or the run grant that answers it
+ * unasked, as it opens or, turned on while it waits, in the transaction
+ * that records the grant. Decided once as the request opens
+ * (`openRequest`), from the operation it asks about and what the call's
+ * hooks said, and stored on its `request.opened`: a request a hook asked
+ * about, a question, a retry and a plugin's request are a person's.
+ */
+export const AnsweredBySchema = Schema.Union([
+  Schema.Literal('person'),
+  Schema.Literals(APPROVAL_BYPASS_KINDS),
+]);
+/** Who answers a request ({@link AnsweredBySchema}). */
+export type AnsweredBy = typeof AnsweredBySchema.Type;
 
 /** The grants that stand for each grant: its own, and the delegated-work
  *  grant, which stands for every one. */
@@ -223,45 +235,20 @@ const STANDS_FOR: Readonly<
   superYolo: ['superYolo'],
 };
 
-/** Whether a grant `held` stands for `grant`: the one reading, before a
- *  request opens (the guard's operation) and as it opens (its kind). */
-export const grantHeld = (
-  held: (bypass: ApprovalBypassKind) => boolean,
-  grant: ApprovalBypassKind,
-): boolean => STANDS_FOR[grant].some(held);
-
-/**
- * The run grant `payload` offers: its kind's grant, or null when the opener
- * said only a person answers it (`offersGrant: false`: a hook asked, or a
- * command prompt for another tool's call, whose grant is not the shell's).
- * The one reading every surface renders "approve all in this task" from,
- * and every grant the run holds is checked against.
- */
-export const offeredGrant = (
-  payload: RequestPayload,
-): ApprovalBypassKind | null => {
-  const grant = GRANT_OF[payload.kind];
-  return grant !== undefined &&
-    'offersGrant' in payload.data &&
-    payload.data.offersGrant
-    ? grant
-    : null;
-};
-
-/** Whether a grant `held` answers `payload`. */
+/** Whether a grant `held` answers a request `answeredBy` names: one that
+ *  stands for its grant. None answers a person's. */
 export const grantAnswering = (
   held: (bypass: ApprovalBypassKind) => boolean,
-  payload: RequestPayload,
-): boolean => {
-  const grant = offeredGrant(payload);
-  return grant !== null && grantHeld(held, grant);
-};
+  answeredBy: AnsweredBy,
+): boolean => answeredBy !== 'person' && STANDS_FOR[answeredBy].some(held);
 
-/** Whether `bypass` approves `payload`. */
-export const bypassCovers = (
-  bypass: ApprovalBypassKind,
-  payload: RequestPayload,
-): boolean => grantAnswering((held) => held === bypass, payload);
+/** The run grant a request offers to turn on ("approve all in this
+ *  task"): the one that answers it, none for a person's. The one reading
+ *  every surface renders the offer from. */
+export const offeredGrant = (request: {
+  readonly answeredBy: AnsweredBy;
+}): ApprovalBypassKind | null =>
+  request.answeredBy === 'person' ? null : request.answeredBy;
 
 /** Whether `decision` is one `request` takes ({@link DecisionOf}). */
 export function decisionFits<P extends AnswerSource>(
@@ -279,20 +266,28 @@ export function decisionFits<P extends AnswerSource>(
 }
 
 /**
- * Why `payload` cannot take this answer, or null when it can: a decision it
- * does not offer, or a run grant that is not an approval of the grant it
- * offers ({@link offeredGrant}).
+ * Why `request` cannot take this answer, or null when it can: a decision
+ * it does not offer, or a run grant that is not an approval under a grant
+ * that answers it ({@link grantAnswering}).
  */
 export function answerMismatch(
-  payload: RequestPayload,
+  request: {
+    readonly payload: RequestPayload;
+    readonly answeredBy: AnsweredBy;
+  },
   decision: RequestDecision,
   grant?: ApprovalBypassKind | null,
 ): string | null {
   const { action } = decision;
+  const { payload, answeredBy } = request;
   const { kind } = payload;
   if (!decisionFits(payload, decision))
     return `A ${kind} request is not answered with "${action}".`;
-  if (grant != null && (action !== 'approve' || !bypassCovers(grant, payload)))
+  if (
+    grant != null &&
+    (action !== 'approve' ||
+      !grantAnswering((held) => held === grant, answeredBy))
+  )
     return `A ${kind} request's "${action}" cannot grant the ${grant} bypass.`;
   return null;
 }

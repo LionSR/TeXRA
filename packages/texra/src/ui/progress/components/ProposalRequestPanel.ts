@@ -29,10 +29,7 @@ import {
   DOCUMENT_TASK_OPTIONS,
   DocumentTaskOptionsSchema,
 } from '@texra/shared/plugins/documents';
-import {
-  DEFINED_AGENT_COPY,
-  DELEGATION_APPROVAL_COPY,
-} from '@ui/copy/delegationApproval';
+import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 
 // Local imports - shared utils
 import {
@@ -93,14 +90,12 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     this.emitAction({ action: 'approve', ...this.modelChange });
   }
 
-  // The grant carries the launch form's model change, and its scope names
-  // the edits and commands the delegated-work grant also turns on.
+  // The grant carries the launch form's model change.
   protected override get grant(): RunGrant | null {
     const offered = super.grant;
     return (
       offered && {
         ...offered,
-        scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
         decision: { action: APPROVE_SESSION_ACTION, ...this.modelChange },
       }
     );

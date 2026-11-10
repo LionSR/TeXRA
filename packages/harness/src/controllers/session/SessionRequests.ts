@@ -9,9 +9,8 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import {
   describeFollowUpFailure,
-  followUpServices,
-  runInbox,
   submitFollowUp,
+  wakeIfOwed,
 } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
 import { sentFollowUpId, sentReceipt } from '@agent/followUp/followUpMessages';
@@ -23,6 +22,7 @@ import {
 } from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
+import { decideRequest } from '@agent/runtime/requests';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionRequestsShape } from '@agent/runtime/SessionHandle';
 import { sessionServices } from '@agent/runtime/ToolServices';
@@ -46,12 +46,11 @@ import {
   type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
-import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import { SessionLog, type SessionViewAccess } from '@shared/session/runHistory';
 import { runActionRefusal } from '@shared/session/runActions';
 import { descriptionRow } from '@shared/session/runFacts';
-import { factRow, ownFactsChecked } from '@tools/plugins';
+import { factRows } from '@tools/plugins';
 import { ToolRegistry, type ToolTable } from '@tools/toolTable';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   deleteAdmittedRun,
@@ -93,18 +92,10 @@ const GATED_ACTIONS: Partial<Record<RuntimeCommand['kind'], RunAction>> = {
   'policy.set': 'grant',
 };
 
-/** One session's requests, as every handler below reads them. */
-interface RequestDeps extends SessionRequestsInit {
-  /** One in-process lane per request id, making the pending check, the
-   *  plugin's record and the append one operation: `decideRequest`'s checked append
-   *  fences only the row, so two surfaces here could both record a verdict. */
-  readonly decisionLanes: Map<string, PerKeyLane>;
-}
-
 /** Refuse a gated request the run's `actions` no longer hold; a run not
  *  folded yet is left to `admit`. */
 const requireRunAction = (
-  deps: RequestDeps,
+  deps: SessionRequestsInit,
   req: RuntimeCommand,
 ): Effect.Effect<void, RequestError> => {
   let action = GATED_ACTIONS[req.kind];
@@ -120,7 +111,7 @@ const requireRunAction = (
 
 /** The run's stored aggregate state; `undefined` while it has no rows. */
 const storedState = (
-  deps: RequestDeps,
+  deps: SessionRequestsInit,
   runId: RunId,
 ): Effect.Effect<AggregateState | undefined> =>
   deps.log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
@@ -128,7 +119,7 @@ const storedState = (
     Effect.map((rows) => rows[0]),
   );
 
-const noLongerOpen = (deps: RequestDeps, runId: RunId) =>
+const noLongerOpen = (deps: SessionRequestsInit, runId: RunId) =>
   new Unavailable({
     runId,
     reason: `The ${runNoun(deps.view, runId)} is no longer open.`,
@@ -136,7 +127,7 @@ const noLongerOpen = (deps: RequestDeps, runId: RunId) =>
 
 /** Admit on current sequence rows: the run exists and is open. */
 const admit = (
-  deps: RequestDeps,
+  deps: SessionRequestsInit,
   req: RuntimeCommand,
 ): Effect.Effect<AggregateState, RequestError> => {
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
@@ -151,7 +142,7 @@ const admit = (
 
 /** The user's title: the run's `run.description` row. */
 const rename = (
-  deps: RequestDeps,
+  deps: SessionRequestsInit,
   req: Extract<RuntimeCommand, { kind: 'run.rename' }>,
 ): Effect.Effect<Outcome, RequestError> =>
   deps.sessionLog.transact([descriptionRow(req.runId, req.title, 'user')]).pipe(
@@ -170,7 +161,11 @@ const rename = (
  * moment it is committed, before the service's view has applied it, and
  * preview or decide it at once.
  */
-const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
+const pendingOf = (
+  deps: SessionRequestsInit,
+  runId: RunId,
+  requestId: string,
+) =>
   Effect.map(deps.view.read([runId]), (view) =>
     view.requests.find(
       (row) => row.runId === runId && row.requestId === requestId,
@@ -178,7 +173,7 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
   );
 
 const decideSurfaceRequest = (
-  deps: RequestDeps,
+  deps: SessionRequestsInit,
   req: Extract<RuntimeCommand, { kind: 'request.decide' }>,
   heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError, GlobalValues | SessionServices> => {
@@ -198,60 +193,78 @@ const decideSurfaceRequest = (
       });
     }
     const { payload } = pending;
-    const services = yield* followUpServices;
+    if (payload.kind !== 'plugin') {
+      if (!(yield* write)) return yield* settled(req.runId);
+      return done;
+    }
+    // A plugin's request: the plugin's record outside the session's store
+    // first (`Plugin.decision`, idempotent), then one checked transaction
+    // holding the decision, the facts the plugin states, checked in the
+    // job, and the input it sends a run, admitted in the job. None of them
+    // lands without the decision, and a request decided meanwhile commits
+    // none of them. The run is woken for that input once it committed.
     const plugin =
-      payload.kind === 'plugin'
-        ? (deps.plugins.entries.get(payload.plugin) ??
-          (yield* new Unavailable({
-            runId: req.runId,
-            reason: `Plugin "${payload.plugin}" is unavailable: restore it to answer this request.`,
-          })))
-        : undefined;
+      deps.plugins.entries.get(payload.plugin) ??
+      (yield* new Unavailable({
+        runId: req.runId,
+        reason: `Plugin "${payload.plugin}" is unavailable: restore it to answer this request.`,
+      }));
+    const recorded =
+      plugin.decision === undefined
+        ? { facts: [] }
+        : yield* Effect.orDie(
+            plugin.decision.record({ payload, decision: req.decision }),
+          );
+    const { followUp } = recorded;
+    const inbox = yield* Inbox;
     const log = deps.sessionLog;
-    const side =
-      payload.kind === 'plugin'
-        ? plugin?.decision?.record({
-            payload,
-            decision: req.decision,
-            inbox: (runId) => runInbox(runId, services),
-            commit: (own) =>
-              log.transact((tx) =>
-                Effect.gen(function* () {
-                  const { kept, rejected } = yield* ownFactsChecked(
-                    own.map((f) => factRow(f, req.runId)),
-                    plugin,
-                    log,
-                  );
-                  if (rejected[0] !== undefined) return yield* rejected[0];
-                  yield* tx.append(kept);
-                }),
-              ),
-          })
-        : undefined;
-    if (side) yield* Effect.orDie(side);
-    if (!(yield* write)) return yield* settled(req.runId);
+    const beside = Effect.gen(function* () {
+      const facts = yield* factRows(recorded.facts, req.runId, plugin, log);
+      if (followUp === undefined) return facts;
+      const admitted = yield* inbox
+        .admission(followUp.runId, followUp.item, {})
+        // An input with no caller id conflicts with nothing.
+        .pipe(Effect.catchTag('Conflict', Effect.die));
+      if (admitted.sent.kind === 'refused')
+        yield* Effect.logWarning(
+          `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${req.requestId} (${admitted.sent.reason}).`,
+        );
+      return [...facts, ...admitted.rows];
+    }).pipe(Effect.scoped);
+    const landed = yield* decideRequest(
+      req.runId,
+      req.requestId,
+      req.decision,
+      beside,
+    ).pipe(
+      Effect.provideService(SessionLog, log),
+      Effect.mapError(
+        writeRejection({
+          runId: req.runId,
+          reason: 'The decision could not be recorded.',
+        }),
+      ),
+    );
+    if (!landed) return yield* settled(req.runId);
+    if (followUp !== undefined) yield* wakeIfOwed(followUp.runId);
     return done;
   });
-  // An answer the request does not take is refused in the lane, before its grant.
-  const decided = Effect.flatMap(
+  // An answer the request does not take is refused before its grant.
+  return Effect.flatMap(
     pendingOf(deps, req.runId, req.requestId),
     (pending) => {
       const reason =
-        pending && answerMismatch(pending.payload, req.decision, req.grant);
+        pending && answerMismatch(pending, req.decision, req.grant);
       if (reason) return Effect.fail(new Rejected({ reason }));
       return decideUnderGrant(req, answer);
     },
   );
-  return withPerKeyLane(
-    deps.decisionLanes,
-    `${req.runId}/${req.requestId}`,
-  )(decided);
 };
 
 /** Queued on the run's input by its live loop's controls, answered once the
  *  input holds it. */
 const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
-  deps: RequestDeps,
+  deps: SessionRequestsInit,
   req: Extract<RuntimeCommand, { kind: `run.${'compact' | 'model'}` }>,
   runs: RunRegistry['Service'],
 ): Effect.fn.Return<Outcome, RequestError, Inbox> {
@@ -277,7 +290,7 @@ const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
 });
 
 const handle = (
-  deps: RequestDeps,
+  deps: SessionRequestsInit,
   req: Exclude<RuntimeCommand, { kind: 'run.stop' | `followUp.${string}` }>,
   admitted: AggregateState,
   heldHere: boolean,
@@ -326,12 +339,10 @@ const handle = (
 };
 
 /** The session's requests: the handler that admits on the log's sequence
- *  table, and a run's questions to a person. One value per session, so the
- *  decision lanes serialize within a session and never across two. */
+ *  table, and a run's questions to a person. One value per session. */
 export function sessionRequests(
-  init: SessionRequestsInit,
+  deps: SessionRequestsInit,
 ): SessionRequestsShape {
-  const deps: RequestDeps = { ...init, decisionLanes: new Map() };
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeCommand,
   ) {

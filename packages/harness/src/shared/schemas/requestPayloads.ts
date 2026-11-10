@@ -14,7 +14,6 @@ import { DeclinableUsageRouteSchema } from './usage';
 /** The fields the bash, tool edit and question requests share. */
 const RequestBaseSchema = Schema.Struct({
   requestId: Schema.String,
-  offersGrant: Schema.Boolean,
   runId: RunIdSchema,
 });
 
@@ -169,13 +168,7 @@ export const AgentProposalSchema = BaseProposalFieldsSchema.mapFields(
 export type AgentProposal = typeof AgentProposalSchema.Type;
 
 export const AgentProposalRequestSchema = AgentProposalSchema.mapFields(
-  Struct.assign({
-    requestId: Schema.String,
-    /** Whether a grant turned on while it waits answers it: false when a
-     *  hook asked for this review. */
-    offersGrant: Schema.Boolean,
-    runId: RunIdSchema,
-  }),
+  Struct.assign({ requestId: Schema.String, runId: RunIdSchema }),
 );
 export type AgentProposalRequest = (typeof AgentProposalRequestSchema)['Type'];
 

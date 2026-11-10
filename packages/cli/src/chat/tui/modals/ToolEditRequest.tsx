@@ -20,7 +20,7 @@ import {
 } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import {
-  offeredGrant,
+  type ApprovalBypassKind,
   type ToolEditContent,
   formatResultCount,
 } from '@texra-ai/harness/schemas';
@@ -35,6 +35,8 @@ const DEFAULT_EDIT_DIFF_ROWS = 30;
 interface ToolEditRequestProps {
   readonly availableRows?: number;
   readonly payload: ToolEditTuiRequest;
+  /** The run grant the request offers (`offeredGrant`). */
+  readonly grant: ApprovalBypassKind | null;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
@@ -71,7 +73,7 @@ export function ToolEditRequest(
       color={COLOR_HINT}
       title={title}
       kind="toolEdit"
-      grant={offeredGrant(props.payload)}
+      grant={props.grant}
       compact={isCompactRows(
         props.availableRows,
         COMPACT_EDIT_APPROVAL_MAX_ROWS,

@@ -391,11 +391,11 @@ export const ownFactsChecked = Effect.fn('ownFactsChecked')(function* (
 });
 
 /**
- * The rows the facts of a call of `runId` commit in its `tool.result`
- * batch, appended beside it (`alongside`) after `ownFactsChecked`, so each
- * commits with the result or not at all. The call's result is the run's
- * record and stands: a fact its plugin's rule rejects is the plugin's row
- * alone, left out and logged.
+ * The rows a plugin's facts under `runId` commit in the batch that records
+ * what they are facts of (a call's `tool.result`, a plugin request's
+ * decision), after `ownFactsChecked`, so each commits with that record or
+ * not at all. The record is the run's and stands: a fact its plugin's rule
+ * rejects is the plugin's row alone, left out and logged.
  */
 export const factRows = (
   facts: readonly ToolFact[],
@@ -411,7 +411,7 @@ export const factRows = (
     Effect.tap(({ rejected }) =>
       Effect.forEach(rejected, (error) =>
         Effect.logWarning(
-          `A plugin fact of a call of ${runId} was not written`,
+          `A plugin fact under run ${runId} was not written`,
         ).pipe(
           Effect.annotateLogs({ data: error.message }),
           withLogChannel('plugins'),

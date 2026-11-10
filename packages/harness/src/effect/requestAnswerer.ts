@@ -60,7 +60,7 @@ const decisionOf = (
   // Called on the host itself: a class-based host keeps its receiver.
   Effect.suspend(() => host.approve(pending)).pipe(
     Effect.flatMap((decision) => {
-      const mismatch = answerMismatch(pending.payload, decision);
+      const mismatch = answerMismatch(pending, decision);
       return mismatch === null
         ? Effect.succeed(decision)
         : Effect.fail(new Error(mismatch));

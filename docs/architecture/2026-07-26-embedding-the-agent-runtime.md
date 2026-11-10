@@ -411,8 +411,8 @@ answers what its policy leaves open from a terminal prompt
 `packages/cli/src/runtime/headless/approvalAdapter.ts`).
 
 The same holds for a plan, a delegation proposal and a question
-(`policyDecidedRows` in `packages/harness/src/agent/runtime/requests.ts`,
-whose rows `openRequest` commits beside the `request.opened`).
+(`answerFor` in `packages/harness/src/agent/runtime/requests.ts`, whose
+answer `openRequest` commits beside the `request.opened`).
 
 ### What ends a wait without a decision
 

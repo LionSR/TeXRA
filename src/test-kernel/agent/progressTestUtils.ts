@@ -213,7 +213,6 @@ export function bashApprovalRequest(request: {
     requestId: `bash-${crypto.randomUUID()}`,
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
-    offersGrant: true,
     runId: request.runId,
   };
 }

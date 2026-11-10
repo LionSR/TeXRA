@@ -10,7 +10,7 @@
 import { Effect, Layer, Schema, SubscriptionRef } from 'effect';
 import {
   AgentConfigSchema,
-  type RequestPayload,
+  type PendingRequest,
   type RunId,
   type SessionView,
 } from '@texra-ai/harness/schemas';
@@ -50,13 +50,6 @@ interface FixtureRun {
   readonly held?: boolean;
 }
 
-/** A request a run opened, as the view lists it. */
-interface FixtureRequest {
-  readonly runId: RunId;
-  readonly requestId: string;
-  readonly payload: RequestPayload;
-}
-
 /**
  * The view the fold states for `runs`, given parents first, and the requests
  * they opened: each run's start, activation, config and first turn, and its
@@ -65,7 +58,7 @@ interface FixtureRequest {
  */
 export function viewWith(
   runs: readonly FixtureRun[],
-  { requests = [] }: { readonly requests?: readonly FixtureRequest[] } = {},
+  { requests = [] }: { readonly requests?: readonly PendingRequest[] } = {},
 ): SessionView {
   const log = new Log();
   for (const run of runs) {
@@ -95,6 +88,7 @@ export function viewWith(
       type: 'request.opened',
       requestId: request.requestId,
       payload: request.payload,
+      answeredBy: request.answeredBy,
     });
   }
   return viewOf(

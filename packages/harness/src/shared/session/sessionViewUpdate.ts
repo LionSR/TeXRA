@@ -889,7 +889,7 @@ function projectRequests(view: ViewDraft, runId: RunId, rows: SharedRunRows) {
     ...open.flatMap(([requestId, r]) =>
       kept.some((q) => q.runId === runId && q.requestId === requestId)
         ? []
-        : [{ runId, requestId, payload: r.payload }],
+        : [{ runId, requestId, payload: r.payload, answeredBy: r.answeredBy }],
     ),
   ];
 }
