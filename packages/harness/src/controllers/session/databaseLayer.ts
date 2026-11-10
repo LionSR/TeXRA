@@ -714,10 +714,11 @@ export const databaseLayer = (
                 [...aggregateColumns(id), RECORD_TYPES],
                 true,
               ),
-              (rows) =>
-                rows.length === 0
-                  ? null
-                  : rows.reduce(recordAfter, NO_RUN_ROWS),
+              // Only a run has a start: a plugin's own aggregate has no record.
+              (rows) => {
+                const record = rows.reduce(recordAfter, NO_RUN_ROWS);
+                return record.start === null ? null : record;
+              },
             ),
           ),
         ...currentValues({
