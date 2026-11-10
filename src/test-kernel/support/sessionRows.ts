@@ -36,9 +36,9 @@ export const runStart = (
  * One tool-use turn of `runId` as the loop writes it, row by row: the user
  * message, the model attempt, its provider id, the response with its two
  * `bash` calls, the first call's intent, and the tool group that delivers
- * both results. `result` builds a call's `tool.result`; `over` replaces any
- * payload field. Every object is built afresh per call, so no suite can
- * change another's input.
+ * both results. `result` builds a call's `tool.result`, closing no card;
+ * `over` replaces any payload field. Every object is built afresh per call,
+ * so no suite can change another's input.
  */
 export function toolUseTurn(runId: RunId) {
   const aggregateId = qualifyAggregateId('run', runId);
@@ -168,6 +168,9 @@ export function toolUseTurn(runId: RunId) {
       origin: { kind: 'response', responseId: RESPONSE_ID },
       callId: 'call-a',
       attempt: 1,
+      logId: 'card-0',
+      toolName: 'bash',
+      input: { command: 'ls' },
     },
   };
   const delivery: HistoryDraft<'model.message'> = {
@@ -198,6 +201,7 @@ export function toolUseTurn(runId: RunId) {
       responseId: RESPONSE_ID,
       callId,
       attempt: 1,
+      logId: null,
       disposition: 'executed',
       duplicateOf: null,
       result: { status: 'executed', output: 'ok' },

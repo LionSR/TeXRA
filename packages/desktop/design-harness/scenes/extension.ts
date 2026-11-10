@@ -305,7 +305,7 @@ function forkView(): SessionView {
   const park = (id: typeof FORK, at: number, turn: number) =>
     log.emit(id, at, {
       type: 'run.position',
-      payload: { family: 'toolUse', at: 'waiting', turn },
+      payload: { at: 'waiting', turn },
     });
   start(FORK_SOURCE, T.root, null);
   log.emit(FORK_SOURCE, T.root, {
@@ -627,7 +627,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     });
     log.emit(ROOT, T.root + 2, {
       type: 'run.position',
-      payload: { family: 'toolUse', at: 'turn.begin', turn: 2 },
+      payload: { at: 'turn.begin', turn: 2 },
     });
     const view = viewOf([
       subscribe(ROOT),

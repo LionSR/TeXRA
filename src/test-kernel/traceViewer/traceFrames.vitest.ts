@@ -45,7 +45,6 @@ function traceDocument(
         aggregateId: AGGREGATE,
         seq: index + 1,
         commit: index + 1,
-        origin: null,
         at: 1_767_225_600_000 + index,
         ...body,
       }),

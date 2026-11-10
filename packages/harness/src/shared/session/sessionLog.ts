@@ -95,7 +95,7 @@ export interface SessionLogShape {
   blobs(
     digests: readonly string[],
   ): Effect.Effect<StoredBlobs, DatabaseReadFailed>;
-  /** A run's facts, as its `run_record` projection names them (its
+  /** A run's record, from the newest row of each record kind (its
    *  requests and pending input left out: a `runRows` read holds those);
    *  null while the store holds no open run under the id. */
   facts(runId: RunId): Effect.Effect<RunRows | null, DatabaseReadFailed>;

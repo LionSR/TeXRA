@@ -116,7 +116,6 @@ export const DocumentTaskTool = defineTool({
   scriptGlobal: { positional: 'prompt' },
   scriptReturns:
     "{ response: string; changes: { path: string; absolutePath: string; base: string | null; added: number | null; removed: number | null }[]; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
-  slow: true,
   description: `Run a named agent's document task over files, as a child of this run: it revises every file in \`inputFiles\` in the fixed revisions its task defines, with compile checks and diffs, and proposes one revised document each.
 
 From a script, \`document_task(prompt, opts)\` waits for the task and resolves to its result: \`{ response, changes, runId, outcome, cost, spent }\`, where \`changes\` lists every revision's files in order (\`path\` the workspace file, \`absolutePath\` the revised copy), \`cost\` is what the task spent and \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, \`Skipped\`, \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. Called directly, the task runs in the background and its result arrives as a follow-up message; in a one-shot run the call waits for it.`,

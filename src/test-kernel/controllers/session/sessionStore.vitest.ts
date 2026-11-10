@@ -139,7 +139,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             ]);
             yield* untilStored(roots.storage, (rows) =>
               rows.some(
-                (row) => row.run === runId && row.type === 'tool.start',
+                (row) => row.run === runId && row.type === 'tool.intent',
               ),
             );
             // Every read the view's updater retries fails: a second reader's

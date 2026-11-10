@@ -553,7 +553,6 @@ export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
     // A script awaits the child's envelope, or `{ runId }` in the background.
     scriptReturns:
       "{ response: string; files: string[]; structured?: unknown; runId: string; outcome: 'completed'; cost: number; spent: number } | { runId: string }",
-    slow: true,
     description: `Run a named agent as a child of this run: it works with its own tools on the prompt you give it.
 
 From a script, \`agent(prompt, opts)\` (the same as \`tools.agent({ prompt, ...opts })\`) waits for the child and resolves to its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`: \`cost\` is what the child and its own children spent, \`spent\` what this run has spent in all so far. It rejects with an Error named \`AgentFailed\`, \`TimedOut\`, \`Skipped\` (the user stopped the child), \`DuplicateCall\` (a second identical call in one script) or \`ModelUnavailable\`. With \`background: true\` it resolves to \`{ runId }\` at once and the result arrives as a follow-up. A completed call is reused, not run again, by a later call in this run with the same prompt, options and file contents; give two otherwise identical calls of one script distinct \`id\`s.

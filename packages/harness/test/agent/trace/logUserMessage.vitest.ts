@@ -64,14 +64,13 @@ describe('logUserMessage', () => {
             provenance: null,
             seq: 1,
             commit: 1,
-            origin: null,
             at: 0,
           },
         },
         {
           _tag: 'event',
           read: 'all',
-          event: { ...prepared.draft, seq: 2, commit: 2, origin: null, at: 1 },
+          event: { ...prepared.draft, seq: 2, commit: 2, at: 1 },
         },
       ],
     });

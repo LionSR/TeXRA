@@ -193,7 +193,6 @@ const searchWeb = Effect.fn('WebSearchTool.execute')(function* ({
 export const WebSearchTool = defineTool({
   name: 'web_search',
   replay: 'safe',
-  slow: true,
   lane: 'parallel',
   description:
     'Search the web and return top results from the DuckDuckGo Instant Answers API.',

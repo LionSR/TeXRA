@@ -101,7 +101,6 @@ layer(
       // producer, no siblings and no writable host.
       expect(trace.events[0]).toMatchObject({
         type: 'run.start',
-        origin: null,
         parent: null,
         provenance: null,
         takesFollowUps: false,

@@ -79,7 +79,7 @@ const renameRefShaped = (value: object, rename: (key: string) => string) =>
 /** The column tuple every event read selects over {@link EVENT_FROM}. */
 export const EVENT_COLUMNS = `e."commit" AS "commit", s.kind AS kind,
   s.logical_id AS logicalId, e.seq AS seq, e.type AS type,
-  e.version AS version, e.origin AS origin, e.at AS at, e.data AS data`;
+  e.version AS version, e.at AS at, e.data AS data`;
 /** An event `e`'s aggregate key, joined on. */
 export const EVENT_JOINS = `JOIN event_sequence s ON s.id = e.aggregate`;
 /** An event with its aggregate's key. */
@@ -248,7 +248,6 @@ export const RowSchema = Schema.Struct({
   seq: Schema.Int,
   type: Schema.String,
   version: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
-  origin: Schema.String,
   at: Schema.Int,
   data: Schema.String,
 });
@@ -311,7 +310,6 @@ export function decodeRow(
     aggregateId: aggregateOf(row.kind, row.logicalId),
     seq: row.seq,
     commit: row.commit,
-    origin: row.origin,
     at: row.at,
     type: row.type,
   });

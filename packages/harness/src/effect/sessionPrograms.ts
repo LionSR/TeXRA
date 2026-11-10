@@ -203,9 +203,9 @@ type ResumeError = ResumeRefused | LaunchError | RunFailure;
 /**
  * Continue a persisted run of `session` through the one resume path every
  * host takes (`resumeRun`), with the caller's custom tools. A child an open
- * call of its parent owns, as its records say under its claim in its own
- * resume job, is not resumed here: its parent is, whose handle names the
- * child it was asked for. One whose edge is cut resumes itself. A run
+ * call of its parent owns, as its records say in its own resume job, is not
+ * resumed here: its parent is, whose handle names the child it was asked
+ * for. One whose edge is cut resumes itself. A run
  * already running here answers the handle of the activation it runs. A
  * refusal arrives before the run is activated, so it fails this, naming the
  * run refused.

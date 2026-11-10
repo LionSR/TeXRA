@@ -330,10 +330,10 @@ return { columns: page.columns, count: page.rows.length,
         }),
       );
 
-      // The settlement is the whole transactional boundary: the result and the
-      // card that reports it commit together, and the edit and the call the
-      // fold reads off the result need no other row.
-      it.effect('commits the card and the workspace with the tool result', () =>
+      // The settlement is the whole transactional boundary: the card that
+      // reports it, the edit and the call are all read off the result row,
+      // and need no other.
+      it.effect('reads the card and the workspace off the tool result', () =>
         Effect.gen(function* () {
           const editingTool: StepTool = {
             definition: { name: 'edit_file', description: 'edit_file' },
@@ -388,11 +388,11 @@ return { columns: page.columns, count: page.rows.length,
           expect(folded?.edited).toEqual(['notes.tex']);
           expect(folded?.toolCalls).toBe(1);
 
-          // The fast tool's card is two rows of that same batch rather than a
-          // pair of trace publications: exactly one open and one close reach
-          // the display, and the interrupted second call opens none.
+          // A card is its call's own rows as the display reads them: the
+          // settled call's opens and closes once, and the interrupted second
+          // call, whose body started, shows its card open.
           const types = (yield* recorded.read).map((event) => event.type);
-          expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
+          expect(types.filter((type) => type === 'tool.start')).toHaveLength(2);
           expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
         }),
       );

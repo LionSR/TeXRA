@@ -71,7 +71,7 @@ const publishRun = (
     {
       type: 'run.position',
       aggregateId,
-      payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
+      payload: { at: 'turn.begin', turn: 1 },
     },
   ]);
 };

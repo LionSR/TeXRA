@@ -345,7 +345,6 @@ export const ScriptTool = defineTool({
   // A resume runs the script again from the top against its recorded calls:
   // each settled call is handed back from its row, never run twice.
   replay: 'safe',
-  slow: true,
   description: SURFACE,
   describe: (declared, modules) =>
     [

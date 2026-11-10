@@ -303,7 +303,7 @@ provider whose key a child agent CLI authenticates with itself. Windows
 matches variable names case-insensitively, as its environment does.
 
 ```ts
-const inheritedEnv: (keep?: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>
+const inheritedEnv: (keep?: "xai" | "anthropic" | "openai" | "google" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>
 ```
 
 ## INPUT_HISTORY_LIMIT
@@ -647,9 +647,9 @@ type RowOf<T extends SessionRow['type']> = Extract<
 ## RunRows
 
 What a run's record rows say about it, each field from the rows its
-comment names: what `SessionLog.facts` serves, read from the store's
-`run_record` projection (`controllers/session/projections.ts`). The
-session view keeps its own on `RunView`.
+comment names, as `recordAfter` (`runRowReads.ts`) applies them: what
+`SessionLog.facts` serves, read from the newest row of each kind, and
+what the session view keeps per run for the fields it shows.
 
 ```ts
 type RunRows = {

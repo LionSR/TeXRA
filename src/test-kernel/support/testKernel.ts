@@ -73,7 +73,6 @@ import {
   ProjectDatabases,
   type SessionOpenError,
 } from '@shared/session/database';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { Plugin } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
@@ -189,12 +188,10 @@ const followedPorts = (current: Ref.Ref<InstalledHost>) => {
  * `AgentCatalog`, the model routes' `RouteRetries` gate, the `ToolRegistry`
  * and `ToolAvailability`; the composition adds its `ToolCatalog`; and a
  * composition root opens its sessions through `Sessions`, with the internal
- * `SessionOwner`, the project stores (`ProjectDatabases`) and the process's
- * `ProcessIdentity` beside it, which the suites' root launches and store
- * faults ask.
+ * `SessionOwner` and the project stores (`ProjectDatabases`) beside it, which
+ * the suites' root launches and store faults ask.
  */
 const PROCESS_SERVICES = [
-  ProcessIdentity,
   FileSystem.FileSystem,
   Path.Path,
   ChildProcessSpawner,
@@ -220,14 +217,13 @@ const PROCESS_SERVICES = [
 ] as const;
 
 /** What the kernel's process serves: a host's, and the internal services
- *  the suites read beside it (`SessionOwner`, the project stores and the
- *  process identity), which `processLayer`'s type omits. */
+ *  the suites read beside it (`SessionOwner` and the project stores), which
+ *  `processLayer`'s type omits. */
 type KernelProcess =
   | ProcessServices
   | Sessions
   | SessionOwner
-  | ProjectDatabases
-  | ProcessIdentity;
+  | ProjectDatabases;
 
 /** The process over the host's app (its settings and plugins) and `extra`, its validation route
  *  served by `model` and its files and child processes by `platform` (the

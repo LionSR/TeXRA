@@ -80,8 +80,9 @@ export interface BindRequest {
   readonly modelId: string;
   /** A route's overlay to keep, else the catalog entry the string names. */
   readonly config?: ModelConfig;
-  /** A resumed run's backend wins over today's default route. */
-  readonly backend?: ModelBackend;
+  /** A resumed run's backend, as its rows name it, wins over today's
+   *  default route. */
+  readonly backend?: string;
   /** The routes the run declined, as its rows record them. */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   readonly textOnly: boolean;

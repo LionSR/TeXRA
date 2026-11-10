@@ -17,7 +17,8 @@ ruling and argues against it explicitly.
 | The tool layer: catalogs, the step pin, the tool contracts              | [tool layer: one catalog, one step pin, one tool contract](./implemented/architecture/2026-11-01-tool-layer-one-catalog-one-step.md) |
 | The harness / app / llm package split                                   | [harness package split](./implemented/architecture/2026-10-02-harness-package-split.md)                                              |
 | Durable runs: replay, fork, compaction                                  | [durable harness](./implemented/architecture/2026-10-02-durable-harness.md)                                                          |
-| Storage format and the session database                                 | [storage v1 design](./implemented/architecture/2026-09-28-storage-v1-design.md)                                                      |
+| The session store and the durable protocol, as built                    | [the durable protocol](../../packages/harness/docs/spec.md)                                                                          |
+| Storage format: the 1.0 decisions and their reasons                     | [storage v1 design](./implemented/architecture/2026-09-28-storage-v1-design.md)                                                      |
 | Plugins and their contributions                                         | [plugin architecture](./implemented/architecture/2026-09-24-plugin-architecture.md)                                                  |
 | Code plugins and hooks                                                  | [code plugins and hooks](./implemented/architecture/2026-09-28-code-plugins-hooks-v1.md)                                             |
 | Code as tool (`script`, `agent()`)                                      | [codemode everywhere](./implemented/architecture/2026-10-01-codemode-everywhere.md)                                                  |

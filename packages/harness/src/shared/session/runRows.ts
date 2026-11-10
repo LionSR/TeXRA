@@ -105,7 +105,6 @@ export function ownCopy<T extends object, W extends T>(
 
 /** The row state before any of these rows. */
 export const freshRunRowState = (): RunRowState => ({
-  family: null,
   at: null,
   turn: 0,
   requests: byId([]),
@@ -177,7 +176,6 @@ export function applyRunRow(
         };
       }
       return applied({
-        family: p.family,
         at: p.at,
         turn: p.turn ?? rows.turn,
       });

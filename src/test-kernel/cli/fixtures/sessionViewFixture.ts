@@ -87,7 +87,7 @@ export function viewWith(
     });
     log.emit(run.id, 1, {
       type: 'run.position',
-      payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
+      payload: { at: 'turn.begin', turn: 1 },
     });
   }
   for (const request of requests) {

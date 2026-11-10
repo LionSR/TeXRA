@@ -149,7 +149,7 @@ const candidates = (
 ): readonly RunHistoryRow[] =>
   rows.filter(isRunStateRow).map((row, i) => ({
     ...row,
-    ...{ seq: i + 1, commit: state.commit + i + 1, origin: null, at: 0 },
+    ...{ seq: i + 1, commit: state.commit + i + 1, at: 0 },
   }));
 
 /**

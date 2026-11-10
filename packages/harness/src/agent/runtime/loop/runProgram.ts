@@ -71,9 +71,9 @@ const foreignProtocol = (
 /**
  * The run's entry: its cell. A fresh run's registration rides the cell's
  * first append, its opening, so the run exists with its opening or not at
- * all. A resume takes the claim and commits its activation, in one batch,
- * and is refused when the rows hold nothing to continue from. A fresh
- * launch onto a run that already holds history state is refused.
+ * all. A resume commits its activation, in one batch, and is refused when
+ * the rows hold nothing to continue from. A fresh launch onto a run that
+ * already holds history state is refused.
  * The caller opens a cell whose state has no phase.
  */
 export const openRun = Effect.fn('runProgram.openRun')(function* (

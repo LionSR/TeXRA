@@ -42,7 +42,6 @@ import {
   ProjectDatabases,
   type SessionOpenError,
 } from '@shared/session/database';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { HostSkillSources } from '@skills/runtimeSkills';
 import {
   hostSkillContributions,
@@ -264,13 +263,8 @@ function sessionsLayer(
           FileSystem.FileSystem,
           ChildProcessSpawner,
           ProjectDatabases,
-          ProcessIdentity,
           ToolRegistry,
-        )(
-          yield* Effect.context<
-            ProcessServices | ProjectDatabases | ProcessIdentity
-          >(),
-        );
+        )(yield* Effect.context<ProcessServices | ProjectDatabases>());
         return yield* makeSessions(
           yield* SessionOwner,
           yield* AgentCatalog,
