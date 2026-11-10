@@ -303,104 +303,101 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       state.at === 'turn.ready' ||
       state.at === 'waiting' ||
       state.at === 'turn.end';
-    const body = Effect.gen(function* () {
-      if (begins) {
-        state = yield* cell.append([
-          positionRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
-        ]);
-      }
-      for (;;) {
-        state = yield* applyPendingModelSwitch(
+    if (begins) {
+      state = yield* cell.append([
+        positionRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
+      ]);
+    }
+    for (;;) {
+      state = yield* applyPendingModelSwitch(
+        cell,
+        compaction,
+        yield* followUps.reader.controls,
+      );
+      if (state.pendingResponse !== null) {
+        // Input queued meanwhile is delivered at the request that follows.
+        const dispatched = yield* dispatchPendingResponse(
           cell,
-          compaction,
-          yield* followUps.reader.controls,
+          yield* dispatchTools(run, state),
         );
-        if (state.pendingResponse !== null) {
-          // Input queued meanwhile is delivered at the request that follows.
-          const dispatched = yield* dispatchPendingResponse(
-            cell,
-            yield* dispatchTools(run, state),
-          );
-          state = dispatched.state;
-          if (dispatched.endTurn) return completeTurn(state);
-          continue;
-        }
-        // A handed-down call asks no model: delivered, the turn ends.
-        if (state.handedDown !== null) return completeTurn(state);
-        // A committed text-only response whose policy has not run: the
-        // response this turn just received, or one a resume finds.
-        const last =
-          state.at === 'response.ready' && state.invocation === null
-            ? state.messages.at(-1)
-            : undefined;
-        if (last?.role === 'assistant') {
-          const text = turnText(last);
-          const processed = yield* afterTextResponse(cell, state, text);
-          state = processed.state;
-          if (processed.done) return completeTurn(state);
-          continue;
-        }
-        const bound = yield* ScopedRef.get(run.model);
-        // A message typed while the turn ran joins the request after the tool
-        // results (past a context update), never a user message: read before
-        // the step opens, so a skill it activates is the step's, and before a
-        // summary lands, which keeps what the loop appended after its base.
-        const tail = state.messages.findLast((m) => m.role !== 'system');
-        if (state.invocation === null && tail?.role === 'tool') {
-          const queued = yield* followUps.reader.read('request');
-          if (queued !== null)
-            state = yield* followUps.consume(cell, queued, {
-              position: false,
-            });
-        }
-        // The step this request opens, its offered set recorded when changed.
-        let step = yield* stepFor(run, state, false);
-        if (step.rows.length > 0) state = yield* cell.append(step.rows);
-        let tools = sentDefinitions(step.tools);
-        // One round: the compaction the history may need, the `/compact`s
-        // it answers, the invocation. An open attempt's history is fixed.
-        if (state.invocation === null) {
-          // A `/compact`: the edit answering it applies it, else it is a no-op.
-          const compacts = consumedRows(runId, 'compact');
-          const controls = yield* followUps.reader.controls;
-          const requests = compacts(controls, { kind: 'applied' });
-          state = yield* compaction.atBoundary(cell, bound, requests);
-          // A compaction dropped the context updates: a new step renders them.
-          if (state.offeredContext === null) {
-            step = yield* stepFor(run, state, false);
-            state = yield* cell.append(step.rows);
-            tools = sentDefinitions(step.tools);
-          }
-          const unanswered = (yield* followUps.reader.controls).filter((f) =>
-            requests.some(({ followUpId }) => followUpId === f.followUpId),
-          );
-          const noops = compacts(unanswered, {
-            kind: 'dropped',
-            reason: 'noop',
-          });
-          if (noops.length > 0) state = yield* cell.append(noops);
-        }
-        const toolChoice =
-          state.forceFinalTool &&
-          run.finalToolName !== null &&
-          bound.forcedToolChoice
-            ? { name: run.finalToolName }
-            : undefined;
-        const outcome = yield* invoker.invoke(cell, {
-          tools,
-          toolChoice,
-          system: step.system,
-        });
-        state = outcome.state;
-        if (outcome.kind === 'cancelled')
-          return { state, outcome: 'cancelled' } as const;
-        if (outcome.kind !== 'failed') continue;
-        const compacted = yield* compaction.afterOverflow(cell, bound);
-        if (compacted === null) return { state, outcome: 'failed' } as const;
-        state = compacted;
+        state = dispatched.state;
+        if (dispatched.endTurn) return completeTurn(state);
+        continue;
       }
-    });
-    return yield* body;
+      // A handed-down call asks no model: delivered, the turn ends.
+      if (state.handedDown !== null) return completeTurn(state);
+      // A committed text-only response whose policy has not run: the
+      // response this turn just received, or one a resume finds.
+      const last =
+        state.at === 'response.ready' && state.invocation === null
+          ? state.messages.at(-1)
+          : undefined;
+      if (last?.role === 'assistant') {
+        const text = turnText(last);
+        const processed = yield* afterTextResponse(cell, state, text);
+        state = processed.state;
+        if (processed.done) return completeTurn(state);
+        continue;
+      }
+      const bound = yield* ScopedRef.get(run.model);
+      // A message typed while the turn ran joins the request after the tool
+      // results (past a context update), never a user message: read before
+      // the step opens, so a skill it activates is the step's, and before a
+      // summary lands, which keeps what the loop appended after its base.
+      const tail = state.messages.findLast((m) => m.role !== 'system');
+      if (state.invocation === null && tail?.role === 'tool') {
+        const queued = yield* followUps.reader.read('request');
+        if (queued !== null)
+          state = yield* followUps.consume(cell, queued, {
+            position: false,
+          });
+      }
+      // The step this request opens, its offered set recorded when changed.
+      let step = yield* stepFor(run, state, false);
+      if (step.rows.length > 0) state = yield* cell.append(step.rows);
+      let tools = sentDefinitions(step.tools);
+      // One round: the compaction the history may need, the `/compact`s
+      // it answers, the invocation. An open attempt's history is fixed.
+      if (state.invocation === null) {
+        // A `/compact`: the edit answering it applies it, else it is a no-op.
+        const compacts = consumedRows(runId, 'compact');
+        const controls = yield* followUps.reader.controls;
+        const requests = compacts(controls, { kind: 'applied' });
+        state = yield* compaction.atBoundary(cell, bound, requests);
+        // A compaction dropped the context updates: a new step renders them.
+        if (state.offeredContext === null) {
+          step = yield* stepFor(run, state, false);
+          state = yield* cell.append(step.rows);
+          tools = sentDefinitions(step.tools);
+        }
+        const unanswered = (yield* followUps.reader.controls).filter((f) =>
+          requests.some(({ followUpId }) => followUpId === f.followUpId),
+        );
+        const noops = compacts(unanswered, {
+          kind: 'dropped',
+          reason: 'noop',
+        });
+        if (noops.length > 0) state = yield* cell.append(noops);
+      }
+      const toolChoice =
+        state.forceFinalTool &&
+        run.finalToolName !== null &&
+        bound.forcedToolChoice
+          ? { name: run.finalToolName }
+          : undefined;
+      const outcome = yield* invoker.invoke(cell, {
+        tools,
+        toolChoice,
+        system: step.system,
+      });
+      state = outcome.state;
+      if (outcome.kind === 'cancelled')
+        return { state, outcome: 'cancelled' } as const;
+      if (outcome.kind !== 'failed') continue;
+      const compacted = yield* compaction.afterOverflow(cell, bound);
+      if (compacted === null) return { state, outcome: 'failed' } as const;
+      state = compacted;
+    }
   });
 
   // ------------------------------------------------------------- the loop
@@ -528,15 +525,15 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // The controls detach as the run's scope closes, after the bracket below
   // settles the cell; `cell.append` protects each commit from interruption.
   yield* registryOf(yield* Runs).attachControls(runId, controls);
-  return yield* Effect.acquireUseRelease(
-    Effect.succeed(cell),
-    loopBody,
-    (cell, exit) =>
-      // However the run ends (a stop's interruption included), a finished
-      // summary lands before the halt (its usage is the run's); one still running
-      // stops with the run. A refused summary fails the run, which its end records.
+  return yield* loopBody(cell).pipe(
+    // However the run ends (a stop's interruption included), a finished
+    // summary lands before the halt (its usage is the run's); one still running
+    // stops with the run. A refused summary fails the run, which its end records.
+    Effect.onExit((exit) =>
       compaction
         .landPending(cell, 'the run stopped')
         .pipe(Effect.asVoid, Effect.ensuring(settleRun(cell, followUps)(exit))),
-  ).pipe(Effect.map((loop) => result(loop.outcome, loop.state)));
+    ),
+    Effect.map((loop) => result(loop.outcome, loop.state)),
+  );
 }, Effect.scoped);

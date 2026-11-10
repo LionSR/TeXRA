@@ -40,7 +40,6 @@ import {
 import { consumedRow, isInstruction } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import type { Alongside } from '@shared/session/sessionEvents';
 import { SessionLog, type RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
@@ -72,7 +71,6 @@ interface ConsumeOptions {
   /** Rows committed before the batch's: a turn's end and a child's
    *  delivery, so one batch carries the boundary and the next input. */
   readonly rows?: readonly RunHistoryDraft[];
-  readonly alongside?: Alongside<Error>;
   /** Whether a batch with a message starts a turn (`run.position
    *  turn.ready`, the default) or joins the one running (delivery at the
    *  next request, `false`). */
@@ -279,7 +277,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const rows = [...(options.rows ?? []), ...built.rows];
     const committed = yield* cell.append(
       opens ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
-      options.alongside,
     );
     built.delivered();
     return committed;
