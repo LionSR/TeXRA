@@ -74,7 +74,7 @@ type RunHistoryDraftType =
   | 'request.decided'
   | 'followup.queued'
   | 'followup.consumed'
-  | CardRowType;
+  | UnreadRowType;
 
 export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsistent>()(
   'RunHistoryInconsistent',
@@ -192,17 +192,22 @@ export type RunState = RunRowState &
     readonly hookOutcomes: HookOutcomes;
   };
 
-/** Display rows a batch commits together with run history rows; the run
- *  state ignores them. */
-type CardRowType = CardType | ResultType | EndType | 'plugin.fact';
-type CardType = 'tool.start' | 'stage.start' | 'stream.end';
-type ResultType = 'run.report' | 'process.exit';
-type EndType = 'stage.end' | 'followup.closed'; // and what it closes
+/** The rows a batch commits beside run history rows, which the run state
+ *  does not read: the card of a call that ended before its body started, a
+ *  stream's close, a run's report and process exit, its input's close, and
+ *  a plugin's fact. */
+type UnreadRowType =
+  | 'tool.start'
+  | 'stream.end'
+  | 'run.report'
+  | 'process.exit'
+  | 'followup.closed'
+  | 'plugin.fact';
 /** The row types the run state reads, each with a handler in
  *  `ROW_HANDLERS`. A run's input is not among them: the inbox reads it. */
 export type RunStateRowType = Exclude<
   SharedRunRow['type'] | RunHistoryDraft['type'] | 'run.activate',
-  CardRowType | 'followup.queued' | 'followup.consumed'
+  UnreadRowType | 'followup.queued' | 'followup.consumed'
 >;
 /** The drafts any job may commit without the run's cell: the ones the run
  *  state does not read (a run's input and the display rows above), and the
