@@ -35,7 +35,6 @@ import {
 
 import {
   foldSkillSources,
-  INTEROP_SKILL_DIRS,
   type SkillSourceContribution,
   type SkillSourceOptions,
 } from './skillSources';
@@ -101,22 +100,31 @@ export type SkillRoots = SettingsStores & {
 const discoverRuntimeSkills = Effect.fn('discoverRuntimeSkills')(function* (
   roots: Pick<SkillRoots, 'workspace' | 'storageRoot'>,
   plugins: InstalledPluginLoad,
+  disabled: DisabledSkills,
   options?: SkillSourceOptions,
 ) {
   const host = yield* HostSkillSources;
   // An unresolvable home directory is logged by `homeDirectory`; the
   // `/nonexistent` root then holds no user skills to discover.
   const home = (yield* homeDirectory) ?? '/nonexistent';
-  const result = yield* discoverSkillSources(
-    foldSkillSources(host.contributions, {
-      cwd: roots.workspace,
-      home,
-      storageRoot: roots.storageRoot,
-      resourcesPath: host.resourcesPath,
-      options: options ?? host.options,
-      plugins: plugins.loadable,
-    }),
-  );
+  const tiers = foldSkillSources(host.contributions, {
+    cwd: roots.workspace,
+    home,
+    storageRoot: roots.storageRoot,
+    resourcesPath: host.resourcesPath,
+    options: options ?? host.options,
+    plugins: plugins.loadable,
+  });
+  // A switched-off source is read after every source that is on, so a skill
+  // it holds never takes the name of one a person can use.
+  const off = (source: SkillSource) =>
+    disabled.scopes.includes(source.scope) || pluginOff(source, disabled);
+  const keep = (wanted: boolean) =>
+    tiers.map((tier) => ({
+      ...tier,
+      sources: tier.sources.filter((source) => off(source) === wanted),
+    }));
+  const result = yield* discoverSkillSources([...keep(false), ...keep(true)]);
   return {
     skills: result.skills,
     errors: [
@@ -203,7 +211,7 @@ function loadEnabledRuntimeSkills(
   options?: SkillSourceOptions,
 ) {
   return Effect.map(
-    discoverRuntimeSkills(roots, plugins, options),
+    discoverRuntimeSkills(roots, plugins, disabled, options),
     (result): DiscoverSkillSourcesResult => ({
       skills: result.skills.filter(
         (entry) => !isSkillDisabled(entry, disabled),
@@ -229,9 +237,6 @@ export interface EnabledSkill {
  * installed. Every read answers with the discovery issues beside the skills.
  */
 export const Skills = Object.freeze({
-  /** The folders, beside a workspace and the home folder, whose `skills/`
-   *  an interop listing (`includeInterop`) also reads. */
-  interopDirs: INTEROP_SKILL_DIRS,
   /**
    * The complete inventory a settings page lists, each skill marked enabled
    * or not. A switched-off plugin's skills are hidden, not listed as
@@ -242,6 +247,7 @@ export const Skills = Object.freeze({
     const result = yield* discoverRuntimeSkills(
       roots,
       yield* readInstalledPluginLoad(roots),
+      disabled,
     );
     return {
       skills: result.skills

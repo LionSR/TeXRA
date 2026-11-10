@@ -40,7 +40,6 @@ export function reachDesktopService(
         new Error(`this build has no service bundle at ${bundle}`),
       );
     return linkService(
-      dataRoot,
       spawnService(dataRoot, process.execPath, [bundle, 'serve'], {
         ELECTRON_RUN_AS_NODE: '1',
       }),

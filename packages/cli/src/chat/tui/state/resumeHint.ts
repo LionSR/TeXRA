@@ -19,7 +19,6 @@ interface ResumeCommandOptions {
   readonly approvalPolicy?: ApprovalPolicy;
   readonly outputFormat?: CliOutputFormat;
   readonly print?: boolean;
-  readonly includeInteropSkills?: boolean;
   readonly skillSourcePaths?: readonly string[];
 }
 
@@ -48,12 +47,10 @@ export function formatResumeCommand(
       ? ` --output-format ${options.outputFormat}`
       : '';
   const printFlag = options.print === true ? ' --print' : '';
-  const interopFlag =
-    options.includeInteropSkills === true ? ' --include-interop' : '';
   const sourceFlags = (options.skillSourcePaths ?? [])
     .map((source) => ` --source ${shellArgument(source)}`)
     .join('');
-  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
+  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${sourceFlags}`;
 }
 
 /** Why a run launched to run once (a headless `texra run`) that ended is

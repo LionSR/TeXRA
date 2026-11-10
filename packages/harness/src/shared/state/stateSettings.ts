@@ -389,10 +389,11 @@ export const DISABLED_SKILL_SOURCES_SETTING = {
   key: 'skills.disabledSources',
   slot: 'config',
   schema: Schema.Array(ActiveSkillSourceScopeSchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
+    Schema.withDecodingDefault(Effect.succeed(['interop'])),
   ),
   title: 'Skill sources',
-  description: 'Enable or disable skill source groups in this workspace.',
+  description:
+    'Enable or disable skill source groups in this workspace. The imported group, the `.agents`, `.claude`, `.codex` and `.gemini` skill folders beside the workspace and in the home directory, is off until enabled.',
 } as const satisfies SettingRow<
   readonly (typeof ActiveSkillSourceScopeSchema.Type)[]
 >;

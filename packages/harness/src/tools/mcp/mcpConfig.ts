@@ -29,7 +29,7 @@ import {
   Duration,
   Effect,
   Equal,
-  type FileSystem,
+  FileSystem,
   Hash,
   Option,
   RcMap,
@@ -61,15 +61,18 @@ const McpConfigFileSchema = Schema.Struct({
 
 /** The file's text, or `null` when it does not exist. */
 const readConfigText = (
-  fs: FileSystem.FileSystem,
   file: string,
-): Effect.Effect<string | null, Error> =>
-  fs.readFileString(file).pipe(
-    Effect.map((text): string | null => text),
-    Effect.catchIf(absentReason, () => Effect.succeed(null)),
-    Effect.mapError(
-      (error) =>
-        new Error(`Could not read ${file}: ${error.message}`, { cause: error }),
+): Effect.Effect<string | null, Error, FileSystem.FileSystem> =>
+  Effect.flatMap(FileSystem.FileSystem, (fs) =>
+    fs.readFileString(file).pipe(
+      Effect.map((text): string | null => text),
+      Effect.catchIf(absentReason, () => Effect.succeed(null)),
+      Effect.mapError(
+        (error) =>
+          new Error(`Could not read ${file}: ${error.message}`, {
+            cause: error,
+          }),
+      ),
     ),
   );
 
@@ -80,13 +83,14 @@ const readConfigText = (
  * read-only from here, and the CLI warns of a broken file at startup.
  */
 export const readMcpConfig: (
-  fs: FileSystem.FileSystem,
   file: string,
-) => Effect.Effect<ReturnType<typeof parseMcpServers> | null> = Effect.fn(
-  'readMcpConfig',
-)(
-  function* (fs: FileSystem.FileSystem, file: string) {
-    const text = yield* readConfigText(fs, file);
+) => Effect.Effect<
+  ReturnType<typeof parseMcpServers> | null,
+  never,
+  FileSystem.FileSystem
+> = Effect.fn('readMcpConfig')(
+  function* (file: string) {
+    const text = yield* readConfigText(file);
     if (text === null) return null;
     const json = yield* Effect.try({
       try: (): unknown => JSON.parse(text),
@@ -207,7 +211,9 @@ export const mcpPluginLoader =
         declared.flatMap((name) => mcpServerOfToolName(name) ?? []),
       );
       if (wanted.size === 0) return { plugins: [], warnings: [] };
-      const config = yield* readMcpConfig(fs, file);
+      const config = yield* readMcpConfig(file).pipe(
+        Effect.provideService(FileSystem.FileSystem, fs),
+      );
       if (config === null)
         return {
           plugins: [],

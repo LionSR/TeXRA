@@ -34,11 +34,8 @@ export function settingsMemoryCommands(ports: {
     ['memory'],
     Effect.map(MemoryStore.list, (items) => ({ items })),
   );
-  const setMemoryPinned = Effect.fn('setMemoryPinned')(function* (
-    storagePath: string,
-    pinned: boolean,
-  ) {
-    const result = yield* MemoryStore.pin(storagePath, pinned);
+  const pinMemory = Effect.fn('pinMemory')(function* (storagePath: string) {
+    const result = yield* MemoryStore.pin(storagePath);
     if (result.status === 'cap-reached') {
       yield* bindings.dialogs.notify(
         'warning',
@@ -120,9 +117,12 @@ export function settingsMemoryCommands(ports: {
       ),
     ),
     pinMemory: ({ storagePath }) =>
-      reported('Failed to pin memory', setMemoryPinned(storagePath, true)),
+      reported('Failed to pin memory', pinMemory(storagePath)),
     unpinMemory: ({ storagePath }) =>
-      reported('Failed to unpin memory', setMemoryPinned(storagePath, false)),
+      reported(
+        'Failed to unpin memory',
+        Effect.andThen(MemoryStore.unpin(storagePath), memoryChanged),
+      ),
   } satisfies Partial<
     SettingsViewInboundHandlerRegistry<ProcessServices | StorageFs>
   >;

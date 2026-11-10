@@ -262,20 +262,33 @@ export const probeRecordedService: Effect.Effect<
 );
 
 /**
- * Start the service detached, with its output appended to its log, and
- * return at once: the caller waits for its hello. It is detached in its own
- * process group, so it outlives the window that started it. `command` and `args` are
- * the host's: its own Node and entry (the CLI), or its runtime as Node and
- * the shipped headless bundle (`env` `ELECTRON_RUN_AS_NODE=1`).
+ * How a host starts the service of a storage root: the root, whose
+ * `serve.log` is where a service that never answers is explained, and the
+ * start itself.
+ */
+interface ServiceStart {
+  readonly storageRoot: string;
+  /** Spawns the service detached and returns; the caller waits for its
+   *  hello. */
+  readonly start: Effect.Effect<void, Error>;
+}
+
+/**
+ * The start of the service that runs detached, with its output appended to
+ * its log, and returns at once: the caller waits for its hello. It is
+ * detached in its own process group, so it outlives the window that started
+ * it. `command` and `args` are the host's: its own Node and entry (the CLI),
+ * or its runtime as Node and the shipped headless bundle (`env`
+ * `ELECTRON_RUN_AS_NODE=1`).
  */
 export function spawnService(
   storageRoot: string,
   command: string,
   args: readonly string[],
   env: Readonly<Record<string, string>> = {},
-): Effect.Effect<void, Error> {
-  return Effect.gen(function* () {
-    const paths = servicePaths(storageRoot);
+): ServiceStart {
+  const paths = servicePaths(storageRoot);
+  const start = Effect.gen(function* () {
     yield* prepareServiceDirectories(paths);
     const log = yield* Effect.try({
       try: () => openSync(paths.log, 'a', 0o600),
@@ -311,6 +324,7 @@ export function spawnService(
       });
     }).pipe(Effect.ensuring(Effect.sync(() => closeSync(log))));
   }).pipe(Effect.mapError(ensureError), Effect.provide(nodeFileServices));
+  return { storageRoot, start };
 }
 
 /**
@@ -345,15 +359,14 @@ const newerService = (info: ServiceInfo) =>
   });
 
 /**
- * Connect to this storage root's service, starting it with `start` (which
- * spawns the service detached and returns) when none answers. One that
- * speaks an older protocol or runs an older build than this one is retired
- * first, and one already draining waited for: either exits once its tasks
- * end, and its socket's close is the signal to start.
+ * Connect to the service of `start`'s storage root, starting it with
+ * `start` when none answers. One that speaks an older protocol or runs an
+ * older build than this one is retired first, and one already draining
+ * waited for: either exits once its tasks end, and its socket's close is
+ * the signal to start.
  */
 export const ensureService = Effect.fn('server.ensureService')(function* (
-  storageRoot: string,
-  start: Effect.Effect<void, Error>,
+  { storageRoot, start }: ServiceStart,
   options: {
     /** Runs whenever the connection ends (see {@link connectService}). */
     readonly onDisconnect?: Effect.Effect<void>;
@@ -556,8 +569,7 @@ const RECONNECT = Schedule.min([
  * way to tell its user; a later one says it as the link's `away`.
  */
 export const linkService = Effect.fn('server.linkService')(function* (
-  storageRoot: string,
-  start: Effect.Effect<void, Error>,
+  start: ServiceStart,
   waiting: (message: string) => Effect.Effect<void>,
 ): Effect.fn.Return<
   ServiceLink,
@@ -566,12 +578,12 @@ export const linkService = Effect.fn('server.linkService')(function* (
 > {
   const away = yield* SubscriptionRef.make(SERVICE_OFFLINE);
   const connect = Effect.fn('connect')(function* (
-    begin: Effect.Effect<void, Error>,
+    begin: ServiceStart,
     told: (message: string) => Effect.Effect<void>,
   ) {
     const scope = yield* Scope.make();
     const lost = yield* Deferred.make<void>();
-    const connection = yield* ensureService(storageRoot, begin, {
+    const connection = yield* ensureService(begin, {
       onDisconnect: Effect.asVoid(Deferred.succeed(lost, undefined)),
       waiting: told,
     }).pipe(
@@ -609,7 +621,10 @@ export const linkService = Effect.fn('server.linkService')(function* (
         // older window never races it with one of its build, and starts
         // one itself only when none came, as at startup.
         let told = '';
-        current = yield* connect(Effect.void, awayWaiting).pipe(
+        current = yield* connect(
+          { storageRoot: start.storageRoot, start: Effect.void },
+          awayWaiting,
+        ).pipe(
           Effect.catch(() => connect(start, awayWaiting)),
           // Said once per reason: a newer protocol's service stays until it
           // exits, and the link keeps trying meanwhile.

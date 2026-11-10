@@ -144,6 +144,16 @@ const InquiryThreadRecordSchema = Schema.Struct({
 /** A thread's full record, as the global database stores it. */
 export type InquiryThreadRecord = typeof InquiryThreadRecordSchema.Type;
 
+/**
+ * What a change to a thread's open turn did: `changed` is the manifest it
+ * wrote; `unchanged` is the thread as it stands (`null` for none), whose
+ * status and last turn say why the change did not apply: the turn is no
+ * longer open, or the thread is at another turn.
+ */
+export type InquiryTurnOutcome =
+  | { readonly changed: InquiryThreadRecord }
+  | { readonly unchanged: InquiryThreadRecord | null };
+
 /** The thread records, in the global database's current values and keyed by
  *  thread id, so a follow-up from another project still reaches its thread.
  *  Named as the plugin's own row kind is (`external-inquiry/thread`). */
@@ -287,16 +297,19 @@ export class InquiryRecords extends Context.Service<
       suggestSearch?: boolean;
       attachFiles?: readonly string[];
     }) => Effect.Effect<InquiryThreadRecord, Error>;
+    /** Answer the thread's open turn `turnIndex`. */
     readonly recordAnswerForOpenTurn: (params: {
       threadId: InquiryThreadId;
       turnIndex: number;
       answer: string;
       sessionLinks?: readonly string[] | null;
-    }) => Effect.Effect<InquiryThreadRecord | null, Error>;
+    }) => Effect.Effect<InquiryTurnOutcome, Error>;
+    /** Drop the thread at its open turn `turnIndex`. A drop that arrives
+     *  after an answer changes nothing: an `answered` thread stays so. */
     readonly markDropped: (params: {
       threadId: InquiryThreadId;
       turnIndex: number;
-    }) => Effect.Effect<InquiryThreadRecord | null, Error>;
+    }) => Effect.Effect<InquiryTurnOutcome, Error>;
     readonly readExternalInquiryThread: (
       threadId: string,
     ) => Effect.Effect<InquiryThreadRecord | null, Error>;

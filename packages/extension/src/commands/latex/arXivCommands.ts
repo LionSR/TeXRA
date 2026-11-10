@@ -19,6 +19,7 @@ import {
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
+import { LatexProgress } from '@latex/progress';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
@@ -96,15 +97,17 @@ export const downloadArXivSource: (
         Effect.raceFirst(
           Effect.gen(function* () {
             const downloadResult = yield* downloadArxivSource(arxivId, {
-              progressCallback: (message, increment) =>
-                progress.report({ message, increment }),
               workspaceRoot: roots.workspace ?? '',
               formatter: autoIndent
                 ? yield* resolveLatexFormatter(roots)
                 : null,
               autoIndent,
               destination,
-            });
+            }).pipe(
+              Effect.provideService(LatexProgress, (message, increment) =>
+                progress.report({ message, increment }),
+              ),
+            );
             return Option.some(downloadResult.path);
           }),
           // Cancel interrupts the download, whose finalizers remove the

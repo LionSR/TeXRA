@@ -18,7 +18,6 @@ import {
   type AgentCliModelRule,
 } from './agentCliModel';
 import {
-  type AgentTrace,
   type ToolError,
   withLogChannel,
   Settings,
@@ -194,46 +193,35 @@ export function claudeResultUsage(
 }
 
 /**
- * Narrow a `tool_use` block's `input` to a record for storage on
- * `ToolUseLog`. A non-object payload here means the SDK sent something
- * outside the tool-use contract (every call — including no-argument ones —
- * carries a JSON object), so it's worth a loud warning rather than a cast
- * that silently misrepresents the value as a record.
- */
-function toToolInputRecord(
-  toolName: string,
-  input: unknown,
-  trace: AgentTrace,
-): Record<string, unknown> | undefined {
-  if (input === undefined) return undefined;
-  if (Predicate.isObject(input)) return input;
-  // The run's own trace: this runs inside the SDK stream's `for await` drain
-  // (one `Effect.tryPromise` in claudeAgent.ts), where no fiber is current.
-  trace.warn(
-    `Claude tool "${toolName}" sent a non-object input (${typeof input}); expected a JSON object per the tool-use protocol.`,
-  );
-  return undefined;
-}
-
-/**
  * Build a tool-use log entry for a Claude `tool_use` content block.
  * Mirrors the rendering of Codex's command/file-change events while retaining
- * Claude's concrete built-in tool name.
+ * Claude's concrete built-in tool name. The entry stores the input only as
+ * a record: every call, including a no-argument one, carries a JSON object
+ * per the tool-use protocol, so a non-object input is the SDK breaking that
+ * contract, which `violation` says for the caller to report rather than a
+ * cast that silently misrepresents the value as a record.
  */
 export function buildClaudeToolUseLog(params: {
   toolName: string;
   input: unknown;
   status: ToolCallStatus;
-  /** The run's trace, where a protocol violation in the input is reported. */
-  trace: AgentTrace;
-}): ToolUseLog {
-  const summarySource = describeToolInput(params.toolName, params.input);
-  return {
-    toolName: `claude:${params.toolName}`,
-    summary: truncateSummary(summarySource, SUMMARY_MAX_LENGTH),
-    input: toToolInputRecord(params.toolName, params.input, params.trace),
+}): { readonly log: ToolUseLog; readonly violation?: string } {
+  const { toolName, input } = params;
+  const log: ToolUseLog = {
+    toolName: `claude:${toolName}`,
+    summary: truncateSummary(
+      describeToolInput(toolName, input),
+      SUMMARY_MAX_LENGTH,
+    ),
+    input: Predicate.isObject(input) ? input : undefined,
     status: params.status,
   };
+  return input === undefined || Predicate.isObject(input)
+    ? { log }
+    : {
+        log,
+        violation: `Claude tool "${toolName}" sent a non-object input (${typeof input}); expected a JSON object per the tool-use protocol.`,
+      };
 }
 
 /**

@@ -24,7 +24,6 @@ import type { CliContext } from '../runtime/platform/cliContext';
 const listSkills = Effect.fn('listSkills')(function* (
   context: CliContext,
   options: {
-    readonly includeInterop: boolean;
     readonly additionalPaths: readonly string[];
   },
 ) {
@@ -85,7 +84,6 @@ const skillsListCommand = defineCliCommand({
   },
   run: (context, ctx) =>
     listSkills(context, {
-      includeInterop: ctx.args['include-interop'] === true,
       additionalPaths: collectStringFlagValues(ctx.rawArgs, 'source', 's'),
     }),
 });
