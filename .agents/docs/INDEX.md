@@ -14,6 +14,7 @@ ruling and argues against it explicitly.
 | Harness 1.0 release requirements                                        | [Harness 1.0 发布 PRD](./proposed/architecture/2026-10-28-harness-1-release-prd.md)                                                  |
 | The harness as a general package                                        | [harness general-package design](./proposed/architecture/2026-10-21-harness-general-package-design.md)                               |
 | The harness against pi-durable and dsh                                  | [harness design by Ousterhout's criteria](./implemented/architecture/2026-10-30-harness-design-against-pi-durable-and-deepseek.md)   |
+| The harness against the peers, round 2: what is still ad hoc            | [harness against the peers, round 2](./proposed/architecture/2026-11-10-harness-against-pi-durable-and-deepseek-round-2.md)          |
 | The tool layer: catalogs, the step pin, the tool contracts              | [tool layer: one catalog, one step pin, one tool contract](./implemented/architecture/2026-11-01-tool-layer-one-catalog-one-step.md) |
 | The harness / app / llm package split                                   | [harness package split](./implemented/architecture/2026-10-02-harness-package-split.md)                                              |
 | Durable runs: replay, fork, compaction                                  | [durable harness](./implemented/architecture/2026-10-02-durable-harness.md)                                                          |
