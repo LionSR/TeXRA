@@ -7,11 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { Context, Effect, FileSystem, Path } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import {
-  describeFollowUpFailure,
-  submitFollowUp,
-  wakeIfOwed,
-} from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp, wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
 import { sentFollowUpId, sentReceipt } from '@agent/followUp/followUpMessages';
 import {
@@ -379,7 +375,7 @@ export function sessionRequests(
       if (result.status === 'failed')
         return yield* new Unavailable({
           runId: req.runId,
-          reason: describeFollowUpFailure(result.reason),
+          reason: result.message,
         });
       const receipt = yield* sentReceipt(deps.sessionLog, {
         runId: req.runId,

@@ -716,26 +716,21 @@ const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) =
 
 ## FollowUpFailureReason
 
-Why a submission could not be admitted, worded for the user by
-{@link presentFollowUpResult}: the kind of a resume's refusal
-(`ResumeRefusal`; a message to a run with no loop here is admitted only as
-a resume would be, and `notResumable` there also covers a closed input, a
-disposed session, or a message that does not wake the run), or one of the
-message's alone:
+Why a submission could not be admitted, as {@link describeFollowUpFailure}
+words it: the kind of a resume's refusal (`ResumeRefusal`; a message to a
+run with no loop here is admitted only as a resume would be, and
+`notResumable` there also covers a closed input, a disposed session, or a
+message that does not wake the run), or one of the message's alone:
 
 - `readFailed`: the run's rows could not be read just now (a failing
   store), which says nothing about the run itself.
 - `notParent`: the sender is not the run's parent.
-- `ranOnce`: the run was launched to run once (`run.start.takesFollowUps`
-  false: a one-shot root, a process run) and reads no message, live or
-  resumed.
 
 ```ts
 type FollowUpFailureReason =
   | ResumeRefusal['kind']
   | 'readFailed'
-  | 'notParent'
-  | 'ranOnce';
+  | 'notParent';
 ```
 
 ## FollowUpSenderInput
@@ -1902,7 +1897,7 @@ interface StreamHandle {
 
 Three outcomes: the input reached a running loop, it waits in the run's
 queue for its next turn (the resume the send started, or an explicit
-one), or it was not admitted for a worded reason. A delivery the
+one), or it was not admitted, with the words that say why. A delivery the
 admission boundary had already accepted is `sent`. A resume the input
 started that the run refused is told by the resume itself.
 
@@ -1910,7 +1905,7 @@ started that the run refused is told by the resume itself.
 type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued' }
-  | { status: 'failed'; reason: FollowUpFailureReason };
+  | { status: 'failed'; message: string };
 ```
 
 ## TEMPLATE_INPUT_NAMES

@@ -37,37 +37,32 @@ export const followUpServices = Effect.map(
 );
 
 /**
- * Why a submission could not be admitted, worded for the user by
- * {@link presentFollowUpResult}: the kind of a resume's refusal
- * (`ResumeRefusal`; a message to a run with no loop here is admitted only as
- * a resume would be, and `notResumable` there also covers a closed input, a
- * disposed session, or a message that does not wake the run), or one of the
- * message's alone:
+ * Why a submission could not be admitted, as {@link describeFollowUpFailure}
+ * words it: the kind of a resume's refusal (`ResumeRefusal`; a message to a
+ * run with no loop here is admitted only as a resume would be, and
+ * `notResumable` there also covers a closed input, a disposed session, or a
+ * message that does not wake the run), or one of the message's alone:
  *
  * - `readFailed`: the run's rows could not be read just now (a failing
  *   store), which says nothing about the run itself.
  * - `notParent`: the sender is not the run's parent.
- * - `ranOnce`: the run was launched to run once (`run.start.takesFollowUps`
- *   false: a one-shot root, a process run) and reads no message, live or
- *   resumed.
  */
 export type FollowUpFailureReason =
   | ResumeRefusal['kind']
   | 'readFailed'
-  | 'notParent'
-  | 'ranOnce';
+  | 'notParent';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
  * queue for its next turn (the resume the send started, or an explicit
- * one), or it was not admitted for a worded reason. A delivery the
+ * one), or it was not admitted, with the words that say why. A delivery the
  * admission boundary had already accepted is `sent`. A resume the input
  * started that the run refused is told by the resume itself.
  */
 export type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued' }
-  | { status: 'failed'; reason: FollowUpFailureReason };
+  | { status: 'failed'; message: string };
 
 /** How one input is delivered to a run. */
 export interface RunInboxSendOptions {
@@ -102,8 +97,6 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
   notParent:
     'This run is not a child of the sender: it was detached or launched by another run.',
-  ranOnce:
-    'This run ran once and takes no messages. Continue it as a fork, or start a new agent task.',
   blocked:
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It can continue once that is fixed.",
 };
@@ -116,10 +109,8 @@ export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
 export function presentFollowUpResult(
   result: SubmitFollowUpResult,
 ): { severity: 'none' } | { severity: 'warning'; message: string } {
-  if (result.status === 'failed') {
-    const message = describeFollowUpFailure(result.reason);
-    return { severity: 'warning', message };
-  }
+  if (result.status === 'failed')
+    return { severity: 'warning', message: result.message };
   return { severity: 'none' };
 }
 
@@ -212,9 +203,13 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     if (yield* sentBefore(runId, item, hold, attach))
       return { status: 'sent' } as const;
     // A run that takes no input (a process run, a one-shot root) reads
-    // none, live or not: nothing would read the row.
+    // none, live or resumed: nothing would read the row.
     if (view.run(runId)?.takesFollowUps === false)
-      return { status: 'failed', reason: 'ranOnce' } as const;
+      return {
+        status: 'failed',
+        message:
+          'This run ran once and takes no messages. Continue it as a fork, or start a new agent task.',
+      } as const;
     const live = runs.get(runId);
     if (live === undefined) {
       const rejection = yield* checkpointRefusal(runId).pipe(
@@ -227,7 +222,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
         ),
       );
       if (rejection !== null)
-        return { status: 'failed', reason: rejection.kind } as const;
+        return {
+          status: 'failed',
+          message: describeFollowUpFailure(rejection.kind),
+        } as const;
     }
     // A user's message to a run that is stopping continues it after the
     // stop: its row lands after the run's end, which the wake reads.
@@ -248,7 +246,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   // The sender is not its parent, its input is closed (deleted, or torn
   // down with nothing queued), or the session is disposed.
   if (landed.kind === 'refused')
-    return { status: 'failed', reason: landed.reason };
+    return {
+      status: 'failed',
+      message: describeFollowUpFailure(landed.reason),
+    };
   if (landed.kind === 'duplicate') return { status: 'sent' };
   // Whether the row wakes the run is the inbox's one reading
   // (`owesResume`), after the commit: a run live a moment ago may have

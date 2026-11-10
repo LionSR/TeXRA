@@ -52,7 +52,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
           ),
         ).toEqual({
           status: 'failed',
-          reason: 'finished',
+          message: 'This run has finished. Start a new agent task to continue.',
         });
       }),
   );
