@@ -42,7 +42,7 @@ owners, and each sits behind a cluster of this month's fixes.
 | 2   | **Where the loop stands, three ways.** A stored `run.position`, a derived `RunLoopPhase`, and about fifteen predicates in the turn loop and the per-call program            | two representations, a stored cursor, nonobvious code               | the `response.ready` and `results.ready` positions, `RunLoopPhase`, `PHASE_AT`, `phaseAfter`; then the branch predicates, for one pure next-move function like `nextAttempt` |
 | 3   | **A child's result is typed, rendered to XML and parsed back,** and an awaited child's is formatted twice                                                                   | information leakage, format then parse, repetition                  | most of `shared/subagentFollowup.ts` (336 lines), the re-parse in `queuedRow` and `followUpDisplay`, the JSON-in-XML script summary, the second formatter in `AgentTool`     |
 | 4   | **A run's life is a state machine spread over seven collections,** with a second map of the same fibers and a cast to reach it                                              | state in maps and flags, two representations, overexposure via cast | five of the seven collections, `heldIds`, `stopEnded`, the dead `programs` member, the 11 `registryOf` casts                                                                 |
-| 5   | **What kind of run this is, and its launch, decided at many sites:** two owners of "takes input", `run.config` written twice per launch, two terminals                      | two representations, temporal decomposition, repetition             | `ResumeInput.interactive`, the CLI's two restated guards, one `run.config` per launch (47% of its stored bytes), the process child's own end                                 |
+| 5   | **What kind of run this is, and its launch, decided at many sites:** two owners of "takes input", `run.config` written twice per launch, two terminals                      | two representations, temporal decomposition, repetition             | a resume that waits for input its run refuses (reproduced), one `run.config` per launch (47% of its stored bytes), the process child's own end                               |
 | 6   | Smaller: a provider's facts in eight files (the rest of O9); the lane rule written twice                                                                                    | change amplification                                                | the endpoint and region rows written by hand; the sentinel manifest rows                                                                                                     |
 
 Findings 1, 2, 3 and 5 change stored shapes. Their stored parts land
@@ -257,9 +257,19 @@ rows, not added beside them.
   `packages/harness/example/acceptance.ts:473-488`) correlate `tool.start`
   and `tool.end` by `logId`. The package is 0.x, and the examples move with
   the API report (`npm run docgen`).
-- **Read volume.** A display read reads `model.message` rows, which are
-  larger than the card rows. Measure the transcript's first paint on the
-  golden store before and after.
+- **Read volume, measured.** Today a cold display read of the golden store
+  reads the display kinds and `tool.result`: 227 rows, 54 KB of `data`. Read
+  straight from history, design A would read the `response`, `append` and
+  `handed-down` messages, `tool.intent`, `script.call` and `hook.outcome`
+  in place of the restating rows: about 89 KB, 63% more, while the store
+  holds 26 KB less. The store already has the shape that avoids this. Its
+  `usage` projector writes "a `usage` display row per priced
+  `model.message` response" into `projected_row` in the append transaction
+  and rebuilds it from the rows (`controllers/session/projections.ts:1-22`).
+  The card and answer entries can be projected the same way. The display
+  read then keeps its size, the loop writes no display row, and the
+  projection is rebuildable from history, so it is not a second authority.
+  This is the recommended form of A.
 - **Other readers.** The trace viewer and the history-query copy
   (`agent/runtime/historyQuery/`) read display rows and need the same
   projection.
@@ -564,6 +574,17 @@ at 11 sites in 9 files (`grep -rn "registryOf("`). One member is dead:
 called. These collections are where a stop, a start and a resume meet, and
 that area (stop, resume and ownership) took 24 of this month's fixes.
 
+One consequence was reproduced with finding 5 (a)'s throwaway case. A resume
+sent as soon as `run.result` resolved, which happens once the view shows the
+stored end, found the ended run still held in `live` (its fiber's observer
+had not run yet). It was answered as a join of "the activation it runs"
+(`joinOpening`, `agent/runtime/resumeRun.ts:168-200`): the call succeeded,
+returned the old activation's handle, whose result is the stored end, and
+wrote nothing. A caller that resumes right after an end gets a silent no-op.
+The stored `run.end` and the registry's `live` map are two answers to "does
+this run still run here", and they disagree for a moment that a caller can
+hit.
+
 ### What the peers do
 
 Both hold a unit's state as one value:
@@ -622,27 +643,47 @@ lands with no behavior change, gated by those suites.
 - `submitFollowUp` refuses every message to a run whose `takesFollowUps`
   is false (`agent/followUp/ToolUseFollowUp.ts:193-196`).
 
-So, as the code reads, an interactive resume of an ended one-shot root is
-accepted. The run opens its input reader anyway (`agent/followUp/Inbox.ts:128-142`)
-and waits for input nothing may send, until it is stopped. The CLI
-restates the rule twice to avoid this ("a run launched to run once reads no
-messages",
-`packages/cli/src/chat/chatSessionController.ts:579-590`,
-`packages/cli/src/commands/resumeRun.ts:159-162`). The run's kind is
-recombined by its readers: `stopAfterCycle` is read on 23 lines in 11 files
-and `takesFollowUps` on 17 lines in 11 files.
+**Reproduced** with a throwaway case over the test kernel (the validation
+model, a persistent session; not committed), started with no `interactive`
+and resumed with `interactive: true` after its first activation ended
+`completed`:
 
-**Design.** One `RunRole` (root, awaited child, background child, process
-child), derived once from the run's `run.start` and activation rows. The
-questions each reader asks are answered by one module:
+- The resume succeeds. It writes `run.activate`, `run.config` and
+  `run.position waiting`, and the view shows the run waiting with `stop` and
+  `compact` among its actions, `outcome` null and `takesFollowUps` false.
+- A `followUp.send` to it fails `Unavailable`: "This run cannot accept
+  messages right now. Resume it, or start a new agent task."
+  (`agent/followUp/ToolUseFollowUp.ts:86-87`). The run was just resumed.
+- The run's input reader opens anyway (`agent/followUp/Inbox.ts:128-142`),
+  so it waits for input nothing may send, until it is stopped.
+
+The CLI avoids this by restating the rule twice ("a run launched to run once
+reads no messages", `packages/cli/src/chat/chatSessionController.ts:579-590`,
+`packages/cli/src/commands/resumeRun.ts:159-162`), and continues the chat
+as a fork. The run's kind is also recombined by its other readers:
+`stopAfterCycle` is read on 23 lines in 11 files and `takesFollowUps` on 17
+lines in 11 files.
+
+**Design.** `interactive` cannot simply go. An interactive run resumed by a
+headless caller (`texra resume`) must still run one cycle and exit, so the
+caller's presence is a real input. What is wrong is that the two facts are
+combined by each caller. They should be combined once, where the resume
+reads the run's rows (`openResume`, `agent/runtime/resumeRun.ts:211-263`):
+a run waits for input only if its rows say it takes input
+(`takesFollowUps`) and its caller is present (`interactive`). A one-shot
+run is never resumed into a wait, and a send to it is refused with its real
+reason (it was launched to run once; fork it), not with "Resume it". The
+fix is one line of decision and one refusal wording, with one regression
+test written to fail first.
+
+The wider direction is one `RunRole` (root, awaited child, background
+child, process child), derived once from the run's `run.start` and
+activation rows, so that one module answers what each reader asks today:
 
 - does it take a later turn;
 - does it count against the budget;
 - does its end deliver to a parent;
 - does it read input when it waits.
-
-A root's one-shot policy is read from its `takesFollowUps`, so
-`ResumeInput.interactive` and the CLI's two guards go.
 
 **(b) The registration is built before the model binds and committed after
 it.**
@@ -760,6 +801,9 @@ The peers' newest changes add evidence on three points:
 
 ## Order
 
+0. **Finding 5 (a)'s defect first**, on its own: the resume decides once
+   whether the run may wait, and the send's refusal names its reason, with
+   one regression test written to fail first.
 1. **One storage-format PR, before the freeze**, with one golden-store
    regeneration. It carries:
    - finding 2's step 1 (two position values and `RunLoopPhase`);
@@ -774,8 +818,8 @@ The peers' newest changes add evidence on three points:
    exists.
 5. **Finding 6's first item** when the next provider is added.
 
-Each PR deletes more than it adds and adds no test file, except one
-regression test if 5 (c) reproduces. The crash-point suite and the golden
+Each PR deletes more than it adds and adds no test file, except the one
+regression test of step 0 and one more if 5 (c) reproduces. The crash-point suite and the golden
 store are the gate.
 
 ## Verified
@@ -818,6 +862,12 @@ store are the gate.
 
   No peer was built or run.
 
-- **Not measured.** The transcript's read time under finding 1's design A,
-  the line counts of each design, and whether 5 (a) and 5 (c) reproduce.
-  The line counts are estimates and are marked as such.
+- **Reproduced.** Finding 5 (a), and the join after an end in finding 4,
+  with a throwaway vitest case beside `src/test-kernel/agent/runtime/resumeRun.vitest.ts`
+  (its `texraHosted` and `validationHost` setup, the validation model, a
+  persistent session), deleted after the run and not committed.
+- **Not measured.** The transcript's paint time under finding 1's design A
+  (its read volume is measured above), and the line counts of each design,
+  which are estimates and are marked as such. 5 (c) is read from the code
+  and not reproduced: it needs a background process child whose output rows
+  the store refuses.
