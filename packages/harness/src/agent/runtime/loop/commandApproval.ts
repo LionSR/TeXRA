@@ -5,7 +5,6 @@
 import { Effect } from 'effect';
 
 import type { CallRequests } from '@agent/core/tools/ToolTypes';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type {
   DecisionOf,
   RefusalDecision,
@@ -13,6 +12,7 @@ import type {
   ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
+import type { ApprovalOperation } from '@shared/session/sessionApprovals';
 import { errorResult } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 
@@ -22,11 +22,11 @@ const DEFAULT_BASH_REJECTION_GUIDANCE =
 
 /**
  * Ask the person about `command`: a `request.opened` on the run, answered
- * by a surface's `request.decide`, or by the command grant turned on
- * meanwhile, which answers every open request it covers. `grant` is the
- * grant the prompt may offer to turn on: `'bash'`, the run's command grant;
- * `'superYolo'`, the delegated-work grant, which it does not offer; `null`,
- * a `PreToolUse` hook asked, so only a person answers.
+ * by a surface's `request.decide`, or by the grant that answers it turned
+ * on meanwhile, which answers every open request it covers. `operation`
+ * says which grant that is: the shell's command grant (`'bash'`), or, for
+ * another tool's call, the delegated-work grant; a `PreToolUse` hook that
+ * asked leaves it to a person.
  */
 export const askCommandApproval = Effect.fn('askCommandApproval')(function* (
   runId: RunId,
@@ -34,23 +34,24 @@ export const askCommandApproval = Effect.fn('askCommandApproval')(function* (
   ask: {
     readonly command: string;
     readonly cwd: string | undefined;
-    readonly grant: ApprovalBypassKind | null;
+    readonly operation: Extract<ApprovalOperation, 'bash' | 'call'>;
   },
 ): Effect.fn.Return<DecisionOf<'bash'>, Error> {
   // The payload every host lists: a blank directory is dropped, so no
   // renderer decides what an empty `cwd` means.
   const cwd = ask.cwd?.trim();
-  const { decision } = yield* requests.open({
-    kind: 'bash',
-    data: {
-      requestId: requests.nextId('bash'),
-      command: ask.command,
-      ...(cwd && { cwd }),
-      // The policy asked, so the command grant is off.
-      offersGrant: ask.grant === 'bash',
-      runId,
+  const { decision } = yield* requests.open(
+    {
+      kind: 'bash',
+      data: {
+        requestId: requests.nextId('bash'),
+        command: ask.command,
+        ...(cwd && { cwd }),
+        runId,
+      },
     },
-  });
+    { operation: ask.operation },
+  );
   return decision;
 });
 

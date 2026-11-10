@@ -3,6 +3,7 @@
 // with its own way of landing the decision.
 
 import { absurd } from 'effect';
+import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { AgentProposal } from './AgentProposal';
 import { BashRequest } from './BashRequest';
@@ -15,17 +16,21 @@ import type { TuiRequest } from '../state/approvalQueue';
 interface ApprovalModalProps {
   readonly availableRows?: number;
   readonly payload: TuiRequest;
+  /** The run grant the request offers (`offeredGrant`): the one that
+   *  answers it, none when a person answers it. */
+  readonly grant: ApprovalBypassKind | null;
   /** Land the user's decision on the request. */
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
 export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
-  const { payload, onDecide, availableRows } = props;
+  const { payload, grant, onDecide, availableRows } = props;
   switch (payload.kind) {
     case 'bash':
       return (
         <BashRequest
           availableRows={availableRows}
+          grant={grant}
           payload={payload.data}
           onDecide={onDecide}
         />
@@ -34,6 +39,7 @@ export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
       return (
         <ToolEditRequest
           availableRows={availableRows}
+          grant={grant}
           payload={payload}
           onDecide={onDecide}
         />
@@ -50,6 +56,7 @@ export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
       return (
         <AgentProposal
           availableRows={availableRows}
+          grant={grant}
           payload={payload.data}
           onDecide={onDecide}
         />

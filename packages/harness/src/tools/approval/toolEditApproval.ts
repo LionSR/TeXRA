@@ -117,17 +117,16 @@ export const requestToolEditApproval = (
         // whichever roots the answering fiber happens to carry.
         relativePath: workspaceRelativePath(call.env.roots.workspace, path),
         sourceTool,
-        // The policy asked, so the edit grant is off.
-        offersGrant: hook !== 'ask',
         runId,
         addedLines: lines.added,
         removedLines: lines.removed,
         content: address,
       };
       return yield* requests
-        .open({ kind: 'toolEdit', data: permission }, [
-          { digest: address, text },
-        ])
+        .open(
+          { kind: 'toolEdit', data: permission },
+          { blobs: [{ digest: address, text }] },
+        )
         .pipe(
           Effect.flatMap(
             ({ payload, decision }): Effect.Effect<ToolEditApprovalResult> =>

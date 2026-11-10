@@ -628,9 +628,10 @@ export const modelInvokerLayer = (): Layer.Layer<
             aggregateId,
             requestId,
             payload,
+            answeredBy: 'person',
           },
           failedRow(next),
-          ...(yield* policyDecidedRows(runId, payload)),
+          ...(yield* policyDecidedRows(runId, payload, 'person')),
         ];
       });
 

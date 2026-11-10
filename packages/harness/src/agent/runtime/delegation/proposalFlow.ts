@@ -186,12 +186,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const { requests } = parent;
     const { decision: result } = yield* requests.open({
       kind: 'proposal',
-      data: {
-        requestId: requests.nextId('proposal'),
-        offersGrant: hook !== 'ask',
-        runId,
-        ...proposal,
-      },
+      data: { requestId: requests.nextId('proposal'), runId, ...proposal },
     });
     return { result, childApproval: 'inherit' };
   },

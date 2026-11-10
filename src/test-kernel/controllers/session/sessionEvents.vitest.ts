@@ -213,10 +213,10 @@ const requested: SessionRowDraft = {
     data: {
       requestId: 'req-1',
       command: 'lake build',
-      offersGrant: true,
       runId: RUN,
     },
   },
+  answeredBy: 'bash',
 };
 
 /** The graph under test, as `sessionLayer` composes it without the runtime
@@ -386,6 +386,7 @@ describe('Sessions owner', () => {
               answers: ['answer'],
               data: { requestId: 'plugin-answer', runId: RUN },
             },
+            answeredBy: 'person',
           },
         ]);
       }).pipe(

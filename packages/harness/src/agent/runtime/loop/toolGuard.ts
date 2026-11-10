@@ -3,12 +3,13 @@
  * permission cover the operation that actually runs: what the call's
  * `PreToolUse` hooks said and how they rewrote it (recorded by `StepHooks.preToolUse`,
  * so a resume reads them back), the final input decoded again, the paths it
- * writes checked, then the policy's one reading ({@link sessionPermission})
- * over that input, whose ask opens the call's request through the run's
- * cell. A tool whose body opens its own request (an edit's review, a plan,
- * a delegation proposal) is decided there, after its proposal exists, with
- * the hooks' answer on `RunCall.hook`; a question it asks is no permission.
- * A body's own requests go through `callRequests`.
+ * writes checked, then the policy's one reading (`sessionPermission`, as
+ * `Approvals.permission`) over that input, whose ask opens the call's
+ * request through the run's cell. The hooks' answer is on `RunCall.hook`
+ * for the whole call: a tool whose body opens its own request (an edit's
+ * review, a plan, a delegation proposal) is decided there, after its
+ * proposal exists; a question it asks is no permission. A body's own
+ * requests go through `callRequests`.
  */
 import { isDeepStrictEqual } from 'node:util';
 
@@ -20,12 +21,6 @@ import {
   type ITool,
 } from '@agent/core/tools/ToolTypes';
 import {
-  approvalPolicyDenialMessage,
-  decideApproval,
-  isApprovalDenied,
-} from '@shared/approvalPolicy';
-import {
-  grantHeld,
   qualifyAggregateId,
   type DecisionOf,
   type HookOutcomePayload,
@@ -34,7 +29,6 @@ import {
   toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import {
   callRequestId,
@@ -48,12 +42,7 @@ import {
   type RunCell,
 } from '@shared/session/runHistory';
 import type { RunHistoryDraft } from '@shared/session/runState';
-import type {
-  ApprovalOperation,
-  ApprovalsWithPermission,
-  HookAnswer,
-  SessionApprovals,
-} from '@shared/session/sessionApprovals';
+import type { HookAnswer } from '@shared/session/sessionApprovals';
 import type { LogWriteError } from '@shared/session/sessionLog';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -68,48 +57,6 @@ import type { PluginToolServices } from '../ToolServices';
 import type { StepHooks } from './hooks';
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
-
-/** Each operation a run asks permission for: the grant that answers it. A
- *  call of a tool that declares no `command.grant` takes the run's
- *  delegated-work grant, so a command grant never approves it. */
-const OPERATIONS = {
-  bash: 'bash',
-  call: 'superYolo',
-  toolEdit: 'toolEdit',
-  plan: 'superYolo',
-  proposal: 'superYolo',
-} as const satisfies Record<ApprovalOperation, ApprovalBypassKind>;
-
-/**
- * The one reading of the policy for an operation of a run, with what the
- * call's `PreToolUse` hooks said: `never`, or an ask nobody can answer,
- * denies whatever a hook said; else a hook's `ask` asks and its `allow`
- * answers what the policy would ask.
- */
-export const sessionPermission =
-  (
-    approvals: Pick<SessionApprovals, 'policy' | 'bypass'>,
-    interactions: Interactions['Service'],
-  ): ApprovalsWithPermission['permission'] =>
-  (runId, operation, hook) => {
-    const grant = OPERATIONS[operation];
-    const canPresent = !interactions.approvalPromptsUnavailable;
-    const policy = approvals.policy(runId);
-    const decision = decideApproval({
-      policy,
-      scopedBypass: grantHeld(
-        (kind) => approvals.bypass(runId, kind) !== null,
-        grant,
-      ),
-      canPresent,
-    });
-    const denied = isApprovalDenied(decision)
-      ? decision
-      : hook === 'ask' && !canPresent && 'deny-unpresentable';
-    if (denied)
-      return { action: 'deny', reason: approvalPolicyDenialMessage(denied) };
-    return hook ?? (decision === 'allow' ? 'allow' : 'ask');
-  };
 
 /** A call's recorded `PreToolUse` outcomes, and how a rewrite reads. */
 type CallHooks = Pick<
@@ -245,7 +192,7 @@ const rejection = Effect.fn('toolUse.guard')(function* (
       ? yield* askCommandApproval(run.runId, requests, {
           command,
           cwd,
-          grant: hook === 'ask' ? null : OPERATIONS[operation],
+          operation,
         })
       : answer;
   return decision.action === 'approve'
@@ -269,14 +216,15 @@ export const guardedToolCall = (
   if (deny !== null)
     return Effect.succeed(hookDenied(tool.definition.name, deny));
   const input = rewritten === null ? issued : hooks.fromHook(rewritten);
+  // The hooks' answer is the call's: its command's request reads it as it
+  // opens, and so does every request its body opens.
   return rejection(tool, input, hook, rewritten !== null).pipe(
     Effect.flatMap((rejected) =>
       rejected
         ? Effect.succeed(rejected)
-        : Effect.andThen(bodyStarts(input), tool.call(input)).pipe(
-            Effect.updateService(RunCall, (call) => ({ ...call, hook })),
-          ),
+        : Effect.andThen(bodyStarts(input), tool.call(input)),
     ),
+    Effect.updateService(RunCall, (call) => ({ ...call, hook })),
   );
 };
 
@@ -335,7 +283,7 @@ export const callRequests = (call: {
       reentering?.request.payload.kind === kind
         ? reentering.requestId
         : callRequestId(at, opened + 1),
-    open: (payload, blobs) =>
+    open: (payload, opening) =>
       Effect.suspend(() => {
         const reentered =
           payload.data.requestId === reentering?.requestId ? reentering : null;
@@ -362,10 +310,12 @@ export const callRequests = (call: {
         // `CallRequests` is public and requires nothing of its caller.
         return Effect.flatMap(Effect.serviceOption(RunCall), (call) =>
           openRequest(runId, payload, {
-            ...(blobs && { blobs }),
+            ...opening,
             ...(Option.isSome(call) &&
               call.value.hook && { hook: call.value.hook }),
-            reentered: reentered !== null,
+            ...(reentered !== null && {
+              reentered: { answeredBy: reentered.request.answeredBy },
+            }),
             // Open already: only what the policy decides commits, and the
             // decision is read from where the resume read the run. Fresh:
             // the standing request of another kind is retired first.
@@ -395,6 +345,7 @@ export const callRequests = (call: {
             payload: Schema.decodeUnknownSync(RequestPayloadSchema)(
               toJsonValue(request),
             ),
+            answeredBy: 'person',
           },
         ]),
       ).pipe(Effect.asVoid),

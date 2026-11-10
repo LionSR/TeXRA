@@ -34,21 +34,19 @@ export abstract class BaseRunContent extends LitElement {
 
   /** The pending requests this run has open, in the session view's request order:
    *  oldest first, the newest last. */
-  protected get runPermissions(): readonly PendingRequest['payload'][] {
+  protected get runRequests(): readonly PendingRequest[] {
     const run = this.run;
     if (!run || !this.view) return [];
-    return this.view.requests
-      .filter((request) => request.runId === run.id)
-      .map((request) => request.payload);
+    return this.view.requests.filter((request) => request.runId === run.id);
   }
 
   protected renderApprovalDock(): TemplateResult | typeof nothing {
-    const permissions = this.runPermissions;
-    if (permissions.length === 0) return nothing;
+    const requests = this.runRequests;
+    if (requests.length === 0) return nothing;
     return html`
       <div class="conversation-column conversation-approval-dock">
         <request-panels
-          .permissions=${permissions}
+          .requests=${requests}
           .surface=${this.surface}
           .host=${this.host}
           .run=${this.run}

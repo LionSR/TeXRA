@@ -18,6 +18,7 @@ import { html as staticHtml, literal } from 'lit/static-html.js';
 // Local imports - shared schemas
 import {
   requestAnswerability,
+  type PendingRequest,
   type RequestPayload,
 } from '@texra-ai/harness/schemas';
 import { INQUIRY_REQUEST } from '@texra/shared/plugins/externalInquiry';
@@ -64,8 +65,7 @@ const cardTag = (permission: RequestPayload): CardTag | undefined =>
 const CARD_MARKER = 'data-request-panel';
 
 /** A pending request's identity: its id, a retry's as any other's. */
-const requestKey = (permission: RequestPayload): string =>
-  permission.data.requestId;
+const requestKey = (request: PendingRequest): string => request.requestId;
 
 /** A select and its listbox options: their keys (typeahead, arrows)
  *  pick an option, never a card shortcut. */
@@ -94,7 +94,7 @@ export class RequestPanels extends LitElement {
     }
   `;
 
-  @property({ attribute: false }) permissions: RequestPayload[] = [];
+  @property({ attribute: false }) requests: readonly PendingRequest[] = [];
 
   /** The run asking: each card reads whether this window can answer it. */
   @property({ attribute: false }) run: RunView | null = null;
@@ -116,20 +116,22 @@ export class RequestPanels extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    if (this.permissions.length === 0) return nothing;
-    return html`${repeat(this.permissions, requestKey, (permission) => {
+    if (this.requests.length === 0) return nothing;
+    return html`${repeat(this.requests, requestKey, (request) => {
+      const permission = request.payload;
       const tag = cardTag(permission);
       // A plugin request with no card in `PLUGIN_CARD_TAG` is a defect of
       // that table: said, not dropped silently.
       if (tag === undefined) {
         console.warn(
-          `No request card is listed for request ${permission.data.requestId}.`,
+          `No request card is listed for request ${request.requestId}.`,
         );
         return nothing;
       }
       return staticHtml`<${tag}
         data-request-panel
         .permission=${permission}
+        .answeredBy=${request.answeredBy}
         .answerability=${
           this.run ? requestAnswerability(this.run, permission) : 'resume'
         }
@@ -169,14 +171,14 @@ export class RequestPanels extends LitElement {
    */
   protected override updated(): void {
     const previousKeys = this.seenKeys;
-    this.seenKeys = new Set(this.permissions.map(requestKey));
-    const firstNew = this.permissions.find(
-      (permission) => !previousKeys.has(requestKey(permission)),
+    this.seenKeys = new Set(this.requests.map(requestKey));
+    const firstNew = this.requests.find(
+      (request) => !previousKeys.has(requestKey(request)),
     );
     if (!firstNew) return;
     const card = [
       ...this.renderRoot.querySelectorAll<BaseRequestPanel>(`[${CARD_MARKER}]`),
-    ].find((element) => element.permission === firstNew);
+    ].find((element) => element.permission === firstNew.payload);
     // A card this window cannot answer has nothing to put focus on.
     if (!card || card.answerability !== 'answerable') return;
     // The card was just connected in this render pass; its first Lit update

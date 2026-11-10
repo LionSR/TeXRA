@@ -10,11 +10,16 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import { offeredGrant, type RequestPayload } from '@texra-ai/harness/schemas';
+import type {
+  ApprovalBypassKind,
+  RequestPayload,
+} from '@texra-ai/harness/schemas';
 
 interface BashRequestProps {
   readonly availableRows?: number;
   readonly payload: Extract<RequestPayload, { kind: 'bash' }>['data'];
+  /** The run grant the request offers (`offeredGrant`). */
+  readonly grant: ApprovalBypassKind | null;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
@@ -52,7 +57,7 @@ export function BashRequest(props: BashRequestProps): React.JSX.Element {
       color={COLOR_WARNING}
       title={COMMAND_APPROVAL_TITLE}
       kind="bash"
-      grant={offeredGrant({ kind: 'bash', data: props.payload })}
+      grant={props.grant}
       onDecide={props.onDecide}
     >
       {cwdLine && <Text dimColor>{cwdLine}</Text>}

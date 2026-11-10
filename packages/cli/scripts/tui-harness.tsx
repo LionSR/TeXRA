@@ -1018,7 +1018,6 @@ function makeBashApprovalPayload(index = 1) {
       index === 1 ? 'harness-bash-approval' : `harness-bash-approval-${index}`,
     command: BASH_APPROVAL_COMMAND,
     cwd: HARNESS_CWD,
-    offersGrant: true,
     runId: SHOW_SCRIPT_RUNNING
       ? RUNNING_SCRIPT_FIRST_AGENT_RUN_ID
       : HARNESS_RUN_ID,
@@ -1088,7 +1087,6 @@ function makeAgentProposalPayload(): AgentProposalRequest {
     instruction: AGENT_PROPOSAL_INSTRUCTION,
     memories: [],
     workingDirectory: HARNESS_CWD,
-    offersGrant: true,
     ...(SCRIPT_PROPOSAL
       ? {
           script: {
@@ -1138,7 +1136,6 @@ function makeUserQuestionPayload(): UserQuestionRequest {
   return {
     requestId: 'harness-user-question',
     runId: HARNESS_RUN_ID,
-    offersGrant: false,
     context: USER_QUESTION_CONTEXT,
     questions: [
       {
@@ -1199,7 +1196,8 @@ function makeUserQuestionPayload(): UserQuestionRequest {
 }
 
 /** Open one request the way a run asks (`openRequest`): committed through
- *  the session's log, answered by the surface's `request.decided`. */
+ *  the session's log, answered by the surface's `request.decided`. The
+ *  harness's commands are the shell's, which its command grant answers. */
 const askHarness = (
   runId: RunId,
   payload: RequestPayload,
@@ -1207,6 +1205,7 @@ const askHarness = (
 ) =>
   openRequest(runId, payload, {
     ...(blobs && { blobs }),
+    ...(payload.kind === 'bash' && { operation: 'bash' }),
     commit: (rows) =>
       session()
         .log.transact((tx) => runStateAppend(tx.append)(rows))
@@ -1496,7 +1495,6 @@ if (SHOW_EDIT_APPROVAL) {
       path: request.path,
       relativePath: request.path,
       sourceTool: request.sourceTool,
-      offersGrant: true,
       runId: request.runId,
       addedLines: lines.added,
       removedLines: lines.removed,
@@ -1951,9 +1949,9 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
         requestId: 'tree-approval',
         runId: waiting,
         command: 'ls',
-        offersGrant: true,
       },
     },
+    answeredBy: 'bash',
   });
   const view = viewOf([
     ...events,

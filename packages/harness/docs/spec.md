@@ -67,9 +67,10 @@ its kind is its `type` column.
   (`shared/schemas/runHistoryEvent.ts#DispatchFactsSchema`,
   `#ScriptCallPayloadSchema`).
 - **Request**: A decision that may wait on a person: a `request.opened` row,
-  closed by one `request.decided` row; an approval policy that answers at once
-  commits both in one batch (`shared/schemas/sessionEvent.ts#'request.opened'`,
-  `agent/runtime/requests.ts#policyDecidedRows`).
+  naming who answers it (`answeredBy`), closed by one `request.decided` row;
+  an approval policy that answers at once commits both in one batch
+  (`shared/schemas/sessionEvent.ts#'request.opened'`,
+  `agent/runtime/requests.ts#openRequest`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
   `RunState` the loop continues from
   (`shared/session/runState.ts#applyRunRows`).
@@ -806,6 +807,13 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/requests.ts#openRequest`); a grant turned on answers every
   open request it covers in the grant's own transaction
   (`agent/runtime/runApprovalQueue.ts#approvalsUnder`).
+- Who answers a request is decided once, as it opens, and stored as its
+  `answeredBy`: a person when a `PreToolUse` hook asked or the request asks
+  about no operation (a question, a retry, a plugin's request), else the grant
+  its operation takes (`agent/runtime/requests.ts#answererOf`, `#OPERATIONS`).
+  The policy's answer at open and a grant turned on while it waits both read
+  it, so a grant answers a waiting request exactly when it would have approved
+  it at open.
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
   (`agent/runtime/requests.ts#decideRequest`).

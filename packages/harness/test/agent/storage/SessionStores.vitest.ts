@@ -44,9 +44,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                         ],
                       },
                     ],
-                    offersGrant: false,
                   },
                 },
+                answeredBy: 'person',
               },
             ]);
             yield* Context.get(session, SessionLog).settled;

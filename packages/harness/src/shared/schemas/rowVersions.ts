@@ -198,7 +198,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // offers the run grant of its kind (an earlier build's would fail to read).
   // v10: a retry carries its failure as the verdict (`failure`), not its
   // words and classification (`errorDetails`), and a host words it.
-  'request.opened': { version: 10, listing: 'request' },
+  // v11: who answers a request is its row's `answeredBy`, decided once as
+  // it opens, and no payload carries `offersGrant` (an earlier build's row
+  // names no answerer).
+  'request.opened': { version: 11, listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options.
   'request.decided': { version: 2, listing: 'request' },

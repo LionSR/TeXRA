@@ -166,10 +166,19 @@ export interface CallRequests {
   /** Open the request (or re-enter the standing one) and wait for its
    *  decision. The returned payload is the request actually answered,
    *  which on resume may differ from the proposal recomputed by the caller.
-   *  `blobs` are the strings the payload names by address, stored with its row. */
+   *  `blobs` are the strings the payload names by address, stored with its
+   *  row. `operation` is what a command (`bash`) asks permission for: the
+   *  shell's (`'bash'`, which the run's command grant answers) or another
+   *  tool's call (`'call'`, which only the delegated-work grant answers).
+   *  An edit, a plan or a proposal asks about its own kind; with the
+   *  call's hooks, the operation decides who answers the request, and a
+   *  request about none is a person's. */
   readonly open: <P extends RequestPayload>(
     payload: P,
-    blobs?: readonly DraftBlob[],
+    opening?: {
+      readonly blobs?: readonly DraftBlob[];
+      readonly operation?: 'bash' | 'call';
+    },
   ) => Effect.Effect<
     {
       readonly payload: Extract<RequestPayload, { kind: P['kind'] }>;

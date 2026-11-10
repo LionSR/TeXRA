@@ -237,7 +237,7 @@ const decideSurfaceRequest = (
     pendingOf(deps, req.runId, req.requestId),
     (pending) => {
       const reason =
-        pending && answerMismatch(pending.payload, req.decision, req.grant);
+        pending && answerMismatch(pending, req.decision, req.grant);
       if (reason) return Effect.fail(new Rejected({ reason }));
       return decideUnderGrant(req, answer);
     },

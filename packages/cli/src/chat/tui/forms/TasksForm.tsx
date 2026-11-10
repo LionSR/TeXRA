@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { presentFollowUpResult } from '@texra-ai/harness/host';
 import {
   acceptsFollowUp,
+  offeredGrant,
   type RunId,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -247,7 +248,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
 
   const decide = (decision: SurfaceDecision): void => {
     if (!pending) return;
-    const arm = approvalDecisionArm(pending.payload, decision);
+    const arm = approvalDecisionArm(pending, decision);
     if ('host' in arm) {
       setNotice(
         'That choice needs the window running the task; approve or reject here instead.',
@@ -356,12 +357,13 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         )}
         {notice && <Text color={COLOR_WARNING}>{notice}</Text>}
       </BorderedPanel>
-      {presentable && (
+      {presentable && pending && (
         <ApprovalModal
           // A fresh modal per request: a question's answers or a card's
           // feedback never carry into the next one.
-          key={pending?.requestId}
+          key={pending.requestId}
           payload={presentable}
+          grant={offeredGrant(pending)}
           availableRows={10}
           onDecide={decide}
         />

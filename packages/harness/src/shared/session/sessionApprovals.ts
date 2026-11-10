@@ -1,7 +1,7 @@
 /**
  * The shape of a session's approvals: a run's grants and the one reading
  * of the policy. Built by `sessionApprovals` (`runApprovalQueue.ts`) and
- * `sessionPermission` (`loop/toolGuard.ts`); its tag is `Approvals`
+ * `sessionPermission` (`agent/runtime/requests.ts`); its tag is `Approvals`
  * (`shared/session/runHistory.ts`).
  */
 
@@ -18,7 +18,8 @@ import type {
   DatabaseWriteFailed,
 } from './database';
 
-/** Each operation a run asks permission for (the guard's `OPERATIONS`). */
+/** Each operation a run asks permission for (`OPERATIONS` in
+ *  `agent/runtime/requests.ts`, which names the grant that answers it). */
 export type ApprovalOperation =
   | 'bash'
   | 'call'

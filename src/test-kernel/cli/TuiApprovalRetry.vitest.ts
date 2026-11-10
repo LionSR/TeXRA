@@ -154,13 +154,15 @@ function ensureRun(runId: RunId) {
 }
 
 /** Ask through the protocol the TUI host answers: `request.opened` on the
- *  run, answered by the `request.decided` a surface commits. */
+ *  run, answered by the `request.decided` a surface commits. A command is
+ *  the shell's, which the run's command grant answers. */
 function openRequest(runId: RunId, payload: RequestPayload) {
   return Effect.gen(function* () {
     yield* ensureRun(runId);
     const session = yield* sessionHandle;
     const log = Context.get(session, SessionLog);
     return yield* openRunRequest(runId, payload, {
+      ...(payload.kind === 'bash' && { operation: 'bash' }),
       commit: (rows) =>
         log
           .transact((tx) => runStateAppend(tx.append)(rows))

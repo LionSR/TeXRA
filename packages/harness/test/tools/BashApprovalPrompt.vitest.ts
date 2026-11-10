@@ -1,8 +1,9 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Stream, Context } from 'effect';
+import { Deferred, Effect, Fiber, Schema, Stream, Context } from 'effect';
 import { expect } from 'vitest';
 import { type BashRequest, generateRunId } from '@texra-ai/harness/schemas';
+import { defineTool } from '@texra-ai/harness/plugins';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
@@ -124,5 +125,51 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           }),
         ),
     );
+
+    // The grant that approves a request as it opens answers it while it
+    // waits: a call of a tool with no command grant is the delegated-work
+    // grant's, at open and when that grant is turned on later.
+    it.effect(
+      'the delegated-work grant turned on answers a waiting call of a tool with no command grant',
+      () =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            yield* setTestApprovalPolicy('ask');
+            const session = yield* isolatedTestSession();
+            const runId = generateRunId();
+            yield* publishTestRunStart(session, runId);
+            yield* Context.get(session, SessionLog).settled;
+            const requests = yield* watchBashRequests(session);
+
+            const call = yield* Effect.forkScoped(
+              guardedToolCall(callTool, { command: 'echo other' }).pipe(
+                Effect.provide(
+                  nativeToolTestLayer({
+                    run: { runId, session, toolPolicy: {} },
+                  }),
+                ),
+              ),
+            );
+            yield* requests.firstOpened;
+            yield* Context.get(session, Approvals).change(
+              runId,
+              humanGrant(['superYolo'], true),
+            );
+            expect(yield* Fiber.join(call)).toMatchObject({
+              status: 'executed',
+            });
+          }),
+        ),
+    );
   },
 );
+
+/** A tool whose calls are asked about as commands but declares no command
+ *  grant: only the delegated-work grant answers them. */
+const callTool = defineTool({
+  name: 'other_command',
+  description: 'Run a command of another tool.',
+  schema: Schema.Struct({ command: Schema.String }),
+  guard: { command: { text: ({ command }) => command } },
+  execute: ({ command }) => Effect.succeed(`ran ${command}`),
+});
