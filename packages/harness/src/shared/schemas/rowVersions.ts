@@ -212,7 +212,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // row would fail its check).
   // v5: no `family`: every run has the one loop, so the field said nothing
   // (an earlier build's row would have it silently dropped).
-  'run.position': { version: 5, listing: 'own' },
+  // v6: no `response.ready` or `results.ready`: the run state reads them off
+  // the `response` row and the delivering `append` (an earlier build's row
+  // would fail as damaged).
+  'run.position': { version: 6, listing: 'own' },
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both.
   // v3: a user message names its attached media by blob address (`media`),

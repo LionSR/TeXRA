@@ -61,10 +61,9 @@ const isQuiet = (state: RunState): boolean =>
  * request. A cut anywhere else would carry a result nobody produced.
  */
 const isSettled = (state: RunState): boolean =>
-  (state.phase === 'waiting' || state.phase === 'turn.ended') &&
-  // Input consumed for a turn that has not run is inside that turn.
-  state.at !== 'turn.ready' &&
-  isQuiet(state);
+  // Not `turn.ready`: input consumed for a turn that has not run is inside
+  // that turn.
+  (state.at === 'waiting' || state.at === 'turn.end') && isQuiet(state);
 
 const refused = (reason: string) => new Rejected({ reason });
 
@@ -118,7 +117,7 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
   const settledAt = (seq: number) =>
     Effect.map(runHistory.load(from, seq), (state) =>
       state !== null &&
-      state.phase !== null &&
+      state.at !== null &&
       (before === undefined ? isSettled(state) : isQuiet(state))
         ? { seq, state }
         : null,

@@ -108,7 +108,7 @@ import {
 } from './run/recordedRequest';
 import { providerMessages } from './providerMessages';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
-import { configRow, positionRow } from './loop/rows';
+import { configRow } from './loop/rows';
 import type { SessionServices } from './rootLaunch';
 
 const EMPTY_RESPONSE_ERROR_MESSAGE =
@@ -357,7 +357,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         );
         // The completed turn, committed once before any local tool runs; it
         // closes the invocation and retires its failure in the fold.
-        const next = yield* cell.append((state) => [
+        const next = yield* cell.append([
           {
             type: 'model.message',
             aggregateId,
@@ -370,7 +370,6 @@ export const modelInvokerLayer = (): Layer.Layer<
               usage,
             },
           },
-          positionRow(runId, state, 'response.ready'),
         ]);
         const contextSize = contextTokens(next);
         if (contextSize > 0 && bound.config.contextWindow > 0) {

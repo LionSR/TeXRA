@@ -8,8 +8,10 @@
  * `response`; a response with calls (or a script run's `handed-down` call)
  * opens the pending response, each call of which a `script.call` issues, a
  * `tool.intent` starts and a `tool.result` finishes; the `append` that
- * delivers the results, once every call has one, closes the turn. Single
- * writer: `RunCell.append` commits every row these handlers read, and
+ * delivers the results, once every call has one, closes the turn. The
+ * `response` and that `append` each move where the loop stands
+ * (`RunState.at`), which no `run.position` restates. Single writer:
+ * `RunCell.append` commits every row these handlers read, and
  * `applyRunRows` alone applies them.
  */
 import { Result } from 'effect';
@@ -172,11 +174,7 @@ const MESSAGE_HANDLERS: {
     copies: BatchCopies,
   ) => RowOutcome;
 } = {
-  attempt: (state, p) =>
-    Result.map(withInvocation(state, p), (updated) => ({
-      ...updated,
-      phase: 'model.submitted',
-    })),
+  attempt: withInvocation,
   identified: withInvocation,
   accepted: withInvocation,
   cancelled: withInvocation,
@@ -202,6 +200,7 @@ const MESSAGE_HANDLERS: {
         );
       const answered: RunState = {
         ...updated,
+        at: 'response.ready',
         continuation: p.turn.continuation ?? null,
         lastError: null,
         lastTurn: p.turn,
@@ -258,6 +257,7 @@ const MESSAGE_HANDLERS: {
     if (unreported !== null) return mismatch(unreported);
     return Result.succeed({
       ...state,
+      at: 'results.ready',
       messages: appended(copies, state, pending.assistant, ...p.messages),
       pendingResponse: null,
     });

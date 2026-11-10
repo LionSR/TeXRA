@@ -74,7 +74,7 @@ const foreignProtocol = (
  * all. A resume commits its activation, in one batch, and is refused when
  * the rows hold nothing to continue from. A fresh launch onto a run that
  * already holds history state is refused.
- * The caller opens a cell whose state has no phase.
+ * The caller opens a cell whose state has no position.
  */
 export const openRun = Effect.fn('runProgram.openRun')(function* (
   runId: RunId,
@@ -99,7 +99,7 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
           activation: Effect.fn('activation')(function* (
             state: RunState | null,
           ) {
-            if (state?.phase == null)
+            if (state?.at == null)
               return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
             const refused = foreignProtocol(
               runId,
@@ -122,7 +122,7 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
   const cell = yield* resume
     ? run.entry.enter(() => opened)
     : Effect.uninterruptible(opened);
-  if (!resume && (yield* cell.current).phase !== null)
+  if (!resume && (yield* cell.current).at !== null)
     return yield* Effect.fail(
       new Error(
         `Run ${runId} already has run history state; resume it instead.`,

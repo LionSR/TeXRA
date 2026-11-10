@@ -419,9 +419,8 @@ write points are normative:
 - **W1**, `model.message` `attempt`: for a turn, commits before the billed
   request leaves the process
   (`agent/runtime/ModelInvoker.ts#'ModelInvoker.attempt'`).
-- **W2**, `model.message` `response`: commits, with `run.position`
-  `response.ready`, before any tool call dispatches
-  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`;
+- **W2**, `model.message` `response`: commits before any tool call
+  dispatches (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`;
   `agent/runtime/loop/runLoop.ts#dispatchPendingResponse`).
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
@@ -454,7 +453,8 @@ usage rides the `context.edit` that lands it
 **W2.** A completed provider turn of a loop invocation (one invocation's answer;
 a loop turn may hold none, or several as the loop calls the model again after
 tool results) MUST commit once, as one `response` row with a fresh `responseId`,
-in the batch that moves the position to `response.ready`. It carries one
+which puts the loop at `response.ready` without a position of its own
+(`shared/session/turnRowHandlers.ts#'response.ready'`). It carries one
 dispatch fact per local call (`agent/runtime/run/tools.ts#dispatchFactsFor`)
 (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`,
 `shared/schemas/runHistoryEvent.ts#DispatchFactsSchema`). The loop MUST dispatch
@@ -494,8 +494,7 @@ to the response (`agent/runtime/loop/toolUseDispatch.ts#'toolUse.deliver'`). A
 delivery its settlements do not match is a defect
 (`agent/runtime/makeRunHistory.ts#'mismatched-delivery'`).
 
-**W5.** The positions are `turn.ready`, `turn.begin`, `response.ready`,
-`results.ready`, `turn.end` and `waiting`
+**W5.** The positions are `turn.ready`, `turn.begin`, `turn.end` and `waiting`
 (`shared/schemas/runHistoryEvent.ts#PositionAtSchema`). A `turn.end` position
 MUST carry an outcome, and every other position MUST NOT carry one
 (`shared/schemas/runHistoryEvent.ts#RunPositionPayloadSchema`). A run's end
@@ -553,16 +552,18 @@ A run is opened by its first `run.position`. Run history rows without an opening
 position MUST fail the load as `inconsistent`
 (`agent/runtime/makeRunHistory.ts#'RunHistory.loaded'`).
 
-### 5.3 Phases
+### 5.3 Where the loop stands
 
-The fold maps a position to a loop phase: `turn.ready` and `waiting` to
-`waiting`, `turn.begin` to `model.ready`, `response.ready` to `model.submitted`,
-`results.ready` to `results.ready`, and `turn.end` to `turn.ended`
-(`shared/session/runState.ts#PHASE_AT`).
+The fold reads where the loop stands from its newest `run.position`, and inside
+a turn from the two rows no position restates: a `response` puts it at
+`response.ready`, and the `append` delivering that response's results at
+`results.ready` (`shared/session/runState.ts#LoopAt`,
+`shared/session/turnRowHandlers.ts#'results.ready'`). Between turns it stands
+at `turn.ready`, `waiting` or `turn.end`, and a run is waiting for input at
+`waiting` or `turn.end` (`agent/runtime/loop/runLoop.ts#parked`).
 
 There is no halted position: a `run.end` is the halt, and a resume continues
-from the phase the last `run.position` recorded
-(`shared/session/runState.ts#phaseAfter`).
+from where the loop stood (`shared/session/runState.ts#RunState`).
 
 ### 5.4 The commit path
 
@@ -906,15 +907,15 @@ What survives at each commit point follows from sections 2 to 8:
 - `tool.result`: The settlement is reused; the call is not run again
   (`agent/runtime/loop/toolUseDispatch.ts#finishCall`).
 - **delivery `append`**: The loop continues to the next step from
-  `results.ready` (`shared/session/runState.ts#PHASE_AT`).
+  `results.ready` (`shared/session/turnRowHandlers.ts#'results.ready'`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
 - `run.end`: The lifecycle is over. A recipe task stays finished, and a
   resume answers `finished`
   (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
   conversation continues on a resume in a new lifecycle
-  (`shared/session/runActions.ts#continuesFromRows`), from the phase its
-  last `run.position` kept (`shared/session/runState.ts#phaseAfter`).
+  (`shared/session/runActions.ts#continuesFromRows`), from where its
+  rows left the loop (`shared/session/runState.ts#LoopAt`).
 
 These are guarantees about committed state. An external effect that finished
 before its result committed stays uncertain; I4 governs it, and the suite cannot
