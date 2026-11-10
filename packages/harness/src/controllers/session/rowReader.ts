@@ -52,7 +52,7 @@ export const AGGREGATE =
  *  version. */
 export const PROJECTED_COLUMNS = `p."commit" AS "commit", s.kind AS kind,
   s.logical_id AS logicalId, e.seq AS seq, p.type AS type,
-  NULL AS version, e.origin AS origin, e.at AS at, p.data AS data`;
+  NULL AS version, e.at AS at, p.data AS data`;
 /** A projected row joined to its source row's envelope. */
 export const PROJECTED_FROM = `projected_row p
   JOIN event e ON e."commit" = p."commit"
@@ -77,8 +77,8 @@ export const READ_LISTING = `SELECT * FROM (
   SELECT ${EVENT_COLUMNS} FROM ${LISTED}
   UNION ALL
   SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
-    e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
-    e.at AS at, u.usage AS data
+    e.seq AS seq, 'usage' AS type, NULL AS version, e.at AS at,
+    u.usage AS data
   FROM run_usage u
     JOIN event e ON e."commit" = u."commit"
     JOIN event_sequence s ON s.id = u.aggregate
@@ -352,7 +352,6 @@ function bareStart(input: SqlRow): SessionRow | null {
     aggregateId: aggregateOf(row.kind, row.logicalId),
     seq: row.seq,
     commit: row.commit,
-    origin: row.origin,
     at: row.at,
     identity: { kind: 'agent', agent: 'unknown' },
     takesFollowUps: false,

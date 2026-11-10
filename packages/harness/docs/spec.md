@@ -31,9 +31,8 @@ its kind is its `type` column.
 
 ## 1. Terms
 
-- **Process**: One OS process with one process identity,
-  `[hostname, pid, processStart]`, stamped on every row it writes
-  (`shared/schemas/identifiers.ts#OwnerIdSchema`).
+- **Process**: One OS process. A project store is held by one at a time
+  (section 7).
 - **Storage root**: One directory holding one store file.
 - **Session**: The process's handle on one storage root: its store connection,
   its one publisher, its fold and its live runs.
@@ -89,7 +88,7 @@ The store is one SQLite file named `texra.db` under the storage root
 application id (`TeXR`) carry the product's name. An ephemeral session runs the
 same schema in memory (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
-The store MUST carry application id `0x54655852` and schema version 103 in
+The store MUST carry application id `0x54655852` and schema version 104 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts#APPLICATION_ID`,
 `#SCHEMA_VERSION`). A process MUST refuse, unchanged, a file with another
 application id or a schema stamp at or above 102 other than its own
@@ -121,8 +120,6 @@ row carries an envelope that the store stamps and no caller supplies:
   never reused
   (`controllers/session/storeSchema.ts#CREATE TABLE IF NOT EXISTS event`).
 - `seq`: Dense from 1 per aggregate (`controllers/session/databaseLayer.ts#NEXT_SEQ`).
-- `origin`: The writing process's identity
-  (`controllers/session/databaseLayer.ts#INSERT_EVENT`).
 - `at`: Publish clock in whole milliseconds, one value for a whole batch;
   informational only (`controllers/session/databaseLayer.ts#'Database.appendAll'`).
 

@@ -81,8 +81,8 @@
  *   would remove the finished command; `texra tasks stop` ends the task.
  *
  * What differs between two generations is normalized before the dump: the
- * temporary paths, the process identities, the clock, the random ids, and
- * the date and platform in a system prompt. Each row is read and written
+ * temporary paths, the clock, the random ids, and the date and platform in
+ * a system prompt. Each row is read and written
  * back through the store's own row codec (`rowCodec.ts`), which recomputes
  * a normalized value's content addresses, so every digest still names its
  * value. Two generations on one tree give the same file.
@@ -1062,7 +1062,6 @@ const ENVELOPE = new Set([
   'aggregateId',
   'seq',
   'commit',
-  'origin',
   'at',
   'type',
   'unavailable',
@@ -1117,9 +1116,6 @@ async function normalize(file, root) {
   const sequences = db
     .prepare('SELECT * FROM event_sequence ORDER BY id')
     .all();
-  const origins = tokens((n) =>
-    JSON.stringify(['golden-host', n, `process-${n}`]),
-  );
   const uuids = tokens(
     (n) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
   );
@@ -1314,7 +1310,7 @@ async function normalize(file, root) {
   db.exec('PRAGMA foreign_keys = OFF; BEGIN');
   db.exec('DELETE FROM event_blob; DELETE FROM blob');
   const updateEvent = db.prepare(
-    'UPDATE event SET origin = ?, at = ?, data = ? WHERE "commit" = ?',
+    'UPDATE event SET at = ?, data = ? WHERE "commit" = ?',
   );
   const insertBlob = db.prepare('INSERT OR IGNORE INTO blob VALUES (?, ?)');
   const insertRef = db.prepare('INSERT INTO event_blob VALUES (?, ?, ?)');
@@ -1327,7 +1323,6 @@ async function normalize(file, root) {
       aggregateId: row.aggregateId,
     });
     updateEvent.run(
-      origins.get(row.origin),
       // One second per commit: two batches can share a millisecond, so the
       // stamps a batch shares cannot be told apart from the rows.
       BASE_AT + row.commit * 1000,

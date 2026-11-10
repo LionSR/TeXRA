@@ -27,8 +27,6 @@ import {
 import { DOCUMENTS_OUTPUT_KIND } from '@texra/shared/plugins/documents';
 import type { SessionViewInput } from '@texra-ai/harness/transcript';
 
-/** A process identity, never a lease token. */
-export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
 export const ROOT = Schema.decodeUnknownSync(RunIdSchema)('aaaaaaaaaaaa');
 export const CHILD = Schema.decodeUnknownSync(RunIdSchema)('bbbbbbbbbbbb');
 export const GRANDCHILD = Schema.decodeUnknownSync(RunIdSchema)('dddddddddddd');
@@ -75,10 +73,10 @@ const ROOT_POLICY: ApprovalGrants = {
 };
 
 /** A durable arm without its envelope: what a publisher builds before the
- *  aggregate, seq, commit, owner, and clock are stamped on. */
+ *  aggregate, seq, commit and clock are stamped on. */
 type DisplaySessionEventBody = DisplayRow extends infer E
   ? E extends unknown
-    ? Omit<E, 'aggregateId' | 'seq' | 'commit' | 'origin' | 'at'>
+    ? Omit<E, 'aggregateId' | 'seq' | 'commit' | 'at'>
     : never
   : never;
 
@@ -92,12 +90,7 @@ export class Log {
   private readonly uid = new Map<RunId, string>();
   private commit = 0;
 
-  emit(
-    runId: RunId,
-    at: number,
-    body: DisplaySessionEventBody,
-    origin: string | null = OWNER,
-  ): DisplayRow {
+  emit(runId: RunId, at: number, body: DisplaySessionEventBody): DisplayRow {
     const key = qualifyAggregateId('run', runId);
     const seq = (this.seq.get(key) ?? 0) + 1;
     this.seq.set(key, seq);
@@ -111,7 +104,6 @@ export class Log {
       aggregateId: key,
       seq,
       commit: this.commit,
-      origin,
       at,
       ...body,
     } as DisplayRow;

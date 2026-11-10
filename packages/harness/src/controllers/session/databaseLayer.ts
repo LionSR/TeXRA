@@ -10,9 +10,8 @@
  * sequence; `rowCodec.ts` every stored shape, by the fact kinds the process's
  * plugins contribute (this module reads no payload); `projections` the
  * projectors and their upkeep, run in this module's transactions. This
- * module owns the envelope: the writer (`ProcessIdentity`), the publish
- * clock, and the `seq` and `commit` ordinals, none of which a caller
- * supplies.
+ * module owns the envelope: the publish clock, and the `seq` and `commit`
+ * ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -24,15 +23,16 @@ import {
   Clock,
   Context,
   Effect,
+  type FileSystem,
   Layer,
   Option,
   Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   CURRENT_VALUE_VERSION,
   edgesOf,
@@ -45,7 +45,7 @@ import {
   type SessionRowDraft,
   factName,
 } from '@shared/schemas';
-import { InPublisherJob, ProcessIdentity } from '@shared/session/sessionEvents';
+import { InPublisherJob } from '@shared/session/sessionEvents';
 import {
   AggregateStateSchema,
   Database,
@@ -118,8 +118,8 @@ RETURNING id, seq
 `;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
-INSERT INTO event (aggregate, seq, type, version, origin, at, data)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO event (aggregate, seq, type, version, at, data)
+VALUES (?, ?, ?, ?, ?, ?)
 RETURNING "commit" AS "commit"
 `;
 /** A blob is stored once per store, whichever run wrote it first. */
@@ -209,13 +209,12 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | ProcessIdentity | ProcessProbe | ToolRegistry
+  WorkspaceRoots | FileSystem.FileSystem | ChildProcessSpawner | ToolRegistry
 > =>
   Layer.effect(
     Database,
     Effect.gen(function* () {
       const roots = yield* WorkspaceRoots;
-      const identity = yield* ProcessIdentity;
       const path =
         mode === 'ephemeral'
           ? IN_MEMORY_STORE
@@ -626,7 +625,6 @@ export const databaseLayer = (
           seq,
           encoded.type,
           encoded.version,
-          identity.ownerId,
           at,
           encoded.data,
         ]))?.commit;
@@ -661,7 +659,6 @@ export const databaseLayer = (
           ...committedDraft,
           seq,
           commit,
-          origin: identity.ownerId,
           at,
         };
       });
@@ -878,7 +875,7 @@ export const globalDatabaseLayer = (
 ): Layer.Layer<
   GlobalDatabase,
   DatabaseOpenFailed,
-  ProcessIdentity | ProcessProbe
+  FileSystem.FileSystem | ChildProcessSpawner
 > =>
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(

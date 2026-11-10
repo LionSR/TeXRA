@@ -22,7 +22,6 @@ function trace(message = 'hello'): TraceDocument {
         aggregateId: qualifyAggregateId('run', RUN_ID),
         seq: 1,
         commit: 1,
-        origin: null,
         at: 1_767_225_600_000,
         type: 'log',
         level: LOG_LEVELS.INFO,

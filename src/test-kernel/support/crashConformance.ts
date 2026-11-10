@@ -387,15 +387,7 @@ const liveRows = (
           if (event.seq < known.nextSeq) continue;
           if (event.type === 'run.start')
             known.parent = event.parent?.id ?? null;
-          const {
-            type,
-            aggregateId,
-            commit,
-            seq,
-            origin: _origin,
-            at: _at,
-            ...data
-          } = event;
+          const { type, aggregateId, commit, seq, at: _at, ...data } = event;
           known.rows.push({
             commit,
             run: aggregateTarget(aggregateId).id,

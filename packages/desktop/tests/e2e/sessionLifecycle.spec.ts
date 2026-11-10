@@ -1,4 +1,3 @@
-import { hostname } from 'node:os';
 import { Effect, Layer } from 'effect';
 
 import type { RunId } from '@shared/schemas';
@@ -58,9 +57,6 @@ function inEventDatabase<A, E>(
           Layer.provide(
             Layer.mergeAll(
               Layer.succeed(fixture.WorkspaceRoots)({ storage: storagePath }),
-              fixture.ProcessIdentity.layer(
-                JSON.stringify([hostname().toLowerCase(), process.pid, null]),
-              ),
               fixture.nodePlatformServices,
               // The canonical runs write no plugin rows.
               Layer.succeed(fixture.ToolRegistry)(fixture.toolTable([])),

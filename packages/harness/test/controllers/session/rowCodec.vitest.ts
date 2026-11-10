@@ -29,7 +29,6 @@ const read = (factKinds: FactKinds, version: number, value: number) =>
       kind: 'run',
       logicalId: 'aa0001',
       seq: 1,
-      origin: '["test",1,"process-1"]',
       at: 0,
     },
     factKinds,

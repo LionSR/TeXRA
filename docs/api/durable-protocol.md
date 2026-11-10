@@ -94,7 +94,7 @@ Every durable event is a row in the `event` table with two sequence numbers:
 
 Repeated immutable values (the system prompt, offered tool schemas, and the resolved agent config) are stored once by SHA-256 digest as `context.blob` rows.
 
-A project store is held by the one process that opened it, for its connection's life (SQLite's exclusive locking mode); every row records the writer's [`ProcessIdentity`](./harness/node#processidentity) (`[hostname, pid, processStart]`) as its `origin`:
+A project store is held by the one process that opened it, for its connection's life (SQLite's exclusive locking mode):
 
 - A second process that opens a held store is refused at once ("Another TeXRA process holds this project; close it there first."), never made to wait.
 - A write to an aggregate that is closed (its run deleted) fails with [`DatabaseAggregateClosed`](./harness/schemas#databaseaggregateclosed), nothing is written, and the run stops.

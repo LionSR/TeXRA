@@ -80,7 +80,6 @@ import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { ROW_KINDS } from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -106,11 +105,6 @@ const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
   'utf8',
 );
-const SELF = JSON.stringify([
-  os.hostname().toLowerCase(),
-  process.pid,
-  'golden-test',
-]);
 
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARENT = Schema.decodeUnknownSync(RunIdSchema)('a00000000001');
@@ -172,7 +166,6 @@ const substrate = (storage: string) =>
   databaseLayer('persistent').pipe(
     Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
     Layer.provide(storePluginsLayer),
-    Layer.provide(ProcessIdentity.layer(SELF)),
     Layer.provide(nodeSpawnerLayer),
     Layer.provide(nodePlatformLayer),
     Layer.fresh,
@@ -195,7 +188,6 @@ const graph = (storage: string) =>
       ),
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
-    Layer.provide(ProcessIdentity.layer(SELF)),
     Layer.provide(nodePlatformLayer),
   );
 
@@ -482,11 +474,7 @@ describe('the golden 1.0 store', () => {
       expect((yield* runHistory.load(CHAT))?.modelId).toBe(
         'google/gemini-3.8-flash@medium',
       );
-    }).pipe(
-      Effect.provide(graph(storage)),
-      Effect.provide(ProcessIdentity.layer(SELF)),
-      Effect.scoped,
-    );
+    }).pipe(Effect.provide(graph(storage)), Effect.scoped);
   });
 
   it.effect(
@@ -506,8 +494,8 @@ describe('the golden 1.0 store', () => {
         const version = ROW_KINDS['model.message'].version + 1;
         db.exec('BEGIN');
         db.prepare(
-          `INSERT INTO event (aggregate, seq, type, version, origin, at, data)
-         VALUES (?, ?, 'model.message', ?, '["newer-build",1,"later"]', 1767312000000, '{}')`,
+          `INSERT INTO event (aggregate, seq, type, version, at, data)
+         VALUES (?, ?, 'model.message', ?, 1767312000000, '{}')`,
         ).run(id, seq + 1, version);
         db.prepare('UPDATE event_sequence SET seq = ? WHERE id = ?').run(
           seq + 1,

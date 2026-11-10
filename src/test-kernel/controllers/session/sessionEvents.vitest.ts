@@ -35,6 +35,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  type FileSystem,
   Layer,
   Result,
   Schema,
@@ -82,7 +83,7 @@ import { SessionRowSchema } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
-import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
+import { SessionEvents } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   nodeSpawnerLayer,
@@ -101,7 +102,6 @@ import {
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 vi.mock('node:os', async (importOriginal) => ({
@@ -121,7 +121,7 @@ vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
 });
 
 /** A second OS process's writer: this build's `Database` over the store at
- *  `storage`, as `owner`, creating `run`. */
+ *  `storage`, creating `run`. */
 const STORE_WRITER = `
 import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/databaseLayer';
@@ -130,16 +130,14 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 import { qualifyAggregateId } from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 
-const [storage, owner, run] = process.argv.slice(2);
+const [storage, run] = process.argv.slice(2);
 const append = Effect.flatMap(Database, (db) =>
   db.appendAll([{ type: 'run.start', aggregateId: qualifyAggregateId('run', run),
     identity: { kind: 'agent', agent: 'chat' }, takesFollowUps: false,
     parent: null, provenance: null }]));
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
   Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
-  Layer.provide(ProcessIdentity.layer(owner)),
   Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
   Layer.provide(nodePlatformServices)))));
 `;
@@ -169,11 +167,6 @@ async function bundleStoreWriter(dir: string): Promise<string> {
   return outfile;
 }
 
-/** Two processes' owner ids: live pids (this one and its parent) whose start
- *  identity was never read, so no proof ties either record to a process and
- *  each reads `unprovable` to the other. */
-const SELF = JSON.stringify(['test-host', process.pid, null]);
-const OTHER = JSON.stringify(['test-host', process.ppid, null]);
 /** The run every case here is about; one id, the key of its one aggregate. */
 const RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 const OLDER = Schema.decodeUnknownSync(RunIdSchema)('ab12ce');
@@ -235,7 +228,7 @@ const graph = (
   store: Layer.Layer<
     Database,
     never,
-    ProcessIdentity | WorkspaceRoots | ProcessProbe
+    WorkspaceRoots | FileSystem.FileSystem | ChildProcessSpawner
   > = databaseLayer('ephemeral').pipe(
     Layer.orDie,
     Layer.provide(storePluginsLayer),
@@ -263,7 +256,6 @@ const graph = (
       ),
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
-    Layer.provide(ProcessIdentity.layer(SELF)),
     Layer.provide(nodePlatformLayer),
   );
 };
@@ -400,7 +392,6 @@ describe('Sessions owner', () => {
         Effect.provide(
           databaseLayer('persistent').pipe(
             Layer.provide(Layer.succeed(WorkspaceRoots)(platform.roots)),
-            Layer.provide(ProcessIdentity.layer(SELF)),
             Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
             Layer.provide(nodePlatformServices),
           ),
@@ -455,13 +446,11 @@ describe('the session event table and its one publisher', () => {
 
   const substrate = (
     storage: string,
-    owner = SELF,
     spawner: Layer.Layer<ChildProcessSpawner> = nodeSpawnerLayer,
   ) =>
     databaseLayer('persistent').pipe(
       Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
       Layer.provide(storePluginsLayer),
-      Layer.provide(ProcessIdentity.layer(owner)),
       Layer.provide(spawner),
       Layer.provide(nodePlatformLayer),
       Layer.fresh,
@@ -487,7 +476,7 @@ describe('the session event table and its one publisher', () => {
     }));
     return Effect.gen(function* () {
       const failure = yield* Effect.flip(
-        Database.pipe(Effect.provide(substrate(storage, SELF, mount.layer))),
+        Database.pipe(Effect.provide(substrate(storage, mount.layer))),
       );
       expect(failure._tag).toBe('DatabaseOpenFailed');
       expect(String(failure.cause)).toContain('verified local filesystem');
@@ -574,7 +563,7 @@ describe('the session event table and its one publisher', () => {
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: 103,
+          user_version: 104,
         });
         expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
           auto_vacuum: 2,
@@ -793,7 +782,7 @@ describe('the session event table and its one publisher', () => {
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
-    const format = 104;
+    const format = 105;
     return Effect.gen(function* () {
       yield* storeOfFormat(storage, format);
       const failure = yield* Effect.flip(
@@ -833,11 +822,8 @@ describe('the session event table and its one publisher', () => {
           [qualifyAggregateId('run', RUN), 2, 3],
           [qualifyAggregateId('run', RUN), 3, 4],
         ]);
-        // The writer is the process, stamped by the layer, and `at` is
-        // the layer's own clock: no caller passes either.
-        expect(first.every((e) => e.origin === SELF && e.at === now)).toBe(
-          true,
-        );
+        // `at` is the layer's own clock: no caller passes it.
+        expect(first.every((e) => e.at === now)).toBe(true);
         expect(yield* db.currentCommit).toBe(4);
         // A run begins with exactly one `run.start` (decision 9): a second
         // creation of a live run is the caller's defect, and the sequence it
@@ -1244,11 +1230,9 @@ describe('the session event table and its one publisher', () => {
       }> =>
         Effect.promise(async () => {
           const bundled = await bundleStoreWriter(storage);
-          const child = spawn(
-            process.execPath,
-            [bundled, storage, OTHER, OLDER],
-            { stdio: ['ignore', 'inherit', 'pipe'] },
-          );
+          const child = spawn(process.execPath, [bundled, storage, OLDER], {
+            stdio: ['ignore', 'inherit', 'pipe'],
+          });
           let stderr = '';
           child.stderr.on('data', (chunk: Buffer) => {
             stderr += chunk.toString();

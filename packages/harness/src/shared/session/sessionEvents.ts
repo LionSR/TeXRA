@@ -7,7 +7,6 @@
 import {
   Context,
   type Effect,
-  Layer,
   type PubSub,
   type Scope,
   type Stream,
@@ -18,7 +17,6 @@ import {
 import type {
   AggregateId,
   CommitOrdinal,
-  OwnerId,
   SessionRow,
   DisplayRow,
   SessionRowDraft,
@@ -88,21 +86,6 @@ export type Append = (
   readonly SessionRow[],
   DatabaseAggregateClosed | DatabaseWriteFailed
 >;
-
-/**
- * The canonical hostname, pid, and nullable process-start tuple: the
- * `origin` stamped on every event the process appends. Resolved once at each
- * process entry, where the start identity can be awaited, and provided to
- * the process layer.
- */
-export class ProcessIdentity extends Context.Service<
-  ProcessIdentity,
-  { readonly ownerId: OwnerId }
->()('@texra-ai/harness/session/ProcessIdentity') {
-  static layer(ownerId: OwnerId): Layer.Layer<ProcessIdentity> {
-    return Layer.succeed(ProcessIdentity)({ ownerId });
-  }
-}
 
 /**
  * The one publisher of a root's facts. Every write to the

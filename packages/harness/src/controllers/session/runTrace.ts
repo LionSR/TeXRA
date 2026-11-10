@@ -197,7 +197,7 @@ export function makeRunTrace({
 /** The rows a trace event is stored as: every one but the chunk's. */
 const STORED_TRACE: ReadonlySet<string> = new Set(TRACE_ROW_TYPES);
 /** The columns the store adds to a trace event's row. */
-const ENVELOPE = ['aggregateId', 'seq', 'commit', 'origin', 'at'] as const;
+const ENVELOPE = ['aggregateId', 'seq', 'commit', 'at'] as const;
 
 /**
  * A run's trace read back from its session's view inputs, for every reader

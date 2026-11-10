@@ -25,40 +25,7 @@ export function generateRunId(): RunId {
 // The aggregate key every durable session event rides on: the kind and
 // logical id of the lifecycle it belongs to (`run` by run id, `plugin` by a
 // plugin's own key), encoded canonically as JSON so one string names it in
-// the event table, and the identity of the process that writes a row.
-
-/** The complete process identity, encoded canonically without losing null. */
-const OwnerIdentitySchema = Schema.Tuple([
-  Schema.String.check(Schema.isMinLength(1)),
-  Schema.Int.check(Schema.isGreaterThan(0)),
-  Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-]);
-const OwnerIdentityJsonSchema = Schema.fromJsonString(OwnerIdentitySchema);
-const decodeOwnerIdentityJson = Schema.decodeUnknownResult(
-  OwnerIdentityJsonSchema,
-);
-
-/**
- * JSON.stringify([hostname.toLowerCase(), pid, processStart]), kept for
- * diagnostics.
- */
-export const OwnerIdSchema = Schema.String.check(
-  Schema.makeFilter(
-    (value) =>
-      Result.match(decodeOwnerIdentityJson(value), {
-        onSuccess: (identity) =>
-          identity[0] === identity[0].toLowerCase() &&
-          JSON.stringify(identity) === value,
-        onFailure: () => false,
-      }),
-    {
-      message:
-        'Expected a canonical [hostname, pid, processStart] process identity',
-    },
-  ),
-);
-/** The identity of the process that wrote a row (`origin`). */
-export type OwnerId = typeof OwnerIdSchema.Type;
+// the event table.
 
 const AggregateKindSchema = Schema.Literals(['run', 'plugin']);
 /** The kind separates lifecycles even when their logical ids coincide:

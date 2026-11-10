@@ -11,8 +11,6 @@ import { describe, expect } from 'vitest';
 import { AppState } from '@texra-ai/harness/host';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -31,10 +29,7 @@ describe('application state on SQLite', () => {
       (context) => Context.get(context, AppState),
     );
   const openStore = (storage: string) =>
-    openAppStateStore(storage).pipe(
-      Effect.provide(ProcessIdentity.layer(processOwnerId('app-state-test'))),
-      Effect.provide(nodePlatformLayer),
-    );
+    openAppStateStore(storage).pipe(Effect.provide(nodePlatformLayer));
 
   it.live('keeps both writers when two stores share one database', () =>
     Effect.gen(function* () {

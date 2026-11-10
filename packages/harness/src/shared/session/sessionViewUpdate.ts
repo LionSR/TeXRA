@@ -815,7 +815,7 @@ function applySessionFacts(
     case 'plugin.fact': {
       // A run's own plugin facts go on the run (`applyRunEvent`).
       if (runId !== null) return;
-      const { seq: _s, commit: _c, origin: _o, at: _a, ...fact } = event;
+      const { seq: _s, commit: _c, at: _a, ...fact } = event;
       const held = view.pluginFacts.findIndex(
         (old) =>
           old.aggregateId === fact.aggregateId &&

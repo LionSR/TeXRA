@@ -25,7 +25,6 @@ it.effect("reads the usage row projected from a model's priced title", () =>
       aggregateId: qualifyAggregateId('run', runId),
       seq,
       commit: seq,
-      origin: null,
       at: 1_700_000_000_000 + seq,
     });
     const event = (

@@ -159,7 +159,6 @@ const runHistoryRow = (
         ),
         seq: commit,
         commit,
-        origin: null,
         at: 0,
       }),
     ]),
@@ -173,7 +172,6 @@ const rowAccepted = (draft: Record<string, unknown>): boolean =>
       ...draft,
       seq: 1,
       commit: 1,
-      origin: null,
       at: 0,
     }),
   );

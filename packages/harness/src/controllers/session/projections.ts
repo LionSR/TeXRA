@@ -292,7 +292,7 @@ export function usageRows(event: SessionRow): readonly SessionRow[] {
   if (event.type === 'usage') return [];
   const usage = pricedUsage(event);
   if (usage === null) return [];
-  const { aggregateId, seq, commit, origin, at } = event;
+  const { aggregateId, seq, commit, at } = event;
   return [
     decodeUsageRow({
       type: 'usage',
@@ -300,7 +300,6 @@ export function usageRows(event: SessionRow): readonly SessionRow[] {
       aggregateId,
       seq,
       commit,
-      origin,
       at,
     }),
   ];
