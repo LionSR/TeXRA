@@ -159,7 +159,7 @@ export const RECORD_ROW_TYPES = [
 ] as const satisfies readonly SessionRow['type'][];
 
 /** The record of a run no row has said anything about. */
-export const NO_RUN_ROWS: RunRows = {
+export const NO_RUN_ROWS: RunRows = Object.freeze({
   start: null,
   parent: null,
   activation: null,
@@ -173,8 +173,8 @@ export const NO_RUN_ROWS: RunRows = {
   title: null,
   label: null,
   grants: null,
-  facts: {},
-};
+  facts: Object.freeze({}),
+});
 
 /**
  * A run's record after `row`, applied in commit order: the one statement of
