@@ -8,20 +8,21 @@
  * transaction), the process's exit (`process.exit`), and its failure: an
  * exit other than 0, or the failure a provider's SDK reported with no exit
  * of its own. The process's output goes to the run's trace as it
- * arrives (`AgentTrace.output`). A stop interrupts the turn, and a stopped
- * process run delivers nothing: its interruption is the fact. A process
- * run is never resumed: a later turn of the same thread is a new run, and
- * a message to one is refused (`takesFollowUps: false`).
+ * arrives (`AgentTrace.output`); a row of it the store refused fails the
+ * run, as it fails any run (`commitEnd`). A stop interrupts the turn, and
+ * a stopped process run delivers nothing: its interruption is the fact. A
+ * process run is never resumed: a later turn of the same thread is a new
+ * run, and a message to one is refused (`takesFollowUps: false`).
  */
 import { Effect, Exit } from 'effect';
 
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { PlatformServices } from '@platform/processRuntime';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
-import { endVerdict } from '@agent/runtime/AgentRunLifecycle';
+import { commitEnd, endVerdict } from '@agent/runtime/AgentRunLifecycle';
 import { childRunDescription } from '@agent/runtime/delegation/childRun';
 import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
-import { endRunRows, registerRun } from '@agent/storage/runLifecycle';
+import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
@@ -85,11 +86,11 @@ interface OpenedProcess {
 }
 
 /**
- * The run on its fiber: the turn, then its end on every
- * exit, in the one masked region whose exit is the terminal, so a stop
- * landing mid-turn still ends the run. The end's transaction delivers the
- * report ({@link endRunRows}); one that never wrote fails the fiber, its
- * terminal fact gone.
+ * The run on its fiber: the turn, then on every exit the end every run
+ * program commits (`commitEnd`), in the one masked region whose exit is
+ * the terminal, so a stop landing mid-turn still ends the run and stays
+ * the fiber's exit. The end's transaction delivers the report; one that
+ * never wrote fails the fiber, its terminal fact gone.
  */
 const runProcessChild = (
   runId: RunId,
@@ -104,8 +105,10 @@ const runProcessChild = (
             : RUN_OUTCOME.FAILED,
         ),
       );
-      const ending = endingOf(runId, turn, exit, error);
-      return endRunRows({ runId, outcome, ...ending }).pipe(Effect.asVoid);
+      const { report, ...ending } = endingOf(runId, turn, exit, error);
+      return commitEnd(exit, { runId, outcome, ...ending }, () =>
+        Effect.succeed(report),
+      );
     }),
   ).pipe(Effect.ensuring(Effect.sync(() => logger.close())));
 
