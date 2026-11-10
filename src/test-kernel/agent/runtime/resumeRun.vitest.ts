@@ -21,6 +21,9 @@
  * - a root launched to run once, resumed by an interactive caller after it
  *   ended, waits for input while every message to it is refused, with a
  *   refusal that tells the user to resume it.
+ * - a resume sent as soon as a run's end is stored, while the fiber that
+ *   wrote it is still leaving, is answered with the ended activation and
+ *   resumes nothing.
  */
 import { layer } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Context, Layer, Stream } from 'effect';
@@ -585,6 +588,38 @@ describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(refused).toMatchObject({
               reason: expect.stringContaining('ran once'),
             });
+          }),
+      );
+
+      it.effect(
+        'resumed as soon as its end is stored, runs a new activation to its own end',
+        () =>
+          Effect.gen(function* () {
+            const { roots } = yield* FakeHost;
+            const session = yield* (yield* Sessions).open(roots, {
+              persistent: true,
+              host: {},
+            });
+            const run = yield* session.start({
+              agent: NOTES_AGENT,
+              instruction: 'Start the notes.',
+              model: 'openai/gpt-5.6-sol',
+            });
+            expect((yield* run.result).outcome).toBe('completed');
+            // Sent once the end is read back, as a host resumes a run it saw
+            // end: the fiber that wrote the end may not have left yet.
+            const resumed = yield* session.resume(run.runId);
+            expect(resumed.activation).toBeGreaterThan(run.activation);
+            const end = yield* Effect.timeout(resumed.result, '20 seconds');
+            expect(end.outcome).toBe('completed');
+            // The first lifecycle's end, then the resumed one's, after its
+            // activation.
+            const ends = storedRows(roots.storage).filter(
+              (row) => row.run === run.runId && row.type === 'run.end',
+            );
+            expect(
+              ends.map((row) => row.commit > resumed.activation),
+            ).toStrictEqual([false, true]);
           }),
       );
     });

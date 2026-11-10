@@ -130,8 +130,9 @@ function refusalFor(
  * whole of it is the registry's launch (`RunRegistry.start`), on the
  * session's context whichever fiber asks (a host's, a wake's, a tool's):
  * a run a fiber here drives or opens is answered as it runs
- * ({@link joinOpening}), and a stop asked while the decision reads ends
- * the run and opens nothing.
+ * ({@link joinOpening}), one whose end is stored is resumed once that
+ * fiber has left, and a stop asked while the decision reads ends the run
+ * and opens nothing.
  */
 export const resumeRun = (
   runId: RunId,
@@ -152,7 +153,11 @@ export const resumeRun = (
         ),
         Effect.catch((error) =>
           error instanceof RunLive
-            ? joinOpening(runs, runId)
+            ? Effect.flatMap(joinOpening(runs, runId), (joined) =>
+                joined === null
+                  ? resumeRun(runId, options)
+                  : Effect.succeed(joined),
+              )
             : refusalFor(error, runId),
         ),
       ),
@@ -163,12 +168,14 @@ export const resumeRun = (
  * of the same input, a host's second resume) is joined, then the run is
  * answered as it runs here: the activation it runs, or, for a child an open
  * call of its parent owns, that parent, whose conversation it belongs to.
- * One whose opening failed is not resumable.
+ * One whose opening failed is not resumable. One whose activation's end is
+ * already stored, its fiber still leaving, runs here no more: once that
+ * fiber has left this answers `null`, and the resume starts over.
  */
 const joinOpening = (
   runs: RunRegistry['Service'],
   runId: RunId,
-): Effect.Effect<ResumeHandOff> =>
+): Effect.Effect<ResumeHandOff | null> =>
   Effect.suspend(() =>
     (runs.openingOf(runId) ?? Effect.void).pipe(
       // An opening that failed leaves no run here, which reads below as
@@ -177,13 +184,16 @@ const joinOpening = (
       Effect.andThen(
         runs.inSession(
           Effect.gen(function* () {
-            if (runs.get(runId) === undefined) return REFUSED;
+            const held = runs.get(runId);
+            if (held === undefined) return REFUSED;
             const owner = yield* owningCall(runId);
             if (owner !== null) return { ownedBy: owner.parentRunId };
             const facts = yield* (yield* SessionLog).facts(runId);
-            return facts?.activation == null
-              ? REFUSED
-              : { activation: facts.activation.commit };
+            if (facts?.activation == null) return REFUSED;
+            if (facts.end === null)
+              return { activation: facts.activation.commit };
+            yield* held.drained;
+            return null;
           }),
         ),
       ),
