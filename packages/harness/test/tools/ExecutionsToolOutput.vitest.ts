@@ -17,7 +17,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -199,7 +199,11 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // Launched and admitted, its program not yet past its setup: the
             // window between `start` and the child's loop being under way.
             const launch = yield* Effect.forkChild(
-              startAwaited(Context.get(session, Runs), childId, Effect.never),
+              startAwaited(
+                Context.get(session, RunRegistry),
+                childId,
+                Effect.never,
+              ),
               { startImmediately: true },
             );
 

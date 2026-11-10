@@ -87,7 +87,8 @@ export const activationRows = Effect.fn('activationRows')(function* (
 });
 
 /** Register a run whose loop is not this process's (an agent CLI, bash)
- *  alone; a run this process's loop drives registers with its opening. */
+ *  alone, its configuration with it; a run this process's loop drives
+ *  registers with its opening. */
 export const registerRun = Effect.fn('registerRun')(function* (
   runId: RunId,
   record: RunRecord,
@@ -95,7 +96,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
 ): Effect.fn.Return<void, Error, OpenServices | RunHistory> {
   return yield* Effect.gen(function* () {
     const opens = yield* registrationRows(runId, record, options);
-    const rows = Effect.succeed(opens.rows);
+    const rows = Effect.succeed([...opens.rows, opens.config]);
     const born = opens.start !== null;
     const cell = yield* (yield* RunHistory).open(
       runId,

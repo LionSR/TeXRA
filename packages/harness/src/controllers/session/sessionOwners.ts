@@ -27,7 +27,6 @@ import {
   ChildRunBudget,
   resolveChildRunConcurrencyBudget,
 } from '@agent/runtime/childRunBudget';
-import { executeAgent } from '@agent/runtime/executeAgent';
 import {
   Interactions,
   presentTerminalResult,
@@ -38,11 +37,10 @@ import { sessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { SessionRequests } from '@agent/runtime/requests';
 import { ProjectTools } from '@agent/runtime/loop/step';
 import { makeRunHistory } from '@agent/runtime/makeRunHistory';
-import { stopRun } from '@agent/storage/runLifecycle';
 import {
-  registryOf,
   RunRegistry,
   Runs,
+  SessionRunRegistry,
   type AgentRunServices,
 } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -96,7 +94,7 @@ export const stopSessionRuns = (
   session: Context.Context<SessionServices>,
 ): Effect.Effect<SessionCloseReport> =>
   Effect.gen(function* () {
-    const runs = registryOf(Context.get(session, Runs));
+    const runs = Context.get(session, RunRegistry);
     const closeBy =
       (yield* Clock.currentTimeMillis) + SESSION_CLOSE_DEADLINE_MS;
     yield* runs.stopAll();
@@ -235,16 +233,17 @@ export const sessionOwnersLayer = (
       // first, so no run is admitted over a session that is unwinding.
       // The context the runs' forks capture: the process's services and
       // every service built so far.
-      const services: Context.Context<Exclude<AgentRunServices, Runs>> =
-        Context.merge(yield* Effect.context<RunServices>(), withRequests);
+      const services: Context.Context<
+        Exclude<AgentRunServices, Runs | RunRegistry>
+      > = Context.merge(yield* Effect.context<RunServices>(), withRequests);
       const fork = yield* FiberSet.runtime(fibers)<
-        Exclude<AgentRunServices, Runs>
+        Exclude<AgentRunServices, Runs | RunRegistry>
       >().pipe(Effect.provide(services));
       const forkRun = yield* FiberMap.runtime(runFibers)<
-        Exclude<AgentRunServices, Runs>
+        Exclude<AgentRunServices, Runs | RunRegistry>
       >().pipe(Effect.provide(services));
       const local = (yield* LocalRuntimeSource).ref;
-      const runs: RunRegistry = new RunRegistry({
+      const runs: SessionRunRegistry = new SessionRunRegistry({
         view,
         log,
         // Set, never updated from a read: each call carries the whole set,
@@ -254,15 +253,12 @@ export const sessionOwnersLayer = (
         roots,
         inSession: (effect) => Effect.provide(effect, services),
         fork: forkRun,
-        programs: { executeAgent, stop: stopRun },
-        wake: (id) =>
-          void fork(wakeIfOwed(id).pipe(Effect.provideService(Runs, runs))),
+        wake: (id) => void fork(runs.inSession(wakeIfOwed(id))),
       });
       yield* Effect.addFinalizer(() => Effect.sync(() => runs.dispose()));
-      const session: Context.Context<SessionServices> = Context.add(
-        withRequests,
-        Runs,
-        runs,
+      const session: Context.Context<SessionServices> = withRequests.pipe(
+        Context.add(Runs, runs),
+        Context.add(RunRegistry, runs),
       );
 
       // What reads the session as it runs: the tails' readers (in the

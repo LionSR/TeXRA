@@ -26,7 +26,7 @@ import {
 import type { RunState } from '@shared/session/runState';
 
 import { AgentRun } from '../run/AgentRun';
-import { registryOf, Runs } from '../runRegistry';
+import { RunRegistry } from '../runRegistry';
 import type { BoundModel } from '../modelAccess/ModelAccess';
 import type { FollowUps } from '../FollowUps';
 
@@ -149,16 +149,18 @@ export const settleRun =
     /** The run's own input lease. */
     lease: FollowUps,
   ) =>
-  (exit: Exit.Exit<RunExit, Error>): Effect.Effect<void, never, Runs> => {
+  (
+    exit: Exit.Exit<RunExit, Error>,
+  ): Effect.Effect<void, never, RunRegistry> => {
     // The body's own value when it returned.
     const outcome = Exit.match(exit, {
       onSuccess: (value) => value.outcome,
       onFailure: outcomeFromCause,
     });
-    return Effect.map(Runs, (service) =>
+    return Effect.map(RunRegistry, (runs) =>
       lease.release(
         outcome === RUN_OUTCOME.COMPLETED &&
-          !registryOf(service).hasLiveDescendants(cell.runId)
+          !runs.hasLiveDescendants(cell.runId)
           ? 'terminal'
           : 'recoverable',
       ),

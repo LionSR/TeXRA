@@ -34,7 +34,7 @@ import {
   SessionOwner,
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
@@ -191,7 +191,7 @@ const start = Effect.fn('start')(function* (
     }),
     Effect.onInterrupt(() =>
       Effect.sync(
-        () => opened && registryOf(Context.get(session, Runs)).interrupt(runId),
+        () => opened && Context.get(session, RunRegistry).interrupt(runId),
       ),
     ),
   );

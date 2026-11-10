@@ -38,7 +38,7 @@ import {
 import { openRequest, SessionRequests } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
@@ -609,7 +609,7 @@ function holdRun(runId: RunId): void {
     runId,
     harnessRuntime.runSync(
       Effect.map(
-        registryOf(Context.get(harnessRuntimeSession, Runs)).start(runId, {
+        Context.get(harnessRuntimeSession, RunRegistry).start(runId, {
           open: Effect.void,
           run: () =>
             Effect.onInterrupt(Effect.never, () =>

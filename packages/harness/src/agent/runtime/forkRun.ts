@@ -234,7 +234,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
   const cutAt = yield* cutOf(from.id, at);
   const { seq: cut, state, start, title, record } = cutAt;
   const runId = generateRunId();
-  const { rows } = yield* registrationRows(runId, record, {
+  const { rows, config } = yield* registrationRows(runId, record, {
     identity: start.identity,
     takesFollowUps: true,
     provenance: { kind: 'fork', from, at: cut },
@@ -252,14 +252,14 @@ export const forkRun = Effect.fn('forkRun')(function* (
   yield* cell.append([
     ...viewRows(runId, state, state.messages),
     ...(yield* forkedFacts(from.id, cut, runId)),
-    ...(state.backend === null
-      ? []
-      : [
-          configRow(runId, record, record.model, {
-            backend: state.backend,
-            declinedRoutes: state.declinedRoutes,
-          }),
-        ]),
+    // Its one `run.config`: bound as its source was at the cut, or as its
+    // registration built it for a source that never bound.
+    state.backend === null
+      ? config
+      : configRow(runId, record, record.model, {
+          backend: state.backend,
+          declinedRoutes: state.declinedRoutes,
+        }),
     positionRow(runId, state, 'waiting'),
   ]);
   return runId;
@@ -304,7 +304,7 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
       : [...state.messages, { role: 'user' as const, content: [text] }];
   // Bound as the source was when it issued the call, not at the cut: a
   // route its turn declined since stays declined (`AgentRun` binds a seeded
-  // launch from this row).
+  // launch on it, and its opening records the binding).
   const bound = (yield* (yield* RunHistory).load(from, boundAt)) ?? state;
   const model = bound.modelId ?? record.model;
   const binding =
@@ -317,9 +317,6 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
       rows: [
         ...viewRows(runId, state, messages),
         ...(yield* forkedFacts(from, seq, runId)),
-        ...(binding === null
-          ? []
-          : [configRow(runId, { ...record, model }, model, binding)]),
       ],
       binding,
     },

@@ -24,7 +24,7 @@ import { setLogSink } from '@texra-ai/harness/node';
 import { endRun } from '@agent/runtime/AgentRunLifecycle';
 import { type RunReport } from '@agent/runtime/runReport';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -121,7 +121,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
 
         const running = yield* Effect.forkChild(
           startAwaited(
-            Context.get(session, Runs),
+            Context.get(session, RunRegistry),
             runId,
             endRun(
               { ...ctx, entry: { ...ctx.entry, parent: PARENT_RUN_ID } },
@@ -140,9 +140,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         // The stop a launch takes when its caller lets go: the fiber's
         // interruption, writing nothing (a `stop` would queue its row behind
         // the parked persist and land after it).
-        expect(registryOf(Context.get(session, Runs)).interrupt(runId)).toBe(
-          true,
-        );
+        expect(Context.get(session, RunRegistry).interrupt(runId)).toBe(true);
 
         yield* Deferred.succeed(parked.release, undefined);
         yield* Fiber.await(running);

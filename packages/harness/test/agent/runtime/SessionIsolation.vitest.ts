@@ -14,7 +14,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { endRunRows } from '@agent/storage/runLifecycle';
 
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { SessionLog } from '@shared/session/runHistory';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -55,7 +55,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             TestSession.open(roots),
             sessionHandleOf,
           );
-          const runs = registryOf(Context.get(session, Runs));
+          const runs = Context.get(session, RunRegistry);
           const runId = yield* publishTestRunStart(session);
           const observed = yield* Deferred.make<string | undefined>();
           const { opened, fiber } = yield* runs.start(runId, {
@@ -135,7 +135,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // A live run whose stop ends it, as its lifecycle's terminal does.
             yield* Effect.forkDetach(
               startAwaited(
-                Context.get(session, Runs),
+                Context.get(session, RunRegistry),
                 runId,
                 Effect.never.pipe(
                   Effect.onInterrupt(() =>

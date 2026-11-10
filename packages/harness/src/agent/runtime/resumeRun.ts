@@ -39,13 +39,7 @@ import {
   type PreparedRun,
 } from './executeAgent';
 import { prepareAgentDefinition } from './AgentLaunchContext';
-import {
-  registryOf,
-  type AgentRunServices,
-  RunLive,
-  type RunRegistry,
-  Runs,
-} from './runRegistry';
+import { type AgentRunServices, RunLive, RunRegistry } from './runRegistry';
 
 /** What a resume answers: the commit of the activation it opened, which
  *  the caller now holds; the refusal its records decided; or the owning
@@ -136,16 +130,16 @@ function refusalFor(
  * whole of it is the registry's launch (`RunRegistry.start`), on the
  * session's context whichever fiber asks (a host's, a wake's, a tool's):
  * a run a fiber here drives or opens is answered as it runs
- * ({@link joinOpening}), and a stop asked while the decision reads ends
- * the run and opens nothing.
+ * ({@link joinOpening}), one whose end is stored is resumed once that
+ * fiber has left, and a stop asked while the decision reads ends the run
+ * and opens nothing.
  */
 export const resumeRun = (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.Effect<ResumeHandOff, Error, Runs> =>
-  Effect.flatMap(Runs, (service) => {
-    const runs = registryOf(service);
-    return runs
+): Effect.Effect<ResumeHandOff, Error, RunRegistry> =>
+  Effect.flatMap(RunRegistry, (runs) =>
+    runs
       .start(runId, {
         open: openResume(runs, runId, options),
         run: (opened) => opened.run,
@@ -159,23 +153,29 @@ export const resumeRun = (
         ),
         Effect.catch((error) =>
           error instanceof RunLive
-            ? joinOpening(runs, runId)
+            ? Effect.flatMap(joinOpening(runs, runId), (joined) =>
+                joined === null
+                  ? resumeRun(runId, options)
+                  : Effect.succeed(joined),
+              )
             : refusalFor(error, runId),
         ),
-      );
-  });
+      ),
+  );
 
 /**
  * A resume of a run a launch here holds: one still opening (a wake's resume
  * of the same input, a host's second resume) is joined, then the run is
  * answered as it runs here: the activation it runs, or, for a child an open
  * call of its parent owns, that parent, whose conversation it belongs to.
- * One whose opening failed is not resumable.
+ * One whose opening failed is not resumable. One whose activation's end is
+ * already stored, its fiber still leaving, runs here no more: once that
+ * fiber has left this answers `null`, and the resume starts over.
  */
 const joinOpening = (
-  runs: RunRegistry,
+  runs: RunRegistry['Service'],
   runId: RunId,
-): Effect.Effect<ResumeHandOff> =>
+): Effect.Effect<ResumeHandOff | null> =>
   Effect.suspend(() =>
     (runs.openingOf(runId) ?? Effect.void).pipe(
       // An opening that failed leaves no run here, which reads below as
@@ -184,13 +184,16 @@ const joinOpening = (
       Effect.andThen(
         runs.inSession(
           Effect.gen(function* () {
-            if (runs.get(runId) === undefined) return REFUSED;
+            const held = runs.get(runId);
+            if (held === undefined) return REFUSED;
             const owner = yield* owningCall(runId);
             if (owner !== null) return { ownedBy: owner.parentRunId };
             const facts = yield* (yield* SessionLog).facts(runId);
-            return facts?.activation == null
-              ? REFUSED
-              : { activation: facts.activation.commit };
+            if (facts?.activation == null) return REFUSED;
+            if (facts.end === null)
+              return { activation: facts.activation.commit };
+            yield* held.drained;
+            return null;
           }),
         ),
       ),
@@ -209,7 +212,7 @@ const joinOpening = (
  *  an open call of `owner` owns resumes for that call alone: any other
  *  caller is sent to the owner. */
 export const openResume = Effect.fn('resumeRun.open')(function* (
-  runs: RunRegistry,
+  runs: RunRegistry['Service'],
   runId: RunId,
   options: ResumeRunOptions,
   owner?: RunId,
