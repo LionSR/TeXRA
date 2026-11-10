@@ -14,6 +14,7 @@ import {
   type OpenInquiryTurn,
   type InquiryThreadRecord,
   type InquiryThreadSummary,
+  type InquiryTurnOutcome,
 } from '@texra/shared/plugins/externalInquiry';
 
 const QUESTION_PREVIEW_CHARS = 200;
@@ -22,7 +23,8 @@ const QUESTION_PREVIEW_CHARS = 200;
 function inquiryOperations(
   values: Context.Service.Shape<typeof GlobalValues>,
 ): Context.Service.Shape<typeof InquiryRecords> {
-  /** One thread's transition under the write lock; `null` writes nothing. */
+  /** One thread's transition under the write lock: what it wrote (`null`
+   *  writes nothing) and the thread as it was. */
   const changeThread = Effect.fn('changeThread')(function* <
     A extends InquiryThreadRecord | null,
   >(
@@ -30,6 +32,10 @@ function inquiryOperations(
     change: (current: InquiryThreadRecord | null, timestamp: string) => A,
   ) {
     const timestamp = DateTime.formatIso(yield* DateTime.now);
+    type Change = {
+      readonly written: A;
+      readonly before: InquiryThreadRecord | null;
+    };
     return yield* values.modify(INQUIRY_THREADS, id, (current) =>
       Result.flatMap(
         // A transition rejects a request by throwing its ToolError.
@@ -40,21 +46,32 @@ function inquiryOperations(
         (
           next,
         ): Result.Result<
-          readonly [A] | readonly [A, InquiryThreadRecord],
+          readonly [Change] | readonly [Change, InquiryThreadRecord],
           Error
         > => {
-          if (next === null) return Result.succeed([next] as const);
+          const change: Change = { written: next, before: current ?? null };
+          if (next === null) return Result.succeed([change] as const);
           if (next.threadId !== id)
             return Result.fail(
               new Error(
                 'An inquiry transition cannot change its thread identity.',
               ),
             );
-          return Result.succeed([next, next] as const);
+          return Result.succeed([change, next] as const);
         },
       ),
     );
   });
+
+  /** A turn change as its caller reads it. */
+  const turnOutcome = ({
+    written,
+    before,
+  }: {
+    readonly written: InquiryThreadRecord | null;
+    readonly before: InquiryThreadRecord | null;
+  }): InquiryTurnOutcome =>
+    written === null ? { unchanged: before } : { changed: written };
 
   function normalizeSessionLinks(
     links?: readonly string[] | null,
@@ -94,59 +111,62 @@ function inquiryOperations(
     const threadId: InquiryThreadId =
       params.threadId ?? `ei_${randomBytes(6).toString('hex')}`;
 
-    return changeThread(threadId, (existing, timestamp) => {
-      if (params.threadId && !existing) {
-        throw new ToolError(`External inquiry thread not found: ${threadId}`);
-      }
-
-      if (existing) {
-        if (existing.status === 'open') {
-          throw new ToolError(
-            'Thread already has an open question; wait for the continuation. ' +
-              'Use inquiry { command: "read", thread_id } to inspect or list to recover thread IDs. ' +
-              'Do not re-dispatch.',
-          );
+    return Effect.map(
+      changeThread(threadId, (existing, timestamp) => {
+        if (params.threadId && !existing) {
+          throw new ToolError(`External inquiry thread not found: ${threadId}`);
         }
-        if (existing.status === 'dropped') {
-          throw new ToolError(
-            'Thread was dropped by user; start a new thread instead.',
-          );
+
+        if (existing) {
+          if (existing.status === 'open') {
+            throw new ToolError(
+              'Thread already has an open question; wait for the continuation. ' +
+                'Use inquiry { command: "read", thread_id } to inspect or list to recover thread IDs. ' +
+                'Do not re-dispatch.',
+            );
+          }
+          if (existing.status === 'dropped') {
+            throw new ToolError(
+              'Thread was dropped by user; start a new thread instead.',
+            );
+          }
         }
-      }
-      const baseManifest: InquiryThreadRecord = existing ?? {
-        threadId,
-        parentRunId: params.parentRunId,
-        status: 'open',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        turns: [],
-      };
+        const baseManifest: InquiryThreadRecord = existing ?? {
+          threadId,
+          parentRunId: params.parentRunId,
+          status: 'open',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          turns: [],
+        };
 
-      const turnIndex = baseManifest.turns.length + 1;
-      const trimmedContext = params.context?.trim() || undefined;
+        const turnIndex = baseManifest.turns.length + 1;
+        const trimmedContext = params.context?.trim() || undefined;
 
-      const turn: OpenInquiryTurn = {
-        turnIndex,
-        timestamp,
-        question: params.question,
-        context: trimmedContext,
-        kind: 'open',
-        suggestSearch: params.suggestSearch ?? undefined,
-        attachFiles: params.attachFiles?.length
-          ? params.attachFiles
-          : undefined,
-      };
+        const turn: OpenInquiryTurn = {
+          turnIndex,
+          timestamp,
+          question: params.question,
+          context: trimmedContext,
+          kind: 'open',
+          suggestSearch: params.suggestSearch ?? undefined,
+          attachFiles: params.attachFiles?.length
+            ? params.attachFiles
+            : undefined,
+        };
 
-      const nextManifest: InquiryThreadRecord = {
-        ...baseManifest,
-        parentRunId: params.parentRunId,
-        status: 'open',
-        updatedAt: timestamp,
-        turns: [...baseManifest.turns, turn],
-      };
+        const nextManifest: InquiryThreadRecord = {
+          ...baseManifest,
+          parentRunId: params.parentRunId,
+          status: 'open',
+          updatedAt: timestamp,
+          turns: [...baseManifest.turns, turn],
+        };
 
-      return nextManifest;
-    });
+        return nextManifest;
+      }),
+      ({ written }) => written,
+    );
   }
 
   /**
@@ -161,34 +181,37 @@ function inquiryOperations(
       Context.Service.Shape<typeof InquiryRecords>['recordAnswerForOpenTurn']
     >[0],
   ) {
-    return changeThread(params.threadId, (existing, timestamp) => {
-      if (!existing || existing.status !== 'open') return null;
-      const lastTurn = existing.turns.at(-1);
-      if (
-        lastTurn === undefined ||
-        lastTurn.kind !== 'open' ||
-        lastTurn.turnIndex !== params.turnIndex
-      )
-        return null;
-      const sessionLinks = normalizeSessionLinks(params.sessionLinks);
+    return Effect.map(
+      changeThread(params.threadId, (existing, timestamp) => {
+        if (!existing || existing.status !== 'open') return null;
+        const lastTurn = existing.turns.at(-1);
+        if (
+          lastTurn === undefined ||
+          lastTurn.kind !== 'open' ||
+          lastTurn.turnIndex !== params.turnIndex
+        )
+          return null;
+        const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
-      const answeredTurn: AnsweredInquiryTurn = {
-        ...lastTurn,
-        kind: 'answered',
-        answer: params.answer,
-        answeredAt: timestamp,
-        sessionLinks,
-      };
+        const answeredTurn: AnsweredInquiryTurn = {
+          ...lastTurn,
+          kind: 'answered',
+          answer: params.answer,
+          answeredAt: timestamp,
+          sessionLinks,
+        };
 
-      const nextManifest: InquiryThreadRecord = {
-        ...existing,
-        status: 'answered',
-        updatedAt: timestamp,
-        turns: [...existing.turns.slice(0, -1), answeredTurn],
-      };
+        const nextManifest: InquiryThreadRecord = {
+          ...existing,
+          status: 'answered',
+          updatedAt: timestamp,
+          turns: [...existing.turns.slice(0, -1), answeredTurn],
+        };
 
-      return nextManifest;
-    });
+        return nextManifest;
+      }),
+      turnOutcome,
+    );
   }
 
   /**
@@ -207,21 +230,24 @@ function inquiryOperations(
       Context.Service.Shape<typeof InquiryRecords>['markDropped']
     >[0],
   ) {
-    return changeThread(params.threadId, (existing, timestamp) => {
-      if (
-        !existing ||
-        existing.status !== 'open' ||
-        existing.turns.at(-1)?.turnIndex !== params.turnIndex
-      )
-        return null;
-      const nextManifest: InquiryThreadRecord = {
-        ...existing,
-        status: 'dropped',
-        updatedAt: timestamp,
-      };
+    return Effect.map(
+      changeThread(params.threadId, (existing, timestamp) => {
+        if (
+          !existing ||
+          existing.status !== 'open' ||
+          existing.turns.at(-1)?.turnIndex !== params.turnIndex
+        )
+          return null;
+        const nextManifest: InquiryThreadRecord = {
+          ...existing,
+          status: 'dropped',
+          updatedAt: timestamp,
+        };
 
-      return nextManifest;
-    });
+        return nextManifest;
+      }),
+      turnOutcome,
+    );
   }
 
   // ============================================================================

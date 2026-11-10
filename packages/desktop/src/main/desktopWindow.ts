@@ -167,7 +167,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   );
   attachRendererConsoleLog(window.webContents);
   installDesktopNavigationPolicy(window.webContents, {
-    onAsyncError: host.reportAsyncError,
+    openExternal: host.openExternalInBackground,
   });
   // Lightweight update check: at most once/day, notifies at most once per
   // release via a native dialog linking to the GitHub release page. Not a full

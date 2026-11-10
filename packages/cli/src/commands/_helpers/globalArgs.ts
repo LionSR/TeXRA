@@ -1,5 +1,4 @@
 import { Predicate } from 'effect';
-import { Skills } from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICIES,
   type ApprovalPolicy,
@@ -54,7 +53,6 @@ type CliGlobalArgsDef = {
 };
 
 type CliSkillSourceArgsDef = {
-  'include-interop': { type: 'boolean'; description: string };
   source: {
     type: 'string';
     alias: 's';
@@ -114,12 +112,6 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
 };
 
 export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
-  'include-interop': {
-    type: 'boolean',
-    description: `Also include ${formatCommaList(
-      Skills.interopDirs.map((dir) => `${dir}/skills`),
-    )} from the workspace and home directory`,
-  },
   source: {
     type: 'string',
     alias: 's',
@@ -160,7 +152,6 @@ export function pickGlobalArgs(
     // negative spelling as `input: false`, which is safe to recognize here
     // because command-specific `--input <file>` arrives as a string/array.
     noInput: args['no-input'] === true || args.input === false,
-    includeInteropSkills: args['include-interop'] === true,
     // Raw argv is the only reader that survives repeated `--source/-s`:
     // citty's parsed args keep the last value only.
     skillSourcePaths: collectStringFlagValues(rawArgs, 'source', 's'),

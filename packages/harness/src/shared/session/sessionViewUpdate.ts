@@ -637,15 +637,15 @@ function withTranscriptFacts(u: Update, run: RunView): RunView {
 function applyTextChunk(u: Update, chunk: TextChunk): boolean {
   const run = u.view.runs.get(chunk.runId);
   if (!run) return false;
-  const transcript = applyLiveText(
+  const applied = applyLiveText(
     run.transcript,
     transcriptWork(u, run.id),
     chunk,
     u.view.runs,
   );
-  if (transcript === null) return false;
-  if (transcript !== run.transcript) setRun(u, { ...run, transcript });
-  return true;
+  if (applied.outcome === 'repainted')
+    setRun(u, { ...run, transcript: applied.transcript });
+  return applied.outcome !== 'ignored';
 }
 
 // ---------------------------------------------------------------------------

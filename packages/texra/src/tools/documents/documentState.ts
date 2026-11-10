@@ -227,10 +227,12 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   // The compile failures that rejected the last revision, from the logs its
   // check wrote.
   const compiled = roundOf(docs.rounds, revision - 1)?.compile;
-  const feedback =
-    compiled?._tag === 'checked' && compiled.rejected
-      ? yield* failureContextFromLogs(compiled.failures, deps.logger)
-      : undefined;
+  let feedback: string | undefined;
+  if (compiled?._tag === 'checked' && compiled.rejected) {
+    const read = yield* failureContextFromLogs(compiled.failures);
+    if (read.kind === 'unreadable') deps.logger.warn(read.warning);
+    else feedback = read.text;
+  }
   const request = (yield* renderPrompt(
     task.requests[revision] ?? '',
     inputs,

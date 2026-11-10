@@ -82,10 +82,12 @@ await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {
       const link = yield* linkService(
-        storageRoot,
-        Effect.fail(
-          new Error('The harness attaches to a running service only.'),
-        ),
+        {
+          storageRoot,
+          start: Effect.fail(
+            new Error('The harness attaches to a running service only.'),
+          ),
+        },
         Effect.logWarning,
       );
       if (mode === 'approve') return yield* approve(link);

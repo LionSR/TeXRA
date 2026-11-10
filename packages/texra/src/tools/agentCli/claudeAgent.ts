@@ -73,13 +73,11 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Third-party type imports (import/order places these after local imports)
 import type {
-  EffortLevel,
   Options as ClaudeAgentSdkOptions,
   PermissionMode,
   SDKAssistantMessage,
   SDKMessage,
   SDKUserMessage,
-  ThinkingConfig,
 } from '@anthropic-ai/claude-agent-sdk';
 
 // ============================================================================
@@ -148,22 +146,16 @@ function claudeCostLines(turn: TurnResult): string[] | undefined {
 // TurnResult for follow-up delivery.
 // ============================================================================
 
+/** The SDK's options for one turn, all but the abort controller the stream
+ *  owns. */
+type ClaudeTurnOptions = Omit<ClaudeAgentSdkOptions, 'abortController'>;
+
 const runStreamedTurn = Effect.fn('runStreamedTurn')(function* (params: {
   prompt: string;
   logger: AgentTrace;
-  /** The API model ID. */
-  model: string;
-  permissionMode: ClaudePermissionMode;
-  effort: EffortLevel | undefined;
-  thinking: ThinkingConfig | undefined;
-  cwd: string | undefined;
-  additionalDirectories: string[] | undefined;
-  env: NodeJS.ProcessEnv;
-  resumeSessionId: string | undefined;
-  forkSession?: boolean;
-  pathToClaudeCodeExecutable: string | undefined;
+  options: ClaudeTurnOptions;
 }): Effect.fn.Return<TurnResult, Error> {
-  const { logger, prompt } = params;
+  const { logger, prompt, options } = params;
   logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
 
   const query = yield* importClaudeAgentSdk();
@@ -171,28 +163,7 @@ const runStreamedTurn = Effect.fn('runStreamedTurn')(function* (params: {
   // The SDK takes a controller, not a signal: this one exists only at that
   // boundary, aborted when the turn is interrupted.
   const abortController = new AbortController();
-  const sdkOptions: ClaudeAgentSdkOptions = {
-    abortController,
-    model: params.model,
-    permissionMode: params.permissionMode,
-    env: params.env,
-    systemPrompt: { type: 'preset', preset: 'claude_code' },
-    settingSources: ['user', 'project', 'local'],
-  };
-  if (params.effort) sdkOptions.effort = params.effort;
-  if (params.thinking) sdkOptions.thinking = params.thinking;
-  if (params.permissionMode === 'bypassPermissions') {
-    sdkOptions.allowDangerouslySkipPermissions = true;
-  }
-  if (params.cwd) sdkOptions.cwd = params.cwd;
-  if (params.additionalDirectories?.length) {
-    sdkOptions.additionalDirectories = params.additionalDirectories;
-  }
-  if (params.resumeSessionId) sdkOptions.resume = params.resumeSessionId;
-  if (params.forkSession) sdkOptions.forkSession = true;
-  if (params.pathToClaudeCodeExecutable) {
-    sdkOptions.pathToClaudeCodeExecutable = params.pathToClaudeCodeExecutable;
-  }
+  const sdkOptions: ClaudeAgentSdkOptions = { ...options, abortController };
 
   const responseParts: string[] = [];
   const toolCards = new StreamedToolCards(logger);
@@ -265,10 +236,7 @@ const runStreamedTurn = Effect.fn('runStreamedTurn')(function* (params: {
     ),
   );
 
-  if (
-    params.forkSession &&
-    (!sessionId || sessionId === params.resumeSessionId)
-  ) {
+  if (options.forkSession && (!sessionId || sessionId === options.resume)) {
     isError = true;
     errorMessage = [
       errorMessage,
@@ -318,13 +286,15 @@ function handleAssistantBlocks(
       case 'tool_use': {
         if (typeof block.name !== 'string') break;
         if (typeof block.id !== 'string' || block.id.length === 0) break;
-        const toolLog = buildClaudeToolUseLog({
+        const { log, violation } = buildClaudeToolUseLog({
           toolName: block.name,
           input: block.input,
           status: 'in_progress',
-          trace: logger,
         });
-        cards.open(block.id, toolLog);
+        // The run's own trace: this runs inside the SDK stream's drain,
+        // where no fiber is current.
+        if (violation !== undefined) logger.warn(violation);
+        cards.open(block.id, log);
         break;
       }
     }
@@ -377,36 +347,16 @@ function buildClaudeAgentTurn(params: {
   logger: AgentTrace;
   runId: RunId;
   prompt: string;
-  run: ClaudeCodeRun;
-  permissionMode: ClaudePermissionMode;
-  cwd: string | undefined;
-  additionalDirectories: string[] | undefined;
-  env: NodeJS.ProcessEnv;
-  pathToClaudeCodeExecutable: string | undefined;
-  forkSession: boolean;
-  /** The session this turn continues (the SDK's `resume` option). */
-  resumeSessionId: string | undefined;
-  /** The claim on that session, closed as the turn ends. */
+  options: ClaudeTurnOptions;
+  /** The claim on the session the turn continues, closed as the turn
+   *  ends. */
   claim: Scope.Closeable | undefined;
 }): ProcessTurn {
-  const { logger, runId, prompt } = params;
+  const { logger, runId, prompt, options } = params;
   return buildAgentCliTurn({
     logger,
     claim: params.claim,
-    runProviderTurn: runStreamedTurn({
-      prompt,
-      logger,
-      model: params.run.model,
-      permissionMode: params.permissionMode,
-      effort: params.run.effort,
-      thinking: params.run.thinking,
-      cwd: params.cwd,
-      additionalDirectories: params.additionalDirectories,
-      env: params.env,
-      resumeSessionId: params.resumeSessionId,
-      forkSession: params.forkSession,
-      pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
-    }),
+    runProviderTurn: runStreamedTurn({ prompt, logger, options }),
     getUsage: (turn) => turn.usage,
     isTurnError: (turn) => turn.isError,
     turnErrorMessage: (turn) =>
@@ -544,14 +494,23 @@ const launchClaudeAgentSession = Effect.fn(
         logger,
         runId,
         prompt: input.prompt,
-        run: claudeRun,
-        permissionMode,
-        cwd: workingDirectory,
-        additionalDirectories,
-        env,
-        pathToClaudeCodeExecutable,
-        resumeSessionId: input.session_id ?? undefined,
-        forkSession: input.fork_session === true,
+        options: {
+          model: claudeRun.model,
+          permissionMode,
+          env,
+          systemPrompt: { type: 'preset', preset: 'claude_code' },
+          settingSources: ['user', 'project', 'local'],
+          ...(claudeRun.effort ? { effort: claudeRun.effort } : {}),
+          ...(claudeRun.thinking ? { thinking: claudeRun.thinking } : {}),
+          ...(permissionMode === 'bypassPermissions'
+            ? { allowDangerouslySkipPermissions: true }
+            : {}),
+          ...(workingDirectory ? { cwd: workingDirectory } : {}),
+          ...(additionalDirectories?.length ? { additionalDirectories } : {}),
+          ...(input.session_id ? { resume: input.session_id } : {}),
+          ...(input.fork_session === true ? { forkSession: true } : {}),
+          ...(pathToClaudeCodeExecutable ? { pathToClaudeCodeExecutable } : {}),
+        },
         claim,
       }),
     summaryLabel: 'Claude Code CLI',

@@ -33,16 +33,18 @@ function replyContext(
       inputFiles,
       outputFiles: options.outputFiles ?? [],
     }),
-    logger: spiedTrace(
-      {
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        emit: vi.fn(),
-      },
-      { strict: true },
-    ),
-    fileService: new RunFileService(RUN_ID, roots),
+    run: {
+      logger: spiedTrace(
+        {
+          debug: vi.fn(),
+          info: vi.fn(),
+          warn: vi.fn(),
+          emit: vi.fn(),
+        },
+        { strict: true },
+      ),
+      fileService: new RunFileService(RUN_ID, roots),
+    },
   };
 }
 

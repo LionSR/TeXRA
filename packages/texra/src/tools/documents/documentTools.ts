@@ -106,8 +106,7 @@ const openTask = Effect.fn('documents.openTask')(function* (
   docs: Documents,
   logger: AgentTrace,
 ) {
-  const { config } = docs.run;
-  const { fileService } = docs.deps;
+  const { config, fileService } = docs.run;
   const fs = yield* FileSystem.FileSystem;
   // A file is loaded when it reads: a directory or an unreadable path is
   // not, though it exists. Why it did not read is kept for the refusal. The
@@ -259,7 +258,8 @@ export const DocumentExtractTool = defineTool({
       return yield* Effect.fail(
         new ToolError(`Run ${run} gave no reply to take documents from.`),
       );
-    const { logger, fileService, roots } = docs.deps;
+    const { logger, fileService } = docs.run;
+    const { roots } = docs.deps;
     const location = yield* keepReply(docs, revision, reply);
     // A broken structure costs the repair, not the revision: reported, and
     // extraction reads the reply as it is.
@@ -487,7 +487,7 @@ export const DocumentDiffTool = defineTool({
         value: { diffs: [], failed: [], notRun: null },
       };
     const { artifacts, entries, notRun } = yield* revisionLatexdiffs(
-      docs.deps,
+      { run: docs.run, roots: docs.deps.roots },
       revision,
       outputs,
       roundOf(docs.rounds, revision - 1)?.outputs ?? [],

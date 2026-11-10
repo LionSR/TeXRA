@@ -30,7 +30,8 @@ import {
   loadMemoryItems,
   loadMemoryPreview,
   onMemoryTreeLane,
-  setMemoryPinned,
+  pinMemory,
+  unpinMemory,
 } from './memoryFileSystem';
 
 /** The storage path of a memory named in any of the three forms; fails on
@@ -90,9 +91,9 @@ export interface MemoryPreview {
   readonly lineCount: number | undefined;
 }
 
-/** What a pin toggle did: `cap-reached` names the cap it hit. */
+/** What a pin did: `cap-reached` names the cap it hit. */
 export type MemoryPinResult =
-  | { readonly status: 'changed'; readonly pinnedCount: number }
+  | { readonly status: 'pinned'; readonly pinnedCount: number }
   | { readonly status: 'already' }
   | { readonly status: 'cap-reached'; readonly max: number };
 
@@ -129,23 +130,28 @@ export const MemoryStore = {
     memoryFilePath(input).pipe(
       Effect.flatMap((path) => deleteMemoryPath(path).pipe(onMemoryTreeLane)),
     ),
-  /** Pin or unpin a memory, on the memory tree's lane. */
+  /** Pin a memory, on the memory tree's lane. */
   pin: (
     input: string,
-    pinned: boolean,
   ): Effect.Effect<
     MemoryPinResult,
     Error | PlatformError.PlatformError,
     StorageFs
   > =>
     memoryFilePath(input).pipe(
-      Effect.flatMap((path) =>
-        setMemoryPinned(path, pinned).pipe(onMemoryTreeLane),
-      ),
+      Effect.flatMap((path) => pinMemory(path).pipe(onMemoryTreeLane)),
       Effect.map((result): MemoryPinResult =>
         result.status === 'cap-reached'
           ? { status: 'cap-reached', max: MAX_PINNED_MEMORIES }
           : result,
       ),
+    ),
+  /** Unpin a memory, on the memory tree's lane; one not pinned stays so. */
+  unpin: (
+    input: string,
+  ): Effect.Effect<void, Error | PlatformError.PlatformError, StorageFs> =>
+    memoryFilePath(input).pipe(
+      Effect.flatMap((path) => unpinMemory(path).pipe(onMemoryTreeLane)),
+      Effect.asVoid,
     ),
 };

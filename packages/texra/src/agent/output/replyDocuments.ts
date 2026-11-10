@@ -26,6 +26,7 @@ import replacementEngine, {
 import { getExtractedDocOutputFileName } from '@texra/utils/files/outputFileUtils';
 import {
   DOCUMENT_NAME_REGEX,
+  bareLatexDocument,
   extractDocuments,
   type NamedDocument,
 } from '@texra/utils/text/xmlExtraction';
@@ -52,8 +53,10 @@ import type { ConfigProvider } from '@texra-ai/harness/host';
 /** What the extraction reads of the run. */
 interface ReplyContext {
   readonly expected: ExpectedDocuments;
-  readonly logger: AgentTrace;
-  readonly fileService: RunFileService;
+  readonly run: {
+    readonly logger: AgentTrace;
+    readonly fileService: RunFileService;
+  };
 }
 
 /** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
@@ -79,20 +82,23 @@ function documentsByTags(
   outputContent: string,
   preferredName?: string,
 ): NamedDocument[] | null {
-  const result = extractDocuments(
-    outputContent,
-    OUTPUT_DOCUMENTS_TAG,
-    preferredName,
-  );
-  if (result.documents) {
-    const suffix =
-      result.method === 'latex'
-        ? 'from \\documentclass block'
-        : 'from document tags';
+  const tagged = extractDocuments(outputContent, OUTPUT_DOCUMENTS_TAG);
+  if (tagged) {
     logger.debug(
-      `Recovered ${OUTPUT_DOCUMENTS_TAG} ${suffix} (${formatResultCount(result.documents.length, 'document')})`,
+      `Recovered ${OUTPUT_DOCUMENTS_TAG} from document tags (${formatResultCount(tagged.length, 'document')})`,
     );
-    return result.documents;
+    return tagged;
+  }
+  // A bare `\documentclass` block is one document, and only a reply
+  // expected to hold one has a name to give it.
+  const bare = preferredName
+    ? bareLatexDocument(outputContent, preferredName)
+    : undefined;
+  if (bare) {
+    logger.debug(
+      `Recovered ${OUTPUT_DOCUMENTS_TAG} from \\documentclass block (1 document)`,
+    );
+    return [bare];
   }
   logger.debug(`No ${OUTPUT_DOCUMENTS_TAG} found in output file`);
   return null;
@@ -118,7 +124,7 @@ const latexFences = (logger: AgentTrace, outputContent: string): string[] =>
  */
 const documentsBySimilarity = Effect.fn('replyDocuments.bySimilarity')(
   function* (
-    { expected, logger }: ReplyContext,
+    { expected, run: { logger } }: ReplyContext,
     outputContent: string,
     baseFiles: readonly FileLocation[],
   ) {
@@ -192,7 +198,8 @@ export const extractReplyDocuments = Effect.fn('replyDocuments.extract')(
     Error,
     FileSystem.FileSystem
   > {
-    const { expected, logger } = ctx;
+    const { expected } = ctx;
+    const { logger } = ctx.run;
     const fs = yield* FileSystem.FileSystem;
     const rawOutputContent = (yield* fs.readFileString(
       outputLocation.absolutePath,
@@ -299,7 +306,7 @@ export const extractReplyDocuments = Effect.fn('replyDocuments.extract')(
 );
 
 const writeDocuments = Effect.fn('replyDocuments.write')(function* (
-  { logger, fileService }: ReplyContext,
+  { run: { logger, fileService } }: ReplyContext,
   latexDocuments: NamedDocument[],
   outputLocation: FileLocation,
   round: number,

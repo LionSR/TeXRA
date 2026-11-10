@@ -32,6 +32,7 @@ import * as tar from 'tar';
 import { hasExtension } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
+import { LatexProgress } from './progress';
 import {
   indentLatexFilesInDirectory,
   type IndentLatexResult,
@@ -104,7 +105,6 @@ export type ArxivDownloadDestination = 'root' | 'references';
 interface DownloadSourceOptions {
   workspaceRoot: string;
   formatter: LatexFormatter | null;
-  progressCallback?: (msg: string, increment?: number) => void;
   autoIndent?: boolean;
   destination?: ArxivDownloadDestination;
 }
@@ -418,10 +418,10 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
     const {
       workspaceRoot,
       formatter,
-      progressCallback,
       autoIndent = true,
       destination = 'references',
     } = options;
+    const progress = yield* LatexProgress;
     // Normalize input (URL or ID) to plain arXiv ID
     const id = normaliseArxivIdentifier(input);
     if (!id) {
@@ -448,20 +448,15 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
 
     const needsDownload = !(yield* hasExistingSource(isRoot, paperDirFull));
     if (needsDownload) {
-      yield* fetchAndPlaceSource(id, paperDirFull, isRoot, progressCallback);
+      yield* fetchAndPlaceSource(id, paperDirFull, isRoot);
     }
 
     // Skip auto-indent for root destination to avoid reformatting existing workspace files
     if (autoIndent && !isRoot) {
-      progressCallback?.('Formatting LaTeX files...', 85);
+      progress('Formatting LaTeX files...', 85);
 
       const indentResult = yield* permanentFs(
-        indentLatexFilesInDirectory(
-          workspaceRoot,
-          formatter,
-          paperDirFull,
-          progressCallback,
-        ),
+        indentLatexFilesInDirectory(workspaceRoot, formatter, paperDirFull),
       );
 
       // Formatting is post-processing on a source that has landed, so its
@@ -469,10 +464,10 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
       const indented = describeIndent(indentResult);
       if (indentResult.status !== 'formatted' || indentResult.failed.length)
         yield* Effect.logWarning(indented);
-      progressCallback?.(indented, 95);
+      progress(indented, 95);
     }
 
-    progressCallback?.('arXiv source downloaded successfully!', 100);
+    progress('arXiv source downloaded successfully!', 100);
 
     yield* Effect.logInfo(`arXiv source downloaded to: ${paperDirFull}`);
 
@@ -552,12 +547,7 @@ function removeUnfinishedPaperDir(
  * root, belong to the user and stay.
  */
 const fetchAndPlaceSource = Effect.fn('arxivProcessor.fetchAndPlaceSource')(
-  function* (
-    id: string,
-    paperDirFull: string,
-    isRoot: boolean,
-    progressCallback: DownloadSourceOptions['progressCallback'],
-  ) {
+  function* (id: string, paperDirFull: string, isRoot: boolean) {
     const fs = yield* FileSystem.FileSystem;
     // The claim is the create itself: a non-recursive `makeDirectory` either
     // makes the directory, and this download owns it, or fails
@@ -583,9 +573,7 @@ const fetchAndPlaceSource = Effect.fn('arxivProcessor.fetchAndPlaceSource')(
     // `Effect.scoped` closes the staging directory's finalizer here, on
     // success, failure and interruption alike, before the paper directory
     // that holds it is removed.
-    const placed = Effect.scoped(
-      stageAndPlaceSource(id, paperDirFull, progressCallback),
-    );
+    const placed = Effect.scoped(stageAndPlaceSource(id, paperDirFull));
     if (!ownsPaperDir) return yield* placed;
     const removeUnfinished = removeUnfinishedPaperDir(paperDirFull);
     return yield* placed.pipe(
@@ -620,12 +608,9 @@ const fetchAndPlaceSource = Effect.fn('arxivProcessor.fetchAndPlaceSource')(
  * finalizer, so the caller must run this inside `Effect.scoped`.
  */
 const stageAndPlaceSource = Effect.fn('arxivProcessor.stageAndPlaceSource')(
-  function* (
-    id: string,
-    paperDirFull: string,
-    progressCallback: DownloadSourceOptions['progressCallback'],
-  ) {
+  function* (id: string, paperDirFull: string) {
     const fs = yield* FileSystem.FileSystem;
+    const progress = yield* LatexProgress;
     // A staging directory of this download's own: a fixed name derived from
     // the id would be shared by two downloads of the same paper, which
     // would then stream into one archive file and remove each other's
@@ -648,7 +633,7 @@ const stageAndPlaceSource = Effect.fn('arxivProcessor.stageAndPlaceSource')(
     );
     const downloadBasePath = path.join(downloadDirFull, 'source');
 
-    progressCallback?.(`Downloading arXiv source for ${id}...`, 20);
+    progress(`Downloading arXiv source for ${id}...`, 20);
 
     const downloadUrl = `https://arxiv.org/src/${id}`;
     const downloadedPath = yield* downloadFile(downloadUrl, downloadBasePath);
@@ -660,12 +645,7 @@ const stageAndPlaceSource = Effect.fn('arxivProcessor.stageAndPlaceSource')(
       });
     }
 
-    yield* placeSourceFiles(
-      downloadedPath,
-      downloadDirFull,
-      paperDirFull,
-      progressCallback,
-    );
+    yield* placeSourceFiles(downloadedPath, downloadDirFull, paperDirFull);
   },
 );
 
@@ -679,9 +659,9 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
     downloadedPath: string,
     downloadDirFull: string,
     paperDirFull: string,
-    progressCallback: DownloadSourceOptions['progressCallback'],
   ) {
     const fs = yield* FileSystem.FileSystem;
+    const progress = yield* LatexProgress;
     const isArchive =
       hasExtension(downloadedPath, '.tar') ||
       downloadedPath.endsWith('.tar.gz') ||
@@ -689,7 +669,7 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
     const isGzipOnly = !isArchive && hasExtension(downloadedPath, '.gz');
 
     if (isArchive) {
-      progressCallback?.('Extracting source files...', 60);
+      progress('Extracting source files...', 60);
       // Staged fresh (a killed run's leftover never collides): no entry
       // overwrites the workspace; Cancel cannot split the moves.
       const extractedDir = yield* permanentFs(
@@ -714,7 +694,7 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
         const message = `Target already exists: ${collisions.map(placed).join(', ')}`;
         return yield* new ArxivSourcePermanentError({ message });
       }
-      progressCallback?.('Placing source files...', 80);
+      progress('Placing source files...', 80);
       yield* permanentFs(
         Effect.forEach(entries, (e) => fs.rename(staged(e), placed(e)), {
           discard: true,
@@ -726,7 +706,7 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
     // For gzip-compressed single files, decompress first
     let sourceFilePath = downloadedPath;
     if (isGzipOnly) {
-      progressCallback?.('Decompressing source file...', 60);
+      progress('Decompressing source file...', 60);
       const decompressedPath = downloadedPath.replace(/\.gz$/, '');
       // Chunk by chunk, never whole; interruption closes gunzip and both handles.
       yield* fs.stream(downloadedPath).pipe(

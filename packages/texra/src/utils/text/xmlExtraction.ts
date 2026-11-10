@@ -68,20 +68,10 @@ function extractNamedDocuments(content: string): NamedDocument[] {
   }));
 }
 
-interface MultipleExtractionResult {
-  documents: NamedDocument[] | null;
-  method: 'simple' | 'latex' | 'none';
-}
-
 /**
- * Extract multiple documents from XML content with fallback support.
- *
- * Primary path looks for <document name="..."> children inside the unified
- * <documents> container. When that finds nothing and a single-file recovery
- * hint is supplied, the extractor falls back to the legacy single-doc shape
- * (a bare \documentclass block) and synthesizes a one-document result named
- * after the hint. Without a hint, recovery is skipped because a synthesized
- * document with no name has no unambiguous destination.
+ * The `<document name="...">` children inside the `containerTag` container
+ * of a reply, or, when the container is absent or holds none, of the whole
+ * reply; `null` when there are none.
  *
  * Fenced ```latex/```tex blocks are deliberately NOT recovered here: this
  * function reads the whole response including the model's thinking tag, so a
@@ -89,40 +79,30 @@ interface MultipleExtractionResult {
  * belongs to `collectLatexFencedBlocks`, which strips the thinking tag first
  * and parses fences per CommonMark. `extractReplyDocuments` runs that tier ahead of
  * this one.
- *
- * @param outputContent The raw output content to extract from
- * @param containerTag The container tag to look for documents within
- * @param preferredName Recovery hint — when set, treat the single-doc legacy
- *   shape as a one-document result named after the hint
- * @returns Extraction result with documents array and method used
  */
 export function extractDocuments(
   outputContent: string,
   containerTag: string,
-  preferredName?: string,
-): MultipleExtractionResult {
-  // Primary tier: `<document name="...">` children inside the container tag,
-  // falling back to a whole-response scan when the container is absent or
-  // holds none of them.
+): NamedDocument[] | null {
   const container = outputContent.match(
     new RegExp(`<${containerTag}>(.*?)</${containerTag}>`, 's'),
   )?.[1];
   const inContainer = container ? extractNamedDocuments(container) : [];
   const documents =
     inContainer.length > 0 ? inContainer : extractNamedDocuments(outputContent);
-  if (documents.length > 0) {
-    return { documents, method: 'simple' };
-  }
+  return documents.length > 0 ? documents : null;
+}
 
-  if (preferredName) {
-    const bare = outputContent.match(/\\documentclass[\s\S]*?\\end{document}/);
-    if (bare) {
-      return {
-        documents: [{ content: removeCDATA(bare[0]), name: preferredName }],
-        method: 'latex',
-      };
-    }
-  }
-
-  return { documents: null, method: 'none' };
+/**
+ * A reply that holds its one document bare, as a `\documentclass` block with
+ * no document tag, read as that one document named `name`: a synthesized
+ * document has no name of its own, so the caller supplies the one
+ * destination it can have. `undefined` when the reply holds no such block.
+ */
+export function bareLatexDocument(
+  outputContent: string,
+  name: string,
+): NamedDocument | undefined {
+  const bare = outputContent.match(/\\documentclass[\s\S]*?\\end{document}/);
+  return bare ? { content: removeCDATA(bare[0]), name } : undefined;
 }

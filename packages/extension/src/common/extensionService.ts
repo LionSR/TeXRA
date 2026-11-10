@@ -22,7 +22,6 @@ export function reachExtensionService(
   extensionPath: string,
 ): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> {
   return linkService(
-    defaultNodeStorageRoot(),
     spawnService(
       defaultNodeStorageRoot(),
       process.execPath,

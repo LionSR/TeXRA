@@ -61,7 +61,7 @@ describe('InquiryStorage', () => {
         ),
         { concurrency: 'unbounded' },
       );
-      expect(answers.filter((answer) => answer !== null)).toHaveLength(1);
+      expect(answers.filter((answer) => 'changed' in answer)).toHaveLength(1);
       const answered = yield* records.readExternalInquiryThread(
         opened.threadId,
       );
@@ -139,10 +139,10 @@ describe('InquiryStorage', () => {
             turnIndex: 1,
             answer: 'A delayed answer to Q1',
           }),
-        ).toBeNull();
+        ).toEqual({ unchanged: followUp });
         expect(
           yield* records.markDropped({ threadId: t.threadId, turnIndex: 1 }),
-        ).toBeNull();
+        ).toEqual({ unchanged: followUp });
         expect(yield* records.readExternalInquiryThread(t.threadId)).toEqual(
           followUp,
         );

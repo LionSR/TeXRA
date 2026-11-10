@@ -191,7 +191,10 @@ export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
     const nothing: ExtractedRevision = { outputs: [], missing: [] };
     const extracted = yield* Effect.gen(function* () {
       const split = yield* extractReplyDocuments(
-        deps,
+        {
+          expected: deps.expected,
+          run: { logger: deps.logger, fileService: deps.fileService },
+        },
         outputLocation,
         currRound,
         similarityBaseFiles(deps.sources, previousOutputs),

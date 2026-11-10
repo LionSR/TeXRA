@@ -29,7 +29,8 @@ import {
   onMemoryTreeLane,
   readMemoryFile,
   renameMemoryPath,
-  setMemoryPinned,
+  pinMemory,
+  unpinMemory,
   walkMemoryDirectory,
   writeMemoryFile,
 } from '@tools/memory/memoryFileSystem';
@@ -465,7 +466,7 @@ const pin = Effect.fn('MemoryTool.pin')(function* (loc: MemoryLocation) {
   const { display: inputPath, storage: resolvedPath } = loc;
   yield* requireEditableFile(resolvedPath, inputPath);
 
-  const result = yield* setMemoryPinned(resolvedPath, true);
+  const result = yield* pinMemory(resolvedPath);
   if (result.status === 'already') {
     return executed(
       `The memory file ${inputPath} is already pinned.`,
@@ -490,7 +491,7 @@ const unpin = Effect.fn('MemoryTool.unpin')(function* (loc: MemoryLocation) {
   const { display: inputPath, storage: resolvedPath } = loc;
   yield* requireEditableFile(resolvedPath, inputPath);
 
-  const result = yield* setMemoryPinned(resolvedPath, false);
+  const result = yield* unpinMemory(resolvedPath);
   if (result.status === 'already') {
     return executed(
       `The memory file ${inputPath} is not pinned.`,

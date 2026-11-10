@@ -30,7 +30,6 @@ export function formatInterruptedResumeHint(
     approvalPolicy: context.approvalPolicy,
     outputFormat: subject === 'workflow' ? context.outputFormat : undefined,
     print: subject === 'workflow' && context.mode === 'headless',
-    includeInteropSkills: context.skillSourceOptions.includeInterop,
     skillSourcePaths: context.skillSourceOptions.additionalPaths,
   });
   return `${TASK_ACTIONS.resumeHint} ${resumeCommand}`;

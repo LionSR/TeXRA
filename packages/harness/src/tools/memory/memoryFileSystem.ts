@@ -382,52 +382,61 @@ const countPinnedMemories = Effect.fn('memoryFileSystem.countPinnedMemories')(
   },
 );
 
-/**
- * What one pin/unpin attempt did. Module-local: every caller reads the
- * `status` discriminant off the returned value and formats its own surface
- * message, so nothing imports the name.
- */
-type SetMemoryPinnedResult =
-  | { readonly status: 'changed'; readonly pinnedCount: number }
+/** What a pin did: `pinnedCount` is the total after the write, from the
+ *  cap-check walk the pin already made (a second count would rescan every
+ *  file). */
+type MemoryPinOutcome =
+  | { readonly status: 'pinned'; readonly pinnedCount: number }
   | { readonly status: 'already' }
   | { readonly status: 'cap-reached' };
 
+/** What an unpin did. */
+type MemoryUnpinOutcome =
+  | { readonly status: 'unpinned' }
+  | { readonly status: 'already' };
+
+/** Rewrite the file with its pinned flag set to `pinned`, in place. */
+const writePinned = Effect.fn('memoryFileSystem.writePinned')(function* (
+  storagePath: string,
+  file: ReturnType<typeof parseFrontmatter>,
+  pinned: boolean,
+) {
+  yield* writeMemoryFile(
+    storagePath,
+    file.content,
+    setPinnedMeta(file.meta, pinned, DateTime.formatIso(yield* DateTime.now)),
+  );
+});
+
 /**
- * Pin or unpin a memory file in place, the one mutation shared by the
- * MemoryTool `pin`/`unpin` commands and the settings-view pin toggle.
- * Reports 'already' when the file's pinned flag already matches the
- * requested state, 'cap-reached' when pinning would exceed
- * MAX_PINNED_MEMORIES, or 'changed' after writing the update. Each caller
- * formats its own surface message from the returned status.
- *
- * `pinnedCount` on a successful pin is the post-write total, derived from
- * the cap-check walk this function already performs. Callers must not walk
- * the tree again to display it: a second `countPinnedMemories()` without a
- * limit loses the early exit and rescans every file.
+ * Pin a memory file in place, the one mutation behind the MemoryTool `pin`
+ * command and the settings view's pin toggle: `already` when it is pinned,
+ * `cap-reached` when pinning would exceed MAX_PINNED_MEMORIES. Each caller
+ * formats its own surface message from the outcome.
  */
-export const setMemoryPinned = Effect.fn('memoryFileSystem.setMemoryPinned')(
-  function* (storagePath: string, pinned: boolean) {
-    const { meta, content } = yield* readMemoryFile(storagePath);
+export const pinMemory = Effect.fn('memoryFileSystem.pinMemory')(function* (
+  storagePath: string,
+) {
+  const file = yield* readMemoryFile(storagePath);
+  if (file.meta?.pinned)
+    return { status: 'already' } satisfies MemoryPinOutcome;
+  const priorPinned = yield* countPinnedMemories(MAX_PINNED_MEMORIES);
+  if (priorPinned >= MAX_PINNED_MEMORIES)
+    return { status: 'cap-reached' } satisfies MemoryPinOutcome;
+  yield* writePinned(storagePath, file, true);
+  return {
+    status: 'pinned',
+    pinnedCount: priorPinned + 1,
+  } satisfies MemoryPinOutcome;
+});
 
-    const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
-    if (alreadyInState) {
-      return { status: 'already' } satisfies SetMemoryPinnedResult;
-    }
-
-    let pinnedCount = 0;
-    if (pinned) {
-      const priorPinned = yield* countPinnedMemories(MAX_PINNED_MEMORIES);
-      if (priorPinned >= MAX_PINNED_MEMORIES) {
-        return { status: 'cap-reached' } satisfies SetMemoryPinnedResult;
-      }
-      pinnedCount = priorPinned + 1;
-    }
-
-    yield* writeMemoryFile(
-      storagePath,
-      content,
-      setPinnedMeta(meta, pinned, DateTime.formatIso(yield* DateTime.now)),
-    );
-    return { status: 'changed', pinnedCount } satisfies SetMemoryPinnedResult;
-  },
-);
+/** Unpin a memory file in place: `already` when it is not pinned. */
+export const unpinMemory = Effect.fn('memoryFileSystem.unpinMemory')(function* (
+  storagePath: string,
+) {
+  const file = yield* readMemoryFile(storagePath);
+  if (!file.meta?.pinned)
+    return { status: 'already' } satisfies MemoryUnpinOutcome;
+  yield* writePinned(storagePath, file, false);
+  return { status: 'unpinned' } satisfies MemoryUnpinOutcome;
+});

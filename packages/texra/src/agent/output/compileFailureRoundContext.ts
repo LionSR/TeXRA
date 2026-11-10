@@ -2,7 +2,6 @@ import { Effect, FileSystem } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { CompileFailure } from '@texra/shared/plugins/documentOutputs';
-import type { AgentTrace } from '@texra-ai/harness/plugins';
 
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 
@@ -50,18 +49,23 @@ function combineFailureLogExcerpts(excerpts: string[]): string {
   ].join('\n');
 }
 
+/** What a rejected round's logs give the next round: its context (none
+ *  for no failures), or why there is none, for the caller to report. */
+type FailureContextRead =
+  | { readonly kind: 'context'; readonly text: string | undefined }
+  | { readonly kind: 'unreadable'; readonly warning: string };
+
 /**
  * A rejected round's context for the next round, rebuilt from its persisted
  * failures and the log each one wrote (`writeCompileFailure`: the excerpt
  * plus a newline), so it equals what the round's own check fed forward.
- * Undefined for no failures, and, with a warning, when a log cannot be read:
- * the rejection stands, its context does not.
+ * No text for no failures; `unreadable` when a log cannot be read: the
+ * rejection stands, its context does not.
  */
 export const failureContextFromLogs = Effect.fn('failureContextFromLogs')(
   function* (
     failures: readonly CompileFailure[],
-    logger: Pick<AgentTrace, 'warn'>,
-  ): Effect.fn.Return<string | undefined, never, FileSystem.FileSystem> {
+  ): Effect.fn.Return<FailureContextRead, never, FileSystem.FileSystem> {
     const fs = yield* FileSystem.FileSystem;
     // The logs are read together, then taken in order: the first unreadable
     // one is the one named.
@@ -74,17 +78,22 @@ export const failureContextFromLogs = Effect.fn('failureContextFromLogs')(
     for (const [i, failure] of failures.entries()) {
       const read = reads[i];
       if (read._tag === 'Failure') {
-        logger.warn(
-          `Compile log ${failure.logRelativePath} could not be read, so the next round is not told why round ${failure.round + 1} was rejected: ${toErrorMessage(read.failure)}`,
-        );
-        return undefined;
+        return {
+          kind: 'unreadable',
+          warning: `Compile log ${failure.logRelativePath} could not be read, so the next round is not told why round ${failure.round + 1} was rejected: ${toErrorMessage(read.failure)}`,
+        };
       }
       excerpts.push(read.success.replace(/\n$/, ''));
     }
-    if (failures.length === 0) return undefined;
-    return formatCompileFailureRoundContext(
-      failures,
-      combineFailureLogExcerpts(excerpts),
-    );
+    return {
+      kind: 'context',
+      text:
+        failures.length === 0
+          ? undefined
+          : formatCompileFailureRoundContext(
+              failures,
+              combineFailureLogExcerpts(excerpts),
+            ),
+    };
   },
 );

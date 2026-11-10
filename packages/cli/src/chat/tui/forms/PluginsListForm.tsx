@@ -9,6 +9,7 @@ import { Effect, Predicate } from 'effect';
 
 import {
   InstalledPlugins,
+  ToolAvailability,
   type PluginReview,
   type ProcessRuntime,
 } from '@texra-ai/harness/host';
@@ -115,7 +116,14 @@ export function PluginsListForm(
           : PLUGINS_TUI.compactTitle
       }
       loadingLabel={PLUGINS_PAGE.loading}
-      load={() => buildPluginRows(roots)}
+      load={() =>
+        Effect.flatMap(
+          Effect.flatMap(ToolAvailability, (availability) =>
+            availability.refresh(roots),
+          ),
+          (results) => buildPluginRows(roots, results),
+        )
+      }
       runtime={props.runtime}
       isEmpty={(data) => data.rows.length === 0}
       items={(data) =>

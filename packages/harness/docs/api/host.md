@@ -1172,8 +1172,8 @@ interface HostSkillOptions {
   /**
    * The folder the host keeps in each project, relative to a session's
    * workspace (TeXRA's `.texra`): its `skills/` holds the project's own
-   * skills. Absent, a project has no skills but those a custom root or an
-   * interop listing reads.
+   * skills. Absent, a project has no skills but those a custom root or the
+   * other agent tools' folders hold.
    */
   readonly projectDataDirName?: string;
   readonly skillSourceOptions?: SkillSourceOptions;
@@ -1806,9 +1806,12 @@ read-only from here, and the CLI warns of a broken file at startup.
 
 ```ts
 const readMcpConfig: (
-  fs: FileSystem.FileSystem,
   file: string,
-) => Effect.Effect<ReturnType<typeof parseMcpServers> | null>
+) => Effect.Effect<
+  ReturnType<typeof parseMcpServers> | null,
+  never,
+  FileSystem.FileSystem
+>
 ```
 
 ## readModelOptions
@@ -2240,14 +2243,13 @@ installed plugins' as they load now, and the bundled ones the host
 installed. Every read answers with the discovery issues beside the skills.
 
 ```ts
-const Skills: Readonly<{ readonly interopDirs: readonly [".agents", ".claude", ".codex", ".gemini"]; readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, Error, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: EnabledSkill[]; issues: SkillLoadIssue[]; }, Error, FileSystem>; }>
+const Skills: Readonly<{ readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, Error, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: EnabledSkill[]; issues: SkillLoadIssue[]; }, Error, FileSystem>; }>
 ```
 
 ## SkillSourceOptions
 
 ```ts
 interface SkillSourceOptions {
-  readonly includeInterop?: boolean;
   readonly additionalPaths?: readonly string[];
 }
 ```
