@@ -233,7 +233,7 @@ const removeRunDir = Effect.fn('runStorage.removeRunDir')(function* (
 /** The registry's step on a run nothing drives (`withInactiveRun`): it
  *  refuses a run live here or with live work under it, and a launch
  *  arriving meanwhile waits for the step. */
-type InactiveRunStep = Pick<RunRegistry, 'withInactiveRun'>;
+type InactiveRunStep = Pick<RunRegistry['Service'], 'withInactiveRun'>;
 
 /** A `run.delete`, the one way a run is deleted: the admitted lifetime's rows
  *  removed from the log as the registry's step on the inactive run, which

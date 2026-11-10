@@ -20,11 +20,7 @@ import type { PlatformServices } from '@platform/processRuntime';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { endVerdict } from '@agent/runtime/AgentRunLifecycle';
 import { childRunDescription } from '@agent/runtime/delegation/childRun';
-import {
-  registryOf,
-  Runs,
-  type AgentRunServices,
-} from '@agent/runtime/runRegistry';
+import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { endRunRows, registerRun } from '@agent/storage/runLifecycle';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
@@ -189,7 +185,7 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
     const turn = launch.turn({ logger, runId });
     return { logger, turn } satisfies OpenedProcess;
   });
-  yield* registryOf(yield* Runs).start(runId, {
+  yield* (yield* RunRegistry).start(runId, {
     open,
     run: (opened) => runProcessChild(runId, opened),
   });

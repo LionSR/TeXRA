@@ -39,13 +39,7 @@ import {
   type PreparedRun,
 } from './executeAgent';
 import { prepareAgentDefinition } from './AgentLaunchContext';
-import {
-  registryOf,
-  type AgentRunServices,
-  RunLive,
-  type RunRegistry,
-  Runs,
-} from './runRegistry';
+import { type AgentRunServices, RunLive, RunRegistry } from './runRegistry';
 
 /** What a resume answers: the commit of the activation it opened, which
  *  the caller now holds; the refusal its records decided; or the owning
@@ -142,10 +136,9 @@ function refusalFor(
 export const resumeRun = (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.Effect<ResumeHandOff, Error, Runs> =>
-  Effect.flatMap(Runs, (service) => {
-    const runs = registryOf(service);
-    return runs
+): Effect.Effect<ResumeHandOff, Error, RunRegistry> =>
+  Effect.flatMap(RunRegistry, (runs) =>
+    runs
       .start(runId, {
         open: openResume(runs, runId, options),
         run: (opened) => opened.run,
@@ -162,8 +155,8 @@ export const resumeRun = (
             ? joinOpening(runs, runId)
             : refusalFor(error, runId),
         ),
-      );
-  });
+      ),
+  );
 
 /**
  * A resume of a run a launch here holds: one still opening (a wake's resume
@@ -173,7 +166,7 @@ export const resumeRun = (
  * One whose opening failed is not resumable.
  */
 const joinOpening = (
-  runs: RunRegistry,
+  runs: RunRegistry['Service'],
   runId: RunId,
 ): Effect.Effect<ResumeHandOff> =>
   Effect.suspend(() =>
@@ -209,7 +202,7 @@ const joinOpening = (
  *  an open call of `owner` owns resumes for that call alone: any other
  *  caller is sent to the owner. */
 export const openResume = Effect.fn('resumeRun.open')(function* (
-  runs: RunRegistry,
+  runs: RunRegistry['Service'],
   runId: RunId,
   options: ResumeRunOptions,
   owner?: RunId,

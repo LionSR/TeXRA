@@ -4,7 +4,7 @@ import { Cause, Context, Effect, Exit } from 'effect';
 import { checkpointRefusal } from '@agent/storage/resumability';
 import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { type ResumeRefusal, type RunId } from '@shared/schemas';
@@ -17,6 +17,7 @@ import { Inbox, type InboxItem } from './Inbox';
 export type FollowUpServices =
   | Inbox
   | Runs
+  | RunRegistry
   | SessionLog
   | SessionViewAccess
   | Interactions;
@@ -25,7 +26,14 @@ export type FollowUpServices =
  *  caller's fiber ({@link runInbox}). */
 export const followUpServices = Effect.map(
   Effect.context<FollowUpServices>(),
-  Context.pick(Inbox, Runs, SessionLog, SessionViewAccess, Interactions),
+  Context.pick(
+    Inbox,
+    Runs,
+    RunRegistry,
+    SessionLog,
+    SessionViewAccess,
+    Interactions,
+  ),
 );
 
 /**
@@ -127,7 +135,7 @@ export const REFUSED: { readonly failed: ResumeRefusal } = {
  */
 export const wakeRun = Effect.fn('wakeRun')(function* (
   runId: RunId,
-): Effect.fn.Return<void, never, Runs | SessionViewAccess> {
+): Effect.fn.Return<void, never, Runs | RunRegistry | SessionViewAccess> {
   if ((yield* SessionViewAccess).run(runId) === undefined) return;
   const resumed = yield* Effect.exit(resumeRun(runId, {}));
   if (Exit.isFailure(resumed)) {
@@ -155,7 +163,11 @@ export const wakeRun = Effect.fn('wakeRun')(function* (
 export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
   runId: RunId,
   apiKeys: Readonly<Record<string, string>> = {},
-): Effect.fn.Return<boolean, never, Inbox | Runs | SessionViewAccess> {
+): Effect.fn.Return<
+  boolean,
+  never,
+  Inbox | Runs | RunRegistry | SessionViewAccess
+> {
   const owed = yield* (yield* Inbox).owesResume(runId);
   if (owed === undefined) return false;
   // The wake's own keys, never the fiber's: the sender may be another

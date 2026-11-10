@@ -23,7 +23,7 @@ import {
 } from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
-import { registryOf, Runs, type RunRegistry } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionRequestsShape } from '@agent/runtime/SessionHandle';
 import { sessionServices } from '@agent/runtime/ToolServices';
 import { GlobalValues } from '@platform/processRuntime';
@@ -253,7 +253,7 @@ const decideSurfaceRequest = (
 const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
   deps: RequestDeps,
   req: Extract<RuntimeCommand, { kind: `run.${'compact' | 'model'}` }>,
-  runs: RunRegistry,
+  runs: RunRegistry['Service'],
 ): Effect.fn.Return<Outcome, RequestError, Inbox> {
   const { runId } = req;
   const unavailable = (reason: string) => new Unavailable({ runId, reason });
@@ -281,7 +281,7 @@ const handle = (
   req: Exclude<RuntimeCommand, { kind: 'run.stop' | `followUp.${string}` }>,
   admitted: AggregateState,
   heldHere: boolean,
-  runs: RunRegistry,
+  runs: RunRegistry['Service'],
 ): Effect.Effect<Outcome, RequestError, RequestServices | SessionServices> => {
   switch (req.kind) {
     case 'run.delete':
@@ -376,7 +376,7 @@ export function sessionRequests(
       });
       return { kind: 'followUp' as const, id, ...result, receipt };
     }
-    const runs = registryOf(yield* Runs);
+    const runs = yield* RunRegistry;
     if (req.kind === 'run.stop') {
       // Refused for a closed run no fiber here drives. An id with no rows
       // yet is a launch its caller minted and has not registered: the

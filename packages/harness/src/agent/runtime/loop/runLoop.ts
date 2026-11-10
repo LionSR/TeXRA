@@ -64,7 +64,7 @@ import { dispatchPendingResponse } from './toolUseDispatch';
 import { hooksOf } from './hooks';
 import { dispatchTools, stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
-import { registryOf, Runs, type AgentRunServices } from '../runRegistry';
+import { RunRegistry, type AgentRunServices } from '../runRegistry';
 import type { RunControls } from '../runs';
 import type { RunReport } from '../runReport';
 
@@ -526,7 +526,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // The controls detach as the run's scope closes, after the bracket below
   // settles the cell; `cell.append` protects each commit from interruption.
-  yield* registryOf(yield* Runs).attachControls(runId, controls);
+  yield* (yield* RunRegistry).attachControls(runId, controls);
   return yield* Effect.acquireUseRelease(
     Effect.succeed(cell),
     loopBody,

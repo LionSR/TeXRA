@@ -8,7 +8,7 @@ import {
 } from 'effect';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   runStateAppend,
   SessionLog,
@@ -79,7 +79,7 @@ export const holdTestRun = (
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     yield* Effect.acquireRelease(
-      registryOf(Context.get(session, Runs))
+      Context.get(session, RunRegistry)
         .start(runId, { open: Effect.void, run: () => Effect.never })
         .pipe(Effect.orDie),
       ({ fiber }) => Fiber.interrupt(fiber),
