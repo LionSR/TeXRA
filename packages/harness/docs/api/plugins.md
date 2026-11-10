@@ -748,12 +748,16 @@ message's alone:
 - `readFailed`: the run's rows could not be read just now (a failing
   store), which says nothing about the run itself.
 - `notParent`: the sender is not the run's parent.
+- `ranOnce`: the run was launched to run once (`run.start.takesFollowUps`
+  false: a one-shot root, a process run) and reads no message, live or
+  resumed.
 
 ```ts
 type FollowUpFailureReason =
   | ResumeRefusal['kind']
   | 'readFailed'
-  | 'notParent';
+  | 'notParent'
+  | 'ranOnce';
 ```
 
 ## FollowUpSenderInput

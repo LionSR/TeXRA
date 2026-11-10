@@ -38,7 +38,7 @@ Exports: 135
 - `FactKind` — `interface FactKind { readonly plugin: string; readonly kind: string; readonly version: number; readonly schema: Schema.Codec<unknown, unknown>; readonly fork: 'copy' | 'drop'; readonly accepts?: (previous: PluginRow | undefined, next: PluginRow) => string | null; readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean; readonly writes?: (value: JsonValue) => readonly string[]; }`
 - `fileList` — `const fileList: (description: string) => decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>`
 - `fileOps` — `const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) => Plugin`
-- `FollowUpFailureReason` — `type FollowUpFailureReason = ResumeRefusal['kind'] | 'readFailed' | 'notParent'; ≡ FollowUpFailureReason`
+- `FollowUpFailureReason` — `type FollowUpFailureReason = ResumeRefusal['kind'] | 'readFailed' | 'notParent' | 'ranOnce'; ≡ FollowUpFailureReason`
 - `FollowUpSenderInput` — `type FollowUpSenderInput = Exclude<FollowUpSender, { readonly kind: 'run'; }> | { readonly kind: 'run'; readonly runId: RunId; }; ≡ FollowUpSenderInput`
 - `formatDelivery` — `function formatDelivery: (delivery: ChildRunDelivery) => string`
 - `formatToolOutput` — `function formatToolOutput: (header: string, content: null | string | string[], noMatchesText?: string) => string`

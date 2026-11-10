@@ -39,11 +39,15 @@ export const followUpServices = Effect.map(
  * - `readFailed`: the run's rows could not be read just now (a failing
  *   store), which says nothing about the run itself.
  * - `notParent`: the sender is not the run's parent.
+ * - `ranOnce`: the run was launched to run once (`run.start.takesFollowUps`
+ *   false: a one-shot root, a process run) and reads no message, live or
+ *   resumed.
  */
 export type FollowUpFailureReason =
   | ResumeRefusal['kind']
   | 'readFailed'
-  | 'notParent';
+  | 'notParent'
+  | 'ranOnce';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
@@ -87,6 +91,8 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
   notParent:
     'This run is not a child of the sender: it was detached or launched by another run.',
+  ranOnce:
+    'This run ran once and takes no messages. Continue it as a fork, or start a new agent task.',
   blocked:
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It can continue once that is fixed.",
 };
@@ -193,7 +199,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     // A run that takes no input (a process run, a one-shot root) reads
     // none, live or not: nothing would read the row.
     if (view.run(runId)?.takesFollowUps === false)
-      return { status: 'failed', reason: 'notResumable' } as const;
+      return { status: 'failed', reason: 'ranOnce' } as const;
     const live = runs.get(runId);
     if (live === undefined) {
       const rejection = yield* checkpointRefusal(runId).pipe(

@@ -244,16 +244,21 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   // launched.
   const blocker = yield* resumeBlocker(config);
   if (blocker !== null) return yield* refuse({ failed: blocker });
-  // Its parent, read once: the run's edge for this activation.
+  // Its parent, read once: the run's edge for this activation; and whether
+  // its launch let it take input (`run.start.takesFollowUps`).
   const parentRunId = yield* persistedParentRunId(runId);
+  const takesInput =
+    (yield* (yield* SessionLog).facts(runId))?.start?.takesFollowUps !== false;
   // A stop asked while those reads ran: the registry ends the run on its
   // rows as this opening fails; there is nothing to activate.
   if (runs.stopAsked(runId) !== null) return yield* refuse(REFUSED);
-  // A child runs one cycle and ends with its report; a root as its caller
-  // asks.
+  // A child runs one cycle and ends with its report, and so does a root
+  // launched to run once, which no message may reach, whoever resumes it;
+  // any other root as its caller asks.
   const definition = yield* prepareAgentDefinition({
     config,
-    stopAfterCycle: options.stopAfterCycle || parentRunId !== undefined,
+    stopAfterCycle:
+      options.stopAfterCycle || parentRunId !== undefined || !takesInput,
   });
   return yield* executeAgent(definition, runId, {
     tools: options.tools,
