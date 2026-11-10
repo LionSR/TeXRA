@@ -7,6 +7,7 @@ import {
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import { decodeRow, encodeDraft } from '@controllers/session/rowCodec';
+import { ROW_KINDS } from '@shared/schemas';
 import type { FactKinds } from '@tools/plugins';
 
 /** A stored `example/count` fact of `version`, read over `factKinds`. */
@@ -71,5 +72,32 @@ it('reads a fact of an absent plugin as written, saying why', () => {
     version: 3,
     value: 7,
     unavailable: expect.stringContaining('Plugin "example" is unavailable'),
+  });
+});
+
+// Failure modes: a `run.config` bound to a backend this build does not serve
+// (a provider since removed) fails to decode, which marks its whole run
+// damaged, or reads with the name dropped.
+it('reads a run.config bound to a backend this build does not have', () => {
+  const stored = decodeRow(
+    {
+      commit: 2,
+      kind: 'run',
+      logicalId: 'aa0001',
+      seq: 2,
+      type: 'run.config',
+      version: ROW_KINDS['run.config'].version,
+      at: 0,
+      data: JSON.stringify({
+        config: { name: 'chat', instruction: 'hello', model: 'some/model' },
+        binding: { backend: 'openrouter', declinedRoutes: [] },
+      }),
+    },
+    {},
+    new Map(),
+  );
+  expect(Result.getOrThrow(stored)).toMatchObject({
+    type: 'run.config',
+    binding: { backend: 'openrouter', declinedRoutes: [] },
   });
 });

@@ -20,7 +20,6 @@ import {
   type CommitOrdinal,
   type HookOutcomes,
   type JsonValue,
-  type ModelBackend,
   type DeclinableUsageRoute,
   type OfferedTool,
   type PositionAt,
@@ -138,8 +137,9 @@ export type RunState = RunRowState &
     readonly phase: RunLoopPhase | null;
     /** The model the run is on: its newest `run.config`'s. */
     readonly modelId: string | null;
-    /** The backend that config's `binding` names; null before the run binds. */
-    readonly backend: ModelBackend | null;
+    /** The backend that config's `binding` names, as written; null before
+     *  the run binds. */
+    readonly backend: string | null;
     /** The failure that stopped the turn's invocation or that a person was
      *  asked about, until a response or the input of a new turn clears it. */
     readonly lastError: ModelFailure | null;

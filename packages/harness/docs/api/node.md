@@ -303,7 +303,7 @@ provider whose key a child agent CLI authenticates with itself. Windows
 matches variable names case-insensitively, as its environment does.
 
 ```ts
-const inheritedEnv: (keep?: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>
+const inheritedEnv: (keep?: "xai" | "anthropic" | "openai" | "google" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>
 ```
 
 ## INPUT_HISTORY_LIMIT
