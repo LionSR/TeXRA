@@ -52,6 +52,7 @@ import {
   freshSharedRunRows,
   isSharedRunRow,
   isMessage,
+  ownCopy,
   type SharedRunRow,
 } from './runRows';
 import {
@@ -274,13 +275,8 @@ interface Update {
 
 /** `map` if this call created it, else a copy this call owns, which the
  *  caller stores back. */
-function writable<K, V>(u: Update, map: ReadonlyMap<K, V>): Map<K, V> {
-  // cast: a map in `owned` is this call's own copy; no published view holds it.
-  if (u.owned.has(map)) return map as Map<K, V>;
-  const copy = new Map(map);
-  u.owned.add(copy);
-  return copy;
-}
+const writable = <K, V>(u: Update, map: ReadonlyMap<K, V>): Map<K, V> =>
+  ownCopy(u.owned, map, (held) => new Map(held));
 
 /** `map` without `key`; a map that never held the key is not copied. */
 function without<K, V>(u: Update, map: ReadonlyMap<K, V>, key: K) {
