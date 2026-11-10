@@ -68,6 +68,7 @@ import {
   type RequestPayload,
   type RequestDecision,
   type RunId,
+  type SessionRowDraft,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { DraftBlob } from '@shared/session/historyTurns';
@@ -339,13 +340,17 @@ export const recordedDecision = <P extends Parameters<typeof decisionFits>[0]>(
  * transaction, so two writers answering at once record exactly one;
  * `false` is that lost race, or an id never opened. It reads the run's
  * request rows alone (the `requests` read, through the type index), so a
- * decision costs the same however long the run's history grows.
+ * decision costs the same however long the run's history grows. `beside`
+ * decides, in the same job once the request is found open, the rows that
+ * commit after the decision and only with it: a plugin's facts and the
+ * input it sends, so none of them lands without the decision.
  */
-export const decideRequest = (
+export const decideRequest = <E = never>(
   runId: RunId,
   requestId: string,
   decision: RequestDecision,
-): Effect.Effect<boolean, DatabaseReadFailed | LogWriteError, SessionLog> =>
+  beside?: Effect.Effect<readonly SessionRowDraft[], E>,
+): Effect.Effect<boolean, DatabaseReadFailed | LogWriteError | E, SessionLog> =>
   SessionLog.use((log) =>
     log.transact((tx) =>
       Effect.gen(function* () {
@@ -354,6 +359,7 @@ export const decideRequest = (
         if (requests[requestId]?.decision !== null) return false;
         yield* runStateAppend(tx.append)([
           { type: 'request.decided', aggregateId, requestId, decision },
+          ...(beside === undefined ? [] : yield* beside),
         ]);
         return true;
       }),

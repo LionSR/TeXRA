@@ -29,8 +29,10 @@
  *   [`PromptSection`](#promptsection),
  *   [`ProcessPluginLayer`](#processpluginlayer),
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
- *   [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
- *   and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
+ *   [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
+ *   decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
+ *   [`FactKind`](#factkind), and [`AgentBlock`](#agentblock)
+ *   ([`agentBlockOf`](#agentblockof)).
  */
 export {
   codemode,
@@ -65,6 +67,7 @@ export {
   type PromptSection,
   type RecipeChange,
   type RequestDecisionHook,
+  type RequestDecisionRecord,
   type SessionPluginLayer,
   type ToolTable,
 } from '@tools/toolTable';

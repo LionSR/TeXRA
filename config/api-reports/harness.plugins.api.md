@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/plugins.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 135
+Exports: 136
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: Schema.Codec<A, unknown>; readonly result?: AgentBlockResult<R>; files?(block: A): readonly string[]; }`
@@ -85,7 +85,8 @@ Exports: 135
 - `RecipeChange` — `interface RecipeChange { readonly path: string; readonly absolutePath: string; readonly base: string | null; readonly added: number | null; readonly removed: number | null; }`
 - `RefusalDecision` — `type RefusalDecision = Extract<RequestDecision, { action: 'reject' | 'deny' | 'cancel'; }>; ≡ RefusalDecision`
 - `renderPrompt` — `const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, Error, never>`
-- `RequestDecisionHook` — `interface RequestDecisionHook { readonly record: (request: { readonly payload: PluginRequest; readonly decision: RequestDecision; readonly inbox: (runId: RunId) => RunInbox; readonly commit: (facts: readonly (ToolFact & { readonly aggregate: string; })[]) => Effect.Effect<void, LogWriteError | DatabaseReadFailed | PluginFactRejected>; }) => Effect.Effect<void, Error, GlobalValues>; }`
+- `RequestDecisionHook` — `interface RequestDecisionHook { readonly record: (request: { readonly payload: PluginRequest; readonly decision: RequestDecision; }) => Effect.Effect<RequestDecisionRecord, Error, GlobalValues>; }`
+- `RequestDecisionRecord` — `interface RequestDecisionRecord { readonly facts: readonly (ToolFact & { readonly aggregate: string; })[]; readonly followUp?: { readonly runId: RunId; readonly item: InboxItem; }; }`
 - `requestToolEditApproval` — `const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>`
 - `resolveToolPath` — `const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>`
 - `retryTransientFetch` — `const retryTransientFetch: <T, E extends Error, R>(request: Effect<T, E, R | Scope>, options: RetryTransientFetchOptions<E>) => Effect<T, E | TimeoutError, Exclude<R, Scope>>`

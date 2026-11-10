@@ -21,7 +21,7 @@ import {
 
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
+import type { InboxItem } from '@agent/followUp/Inbox';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AppSignals } from '@platform/appSignals';
@@ -36,11 +36,9 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
-import type { LogWriteError } from '@shared/session/sessionLog';
 import type { ToolCatalog } from '@tools/liveTools';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import type { Plugin, PluginFactRejected } from '@tools/plugins';
+import type { Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
@@ -107,25 +105,32 @@ export type PromptSection = (ctx: {
 
 /**
  * A plugin's side of a decision on a pending request it opened (a
- * `PluginRequest` naming it). The session runs it before the decision's row
- * commits, under the request's decision lane, so a process that exits in
- * between leaves the request pending and answerable rather than settled
- * with nothing recorded. It may send a run of the session its input
- * (`inbox`), and commit facts about its own aggregates, hung under the
- * request's run (`commit`).
+ * `PluginRequest` naming it), run before the decision commits: what the
+ * plugin records outside the session's store, and what commits with the
+ * decision in its one checked transaction ({@link RequestDecisionRecord}).
+ * The outside record must be idempotent: an answer tried again after a
+ * failure, or raced by another, records nothing twice, and the second
+ * reads the first's. A process that exits before the transaction leaves
+ * the request pending and answerable.
  */
 export interface RequestDecisionHook {
   readonly record: (request: {
     readonly payload: PluginRequest;
     readonly decision: RequestDecision;
-    readonly inbox: (runId: RunId) => RunInbox;
-    readonly commit: (
-      facts: readonly (ToolFact & { readonly aggregate: string })[],
-    ) => Effect.Effect<
-      void,
-      LogWriteError | DatabaseReadFailed | PluginFactRejected
-    >;
-  }) => Effect.Effect<void, Error, GlobalValues>;
+  }) => Effect.Effect<RequestDecisionRecord, Error, GlobalValues>;
+}
+
+/** What commits with a plugin request's decision, in its transaction
+ *  ({@link RequestDecisionHook}). */
+export interface RequestDecisionRecord {
+  /** Facts about the plugin's own aggregates, hung under the request's run
+   *  and checked in the transaction: one its kind refuses is logged and
+   *  left out. */
+  readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
+  /** The input the plugin sends a run of the session, admitted in the
+   *  transaction (one the run's closed input refuses is logged), the run
+   *  woken for it once that commits. */
+  readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
 }
 
 /**

@@ -19,14 +19,12 @@ export const externalInquiry: TexraPlugin = {
   tools: [ExternalInquiryTool],
   factKinds: APP_FACT_KINDS['external-inquiry'],
   toggle: 'off',
-  // The answer is recorded on the thread and delivered to the run that
-  // asked, before the decision commits.
+  // The answer is recorded on the thread before the decision commits; the
+  // thread's row and the continuation to the run that asked commit with it.
   decision: {
-    record: ({ payload, decision, inbox, commit }) =>
+    record: ({ payload, decision }) =>
       Schema.decodeUnknownEffect(InquiryRequestSchema)(payload.data).pipe(
-        Effect.flatMap((inquiry) =>
-          recordInquiryDecision(inquiry, decision, inbox, commit),
-        ),
+        Effect.flatMap((inquiry) => recordInquiryDecision(inquiry, decision)),
         Effect.provide(inquiryRecordsLayer),
       ),
   },

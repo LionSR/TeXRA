@@ -834,9 +834,12 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   block its caller is neither: no attempt re-enters it and it is not unbound; it
   stays open until its `request.decided` commits, or until `run.removed`
   closes the run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts#admit`). What its plugin's
-  decision hook does with the answer (the external inquiry delivers it as a
-  follow-up) is the plugin's.
+  (`controllers/session/SessionRequests.ts#admit`). Its plugin's decision
+  hook records an answer outside the store first, idempotently; the decision,
+  the facts the hook returns and the input it sends a run (the external
+  inquiry's follow-up) then commit in one checked transaction, after which
+  that run is woken (`agent/runtime/requests.ts#decideRequest`,
+  `controllers/session/SessionRequests.ts#wakeIfOwed`).
 
 ## 9. Crash guarantees
 

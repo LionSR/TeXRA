@@ -32,8 +32,10 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`PromptSection`](#promptsection),
   [`ProcessPluginLayer`](#processpluginlayer),
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
-  [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
-  and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
+  [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
+  decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
+  [`FactKind`](#factkind), and [`AgentBlock`](#agentblock)
+  ([`agentBlockOf`](#agentblockof)).
 
 ## AGENT_TOOL_NAME
 
@@ -1570,26 +1572,38 @@ const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effe
 ## RequestDecisionHook
 
 A plugin's side of a decision on a pending request it opened (a
-`PluginRequest` naming it). The session runs it before the decision's row
-commits, under the request's decision lane, so a process that exits in
-between leaves the request pending and answerable rather than settled
-with nothing recorded. It may send a run of the session its input
-(`inbox`), and commit facts about its own aggregates, hung under the
-request's run (`commit`).
+`PluginRequest` naming it), run before the decision commits: what the
+plugin records outside the session's store, and what commits with the
+decision in its one checked transaction ({@link RequestDecisionRecord}).
+The outside record must be idempotent: an answer tried again after a
+failure, or raced by another, records nothing twice, and the second
+reads the first's. A process that exits before the transaction leaves
+the request pending and answerable.
 
 ```ts
 interface RequestDecisionHook {
   readonly record: (request: {
     readonly payload: PluginRequest;
     readonly decision: RequestDecision;
-    readonly inbox: (runId: RunId) => RunInbox;
-    readonly commit: (
-      facts: readonly (ToolFact & { readonly aggregate: string })[],
-    ) => Effect.Effect<
-      void,
-      LogWriteError | DatabaseReadFailed | PluginFactRejected
-    >;
-  }) => Effect.Effect<void, Error, GlobalValues>;
+  }) => Effect.Effect<RequestDecisionRecord, Error, GlobalValues>;
+}
+```
+
+## RequestDecisionRecord
+
+What commits with a plugin request's decision, in its transaction
+({@link RequestDecisionHook}).
+
+```ts
+interface RequestDecisionRecord {
+  /** Facts about the plugin's own aggregates, hung under the request's run
+   *  and checked in the transaction: one its kind refuses is logged and
+   *  left out. */
+  readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
+  /** The input the plugin sends a run of the session, admitted in the
+   *  transaction (one the run's closed input refuses is logged), the run
+   *  woken for it once that commits. */
+  readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
 }
 ```
 
