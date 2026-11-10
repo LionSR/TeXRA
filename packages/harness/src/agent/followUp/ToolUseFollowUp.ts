@@ -8,19 +8,24 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { type ResumeRefusal, type RunId } from '@shared/schemas';
-import { SessionLog } from '@shared/session/runHistory';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import { sentBefore } from './followUpMessages';
 import { Inbox, type InboxItem } from './Inbox';
 
 /** What a follow-up's admission and its wake read of the session. */
-export type FollowUpServices = Inbox | Runs | SessionLog | Interactions;
+export type FollowUpServices =
+  | Inbox
+  | Runs
+  | SessionLog
+  | SessionViewAccess
+  | Interactions;
 
 /** The caller's {@link FollowUpServices}, for a run's inbox kept past the
  *  caller's fiber ({@link runInbox}). */
 export const followUpServices = Effect.map(
   Effect.context<FollowUpServices>(),
-  Context.pick(Inbox, Runs, SessionLog, Interactions),
+  Context.pick(Inbox, Runs, SessionLog, SessionViewAccess, Interactions),
 );
 
 /**
@@ -191,6 +196,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   const log = yield* SessionLog;
+  const view = yield* SessionViewAccess;
   // From the checks to the row's commit, one send to a run at a time, so a
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
@@ -199,9 +205,11 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       return { status: 'sent' } as const;
     // A run that takes no input (a process run, a one-shot root) reads
     // none, live or not: nothing would read the row.
-    // Read from the store: the view trails it.
-    const started = (yield* log.facts(runId))?.start;
-    if (started?.takesFollowUps === false)
+    // Still the view's answer, and so unsettled: a run the view has not
+    // loaded skips this check. The store's answer would always refuse an
+    // ended one-shot root, which a later resume does read a message for
+    // (`example/10-external-plugin.ts`); which of the two is meant is open.
+    if (view.run(runId)?.takesFollowUps === false)
       return { status: 'failed', reason: 'notResumable' } as const;
     const live = runs.get(runId);
     if (live === undefined) {

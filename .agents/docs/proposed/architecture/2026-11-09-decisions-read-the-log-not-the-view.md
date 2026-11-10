@@ -94,13 +94,13 @@ the rule the three fixes already applied one site at a time.
 
 ## Progress
 
-Done, nine of the ten sites:
+Done, eight of the ten sites:
 
 - `requireRunAction` and `showOutput` read the run from `view.read` (the
   view rebuilt from the log as of the call, which `pendingOf` already
   used): both need what only the view's updater derives (`actions`, the
   status wording).
-- `submitFollowUp`, `wakeRun`, `presentTerminalResult`, the hooks' session
+- `wakeRun`, `presentTerminalResult`, the hooks' session
   id and the child-output check read `SessionLog.facts`, whose `parent` is
   the attached edge.
 - A task's cost reads its children from the store: `SessionLog.children`,
@@ -110,6 +110,17 @@ Done, nine of the ten sites:
   shutdown's roots no longer depend on what the view has applied. It holds
   no view. The wake of an ended run's parent reads the edge in the wake
   itself, where it read it in the fiber's observer before.
+
+Open, the owner's call: `submitFollowUp`'s `takesFollowUps` check still
+reads the view. Read from the store it refuses every message to an ended
+one-shot root (`run.start.takesFollowUps` is false for one), and
+`packages/harness/example/10-external-plugin.ts` sends such a run a
+message from a fresh process and resumes it to answer it. That passes on
+`main` only because the fresh process's view has not loaded the run, so the
+check is skipped (the store says false, the view `undefined`); with the
+view loaded the same message is refused. The two deterministic rules are:
+refuse it always and change the example, or accept a message to a one-shot
+root no launch holds and leave the refusal to a live one and a process run.
 
 Left as it is: `runNoun` words a refusal ("task" or "agent") and decides
 nothing, so it is rendering and reads the view.
