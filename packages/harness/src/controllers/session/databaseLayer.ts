@@ -380,12 +380,13 @@ export const databaseLayer = (
             ),
           ),
         );
-      // Every body is database-only, and a savepoint inside a caller's
-      // transaction (the client's own `withTransaction`, which skips a
-      // ROLLBACK SQLite already made and gives a failed COMMIT back typed). A
-      // busy lock, which only the global store's other writers take, runs the
-      // transaction again whole; a nested body never meets one, its
-      // transaction holding the lock already.
+      // Every body is database-only. It runs in the client's own transaction,
+      // which on this writable connection begins `BEGIN IMMEDIATE` (holding
+      // the write lock from its first statement), skips a ROLLBACK SQLite
+      // already made and gives a failed COMMIT back typed; inside a caller's
+      // transaction it is a savepoint. A busy lock, which only the global
+      // store's other writers take, runs the transaction again whole; a
+      // nested body never meets one, its transaction holding the lock already.
       const own = <A, E>(body: Effect.Effect<A, E>) =>
         retryBusy(sql.withTransaction(body));
       const transaction = <A, E, EBody>(
