@@ -720,24 +720,6 @@
           "signature": "export function withPerKeyLane<Key, RefusalE = never>( lanes: PerKeyLanes<Key>, key: Key, refuseClaim?: (occupant: PerKeyLane | undefined) => RefusalE | undefined, ): <A, E, R>( self: Effect.Effect<A, E, R>, ) => Effect.Effect<A, E | RefusalE, R> {…}"
         }
       ]
-    },
-    {
-      "id": "ROW-record-rules-one-reducer",
-      "candidate": "one pure reducer in shared/session for a run's record rules (an activation starts the end, the stop and the input's closure over; a detach severs the parent edge; a user's title outranks a model's), generic over what stands for a row (the row itself, or the commit a store keeps), used by the run_record projection (RECORD_STEPS), the input read (lifecycleOf), a follow-up's receipt (turnReceipt) and the session view (applyRunEvent)",
-      "why": "The four sites share rules of one to three lines and read different shapes, so a shared reducer costs more than the copies it removes. The projection never holds rows: it steps from its stored record of commits, so the reducer must be generic over the slot, and deriving RunRows from a record of rows then needs each slot's row type (a per-slot kind map, or the checked casts runRowsOf already makes from commits). Estimated from the code on main at db09959, not prototyped: about 120 lines added (the generic record and its steps, the RunRows derivation, the projection's slot lookup) against about 85 deleted (RECORD_STEPS, recordAfter, half of runRowsOf, lifecycleOf and the receipt's five lines). The session view keeps none of these rows: its position and outcome already come from the shared standingAfter, and what is left there is a detach (one line) and the title rule (three). The cheaper route, the input read taking its lifecycle from the run_record projection (SessionLog.facts), turns one read into two: Inbox's wake decision (needsWake with inputClosed) and resumeRun's closed-input refusal decide from one snapshot of the input and lifecycle rows, and outside a publisher job two reads can straddle a commit, so it needs a combined snapshot read in the store and in its test fakes.",
-      "ruling": ".agents/docs/proposed/architecture/2026-11-09-agent-data-one-row-per-fact.md#32-规则二一个主题一个归约函数调查后否决",
-      "symbols": [
-        {
-          "file": "packages/harness/src/shared/session/runRowReads.ts",
-          "symbol": "lifecycleOf",
-          "signature": "function lifecycleOf(rows: readonly SessionRow[]) {…}"
-        },
-        {
-          "file": "packages/harness/src/controllers/session/projections.ts",
-          "symbol": "recordAfter",
-          "signature": "function recordAfter(record: RunRecord, row: SessionRow): RunRecord {…}"
-        }
-      ]
     }
   ]
 }

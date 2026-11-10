@@ -69,9 +69,9 @@ export type SharedRunRows = RunRowState & PendingFollowUps;
 
 /**
  * What a run's record rows say about it, each field from the rows its
- * comment names: what `SessionLog.facts` serves, read from the store's
- * `run_record` projection (`controllers/session/projections.ts`). The
- * session view keeps its own on `RunView`.
+ * comment names, as `recordAfter` (`runRowReads.ts`) applies them: what
+ * `SessionLog.facts` serves, read from the newest row of each kind, and
+ * what the session view keeps per run for the fields it shows.
  */
 export type RunRows = {
   /** Its `run.start`, and its parent edge: the start's, until a

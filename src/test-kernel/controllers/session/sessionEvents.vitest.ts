@@ -717,13 +717,14 @@ describe('the session event table and its one publisher', () => {
             },
           });
         }).pipe(Effect.provide(substrate(storage)));
-        // A run record built at open over that row (a store that held no
-        // record yet) fails its read on it, never answers without it.
+        // A listing built at open over that row (a store that held none
+        // yet) lists it as the run's unread row, so the record's read fails
+        // on it, never answers without it.
         yield* Effect.sync(() => {
           const raw = reader(storage);
           try {
-            raw.exec(`DELETE FROM run_record;
-              DELETE FROM projection_state WHERE name = 'run_record';`);
+            raw.exec(`DELETE FROM listing_entry;
+              DELETE FROM projection_state WHERE name = 'listing';`);
           } finally {
             raw.close();
           }

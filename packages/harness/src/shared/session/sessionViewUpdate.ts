@@ -54,7 +54,12 @@ import {
   isMessage,
   type SharedRunRow,
 } from './runRows';
-import { standingAfter, type RunStanding } from './runRowReads';
+import {
+  NO_RUN_ROWS,
+  recordAfter,
+  standingAfter,
+  type RunStanding,
+} from './runRowReads';
 import { applyTranscriptEvent } from './transcriptUpdate';
 import {
   applyLiveText,
@@ -76,7 +81,7 @@ import {
   requireRun,
   rollupOf,
 } from './sessionView';
-import type { SharedRunRows } from './runRowsShape';
+import type { RunRows, SharedRunRows } from './runRowsShape';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplayRow, { type: 'run.start' }>;
@@ -220,6 +225,10 @@ interface SessionState {
   /** What the rows `runRows.ts` reads say about each run: `view.requests`,
    *  `view.queuedFollowUps` and `RunView.turn` are built from it. */
   readonly rows: Map<RunId, SharedRunRows>;
+  /** Each run's record (`recordAfter`): its title, its attached parent and
+   *  what its end left are read off it, so the view states none of those
+   *  rules itself. */
+  readonly records: Map<RunId, RunRows>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the newest
    *  listing fact applied for it, so an older one a later read replays is
    *  skipped. The lifecycle entry outlives its run: it keeps a replayed
@@ -240,6 +249,7 @@ function emptySessionState(): SessionState {
   return {
     listed: new Set(),
     rows: new Map(),
+    records: new Map(),
     latest: new Map(),
     transcripts: new Map(),
     unreadable: new Map(),
@@ -649,9 +659,20 @@ function applyTextChunk(u: Update, chunk: TextChunk): boolean {
 /** A durable event `runRows.ts` does not handle, other than a priced turn. */
 type OwnEvent = Exclude<DisplayRow, SharedRunRow | { type: 'usage' }>;
 
-/** What the event changes on its own run (topology, session-level fields and
- *  the transcript are the caller's). */
-function applyRunEvent(run: RunView, event: OwnEvent): RunView {
+/** What the run's end left, off its record: nothing once an activation
+ *  started the run over. */
+const endOf = ({ end }: RunRows) => ({
+  output: end?.output ?? null,
+  lost: end?.error?.kind === 'result-lost' ? end.error.message : null,
+});
+
+/** What the event changes on its own run, whose `record` already holds it
+ *  (topology, session-level fields and the transcript are the caller's). */
+function applyRunEvent(
+  run: RunView,
+  event: OwnEvent,
+  record: RunRows,
+): RunView {
   switch (event.type) {
     case 'log':
     case 'process.output':
@@ -682,8 +703,7 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
           event.at,
         ),
         turn: null,
-        lost: null,
-        output: null,
+        ...endOf(record),
       };
     case 'run.config': {
       // A process has no model; any other run is on its newest config's.
@@ -719,11 +739,13 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
         facts: { ...run.facts, [factName(event)]: event.value },
       };
     case 'run.detach': // the attached parent goes; the launch parent stays
-      return run.parentId === null ? run : { ...run, parentId: null };
+      return run.parentId === null
+        ? run
+        : { ...run, parentId: record.parent?.id ?? null };
     case 'run.description':
-      // A user's title stands until the user renames again: the next AI
-      // summary does not overwrite it.
-      return event.by === 'model' && run.descriptionBy === 'user'
+      // A title the record did not take (a model's, under a user's) changes
+      // nothing.
+      return record.title !== event
         ? run
         : {
             ...run,
@@ -735,10 +757,7 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
       // The run ended: its outcome and output, and any result its end lost.
       return {
         ...applyStanding(run, standingOf(event), event.at),
-        output: event.output,
-        ...(event.error?.kind === 'result-lost'
-          ? { lost: event.error.message }
-          : {}),
+        ...endOf(record),
       };
   }
 }
@@ -964,6 +983,9 @@ function applyEvent(
   latest.set(listingKey, event.commit);
   if (event.type === 'run.removed') return removeRun(u, runId);
   const created = !known;
+  const { records } = u.state;
+  const record = recordAfter(records.get(runId) ?? NO_RUN_ROWS, event);
+  records.set(runId, record);
 
   // The rows the run loop's state is also built from are applied once, in
   // `runRows.ts`; every other row is the view's own.
@@ -983,7 +1005,7 @@ function applyEvent(
     };
   } else {
     applySessionFacts(u, runId, event);
-    own = applyRunEvent(before, event);
+    own = applyRunEvent(before, event, record);
   }
   if (event.type === 'run.end') {
     // A run can end with a row unfinalized: its end drops all live text.
@@ -1048,6 +1070,7 @@ function removeRun(u: Update, runId: RunId): boolean {
   view.policy = without(u, view.policy, run.id);
   view.queuedFollowUps = without(u, view.queuedFollowUps, run.id);
   state.rows.delete(run.id);
+  state.records.delete(run.id);
   state.transcripts.delete(run.id);
   state.turnOver.delete(run.id);
   const aggregateId = qualifyAggregateId('run', run.id);

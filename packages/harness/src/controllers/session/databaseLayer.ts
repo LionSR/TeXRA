@@ -46,6 +46,11 @@ import {
   type SessionRowDraft,
   factName,
 } from '@shared/schemas';
+import {
+  NO_RUN_ROWS,
+  RECORD_ROW_TYPES,
+  recordAfter,
+} from '@shared/session/runRowReads';
 import { InPublisherJob } from '@shared/session/sessionEvents';
 import {
   AggregateStateSchema,
@@ -62,13 +67,7 @@ import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
-import {
-  LISTED_TYPES,
-  projectionUpkeep,
-  runRecordCommits,
-  runRowsOf,
-  usageRows,
-} from './projections';
+import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
 import {
   EVENT_COLUMNS,
   EVENT_FROM,
@@ -91,7 +90,6 @@ import {
   PROJECTED_COLUMNS,
   PROJECTED_FROM,
   READ_LISTING,
-  READ_COMMITS,
   READ_RUN_RECORD,
   rowReader,
 } from './rowReader';
@@ -148,6 +146,8 @@ WHERE s.id IN (${AGGREGATE_LIST})
 
 /** The stored rows one display page covers. */
 const DISPLAY_PAGE_ROWS = 2000;
+/** The kinds a run's record reads, as the JSON list its read binds. */
+const RECORD_TYPES = JSON.stringify(RECORD_ROW_TYPES);
 /** A run's aggregate `logical_id` column as the `RunId` it is. */
 const runIdOf = Schema.decodeUnknownSync(RunIdSchema);
 /** The `event` table's autoincrement sequence: a non-negative integer. */
@@ -707,21 +707,18 @@ export const databaseLayer = (
         readListing: () => query(decodedRows(READ_LISTING, [])),
         readBlobs: (digests) => query(reader.blobs(digests)),
         readRunRecord: (id) =>
-          snapshot(
-            Effect.gen(function* () {
-              const stored = (yield* execOne(
+          query(
+            Effect.map(
+              decodedRows(
                 READ_RUN_RECORD,
-                aggregateColumns(id),
-              ))?.record;
-              if (stored === undefined) return null;
-              const record = String(stored);
-              const rows = yield* decodedRows(
-                READ_COMMITS,
-                [JSON.stringify(runRecordCommits(record))],
+                [...aggregateColumns(id), RECORD_TYPES],
                 true,
-              );
-              return runRowsOf(record, rows);
-            }),
+              ),
+              (rows) =>
+                rows.length === 0
+                  ? null
+                  : rows.reduce(recordAfter, NO_RUN_ROWS),
+            ),
           ),
         ...currentValues({
           exec,

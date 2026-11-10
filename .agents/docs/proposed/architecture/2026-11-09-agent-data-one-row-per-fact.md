@@ -7,7 +7,7 @@ status: proposed
 
 这是一份评审后的设计提案，基线是 `main` 的 `db09959`。范围是一次运行（run）的数据怎么存、怎么读，不含设置和其他当前值。
 
-**进度。** 提案里的格式批已在同一分支落地（§5 的第 1、2 步）。规则二（§3.2）动手前重新算过账，结论是不做，已记入 `.agents/docs/refuted-candidates.json`。三份 implemented 说明里点名的过时段落已改。冻结时归零还没有做，要等负责人决定。正文各节写明哪些已经是现状、哪些仍是提议。实现时有两处和最初的提案不同，见 §3.1 的“和最初提案的两处不同”。
+**进度。** 提案里的格式批已在同一分支落地（§5 的第 1、2 步）。规则二（§3.2）第一次算账时被否决，换成“单一事实来源”的问法之后找到了更小的做法，已落地。三份 implemented 说明里点名的过时段落已改。冻结时归零还没有做，要等负责人决定。正文各节写明哪些已经是现状、哪些仍是提议。实现时有两处和最初的提案不同，见 §3.1 的“和最初提案的两处不同”。
 
 与已定案规则的关系：
 
@@ -21,10 +21,10 @@ status: proposed
 
 **设计问题只有一个：行是按“谁读”分的（展示行和私有行），不是按“什么事实”分的。** 两边都需要的事实因此存成两行，再在读取时对齐；基线上一次工具调用写 4 行，其中 2 行是为展示另写的。
 
-最初推荐的是两条规则，都不引入新的行词汇。落地后只有第一条成立：
+推荐的是两条规则，都不引入新的行词汇：
 
 1. **展示行只在没有执行行持有这个事实时才存。** 其余展示事件由一个函数从已提交的行推导，实时路径和冷读共用它。第一片是工具卡片，**已落地**。
-2. **一个主题一个归约函数。** “一个 run 的记录行说明了什么”只写一遍，由 store 的投影、视图和窄读取共用。**调查后否决**：共享的归约函数比它替掉的几处重复更大（§3.2）。
+2. **一个主题一个归约函数，一份索引。** “一个 run 的记录行说明了什么”只写一遍，由 store 的记录读取、视图和窄读取共用；store 不再另存一份记录。**已落地**，做法和最初的提议不同（§3.2）。
 
 行里封闭的 provider 枚举（§3.3）：存下来的 backend 已改成按字符串读，**已落地**；重试载荷里的 API key provider 仍然封闭。
 
@@ -82,7 +82,7 @@ status: proposed
 - `shared/session/runRowReads.ts` 的 `lifecycleOf`（input 读取）
 - `shared/session/runRowReads.ts` 的 `turnReceipt`（回执）
 
-“detach 切断父边”有三个实现，“用户起的标题不被模型标题覆盖”有两个。T5（#14854）已经把 store 里的两份收成 `run_record` 一份，它点名的第三份（视图）和窄读取还在。这一节的状态没有变，为什么不再收，见 §3.2。
+“detach 切断父边”有三个实现，“用户起的标题不被模型标题覆盖”有两个。T5（#14854）已经把 store 里的两份收成 `run_record` 一份，它点名的第三份（视图）和窄读取在基线上还在。现在这三条规则各只有一个实现，见 §3.2。
 
 ### 1.4 用《软件设计的哲学》的词说
 
@@ -150,19 +150,28 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 
 前两行说明了硬约束的代价。要让响应行显示成它的两条流的结束，转录事件就得带上“它是这一行的第几条”，视图按 `seq` 去重的游标（`SessionView.transcriptSeq`，也是订阅续读的起点）随之改变。这是对视图契约和事件形状的改动，比这一批大，值不值得做取决于响应文本存两份的代价（4096 字符以上的字符串按内容寻址只存一次，但 `finalText` 是把各段拼起来的，和单段文本一般不相同）。这里只记下结论，不做。
 
-### 3.2 规则二：一个主题一个归约函数（调查后否决）
+### 3.2 规则二：一个主题一个归约函数，一份索引（已落地）
 
-最初的提议：把 `controllers/session/projections.ts` 的 `RECORD_STEPS` 和 `recordAfter` 搬进 `shared/session/`，让它对“每个槽里放什么”通用（投影放 commit，视图和读取放行本身），store 的投影、视图的 `applyRunEvent`、input 读取的 `lifecycleOf` 和回执的 `turnReceipt` 都用它。
+**最初的提议和它为什么先被否决。** 最初的提议是把 `controllers/session/projections.ts` 的 `RECORD_STEPS` 搬进 `shared/session/`，让它对“每个槽里放什么”通用（投影放 commit，视图和读取放行本身）。动手前按代码估算：投影从不持有行，它从上一次存下来的 commit 记录往前走一步，所以共享函数必须对槽通用，再从“行的记录”推出 `RunRows` 还要每个槽的行类型。新增约 120 行和两个泛型类型，删掉约 85 行，净增加。当时的结论是不做。
 
-动手前按现在的代码重新算了一遍，结论是不做。它已记入 `.agents/docs/refuted-candidates.json`（`ROW-record-rules-one-reducer`），理由有三条：
+**换一个问法：这份记录的唯一来源是什么。** 按“单一事实来源”重新看，问题不在归约函数，而在 store 把同一份索引存了两次：
 
-- **四处读的是不同的形状，共享的只是一两行规则。** 投影从不持有行：它从上一次存下来的 commit 记录往前走一步。input 读取要四个字段的带类型的行。回执要的是一次顺序扫描里“走到每条位置行时”的 end 和 stop。视图不保存这些行，它的位置和结果已经来自共享的 `standingAfter`，剩下的只有 detach（一行）和标题规则（三行）。
-- **通用的归约函数比它替掉的重复更大。** 投影和 `shared/` 都能用的函数必须对槽的内容通用；从一份“行的记录”推出 `RunRows` 还需要每个槽的行类型（每个槽一张种类表，或者 `runRowsOf` 现在从 commit 查行时做的那种带检查的转换）。按代码估算（没有做原型）：新增约 120 行和两个泛型类型，删掉约 85 行。净增加，换来的是五条各一到三行的规则少写几遍。
-- **便宜的那条路要拆开一次读取。** 让 input 读取从 `run_record` 投影（`SessionLog.facts`）取生命周期，可以直接删掉 `lifecycleOf`。但 `Inbox` 的唤醒判断（`needsWake` 加 `inputClosed`）和 `resumeRun` 对已关闭输入的拒绝，都是从同一次读取的输入行和生命周期行做决定的；在发布者的 job 之外，两次读取之间可能夹着一次提交。要保持一致就得在 store 和它的测试替身里加一个合并的快照读取，比省下的二十多行大。
+- `listing_entry` 按 `(aggregate, listing key)` 存每种行最新一条的 commit，记录要读的 14 种行都在里面（每个插件事实、每种标题作者各一个 key）。
+- `run_record` 按槽存同样这些行的 commit，只是在写入时多套了一条规则（activation 清掉 end、stop 和输入关闭）。
 
-所以 §1.3 的四份实现保持原样。它们确实是 one fact, one representation 记录的反复出错的那一类规则（停止、恢复、父边），但把它们收成一份的代价超过了收益；以后如果 `RunRows` 的形状或视图的状态为了别的理由要改，再重新算这笔账。
+而这条规则不需要在写入时套：把“每种行最新的一条”按 commit 顺序过一遍归约函数，结果和过一遍全部行相同（每个字段只取某一种行的最新值，能把它清掉的只有 activation，谁的 commit 更大谁赢）。所以记录根本不用存。
 
-之后可以再看一步，同样不属于本提案的必做部分：`run_record` 和 `listing_entry` 为同样 14 种行各存了一份“最新一行的 commit”。冷视图如果从 `run_record` 初始化，`listing` 投影只需要保留未关闭的请求、未消费的输入和 `context.state`。
+**现在的做法。**
+
+- `shared/session/runRowReads.ts` 的 `recordAfter(record, row)` 是记录规则唯一的陈述：状态就是 `RunRows`，每个字段带着自己的行类型，没有泛型，也没有类型转换。
+- store 删掉了 `run_record` 表和它的投影器。`readRunRecord` 从 `listing_entry` 读出这个 run 每种记录行最新的一条（`READ_RUN_RECORD`），严格解码后用 `recordAfter` 折叠。
+- input 读取原来的 `lifecycleOf` 删除，改成对它选出的行用同一个函数；回执的 `turnReceipt` 在顺序扫描里逐行用它，不再自己记 end 和 stop。
+- 视图给每个 run 保留一份记录（`SessionState.records`），标题、挂接的父 run、end 留下的输出和丢失的结果都从记录里读，不再自己写“用户标题优先”“detach 切断父边”“activation 清掉 end”。
+- 原来由 `run_record` 的 `unread` 保证的一点保留了下来：投影重建时解码不了的记录行，登记成这个 run 的 `unread` 列表项（每个 run 只记第一条），记录读取和冷列表都会选到它，所以读取会在这一行上失败，而不是缺了它照常回答。`listing` 投影因此升到 v2。
+
+**结果。** “activation 清掉 end 和 stop”“detach 切断父边”“用户标题优先”各只剩一个实现。源码 9 个文件，加 216 行、删 320 行；store 少一张表、一个投影器和一份索引。没有格式变更（投影表不在行格式里），已有的库在下次打开时重建列表投影。先前记进 `refuted-candidates.json` 的 `ROW-record-rules-one-reducer` 已删除：被否决的是“对槽通用的归约函数”，落地的做法里没有存下来的 commit 记录，那个代价不存在了。
+
+**没有做的一步。** 冷视图现在可以直接从记录读取初始化；`listing` 投影里只为视图存在的部分因此可以再收窄。没有核对，不属于这一片。
 
 **不做的一件事。** 不为“调用”另建共享的读模型。卡片改成由行自己推导之后，调用行只有三个读者：loop 的运行状态（回答能否续跑）、历史查询（填给模型的表）和 `callCard`（显示成卡片），它们回答的是不同的问题。把 `HistoryQuery.ts` 的 `callWrites` 提成共享函数只会有一个调用方，按 AGENTS.md 的规则（single-caller extractions are banned）不做。
 
@@ -206,7 +215,7 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 
 1. **修 §8 的缺陷。** 已完成。
 2. **格式批。** 已完成：§3.4 的第 1 到 4 项和 §3.3 的 backend。
-3. **记录归约函数（§3.2）。** 调查后否决，不做。
+3. **记录归约函数和单一索引（§3.2）。** 已完成，做法见 §3.2。
 4. **三份 implemented 说明（第 5 项）。** 点名的段落已改；storage v1 的其余部分仍然过时，见 §3.4。
 5. **冻结时归零（第 6 项）。** 只在冻结那一刻有意义，由负责人决定。
 
@@ -220,9 +229,8 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 - `platform/defaults/nodeProcesses.ts` 不存在；打开会话不再起 `ps` 或 PowerShell。
 - 这些片没有加新的单元测试，除了两个先失败后通过的回归测试（§8 的缺陷，§3.3 的 backend）；格式变更由 golden 和崩溃一致性回放覆盖。
 
-撤回的一条（§3.2 否决）：
-
-- “activation 清除 end 和 stop”只有一个实现。它仍有四个实现。
+- “activation 清除 end 和 stop”只有一个实现：`shared/session/runRowReads.ts` 的 `recordAfter`。按 `'run.activate'` 搜索，其余命中的是另外的事实（`standingAfter` 的位置规则、运行状态的 `activatedAt`、转录的流边界）。
+- `run_record` 在 `packages/harness/src` 里搜不到；golden 库里没有这张表。
 
 ## 7. 风险和没有验证的部分
 
@@ -259,6 +267,6 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 - 读取 `tool.start`、`tool.end` 的地方都在展示事件一侧（转录、视图、`runTrace`、压缩活动投影）；会打印到卡片上的工具只有 `bash`、`script`、`self` 和 `agent`。
 - 视图的转录按 `seq` 去重；`tool.end` 找不到卡片时被忽略（`shared/session/transcriptUpdate.ts`）。
 - 版本升级次数：逐条读 `rowVersions.ts` 的注释后计数。
-- activation 规则的四个实现：按 `'run.activate'` 搜索后逐个读。
+- activation 规则在基线上的四个实现：按 `'run.activate'` 搜索后逐个读。落地后的核对见上面的验收标准；记录读取的严格性由 `src/test-kernel/controllers/session/sessionEvents.vitest.ts` 里原有的测试覆盖（损坏的记录行、重建时解码不了的行、损坏的 `run.start`），只把它直接清空的表从 `run_record` 换成了 `listing_entry`。
 - 已定案的决定：PRD“最小存储契约”和“实现前需要收敛的选择”；storage v1 §5、§10 和 §13；one run model §2 和 §3；one fact, one representation 的规则、§A 的“Who may run this run”行和 §G 的落地说明；规范 §2.2、§3、§4 和 §7；rulings ledger（没有关于 `origin`、卡片或 `family` 的裁决）；`.agents/docs/refuted-candidates.json`（没有和本提案冲突的条目）。
 - 没有核对的：git 历史（这个检出是浅克隆，无法确认各次升版的日期）；`release/0.40` 分支上只核对了 `slow` 选项在那里也存在。

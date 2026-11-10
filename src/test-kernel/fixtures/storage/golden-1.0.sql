@@ -900,8 +900,7 @@ CREATE TABLE projection_state (
     version        INTEGER NOT NULL,
     through_commit INTEGER NOT NULL
   ) STRICT, WITHOUT ROWID;
-INSERT INTO projection_state VALUES('listing',1,777);
-INSERT INTO projection_state VALUES('run_record',1,777);
+INSERT INTO projection_state VALUES('listing',2,777);
 INSERT INTO projection_state VALUES('usage',3,777);
 CREATE TABLE projected_row (
     "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
@@ -1095,28 +1094,6 @@ INSERT INTO run_usage VALUES(14,621,'{"usage":{"inputTokens":1,"outputTokens":1,
 INSERT INTO run_usage VALUES(15,653,'{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
 INSERT INTO run_usage VALUES(16,679,'{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
 INSERT INTO run_usage VALUES(18,767,'{"usage":{"inputTokens":3,"outputTokens":3,"cost":0.000072,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
-CREATE TABLE run_record (
-    aggregate INTEGER PRIMARY KEY REFERENCES event_sequence(id) ON DELETE CASCADE,
-    record    TEXT NOT NULL
-  ) STRICT;
-INSERT INTO run_record VALUES(1,'{"start":1,"policy":null,"activation":3,"end":102,"stop":null,"report":103,"exit":null,"config":14,"position":101,"userTitle":null,"label":18,"facts":{"goal/plan":37},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(2,'{"start":46,"policy":null,"activation":48,"end":88,"stop":null,"report":89,"exit":null,"config":57,"position":87,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(3,'{"start":104,"policy":null,"activation":106,"end":137,"stop":null,"report":138,"exit":null,"config":120,"position":136,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(4,'{"start":139,"policy":null,"activation":141,"end":172,"stop":null,"report":173,"exit":null,"config":155,"position":171,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(5,'{"start":174,"policy":null,"activation":176,"end":314,"stop":null,"report":315,"exit":null,"config":191,"position":313,"userTitle":null,"label":null,"facts":{"documents/output":308},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(6,'{"start":205,"policy":null,"activation":207,"end":227,"stop":null,"report":228,"exit":null,"config":212,"position":226,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(7,'{"start":258,"policy":null,"activation":260,"end":280,"stop":null,"report":281,"exit":null,"config":265,"position":279,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(8,'{"start":316,"policy":null,"activation":318,"end":509,"stop":506,"report":null,"exit":null,"config":449,"position":503,"userTitle":null,"label":null,"facts":{"goal/plan":386},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(9,'{"start":341,"policy":null,"activation":343,"end":423,"stop":null,"report":424,"exit":null,"config":356,"position":422,"userTitle":null,"label":344,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(10,'{"start":363,"policy":null,"activation":365,"end":415,"stop":null,"report":416,"exit":null,"config":369,"position":414,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(11,'{"start":495,"policy":508,"activation":497,"end":518,"stop":null,"report":519,"exit":null,"config":496,"position":null,"userTitle":null,"label":498,"facts":{},"detach":507,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(12,'{"start":520,"policy":null,"activation":522,"end":603,"stop":null,"report":604,"exit":null,"config":537,"position":602,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(13,'{"start":561,"policy":null,"activation":563,"end":588,"stop":null,"report":589,"exit":null,"config":573,"position":587,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(14,'{"start":605,"policy":null,"activation":607,"end":627,"stop":null,"report":628,"exit":null,"config":612,"position":626,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(15,'{"start":629,"policy":null,"activation":636,"end":660,"stop":659,"report":null,"exit":null,"config":634,"position":658,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(16,'{"start":661,"policy":null,"activation":663,"end":null,"stop":null,"report":null,"exit":null,"config":672,"position":680,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(18,'{"start":710,"policy":null,"activation":712,"end":775,"stop":774,"report":null,"exit":null,"config":727,"position":772,"userTitle":null,"label":null,"facts":{},"detach":null,"closedBy":null,"unread":[]}');
-INSERT INTO run_record VALUES(19,'{"start":738,"policy":null,"activation":740,"end":756,"stop":null,"report":757,"exit":755,"config":739,"position":null,"userTitle":null,"label":741,"facts":{},"detach":null,"closedBy":777,"unread":[]}');
 DELETE FROM sqlite_sequence;
 INSERT INTO sqlite_sequence VALUES('event',777);
 CREATE INDEX event_sequence_parent

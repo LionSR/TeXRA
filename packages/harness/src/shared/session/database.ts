@@ -249,8 +249,9 @@ export class Database extends Context.Service<
     readonly readBlobs: (
       digests: readonly string[],
     ) => Effect.Effect<StoredBlobs, DatabaseReadFailed>;
-    /** One open run's record (the `run_record` projection over the rows
-     *  it names), null for a run never started or removed. */
+    /** One open run's record (`recordAfter` over the newest row of each
+     *  record kind, which the listing indexes), null for a run never
+     *  started or removed. A row of them that does not decode fails it. */
     readonly readRunRecord: (
       id: AggregateId,
     ) => Effect.Effect<RunRows | null, DatabaseReadFailed>;
