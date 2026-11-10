@@ -102,7 +102,7 @@ Exports: 164
 - `presenterOn` — `function presenterOn: (host: HostInteractions) => Notices`
 - `presentFollowUpResult` — `function presentFollowUpResult: (result: SubmitFollowUpResult) => { message: string; severity: "warning"; } | { severity: "none"; }`
 - `presentRunFailure` — `function presentRunFailure: (interactions: Notices, error: unknown, prefix?: string) => Effect<void, never, never>`
-- `processLayer` — `function processLayer: (options: ProcessLayerOptions) => Layer<ProcessServices | Sessions, PluginsRefused, never>`
+- `processLayer` — `function processLayer: (options: ProcessLayerOptions) => Layer<ProcessServices | Sessions, PluginsRefused, ChildProcessSpawner | FileSystem | Path>`
 - `ProcessLayerOptions` — `interface ProcessLayerOptions extends Omit<ProcessServicesOptions, 'appState'> { readonly skills?: HostSkillOptions; readonly appState?: ProcessServicesOptions['appState']; }`
 - `ProcessRuntime` — `type ProcessRuntime = ManagedRuntime.ManagedRuntime<ProcessServices | Sessions, never>; ≡ ProcessRuntime`
 - `ProcessServices` — `type ProcessServices = RunServices | ToolCatalog; ≡ ProcessServices`

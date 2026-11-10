@@ -44,7 +44,7 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
-import { type RunCell, SessionViewAccess } from '@shared/session/runHistory';
+import { type RunCell, SessionLog } from '@shared/session/runHistory';
 import { workAutoApproved } from '../requests';
 import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
@@ -209,15 +209,24 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
 });
 
 /** The fields every event's input carries for `run`: its root run's id as
- *  the session (the view's ancestry of its parent), its permission mode as
+ *  the session (the top of its parent's attached ancestry, read from the
+ *  store), its permission mode as
  *  its approvals decide, and for a child its own id and agent, as the
  *  reference gives a subagent's hooks. */
 const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
   const { parent } = run.entry;
-  const root =
-    parent === null
-      ? run.runId
-      : ((yield* SessionViewAccess).run(parent)?.ancestors[0]?.id ?? parent);
+  const log = yield* SessionLog;
+  let root = parent ?? run.runId;
+  if (parent !== null) {
+    // Parentage is a tree; the visited check only stops a corrupt cycle.
+    const seen = new Set([root]);
+    for (;;) {
+      const up = (yield* Effect.orDie(log.facts(root)))?.parent?.id;
+      if (up == null || seen.has(up)) break;
+      seen.add(up);
+      root = up;
+    }
+  }
   return {
     session_id: root,
     cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',

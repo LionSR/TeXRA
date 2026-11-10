@@ -9,6 +9,7 @@
  */
 import {
   Cause,
+  Exit,
   Clock,
   Context,
   Effect,
@@ -245,7 +246,6 @@ export const sessionOwnersLayer = (
       >().pipe(Effect.provide(services));
       const local = (yield* LocalRuntimeSource).ref;
       const runs: RunRegistry = new RunRegistry({
-        view,
         log,
         // Set, never updated from a read: each call carries the whole set,
         // and the fork runs it before this fiber goes on.
@@ -256,7 +256,22 @@ export const sessionOwnersLayer = (
         fork: forkRun,
         programs: { executeAgent, stop: stopRun },
         wake: (id) =>
-          void fork(wakeIfOwed(id).pipe(Effect.provideService(Runs, runs))),
+          void fork(
+            Effect.gen(function* () {
+              // The parent its last batch delivered to, as the store holds
+              // the edge: it outlives the run's fiber.
+              const parent = yield* Effect.exit(runs.attachedParent(id));
+              yield* wakeIfOwed(id);
+              if (Exit.isFailure(parent))
+                return yield* Effect.logWarning(
+                  `Run ${id}: its parent edge could not be read, so no parent is woken for its last delivery`,
+                ).pipe(
+                  Effect.annotateLogs({ data: Cause.squash(parent.cause) }),
+                  withLogChannel(CHANNEL),
+                );
+              if (parent.value !== null) yield* wakeIfOwed(parent.value);
+            }).pipe(Effect.provideService(Runs, runs)),
+          ),
       });
       yield* Effect.addFinalizer(() => Effect.sync(() => runs.dispose()));
       const session: Context.Context<SessionServices> = Context.add(

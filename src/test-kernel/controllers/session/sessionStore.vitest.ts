@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 
 import { layer } from '@effect/vitest';
-import { Context, Effect, Exit, Layer, PubSub, Schema } from 'effect';
+import { Context, Effect, Exit, Layer, PubSub, Schema, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
@@ -152,6 +152,11 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
               { id: qualifyAggregateId('run', runId), fromSeq: 0 },
               { id: qualifyAggregateId('run', generateRunId()), fromSeq: 0 },
             ]);
+            // The view is dead before the rename asks: the request's own
+            // read of the log must not take the faults meant for it.
+            yield* Effect.exit(
+              Stream.runDrain(Context.get(session, SessionViewAccess).changes),
+            );
 
             const renamed = yield* Effect.exit(
               Context.get(session, SessionRequests)
