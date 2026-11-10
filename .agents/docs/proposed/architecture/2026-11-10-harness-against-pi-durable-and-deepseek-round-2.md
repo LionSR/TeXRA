@@ -5,7 +5,10 @@ status: proposed
 
 # The harness against pi-durable and DeepSeek Harness, round 2: what is still ad hoc
 
-Measured on 2026-11-10 at TeXRA `8281784` (main), pi
+Read on 2026-11-10 at TeXRA `8281784`, and every finding re-checked on
+`main` at `521bb189`, after
+[one row per fact](./2026-11-09-agent-data-one-row-per-fact.md) (#14894)
+merged. The peers are pi
 [`a05e3a0`](https://github.com/earendil-works/pi/tree/a05e3a07763c38d23d50207742f7e073e35cd0f8)
 (`packages/durable` 1.5.1 and `packages/ai`) and DeepSeek Harness (dsh)
 [`fcc0ad4`](https://github.com/deepseek-ai/deepseek-harness/tree/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159)
@@ -20,8 +23,9 @@ landed its eight moves. Seven red-flag rounds and two lens audits have landed
 This round asks the same question again: which parts of the harness and
 `packages/llm` still decide one fact in several places, where one general
 shape would do, and what the peers do there now. It reports only what no
-earlier round recorded, or what the catalogue marks landed while the tree
-says otherwise.
+earlier round or open PR records, or what the catalogue marks landed while
+the tree says otherwise. Two of its findings are of the second kind: A7 and
+R7 are marked landed, and half of each is not in the tree.
 
 ## Summary
 
@@ -30,24 +34,58 @@ The core is sound:
 - every resumable fact is a row;
 - the model invocation's retry is a pure function of its rows
   (`nextAttempt`);
-- one publisher commits in order, and a claim owns each run;
+- one publisher commits in order;
 - the llm `Model` is a deep door with four members.
 
 What is still ad hoc sits beside the core. In each case one fact has two
 owners, and each sits behind a cluster of this month's fixes.
 
-| #   | Finding                                                                                                                                                                     | Red flag (Ousterhout)                                               | What goes                                                                                                                                                                    |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **One conversation, two records.** Each tool call, model answer and user message is written as history rows the run resumes from and again as display rows the hosts render | repetition, information leakage, a join by adjacency                | the loop's card rows, `settleCards`, the batch rule of `DISPLAY_PAGE_END`, `response.finalized` with `answerFinalized`, the model streams' end rows, the user-message `log`  |
-| 2   | **Where the loop stands, three ways.** A stored `run.position`, a derived `RunLoopPhase`, and about fifteen predicates in the turn loop and the per-call program            | two representations, a stored cursor, nonobvious code               | the `response.ready` and `results.ready` positions, `RunLoopPhase`, `PHASE_AT`, `phaseAfter`; then the branch predicates, for one pure next-move function like `nextAttempt` |
-| 3   | **A child's result is typed, rendered to XML and parsed back,** and an awaited child's is formatted twice                                                                   | information leakage, format then parse, repetition                  | most of `shared/subagentFollowup.ts` (336 lines), the re-parse in `queuedRow` and `followUpDisplay`, the JSON-in-XML script summary, the second formatter in `AgentTool`     |
-| 4   | **A run's life is a state machine spread over seven collections,** with a second map of the same fibers and a cast to reach it                                              | state in maps and flags, two representations, overexposure via cast | five of the seven collections, `heldIds`, `stopEnded`, the dead `programs` member, the 11 `registryOf` casts                                                                 |
-| 5   | **What kind of run this is, and its launch, decided at many sites:** two owners of "takes input", `run.config` written twice per launch, two terminals                      | two representations, temporal decomposition, repetition             | a resume that waits for input its run refuses (reproduced), one `run.config` per launch (47% of its stored bytes), the process child's own end                               |
-| 6   | Smaller: a provider's facts in eight files (the rest of O9); the lane rule written twice                                                                                    | change amplification                                                | the endpoint and region rows written by hand; the sentinel manifest rows                                                                                                     |
+| #   | Finding                                                                                                                                                          | Red flag (Ousterhout)                                               | What goes                                                                                                                                                                    |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Where the loop stands, three ways.** A stored `run.position`, a derived `RunLoopPhase`, and about fifteen predicates in the turn loop and the per-call program | two representations, a stored cursor, nonobvious code               | the `response.ready` and `results.ready` positions, `RunLoopPhase`, `PHASE_AT`, `phaseAfter`; then the branch predicates, for one pure next-move function like `nextAttempt` |
+| 2   | **A child's result is typed, rendered to XML and parsed back,** and an awaited child's is formatted twice (A7's typed half, marked landed)                       | information leakage, format then parse, repetition                  | most of `shared/subagentFollowup.ts` (336 lines), the re-parse in `queuedRow` and `followUpDisplay`, the JSON-in-XML script summary, the second formatter in `AgentTool`     |
+| 3   | **A run's life is a state machine spread over seven collections,** with a second map of the same fibers and a cast to reach it                                   | state in maps and flags, two representations, overexposure via cast | five of the seven collections, `heldIds`, `stopEnded`, the dead `programs` member, the 11 `registryOf` casts                                                                 |
+| 4   | **What kind of run this is, and its launch, decided at many sites:** two owners of "takes input", `run.config` written twice per launch, two terminals           | two representations, temporal decomposition, repetition             | a resume that waits for input its run refuses (reproduced), one `run.config` per launch (47% of its stored bytes), the process child's own end                               |
+| 5   | **Which grant answers a request has two tables that disagree,** and three askers go around the one open door (R7's core, marked landed)                          | two representations, information leakage, temporal decomposition    | `GRANT_OF`, `offeredGrant`'s conditions, the five `offersGrant` writers, the invoker's own request and wait, the plugin answer's three transactions                          |
+| 6   | Smaller: a provider's facts in eight files (the rest of O9); the lane rule written twice                                                                         | change amplification                                                | the endpoint and region rows written by hand; the sentinel manifest rows                                                                                                     |
 
-Findings 1, 2, 3 and 5 change stored shapes. Their stored parts land
+Findings 1, 2, 4 and 5 change stored shapes. Their stored parts land
 together before the storage freeze, with one golden-store regeneration, as
-round 3's storage batch did ("Order", below).
+round 3's storage batch and #14894's format batch did ("Order", below).
+
+## Since this note's base
+
+**#14894 landed the largest finding of this round's first draft.** That
+draft found the conversation stored twice: history rows the run resumes from
+and display rows the hosts render. Its biggest part was the tool cards, and
+#14894 removed them. A card is now its call's rows: `tool.intent` names the
+card it opens, `tool.result` the card it closes, and `callCard` shows them
+as `tool.start` and `tool.end` (`controllers/session/rowReader.ts`).
+`cardRows`, `settleCards` and the `at`-based page end are gone, and the
+golden store went from 806 to 749 rows.
+
+**#14894 kept the remaining copies on purpose, and this note does not
+reopen that.** The copies are the model's answer text (`stream.end.finalText`),
+the user-message `log` rows and the copies of a model failure. #14894 §3.1
+gives the reason: deriving them would decode the heaviest rows on every cold
+read, or cache the text in `projected_row` again. This round measured that
+cost on the golden store before the merge, and it agrees. A display read
+that took the `response`, `append` and `handed-down` messages, `tool.intent`,
+`script.call` and `hook.outcome` in place of the copies would read about
+89 KB where the display read took 54 KB, 63% more, while storing 26 KB less.
+One correction to the first draft: `response.finalized` is not a copy. It is
+the answer after replacement-rule cleanup, and the run state reads it
+(#14894 §3.1). It equals the response text in the golden store only because
+no replacement rule runs there.
+
+**#14893 (open) raises finding 4 (a) as an owner question.** It is the
+`takesFollowUps` check in `submitFollowUp`, read from the view, which skips
+it when the view has not loaded the run. It records that
+`packages/harness/example/10-external-plugin.ts` sends an ended one-shot
+root a message and resumes it, and passes only because of that skip.
+Finding 4 (a) adds a reproduced case to that decision. #14893 also moves
+the registry's parent edges onto store reads, so finding 3 is sequenced
+after it.
 
 ## What picks the targets
 
@@ -77,226 +115,34 @@ scripts':
 - a failed script resumed while waiting that ends COMPLETED (#14042);
 - one child run per nested call (#14251).
 
-#14638 ("an answer the model could not finish says so") is a display fact
-the loop writes: `response.finalized.cut`.
+**What a run stores.** The golden store on `main`
+(`src/test-kernel/fixtures/storage/golden-1.0.sql`) is what the CLI writes
+for 18 runs: 749 `event` rows. Counted by `type` (the method is under
+"Verified"):
 
-**What a run stores.** The golden store (`src/test-kernel/fixtures/storage/golden-1.0.sql`)
-is what the CLI writes for 18 runs: 806 `event` rows. Counted by `type`
-(the method is under "Verified"):
+| Rows                                      | Count | Share |
+| ----------------------------------------- | ----: | ----: |
+| history (the run state reads them)        |   609 |   81% |
+| display (only hosts read them)            |   140 |   19% |
+| `run.position` (finding 1)                |   123 |   16% |
+| `run.config` (finding 4)                  |    36 |  4.8% |
+| card rows left (an agent CLI's own cards) |     4 |  0.5% |
 
-| Rows                                                | Count | Share |
-| --------------------------------------------------- | ----: | ----: |
-| history (the run state reads them)                  |   609 |   76% |
-| display (only hosts read them)                      |   197 |   24% |
-| display rows that restate a history row (finding 1) |   124 |   15% |
-| `run.position` (finding 2)                          |   123 |   15% |
-| `run.config` (finding 5)                            |    36 |  4.5% |
-
-## 1. One conversation, two records
-
-### What the code does
-
-A run commits its history through its cell: `model.message` (`attempt`,
-`response`, `append`), `tool.intent`, `script.call`, `tool.result` and
-`hook.outcome`. Beside those rows the loop writes display rows that say the
-same things again for the hosts:
-
-- **Each tool call's card.** `cardRows` (`agent/runtime/loop/toolUseDispatch.ts:305-346`)
-  writes two rows:
-  - `tool.start`, with the tool name, the input the body ran on, the tool's
-    declared `card`, `section` and `attempt`;
-  - `tool.end`, with the status and edited files.
-
-  A slow tool's card opens with its `tool.intent` (`:484-501`). A fast
-  tool's opens and closes with its `tool.result` (`:604-644`). A skipped
-  call closes its card in `skipCall` (`:350-370`).
-
-- **Each model answer's text.** The invoker opens two trace streams per
-  attempt (`agent/runtime/ModelInvoker.ts:260-263`). They commit
-  `stream.start` and, at the end, `stream.end` with the whole `finalText`
-  (`agent/trace/TraceEmitter.ts:156-161`, `:262-278`). The same text is in
-  the `response` row committed a few lines later (`ModelInvoker.ts:360-374`).
-- **The answer shown as final.** `afterTextResponse` writes
-  `response.finalized` with the turn's text and its `cut`
-  (`agent/runtime/loop/runLoop.ts:126-127`, `loop/rows.ts:40-53`). The cut
-  is the `response` row's finish reason, and the text is that row's text.
-  The run state then records `answerFinalized` (`shared/session/runState.ts:399-402`)
-  so that the loop writes the display row only once. A display fact is
-  tracked by the run state.
-- **The user's message.** `logUserMessage` writes a `log` row with the
-  message's text (`agent/trace/traceLogs.ts:141-163`, called at
-  `runLoop.ts:219-223`). The text is in the opening `append`.
-
-The readers never meet the history rows directly:
-
-- Of the 37 row kinds, the session view update (`shared/session/sessionViewUpdate.ts`)
-  and the transcript update (`shared/session/transcriptUpdate.ts`) name
-  none of `model.message`, `tool.intent`, `tool.result`, `script.call`,
-  `context.edit`, `tools.offered`, `context.blob` or `hook.outcome`.
-- The one history row a card needs, its `tool.result`, reaches the
-  transcript glued onto the card's `tool.end` at read time.
-  `settleCards` (`controllers/session/rowReader.ts:363-398`) takes "the
-  `tool.result` committed just before it in the same batch".
-- That join by adjacency then constrains the store. A display page must not
-  split a batch, so `DISPLAY_PAGE_END` (`controllers/session/databaseLayer.ts:149-165`)
-  ends a page where the row's `at` changes. Its comment gives the reason:
-  "a card's `tool.end` and the settlement it projects from share one batch
-  (`settleCards`) and a batch's rows share one `at`".
-
-The store review proposed storing a batch column (F3 in
-[the session store review](./2026-11-03-session-store-review.md)). That
-treats the symptom. The cause is the second record.
-
-In the golden store, 124 display rows restate a history row:
-
-- the 16 `stream.end` rows, each of whose `finalText` equals a `response`
-  row's text or reasoning in the same run, with their 16 `stream.start`
-  rows;
-- the 16 `response.finalized` rows, each equal to a `response` row's text;
-- 29 of the 31 `tool.start` rows, which name a call a `response`,
-  `handed-down` or `script.call` row records, with their 28 `tool.end`
-  rows (the other two cards are an agent CLI's own);
-- the 19 user-message `log` rows, whose text is an `append`'s, a
-  `run.config` instruction's, or a follow-up's `displayText`.
-
-### Why it costs
-
-- **Two representations of one fact**, against the harness's own invariants:
-  "A fact is one row type", and transient observations "are never rows"
-  ([core concepts](../../implemented/architecture/2026-09-26-core-concepts.md),
-  invariants 2 and 9). A card's name, input, attempt and outcome each have
-  a history row and a display row. The model's answer is stored three
-  times: in `response`, `stream.end` and `response.finalized`.
-- **Change amplification.** A new fact a card shows takes four edits: a
-  write in the loop beside the history write, a row field, a row version
-  and a handler in the transcript. #14638 (the cut answer) and #14591 (the
-  stage a resumed script reopens) were fixes to display state that the loop
-  maintains beside history.
-- **Unknown unknowns.** The card's output depends on two rows staying
-  adjacent in one batch, and the pager depends on a batch sharing one clock
-  reading. Neither is visible where the rows are written.
-
-### What the peers do
-
-Both keep one record per fact and render from it:
-
-- **dsh.** The session log holds `assistant/message`, `tool/call` and
-  `tool/result` (`dsh:packages/core/session/src/known-event-types.ts:29`,
-  `:76`, `:79`). A tool declares `presentCall` and `presentResult`
-  (`dsh:packages/core/tools/src/contracts.ts:93`, `:101`), and the card is
-  computed from the stored result on replay. In
-  `dsh:packages/web/tool-web/src/search.ts:120-127`, the `tool/result`'s
-  `meta` "is persisted with the session log, so `presentResult` reproduces
-  the search card on replay".
-- **pi.** 1.5.0 removed its event stream for renderers outright: "A renderer
-  renders state instead of assembling it from events"
-  (`pi:packages/durable/CHANGELOG.md:76`). Its in-flight presentation
-  (partial answers, a tool slot's progress) lives in one document whose
-  commits are deferred, and the entries are the transcript (`:70`, `:184`).
-
-### The design
-
-**Design A (chosen): the transcript is a projection of the history rows.**
-The transcript update reads the rows the run state reads, and the loop
-writes no display row for a fact a history row holds:
-
-- **A call's card comes from its rows:**
-  - Name and issued input come from the `response` row's call or the
-    `script.call` row, whose `section` and issuing script give the card's
-    section and stage.
-  - The input the body ran on is a PreToolUse rewrite, stored in
-    `hook.outcome.updatedInput` (`shared/schemas/hookOutcome.ts:55`).
-  - The start and attempt come from `tool.intent`. The outcome, output and
-    edited files come from `tool.result`.
-  - One presentation fact has no history row: the tool's declared `card`,
-    computed from the input the call ran on. It moves onto `tool.intent`,
-    or onto `tool.result` for a call that never started. The browser has no
-    tool definitions to compute it with, so it stays stored.
-- **A model answer's entry** comes from its `attempt` row, which names the
-  stream ids its live chunks use, and its `response` row, which closes them
-  with its content and finish reason (the `cut`). Chunks stay transient on
-  the live trace, as now.
-- **The user's message** comes from the `append` and the `followup.*` rows
-  that carry it.
-- **Display rows remain** for facts no history row holds: `log` notices,
-  `process.*` output, the cards an agent CLI's turn reports (`TraceEmitter`'s
-  tool cards, `agent/trace/TraceEmitter.ts:165-215`), a plugin's stage,
-  `context.state` and `usage`.
-
-Rows arrive decoded, and the stored turn schema imports nothing from
-`@texra-ai/llm` (`shared/schemas/storedTurn.ts:1-14`). The browser
-transcript entry gains no dependency.
-
-**Design B: keep the display rows, strip them to what history lacks.**
-`tool.start` would carry only `{ logId, card }`, `stream.end` no text, and
-`response.finalized` would go. The transcript would join the stripped rows
-to the history rows by `logId`. Less of the transcript changes, but every
-call still has two rows and a join, and `settleCards` becomes a join by id.
-It is the same leak behind a better key. B is the fallback if A's read
-volume measures badly.
-
-**What goes (A):**
-
-- `cardRows` and the card halves of `finishCall`, `skipCall` and the script
-  door's finalizer;
-- `settleCards` and `cardResult`;
-- the batch rule in `DISPLAY_PAGE_END`, so a page may end at any commit;
-- `response.finalized` (the row kind, and its handlers in the run state,
-  the view and the transcript) and `RunFacts.answerFinalized`;
-- the invoker's two trace streams;
-- `logUserMessage`'s row.
-
-That is 124 of the golden store's 806 rows (15%). A rough estimate is 250
-to 350 lines net: the transcript's card handlers are rewritten over history
-rows, not added beside them.
-
-**Risks:**
-
-- **The SDK's event vocabulary changes.** `run.events` consumers in the
-  examples (`packages/harness/example/_evidence.ts:53-55`,
-  `packages/harness/example/acceptance.ts:473-488`) correlate `tool.start`
-  and `tool.end` by `logId`. The package is 0.x, and the examples move with
-  the API report (`npm run docgen`).
-- **Read volume, measured.** Today a cold display read of the golden store
-  reads the display kinds and `tool.result`: 227 rows, 54 KB of `data`. Read
-  straight from history, design A would read the `response`, `append` and
-  `handed-down` messages, `tool.intent`, `script.call` and `hook.outcome`
-  in place of the restating rows: about 89 KB, 63% more, while the store
-  holds 26 KB less. The store already has the shape that avoids this. Its
-  `usage` projector writes "a `usage` display row per priced
-  `model.message` response" into `projected_row` in the append transaction
-  and rebuilds it from the rows (`controllers/session/projections.ts:1-22`).
-  The card and answer entries can be projected the same way. The display
-  read then keeps its size, the loop writes no display row, and the
-  projection is rebuildable from history, so it is not a second authority.
-  This is the recommended form of A.
-- **Other readers.** The trace viewer and the history-query copy
-  (`agent/runtime/historyQuery/`) read display rows and need the same
-  projection.
-
-**Done when:**
-
-- no loop path writes `tool.start`, `tool.end`, `stream.*` or
-  `response.finalized` for its own call or answer;
-- `settleCards` and `answerFinalized` do not exist;
-- a display page may end at any commit;
-- the regenerated golden store has no row that restates another.
-
-## 2. Where the loop stands, three ways
+## 1. Where the loop stands, three ways
 
 ### What the code does
 
 **A stored cursor.** `run.position` is "the one record of the loop's
-position" (`shared/schemas/runHistoryEvent.ts:95-99`), with six values
-(`:86-93`). It is 123 of the golden store's 806 rows. Two of its values only
+position" (`shared/schemas/runHistoryEvent.ts:95-98`), with six values
+(`:85-92`). It is 123 of the golden store's 749 rows. Two of its values only
 restate the row they are committed with:
 
 | Value            | Writer                                                                 | Rows | Always right after       | Readers                                                           |
 | ---------------- | ---------------------------------------------------------------------- | ---: | ------------------------ | ----------------------------------------------------------------- |
 | `response.ready` | `ModelInvoker.ts:373`, in the batch of the `response` row              |   28 | `model.message response` | one: `runLoop.ts:330`                                             |
-| `results.ready`  | `loop/toolUseDispatch.ts:997`, in the batch of the delivering `append` |   13 | `model.message append`   | none outside `PHASE_AT`                                           |
+| `results.ready`  | `loop/toolUseDispatch.ts:955`, in the batch of the delivering `append` |   13 | `model.message append`   | none outside `PHASE_AT`                                           |
 | `turn.ready`     | `runLoop.ts:175`, `:244`; `agent/runtime/FollowUps.ts:281`             |   21 |                          | `forkRun.ts:66`, `runLoop.ts:411`, `delegation/agentChild.ts:123` |
-| `turn.begin`     | `runLoop.ts:306`                                                       |   21 |                          | `runState.ts:335`, `transcriptUpdate.ts:387`                      |
+| `turn.begin`     | `runLoop.ts:306`                                                       |   21 |                          | `runState.ts:335`, `transcriptUpdate.ts:386`                      |
 | `turn.end`       | `runLoop.ts:472`                                                       |   19 |                          | the follow-up receipt (`runHistoryEvent.ts:103-105`)              |
 | `waiting`        | `runLoop.ts:425`, `:474`; `agent/runtime/forkRun.ts:264`               |   21 |                          | four sites                                                        |
 
@@ -307,7 +153,8 @@ store.
 The harness's own rule is that "no row restates loop state"
 (`packages/harness/AGENTS.md`, "Run loop architecture"). `response.ready`
 and `results.ready` do restate it. Nothing else commits them, so the run
-state can set `at` when it applies the row that implies it.
+state can set `at` when it applies the row that implies it. #14894 removed
+the position's constant `family` field. It did not touch these two values.
 
 **A derived encoding of the cursor.** `RunLoopPhase` (`shared/session/runState.ts:99-126`)
 maps the six positions onto five phases through `PHASE_AT` and
@@ -339,9 +186,9 @@ about fifteen reads of other fields, each in its own branch:
   - whether the run is a child (`:420`, `:428`, `:479`).
 
 The per-call program does the same inline. `finishCall`
-(`loop/toolUseDispatch.ts:382-645`) decides keep, derive, skip or run at
-`:393-430`, and the script door's finalizer decides its own skip at
-`:715-749`.
+(`loop/toolUseDispatch.ts:335-603`) decides keep, derive, skip or run at
+`:350-383`, and the script door's finalizer decides its own skip at
+`:673-707`.
 
 **The precedent is the model invocation**, the one loop that already
 decides from its rows:
@@ -394,8 +241,10 @@ already is.
 - `response.ready` and `results.ready` leave `PositionAtSchema`. The
   `model.message` handler (`shared/session/turnRowHandlers.ts`) sets `at`
   when it applies a `response` row or a delivering `append`.
-- The view needs neither value. It shows `running` for every position but
-  `waiting` (`shared/session/runRowReads.ts:187`).
+- The view needs neither value. It sets `ready` from a run's start and its
+  `run.end` (`shared/session/sessionViewUpdate.ts:335`,
+  `shared/session/runRowReads.ts:273`), `waiting` from `at === 'waiting'`
+  (`:269`), and `running` otherwise.
 - `RunLoopPhase`, `PHASE_AT` and `phaseAfter` go. Readers read `at`. A run
   is open once its first position is applied, as `requires: 'opened'`
   checks today.
@@ -405,7 +254,7 @@ In the golden store this removes 41 of the 123 position rows.
 
 **Step 2 (no stored change).** The turn loop's next move becomes one pure,
 total function of the run state and the few facts outside it: whether input
-is queued, and the run's kind and policy (finding 5's role). It is the
+is queued, and the run's kind and policy (finding 4's role). It is the
 shape of `nextAttempt`. Sketch, illustrative:
 
 ```ts
@@ -461,10 +310,10 @@ decided in one place a test can enumerate.
   between `turn.begin` and `turn.end`, and it does: only `waiting` is
   distinguished.
 - Step 2 touches the two files with the most fixes. It lands alone, after
-  step 1 and finding 5's role. Its gate is the crash-point suite and the
+  step 1 and finding 4's role. Its gate is the crash-point suite and the
   golden store, with no behavior change.
 
-## 3. A child's result is typed, rendered to XML and parsed back
+## 2. A child's result is typed, rendered to XML and parsed back
 
 ### What the code does
 
@@ -543,7 +392,7 @@ own envelope today. It would pass the same typed delivery, and the harness
 would render it. The XML the model reads does not change, so no prompt
 changes.
 
-## 4. A run's life is a state machine spread over seven collections
+## 3. A run's life is a state machine spread over seven collections
 
 ### What the code does
 
@@ -574,7 +423,7 @@ at 11 sites in 9 files (`grep -rn "registryOf("`). One member is dead:
 called. These collections are where a stop, a start and a resume meet, and
 that area (stop, resume and ownership) took 24 of this month's fixes.
 
-One consequence was reproduced with finding 5 (a)'s throwaway case. A resume
+One consequence was reproduced with finding 4 (a)'s throwaway case. A resume
 sent as soon as `run.result` resolved, which happens once the view shows the
 stored end, found the ended run still held in `live` (its fiber's observer
 had not run yet). It was answered as a join of "the activation it runs"
@@ -620,6 +469,8 @@ type RunEntry =
 - An internal `RunRegistry` service tag replaces the `registryOf` cast. The
   public `Runs` stays two members.
 - The dead `programs` member goes.
+- A `live` entry whose run's end is stored answers a resume as ended, not as
+  a join, so the no-op above cannot happen.
 
 A design with stops only in rows does not work. `stopRun` cannot write a
 row for an id that has none yet (`agent/storage/runLifecycle.ts:356`), so
@@ -630,18 +481,20 @@ the `pending` state is real.
 reader, not by an implementation.
 
 **Risk:** the stop-during-open orderings the isolation suites pin. This
-lands with no behavior change, gated by those suites.
+lands with no behavior change other than the join, after #14893, which
+moves the registry's parent edges onto store reads and changes the same
+file.
 
-## 5. What kind of run this is, and its launch, decided at many sites
+## 4. What kind of run this is, and its launch, decided at many sites
 
 **(a) "Does this run take input" has two owners.**
 
 - `run.start.takesFollowUps` is stamped once, at registration.
 - Each resume's caller decides `stopAfterCycle` again through
-  `ResumeInput.interactive` (`effect/sessionPrograms.ts:218-232`:
+  `ResumeInput.interactive` (`effect/sessionPrograms.ts:226`:
   `stopAfterCycle: interactive !== true`; `agent/runtime/resumeRun.ts:248-262`).
 - `submitFollowUp` refuses every message to a run whose `takesFollowUps`
-  is false (`agent/followUp/ToolUseFollowUp.ts:193-196`).
+  is false, as the view reads it (`agent/followUp/ToolUseFollowUp.ts:194-197`).
 
 **Reproduced** with a throwaway case over the test kernel (the validation
 model, a persistent session; not committed), started with no `interactive`
@@ -654,7 +507,7 @@ and resumed with `interactive: true` after its first activation ended
 - A `followUp.send` to it fails `Unavailable`: "This run cannot accept
   messages right now. Resume it, or start a new agent task."
   (`agent/followUp/ToolUseFollowUp.ts:86-87`). The run was just resumed.
-- The run's input reader opens anyway (`agent/followUp/Inbox.ts:128-142`),
+- The run's input reader opens anyway (`agent/followUp/Inbox.ts:127-141`),
   so it waits for input nothing may send, until it is stopped.
 
 The CLI avoids this by restating the rule twice ("a run launched to run once
@@ -664,17 +517,23 @@ as a fork. The run's kind is also recombined by its other readers:
 `stopAfterCycle` is read on 23 lines in 11 files and `takesFollowUps` on 17
 lines in 11 files.
 
+This is the case #14893 leaves to the owner, from the other side. #14893
+asks whether a message to an ended one-shot root is refused always or
+accepted when no launch holds the run. The reproduction adds that a resume
+can put such a run into a wait the refusal then makes permanent. Whichever
+rule the owner picks, the resume must apply the same rule.
+
 **Design.** `interactive` cannot simply go. An interactive run resumed by a
 headless caller (`texra resume`) must still run one cycle and exit, so the
 caller's presence is a real input. What is wrong is that the two facts are
 combined by each caller. They should be combined once, where the resume
 reads the run's rows (`openResume`, `agent/runtime/resumeRun.ts:211-263`):
-a run waits for input only if its rows say it takes input
-(`takesFollowUps`) and its caller is present (`interactive`). A one-shot
-run is never resumed into a wait, and a send to it is refused with its real
-reason (it was launched to run once; fork it), not with "Resume it". The
-fix is one line of decision and one refusal wording, with one regression
-test written to fail first.
+a run waits for input only if its rows say it takes input and its caller
+is present. With #14893's "refuse always", a one-shot run is never resumed
+into a wait, and a send to it is refused with its real reason (it was
+launched to run once; fork it), not with "Resume it". The fix is one line
+of decision and one refusal wording, with one regression test written to
+fail first.
 
 The wider direction is one `RunRole` (root, awaited child, background
 child, process child), derived once from the run's `run.start` and
@@ -693,9 +552,9 @@ it.**
 - The opening batch then writes a second `run.config` that adds only the
   binding (`runLoop.ts:243`). A forked child writes a third (`forkRun.ts:321-323`,
   `runLoop.ts:174`).
-- In the golden store, 14 of 18 runs write two `run.config` rows and 2
-  write three. In 15 of the 18 consecutive pairs the second row repeats the
-  same `config` and adds `binding`.
+- In the golden store on `main`, 14 of 18 runs write two `run.config` rows
+  and 2 write three. In 15 of the 18 consecutive pairs the second row
+  repeats the same `config` and adds `binding`.
 - The repeats are 15,133 of the 32,228 bytes the store spends on
   `run.config`.
 
@@ -704,16 +563,127 @@ builds the rows once the binding is known, as one `run.config`.
 
 **(c) Two terminals.** A native run ends through `endRun`, which fails a
 run whose rows the store refused unless a stop ended it
-(`agent/runtime/AgentRunLifecycle.ts:148-153`, `log.lost`). A process child
-ends through `runProcessChild` (`agent/runtime/processRun.ts:98-164`), which
-builds its end from its own verdict and does not ask `log.lost`. As read
-(not reproduced), a process run whose output rows the store refused ends
-with its own verdict where a native run in the same state ends failed.
+(`agent/runtime/AgentRunLifecycle.ts:148-153`, `log.lost`). `log.lost` is
+the first published display row the store refused
+(`shared/session/sessionLog.ts:61-66`), and a process child's
+`process.output` rows are such rows. A process child ends through
+`runProcessChild` (`agent/runtime/processRun.ts:98-164`), which builds its
+end from its own verdict and does not ask `log.lost`. As read (not
+reproduced), a process run whose output rows the store refused ends with
+its own verdict where a native run in the same state ends failed.
 
 **Design.** Each program keeps its own verdict. One shared end commits it:
 the lost-rows check, the log, `endRunRows`, and re-raising an interrupt. If
 the asymmetry reproduces, it is a defect and its fix gets one regression
 test, written to fail first.
+
+## 5. Which grant answers a request has two tables that disagree
+
+### What the code does
+
+A request to a person is approved by a grant (an "approve all" the run
+holds) through two tables, one at open and one while it waits:
+
+- **At open**, the guard and the door read the policy through `OPERATIONS`
+  (`agent/runtime/loop/toolGuard.ts:75-81`). A plan, and a call of a tool
+  with no command grant, are answered by the delegated-work grant
+  `superYolo`. So a plan approval is approved at open while `superYolo` is
+  on (`answerFor`, `agent/runtime/requests.ts:148-151`).
+- **While it waits**, a grant turned on answers it through `GRANT_OF` and
+  `offeredGrant` (`shared/schemas/request.ts:209-249`). `GRANT_OF` has no
+  `planApproval`: "a plan approval ... need[s] an answer". A command prompt
+  for a non-shell tool opens with `offersGrant: false`
+  (`agent/runtime/loop/commandApproval.ts:50`).
+
+So `superYolo` approves a plan, or a non-shell command, when it was on
+before the request opened, and does not when it is turned on while the
+request waits. The two tables disagree, and each comment states its own
+rule as the rule.
+
+The grant a waiting request offers is also written by each opener, by its
+own rule. Five writers set `offersGrant`:
+
+- `ask.grant === 'bash'` (`agent/runtime/loop/commandApproval.ts:50`);
+- `hook !== 'ask'` (`tools/approval/toolEditApproval.ts:121`,
+  `agent/runtime/delegation/proposalFlow.ts:191`,
+  `agent/runtime/delegation/AgentTool.ts:228`);
+- `false` on a kind `GRANT_OF` never reads
+  (`packages/texra/src/tools/userQuestion/UserQuestionTool.ts:59`).
+
+The one open door has one caller. `openRequest` is called only from the
+guard's `CallRequests.open` (`agent/runtime/loop/toolGuard.ts:364`), and
+three askers go around it:
+
+- the model retry builds its own `request.opened` and policy rows
+  (`agent/runtime/ModelInvoker.ts:614-634`) and waits with its own tail
+  (`:774-797`);
+- a script's shared agent request does its own lookup and wait on re-entry
+  (`agent/runtime/delegation/AgentTool.ts:205-221`);
+- a plugin's non-blocking request builds its row in the guard
+  (`toolGuard.ts:386-400`).
+
+`request.opened` is built at three sites (`requests.ts:393`,
+`ModelInvoker.ts:627`, `toolGuard.ts:390`). `decisionOf` is waited on at
+three run-side sites (`requests.ts:405`, `ModelInvoker.ts:779`,
+`AgentTool.ts:210`).
+
+**A plugin request's answer commits its effects before its decision.** For
+a plugin's request, the decide path first runs the plugin's record: its
+facts in a transaction of their own and a follow-up to the run through the
+inbox. Only then does it write `request.decided` (`controllers/session/SessionRequests.ts:212-232`).
+A decision is not durable before its effects. An area pass found by
+reading, not reproduced, that a run end landing in between gives the run
+the answer while the surface is told "No pending request". The inquiry
+plugin carries a re-delivery branch to cope with it
+(`packages/texra/src/tools/inquiry/inquiryActions.ts`).
+
+### Already designed, and marked landed in part
+
+R7 ([root designs](./2026-11-05-root-designs-effect-native.md), "R7. A
+question to a person is a row of the run") designed this module:
+
+- `openRequest(cell, payload, beside?)` for every asker, with the
+  invoker's `failed` row passed as `beside`;
+- `decideRequest` as the one checked append;
+- the request row carries `answeredBy: 'person' | ApprovalBypassKind`;
+- the three tail waiters go.
+
+The catalogue marks R7, and the B5 and E2 rows it closes, "landed
+(#14769)". Its lanes and `approvePendingUnderBypass` are gone. Its door for
+every asker, `answeredBy` (no such field in `packages/*/src`) and its one
+waiter are not in the tree. This note takes R7's rest as written.
+
+### What the peers do
+
+Neither has grants that answer a waiting request, so there is no peer shape
+to copy. dsh's approval is a one-shot call through answerer listeners,
+withdrawn when its step aborts and not durable
+(`dsh:packages/interaction/user-approval/README.md`). pi has no approval.
+TeXRA's requests are rows with derived ids, so a resumed call rejoins its
+request, which is worth keeping.
+
+### The design
+
+R7's rest:
+
+- `request.opened` carries `answeredBy`, decided once at open from the
+  operation and the hook's answer, with `OPERATIONS` moved there. The
+  answer at open and the grant sweep read the same field, so the two
+  tables become one.
+- The invoker and the script's shared request open through `openRequest`
+  and wait on one waiter.
+- A plugin request's decision, its facts and its follow-up commit in one
+  checked transaction, then the run is woken. `endIn` already commits a
+  child's report this way (`agent/storage/runLifecycle.ts:219-251`).
+
+**What goes:** `GRANT_OF`, `offeredGrant`'s two conditions, `grantAnswers`,
+the five `offersGrant` writers, the invoker's `awaitDecision`, the script's
+private wait, and `SessionRequests`' `decisionLanes` with its lane.
+
+**Risk:** `request.opened` takes a version bump, so it goes in the storage
+batch. A request a hook asked about writes `answeredBy: 'person'`. The
+inquiry's cross-project record cannot join the transaction, so it stays an
+idempotent step before it.
 
 ## 6. Smaller
 
@@ -721,10 +691,11 @@ test, written to fail first.
 
 - Adding an API-key provider touches the seven places `packages/harness/AGENTS.md`
   lists ("Agent execution"): eight production files in three packages.
-- O9 found it, and its first half landed (#14876).
+- O9 found it, and its first half landed (#14876). #14894 made a stored
+  `binding.backend` a string, so removing a provider bumps no row version.
 - What is left:
   - The stored list `MODEL_PROVIDERS` (`shared/schemas/runInput.ts:32-43`)
-    is a persisted vocabulary. It stays, as a checked copy.
+    stays the writer's closed list, as a checked copy.
   - The endpoint and region rows (`shared/state/providerSettings.ts`) are
     still written by hand, where `EndpointProviderId` and
     `providerDisplayName` already decide them.
@@ -740,8 +711,8 @@ test, written to fail first.
 **The lane rule written twice.**
 
 - The response's calls are partitioned into lane groups up front
-  (`groupsOf`, `loop/toolUseDispatch.ts:887-898`).
-- A script's calls take their lanes as they arrive (`inLane`, `:689-714`),
+  (`groupsOf`, `loop/toolUseDispatch.ts:845-856`).
+- A script's calls take their lanes as they arrive (`inLane`, `:647-672`),
   over three maps of `Deferred`s, a `Semaphore` and a `FiberMap`.
 - Replacing the maps with a `Semaphore` stays refused
   (`DISPATCH-script-lanes-semaphore`).
@@ -756,12 +727,11 @@ script path's `Deferred` bookkeeping for no behavior change.
 
 Round 1's refusals stand: a task scheduler, an event bus with ordered
 listeners, YAML composition, documents as a second state owner, and JSONL.
-The peers' newest changes add evidence on three points:
+The peers' newest changes add evidence on two points:
 
 - **pi's deferred commits** (`pi:packages/durable/CHANGELOG.md:70`) store
   partial answers and tool progress later than they are shown. TeXRA stores
-  none of these: chunks are transient on the live trace. Finding 1 keeps
-  that, and removes the stored copies of the final text instead.
+  none of these: chunks are transient on the live trace.
 - **pi retries in two layers.**
   - pi-ai retries a provider request itself
     (`pi:packages/ai/src/utils/provider-retry.ts`), called with the SDK's
@@ -772,16 +742,10 @@ The peers' newest changes add evidence on three points:
   route gate, with provider SDK retries off. That is the better shape and
   stays.
 
-- **dsh's approvals are not durable.** A request is a one-shot call through
-  answerer listeners (`dsh:packages/interaction/user-approval/README.md`),
-  withdrawn when its step aborts. TeXRA's requests are rows with derived
-  ids, so a resumed call rejoins its request. Its 4,208 lines across 15
-  files were not audited this round, and their size alone is not a finding.
-
 ## What is good and stays
 
 - **`nextAttempt` and `failedNext`** (`shared/session/inFlight.ts`): the
-  retry loop as a pure function of its rows. Finding 2 extends this shape.
+  retry loop as a pure function of its rows. Finding 1 extends this shape.
 - **The row codec and `ROW_KINDS`** (`shared/schemas/rowVersions.ts`): one
   version per kind and a whole-store gate. Because of them, a stored-shape
   change is cheap before the freeze.
@@ -795,49 +759,50 @@ The peers' newest changes add evidence on three points:
 - **The `Model` interface** (`packages/llm/src/turn.ts:489-521`):
   `prepareTurn`, `streamTurn`, optional `uploadFile` and `background`, and
   three event kinds.
+- **Durable requests with derived ids**, which neither peer has: a resumed
+  call rejoins the request its attempt left standing.
 - **The doors:** one launch door (`RunRegistry.start`), one end transaction
-  (`endIn`), one publisher, the claim as the one owner of a run, and resume
-  as the same program over the same rows.
+  (`endIn`), one publisher, and resume as the same program over the same
+  rows.
 
 ## Order
 
-0. **Finding 5 (a)'s defect first**, on its own: the resume decides once
-   whether the run may wait, and the send's refusal names its reason, with
-   one regression test written to fail first.
+0. **Finding 4 (a)'s decision**, which is #14893's open question. Whichever
+   rule the owner picks for messages to an ended one-shot root, the resume
+   applies it too. The fix lands with one regression test written to fail
+   first.
 1. **One storage-format PR, before the freeze**, with one golden-store
    regeneration. It carries:
-   - finding 2's step 1 (two position values and `RunLoopPhase`);
-   - finding 3 (the typed delivery on `followup.queued`);
-   - finding 5 (b) (one `run.config` per launch).
-2. **Finding 1, design A**, as one PR. It changes the transcript, the view,
-   the trace viewer and the SDK's event vocabulary. Landing it whole means
-   no release writes both records.
-3. **Findings 4 and 5 (a) and (c)**, with no stored change. This is the
-   stop, resume and ownership area.
-4. **Finding 2's step 2**, with no stored change, once finding 5's role
+   - finding 1's step 1 (two position values and `RunLoopPhase`);
+   - finding 2 (the typed delivery on `followup.queued`);
+   - finding 4 (b) (one `run.config` per launch);
+   - finding 5's `answeredBy` on `request.opened`.
+2. **Findings 3, 4 (c) and the rest of 5**, after #14893. They need no
+   stored change. Finding 3 and 4 (c) sit in the stop, resume and ownership
+   area; the rest of 5 is the request module.
+3. **Finding 1's step 2**, with no stored change, once finding 4's role
    exists.
-5. **Finding 6's first item** when the next provider is added.
+4. **Finding 6's first item** when the next provider is added.
 
 Each PR deletes more than it adds and adds no test file, except the one
-regression test of step 0 and one more if 5 (c) reproduces. The crash-point suite and the golden
-store are the gate.
+regression test of step 0 and one more if 4 (c) reproduces. The crash-point
+suite and the golden store are the gate.
 
 ## Verified
 
 - **Golden store counts.**
   - Every `INSERT INTO event VALUES(...)` line of
     `src/test-kernel/fixtures/storage/golden-1.0.sql` was parsed with Node,
-    and its `data` column decoded as JSON.
-  - Display kinds are the `TRACE_ROW_TYPES` list (`shared/schemas/sessionEvent.ts:511`)
+    and its `data` column decoded as JSON, at `8281784` (806 rows) and
+    again at `521bb189` (749 rows, after #14894).
+  - Display kinds are the `TRACE_ROW_TYPES` list (`shared/schemas/sessionEvent.ts`)
     plus `response.finalized`.
-  - A `stream.end` restates a response when its `finalText` equals the text
-    or the reasoning of a `model.message` `response` on the same aggregate.
-  - A `tool.start` or `tool.end` restates a call when a `response`, a
-    `handed-down` or a `script.call` row on the same aggregate has its
-    `logId`.
   - Position rows are classified by the row before them, in `seq` order on
-    their aggregate.
-  - `run.config` pairs are compared by their `config` object.
+    their aggregate. The classification is the same at both commits.
+  - `run.config` pairs are compared by their `config` object. The counts
+    are the same at both commits.
+  - The read volume in "Since this note's base" was measured at `8281784`:
+    the `data` bytes of the kinds each read would select.
 - **Readers of row kinds.** Each kind's literal was searched in
   `shared/session/runState.ts`, `turnRowHandlers.ts`, `runRows.ts`,
   `sessionViewUpdate.ts`, `transcriptUpdate.ts`, `runRowReads.ts` and
@@ -845,13 +810,27 @@ store are the gate.
 - **Fix counts.** `node scripts/report-fix-churn.mjs` ran on a history
   fetched to 1,604 commits. Per-file counts came from
   `git log --since='30 days ago'`, following the rename of `toolUse.ts`.
-- **Findings 4 and 5.** These came from a read-only area pass over the
-  lifecycle, child and catalog modules. Each claim used here was then
-  checked in the tree: the collections and flags (`runRegistry.ts:124-152`),
-  the `registryOf` count, the unused `programs`, the `FiberMap` in
-  `sessionOwners.ts`, the resume's `interactive`, the follow-up refusal, the
-  two CLI guards, the missing `log.lost` in `processRun.ts`, `childResult`'s
-  second formatting, and the two counts in 5 (a).
+- **Findings 3 to 5.** These came from read-only area passes over the
+  lifecycle, child, catalog and request modules. Each claim used here was
+  then checked in the tree:
+  - for finding 3: the collections and flags (`runRegistry.ts:124-152`),
+    the `registryOf` count, the unused `programs` and the `FiberMap` in
+    `sessionOwners.ts`;
+  - for finding 4: the resume's `interactive`, the follow-up refusal, the
+    two CLI guards, the missing `log.lost` in `processRun.ts` and the two
+    counts in (a);
+  - for findings 2 and 5: `childResult`'s second formatting, the two grant
+    tables, the five `offersGrant` writers, `openRequest`'s one caller, the
+    three `request.opened` builders, the three run-side waiters, the absent
+    `answeredBy` and the plugin answer's write order.
+
+  Line references were re-checked after merging `main` at `521bb189`.
+
+- **Reproduced.** Finding 4 (a), and the join after an end in finding 3,
+  with a throwaway vitest case beside `src/test-kernel/agent/runtime/resumeRun.vitest.ts`
+  (its `texraHosted` and `validationHost` setup, the validation model, a
+  persistent session), run at `8281784`, deleted after the run and not
+  committed.
 - **Peers.** Read at the pinned commits:
   - pi: `generation.ts`, `tool.ts`, `codemode/codemode.ts`, `types.ts`,
     `CHANGELOG.md` and `README.md:894`;
@@ -862,12 +841,8 @@ store are the gate.
 
   No peer was built or run.
 
-- **Reproduced.** Finding 5 (a), and the join after an end in finding 4,
-  with a throwaway vitest case beside `src/test-kernel/agent/runtime/resumeRun.vitest.ts`
-  (its `texraHosted` and `validationHost` setup, the validation model, a
-  persistent session), deleted after the run and not committed.
-- **Not measured.** The transcript's paint time under finding 1's design A
-  (its read volume is measured above), and the line counts of each design,
-  which are estimates and are marked as such. 5 (c) is read from the code
-  and not reproduced: it needs a background process child whose output rows
-  the store refuses.
+- **Not measured or not reproduced.** The line counts of each design are
+  estimates and are marked as such. 4 (c) is read from the code: it needs a
+  background process child whose output rows the store refuses. Finding 5's
+  end-and-answer interleaving, and the window between the open's policy
+  answer and its commit, are read from the code.
