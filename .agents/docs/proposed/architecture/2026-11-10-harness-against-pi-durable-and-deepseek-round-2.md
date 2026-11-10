@@ -856,24 +856,19 @@ The peers' newest changes add evidence on two points:
 ## Still open
 
 - **Finding 6**, as written above, when the next provider is added.
-- **#14893's owner question.** 4 (a) applies "refuse always" on both sides:
-  a run launched to run once is never resumed into a wait, and a send to it
-  is refused as having run once. #14893 still reads `takesFollowUps` from
-  the view, which skips the check for a run the view has not loaded. If the
-  owner picks the other rule, `openResume` and the refusal change together.
+- **The `takesFollowUps` owner question (#14893).** 4 (a) never resumes a
+  run launched to run once into a wait, and words the refusal of a send to
+  it as having run once. The send check still reads `takesFollowUps` from
+  the view, as #14893 left it, so it skips a run the view has not loaded.
+  Whichever rule the owner picks, `openResume` and the refusal change
+  together.
 - **Found while landing, not fixed here.**
-  - **A deletion can outlive its process.** `run.delete` hands its marker
-    to the session's collector fiber and answers. A CLI that exits right
-    after (`texra history delete`) can close the session before the
-    collector runs, and the run's rows and files stay under the marker
-    until the next open. Measured on a fresh store over the validation
-    bundle: 1 of 16 deletes at `28726ae9`, 2 of 12 on the merged branch.
-    It is also why `golden:store --twice` sometimes fails: the uncollected
-    run's sequence row shifts every later normalized id. The fixture relies
-    on the same timing the other way, since the swept shell's marker stays
-    pending because the close interrupts its collection. A fix that makes a
-    clean close finish its collections, or a delete answer after its own,
-    must give the generator another way to leave a pending marker.
+  - **A deletion can outlive its process.** `texra history delete` can
+    exit before its session collects the deletion, and the golden
+    generator's `--twice` fails for the same reason. The measurements and
+    the constraint on a fix are recorded once, in
+    [the session surfaces audit](../simplification/2026-11-10-session-surfaces-ad-hoc.md)
+    ("`history delete` 的回收是异步的，golden 的生成因此不确定").
   - **Two answers to one inquiry at once** can leave the thread's record
     and the decided row naming different answers, now that `decisionLanes`
     is gone. The run is told what the thread says.

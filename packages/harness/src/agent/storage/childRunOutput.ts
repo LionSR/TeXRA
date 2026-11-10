@@ -11,8 +11,8 @@ import {
 } from '@shared/schemas';
 import {
   type RunHistory,
-  type SessionLog,
-  SessionViewAccess,
+  SessionLog,
+  type SessionViewAccess,
 } from '@shared/session/runHistory';
 import type { ToolRegistry } from '@tools/toolTable';
 import { normalizeFilePath } from '@utils/core/pathBasics';
@@ -34,8 +34,10 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
       store.readRunEnd(),
       store.readConfig(),
     ]);
-    const view = yield* SessionViewAccess;
-    if (view.run(reference.runId)?.parentId !== parentRunId) {
+    // The store's edge, not the view's: the view trails the log, and a
+    // child it has not applied yet would be refused as no child at all.
+    const facts = yield* (yield* SessionLog).facts(reference.runId);
+    if (facts?.parent?.id !== parentRunId) {
       return yield* Effect.fail(
         new Error(
           `Run ${reference.runId} is not a direct child of ${parentRunId}.`,

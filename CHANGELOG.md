@@ -117,6 +117,11 @@ All notable changes to this project will be documented in this file.
   `{ method, params }`, not a tuple; `TemplateVars` holds only the fixed
   variables; a `notification` follow-up's `source` is any string; and
   `./schemas` exports `AGENT_FILE_EXTENSION`.
+- **SDK: `processLayer` requires the Node services it used to build.** Its
+  type names the filesystem, path and child-process spawner as a
+  requirement: a host composes
+  `processLayer(options).pipe(Layer.provide(nodePlatformServices))`
+  (`@texra-ai/harness/node`). `Sessions.layer` is unchanged.
 - **SDK: a tool's `ToolContext` always carries its run and requests.** A
   tool is only ever called under a run, so `ToolEnv.run` and
   `ToolContextShape.requests` are required, and a tool reads them as fields

@@ -467,6 +467,11 @@ R5-10's three process waits) and A's (#14875: R5-3). R5-8 has a design
 fixed the desktop e2e's first-test timeout; the agent-picker click did
 not reproduce and has no owner.
 
+**Landed since:** R5-8, as its design wrote it
+(`.agents/docs/implemented/architecture/2026-11-08-process-spawner-as-a-requirement.md`):
+`processLayer` requires the filesystem, path and spawner, the hosts provide
+them through `texraProcessLayer`, and the two suites script the spawner.
+
 ## 7. Round 6: two areas spread across layers
 
 Round 6 (`.agents/docs/evidence/2026-11-07-design-red-flags-round-6/`,

@@ -270,7 +270,7 @@ export const liveToolGates = Effect.fn('liveToolGates')(function* ({
   SessionViewAccess | Approvals | Interactions
 > {
   const owners = yield* policyOwners;
-  const view = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
+  const view = yield* SubscriptionRef.get((yield* SessionViewAccess).ref);
   const start = entry.registration?.start ?? null;
   const parent = start?.parent?.id ?? null;
   const source =

@@ -16,10 +16,10 @@ import {
   DISPLAY_ROW_TYPES,
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
+  toJsonValue,
   TOOL_CALL_STATUS,
   type DisplayRow,
   type FileListEntry,
-  type JsonValue,
   type UnreadableRun,
   type RunId,
   type SessionRow,
@@ -421,12 +421,10 @@ export function callCard(row: SessionRow): readonly DisplayRow[] {
   };
   // A stored result's optional keys may read `undefined`: the card's result
   // is JSON, so they are dropped.
-  const json: JsonValue = JSON.parse(
-    JSON.stringify({
-      ...(Object.keys(output).length > 0 ? { output } : {}),
-      ...(files.length > 0 ? { files } : {}),
-    }),
-  );
+  const json = toJsonValue({
+    ...(Object.keys(output).length > 0 ? { output } : {}),
+    ...(files.length > 0 ? { files } : {}),
+  });
   return [
     {
       ...envelope,

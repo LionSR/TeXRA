@@ -3,7 +3,7 @@
  *  readers in `shared/session/runFacts.ts`; record accessors:
  *  `runRecords.ts`). */
 
-import { Context, Effect, Result, Schema, type Scope } from 'effect';
+import { Context, Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
@@ -224,7 +224,7 @@ const parentDelivery = Effect.fn('parentDelivery')(function* (
   runId: RunId,
   facts: RunRows,
   delivery: ChildRunDelivery,
-): Effect.fn.Return<readonly RunInputDraft[], never, Inbox | Scope.Scope> {
+): Effect.fn.Return<readonly RunInputDraft[], never, Inbox> {
   const parent = facts.parent;
   if (parent === null || parent.call?.awaited === true) return [];
   const item = {
@@ -243,8 +243,6 @@ const parentDelivery = Effect.fn('parentDelivery')(function* (
           ).pipe(Effect.annotateLogs({ data: error })),
           { rows: [], sent: { kind: 'refused', reason: 'notResumable' } },
         ),
-      // A delivery names no caller id, so nothing conflicts with it.
-      Conflict: Effect.die,
     }),
   );
   if (admitted.sent.kind === 'refused')
@@ -269,7 +267,7 @@ export const endIn = Effect.fn('endIn')(function* (
   tx: Pick<SessionTransaction, 'append'>,
   input: RunEnding,
   leading: readonly UnfoldedDraft[] = [],
-): Effect.fn.Return<EndedRun, Error, EndServices | Scope.Scope> {
+): Effect.fn.Return<EndedRun, Error, EndServices> {
   const { append } = tx;
   const { runId, outcome, error } = input;
   const log = yield* SessionLog;
@@ -335,7 +333,7 @@ export const endRunRows = Effect.fn('endRunRows')(function* (
   const log = yield* SessionLog;
   const services = yield* endServices;
   return yield* log.transact((tx) =>
-    endIn(tx, input).pipe(Effect.scoped, Effect.provide(services)),
+    endIn(tx, input).pipe(Effect.provide(services)),
   );
 });
 
@@ -375,6 +373,6 @@ export const stopRun = Effect.fn('stopRun')(function* (
       }
       yield* endIn(tx, { runId, outcome: RUN_OUTCOME.CANCELLED }, stop);
       return true;
-    }).pipe(Effect.scoped, Effect.provide(services)),
+    }).pipe(Effect.provide(services)),
   );
 });

@@ -25,7 +25,6 @@ import {
   qualifyAggregateId,
   referencedAggregates,
   replayInputs,
-  isDisplayRow,
   type AggregateId,
   type DisplayRow,
   type ExistenceReconciliation,
@@ -94,7 +93,7 @@ export const readReplay = Effect.fnUntraced(function* (
     readonly at: number;
   },
 ) {
-  const listing = (yield* requiredRead(log.readListing())).filter(isDisplayRow);
+  const listing = yield* requiredRead(log.readListing());
   const checked = new Set<AggregateId>(read.subscriptions.map(({ id }) => id));
   for (const event of listing)
     for (const id of referencedAggregates(event)) checked.add(id);

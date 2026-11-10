@@ -36,6 +36,7 @@ import {
   type ToolCallFacts,
 } from '@shared/transcript/projectTranscriptRow';
 
+import { ownCopy } from './runRows';
 import type { TranscriptView } from './sessionView';
 
 /** What a run's transcript is built under. */
@@ -183,15 +184,16 @@ export function writableArray<K extends keyof DraftArrays>(
   transcript: TranscriptDraft,
   key: K,
 ): DraftArrays[K] {
-  const current = transcript[key];
+  const current: TranscriptDraft[keyof DraftArrays] = transcript[key];
   // An array in `owned` is the copy this function made for the current call,
   // so writing it reaches no published transcript.
-  // cast: an owned array is this key's own writable copy.
-  if (work.owned.has(current)) return current as DraftArrays[K];
-  // cast: a spread of `transcript[key]` is that key's array, writable.
-  const copy = [...current] as DraftArrays[K];
-  work.owned.add(copy);
-  Object.assign(transcript, { [key]: copy });
+  const copy = ownCopy(
+    work.owned,
+    current,
+    // cast: a spread of `transcript[key]` is that key's array, writable.
+    (held) => [...held] as DraftArrays[K],
+  );
+  if (copy !== current) Object.assign(transcript, { [key]: copy });
   return copy;
 }
 

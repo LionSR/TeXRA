@@ -102,20 +102,16 @@ export class SessionViewService extends Context.Service<
           ),
         ),
       );
-      // The update fiber's own exit ends the level stream (the merge halts on
-      // it): a defect fails every reader of `changes` at the boundary that
-      // named it once above; the graph closing, an interrupt, ends them
-      // cleanly.
+      // The update fiber's own exit ends the level stream: a defect fails
+      // every reader of `changes` at the boundary that named it once above;
+      // the graph closing, an interrupt, ends them cleanly.
       const changes = SubscriptionRef.changes(ref).pipe(
-        Stream.merge(
-          Stream.fromEffect(Fiber.await(updating)).pipe(
-            Stream.flatMap((exit) =>
-              Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
-                ? Stream.failCause(exit.cause)
-                : Stream.empty,
-            ),
+        Stream.interruptWhen(
+          Effect.flatMap(Fiber.await(updating), (exit) =>
+            Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
+              ? Effect.failCause(exit.cause)
+              : Effect.void,
           ),
-          { haltStrategy: 'right' },
         ),
       );
       return { ref, changes };

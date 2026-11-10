@@ -1669,10 +1669,19 @@ it is. Every root run is labelled with a short title from the helper model
 (its `run.description`): an extra model request per root run, counted in
 the run's usage, which every host's run list shows.
 
+The filesystem, path and child-process spawner are a requirement, as the
+model is: the root provides `nodePlatformServices`
+(`@texra-ai/harness/node`) once, and every session and run of the process
+reads the files and starts the children that layer gives it.
+
 ```ts
 function processLayer(
   options: ProcessLayerOptions,
-): Layer.Layer<ProcessServices | Sessions, PluginsRefused>
+): Layer.Layer<
+  ProcessServices | Sessions,
+  PluginsRefused,
+  FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+>
 ```
 
 ## ProcessLayerOptions

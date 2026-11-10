@@ -10,14 +10,17 @@ import {
   Duration,
   Effect,
   Equal,
+  FileSystem,
   Hash,
   Layer,
   LayerMap,
   type LogLevel,
   Option,
+  Path,
   RcMap,
 } from 'effect';
 import { FetchHttpClient, HttpClient } from 'effect/http';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
@@ -35,10 +38,7 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import { globalStorageFsLayer, SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
-import {
-  nodePlatformServices,
-  workspaceEnvironmentLayer,
-} from '@platform/defaults/nodePlatform';
+import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { SessionCloseReport } from '@shared/schemas';
 import {
@@ -331,11 +331,20 @@ export interface ProcessServicesOptions {
   readonly workspace?: string;
 }
 
+/** The Node standard-library services a process is built over
+ *  (`nodePlatformServices` in a host; a suite may script the spawner). */
+export type NodeServices =
+  | FileSystem.FileSystem
+  | Path.Path
+  | ChildProcessSpawner;
+
 /** The process services and the {@link SessionOwner} over the session map
  *  (one session per storage root), which the public `processLayer` serves
  *  its `Sessions` over, with the project stores and the process's identity
  *  that its cold reads take; `processLayer`'s type serves neither. The
- *  table is the one that composition validated. */
+ *  table is the one that composition validated. The filesystem, path and
+ *  child-process spawner are whoever builds the layer's, served on to every
+ *  session and run. */
 export function ownerProcessLayer(
   {
     storageRoot,
@@ -349,7 +358,11 @@ export function ownerProcessLayer(
     workspace,
   }: Omit<ProcessServicesOptions, 'plugins'>,
   table: ToolTable,
-): Layer.Layer<RunServices | ToolCatalog | SessionOwner | ProjectDatabases> {
+): Layer.Layer<
+  RunServices | ToolCatalog | SessionOwner | ProjectDatabases,
+  never,
+  NodeServices
+> {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
   const catalog = pluginCatalogLayer(table, mcpConfigPathOf(storageRoot));
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
@@ -389,8 +402,13 @@ export function ownerProcessLayer(
         minimumLogLevel ? effectDiagnosticsLayer(minimumLogLevel) : Layer.empty,
         FetchHttpClient.layer,
         Layer.succeed(HttpClient.TracerPropagationEnabled)(false), // no run trace ids to third parties
-        // Filesystem, path, spawner, env config: once per process.
-        nodePlatformServices,
+        // The builder's filesystem, path and spawner, once per process.
+        Layer.effectContext(
+          Effect.map(
+            Effect.context<NodeServices>(),
+            Context.pick(FileSystem.FileSystem, Path.Path, ChildProcessSpawner),
+          ),
+        ),
         workspaceEnvironmentLayer(workspace),
       ),
     ),

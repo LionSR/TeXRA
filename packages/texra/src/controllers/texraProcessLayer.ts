@@ -25,6 +25,7 @@ import { emitAppSignal, Secrets } from '@texra-ai/harness/plugins';
 import {
   CommandDirs,
   FileSecrets,
+  nodePlatformServices,
   secretsDirectory,
 } from '@texra-ai/harness/node';
 import {
@@ -120,6 +121,8 @@ export const texraProcessLayer = ({
     // Beneath every session the process builds, so each command it runs
     // resolves on the app's directories too.
     Layer.provideMerge(Layer.succeed(CommandDirs)(commandDirs)),
+    // The Node filesystem, path and supervised spawner, once per process.
+    Layer.provide(nodePlatformServices),
   );
   return Layer.merge(
     HostWindows.layer(editors),

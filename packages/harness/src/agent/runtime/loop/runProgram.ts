@@ -157,12 +157,13 @@ export const settleRun =
       onSuccess: (value) => value.outcome,
       onFailure: outcomeFromCause,
     });
-    return Effect.map(RunRegistry, (runs) =>
-      lease.release(
-        outcome === RUN_OUTCOME.COMPLETED &&
-          !runs.hasLiveDescendants(cell.runId)
-          ? 'terminal'
-          : 'recoverable',
+    return Effect.flatMap(RunRegistry, (runs) =>
+      Effect.map(runs.hasLiveDescendants(cell.runId), (descendants) =>
+        lease.release(
+          outcome === RUN_OUTCOME.COMPLETED && !descendants
+            ? 'terminal'
+            : 'recoverable',
+        ),
       ),
     );
   };

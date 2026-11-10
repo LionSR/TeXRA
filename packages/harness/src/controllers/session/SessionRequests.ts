@@ -88,8 +88,10 @@ const GATED_ACTIONS: Partial<Record<RuntimeCommand['kind'], RunAction>> = {
   'policy.set': 'grant',
 };
 
-/** Refuse a gated request the run's `actions` no longer hold; a run not
- *  folded yet is left to `admit`. */
+/** Refuse a gated request the run's `actions` no longer hold, read from
+ *  the log as of the call (the current view trails it, and a window fed by
+ *  the log can ask before the view has applied a row); a run the log does
+ *  not hold is left to `admit`. */
 const requireRunAction = (
   deps: SessionRequestsInit,
   req: RuntimeCommand,
@@ -98,11 +100,14 @@ const requireRunAction = (
   if (req.kind === 'policy.set' && narrows(req.change)) action = undefined;
   if (req.kind === 'request.decide' && req.grant != null) action = 'grant';
   if (action === undefined) return Effect.void;
+  const gated = action;
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
-  const run = deps.view.run(runId);
-  return run === undefined || run.actions.includes(action)
-    ? Effect.void
-    : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
+  return Effect.flatMap(deps.view.read([runId]), (view) => {
+    const run = view.runs.get(runId);
+    return run === undefined || run.actions.includes(gated)
+      ? Effect.void
+      : Effect.fail(new Rejected({ reason: runActionRefusal(run, gated) }));
+  });
 };
 
 /** The run's stored aggregate state; `undefined` while it has no rows. */
@@ -217,10 +222,11 @@ const decideSurfaceRequest = (
     const beside = Effect.gen(function* () {
       const facts = yield* factRows(recorded.facts, req.runId, plugin, log);
       if (followUp === undefined) return facts;
-      const admitted = yield* inbox
-        .admission(followUp.runId, followUp.item, {})
-        // An input with no caller id conflicts with nothing.
-        .pipe(Effect.catchTag('Conflict', Effect.die));
+      const admitted = yield* inbox.admission(
+        followUp.runId,
+        followUp.item,
+        {},
+      );
       if (admitted.sent.kind === 'refused')
         yield* Effect.logWarning(
           `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${req.requestId} (${admitted.sent.reason}).`,

@@ -16,16 +16,15 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
-import * as SqlClient from 'effect/sql/SqlClient';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 import { isSqlError } from 'effect/sql/SqlError';
 import {
   Clock,
-  Context,
   Effect,
   type FileSystem,
   Layer,
   Option,
+  Schedule,
   Schema,
   Stream,
   SubscriptionRef,
@@ -73,7 +72,7 @@ import {
   EVENT_FROM,
   EVENT_JOINS,
   aggregateColumns,
-  aggregateLists,
+  aggregateList,
   aggregateOf,
   CURRENT_VALUE_KIND,
   encodeDraft,
@@ -100,11 +99,6 @@ export const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
-/** The open transaction's mode, null outside one. */
-const TxMode = Context.Reference<'read' | 'write' | null>(
-  '@texra-ai/harness/session/TxMode',
-  { defaultValue: () => null },
-);
 /** First append creates the aggregate and mints its uid; a closed one
  *  takes no more rows. */
 const NEXT_SEQ = `
@@ -129,12 +123,11 @@ const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
 
-/** Aggregates bound as two parallel `json_each(?)` arrays (`aggregateLists`),
- *  joined in this order: a free planner scans both arrays per aggregate. */
-const AGGREGATE_LIST = `WITH k(key, value) AS MATERIALIZED
-  (SELECT key, value FROM json_each(?))
-  SELECT s.id FROM json_each(?) l CROSS JOIN k ON k.key = l.key
-  CROSS JOIN event_sequence s ON s.kind = k.value AND s.logical_id = l.value`;
+/** Aggregates bound as one `json_each(?)` array of `[kind, logicalId]`
+ *  pairs (`aggregateList`), each found by its unique key. */
+const AGGREGATE_LIST = `SELECT s.id FROM json_each(?) l
+  CROSS JOIN event_sequence s
+    ON s.kind = l.value ->> 0 AND s.logical_id = l.value ->> 1`;
 /** Aggregates' existence, the list bound as `AGGREGATE_LIST` binds. */
 const READ_STATE = `
 SELECT s.kind, s.logical_id AS logicalId, s.uid,
@@ -359,96 +352,47 @@ export const databaseLayer = (
           WHERE e.aggregate IN (${AGGREGATE_LIST})
             AND e.type NOT IN (SELECT value FROM json_each(?))`,
       );
-      const dataVersion = 'PRAGMA data_version';
-      let version = (yield* execOne(dataVersion, []).pipe(
-        mapDatabaseFailure(openFailed),
-      ))?.data_version;
       // Only the global store has other writers to watch for, and it holds
-      // values alone. A failed read logs and retries.
+      // values alone: each change of its `data_version` wakes the readers of
+      // values (the first read, at start, wakes them for nothing). A failed
+      // read logs and retries.
       if (mode === 'global')
         yield* Effect.forkScoped(
-          Stream.tick('250 millis').pipe(
-            Stream.runForEach(
-              Effect.fnUntraced(
-                function* () {
-                  const next = (yield* query(execOne(dataVersion, [])))
-                    ?.data_version;
-                  if (next !== version) {
-                    version = next;
-                    yield* SubscriptionRef.update(
-                      valuesWritten,
-                      (wake) => wake + 1,
-                    );
-                  }
-                },
-                Effect.tapError((error) =>
-                  Effect.logWarning(
-                    'The session database change poll failed; retrying.',
-                  ).pipe(
-                    Effect.annotateLogs({ data: error }),
-                    withLogChannel(CHANNEL),
-                  ),
+          Stream.fromEffectSchedule(
+            query(execOne('PRAGMA data_version', [])).pipe(
+              Effect.map((row) => row?.data_version),
+              Effect.tapError((error) =>
+                Effect.logWarning(
+                  'The session database change poll failed; retrying.',
+                ).pipe(
+                  Effect.annotateLogs({ data: error }),
+                  withLogChannel(CHANNEL),
                 ),
-                Effect.retry(READ_RETRY),
-                Effect.orDie,
               ),
+              Effect.retry(READ_RETRY),
+              Effect.orDie,
+            ),
+            Schedule.spaced('250 millis'),
+          ).pipe(
+            Stream.changes,
+            Stream.runForEach(() =>
+              SubscriptionRef.update(valuesWritten, (wake) => wake + 1),
             ),
           ),
         );
-      // One transaction wrapper, so a nested call of any mode finds the
-      // savepoint semaphore its outermost opened; that one's mode is `TxMode`.
-      const withTransaction = SqlClient.makeWithTransaction({
-        transactionService: sql.transactionService,
-        spanAttributes: [['db.system.name', 'sqlite']],
-        acquireConnection: (restore) => restore(sql.reserve),
-        begin: (connection) =>
-          Effect.flatMap(TxMode, (mode) =>
-            connection.executeUnprepared(
-              mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE',
-              [],
-              undefined,
-            ),
-          ),
-        commit: (connection) =>
-          connection.executeUnprepared('COMMIT', [], undefined).pipe(
-            Effect.orDie,
-            Effect.onError(() =>
-              connection
-                .executeUnprepared('ROLLBACK', [], undefined)
-                .pipe(Effect.orDie),
-            ),
-          ),
-        rollback: (connection) =>
-          connection.executeUnprepared('ROLLBACK', [], undefined),
-        savepoint: (connection, id) =>
-          connection.executeUnprepared(
-            `SAVEPOINT effect_sql_${id}`,
-            [],
-            undefined,
-          ),
-        rollbackSavepoint: (connection, id) =>
-          connection.executeUnprepared(
-            `ROLLBACK TO SAVEPOINT effect_sql_${id}`,
-            [],
-            undefined,
-          ),
-      });
-      // Every body is database-only. A busy lock (the global store's other
-      // writers) runs the body again whole. In a caller's transaction a body
-      // is a savepoint.
-      const own = <A, E>(txMode: 'read' | 'write', body: Effect.Effect<A, E>) =>
-        Effect.flatMap(TxMode, (outer) =>
-          outer !== null
-            ? withTransaction(body)
-            : retryBusy(withTransaction(body)).pipe(
-                Effect.provideService(TxMode, txMode),
-              ),
-        );
+      // Every body is database-only. It runs in the client's own transaction,
+      // which on this writable connection begins `BEGIN IMMEDIATE` (holding
+      // the write lock from its first statement), skips a ROLLBACK SQLite
+      // already made and gives a failed COMMIT back typed; inside a caller's
+      // transaction it is a savepoint. A busy lock, which only the global
+      // store's other writers take, runs the transaction again whole; a
+      // nested body never meets one, its transaction holding the lock already.
+      const own = <A, E>(body: Effect.Effect<A, E>) =>
+        retryBusy(sql.withTransaction(body));
       const transaction = <A, E, EBody>(
-        mode: 'read' | 'write',
         body: Effect.Effect<A, EBody>,
         failed: (cause: unknown) => E,
-      ) => own(mode, body).pipe(mapDatabaseFailure(failed));
+      ) => own(body).pipe(mapDatabaseFailure(failed));
       /** A write transaction. A closed-aggregate rejection the body raised
        *  leaves as itself, as it does from `job`; any other failure is the
        *  write's. On the global store, whose other processes can be newer
@@ -456,7 +400,6 @@ export const databaseLayer = (
        *  alone, whose gate ran at open). */
       const transact = <A, E>(body: Effect.Effect<A, E>) =>
         transaction(
-          'write',
           mode === 'global' ? Effect.andThen(gate, body) : body,
           (cause) =>
             cause instanceof DatabaseAggregateClosed
@@ -473,7 +416,7 @@ export const databaseLayer = (
       const collectClosed = `DELETE FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const readState = (ids: readonly AggregateId[]) =>
-        Effect.map(exec(READ_STATE, aggregateLists(ids)), (rows) =>
+        Effect.map(exec(READ_STATE, [aggregateList(ids)]), (rows) =>
           rows.map((row) =>
             Schema.decodeUnknownSync(AggregateStateSchema)({
               ...row,
@@ -507,7 +450,7 @@ export const databaseLayer = (
       const upkeep = projectionUpkeep(exec, reader.read, path);
       /** A read of several statements, as one snapshot. */
       const snapshot = <A, E>(read: Effect.Effect<A, E>) =>
-        transaction('read', read, readFailed);
+        transaction(read, readFailed);
       const appendRows = Effect.fn('appendRows')(function* (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
@@ -662,7 +605,6 @@ export const databaseLayer = (
       // on this process is the store's one writer (the global store holds no
       // event rows), and each append keeps them current (`follow`).
       yield* transaction(
-        'write',
         Effect.flatMap(currentCommit, upkeep.catchUp),
         openFailed,
       ).pipe(Effect.repeat({ until: (done) => done }));
@@ -704,7 +646,12 @@ export const databaseLayer = (
             ),
           );
         },
-        readListing: () => query(decodedRows(READ_LISTING, [])),
+        readListing: () =>
+          query(
+            Effect.map(decodedRows(READ_LISTING, []), (rows) =>
+              rows.filter(isDisplayRow),
+            ),
+          ),
         readBlobs: (digests) => query(reader.blobs(digests)),
         readRunRecord: (id) =>
           query(
@@ -754,7 +701,7 @@ export const databaseLayer = (
             Effect.gen(function* () {
               const events = yield* decodedRows(inputRows, [
                 LISTED_TYPES,
-                ...aggregateLists(ids),
+                aggregateList(ids),
                 LISTED_TYPES,
                 fromCommit,
                 throughCommit,
@@ -768,7 +715,6 @@ export const databaseLayer = (
           ),
         runRemoval: (id, expectedStartCommit) =>
           transaction(
-            'write',
             Effect.gen(function* () {
               const observed = yield* readDependents(id);
               const target = observed.find((row) => row.aggregateId === id);
@@ -815,8 +761,9 @@ export const databaseLayer = (
           }),
         },
         job: (body) =>
-          own('write', Effect.provideService(body, InPublisherJob, true)).pipe(
-            // BEGIN's or COMMIT's failure; the body's leave typed.
+          own(Effect.provideService(body, InPublisherJob, true)).pipe(
+            // SQLite's own failures, a failed cleanup the client raises as a
+            // defect included, are the write's; the body's leave typed.
             Effect.catchIf(isSqlError, (e) => Effect.fail(writeFailed(e))),
             Effect.catchDefect((d) =>
               isSqlError(d) ? Effect.fail(writeFailed(d)) : Effect.die(d),
@@ -881,9 +828,9 @@ export const globalDatabaseLayer = (
   );
 
 /** Interruption stays; a failure, or SQLite's error raised as a defect (a
- *  failed COMMIT), becomes `failed`'s. Any other defect dies: the store's
- *  own protocol refusals (`invariant`) are a caller's defect, never a disk
- *  failure. */
+ *  ROLLBACK or RELEASE that failed in a transaction's cleanup), becomes
+ *  `failed`'s. Any other defect dies: the store's own protocol refusals
+ *  (`invariant`) are a caller's defect, never a disk failure. */
 function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
   return <A, EOp, R>(
     operation: Effect.Effect<A, EOp, R>,

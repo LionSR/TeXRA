@@ -50,13 +50,13 @@ export const nodeSpawnerLayer: Layer.Layer<ChildProcessSpawner> = Layer.effect(
 type ScriptedOutput = string | Stream.Stream<Uint8Array, PlatformError>;
 
 /** What a scripted command does: its output and exit code (a
- *  `PlatformError` there is a death by signal), a spawn failure, or never
- *  ending. */
+ *  `PlatformError` there is a death by signal; an effect is a process that
+ *  exits when the case lets it), a spawn failure, or never ending. */
 type ScriptedAnswer =
   | {
       readonly stdout?: ScriptedOutput;
       readonly stderr?: ScriptedOutput;
-      readonly exitCode?: number | PlatformError;
+      readonly exitCode?: number | PlatformError | Effect.Effect<number>;
     }
   | PlatformError
   | 'hang';
@@ -100,8 +100,9 @@ export function scriptedSpawnerLayer(
       const stdout = hang ? Stream.never : bytes(answer.stdout);
       const stderr = hang ? Stream.never : bytes(answer.stderr);
       const code = hang ? undefined : answer.exitCode;
-      const exited =
-        typeof code === 'object'
+      const exited = Effect.isEffect(code)
+        ? Effect.map(code, ExitCode)
+        : typeof code === 'object'
           ? Effect.fail(code)
           : Effect.succeed(ExitCode(code ?? 0));
       return makeHandle({

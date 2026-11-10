@@ -17,7 +17,7 @@ import { LaunchRefused } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
 import { aggregateTarget, type SessionRow } from '@shared/schemas';
 import { Rejected } from '@shared/session/runtimeRequest';
-import { SessionViewAccess } from '@shared/session/runHistory';
+import { SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   HostPresentationFailed,
@@ -331,10 +331,14 @@ function presentAgentFailure(
 export const presentTerminalResult = Effect.fn('presentTerminalResult')(
   function* (
     row: SessionRow,
-  ): Effect.fn.Return<void, never, SessionViewAccess | Interactions> {
+  ): Effect.fn.Return<void, never, SessionLog | Interactions> {
     const target = aggregateTarget(row.aggregateId);
     if (target.kind !== 'run' || row.type !== 'run.end' || !row.error) return;
-    if ((yield* SessionViewAccess).run(target.id)?.parentId != null) return;
+    // The store's edge, as of this row: the view may not hold the run yet.
+    const facts = yield* (yield* SessionLog)
+      .facts(target.id)
+      .pipe(Effect.orDie);
+    if (facts?.parent != null) return;
     yield* presentAgentFailure(yield* Interactions, row.error);
   },
 );

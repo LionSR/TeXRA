@@ -61,8 +61,7 @@ const isQuiet = (state: RunState): boolean =>
  * request. A cut anywhere else would carry a result nobody produced.
  */
 const isSettled = (state: RunState): boolean =>
-  // Not `turn.ready`: input consumed for a turn that has not run is inside
-  // that turn.
+  // Input taken for a turn that has not run (`turn.ready`) is inside it.
   (state.at === 'waiting' || state.at === 'turn.end') && isQuiet(state);
 
 const refused = (reason: string) => new Rejected({ reason });

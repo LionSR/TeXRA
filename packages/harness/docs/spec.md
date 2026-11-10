@@ -89,7 +89,7 @@ The store is one SQLite file named `texra.db` under the storage root
 application id (`TeXR`) carry the product's name. An ephemeral session runs the
 same schema in memory (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
-The store MUST carry application id `0x54655852` and schema version 104 in
+The store MUST carry application id `0x54655852` and schema version 105 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts#APPLICATION_ID`,
 `#SCHEMA_VERSION`). A process MUST refuse, unchanged, a file with another
 application id or a schema stamp at or above 102 other than its own
@@ -102,10 +102,12 @@ damaged at open SHALL be moved, with its WAL and shared-memory files, to
 (`controllers/session/storeSchema.ts#asideName.corrupt`).
 
 A persistent store runs in WAL mode with `synchronous = NORMAL` and foreign keys
-on (`controllers/session/storeSchema.ts#prepareStore`). Every write transaction
-the database's transaction wrapper runs MUST begin with `BEGIN IMMEDIATE`
-(`controllers/session/databaseLayer.ts#'BEGIN IMMEDIATE'`). File maintenance runs
-outside it: the one-time `VACUUM` at setup, page reclaim in autocommit
+on (`controllers/session/storeSchema.ts#prepareStore`). Every transaction the
+store runs MUST begin with `BEGIN IMMEDIATE`, so it holds the write lock from its
+first statement and never upgrades a read lock: it is the SQLite client's own
+transaction, which begins that way on a writable connection
+(`controllers/session/databaseLayer.ts#sql.withTransaction`). File maintenance
+runs outside these: the one-time `VACUUM` at setup, page reclaim in autocommit
 `incremental_vacuum` steps, and the `VACUUM INTO` copy a store moved aside
 takes, none of which writes a row
 (`controllers/session/storeSchema.ts#incrementalVacuum`, `#reclaimFreePages`,

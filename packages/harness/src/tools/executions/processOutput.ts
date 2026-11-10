@@ -124,7 +124,9 @@ export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   runId: RunId,
   viewRange?: readonly [number, number],
 ) {
-  const run = (yield* SessionViewAccess).run(runId);
+  // The run as the log holds it at this call: the current view trails the
+  // log, and would not know a command launched a moment ago.
+  const run = (yield* (yield* SessionViewAccess).read([runId])).runs.get(runId);
   if (run === undefined) {
     return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
   }

@@ -20,7 +20,6 @@ import {
 } from 'effect';
 import type { SqlClient } from 'effect/sql/SqlClient';
 import { withLogChannel } from '@logger/effectLog';
-import { CURRENT_VALUE_VERSION as VALUE_VERSION } from '@shared/schemas';
 import {
   InputHistoryRecordSchema,
   INPUT_HISTORY_LIMIT,
@@ -34,11 +33,12 @@ import type { ValueFamily } from '@shared/session/valueFamily';
 import type { SqlRow } from './rowCodec';
 import type { SqlError } from 'effect/sql/SqlError';
 
-/** Replace one current value in place. */
+/** Replace one current value in place. The version values are written at
+ *  is the store's (`stored_kind`), which the store gate reads. */
 const UPSERT_VALUE = `
-INSERT INTO current_value (family, key, version, value, at) VALUES (?, ?, ${VALUE_VERSION}, ?, ?)
+INSERT INTO current_value (family, key, value, at) VALUES (?, ?, ?, ?)
 ON CONFLICT(family, key) DO UPDATE SET
-  version = excluded.version, value = excluded.value, at = excluded.at
+  value = excluded.value, at = excluded.at
 `;
 
 /** The keys' rows in key order: their text is equal exactly when no value

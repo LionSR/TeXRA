@@ -13,7 +13,7 @@ import {
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import { SessionRoots } from '@platform/rootedFs';
-import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import { SessionLog } from '@shared/session/runHistory';
 import {
   startAwaited,
   testRunFork,
@@ -47,7 +47,6 @@ function createRegistry(
 ): SessionRunRegistry {
   return new SessionRunRegistry({
     roots: Context.get(session, SessionRoots),
-    view: Context.get(session, SessionViewAccess),
     log: Context.get(session, SessionLog),
     runsHere: () => {},
     inSession: (effect) => testRunInSession(Effect.provide(effect, session)),

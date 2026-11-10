@@ -146,24 +146,6 @@ export const sentFollowUpId = (id: string): string => `followUp.send/${id}`;
  *  never by serialization order. */
 const sameRequest = Schema.toEquivalence(FollowUpRequestSchema);
 
-/** Fail `Conflict` unless `row` asks what the message first sent under the
- *  caller's id `caller` asked, as the run's rows say it. */
-export const sameAsFirst = (
-  log: Pick<SessionLog['Service'], 'history'>,
-  runId: RunId,
-  row: Omit<QueuedFollowUp, 'commit'>,
-  caller: string,
-): Effect.Effect<void, Conflict | DatabaseReadFailed> =>
-  Effect.flatMap(
-    log.history(qualifyAggregateId('run', runId), 1, RECEIPT_ROW_TYPES),
-    (rows) => {
-      const first = followUpReceipt(rows, row.followUpId);
-      return typeof first === 'string' || sameRequest(first.queued, row)
-        ? Effect.void
-        : Effect.fail(new Conflict({ runId, id: caller }));
-    },
-  );
-
 /**
  * Whether run `runId` already holds `item`, a message under the id its
  * caller named it by (`InboxItem.caller`; false with none), whatever the

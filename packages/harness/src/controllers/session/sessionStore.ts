@@ -29,7 +29,6 @@ import {
 } from '@shared/session/database';
 import {
   SessionEvents,
-  type Append,
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
@@ -64,32 +63,6 @@ export interface SessionStore {
   readonly close: Effect.Effect<void>;
   readonly closed: () => boolean;
 }
-
-/** One transaction on the publisher, returned once the view applied its own
- *  last commit, never another job's: one that appended nothing returns at
- *  once. */
-const transaction =
-  (
-    events: SessionEventsShape,
-    applied: (commit: CommitOrdinal) => Effect.Effect<void>,
-  ) =>
-  <A, E>(
-    job: (tx: SessionTransaction) => Effect.Effect<A, E>,
-  ): Effect.Effect<A, E | DatabaseAggregateClosed | DatabaseWriteFailed> =>
-    Effect.gen(function* () {
-      let committed: CommitOrdinal | null = null;
-      const tx = (append: Append): SessionTransaction => ({
-        append: (drafts) =>
-          Effect.tap(append(drafts), (rows) =>
-            Effect.sync(() => {
-              committed = rows.at(-1)?.commit ?? committed;
-            }),
-          ),
-      });
-      const value = yield* events.transact((append) => job(tx(append)));
-      if (committed !== null) yield* applied(committed);
-      return value;
-    });
 
 /** Wait until `level` reaches `commit`; it dies if `level` ends first
  *  (`stopped` names what stopped), so it never hangs. */
@@ -137,7 +110,19 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
         commit,
         'Session view stopped before applying a commit',
       );
-    const transact = transaction(events, viewApplied);
+    /** One transaction on the publisher, returned once the view applied its
+     *  own last commit, never another job's: one that appended nothing
+     *  returns at once. */
+    const transact = <A, E>(
+      job: (tx: SessionTransaction) => Effect.Effect<A, E>,
+    ): Effect.Effect<A, E | DatabaseAggregateClosed | DatabaseWriteFailed> =>
+      Effect.flatMap(
+        events.transact((append) => job({ append })),
+        ({ value, through }) =>
+          through === null
+            ? Effect.succeed(value)
+            : Effect.as(viewApplied(through), value),
+      );
     let doorsShut = false;
     const closed = () => doorsShut;
     /** Jobs before it ran, the presenter ran past them; its end fails only
@@ -146,7 +131,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       .transact(() => Effect.sync(events.head), { order: true })
       .pipe(
         Effect.orDie,
-        Effect.flatMap((commit) =>
+        Effect.flatMap(({ value: commit }) =>
           reach(
             SubscriptionRef.changes(presented).pipe(
               Stream.interruptWhen(Deferred.await(presenterEnded)),
@@ -179,7 +164,10 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
         if (typeof work === 'function') return transact(work);
         // An empty batch is a barrier: every job before it has run.
         return work.length === 0
-          ? events.transact(() => Effect.succeed([]), { order: true })
+          ? Effect.as(
+              events.transact(() => Effect.void, { order: true }),
+              [],
+            )
           : transact((tx) => tx.append(work));
       },
       publish: trace.publish,
@@ -203,7 +191,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           (rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows),
         ),
       tail: events.all,
-      listing: events.listing,
+      listing: database.readListing,
       movedAside: database.movedAside,
     };
     return {

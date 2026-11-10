@@ -110,9 +110,8 @@ export interface SessionLogShape {
     fromCommit: CommitOrdinal,
     drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
   ): Stream.Stream<DisplayRow, DatabaseReadFailed>;
-  /** The cold listing: the latest row per aggregate and listing type, plus
-   *  the outstanding approvals; completes. */
-  listing(): Stream.Stream<DisplayRow, DatabaseReadFailed>;
+  /** The cold listing (`Database.readListing`). */
+  listing(): Effect.Effect<readonly DisplayRow[], DatabaseReadFailed>;
   /** Set when opening the store moved an older build's rows aside; the
    *  host that opened the session presents it once. */
   readonly movedAside: SessionStoreMovedAside | null;
