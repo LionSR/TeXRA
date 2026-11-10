@@ -35,7 +35,11 @@ import {
   attachInteractions,
   Interactions,
 } from '@agent/runtime/HostInteractions';
-import { openRequest, SessionRequests } from '@agent/runtime/requests';
+import {
+  decisionOf,
+  openRequest,
+  SessionRequests,
+} from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
@@ -85,6 +89,7 @@ import {
   type ToolEditContent,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
 import { MODEL_SELECTION_KEY } from '@model/computeModelOptions';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
@@ -1203,13 +1208,25 @@ const askHarness = (
   payload: RequestPayload,
   blobs?: readonly DraftBlob[],
 ) =>
-  openRequest(runId, payload, {
-    ...(blobs && { blobs }),
-    ...(payload.kind === 'bash' && { operation: 'bash' }),
-    commit: (rows) =>
-      session()
-        .log.transact((tx) => runStateAppend(tx.append)(rows))
-        .pipe(Effect.as(session().log.now())),
+  Effect.gen(function* () {
+    const asker = {
+      runId,
+      append: (rows: readonly RunHistoryDraft[]) => {
+        // Read before the batch commits: an answer lands above it.
+        const commit = session().log.now();
+        // cast: the door hands an asker with nothing beside its request
+        // only the request's rows, which the log stores as they are.
+        const drafts = rows as readonly SessionRowDraft[];
+        return session()
+          .log.transact((tx) => runStateAppend(tx.append)(drafts))
+          .pipe(Effect.as({ commit }));
+      },
+    };
+    const { answer, from } = yield* openRequest(asker, payload, {
+      ...(blobs && { blobs }),
+      ...(payload.kind === 'bash' && { operation: 'bash' }),
+    });
+    return answer ?? (yield* decisionOf(runId, payload.data.requestId, from));
   }).pipe(Effect.provide(harnessRuntimeSession));
 
 /** One request the way a run asks: `request.opened` on the run, the modal

@@ -21,7 +21,10 @@ import {
   attachInteractions,
   Interactions,
 } from '@agent/runtime/HostInteractions';
-import { openRequest as openRunRequest } from '@agent/runtime/requests';
+import {
+  decisionOf,
+  openRequest as openRunRequest,
+} from '@agent/runtime/requests';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { startChat, rootRunId } from '@cli/chat/tui/state/cliState';
@@ -34,6 +37,8 @@ import {
   SessionViewAccess,
   runStateAppend,
 } from '@shared/session/runHistory';
+import type { SessionRowDraft } from '@shared/schemas';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import {
   holdTestRun,
@@ -161,12 +166,24 @@ function openRequest(runId: RunId, payload: RequestPayload) {
     yield* ensureRun(runId);
     const session = yield* sessionHandle;
     const log = Context.get(session, SessionLog);
-    return yield* openRunRequest(runId, payload, {
-      ...(payload.kind === 'bash' && { operation: 'bash' }),
-      commit: (rows) =>
-        log
-          .transact((tx) => runStateAppend(tx.append)(rows))
-          .pipe(Effect.as(log.now())),
+    const asker = {
+      runId,
+      append: (rows: readonly RunHistoryDraft[]) => {
+        // Read before the batch commits: an answer lands above it.
+        const commit = log.now();
+        // cast: the door hands an asker with nothing beside its request
+        // only the request's rows, which the log stores as they are.
+        const drafts = rows as readonly SessionRowDraft[];
+        return log
+          .transact((tx) => runStateAppend(tx.append)(drafts))
+          .pipe(Effect.as({ commit }));
+      },
+    };
+    return yield* Effect.gen(function* () {
+      const { answer, from } = yield* openRunRequest(asker, payload, {
+        ...(payload.kind === 'bash' && { operation: 'bash' }),
+      });
+      return answer ?? (yield* decisionOf(runId, payload.data.requestId, from));
     }).pipe(Effect.provide(session));
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));
 }

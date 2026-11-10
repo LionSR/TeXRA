@@ -517,10 +517,12 @@ unless the parent's call awaits it or the child was detached.
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
 commit a `failed` row whose `next` is the move after it; a call off the rows
 records none (`agent/runtime/run/modelCall.ts#callModel`)
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#failedRows`). A
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#commitFailed`). A
 `failed` row that asks MUST be
-preceded, in its batch, by the `request.opened` of its retry request
-(`agent/runtime/ModelInvoker.ts#failedRows`,
+preceded, in its batch, by the `request.opened` of its retry request, which
+opens at the one request door with the `failed` row beside it
+(`agent/runtime/ModelInvoker.ts#commitFailed`,
+`agent/runtime/requests.ts#openRequest`,
 `shared/session/turnRowHandlers.ts#a failed attempt asks`).
 
 ## 5. The fold
@@ -798,7 +800,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 ### 8.3 Protocol
 
 - A request's id is part of its payload
-  (`agent/runtime/requests.ts#payload.data.requestId`). A tool call's
+  (`agent/runtime/requests.ts#const { requestId } = payload.data`). A tool call's
   request id is derived from the response, call, attempt and ordinal, so a
   resumed attempt rejoins the request it left standing
   (`shared/session/inFlight.ts#callRequestId`).
@@ -817,10 +819,11 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
   (`agent/runtime/requests.ts#decideRequest`).
-- The asker waits on the committed `request.decided` row, read from the tail
-  (`agent/runtime/requests.ts#decisionOf`). If the session closes first, the
-  asker goes on as cancelled with no row written, and the request stays open
-  (`agent/runtime/requests.ts#ended without one`).
+- Every asker waits on the committed `request.decided` row, read from the
+  tail (`agent/runtime/requests.ts#decisionOf`). If the session closes first,
+  the wait decides nothing: the asking fiber is interrupted with no row
+  written, the request stays open, and the next resume asks again
+  (`agent/runtime/requests.ts#the session closed before it was decided`).
 - An interrupted asker writes nothing: the request a stopped or failed run
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#cancelledRequests`);

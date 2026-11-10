@@ -1,16 +1,18 @@
 /**
- * A run's questions to a person, as rows of the run. A request opens
- * through the run's cell ({@link openRequest}): its `request.opened` and,
- * when the session's policy answers it (a `yolo` or `never` policy, a
- * grant that covers it, nobody to ask), the `request.decided` beside it in
- * the same batch, so no surface ever lists it pending; otherwise the asker
- * waits on the row stream for the decision a surface lands
+ * A run's questions to a person, as rows of the run. Every asker (a tool
+ * call's request, a plugin's request no call waits on, the invoker's
+ * retry) opens through the run's cell at the one door
+ * ({@link openRequest}): its `request.opened` and, when the session's
+ * policy answers it (a `yolo` or `never` policy, a grant that covers it,
+ * nobody to ask), the `request.decided` beside it in the same batch, so no
+ * surface ever lists it pending; otherwise the asker waits on the row
+ * stream for the decision a surface lands, the one wait
  * ({@link decisionOf}). Every decision is one checked append
  * ({@link decideRequest}): a surface's answer, a grant change answering
  * the requests it covers, and the invoker's own. A request a stopped or
  * failed run leaves open is cancelled with the run's end, in the end's
  * batch (`endIn`); one a dead process left, with the run's next activation
- * ({@link cancelRequestRows}).
+ * (`cancelRequestRows`).
  *
  * Who answers a request (`answeredBy`) is decided once, as it opens
  * ({@link answererOf}): its operation's grant ({@link OPERATIONS}), or a
@@ -66,7 +68,6 @@ import {
   type RequestPayload,
   type RequestDecision,
   type RunId,
-  type SessionRow,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { DraftBlob } from '@shared/session/historyTurns';
@@ -92,14 +93,6 @@ const policyOwners = Effect.all({
   interactions: Interactions,
 });
 type PolicyOwners = Effect.Success<typeof policyOwners>;
-
-/** The rows that open a request: its `request.opened`, and the
- *  `request.decided` the policy lands beside it. */
-export type RequestRow = Extract<
-  RunHistoryDraft,
-  { type: 'request.opened' | 'request.decided' }
->;
-type DecidedDraft = Extract<RequestRow, { type: 'request.decided' }>;
 
 /** What the session's host can answer, read live: a host attached after a
  *  run started still answers for it. */
@@ -260,28 +253,6 @@ function answerFor(
   }
 }
 
-/** The `request.decided` that records the policy's answer beside a request
- *  about to open, `answeredBy` whom: none when a person decides. */
-export const policyDecidedRows = (
-  runId: RunId,
-  payload: RequestPayload,
-  answeredBy: AnsweredBy,
-  hook?: 'allow' | 'ask',
-): Effect.Effect<DecidedDraft[], never, Approvals | Interactions> =>
-  Effect.map(policyOwners, (owners) => {
-    const decision = answerFor(owners, runId, payload, answeredBy, hook);
-    return decision === undefined
-      ? []
-      : [
-          {
-            type: 'request.decided',
-            aggregateId: qualifyAggregateId('run', runId),
-            requestId: payload.data.requestId,
-            decision,
-          },
-        ];
-  });
-
 /** Whether a step's approval-gated tools are withheld, read live from its
  *  session's policy, its grants and its host, and the policy read (which a
  *  denial names). A fresh run's opening reads its uncommitted `run.start`. */
@@ -389,19 +360,20 @@ export const decideRequest = (
     ),
   );
 
-/** The `request.decided` row answering `requestId`, read from the row
- *  stream above `from`: what a run blocked on a request waits for. Fails
- *  when the log closes first, which a waiting caller reads as a
- *  cancellation. */
+/**
+ * The decision on request `requestId` of `runId`: the first
+ * `request.decided` the session log commits for it above `from`. The one
+ * wait of every asker a person answers: a tool call's request, the
+ * invoker's retry, a script's shared agent request. A session that closes
+ * first decides nothing: the waiting fiber is interrupted, so the call or
+ * turn that asked stays in flight and the next resume asks again. A log
+ * that cannot be read fails the wait.
+ */
 export const decisionOf = (
   runId: RunId,
   requestId: string,
   from: CommitOrdinal,
-): Effect.Effect<
-  Extract<SessionRow, { type: 'request.decided' }>,
-  Error,
-  SessionLog
-> =>
+): Effect.Effect<RequestDecision, DatabaseReadFailed, SessionLog> =>
   SessionLog.use((log) => {
     const aggregate = qualifyAggregateId('run', runId);
     return log.tail(from).pipe(
@@ -414,97 +386,111 @@ export const decisionOf = (
       Effect.flatMap(
         Option.match({
           onNone: () =>
-            Effect.fail(
-              new Error(
-                `The session closed before request ${requestId} was decided.`,
-              ),
-            ),
-          onSome: Effect.succeed,
+            Effect.logWarning(
+              `Request ${requestId}: the session closed before it was decided; its asker stops, and the next resume asks again`,
+            ).pipe(withLogChannel(CHANNEL), Effect.andThen(Effect.interrupt)),
+          onSome: (row) => Effect.succeed(row.decision),
         }),
       ),
     );
   });
 
-/** How {@link openRequest} commits its rows: through the asker's cell,
- *  answering the commit its decision is read from. */
-export interface RequestOpening<E> {
-  /** Commit the request's rows (the `request.opened` and the policy's
-   *  answer beside it; a re-entered request's answer alone). */
-  readonly commit: (
-    rows: readonly RequestRow[],
-  ) => Effect.Effect<CommitOrdinal, E>;
+/** The cell a request opens through: its run, and the append of the
+ *  asker's batch (the run's cell, or a call's commit through it). */
+interface AskerCell<E> {
+  readonly runId: RunId;
+  readonly append: (
+    rows: readonly RunHistoryDraft[],
+  ) => Effect.Effect<{ readonly commit: CommitOrdinal }, E>;
+}
+
+/** How {@link openRequest} opens a request: what it asks about, and what
+ *  the asker's batch carries beside it. */
+interface RequestOpening {
   /** The strings the payload names by address (a tool edit's proposal),
    *  stored with the `request.opened` row; the session log's `blobs` reads
    *  them back for as long as the row lives. */
   readonly blobs?: readonly DraftBlob[];
-  /** A request a resumed call re-entered, as it opened: open already, only
-   *  what the policy decides now commits. */
-  readonly reentered?: { readonly answeredBy: AnsweredBy };
+  /** A request a resumed call re-entered, as it opened, and the commit
+   *  the resume read it open at: open already, only what the policy
+   *  decides now commits, and a person's answer since is read from there. */
+  readonly reentered?: {
+    readonly answeredBy: AnsweredBy;
+    readonly openAt: CommitOrdinal;
+  };
   /** What the call's `PreToolUse` hooks said. */
   readonly hook?: 'allow' | 'ask';
   /** What the request asks permission for, where its kind does not say:
    *  a command's operation. */
   readonly operation?: ApprovalOperation;
+  /** The asker's own rows, committed after the `request.opened` in its
+   *  batch: the invoker's `failed` row, which the cell requires to follow
+   *  the request it asks. */
+  readonly beside?: readonly RunHistoryDraft[];
+}
+
+/** A request {@link openRequest} opened: the policy's answer, or null when
+ *  a person answers it, whose decision is read from `from`
+ *  ({@link decisionOf}). */
+interface OpenedRequest<K extends RequestPayload['kind']> {
+  readonly answer: DecisionOf<K> | null;
+  readonly from: CommitOrdinal;
 }
 
 /**
- * Ask a person: open the request on its run through `opening.commit`,
- * with the policy's own answer beside it, and wait for a decision its kind
- * takes. The policy's answer returns at once; a person's is read from the
- * row stream. A request the run's end leaves open is cancelled by the end's
- * transaction (`cancelRequestRows`); a session that closes first answers
- * with a cancellation.
+ * Open `payload` on its run through the asker's cell: its
+ * `request.opened`, naming who answers it ({@link answererOf}), the
+ * asker's rows `beside` it, and the policy's own answer when the policy
+ * answers it, in one batch, so no surface lists as pending a request the
+ * policy answered. The one door every asker opens through; a person's
+ * answer is the one wait ({@link decisionOf}). A request the run's end
+ * leaves open is cancelled by the end's transaction (`endIn`).
  */
-export const openRequest = <P extends RequestPayload, E = never>(
-  runId: RunId,
+export const openRequest = <P extends RequestPayload, E>(
+  cell: AskerCell<E>,
   payload: P,
-  opening: RequestOpening<E>,
-): Effect.Effect<
-  DecisionOf<P['kind']>,
-  LogWriteError | E,
-  SessionLog | Approvals | Interactions
-> =>
+  opening: RequestOpening = {},
+): Effect.Effect<OpenedRequest<P['kind']>, E, Approvals | Interactions> =>
   Effect.gen(function* () {
-    const requestId = payload.data.requestId;
+    const { runId } = cell;
+    const { requestId } = payload.data;
     const aggregateId = qualifyAggregateId('run', runId);
     const { reentered, hook } = opening;
     const answeredBy =
       reentered?.answeredBy ??
       answererOf(opening.operation ?? KIND_OPERATIONS[payload.kind], hook);
-    const decided = yield* policyDecidedRows(runId, payload, answeredBy, hook);
-    const rows: RequestRow[] = [
-      ...(reentered
-        ? []
-        : [
-            {
-              type: 'request.opened' as const,
-              aggregateId,
-              requestId,
-              payload,
-              answeredBy,
-              ...(opening.blobs && { blobs: opening.blobs }),
-            },
-          ]),
-      ...decided,
-    ];
-    const from = yield* opening.commit(rows);
-    const answer = decided[0]?.decision;
-    if (answer !== undefined) return yield* recordedDecision(payload, answer);
-    return yield* decisionOf(runId, requestId, from).pipe(
-      Effect.flatMap((row) => recordedDecision(payload, row.decision)),
-      Effect.catch((cause) =>
-        Effect.logWarning(
-          `Request ${requestId}: its wait for a decision ended without one`,
-        ).pipe(
-          Effect.annotateLogs({ data: cause }),
-          withLogChannel(CHANNEL),
-          Effect.as({
-            action: 'cancel',
-            cause: cause.message,
-          } satisfies RequestDecision),
-        ),
-      ),
+    const decision = answerFor(
+      yield* policyOwners,
+      runId,
+      payload,
+      answeredBy,
+      hook,
     );
+    const answer =
+      decision === undefined
+        ? null
+        : yield* recordedDecision(payload, decision);
+    const decided: readonly RunHistoryDraft[] =
+      decision === undefined
+        ? []
+        : [{ type: 'request.decided', aggregateId, requestId, decision }];
+    if (reentered !== undefined) {
+      if (decided.length > 0) yield* cell.append(decided);
+      return { answer, from: reentered.openAt };
+    }
+    const { commit } = yield* cell.append([
+      {
+        type: 'request.opened',
+        aggregateId,
+        requestId,
+        payload,
+        answeredBy,
+        ...(opening.blobs && { blobs: opening.blobs }),
+      },
+      ...(opening.beside ?? []),
+      ...decided,
+    ]);
+    return { answer, from: commit };
   });
 
 /** The session's requests ({@link SessionRequestsShape}): the one handler

@@ -21,7 +21,6 @@ import {
   type ITool,
 } from '@agent/core/tools/ToolTypes';
 import {
-  qualifyAggregateId,
   type DecisionOf,
   type HookOutcomePayload,
   type RequestPayload,
@@ -41,14 +40,19 @@ import {
   type CellError,
   type RunCell,
 } from '@shared/session/runHistory';
-import type { RunHistoryDraft } from '@shared/session/runState';
+import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { HookAnswer } from '@shared/session/sessionApprovals';
 import type { LogWriteError } from '@shared/session/sessionLog';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { Interactions } from '../HostInteractions';
-import { decideRequest, openRequest, recordedDecision } from '../requests';
+import {
+  decideRequest,
+  decisionOf,
+  openRequest,
+  recordedDecision,
+} from '../requests';
 import { RunCall } from '../RunCall';
 import { askCommandApproval, commandRejectedResult } from './commandApproval';
 import type { AgentRunShape } from '../run/AgentRun';
@@ -236,8 +240,9 @@ export const guardedToolCall = (
  * longer asks is retired as cancelled (`retireStanding`, which the call's
  * settlement runs too, recording `retireCause`), so no surface keeps
  * offering it; a retirement the store refuses fails the call with the
- * refusal, which ends the run like any refused write. `commit` commits rows
- * of the call.
+ * refusal, which ends the run like any refused write. Every request opens
+ * at the one door (`openRequest`) through `commit`, which commits rows of
+ * the call, and a person's answer is the one wait (`decisionOf`).
  */
 export const callRequests = (call: {
   readonly run: Pick<AgentRunShape, 'runId'>;
@@ -245,7 +250,7 @@ export const callRequests = (call: {
   readonly cell: Pick<RunCell, 'opened'>;
   readonly commit: (
     rows: readonly RunHistoryDraft[],
-  ) => Effect.Effect<unknown, CellError>;
+  ) => Effect.Effect<RunState, CellError>;
   readonly at: Omit<CallAttempt, 'attempt'>;
   readonly entered: { readonly attempt: number } & AttemptRequests;
   readonly retireCause: string;
@@ -258,6 +263,7 @@ export const callRequests = (call: {
 } => {
   const { run, session, cell, commit, entered, retireCause } = call;
   const { runId } = run;
+  const asker = { runId, append: commit };
   const at: CallAttempt = { ...call.at, attempt: entered.attempt };
   const log = Context.get(session, SessionLog);
   const interactions = Context.get(session, Interactions);
@@ -306,49 +312,44 @@ export const callRequests = (call: {
           return recordedDecision(payload, reentered.request.decision).pipe(
             Effect.map(answered),
           );
-        // The hook of the call the request opens in, read from its fiber:
-        // `CallRequests` is public and requires nothing of its caller.
-        return Effect.flatMap(Effect.serviceOption(RunCall), (call) =>
-          openRequest(runId, payload, {
+        return Effect.gen(function* () {
+          // The hook of the call the request opens in, read from its
+          // fiber: `CallRequests` is public and requires nothing of its
+          // caller.
+          const call = yield* Effect.serviceOption(RunCall);
+          const hook = Option.isSome(call) ? call.value.hook : undefined;
+          // Fresh: the standing request of another kind is retired first.
+          if (reentered === null) yield* retireStanding;
+          const { answer, from } = yield* openRequest(asker, payload, {
             ...opening,
-            ...(Option.isSome(call) &&
-              call.value.hook && { hook: call.value.hook }),
+            ...(hook && { hook }),
+            // Open already: only what the policy decides commits, and a
+            // person's answer is read from where the resume read the run.
             ...(reentered !== null && {
-              reentered: { answeredBy: reentered.request.answeredBy },
+              reentered: {
+                answeredBy: reentered.request.answeredBy,
+                openAt: cell.opened.commit,
+              },
             }),
-            // Open already: only what the policy decides commits, and the
-            // decision is read from where the resume read the run. Fresh:
-            // the standing request of another kind is retired first.
-            commit: (rows) =>
-              reentered !== null
-                ? rows.length === 0
-                  ? Effect.succeed(cell.opened.commit)
-                  : commit(rows).pipe(Effect.as(cell.opened.commit))
-                : retireStanding.pipe(
-                    Effect.andThen(Effect.sync(() => log.now())),
-                    Effect.flatMap((from) =>
-                      commit(rows).pipe(Effect.as(from)),
-                    ),
-                  ),
-          }),
-        ).pipe(Effect.provide(session), Effect.map(answered));
+          });
+          if (answer !== null) return answer;
+          const decision = yield* decisionOf(
+            runId,
+            payload.data.requestId,
+            from,
+          );
+          return yield* recordedDecision(payload, decision);
+        }).pipe(Effect.provide(session), Effect.map(answered));
       }),
-    post: (requestId, request) =>
+    post: (request) =>
       Effect.suspend(() =>
-        commit([
-          {
-            type: 'request.opened',
-            aggregateId: qualifyAggregateId('run', runId),
-            requestId,
-            // A plugin's data as the JSON its row stores; one that is not
-            // JSON is a defect of the plugin.
-            payload: Schema.decodeUnknownSync(RequestPayloadSchema)(
-              toJsonValue(request),
-            ),
-            answeredBy: 'person',
-          },
-        ]),
-      ).pipe(Effect.asVoid),
+        openRequest(
+          asker,
+          // A plugin's data as the JSON its row stores; one that is not
+          // JSON is a defect of the plugin.
+          Schema.decodeUnknownSync(RequestPayloadSchema)(toJsonValue(request)),
+        ),
+      ).pipe(Effect.provide(session), Effect.asVoid),
     present: interactions.emit,
   };
   return { requests, retireStanding };
