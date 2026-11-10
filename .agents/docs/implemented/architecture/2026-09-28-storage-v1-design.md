@@ -9,6 +9,14 @@ release step remains: the first release that promises its rows runs
 Owner ruling (2026-09-28): "we really should have the cleanest design before
 v1.0 because I don't want to rewrite this again."
 
+What the store does today is specified in
+[`packages/harness/docs/spec.md`](../../../../packages/harness/docs/spec.md),
+which is checked against the code; its tables are `storeSchema.ts`. This note
+owns the 1.0 decisions and their reasons (§13, and the alternatives each
+section rejects). Where a description here differs from the spec (the schema
+numbers, the DDL listing, the open sequence, the projections), the spec is
+right.
+
 ## Summary
 
 This is the session store's 1.0 format. From the first release on, the store
