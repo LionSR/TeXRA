@@ -33,6 +33,7 @@ import {
   generateRunId,
   qualifyAggregateId,
   RUN_OUTCOME,
+  type ChildRunDelivery,
   type ProcessExit,
   type RunEnd,
   type RunId,
@@ -44,8 +45,8 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 /** What one process turn reports as it returns. */
 export interface ProcessReport {
-  /** The delivery its parent reads (`formatDelivery`). */
-  readonly report: string;
+  /** The delivery its parent reads, typed. */
+  readonly report: ChildRunDelivery;
   /** How a command exited, recorded as the run's `process.exit` row: a
    *  code other than 0 ends the run failed, its report still delivered. */
   readonly exit?: ProcessExit;
@@ -63,7 +64,7 @@ export interface ProcessTurn {
    *  (`Effect.abortSignal`). */
   readonly run: Effect.Effect<ProcessReport, Error, PlatformServices>;
   /** The delivery of a turn that threw. */
-  readonly reportError: (error: Error) => string;
+  readonly reportError: (error: Error) => ChildRunDelivery;
 }
 
 /**
@@ -130,7 +131,7 @@ const endingOf = (
   exit: Exit.Exit<ProcessReport, Error>,
   thrown: unknown,
 ): {
-  readonly report: string | null;
+  readonly report: ChildRunDelivery | null;
   readonly error?: RunEnd['error'];
   readonly leading: readonly UnfoldedDraft[];
 } => {

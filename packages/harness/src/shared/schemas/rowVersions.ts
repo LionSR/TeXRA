@@ -173,7 +173,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v5: no `holdUntil: 'generation'`: a child queues no progress notice, and
   // a host's notification is known by its sender (a v4 row holding it would
   // fail as damaged).
-  'followup.queued': { version: 5, listing: 'followup' },
+  // v6: a child's delivery carries its facts typed (`delivery`), rendered
+  // where the row becomes its parent's message, not its envelope's text and
+  // summary (a v5 delivery would read as a message, its facts untyped).
+  'followup.queued': { version: 6, listing: 'followup' },
   // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
   // it and fails to decode.
   // v3: no `stale` reason: nothing drops a notice of an ended child (a v2

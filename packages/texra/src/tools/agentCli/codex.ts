@@ -38,7 +38,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import {
   ToolError,
-  formatDelivery,
   type AgentTrace,
   type ToolCardHandle,
 } from '@texra-ai/harness/plugins';
@@ -348,23 +347,21 @@ function buildCodexTurn(params: {
     claim: params.claim,
     runProviderTurn: runStreamedTurn(thread, prompt, logger),
     getUsage: codexTurnUsage,
-    formatDelivery: (turn, wallTimeMs) =>
-      formatDelivery({
-        tag: 'codex-result',
-        runId,
-        prompt,
-        attributes: [{ name: 'thread-id', value: thread.id || null }],
-        wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
-        response: turn.finalResponse,
-        usage: codexTurnUsage(turn),
-      }),
-    formatError: (_turn, err) =>
-      formatDelivery({
-        tag: 'codex-error',
-        runId,
-        prompt,
-        message: toErrorMessage(err),
-      }),
+    delivery: (turn, wallTimeMs) => ({
+      family: 'codex',
+      runId,
+      prompt,
+      attributes: [{ name: 'thread-id', value: thread.id || null }],
+      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      response: turn.finalResponse,
+      usage: codexTurnUsage(turn),
+    }),
+    errorDelivery: (_turn, err) => ({
+      family: 'codex',
+      runId,
+      prompt,
+      message: toErrorMessage(err),
+    }),
   });
 }
 

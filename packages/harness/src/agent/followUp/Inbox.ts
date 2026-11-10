@@ -8,7 +8,12 @@
 import { Context, Effect, Result, type Scope } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { qualifyAggregateId, type RunId } from '@shared/schemas';
+import {
+  qualifyAggregateId,
+  type ChildRunDelivery,
+  type RunId,
+  type StoredMedia,
+} from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { ancestryRows, runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
@@ -48,13 +53,19 @@ export interface InboxPort {
   readonly detach: SessionEventsShape['detach'];
 }
 
-/** One message a producer sends. */
-export interface InboxItem {
-  readonly text: string;
-  readonly displayText?: string;
-  /** A user's media (e.g. pasted images) and its blobs (`attachedMedia`). */
-  readonly media?: QueuedFollowUp['content']['media'];
-  readonly blobs?: readonly DraftBlob[];
+/** One message a producer sends: a text, with what surfaces show instead
+ *  (`displayText`) and a user's media (e.g. pasted images) with its blobs
+ *  (`attachedMedia`); or a child's delivery to its parent, whose facts its
+ *  row keeps typed. */
+export type InboxItem = (
+  | {
+      readonly text: string;
+      readonly displayText?: string;
+      readonly media?: readonly StoredMedia[];
+      readonly blobs?: readonly DraftBlob[];
+    }
+  | { readonly delivery: ChildRunDelivery }
+) & {
   readonly from: FollowUpSenderInput;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
@@ -65,7 +76,7 @@ export interface InboxItem {
    *  is its `sentFollowUpId`): a retry under it answers with the first
    *  send's receipt, another message under it fails `Conflict`. */
   readonly caller?: string;
-}
+};
 
 /** How a send landed: queued for the run (a reader here takes it, or its
  *  resume does), a replay of a row already queued, or refused. */

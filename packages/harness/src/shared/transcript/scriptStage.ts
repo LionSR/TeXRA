@@ -9,7 +9,7 @@
  * settlement (`reusedFrom`, a `Skipped` error, a cut by the run's end) and
  * whether a child exists;
  * a row's agent, model, files and attempt are its input's and its card's;
- * its answer is its card's delivery (`deliveredResponse`); its duration and
+ * its answer is its card's typed result (`childAnswer`); its duration and
  * cost are its child's rows.
  */
 import { Predicate } from 'effect';
@@ -27,11 +27,11 @@ import {
 } from '@shared/session/sessionView';
 import type { RunView, SessionView } from '@shared/session/readonlyViews';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-import { deliveredResponse } from '@shared/subagentFollowup';
 import { formatScriptCallFiles } from '@shared/transcript/scriptCall';
 import { getBasename } from '@utils/core/pathBasics';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
+import { childAnswer } from './toolRowSections';
 import type { ToolRow as FoldedToolRow, TranscriptRow } from './transcriptRow';
 import { transcriptTimeline } from './transcriptTimeline';
 
@@ -218,7 +218,7 @@ function callView(
     detail = { kind: 'error', text: row.toolUse.errorText };
   else if (status === 'not run') detail = { kind: 'notRun' };
   else if (status === 'interrupted') detail = { kind: 'interrupted' };
-  const answer = deliveredResponse(row.toolUse.outputText);
+  const answer = childAnswer(row.log.output);
   const said =
     agent && (status === 'finished' || status === 'reused')
       ? (answer ?? child?.latestLine)

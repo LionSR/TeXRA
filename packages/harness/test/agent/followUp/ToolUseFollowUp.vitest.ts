@@ -40,7 +40,9 @@ const queuedTexts = (session: Context.Context<SessionServices>, runId: RunId) =>
       ['followup.queued'],
     );
     return rows.flatMap((row) =>
-      row.type === 'followup.queued' ? [row.content.text] : [],
+      row.type === 'followup.queued' && 'text' in row.content
+        ? [row.content.text]
+        : [],
     );
   });
 
@@ -52,7 +54,9 @@ const taken = (input: FollowUpReader) =>
       : null;
     return batch?.kind !== 'followUps'
       ? []
-      : batch.followUps.map((followUp) => followUp.content.text);
+      : batch.followUps.flatMap(({ content }) =>
+          'text' in content ? [content.text] : [],
+        );
   });
 
 const user = (text: string) => ({ text, from: { kind: 'user' as const } });

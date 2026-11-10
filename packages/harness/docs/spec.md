@@ -377,7 +377,9 @@ also read by `applyRunRows`.
 - `run.removed` (folded: no): The deletion marker: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
 - `plugin.fact` (folded: no): A plugin's own kind; core never reads `value`.
-- `followup.queued` (folded: no): Input not taken yet, whole.
+- `followup.queued` (folded: no): Input not taken yet, whole: a message's
+  text, or a child's delivery with its facts typed, rendered as its envelope
+  where it becomes the run's message.
 - `followup.consumed` (folded: no): A queued follow-up was taken: delivered as a
   turn's message, answered by a tool, or retired as a control or with the run's
   end.

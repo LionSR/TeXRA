@@ -1,14 +1,18 @@
 /**
  * One follow-up: input put on a run's queue and read at its next turn
  * boundary. Every producer — the user's composer, a child's report, a
- * parent's or peer's message, a host notice — writes this one shape, so
- * messaging between runs and subagent reporting are the same row.
+ * parent's or peer's message, a host notice — writes this one row, so
+ * messaging between runs and subagent reporting are the same row: a
+ * message's text, or a child's report as its typed delivery.
  */
-import { Schema } from 'effect';
+import { Schema, Struct } from 'effect';
 
+import { DELIVERY_FAMILY_PATTERN } from '@shared/deliveryTags';
 import { RunIdSchema } from './identifiers';
 import { RunOutcomeSchema } from './run';
+import { ScriptDeliverySummarySchema } from './scriptDelivery';
 import { StoredMediaSchema } from './storedTurn';
+import { TokenUsageStatsSchema } from './usage';
 
 /**
  * Where one run stands relative to another in the supervision tree: who
@@ -51,12 +55,74 @@ const FollowUpSenderSchema = Schema.Union([
 export type FollowUpSender = typeof FollowUpSenderSchema.Type;
 
 /**
- * One follow-up as it is queued, taken, and shown. `from` is the provenance
- * a consumer reads: a user's or parent's text becomes the run's instruction,
- * a delivery or notice envelope is summarized for the transcript. A loop's own
- * maintenance wake is never a follow-up row.
+ * A child run's report to its parent: its family and run, then the facts its
+ * driver chose, each optional. `formatDelivery` renders them, in this order,
+ * as the XML envelope its parent's model reads: `<family>-result`, or
+ * `<family>-error` for one that carries `message`. Every surface shows the
+ * same facts summarized (`followUpDisplay`), never the XML.
  */
-const FollowUpContentSchema = Schema.Struct({
+const ChildRunDeliverySchema = Schema.Struct({
+  /** The envelope's family (`subagent`, a plugin's `codex`). */
+  family: Schema.String.check(
+    Schema.isPattern(new RegExp(`^${DELIVERY_FAMILY_PATTERN}$`)),
+  ),
+  runId: Schema.String,
+  /** The prompt the child took, echoed (cut short) as an attribute. */
+  prompt: Schema.optional(Schema.String),
+  /** The attributes after `id` and `prompt`, in order (`agent`, `status`,
+   *  `command`, `thread-id`, …); one whose value is null is left out. */
+  attributes: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        name: Schema.String,
+        value: Schema.NullOr(
+          Schema.Union([Schema.String, Schema.Finite, Schema.Boolean]),
+        ),
+      }),
+    ),
+  ),
+  /** How a background command exited: its code, a conventional one when it
+   *  timed out or had none of its own (`noExitCode`). */
+  exit: Schema.optional(
+    Schema.Struct({
+      code: Schema.Int,
+      timedOut: Schema.Boolean,
+      noExitCode: Schema.Boolean,
+    }),
+  ),
+  /** How long the child ran, as it reads (`1.2s`). */
+  wallTime: Schema.optional(Schema.String),
+  /** A turn's or a script's answer, inline; an empty one reads
+   *  `(no response)`. */
+  response: Schema.optional(Schema.String),
+  usage: Schema.optional(
+    Schema.NullOr(
+      TokenUsageStatsSchema.mapFields(
+        Struct.pick(['inputTokens', 'outputTokens']),
+      ),
+    ),
+  ),
+  /** A background script's summary: its calls, what they wrote and cost. */
+  summary: Schema.optional(ScriptDeliverySummarySchema),
+  /** Body lines its driver rendered, carried as given: facts only the
+   *  model reads (a command's output, a recipe's documents). */
+  lines: Schema.optional(Schema.Array(Schema.String)),
+  /** A native run's output: its reply, as a block (none when empty), and the
+   *  files its calls touched. */
+  output: Schema.optional(
+    Schema.Struct({
+      response: Schema.String,
+      files: Schema.Array(Schema.String),
+    }),
+  ),
+  /** Failure text; its presence is what makes the delivery an error report. */
+  message: Schema.optional(Schema.String),
+});
+/** A child run's report to its parent ({@link ChildRunDeliverySchema}). */
+export type ChildRunDelivery = typeof ChildRunDeliverySchema.Type;
+
+/** A message: a user's or a run's text, or a host's notice. */
+const FollowUpMessageSchema = Schema.Struct({
   text: Schema.String,
   /** What the transcript and the queued list show instead of `text`. */
   displayText: Schema.optional(Schema.NullOr(Schema.String)),
@@ -65,6 +131,23 @@ const FollowUpContentSchema = Schema.Struct({
   media: Schema.optional(Schema.Array(StoredMediaSchema)),
   from: FollowUpSenderSchema,
 });
+/** A follow-up that is a message, not a child's delivery. */
+export type FollowUpMessage = typeof FollowUpMessageSchema.Type;
+
+/**
+ * One follow-up as it is queued, taken, and shown: a message, or a child's
+ * delivery to its parent, whose facts are rendered once, as the envelope its
+ * parent's model reads, where the row becomes the run's message. `from` is
+ * the provenance a consumer reads: a user's or parent's text becomes the
+ * run's instruction. A loop's own maintenance wake is never a follow-up row.
+ */
+const FollowUpContentSchema = Schema.Union([
+  FollowUpMessageSchema,
+  Schema.Struct({
+    delivery: ChildRunDeliverySchema,
+    from: FollowUpSenderSchema,
+  }),
+]);
 export type FollowUpContent = typeof FollowUpContentSchema.Type;
 
 /** What a follow-up asks of its run, as its `followup.queued` row stores

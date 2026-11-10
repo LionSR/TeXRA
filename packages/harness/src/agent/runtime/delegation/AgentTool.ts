@@ -15,7 +15,6 @@ import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
 import { readRecipeResult } from '@agent/runtime/recipeResult';
-import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
@@ -244,8 +243,9 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
     .pipe(Effect.map(({ decision }) => decision));
 });
 
-/** What an ended child becomes for its call: its envelope (a recipe's read
- *  through its block), or the error a script's `await` throws for it. */
+/** What an ended child becomes for its call: the report its end stored,
+ *  the envelope its parent's model reads (a recipe's read through its
+ *  block), or the error a script's `await` throws for it. */
 export const childResult = Effect.fn('AgentTool.childResult')(function* (
   call: RunToolCall,
   agentName: string,
@@ -265,14 +265,19 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error ? `: ${runEndErrorMessage(result.error)}` : '.'}`,
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
     );
-  const config = yield* getRunRecords(runId).readConfig();
+  const records = getRunRecords(runId);
+  // A child's end commits its report with its `run.end`: a completed child
+  // with none is a defect.
+  const report = yield* records.readReport();
+  if (report === null)
+    return yield* Effect.die(
+      new Error(`The agent run ${runId} completed without a report.`),
+    );
+  const config = yield* records.readConfig();
   const view = yield* (yield* SessionViewAccess).read([]);
   const recipe = yield* readRecipeResult(config, runId, call.env.roots);
   return {
-    ...executed(
-      formatSubagentDelivery(agentName, result, { runId, recipe }),
-      `Completed '${agentName}'`,
-    ),
+    ...executed(report, `Completed '${agentName}'`),
     value: toJsonValue({
       ...result.output,
       ...(recipe !== undefined && { changes: recipe.changes }),

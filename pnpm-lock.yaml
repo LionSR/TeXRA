@@ -444,9 +444,6 @@ importers:
       diff:
         specifier: 'catalog:'
         version: 9.0.0
-      escape-string-regexp:
-        specifier: 'catalog:'
-        version: 5.0.0
       glob:
         specifier: 'catalog:'
         version: 14.0.4

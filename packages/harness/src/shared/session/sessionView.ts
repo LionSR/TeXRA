@@ -291,8 +291,8 @@ const PendingRequestSchema = Schema.Struct({
   payload: RequestPayloadSchema,
 });
 
-/** A run's queued follow-ups as a composer lists them (`displayText`, else
- *  `text`): a set keyed by `followUpId`, queued, unconsumed, in order. */
+/** A run's queued follow-ups as a composer lists them (`followUpDisplay`):
+ *  a set keyed by `followUpId`, queued, unconsumed, in order. */
 const QueuedFollowUpsSchema = Schema.Array(
   Schema.Struct({ followUpId: Schema.String, text: Schema.String }),
 );

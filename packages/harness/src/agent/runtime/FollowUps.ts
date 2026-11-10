@@ -22,10 +22,7 @@
  */
 import { Effect, type FileSystem, Result, type Scope, ScopedRef } from 'effect';
 
-import {
-  followUpDisplay,
-  userFollowUpInstruction,
-} from '@agent/followUp/followUpMessages';
+import { userFollowUpInstruction } from '@agent/followUp/followUpMessages';
 import { Inbox } from '@agent/followUp/Inbox';
 import type {
   FollowUpBatch,
@@ -42,8 +39,10 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { SessionLog, type RunCell } from '@shared/session/runHistory';
+import { followUpDisplay } from '@shared/subagentFollowup';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
+import { formatDelivery } from './deliveryEnvelope';
 import {
   skippedMediaPart,
   storedMediaPart,
@@ -116,12 +115,14 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const reader = yield* inbox.open(runId);
 
   /** The canonical user message of one batch: every item's text as its
-   *  own part, media parts after it; `kinds[i]` is item i's badges.
-   *  The media is the row's by address; a PDF for a model that takes
-   *  images but no PDF is sent as its pages, as an opening message's is. A
-   *  medium the model does not take, or one whose pages cannot be
-   *  rendered, is a text part saying so (`skippedMediaPart`): the model is
-   *  told, in the row that carries the message. */
+   *  own part, media parts after it; `kinds[i]` is item i's badges. A
+   *  child's delivery is rendered here, once, as the envelope the model
+   *  reads (`formatDelivery`). The media is the row's by address; a PDF for
+   *  a model that takes images but no PDF is sent as its pages, as an
+   *  opening message's is. A medium the model does not take, or one whose
+   *  pages cannot be rendered, is a text part saying so
+   *  (`skippedMediaPart`): the model is told, in the row that carries the
+   *  message. */
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
     followUps: readonly QueuedFollowUp[],
   ) {
@@ -129,6 +130,11 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const parts: (InputPart | StoredInputPart)[] = [];
     const kinds: (readonly MediaAttachmentKind[])[] = [];
     for (const { content } of followUps) {
+      if ('delivery' in content) {
+        parts.push({ kind: 'text', text: formatDelivery(content.delivery) });
+        kinds.push([]);
+        continue;
+      }
       parts.push({ kind: 'text', text: content.text });
       const badges: MediaAttachmentKind[] = [];
       for (const { name, mimeType, digest } of content.media ?? []) {
@@ -164,7 +170,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   ): void => {
     for (const [i, { content }] of followUps.entries()) {
       const { text, scriptSummary } = followUpDisplay(content);
-      const { media } = content;
+      const media = 'delivery' in content ? undefined : content.media;
       const attachments = kinds[i];
       logUserMessage(logger, text, { attachments, media, scriptSummary });
     }
@@ -200,8 +206,10 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     );
     // What the user typed runs the step's UserPromptSubmit hooks, recorded
     // with the message their context joins.
-    const typed = followUps.filter(
-      ({ content }) => content.from.kind === 'user',
+    const typed = followUps.flatMap(({ followUpId, content }) =>
+      content.from.kind === 'user' && !('delivery' in content)
+        ? [{ followUpId, text: content.text }]
+        : [],
     );
     const hooked =
       typed.length === 0
@@ -209,7 +217,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         : yield* (yield* hooksOf(run)).prompt(
             state,
             typed[0].followUpId,
-            typed.map(({ content }) => content.text).join('\n\n'),
+            typed.map(({ text }) => text).join('\n\n'),
           );
     const message: AppendedMessage = {
       ...built.message,
@@ -221,9 +229,9 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const found = yield* resolveActivations(
       run,
       activatedSkillNames(
-        followUps
-          .filter(({ content }) => isInstruction(content))
-          .map(({ content }) => content.text),
+        followUps.flatMap(({ content }) =>
+          isInstruction(content) ? [content.text] : [],
+        ),
       ),
     );
     const current = state.input.activated ?? [];

@@ -21,6 +21,7 @@ import {
   emptyRunEndOutput,
   type FollowUpContent,
   type FollowUpDisposition,
+  type FollowUpMessage,
   type JsonValue,
   qualifyAggregateId,
   type RunEnd,
@@ -172,10 +173,15 @@ function outputOf(
   return tool === STRUCTURED_OUTPUT_TOOL_NAME ? 'submitted' : null;
 }
 
-/** Input that asks the run to do something: its user's and its parent's. A
- *  child's report, another run's message and a host notice only inform it. */
-export const isInstruction = ({ from }: FollowUpContent): boolean =>
-  from.kind === 'user' || (from.kind === 'run' && from.relation === 'parent');
+/** Input that asks the run to do something: its user's and its parent's
+ *  messages. A child's report, another run's message and a host notice only
+ *  inform it. */
+export const isInstruction = (
+  content: FollowUpContent,
+): content is FollowUpMessage =>
+  !('delivery' in content) &&
+  (content.from.kind === 'user' ||
+    (content.from.kind === 'run' && content.from.relation === 'parent'));
 
 /** The row that consumes one follow-up, committed beside the rows that took
  *  it; its writer states why (`disposition`). */

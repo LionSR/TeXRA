@@ -10,6 +10,7 @@ import {
   ChildRuns,
   noLaterTurn,
   type AgentTrace,
+  type ChildRunDelivery,
   type PluginToolServices,
   type ProcessTurn,
   type ToolCardHandle,
@@ -217,8 +218,11 @@ interface AgentCliTurnParams<TTurn> {
   /** The turn's own spend, logged and published on the child's trace as
    *  the turn returns. Null when the provider reported none. */
   getUsage: (turn: TTurn) => TokenUsageStats | null;
-  formatDelivery: (turn: TTurn, wallTimeMs: number) => string;
-  formatError: (turn: TTurn | null, err: unknown) => string;
+  /** The delivery of a turn the provider returned. */
+  delivery: (turn: TTurn, wallTimeMs: number) => ChildRunDelivery;
+  /** The delivery of a failed turn: one the provider reported failed, or
+   *  (no turn) one that threw. */
+  errorDelivery: (turn: TTurn | null, err: unknown) => ChildRunDelivery;
   /** Omitted by providers (codex) that always throw on failure. */
   isTurnError?: (turn: TTurn) => boolean;
   turnErrorMessage?: (turn: TTurn) => string;
@@ -229,7 +233,7 @@ interface AgentCliTurnParams<TTurn> {
  * provider (codex, claudeAgent): the provider's turn with its wall time,
  * its usage on the child's trace, its delivery or error report, and the
  * thread's claim closed as the turn ends. Callers supply only their
- * provider-specific turn and its formatting.
+ * provider-specific turn and its deliveries.
  */
 export function buildAgentCliTurn<TTurn>(
   params: AgentCliTurnParams<TTurn>,
@@ -239,8 +243,8 @@ export function buildAgentCliTurn<TTurn>(
     claim,
     runProviderTurn,
     getUsage,
-    formatDelivery,
-    formatError,
+    delivery,
+    errorDelivery,
     isTurnError,
     turnErrorMessage,
   } = params;
@@ -264,9 +268,9 @@ export function buildAgentCliTurn<TTurn>(
         turnErrorMessage?.(turn) ??
         'The provider reported a failed turn without throwing.';
       logger.error(failure);
-      return { report: formatError(turn, null), failure };
+      return { report: errorDelivery(turn, null), failure };
     }
-    return { report: formatDelivery(turn, wallTimeMs) };
+    return { report: delivery(turn, wallTimeMs) };
   }).pipe(
     Effect.onExit((exit) =>
       claim === undefined ? Effect.void : Scope.close(claim, exit),
@@ -274,6 +278,6 @@ export function buildAgentCliTurn<TTurn>(
   );
   return {
     run,
-    reportError: (error) => formatError(null, error),
+    reportError: (error) => errorDelivery(null, error),
   };
 }

@@ -10,6 +10,7 @@ import { endRunRows } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
+import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import { SessionLog } from '@shared/session/runHistory';
 import {
@@ -160,7 +161,7 @@ export const endRun = Effect.fn('endRun')(function* (
       : yield* childEndReport(
           ctx,
           { ...childResult, outcome },
-          (yield* log.facts(runId))?.stop?.reason ?? null,
+          yield* log.facts(runId),
           (yield* Clock.currentTimeMillis) - ctx.startedAt,
         ).pipe(
           Effect.catch((unbuilt) =>
@@ -172,7 +173,14 @@ export const endRun = Effect.fn('endRun')(function* (
                   error: unbuilt,
                 },
               ),
-              `The run ${runId} ended ${outcome}, but its report could not be built: ${unbuilt.message}`,
+              {
+                family:
+                  ctx.config.script?.kind === 'background'
+                    ? DELIVERY_FAMILY.script
+                    : DELIVERY_FAMILY.subagent,
+                runId,
+                message: `The run ${runId} ended ${outcome}, but its report could not be built: ${unbuilt.message}`,
+              },
             ),
           ),
         );
