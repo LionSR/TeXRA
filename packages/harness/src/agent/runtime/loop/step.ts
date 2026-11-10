@@ -270,7 +270,7 @@ const openStep = Effect.fn('Step.open')(function* (
     ]);
     const skills = { plugins: [...pinned.installed.values()], contributors };
     const names =
-      state.phase === null
+      state.at === null
         ? (run.opening?.activated ?? [])
         : (state.input.activated ?? []);
     const recordedSkills = recorded === null ? null : state.offeredWith.skills;

@@ -20,7 +20,7 @@
  * costs the chunk, never the row's text.
  */
 
-import { Equal, type Types, absurd } from 'effect';
+import { Equal, type Types } from 'effect';
 import {
   aggregateTarget,
   qualifyAggregateId,
@@ -689,18 +689,11 @@ function applyRunEvent(
       return run;
     case 'run.activate':
       // Every activation (the launch, a resume, a follow-up) sets the run
-      // running, which clears its outcome; the tool-call count is the run's
-      // and carries over. Its turn's clock starts here: an interrupted
-      // run's old start would count the time nothing ran it.
-      return {
-        ...applyStanding(
-          { ...run, turnStartedAt: null },
-          standingOf(event),
-          event.at,
-        ),
-        turn: null,
-        ...endOf(record),
-      };
+      // running (`applyEvent` puts it there), which clears its outcome; the
+      // tool-call count is the run's and carries over. Its turn's clock
+      // starts here: an interrupted run's old start would count the time
+      // nothing ran it.
+      return { ...run, turnStartedAt: null, turn: null, ...endOf(record) };
     case 'run.config': {
       // A process has no model; any other run is on its newest config's.
       const { config } = event;
@@ -750,32 +743,10 @@ function applyRunEvent(
             title: event.description || run.label,
           };
     case 'run.end':
-      // The run ended: its outcome and output, and any result its end lost.
-      return {
-        ...applyStanding(run, standingOf(event), event.at),
-        ...endOf(record),
-      };
+      // The run ended (`applyEvent` puts it at its outcome): its output, and
+      // any result its end lost.
+      return { ...run, ...endOf(record) };
   }
-}
-
-/** The run's loop position, read from what `runRows.ts` recorded, moved to
- *  where {@link standingAfter} leaves it. */
-function withPosition(run: RunView, rows: SharedRunRows, row: SharedRunRow) {
-  if (rows.at === null) return run;
-  if (row.type === 'run.position' && row.payload.at === 'waiting')
-    run = { ...run, forkPoint: row.seq };
-  const turn = rows.turn;
-  const standing = standingAfter(row);
-  return standing === null
-    ? { ...run, turn }
-    : applyStanding({ ...run, turn }, standing, row.at);
-}
-
-/** Where a lifecycle row leaves its run; only those rows reach here. */
-function standingOf(row: Parameters<typeof standingAfter>[0]): RunStanding {
-  const standing = standingAfter(row);
-  if (standing === null) throw new Error(`${row.type} changes no run standing`);
-  return standing;
 }
 
 /** Put the run where a lifecycle row leaves it: the one standing writer. Inside
@@ -794,58 +765,22 @@ function applyStanding(
   };
 }
 
-/** The rows that change a session-level field; every other row changes
- *  only its run. */
-type SessionFactRow = Extract<
-  DisplayRow,
-  { type: 'run.start' | 'approval.policy' | 'plugin.fact' }
->;
-const changesSessionFacts = (event: DisplayRow): event is SessionFactRow =>
-  event.type === 'run.start' ||
-  event.type === 'approval.policy' ||
-  event.type === 'plugin.fact';
-
-/** The session-level fields an event changes, applied before the run's own
- *  change so its derived fields see them. */
-function applySessionFacts(
-  u: Update,
-  runId: RunId | null,
-  event: DisplayRow,
-): void {
-  if (!changesSessionFacts(event)) return;
+/** A plugin's own aggregate's fact, the newest of its kind (a run's own
+ *  facts go on the run, `applyRunEvent`). */
+function applyPluginFact(u: Update, event: DisplayRow): void {
+  if (event.type !== 'plugin.fact') return;
   const { view } = u;
-  switch (event.type) {
-    case 'run.start':
-      // The run's initial policy snapshot comes with its `run.start`.
-      // `runLifecycle.ts` always stamps it; the trace viewer's synthetic
-      // envelope carries none, which is why the field stays optional.
-      if (event.approvalPolicy && runId !== null) {
-        view.policy = writable(u, view.policy).set(runId, event.approvalPolicy);
-      }
-      return;
-    case 'approval.policy':
-      if (runId !== null)
-        view.policy = writable(u, view.policy).set(runId, event.snapshot);
-      return;
-    case 'plugin.fact': {
-      // A run's own plugin facts go on the run (`applyRunEvent`).
-      if (runId !== null) return;
-      const { seq: _s, commit: _c, at: _a, ...fact } = event;
-      const held = view.pluginFacts.findIndex(
-        (old) =>
-          old.aggregateId === fact.aggregateId &&
-          old.plugin === fact.plugin &&
-          old.kind === fact.kind,
-      );
-      view.pluginFacts =
-        held === -1
-          ? [...view.pluginFacts, fact]
-          : view.pluginFacts.with(held, fact);
-      return;
-    }
-    default:
-      absurd(event);
-  }
+  const { seq: _s, commit: _c, at: _a, ...fact } = event;
+  const held = view.pluginFacts.findIndex(
+    (old) =>
+      old.aggregateId === fact.aggregateId &&
+      old.plugin === fact.plugin &&
+      old.kind === fact.kind,
+  );
+  view.pluginFacts =
+    held === -1
+      ? [...view.pluginFacts, fact]
+      : view.pluginFacts.with(held, fact);
 }
 
 /** One shared row, applied by `runRows.ts` and projected onto the session's
@@ -866,7 +801,12 @@ function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
   rows.set(run.id, after);
   if (moved.requests !== undefined) projectRequests(u.view, run.id, after);
   if (moved.followUps !== undefined) projectFollowUps(u, run.id, after);
-  return moved.at === undefined ? run : withPosition(run, after, event);
+  // A position moves the turn, and a wait is a point a fork may cut at;
+  // where it leaves the run is `applyEvent`'s.
+  if (moved.at === undefined) return run;
+  return event.type === 'run.position' && event.payload.at === 'waiting'
+    ? { ...run, turn: after.turn, forkPoint: event.seq }
+    : { ...run, turn: after.turn };
 }
 
 /** `view.requests` is every run's open requests, in the order the rows
@@ -949,9 +889,10 @@ function applyEvent(
   event: DisplayRow,
   read: 'listing' | 'aggregate' | 'all',
 ): boolean {
+  // Where a lifecycle row leaves its run, which moves its transcript too.
+  const standing = standingAfter(event);
   const transcriptChanged =
-    read !== 'listing' &&
-    (isTranscriptEvent(event) || standingAfter(event) !== null)
+    read !== 'listing' && (isTranscriptEvent(event) || standing !== null)
       ? applyTranscriptRow(u, event)
       : false;
   const listingType = listingKeyOf(event);
@@ -966,7 +907,7 @@ function applyEvent(
   const runId = runIdOf(event.aggregateId);
   if (runId === null) {
     latest.set(listingKey, event.commit);
-    applySessionFacts(u, null, event);
+    applyPluginFact(u, event);
     return true;
   }
   const known = u.view.runs.get(runId);
@@ -982,6 +923,9 @@ function applyEvent(
   const { records } = u.state;
   const record = recordAfter(records.get(runId) ?? NO_RUN_ROWS, event);
   records.set(runId, record);
+  // Its grants, before its own change, whose derived fields read them.
+  if (record.grants !== null && u.view.policy.get(runId) !== record.grants)
+    u.view.policy = writable(u, u.view.policy).set(runId, record.grants);
 
   // The rows the run loop's state is also built from are applied once, in
   // `runRows.ts`; every other row is the view's own.
@@ -1000,9 +944,9 @@ function applyEvent(
           : sumUsageStats([before.usage, event.usage]),
     };
   } else {
-    applySessionFacts(u, runId, event);
     own = applyRunEvent(before, event, record);
   }
+  if (standing !== null) own = applyStanding(own, standing, event.at);
   if (event.type === 'run.end') {
     // A run can end with a row unfinalized: its end drops all live text.
     clearLiveText(transcriptWork(u, runId).ix);

@@ -172,11 +172,7 @@ const MESSAGE_HANDLERS: {
     copies: BatchCopies,
   ) => RowOutcome;
 } = {
-  attempt: (state, p) =>
-    Result.map(withInvocation(state, p), (updated) => ({
-      ...updated,
-      phase: 'model.submitted',
-    })),
+  attempt: withInvocation,
   identified: withInvocation,
   accepted: withInvocation,
   cancelled: withInvocation,

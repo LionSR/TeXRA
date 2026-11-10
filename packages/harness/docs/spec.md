@@ -553,16 +553,14 @@ A run is opened by its first `run.position`. Run history rows without an opening
 position MUST fail the load as `inconsistent`
 (`agent/runtime/makeRunHistory.ts#'RunHistory.loaded'`).
 
-### 5.3 Phases
+### 5.3 Where a run stands
 
-The fold maps a position to a loop phase: `turn.ready` and `waiting` to
-`waiting`, `turn.begin` to `model.ready`, `response.ready` to `model.submitted`,
-`results.ready` to `results.ready`, and `turn.end` to `turn.ended`
-(`shared/session/runState.ts#PHASE_AT`).
-
-There is no halted position: a `run.end` is the halt, and a resume continues
-from the phase the last `run.position` recorded
-(`shared/session/runState.ts#phaseAfter`).
+The fold keeps the newest position as where the loop stands: between turns at
+`waiting` or `turn.end`, and inside a turn at any other, `turn.ready` being
+input taken for a turn that has not begun
+(`shared/session/runRowsShape.ts#RunRowState`). There is no halted position: a
+`run.end` is the halt, and a resume continues from the position the last
+`run.position` recorded (`shared/session/runRows.ts#applyRunRow`).
 
 ### 5.4 The commit path
 
@@ -906,15 +904,15 @@ What survives at each commit point follows from sections 2 to 8:
 - `tool.result`: The settlement is reused; the call is not run again
   (`agent/runtime/loop/toolUseDispatch.ts#finishCall`).
 - **delivery `append`**: The loop continues to the next step from
-  `results.ready` (`shared/session/runState.ts#PHASE_AT`).
+  `results.ready` (`shared/session/runRowsShape.ts#RunRowState`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
 - `run.end`: The lifecycle is over. A recipe task stays finished, and a
   resume answers `finished`
   (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
   conversation continues on a resume in a new lifecycle
-  (`shared/session/runActions.ts#continuesFromRows`), from the phase its
-  last `run.position` kept (`shared/session/runState.ts#phaseAfter`).
+  (`shared/session/runActions.ts#continuesFromRows`), from the position its
+  last `run.position` kept (`shared/session/runRows.ts#applyRunRow`).
 
 These are guarantees about committed state. An external effect that finished
 before its result committed stays uncertain; I4 governs it, and the suite cannot

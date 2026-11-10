@@ -22,7 +22,6 @@ import {
   type JsonValue,
   type DeclinableUsageRoute,
   type OfferedTool,
-  type PositionAt,
   qualifyAggregateId,
   type ModelFailure,
   type RunId,
@@ -92,40 +91,6 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
 ) {}
 
 /**
- * Where the loop stands, as its own branches read it: between turns
- * (`waiting`, `turn.ended`) or somewhere inside a turn. Never written: derived
- * from the run's `run.position` rows.
- */
-type RunLoopPhase =
-  | 'model.ready'
-  | 'model.submitted'
-  | 'results.ready'
-  | 'waiting'
-  | 'turn.ended';
-
-/**
- * The phase a position leaves an opened loop in. A stop writes no
- * position: the loop stops in the phase its newest position names, so a
- * resume continues from there. `turn.ready` is input consumed while
- * waiting, still between turns; a `turn.end` that no `waiting` or
- * `turn.begin` follows in its batch is the round loop's last round closed,
- * the run concluded before its terminal row. A run's first position opens
- * it: its opening batch's `turn.ready`, or a fork's `waiting`.
- */
-const PHASE_AT: Readonly<Record<PositionAt, RunLoopPhase>> = {
-  'turn.ready': 'waiting',
-  'turn.begin': 'model.ready',
-  'response.ready': 'model.submitted',
-  'results.ready': 'results.ready',
-  'turn.end': 'turn.ended',
-  waiting: 'waiting',
-};
-const phaseAfter = (
-  phase: RunLoopPhase | null,
-  at: PositionAt | null | undefined,
-): RunLoopPhase | null => (at == null ? phase : PHASE_AT[at]);
-
-/**
  * What the loop continues from. A plain type with no schema of its own,
  * because giving it one invites persisting it. Every field is derived
  * from the row that produced it.
@@ -133,9 +98,6 @@ const phaseAfter = (
 export type RunState = RunRowState &
   RunFacts & {
     readonly commit: CommitOrdinal;
-    /** `null` until the opening `run.position` (then set by
-     *  {@link phaseAfter}): no row that needs an opened run comes before it. */
-    readonly phase: RunLoopPhase | null;
     /** The model the run is on: its newest `run.config`'s. */
     readonly modelId: string | null;
     /** The backend that config's `binding` names, as written; null before
@@ -223,7 +185,6 @@ export type RunInputDraft = Exclude<
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunRowState(),
   commit,
-  phase: null,
   modelId: null,
   backend: null,
   lastError: null,
@@ -340,7 +301,6 @@ const applySharedRow = (
     ...(row.type === 'run.position' &&
       row.payload.at === 'turn.begin' && { answer: '' }),
     ...(row.type === 'run.position' && { steppedAt: row.seq }),
-    phase: phaseAfter(state.phase, verdict.rows.at),
   });
 };
 
@@ -415,7 +375,7 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       const p = row.payload;
       const input = withInput(state.input, p.input);
       if (p.cause === 'fork') {
-        const first = state.phase === null && state.messages.length === 0;
+        const first = state.at === null && state.messages.length === 0;
         if (!first || p.base !== null || p.range.to !== 0)
           return outOfOrder('a fork edit must be the first view of its run');
         return Result.succeed({
@@ -538,7 +498,7 @@ function applyRow(
   const handler = handlerOf(row.type);
   const requires = requirementOf(row);
   if (requires === 'existing' && current === null) return null;
-  if (requires === 'opened' && current?.phase == null)
+  if (requires === 'opened' && current?.at == null)
     return rejected(
       'out-of-order',
       `${row.type} before the opening run.position`,
@@ -575,7 +535,7 @@ export function applyRunRows(
     current = next.success;
     history ||= isRunStateRow(row) && requirementOf(row) !== 'existing';
   }
-  if (history && current !== null && current.phase === null)
+  if (history && current !== null && current.at === null)
     return Result.fail(
       new RunHistoryInconsistent({
         reason: 'out-of-order',

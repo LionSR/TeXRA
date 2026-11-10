@@ -94,7 +94,7 @@ export type PositionAt = typeof PositionAtSchema.Type;
 
 /** Where the loop stands (`at`, not "step": a step is one model call) and
  *  the turn it stands in: the one record of the loop's position, which the
- *  fold projects to `RunState.phase` and `RunView.position`. */
+ *  fold reads as `RunState.at` and projects to `RunView.position`. */
 export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
   turn: Schema.optional(
