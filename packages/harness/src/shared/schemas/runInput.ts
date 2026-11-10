@@ -90,9 +90,14 @@ export type RunInput = typeof RunInputSchema.Type;
  * provider preferences say by then, and the subscription routes it
  * declined. Routes declined by a retry are folded from that retry's
  * decision.
+ *
+ * `backend` reads as written: a row naming a provider this build no longer
+ * has still decodes, so its run stays readable, and the run's next bind
+ * refuses it by name (`decideRoute`). What a bind writes is a
+ * {@link ModelBackend}, so the stored names only grow with this list.
  */
 export const RunBindingSchema = Schema.Struct({
-  backend: ModelBackendSchema,
+  backend: Schema.String.check(Schema.isMinLength(1)),
   declinedRoutes: Schema.Array(DeclinableUsageRouteSchema),
 });
 /** What a run is bound to beyond its model id ({@link RunBindingSchema}). */

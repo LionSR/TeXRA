@@ -319,7 +319,6 @@ const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
 export const WebFetchTool = defineTool({
   name: 'web_fetch',
   replay: 'safe',
-  slow: true,
   lane: 'parallel',
   description:
     'Fetch content from a URL and return it as clean text. Fetches the HTML and converts it to Markdown locally. An optional prompt is echoed above the text as a reminder of what you need from it.',

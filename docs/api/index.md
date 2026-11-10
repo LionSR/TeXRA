@@ -10,7 +10,7 @@
 
 A session's runs do not live in an in-memory conversation array or a sidecar checkpoint file. Every model call, tool execution, human approval, context edit, and child delegation commits append-only rows to the project database (`texra.db`, or an in-memory SQLite database when opened without `{ persistent: true }`):
 
-- **One writer per storage root.** A project store is held by the one process that opened it (a second process's open is refused), and every durable write goes through the session publisher in enqueue order. Each stateful stream—a run (`run:<runId>`) or a plugin's durable state (`plugin:<id>:<key>`)—is an aggregate of that store, and every row is stamped with the writer's [`ProcessIdentity`](./harness/node#processidentity) (`[hostname, pid, processStart]`) as its `origin`.
+- **One writer per storage root.** A project store is held by the one process that opened it (a second process's open is refused), and every durable write goes through the session publisher in enqueue order. Each stateful stream—a run (`run:<runId>`) or a plugin's durable state (`plugin:<id>:<key>`)—is an aggregate of that store.
 - **One reducer for live steps and recovery.** Appending a batch of rows updates the run's state through the run reducer, and the loop reads its next action from that returned state. Resuming an interrupted run in a later process replays the committed rows through the same reducer.
 - **Three authorities, kept separate:**
   1. **History rows** hold resumable execution facts (messages, tool intents and results, model bindings, context edits, human requests, and terminal outcomes).

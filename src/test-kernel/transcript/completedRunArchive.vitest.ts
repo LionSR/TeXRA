@@ -123,7 +123,7 @@ layer(texraHosted, { excludeTestServices: true })(
               {
                 type: 'run.position',
                 aggregateId: qualifyAggregateId('run', runId),
-                payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
+                payload: { at: 'turn.ready', turn: 0 },
               },
             ]);
 

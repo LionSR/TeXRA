@@ -10,9 +10,8 @@
  * sequence; `rowCodec.ts` every stored shape, by the fact kinds the process's
  * plugins contribute (this module reads no payload); `projections` the
  * projectors and their upkeep, run in this module's transactions. This
- * module owns the envelope: the writer (`ProcessIdentity`), the publish
- * clock, and the `seq` and `commit` ordinals, none of which a caller
- * supplies.
+ * module owns the envelope: the publish clock, and the `seq` and `commit`
+ * ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -24,15 +23,16 @@ import {
   Clock,
   Context,
   Effect,
+  type FileSystem,
   Layer,
   Option,
   Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   CURRENT_VALUE_VERSION,
   edgesOf,
@@ -40,12 +40,18 @@ import {
   RunIdSchema,
   aggregateTarget,
   type AggregateId,
+  type DisplayRow,
   type RunParent,
   type SessionRow,
   type SessionRowDraft,
   factName,
 } from '@shared/schemas';
-import { InPublisherJob, ProcessIdentity } from '@shared/session/sessionEvents';
+import {
+  NO_RUN_ROWS,
+  RECORD_ROW_TYPES,
+  recordAfter,
+} from '@shared/session/runRowReads';
+import { InPublisherJob } from '@shared/session/sessionEvents';
 import {
   AggregateStateSchema,
   Database,
@@ -61,13 +67,7 @@ import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
-import {
-  LISTED_TYPES,
-  projectionUpkeep,
-  runRecordCommits,
-  runRowsOf,
-  usageRows,
-} from './projections';
+import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
 import {
   EVENT_COLUMNS,
   EVENT_FROM,
@@ -85,15 +85,13 @@ import {
 } from './rowCodec';
 import {
   AGGREGATE,
-  DISPLAY_READ_KINDS,
+  callCard,
   DISPLAY_READ_TYPES,
   PROJECTED_COLUMNS,
   PROJECTED_FROM,
   READ_LISTING,
-  READ_COMMITS,
   READ_RUN_RECORD,
   rowReader,
-  settleCards,
 } from './rowReader';
 import { isBusy, isDamaged, retryBusy } from './storeAside';
 import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
@@ -118,8 +116,8 @@ RETURNING id, seq
 `;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
-INSERT INTO event (aggregate, seq, type, version, origin, at, data)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO event (aggregate, seq, type, version, at, data)
+VALUES (?, ?, ?, ?, ?, ?)
 RETURNING "commit" AS "commit"
 `;
 /** A blob is stored once per store, whichever run wrote it first. */
@@ -146,22 +144,20 @@ FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
 WHERE s.id IN (${AGGREGATE_LIST})
 `;
 
-/** Stored rows a display page reads before it runs on to its batch's end. */
+/** The stored rows one display page covers. */
 const DISPLAY_PAGE_ROWS = 2000;
+/** The kinds a run's record reads, as the JSON list its read binds. */
+const RECORD_TYPES = JSON.stringify(RECORD_ROW_TYPES);
 /** A run's aggregate `logical_id` column as the `RunId` it is. */
 const runIdOf = Schema.decodeUnknownSync(RunIdSchema);
 /** The `event` table's autoincrement sequence: a non-negative integer. */
 const EventSeqSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
-/** Where a display page after a commit ends: 2,000 stored rows on, run to
- *  the end of the batch the last one is in, as a card's `tool.end` and the
- *  settlement it projects from share one batch (`settleCards`) and a batch's
- *  rows share one `at`. No row, or a NULL `through`: the page runs to the
- *  end. Counted in rows, so a stretch of collected commits bounds nothing. */
-const DISPLAY_PAGE_END = `WITH last AS (SELECT "commit", at FROM event
-    WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1})
-  SELECT (SELECT e."commit" - 1 FROM event e
-    WHERE e."commit" > last."commit" AND e.at <> last.at
-    ORDER BY e."commit" LIMIT 1) AS through FROM last`;
+/** Where a display page after a commit ends: at the last of the stored rows
+ *  it covers. A page may end at any row, as each display row is shown from
+ *  one stored row. No row: the page runs to the end. Counted in rows, so a
+ *  stretch of collected commits bounds nothing. */
+const DISPLAY_PAGE_END = `SELECT "commit" AS through FROM event
+  WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1}`;
 
 /**
  * The one display union: the `event` rows of the types bound first, every
@@ -176,16 +172,17 @@ const displayUnion = (where: string, order: string, arm?: string) =>
     UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
     ${arm === undefined ? '' : `UNION ALL ${arm}`}
   ) WHERE ${where} ORDER BY ${order}`;
+/** What a display read shows of one decoded row: a display row itself, a
+ *  call row's tool card, nothing of any other private row. */
+const shown = (row: SessionRow): readonly DisplayRow[] =>
+  isDisplayRow(row) ? [row] : callCard(row);
 /** A committed batch's display rows, as a display read of its commits
- *  selects and settles them: the display kinds and tool results, each priced
- *  row's projected `usage` row after it, each card's output projected. */
+ *  returns them: what each row shows, then the `usage` row a priced one
+ *  projects. */
 const displayRows = (rows: readonly SessionRow[]) =>
-  settleCards(
-    rows.flatMap((row) => [
-      ...(DISPLAY_READ_KINDS.has(row.type) ? [row] : []),
-      ...usageRows(row),
-    ]),
-  ).filter(isDisplayRow);
+  rows
+    .flatMap((row) => [...shown(row), ...usageRows(row)])
+    .filter(isDisplayRow);
 
 /** How a store is opened: a project store, created if absent
  *  (`persistent`) or only opened (`existing`), is held exclusively by this
@@ -209,13 +206,12 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | ProcessIdentity | ProcessProbe | ToolRegistry
+  WorkspaceRoots | FileSystem.FileSystem | ChildProcessSpawner | ToolRegistry
 > =>
   Layer.effect(
     Database,
     Effect.gen(function* () {
       const roots = yield* WorkspaceRoots;
-      const identity = yield* ProcessIdentity;
       const path =
         mode === 'ephemeral'
           ? IN_MEMORY_STORE
@@ -308,7 +304,6 @@ export const databaseLayer = (
       ) =>
         exec(statement, params).pipe(
           Effect.flatMap((rows) => reader.read(rows, whole)),
-          Effect.map(settleCards),
         );
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
@@ -626,7 +621,6 @@ export const databaseLayer = (
           seq,
           encoded.type,
           encoded.version,
-          identity.ownerId,
           at,
           encoded.data,
         ]))?.commit;
@@ -661,7 +655,6 @@ export const databaseLayer = (
           ...committedDraft,
           seq,
           commit,
-          origin: identity.ownerId,
           at,
         };
       });
@@ -704,7 +697,7 @@ export const databaseLayer = (
                 return [
                   [...rows, ...kept]
                     .sort((x, y) => x.commit - y.commit)
-                    .filter(isDisplayRow),
+                    .flatMap(shown),
                   through < top ? Option.some(through) : Option.none(),
                 ] as const;
               }),
@@ -714,21 +707,19 @@ export const databaseLayer = (
         readListing: () => query(decodedRows(READ_LISTING, [])),
         readBlobs: (digests) => query(reader.blobs(digests)),
         readRunRecord: (id) =>
-          snapshot(
-            Effect.gen(function* () {
-              const stored = (yield* execOne(
+          query(
+            Effect.map(
+              decodedRows(
                 READ_RUN_RECORD,
-                aggregateColumns(id),
-              ))?.record;
-              if (stored === undefined) return null;
-              const record = String(stored);
-              const rows = yield* decodedRows(
-                READ_COMMITS,
-                [JSON.stringify(runRecordCommits(record))],
+                [...aggregateColumns(id), RECORD_TYPES],
                 true,
-              );
-              return runRowsOf(record, rows);
-            }),
+              ),
+              // Only a run has a start: a plugin's own aggregate has no record.
+              (rows) => {
+                const record = rows.reduce(recordAfter, NO_RUN_ROWS);
+                return record.start === null ? null : record;
+              },
+            ),
           ),
         ...currentValues({
           exec,
@@ -755,7 +746,7 @@ export const databaseLayer = (
               DISPLAY_READ_TYPES,
               ...aggregateColumns(id),
               fromSeq,
-            ]).pipe(Effect.map((rows) => rows.filter(isDisplayRow))),
+            ]).pipe(Effect.map((rows) => rows.flatMap(shown))),
           ),
         aggregateState: (ids) => query(readState(ids)),
         readInputBatch: (ids, fromCommit, throughCommit, checkedIds) =>
@@ -769,7 +760,7 @@ export const databaseLayer = (
                 throughCommit,
               ]);
               return {
-                events,
+                events: events.flatMap(shown),
                 state: yield* readState(checkedIds),
                 damaged: yield* reader.damaged,
               };
@@ -878,7 +869,7 @@ export const globalDatabaseLayer = (
 ): Layer.Layer<
   GlobalDatabase,
   DatabaseOpenFailed,
-  ProcessIdentity | ProcessProbe
+  FileSystem.FileSystem | ChildProcessSpawner
 > =>
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(

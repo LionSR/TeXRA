@@ -5,8 +5,6 @@ import { describe, expect } from 'vitest';
 
 import { GlobalValues } from '@texra-ai/harness/host';
 import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { globalValuesOver } from '@test/support/setupPlatform';
 import {
@@ -33,7 +31,6 @@ const withGlobalValues = <A, E>(program: Effect.Effect<A, E, GlobalValues>) =>
         Effect.provide(
           globalValuesOver(
             globalDatabaseLayer(storage).pipe(
-              Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
               Layer.provide(nodeSpawnerLayer),
               Layer.orDie,
             ),

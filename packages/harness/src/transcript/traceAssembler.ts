@@ -2,13 +2,12 @@
  * Assemble a static trace: the run aggregate's own display events, in commit
  * order, plus the run's persisted record for the caller's filename.
  *
- * Four facts are authored rather than copied, because an exported file has no
- * producer, no siblings and no writable host: `origin` is null on every row
- * (which is also PII removal — the origin names the writing process), and
- * the creation row carries no parent, no checkpoint and no follow-up support
- * (a visible composer would be a dead control against a read-only bridge).
+ * Three facts are authored rather than copied, because an exported file has
+ * no siblings and no writable host: the creation row carries no parent, no
+ * checkpoint and no follow-up support (a visible composer would be a dead
+ * control against a read-only bridge).
  *
- * A fifth is redacted: a decided request keeps its action and loses what the
+ * A fourth is redacted: a decided request keeps its action and loses what the
  * user typed or approved (see `decisionAction`).
  */
 import { Effect, absurd } from 'effect';
@@ -96,19 +95,10 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
       runId,
       events: displayEvents.map((event) => {
         if (event.type === 'run.start')
-          return {
-            ...event,
-            origin: null,
-            parent: null,
-            takesFollowUps: false,
-          };
+          return { ...event, parent: null, takesFollowUps: false };
         if (isRequestDecision(event))
-          return {
-            ...event,
-            origin: null,
-            decision: decisionAction(event.decision),
-          };
-        return { ...event, origin: null };
+          return { ...event, decision: decisionAction(event.decision) };
+        return event;
       }),
     },
   };

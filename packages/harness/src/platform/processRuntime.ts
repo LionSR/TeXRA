@@ -82,9 +82,8 @@ export class StateStores extends Context.Service<
  * and `AppSignals`, the process's app-lifecycle signal hub. Every run and
  * session of the process is provided these, beneath the run-level services
  * the agent runtime adds (`RunServices`) and the `ProcessServices` a
- * composition root runs on. The project stores (`ProjectDatabases`) and the
- * identity stamped on every row (`ProcessIdentity`) are not among them: only
- * the session composition and its stores read them.
+ * composition root runs on. The project stores (`ProjectDatabases`) are not
+ * among them: only the session composition and its stores read them.
  */
 export type PlatformServices =
   | FileSystem.FileSystem

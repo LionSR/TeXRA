@@ -14,8 +14,8 @@ import {
   Option,
   RcMap,
 } from 'effect';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import type { LocalRuntimeState } from '@shared/schemas';
 import {
   Database,
@@ -23,7 +23,6 @@ import {
   ProjectDatabases,
 } from '@shared/session/database';
 import type { SessionView } from '@shared/session/readonlyViews';
-import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { ToolRegistry } from '@tools/toolTable';
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -71,7 +70,7 @@ export const readSessionView = Effect.fn('readSessionView')(function* (
 ): Effect.fn.Return<
   Option.Option<SessionView>,
   DatabaseOpenFailed,
-  ProcessProbe | ProjectDatabases | ProcessIdentity | ToolRegistry
+  FileSystem.FileSystem | ChildProcessSpawner | ProjectDatabases | ToolRegistry
 > {
   const databases = yield* ProjectDatabases;
   const read = Effect.gen(function* () {

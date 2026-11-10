@@ -5,7 +5,7 @@
  * billing. Also whether a model switch can take the run's route, and the one
  * move onto the user's own credential a failed attempt offers.
  */
-import { Context, Effect, Option } from 'effect';
+import { Context, Effect, Option, Schema } from 'effect';
 
 import {
   decideModelRoute,
@@ -25,11 +25,15 @@ import { RouteUnavailable } from '@common/errors/agentErrors';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
 import { decideReasoning, servingBackend } from '@model/reasoningLevel';
 import { Secrets } from '@platform/secrets';
-import type {
-  CredentialSwitch,
-  DeclinableUsageRoute,
-  ModelBackend,
+import {
+  ModelBackendSchema,
+  type CredentialSwitch,
+  type DeclinableUsageRoute,
+  type ModelBackend,
 } from '@shared/schemas';
+
+/** Whether a stored backend name is one this build serves. */
+const isModelBackend = Schema.is(ModelBackendSchema);
 
 /** The canned model a package-validation build provides beneath the process
  *  layer, and whether a new run takes it. Absent, none does, and a run
@@ -58,9 +62,10 @@ export interface RouteDecision {
 
 /** What the decision is asked for besides the model. */
 interface RouteAsk {
-  /** A resumed run's backend: the decision fails when today's route would
-   *  serve the model from another one. */
-  readonly backend?: ModelBackend;
+  /** A resumed run's backend, as its rows name it: the decision fails when
+   *  this build has no such backend, or when today's route would serve the
+   *  model from another one. */
+  readonly backend?: string;
   /** The routes the run declined (its rows record them). */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /** The provider reasoning mode the request asks for (OpenAI `pro`). */
@@ -83,6 +88,11 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
 ): Effect.fn.Return<RouteDecision, RouteUnavailable> {
   const host = routeFactsFor(settings, ask.declinedRoutes);
   const { backend, mode } = ask;
+  if (backend !== undefined && !isModelBackend(backend)) {
+    return yield* unavailable(
+      `This conversation ran on ${backend}, which this build no longer supports. Start a new chat.`,
+    );
+  }
   const canned = yield* Effect.serviceOption(ValidationModel);
   const validation =
     backend === undefined
@@ -138,7 +148,7 @@ export interface SwitchRefusal {
 export const admitSwitch = Effect.fn('admitSwitch')(
   function* (
     selected: SelectedModel,
-    backend: ModelBackend,
+    backend: string,
     settings: ModelSettings,
     declinedRoutes: readonly DeclinableUsageRoute[],
   ) {

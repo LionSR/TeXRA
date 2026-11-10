@@ -146,7 +146,7 @@ export class DatabaseRowEarlier extends Schema.TaggedError<DatabaseRowEarlier>()
 /**
  * A root's current values (`current_value`): one row per family and key,
  * replaced in place, outside the event history, so an event-format bump
- * leaves them. Every write is one `BEGIN IMMEDIATE` with no aggregate claim;
+ * leaves them. Every write is one `BEGIN IMMEDIATE`;
  * a value decodes with its family's schema where it is read, and a row that
  * no longer decodes fails that read.
  */
@@ -232,14 +232,15 @@ export class Database extends Context.Service<
     /** SQLite's committed high-water mark. */
     readonly currentCommit: Effect.Effect<CommitOrdinal, DatabaseReadFailed>;
     /** The display rows a committed batch shows, as a display read of the
-     *  same commits returns them (each tool card's output projected, the
-     *  priced rows' `usage` rows added), from the rows in memory. */
+     *  same commits returns them (its display rows, each call row as its
+     *  tool card, each priced row's `usage` row), from the rows in memory. */
     readonly displayRows: (
       rows: readonly SessionRow[],
     ) => readonly DisplayRow[];
-    /** The display rows from `fromCommit`, filtered in SQL (a tail never
-     *  decodes private records to drop them), a page at a time; each page is
-     *  its own snapshot, so a deletion marker a page saw is delivered regardless. */
+    /** The display rows from `fromCommit`, selected in SQL (a tail decodes
+     *  no private row but the call rows it shows as tool cards), a page at a
+     *  time; each page is its own snapshot, so a deletion marker a page saw
+     *  is delivered regardless. */
     readonly readDisplay: (
       fromCommit: CommitOrdinal,
     ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
@@ -248,8 +249,9 @@ export class Database extends Context.Service<
     readonly readBlobs: (
       digests: readonly string[],
     ) => Effect.Effect<StoredBlobs, DatabaseReadFailed>;
-    /** One open run's record (the `run_record` projection over the rows
-     *  it names), null for a run never started or removed. */
+    /** One open run's record (`recordAfter` over the newest row of each
+     *  record kind, which the listing indexes), null for a run never
+     *  started or removed. A row of them that does not decode fails it. */
     readonly readRunRecord: (
       id: AggregateId,
     ) => Effect.Effect<RunRows | null, DatabaseReadFailed>;
@@ -264,8 +266,9 @@ export class Database extends Context.Service<
       types: readonly SessionRow['type'][],
       toSeq?: number,
     ) => Effect.Effect<readonly SessionRow[], DatabaseReadFailed>;
-    /** One aggregate's display rows in seq order, with the `usage` rows its
-     *  priced responses project: what a renderer replays. */
+    /** One aggregate's display rows in seq order, with the tool cards its
+     *  call rows show and the `usage` rows its priced responses project:
+     *  what a renderer replays. */
     readonly readDisplayAggregate: (
       id: AggregateId,
       fromSeq: number,
@@ -291,10 +294,10 @@ export class Database extends Context.Service<
         cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
       ) => Effect.Effect<void, Error>;
     };
-    /** From one snapshot: the rows above `fromCommit` through
-     *  `throughCommit` a session's view reads (every listing kind, and every
-     *  row of the aggregates `ids`), the existence of `checkedIds`, and the
-     *  runs this build cannot open. */
+    /** From one snapshot: the display rows above `fromCommit` through
+     *  `throughCommit` a session's view reads (every listing kind, and what
+     *  every row of the aggregates `ids` shows), the existence of
+     *  `checkedIds`, and the runs this build cannot open. */
     readonly readInputBatch: (
       ids: readonly AggregateId[],
       fromCommit: CommitOrdinal,
@@ -302,7 +305,7 @@ export class Database extends Context.Service<
       checkedIds: readonly AggregateId[],
     ) => Effect.Effect<
       {
-        readonly events: readonly SessionRow[];
+        readonly events: readonly DisplayRow[];
         readonly state: readonly AggregateState[];
         readonly damaged: readonly UnreadableRun[];
       },

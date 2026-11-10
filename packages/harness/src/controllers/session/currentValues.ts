@@ -2,7 +2,7 @@
  * A root's current values and input history:
  * application state, not history, and the one writer of `current_value` and
  * `input_history`. Each family's row is replaced in place in one
- * `BEGIN IMMEDIATE` with no aggregate claim, and decodes with its family's
+ * `BEGIN IMMEDIATE`, and decodes with its family's
  * schema where it is read; a row that no longer decodes fails that read.
  * `Database` hands it the connection's statements and transaction, and the
  * counter of value writes its change feed wakes on: this module moves it

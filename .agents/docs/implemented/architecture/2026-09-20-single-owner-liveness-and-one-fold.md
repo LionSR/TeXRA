@@ -20,10 +20,12 @@ rather than synchronized.
 
 ## 2. How it holds today
 
-- **The event table is the only durable authority for run facts.** Every
-  append is stamped with the owner in the same SQL statement
-  (`event_sequence.owner_id`, `packages/harness/src/controllers/session/Database.ts`),
-  so a lost claim writes nothing.
+- **The event table is the only durable authority for run facts.** A
+  project store is held by the one process that opened it, for its
+  connection's life (`locking_mode = EXCLUSIVE`,
+  `packages/harness/src/controllers/session/databaseLayer.ts`): a second
+  opener is refused at once, so a row has one writer and no process holds a
+  run another could take. There is no claim and no owner column.
 - **No snapshot restates rows.** A run resumes from `applyRunRows` over its
   rows (`packages/harness/src/shared/session/runState.ts`); the facts a
   snapshot once carried each have their own row.
@@ -51,8 +53,9 @@ rather than synchronized.
 These guard inherent concurrency, not a duplicated authority:
 
 - the `SessionEvents` publisher: many producers, one commit order;
-- the claim and its liveness proof, SQLite's `busy_timeout`, and the
-  `PRAGMA data_version` poll (two processes on one root);
+- on the global store, which processes share and which holds values alone,
+  SQLite's `busy_timeout` and the `PRAGMA data_version` poll (a project
+  store has one process, so it needs neither);
 - `ModelRetryGate` (the provider);
 - webview reconnect generations (`SessionFramer`, `SessionBridge`);
 - `jsonStore` file write lanes;

@@ -36,8 +36,8 @@ export const followUpServices = Effect.map(
  * disposed session, or a message that does not wake the run), or one of the
  * message's alone:
  *
- * - `readFailed`: the run's claim or state could not be read just now
- *   (a busy or failing store), which says nothing about the run itself.
+ * - `readFailed`: the run's rows could not be read just now (a failing
+ *   store), which says nothing about the run itself.
  * - `notParent`: the sender is not the run's parent.
  */
 export type FollowUpFailureReason =

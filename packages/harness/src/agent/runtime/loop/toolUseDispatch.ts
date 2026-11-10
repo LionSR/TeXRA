@@ -18,9 +18,10 @@
  * script's stage, which the transcript projects from those cards); its
  * requests, under ids the attempt derives (`callRequestId`); `tool.intent`
  * as the body starts, after the PreToolUse hooks, the guard and its
- * approval, with a slow tool's card; `tool.result` with its card's close;
- * and the delivering `append` with the complete tool group once, when every
- * call of the response has its result.
+ * approval; `tool.result`; and the delivering `append` with the complete
+ * tool group once, when every call of the response has its result. Those two
+ * rows are the call's card as well: a display read shows the intent as the
+ * card's opening and the result as its close.
  */
 import { isDeepStrictEqual } from 'node:util';
 
@@ -62,9 +63,7 @@ import {
   toJsonValue,
   type AggregateId,
   type DispatchFacts,
-  type FileListEntry,
   type ScriptCallPayload,
-  type ToolCallStatus,
   type StoredMediaPart,
   type ToolResult,
   type ToolResultPayload,
@@ -112,7 +111,7 @@ import {
   formatToolResultAsText,
 } from '../run/toolResultText';
 import { callRequests, guardedToolCall } from './toolGuard';
-import { appendRow, displayRow, positionRow } from './rows';
+import { appendRow, positionRow } from './rows';
 import type { AgentRunServices } from '../runRegistry';
 import type { StepTools } from './step';
 import type { InvokeError } from '../ModelInvoker';
@@ -270,90 +269,46 @@ const commit = (
       : rows;
   }, alongside);
 
-/** The call's result row at `attempt`; `blobs` are the bytes it links. */
+/** The call's result row at `attempt`, which closes the call's card when it
+ *  has one (`card`); `blobs` are the bytes it links. */
 const resultRow = (
-  { dispatch, fact }: Call,
+  { dispatch, fact, stage }: Call,
   attempt: number,
   result: Omit<ToolCallResult, 'attempt'>,
+  card: boolean,
   blobs: readonly DraftBlob[] = [],
 ): RunHistoryDraft => ({
   type: 'tool.result',
   aggregateId: dispatch.aggregateId,
+  ...(card && stage !== null && { stageId: stage }),
   payload: {
     responseId: dispatch.responseId,
     callId: fact.callId,
     attempt,
+    logId: card ? fact.logId : null,
     ...result,
   },
   ...(blobs.length > 0 && { blobs }),
 });
 
-/** Commit the call's result at `attempt`, its card `rows` in the batch. */
+/** Commit a result no body returned (a duplicate's copy, a script's host
+ *  function's answer, a skip) at `attempt`; `card` says whether an attempt
+ *  of the call opened the card this result then closes. */
 const commitResult = (
   call: Call,
   attempt: number,
   result: Omit<ToolCallResult, 'attempt'>,
-  rows: readonly RunHistoryDraft[] = [],
-) => commit(call, [resultRow(call, attempt, result), ...rows]);
-
-/** The rows of a call's card over `ran`, the input its body ran on: its
- *  `tool.start` unless the card is `opened` already, then its `tool.end` when
- *  `close` says how it ended, with the `files` it edited. A slow tool's card
- *  opens with its intent, so a resume finds the card its result closes; a fast
- *  tool's opens and closes with its result, which a read projects it from
- *  (`rowCodec.ts`): the card stores no output. */
-const cardRows = (
-  { dispatch, fact, stage }: Call,
-  ran: unknown,
-  attempt: number,
-  opened: boolean,
-  close: ToolCallStatus | null,
-  files: readonly FileListEntry[] = [],
-): RunHistoryDraft[] => {
-  const script = scriptOf(fact);
-  const base = {
-    logId: fact.logId,
-    ...(stage === null ? {} : { stageId: stage }),
-  };
-  const { runId } = dispatch.run;
-  return [
-    ...(opened
-      ? []
-      : [
-          displayRow(runId, {
-            type: 'tool.start',
-            ...base,
-            toolName: fact.toolName,
-            input: toJsonValue(ran),
-            card: dispatch.step.registry
-              .get(fact.toolName)
-              ?.definition.card?.(ran),
-            ...(script?.section != null ? { section: script.section } : {}),
-            ...(attempt > 1 ? { attempt } : {}),
-          }),
-        ]),
-    ...(close === null
-      ? []
-      : [
-          displayRow(runId, {
-            type: 'tool.end',
-            ...base,
-            status: close,
-            ...(files.length > 0 ? { files: [...files] } : {}),
-          }),
-        ]),
-  ];
-};
+  card = false,
+) => commit(call, [resultRow(call, attempt, result, card)]);
 
 /** Settle a call that has no result as skipped for `reason`, closing the
- *  card its attempt opened (a slow tool's); one that never started has none. */
+ *  card an attempt of it opened; one that never started has none. */
 const skipCall = (
   call: Call,
   status: Exclude<CallStatus, { kind: 'settled' }>,
   reason: string,
 ) => {
   const reached = attemptOf(status);
-  const slow = call.dispatch.step.registry.get(call.fact.toolName)?.slow;
   return commitResult(
     call,
     Math.max(1, reached),
@@ -363,9 +318,7 @@ const skipCall = (
       result: { status: 'error', error: reason },
       attachments: [],
     },
-    reached === 0
-      ? []
-      : cardRows(call, call.input, reached, slow === true, 'failed'),
+    reached > 0,
   );
 };
 
@@ -435,7 +388,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     script === null &&
     step.offered.some((t) => t.name === fact.toolName && !t.sent);
   const tool = unsent ? undefined : step.registry.get(fact.toolName);
-  // A slow tool's card opens as its body starts; what the tool prints is
+  // The call's card opens as its body starts; what the tool prints is
   // transient text on it, capped, never a row, refused once the call returned.
   let accepting = false;
   let streamed = 0;
@@ -469,8 +422,17 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     ));
   if (pre && pre.rows.length > 0) yield* commit(call, pre.rows);
   let result: ToolResult;
-  // What the body ran on, which the cards show; the issued input is recorded.
+  // What the body ran on, which the card shows; the issued input is recorded.
   let ran = input;
+  /** The card the call opens over `on`, with the stage it opens under. */
+  const cardOver = (on: unknown) => ({
+    logId: fact.logId,
+    toolName: fact.toolName,
+    input: toJsonValue(on),
+    card: step.registry.get(fact.toolName)?.definition.card?.(on),
+    ...(script?.section != null ? { section: script.section } : {}),
+  });
+  const staged = call.stage === null ? {} : { stageId: call.stage };
   if (!tool || !pre) {
     result = {
       status: 'error',
@@ -479,8 +441,8 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
         : `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
     };
   } else {
-    // From here the call may have run: its intent commits now, with a slow
-    // tool's card, unless this attempt's body already started (a re-entry).
+    // From here the call may have run: its intent commits now, which opens
+    // its card, unless this attempt's body already started (a re-entry).
     const bodyStarts = Effect.fn('bodyStarts')(function* (on: unknown) {
       ran = on;
       if (!bodyStarted)
@@ -488,6 +450,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
           {
             type: 'tool.intent',
             aggregateId: dispatch.aggregateId,
+            ...staged,
             payload: {
               origin:
                 script === null
@@ -495,12 +458,12 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
                   : { kind: 'script', scriptCallId: script.scriptCallId },
               callId: fact.callId,
               attempt,
+              ...cardOver(on),
             },
           },
-          ...(tool.slow ? cardRows(call, on, attempt, false, null) : []),
         ]);
       bodyStarted = true;
-      accepting = tool.slow === true;
+      accepting = true;
       yield* pre.bodyStarts;
     });
     // This call's place in its run, and the child door over exactly it.
@@ -584,39 +547,33 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
       }),
     ),
   );
-  const edited =
-    result.status === 'executed'
-      ? (result.edits ?? []).flatMap(({ path }) => (path ? [path] : []))
-      : [];
-  const editedFiles = [...new Set(edited)].map((path) => ({
-    path,
-    ok: true,
-    source: 'tool',
-    sourceDisplay: 'Tool use',
-  }));
   const { attachments, blobs } = yield* captureAttachments(
     extracted.attachments,
     roots.workspace,
   );
   const sanitized = extracted.sanitizedResult;
-  // The card commits with the result (a slow tool's closes, a fast tool's
-  // opens and closes here); outside the batch recovery could see it undone.
-  const cards = cardRows(
-    call,
-    ran,
-    attempt,
-    tool?.slow === true && bodyStarted,
-    sanitized.status === 'error' ? 'failed' : 'completed',
-    editedFiles,
-  );
+  // A call that ends before its body starts (denied, or its tool not in
+  // this run) has no intent to open its card: the card's `tool.start`
+  // commits here, before the result that closes it.
+  const opening: RunHistoryDraft[] = bodyStarted
+    ? []
+    : [
+        {
+          type: 'tool.start',
+          aggregateId: dispatch.aggregateId,
+          ...staged,
+          ...cardOver(ran),
+          ...(attempt > 1 ? { attempt } : {}),
+        },
+      ];
   // An executed call's PostToolUse rows, the follow-ups its result answers
   // and its facts (the run's, and its plugin's own aggregates') commit too.
   const post = pre ? yield* pre.after(sanitized) : [];
   const answered =
     sanitized.status === 'executed' ? (sanitized.consumedFollowUps ?? []) : [];
   const facts = factRows(extracted.facts, runId, plugin, log);
-  // A retirement refused outside the run history is the claim's refusal,
-  // worded as the cell words one of its own.
+  // A retirement refused outside the run history names a closed aggregate;
+  // it is worded as the cell words one of its own.
   yield* retireStanding.pipe(
     Effect.catchTag('DatabaseAggregateClosed', (refused) =>
       Effect.fail(runRefusal(runId, refused)),
@@ -625,6 +582,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   yield* commit(
     call,
     [
+      ...opening,
       resultRow(
         call,
         attempt,
@@ -634,9 +592,9 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
           result: storedResult(sanitized),
           attachments,
         },
+        true,
         blobs,
       ),
-      ...cards,
       ...post,
       ...answered.map((id) => consumedRow(runId, id, { kind: 'answered' })),
     ],

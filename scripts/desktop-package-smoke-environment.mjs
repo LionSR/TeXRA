@@ -103,11 +103,9 @@ async function bundleDatabaseFixture() {
         export { databaseLayer, globalDatabaseLayer } from '@controllers/session/databaseLayer';
         export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
         export { Database, GlobalDatabase } from '@shared/session/database';
-        export { ProcessIdentity } from '@shared/session/sessionEvents';
         export { qualifyAggregateId, SessionRowSchema } from '@shared/schemas';
         export { resolveGlobalStoragePath, resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
         export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
-        export { processOwnerId, processStartIdentity } from '@platform/defaults/nodeProcesses';
         export { nodePlatformServices } from '@platform/defaults/nodePlatform';
         export { ToolRegistry, toolTable } from '@tools/toolTable';
         export { servicePaths } from '@texra/controllers/server/discovery';
@@ -137,23 +135,19 @@ async function bundleDatabaseFixture() {
  */
 export async function rememberOpenProject(dataRoot, workspaceRoot) {
   const fixture = await loadDatabaseFixture();
-  // The identity read and the database open spawn through the Node spawner
-  // the application's runtime serves.
+  // The database open spawns through the Node spawner the application's
+  // runtime serves.
   await Effect.runPromise(
     Effect.gen(function* () {
-      const owner = fixture.processOwnerId(yield* fixture.processStartIdentity);
-      yield* Effect.gen(function* () {
-        const { values } = yield* fixture.GlobalDatabase;
-        const records = fixture.openDesktopProjectRecords(values);
-        yield* records.activate(workspaceRoot);
-      }).pipe(
-        Effect.provide(
-          fixture
-            .globalDatabaseLayer(fixture.resolveGlobalStoragePath(dataRoot))
-            .pipe(Layer.provide(fixture.ProcessIdentity.layer(owner))),
-        ),
-      );
-    }).pipe(Effect.provide(fixture.nodePlatformServices)),
+      const { values } = yield* fixture.GlobalDatabase;
+      const records = fixture.openDesktopProjectRecords(values);
+      yield* records.activate(workspaceRoot);
+    }).pipe(
+      Effect.provide(
+        fixture.globalDatabaseLayer(fixture.resolveGlobalStoragePath(dataRoot)),
+      ),
+      Effect.provide(fixture.nodePlatformServices),
+    ),
   );
 }
 

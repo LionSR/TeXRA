@@ -31,9 +31,8 @@ its kind is its `type` column.
 
 ## 1. Terms
 
-- **Process**: One OS process with one process identity,
-  `[hostname, pid, processStart]`, stamped on every row it writes
-  (`shared/schemas/identifiers.ts#OwnerIdSchema`).
+- **Process**: One OS process. A project store is held by one at a time
+  (section 7).
 - **Storage root**: One directory holding one store file.
 - **Session**: The process's handle on one storage root: its store connection,
   its one publisher, its fold and its live runs.
@@ -89,7 +88,7 @@ The store is one SQLite file named `texra.db` under the storage root
 application id (`TeXR`) carry the product's name. An ephemeral session runs the
 same schema in memory (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
-The store MUST carry application id `0x54655852` and schema version 102 in
+The store MUST carry application id `0x54655852` and schema version 104 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts#APPLICATION_ID`,
 `#SCHEMA_VERSION`). A process MUST refuse, unchanged, a file with another
 application id or a schema stamp at or above 102 other than its own
@@ -121,8 +120,6 @@ row carries an envelope that the store stamps and no caller supplies:
   never reused
   (`controllers/session/storeSchema.ts#CREATE TABLE IF NOT EXISTS event`).
 - `seq`: Dense from 1 per aggregate (`controllers/session/databaseLayer.ts#NEXT_SEQ`).
-- `origin`: The writing process's identity
-  (`controllers/session/databaseLayer.ts#INSERT_EVENT`).
 - `at`: Publish clock in whole milliseconds, one value for a whole batch;
   informational only (`controllers/session/databaseLayer.ts#'Database.appendAll'`).
 
@@ -194,10 +191,11 @@ Above the publisher, the session's own door (`SessionLog.transact`) SHALL return
 only after the session's view has applied every commit the job made
 (`controllers/session/sessionStore.ts#viewApplied`).
 A trace row emitted on its own reaches the publisher through
-`SessionLog.publish` (`shared/session/sessionLog.ts#SessionLogShape`); a call's
-card rows and a turn's closing rows commit inside the run's own batches instead
-(`agent/runtime/loop/toolUseDispatch.ts#cardRows`,
-`agent/runtime/loop/runLoop.ts#log.closure`). `SessionLog.settled` is the
+`SessionLog.publish` (`shared/session/sessionLog.ts#SessionLogShape`); a turn's
+closing rows commit inside the run's own batches instead
+(`agent/runtime/loop/runLoop.ts#log.closure`), and a call's card is no row of
+its own: a display read shows the call's `tool.intent` and `tool.result` as it
+(`controllers/session/rowReader.ts#callCard`). `SessionLog.settled` is the
 barrier after every job enqueued before it, once the terminal-result presenter
 has run over the view's rows past it
 (`controllers/session/sessionStore.ts#settled`).
@@ -290,10 +288,12 @@ Read through the run history, and by the store's usage projection, which turns
 the priced usage on `response`, `failed` and `context.edit` rows, and on a
 model's `run.description`, into a projected `usage` row
 (`controllers/session/projections.ts#pricedUsage`), and by
-the display reader, which selects `tool.result` to fill the adjacent `tool.end`
-card's result before it drops the private row
-(`controllers/session/rowReader.ts#DISPLAY_READ_TYPES`, `#settleCards`). The
-private rows themselves are never sent to a renderer
+the display reader, which selects `tool.intent` and `tool.result` and shows
+each as its call's card row, a `tool.start` or a `tool.end`, in the private
+row's place (`controllers/session/rowReader.ts#DISPLAY_READ_TYPES`,
+`#callCard`). Each display row is shown from one stored row, so a display read
+may end a page at any row (`controllers/session/databaseLayer.ts#DISPLAY_PAGE_END`).
+The private rows themselves are never sent to a renderer
 (`shared/schemas/sessionEvent.ts#isDisplayRow`).
 
 - `model.message` (folded: yes): One arm per invocation fact: `attempt`,
@@ -304,11 +304,14 @@ private rows themselves are never sent to a renderer
   (`shared/schemas/runHistoryEvent.ts#ContextEditPayloadSchema`).
 - `tool.intent` (folded: yes): The point after which a call's body may have run,
   at an attempt number; it commits just before the body starts, so it does not
-  prove the body ran (`shared/schemas/runHistoryEvent.ts#ToolIntentPayloadSchema`,
+  prove the body ran. It names the card the attempt opens: its id, its tool,
+  the input the body runs on and the card the tool states
+  (`shared/schemas/runHistoryEvent.ts#ToolIntentPayloadSchema`,
   `agent/runtime/loop/toolUseDispatch.ts#bodyStarts`).
 - `script.call` (folded: yes): A call a `script` guest issued, with its
   arguments (`shared/schemas/runHistoryEvent.ts#ScriptCallPayloadSchema`).
-- `tool.result` (folded: yes): A call's one settlement and its disposition
+- `tool.result` (folded: yes): A call's one settlement and its disposition,
+  naming the card it closes, or none
   (`shared/schemas/runHistoryEvent.ts#ToolResultPayloadSchema`).
 - `tools.offered` (folded: yes): The step's offered tools, system text and
   hooks, when they changed
@@ -343,10 +346,19 @@ The `model.message` arms:
 `run.end`), `process.exit` how a process run's command exited, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts#RunRecordEventDraftSchema`,
-`controllers/session/projections.ts#recordAfter`, `agent/followUp/Inbox.ts#admission`).
-A run's record (`SessionLog.facts`) is one projection row per run, the
-`run_record` table, naming the commits of the rows it reads
-(`controllers/session/projections.ts#runRowsOf`).
+`shared/session/runRowReads.ts#recordAfter`, `agent/followUp/Inbox.ts#admission`).
+A run's record (`SessionLog.facts`) is stored nowhere: it is the newest row of
+each record kind, which the listing projection already indexes, applied in
+commit order by the one statement of the record's rules
+(`controllers/session/rowReader.ts#READ_RUN_RECORD`,
+`shared/session/runRowReads.ts#recordAfter`). The input read, a follow-up's
+receipt and the session view apply that same function to the rows they hold
+(`shared/session/runRowReads.ts#RUN_ROW_READS`, `#turnReceipt`,
+`shared/session/sessionViewUpdate.ts#applyRunEvent`). A record row a projection
+catch-up could not decode is listed as its run's unread row, so the record's
+read fails on it and never answers without it
+(`controllers/session/rowReader.ts#UNREAD_KEY`,
+`controllers/session/projections.ts#unread`).
 
 ### 3.3 Display rows (session-authored and run-authored)
 
@@ -380,13 +392,20 @@ The transcript tier is display rows too
 such as a plugin's section; a stage still open when its run ends closes with
 that `run.end`), `tool.start` (a call's card opens; a script's call names
 the `script` card that issued it as its `stageId`, the script's stage),
-`tool.end` (it closes), `usage` (one priced turn; a run with a run history
-stores none), `context.state`, `stream.start`, `stream.end`, and
+`tool.end` (it closes, with the call's output and the files it edited),
+`usage` (one priced turn; a run with a run history stores none),
+`context.state`, `stream.start`, `stream.end`, and
 `response.finalized` (the final text of one provider response; a loop turn that
 asks for its final tool may record another,
 `agent/runtime/loop/runLoop.ts#afterTextResponse`). `response.finalized` is read
 by the fold, which marks that response's answer final
 (`shared/session/runState.ts#answerFinalized`).
+
+A run with a run history stores no `tool.end`, and a `tool.start` only for a
+call that ends before its body starts: a display read shows a call's
+`tool.intent` as its `tool.start` and its `tool.result` as its `tool.end`
+(section 4, W3 and W4). A run without one (an agent-CLI child) stores both
+(`agent/trace/TraceEmitter.ts#openToolCard`).
 
 Streamed text (`stream.chunk`) is transient. It is not an arm of the vocabulary
 and never a row (`agent/runtime/loop/toolUseDispatch.ts#'stream.chunk'`).
@@ -408,8 +427,8 @@ write points are normative:
   the body runs, once per attempt
   (`agent/runtime/loop/toolUseDispatch.ts#bodyStarts`;
   `agent/runtime/loop/toolGuard.ts#guardedToolCall`).
-- **W4**, `tool.result`: commits, with the call's card rows, before the delivery
-  that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts#cardRows`,
+- **W4**, `tool.result`: commits before the delivery that lets the loop
+  continue (`agent/runtime/loop/toolUseDispatch.ts#resultRow`,
   `#'toolUse.deliver'`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
@@ -447,22 +466,29 @@ helper call, which records no row (W1).
 **W3.** A call's `tool.intent` MUST commit after its PreToolUse hooks and its
 guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts#bodyStarts`,
 `agent/runtime/loop/toolGuard.ts#guardedToolCall`). The guard asks for a
-command's approval (`agent/runtime/loop/toolGuard.ts#askCommandApproval`). A
-slow tool's `tool.start` card MUST commit in the intent's batch
-(`agent/runtime/loop/toolUseDispatch.ts#bodyStarts`). An attempt whose intent is
+command's approval (`agent/runtime/loop/toolGuard.ts#askCommandApproval`). The
+intent names the card the attempt opens, and a display read shows the row as
+that card's `tool.start`, so every call's card opens as its body starts and no
+card row commits beside the intent
+(`shared/schemas/runHistoryEvent.ts#ToolIntentPayloadSchema`,
+`controllers/session/rowReader.ts#callCard`). An attempt whose intent is
 already committed MUST NOT commit another
 (`agent/runtime/loop/toolUseDispatch.ts#bodyStarted`).
 
-**W4.** A call that settles from its body MUST commit its `tool.result` with its
-whole card: a slow tool's `tool.end`, a fast tool's `tool.start` and `tool.end`
-(`agent/runtime/loop/toolUseDispatch.ts#cardRows`). A body interrupted or cut by
-a crash commits no result; a resume settles it (section 9, "`tool.intent`, no
-result"). A synthetic settlement of a call no body started (a call a recovered
-response never started, a duplicate, a call after the turn ended) commits its
-`tool.result` with no card (`agent/runtime/loop/toolUseDispatch.ts#skipCall`,
-`#commitResult`); one that settles a started call as outcome unknown commits its
-card's close, and its open for a fast tool
-(`agent/runtime/loop/toolUseDispatch.ts#skipCall`). The delivering `append` MUST
+**W4.** A call's `tool.result` names the card it closes, and a display read
+shows the row as that card's `tool.end`, with the call's output and the files
+it edited (`shared/schemas/runHistoryEvent.ts#ToolResultPayloadSchema`,
+`controllers/session/rowReader.ts#callCard`). A call that ends before its body
+starts (its guard or a hook denied it, or its tool is not in the run) has no
+intent to open its card: its `tool.start` MUST commit in its result's batch,
+before the result (`agent/runtime/loop/toolUseDispatch.ts#opening`). A body
+interrupted or cut by a crash commits no result; a resume settles it (section
+9, "`tool.intent`, no result"). A result no body returned names a card only
+when an attempt of the call opened one: a call a recovered response never
+started, a duplicate, a script's host function and a call after the turn ended
+name none, and one that settles a started call as outcome unknown closes the
+card its intent opened (`agent/runtime/loop/toolUseDispatch.ts#skipCall`,
+`#commitResult`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
 to the response (`agent/runtime/loop/toolUseDispatch.ts#'toolUse.deliver'`). A
 delivery its settlements do not match is a defect

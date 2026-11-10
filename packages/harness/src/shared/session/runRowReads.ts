@@ -2,14 +2,16 @@
  * The reads of a run's rows, for every reader but the run state and the
  * session view (those apply their shared rows through `runRows.ts`): each
  * read of {@link RUN_ROW_READS} names the kinds it selects and folds those
- * rows, typed as them, into what it answers (`foldRunRows`). A run's
- * `RunRows` is the store's `run_record` projection. Beside them: a row as the
- * decision of a request (`isRequestDecision`), where a row leaves its run
- * (`standingAfter`, `closesRunWindow`), and what became of one input
+ * rows, typed as them, into what it answers (`foldRunRows`). A run's record
+ * (`RunRows`) is its record rows applied one at a time by {@link recordAfter},
+ * the one statement of the record's rules, whoever reads it. Beside them: a
+ * row as the decision of a request (`isRequestDecision`), where a row leaves
+ * its run (`standingAfter`, `closesRunWindow`), and what became of one input
  * (`followUpReceipt`).
  *
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   runEndErrorMessage,
   type FollowUpReceipt,
@@ -25,7 +27,7 @@ import {
   isSharedRunRow,
   type SharedRunRow,
 } from './runRows';
-import type { RowOf, SharedRunRows } from './runRowsShape';
+import type { RowOf, RunRows, SharedRunRows } from './runRowsShape';
 
 /** One read: the kinds it selects and what it makes of those rows. */
 interface RowRead<K extends SessionRow['type'], A> {
@@ -85,7 +87,11 @@ export const RUN_ROW_READS = {
     ],
     (rows) => {
       const { followUps, taken } = sharedRowsFrom(rows.filter(isSharedRunRow));
-      return { ...lifecycleOf(rows), followUps, taken };
+      const { parent, end, stop, inputClosed } = rows.reduce(
+        recordAfter,
+        NO_RUN_ROWS,
+      );
+      return { parent, end, stop, inputClosed, followUps, taken };
     },
   ),
   requests: rowRead(['request.opened', 'request.decided'], (rows) => ({
@@ -133,27 +139,103 @@ export function foldRunRows<R extends RunRowRead>(
   );
 }
 
-/** The input read's lifecycle: the parent edge the start set and a
- *  `run.detach` severs, the current lifecycle's end and stop (an activation
- *  clears both), and whether the input is closed (the latest of
- *  `run.activate`, `followup.closed` and `run.removed` is not an
- *  activation). */
-function lifecycleOf(rows: readonly SessionRow[]) {
-  let parent: RowOf<'run.start'>['parent'] = null;
-  let end: RowOf<'run.end'> | null = null;
-  let stop: RowOf<'run.stop'> | null = null;
-  let inputClosed = false;
-  for (const row of rows) {
-    if (row.type === 'run.start') parent = row.parent;
-    if (row.type === 'run.detach') parent = null;
-    if (row.type === 'run.activate')
-      [end, stop, inputClosed] = [null, null, false];
-    if (row.type === 'run.stop') stop = row;
-    if (row.type === 'run.end') end = row;
-    if (row.type === 'followup.closed' || row.type === 'run.removed')
-      inputClosed = true;
+/** The kinds a run's record reads, each handled by {@link recordAfter}:
+ *  what a store selects to read a record. */
+export const RECORD_ROW_TYPES = [
+  'run.start',
+  'approval.policy',
+  'run.detach',
+  'run.activate',
+  'run.stop',
+  'run.end',
+  'followup.closed',
+  'run.removed',
+  'run.report',
+  'process.exit',
+  'run.config',
+  'run.position',
+  'plugin.fact',
+  'run.description',
+] as const satisfies readonly SessionRow['type'][];
+
+/** The record of a run no row has said anything about. */
+export const NO_RUN_ROWS: RunRows = {
+  start: null,
+  parent: null,
+  activation: null,
+  end: null,
+  stop: null,
+  inputClosed: false,
+  report: null,
+  exit: null,
+  config: null,
+  position: null,
+  title: null,
+  label: null,
+  grants: null,
+  facts: {},
+};
+
+/**
+ * A run's record after `row`, applied in commit order: the one statement of
+ * what each record row changes, which the store's record read, the input
+ * read, a follow-up's receipt and the session view all apply. Each field
+ * holds what the latest row of a kind says and one row can start over
+ * (an activation), so a run's latest row of each kind, each plugin fact and
+ * each title's author gives the same record as all its rows do.
+ */
+export function recordAfter(record: RunRows, row: SessionRow): RunRows {
+  switch (row.type) {
+    case 'run.start':
+      return {
+        ...record,
+        start: row,
+        parent: row.parent,
+        grants: row.approvalPolicy ?? NO_APPROVAL_GRANTS,
+      };
+    case 'approval.policy':
+      return { ...record, grants: row.snapshot };
+    case 'run.detach':
+      return { ...record, parent: null };
+    // A resumed run never carries the previous lifecycle's end or stop, and
+    // its input is open again.
+    case 'run.activate':
+      return {
+        ...record,
+        activation: row,
+        end: null,
+        stop: null,
+        inputClosed: false,
+      };
+    case 'run.stop':
+      return { ...record, stop: row };
+    case 'run.end':
+      return { ...record, end: row };
+    case 'followup.closed':
+    case 'run.removed':
+      return { ...record, inputClosed: true };
+    case 'run.report':
+      return { ...record, report: row.report };
+    case 'process.exit':
+      return { ...record, exit: row };
+    case 'run.config':
+      return { ...record, config: row.config };
+    case 'run.position':
+      return { ...record, position: row };
+    case 'plugin.fact':
+      return { ...record, facts: { ...record.facts, [factName(row)]: row } };
+    // A user's title stands until the user renames again.
+    case 'run.description':
+      return row.by === 'user'
+        ? { ...record, title: row }
+        : {
+            ...record,
+            label: row,
+            title: record.title?.by === 'user' ? record.title : row,
+          };
+    default:
+      return record;
   }
-  return { parent, end, stop, inputClosed };
 }
 
 /** Whether `row` decides a request: what a waiter on a request reads off
@@ -268,12 +350,9 @@ function turnReceipt(
   after: readonly SessionRow[],
   turn: number,
 ): FollowUpReceipt {
-  let end: RowOf<'run.end'> | null = null;
-  let stop: RowOf<'run.stop'> | null = null;
+  let record = NO_RUN_ROWS;
   for (const row of after) {
-    if (row.type === 'run.activate') end = stop = null;
-    if (row.type === 'run.stop') stop = row;
-    if (row.type === 'run.end') end = row;
+    record = recordAfter(record, row);
     if (row.type !== 'run.position') continue;
     const { at, outcome } = row.payload;
     const rowTurn = row.payload.turn ?? 0;
@@ -282,12 +361,12 @@ function turnReceipt(
         ? { state: 'answered', turn, answer: row.seq }
         : { state: 'unanswered', turn, reason: 'failed' };
     // Past the turn with no end of it: the end that cut it short says why.
-    if (rowTurn > turn) return unansweredBy(turn, end);
+    if (rowTurn > turn) return unansweredBy(turn, record.end);
   }
   // A shutdown cut the turn, which the resume continues.
-  return end === null || stop?.reason === 'shutdown'
+  return record.end === null || record.stop?.reason === 'shutdown'
     ? { state: 'incorporated', turn }
-    : unansweredBy(turn, end);
+    : unansweredBy(turn, record.end);
 }
 
 /** A turn's input the run's end left unanswered: the end's outcome and
