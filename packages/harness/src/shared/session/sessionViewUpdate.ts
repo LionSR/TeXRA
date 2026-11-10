@@ -746,7 +746,7 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
 /** The run's loop position, read from what `runRows.ts` recorded, moved to
  *  where {@link standingAfter} leaves it. */
 function withPosition(run: RunView, rows: SharedRunRows, row: SharedRunRow) {
-  if (rows.family === null || rows.at === null) return run;
+  if (rows.at === null) return run;
   if (row.type === 'run.position' && row.payload.at === 'waiting')
     run = { ...run, forkPoint: row.seq };
   const turn = rows.turn;

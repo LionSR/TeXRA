@@ -208,7 +208,7 @@ const runStartRow = runStart(RUN);
 const waiting: SessionRowDraft = {
   type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
-  payload: { family: 'toolUse', at: 'waiting' },
+  payload: { at: 'waiting' },
 };
 
 const requested: SessionRowDraft = {
@@ -344,7 +344,7 @@ describe('session events and view', () => {
           {
             type: 'run.position',
             aggregateId: qualifyAggregateId('run', RUN),
-            payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
+            payload: { at: 'turn.begin', turn: 1 },
           },
         ]),
       );

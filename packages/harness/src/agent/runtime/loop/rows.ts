@@ -76,7 +76,6 @@ export function positionRow(
     type: 'run.position',
     aggregateId: qualifyAggregateId('run', runId),
     payload: {
-      family: 'toolUse',
       at,
       turn: state.turn,
       ...(outcome !== undefined && { outcome }),

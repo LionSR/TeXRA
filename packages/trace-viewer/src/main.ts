@@ -43,14 +43,12 @@ function renderLoadError(err: unknown): void {
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }
 
-/** One `run.position` row, as the slider's readout spells it: its family,
- *  where the loop stands, and the row's own turn. A row carries all three
- *  coordinates, the ones its family never advances included, so reading
- *  them all would label a tool-use turn with the round it never left. */
+/** One `run.position` row, as the slider's readout spells it: where the
+ *  loop stands, and the row's own turn. */
 function positionLabel(position: TracePosition): string {
-  const { family, at, turn } = position.payload;
+  const { at, turn } = position.payload;
   const where = turn == null ? undefined : formatLoopPositionLabel(turn);
-  return `${family} ${at}${where ? ` (${where})` : ''}`;
+  return `${at}${where ? ` (${where})` : ''}`;
 }
 
 /**

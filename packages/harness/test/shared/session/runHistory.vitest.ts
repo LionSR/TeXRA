@@ -35,7 +35,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     const snapshot = (): RunHistoryDraft => ({
       type: 'run.position',
       aggregateId: AGGREGATE,
-      payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
+      payload: { at: 'turn.ready', turn: 0 },
     });
     const refusalOf = (error: unknown): RunHistoryRefused | null =>
       error instanceof RunHistoryRefused ? error : null;

@@ -251,7 +251,7 @@ export function buildScenario({ proposal = false } = {}) {
   // step, so a mid-flight fixture carries one (one run model, 3.3).
   log.emit(CHILD, T.childProgress, {
     type: 'run.position',
-    payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
+    payload: { at: 'turn.begin', turn: 1 },
   });
   log.emit(CHILD, T.childApproval, {
     type: 'request.opened',
@@ -292,7 +292,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.position',
-    payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
+    payload: { at: 'turn.begin', turn: 1 },
   });
   log.emit(GRANDCHILD, T.grandchildFiles, {
     type: 'plugin.fact',

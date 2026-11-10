@@ -9,7 +9,6 @@ import type {
   RequestPayload,
   PositionAt,
   RequestDecision,
-  RunFamily,
   SessionRow,
   FactName,
 } from '@shared/schemas';
@@ -32,7 +31,6 @@ type RequestState = {
  * fields `applyRunRow` returns onto itself.
  */
 export type RunRowState = {
-  readonly family: RunFamily | null;
   /** Where the loop stands. */
   readonly at: PositionAt | null;
   readonly turn: number;

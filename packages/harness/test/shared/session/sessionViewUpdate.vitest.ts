@@ -135,7 +135,7 @@ const toolTurn = toolUseTurn(RUN_HISTORY_RUN);
 /** Where the loop stands: its first position opens the run. */
 const position = (at: string, turn: number) => ({
   type: 'run.position',
-  payload: { family: 'toolUse', at, turn },
+  payload: { at, turn },
 });
 const message = (payload: Record<string, unknown>) => ({
   type: 'model.message',
@@ -196,7 +196,6 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
   {
     type: 'run.position',
     payload: {
-      family: 'toolUse',
       at: 'turn.end',
       turn: 1,
       outcome: 'completed',

@@ -32,9 +32,6 @@ import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
 
 /* ------------------------------------------------------------------ ids */
 
-const RunFamilySchema = Schema.Literals(['toolUse']);
-export type RunFamily = typeof RunFamilySchema.Type;
-
 /**
  * One completed provider turn. Runtime-minted when the response row is
  * authored: durable, stable across compaction and branching, and needing no
@@ -98,7 +95,6 @@ export type PositionAt = typeof PositionAtSchema.Type;
  *  the turn it stands in: the one record of the loop's position, which the
  *  fold projects to `RunState.phase` and `RunView.position`. */
 export const RunPositionPayloadSchema = Schema.Struct({
-  family: RunFamilySchema,
   at: PositionAtSchema,
   turn: Schema.optional(
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),

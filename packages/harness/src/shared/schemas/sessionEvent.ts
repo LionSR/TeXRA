@@ -309,7 +309,7 @@ const DisplayRowDraftSchema = Schema.Union([
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
   /**
-   * The loop's position: family, `at`, and coordinates. The one run-history
+   * The loop's position: `at`, and its coordinates. The one run-history
    * row renderers read: the fold derives the live phase from it (`waiting`
    * parks the run, any other position is running) and `RunView.position`
    * carries its coordinates; its five siblings below are run-history-private.

@@ -210,7 +210,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // retry).
   // v4: no `halted` position: `run.end` is the halt (an earlier build's halt
   // row would fail its check).
-  'run.position': { version: 4, listing: 'own' },
+  // v5: no `family`: every run has the one loop, so the field said nothing
+  // (an earlier build's row would have it silently dropped).
+  'run.position': { version: 5, listing: 'own' },
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both.
   // v3: a user message names its attached media by blob address (`media`),

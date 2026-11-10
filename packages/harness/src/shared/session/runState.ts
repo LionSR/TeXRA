@@ -212,8 +212,8 @@ export type RunInputDraft = Exclude<
   { type: Exclude<RunStateRowType, 'run.end' | 'run.stop'> }
 >;
 
-/** The state a run starts from: every field at its zero, no family bound
- *  yet. The run program opens from this and stamps its family. */
+/** The state a run starts from: every field at its zero. The run program
+ *  opens from this. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunRowState(),
   commit,
