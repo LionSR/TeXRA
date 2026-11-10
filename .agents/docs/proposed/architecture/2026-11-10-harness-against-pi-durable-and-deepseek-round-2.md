@@ -49,9 +49,96 @@ owners, and each sits behind a cluster of this month's fixes.
 | 5   | **Which grant answers a request has two tables that disagree,** and three askers go around the one open door (R7's core, marked landed)                          | two representations, information leakage, temporal decomposition    | `GRANT_OF`, `offeredGrant`'s conditions, the five `offersGrant` writers, the invoker's own request and wait, the plugin answer's three transactions                          |
 | 6   | Smaller: a provider's facts in eight files (the rest of O9); the lane rule written twice                                                                         | change amplification                                                | the endpoint and region rows written by hand; the sentinel manifest rows                                                                                                     |
 
-Findings 1, 2, 4 and 5 change stored shapes. Their stored parts land
-together before the storage freeze, with one golden-store regeneration, as
-round 3's storage batch and #14894's format batch did ("Order", below).
+Findings 1 to 5 landed on this note's branch (#14896). "Landed" says what
+changed and where the result differs from the design; the sections after it
+describe the tree at `521bb189`, before the change.
+
+## Landed
+
+Each finding landed in its own commits and was merged into the branch with
+the golden store regenerated from the merged source. Finding 1's step 2 was
+drafted, measured and refused.
+
+- **Finding 1, step 1** (`28726ae9`, `run.position` v6). The row that
+  implies `response.ready` or `results.ready` sets it, and `RunLoopPhase`,
+  `PHASE_AT` and `phaseAfter` are gone. 41 of the golden store's 123
+  position rows go.
+- **Finding 1, step 2** (`06e73da4`), refused as
+  `RUN-turn-next-move-function` in `.agents/docs/refuted-candidates.json`.
+  The switch that keeps behavior is 338 lines against the 258 it replaces,
+  and several turn ends are results of the effect just run, not facts of
+  the run state.
+- **Finding 2** (`6ec3835a`, `followup.queued` v6). A delivery is a typed
+  `ChildRunDelivery`, rendered by `formatDelivery` where the row becomes the
+  parent's message. The regex summarizers, `subagentResults.ts`,
+  `scriptSummaryElement`, `parseScriptDeliverySummary`, `deliveredResponse`
+  and the `escape-string-regexp` dependency are gone. The text the model
+  reads is byte-identical in the golden store.
+- **Finding 3** (`3cfe5452`, `703b6886`). One `Map<RunId, RunEntry>` of
+  five states. `RunRegistry` is a service tag, and `registryOf` (11 casts)
+  and `programs` are gone. A resume right after an end resumes the run,
+  with a regression test.
+- **Finding 4 (a)** (`bbb6f012`). `openResume` decides once: a run waits for
+  input only if its rows say it takes input and its caller is present. A
+  send to a run launched to run once says so. With a regression test.
+- **Finding 4 (b)** (`2386b7ba`). One `run.config` per launch: 36 rows to
+  19, and 32,214 bytes to 16,784.
+- **Finding 4 (c)** (`8b46c177`). It reproduced: a process run whose
+  `process.output` row the store refused ended completed. Both programs now
+  end through `commitEnd`, with a regression suite
+  (`packages/harness/test/agent/runtime/processRun.vitest.ts`).
+- **Finding 5** (`94b19a66`, `ec9142fa`, `ce7cca5a`, `request.opened`
+  v11). `answeredBy` is decided at open, and the answer at open and the
+  grant sweep read it. `GRANT_OF`, `grantHeld`, `bypassCovers`,
+  `grantAnswers`, `policyDecidedRows`, the five `offersGrant` writers,
+  `awaitDecision`, the script's private wait and `decisionLanes` are gone.
+  A plugin request's decision, facts and follow-up commit in one
+  transaction. With a regression test of the grant turned on while a call
+  waits.
+
+The golden store went from 749 rows to 691, and from 411,127 bytes of row
+data to 394,376.
+
+### Where the result differs from the design
+
+- **The branch adds lines.** Across the packages' `src` directories it is
+  +2,014 and −1,810 lines: 204 more than it removes. The "What goes" lists
+  named what is deleted, not what replaces it.
+  - Finding 1, step 1: −21.
+  - Finding 2: −5. `shared/subagentFollowup.ts` went from 336 lines to
+    326, not "most of" it: the regex paths went, and the display summary
+    of a typed delivery took their place.
+  - Finding 3: +137. `runRegistry.ts` went from 686 lines to 816. Each
+    state is handled where membership tests were, so the estimate of about
+    80 lines removed was wrong.
+  - Finding 4: +44 ((a) +11, (b) +8, (c) +25).
+  - Finding 5: +52, and −3 for the review fix below.
+
+  Tests are +296 and −83: four regression tests and the fixtures' changes.
+
+- **Finding 2 changes what an awaited call's model reads.** The call
+  answers with its child's stored report, so its text now carries the wall
+  time, working directory and memory misses. A report says
+  `continued="true"` only when the run reported before, not on every
+  resume: a child a crash cut short, finished by its recovery, now answers
+  with the same report a clean run does.
+- **Finding 5 changes behavior in three places**, each following from one
+  table.
+  - A grant turned on while a plan approval or a non-shell command waits
+    now answers it, as it did at open.
+  - A non-shell command's card offers "Approve all agent work".
+  - When the session closes first, the waiter interrupts the asking fiber
+    and records nothing, and the next resume asks again; the invoker had
+    ended the turn as cancelled. A failed read of the log fails the wait,
+    where it read as a cancel.
+
+  The script's shared request still reloads its run to find the request
+  standing for it, which belongs to the script call; only its private wait
+  went.
+
+- **The one-shot refusal carries its words, not a kind.** 4 (a) first added
+  a `ranOnce` failure reason. Nothing branches on a follow-up's reason, so
+  a refused send now answers with its message (`c3304665`, from review).
 
 ## Since this note's base
 
@@ -84,8 +171,8 @@ it when the view has not loaded the run. It records that
 `packages/harness/example/10-external-plugin.ts` sends an ended one-shot
 root a message and resumes it, and passes only because of that skip.
 Finding 4 (a) adds a reproduced case to that decision. #14893 also moves
-the registry's parent edges onto store reads, so finding 3 is sequenced
-after it.
+the registry's parent edges onto store reads. Finding 3 rewrote the same
+file first, so whichever merges second rebases onto the other.
 
 ## What picks the targets
 
@@ -93,9 +180,10 @@ after it.
 over the 30 days to `8281784` counts 159 fix commits:
 
 - 63 scoped `harness` and 8 scoped `llm`.
-- Two areas are over the script's line of ten, where an area's rulings are
-  to be revisited: stop, resume and ownership (24), and model, retry and
-  route (23).
+- Three areas are over the script's line of ten, where an area's rulings
+  are to be revisited: stop, resume and ownership (24), model, retry and
+  route (23), and desktop and windows (13). The third is outside the
+  harness and `packages/llm`.
 
 By file (fix commits touching `packages/harness/src` or `packages/llm/src`,
 renames followed):
@@ -321,7 +409,7 @@ A child's end builds the envelope its parent's model reads, from the
 child's typed facts:
 
 - `formatDelivery` (`agent/runtime/deliveryEnvelope.ts:66`) is called from
-  12 sites:
+  13 sites:
   - in the harness: `subagentResults.ts:94`, `:120`;
     `delegation/bashDelivery.ts:118`, `:134`; `leftoverChildren.ts:63`; and
     `scriptRun.ts:247`, `:262`, `:289`;
@@ -765,28 +853,34 @@ The peers' newest changes add evidence on two points:
   (`endIn`), one publisher, and resume as the same program over the same
   rows.
 
-## Order
+## Still open
 
-0. **Finding 4 (a)'s decision**, which is #14893's open question. Whichever
-   rule the owner picks for messages to an ended one-shot root, the resume
-   applies it too. The fix lands with one regression test written to fail
-   first.
-1. **One storage-format PR, before the freeze**, with one golden-store
-   regeneration. It carries:
-   - finding 1's step 1 (two position values and `RunLoopPhase`);
-   - finding 2 (the typed delivery on `followup.queued`);
-   - finding 4 (b) (one `run.config` per launch);
-   - finding 5's `answeredBy` on `request.opened`.
-2. **Findings 3, 4 (c) and the rest of 5**, after #14893. They need no
-   stored change. Finding 3 and 4 (c) sit in the stop, resume and ownership
-   area; the rest of 5 is the request module.
-3. **Finding 1's step 2**, with no stored change, once finding 4's role
-   exists.
-4. **Finding 6's first item** when the next provider is added.
-
-Each PR deletes more than it adds and adds no test file, except the one
-regression test of step 0 and one more if 4 (c) reproduces. The crash-point
-suite and the golden store are the gate.
+- **Finding 6**, as written above, when the next provider is added.
+- **#14893's owner question.** 4 (a) applies "refuse always" on both sides:
+  a run launched to run once is never resumed into a wait, and a send to it
+  is refused as having run once. #14893 still reads `takesFollowUps` from
+  the view, which skips the check for a run the view has not loaded. If the
+  owner picks the other rule, `openResume` and the refusal change together.
+- **Found while landing, not fixed here.**
+  - **A deletion can outlive its process.** `run.delete` hands its marker
+    to the session's collector fiber and answers. A CLI that exits right
+    after (`texra history delete`) can close the session before the
+    collector runs, and the run's rows and files stay under the marker
+    until the next open. Measured on a fresh store over the validation
+    bundle: 1 of 16 deletes at `28726ae9`, 2 of 12 on the merged branch.
+    It is also why `golden:store --twice` sometimes fails: the uncollected
+    run's sequence row shifts every later normalized id. The fixture relies
+    on the same timing the other way, since the swept shell's marker stays
+    pending because the close interrupts its collection. A fix that makes a
+    clean close finish its collections, or a delete answer after its own,
+    must give the generator another way to leave a pending marker.
+  - **Two answers to one inquiry at once** can leave the thread's record
+    and the decided row naming different answers, now that `decisionLanes`
+    is gone. The run is told what the thread says.
+  - **A resume between a result that ends its turn and that turn's end**
+    (`submit_output`'s `endTurn`, after its delivering `append` and before
+    `turn.end`) calls the model once more. This was read while measuring
+    step 2 and not reproduced.
 
 ## Verified
 
@@ -841,8 +935,23 @@ suite and the golden store are the gate.
 
   No peer was built or run.
 
-- **Not measured or not reproduced.** The line counts of each design are
-  estimates and are marked as such. 4 (c) is read from the code: it needs a
+- **The implementation.**
+  - At each finding and at the branch head: the type check in its three
+    parts (the whole of `npm run typecheck` is killed for memory here),
+    `npm run lint`, `gate:invariants`, `gate:docs`, `format:check`, and the
+    suites the change reaches (`vitest --changed`).
+  - At the head: `npm test`, 254 files and 576 tests with 1 skipped, the
+    crash project's 7 files and 9 tests among them.
+  - The golden store was regenerated after each merge. Three generations
+    at the head agree; a generation that differs is the deletion race
+    above.
+  - The deletion race was measured with a script that runs
+    `texra run golden_child` and then `texra history delete` on a fresh
+    store and reads whether the run's sequence row is gone. It is not
+    committed.
+  - Line counts are `git diff --shortstat` over each finding's commits.
+- **Not measured or not reproduced (in the design).** The line counts of
+  each design are estimates and are marked as such. 4 (c) is read from the code: it needs a
   background process child whose output rows the store refuses. Finding 5's
   end-and-answer interleaving, and the window between the open's policy
   answer and its commit, are read from the code.
