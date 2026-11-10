@@ -136,15 +136,11 @@ export function makeRunTrace({
                 }
               : event,
           );
-          if (draft === null) return Effect.void;
-          return append([draft]).pipe(
-            Effect.tapError((refusal) =>
-              Effect.sync(() => keep(runId, refusal)),
-            ),
-          );
-          // Its transaction failing (a busy lock past the budget, the store
-          // gate, the commit) loses the row as surely as a refusal does.
+          return draft === null ? Effect.void : append([draft]);
         },
+        // A refused row, or its transaction failing (a busy lock past the
+        // budget, the store gate, the commit), loses the row; the first loss
+        // is kept for the run's end.
         { failed: (error) => keep(runId, error) },
       );
     },

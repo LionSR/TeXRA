@@ -100,9 +100,10 @@ export class SessionEvents extends Context.Service<
   SessionEvents,
   {
     /** Run one job as the next transaction of the inbox, one SQLite
-     *  transaction, and return its value: reads of committed rows and the
-     *  appends that depend on them, committed together or not at all, with
-     *  no other write between them. An append refusal is one of two typed
+     *  transaction, and return its value with the last commit it made
+     *  (`through`, null for a job that appended nothing): reads of committed
+     *  rows and the appends that depend on them, committed together or not
+     *  at all, with no other write between them. An append refusal is one of two typed
      *  failures: `DatabaseAggregateClosed`, a target the process does not
      *  hold open, and `DatabaseWriteFailed`, the batch rolled back for any
      *  other reason; a job that lets one through writes nothing, and a
@@ -113,7 +114,10 @@ export class SessionEvents extends Context.Service<
     readonly transact: <A, E>(
       job: (append: Append) => Effect.Effect<A, E>,
       options?: Pick<JobOptions, 'order'>,
-    ) => Effect.Effect<A, E | DatabaseWriteFailed>;
+    ) => Effect.Effect<
+      { readonly value: A; readonly through: CommitOrdinal | null },
+      E | DatabaseWriteFailed
+    >;
     /** Enqueue one job synchronously and return: the door for a producer
      *  with no fiber to wait on (a trace sink, a follow-up's admission).
      *  Its order is the moment of this call. A refused append is never
@@ -166,10 +170,6 @@ export class SessionEvents extends Context.Service<
       never,
       Scope.Scope
     >;
-    /** The listing read from storage: the latest row per aggregate and type
-     *  for the listing fact types plus the outstanding approvals, in commit
-     *  order; never a transcript row; completes. */
-    readonly listing: () => Stream.Stream<DisplayRow, DatabaseReadFailed>;
     /** Every event with commit above `fromCommit`, in commit order across
      *  aggregates, then the tail, which ends when the session closes: what
      *  the reader starts behind {@link head} is read from the store, the rest

@@ -25,7 +25,6 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {
-  isDisplayRow,
   type AggregateId,
   type CommitOrdinal,
   type DisplayRow,
@@ -273,7 +272,16 @@ export const sessionEventsLayer = Layer.effect(
       return yield* Deferred.await(done);
     });
     const transact: SessionEventsShape['transact'] = (job, options = {}) =>
-      awaited(inTransaction(job, options.order));
+      awaited(
+        inTransaction(
+          (append, appended) =>
+            Effect.map(job(append), (value) => ({
+              value,
+              through: appended.at(-1)?.commit ?? null,
+            })),
+          options.order,
+        ),
+      );
     const removeRun: SessionEventsShape['removeRun'] = (
       id,
       expectedStartCommit,
@@ -316,10 +324,6 @@ export const sessionEventsLayer = Layer.effect(
       openWork,
       head: () => head,
       subscribe: PubSub.subscribe(committed),
-      listing: () =>
-        Stream.fromIterableEffect(log.readListing()).pipe(
-          Stream.filter(isDisplayRow),
-        ),
       all: (fromCommit, drained) =>
         Stream.unwrap(
           Effect.map(PubSub.subscribe(committed), (subscription) => {

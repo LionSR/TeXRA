@@ -244,7 +244,13 @@ export class Database extends Context.Service<
     readonly readDisplay: (
       fromCommit: CommitOrdinal,
     ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
-    readonly readListing: () => EventsRead;
+    /** The cold listing: the display rows the listing index holds, the
+     *  newest per aggregate and listing type with the open requests and
+     *  queued input, and each run's spend, in commit order. */
+    readonly readListing: () => Effect.Effect<
+      readonly DisplayRow[],
+      DatabaseReadFailed
+    >;
     /** The strings under `digests`: media bytes a history names by address. */
     readonly readBlobs: (
       digests: readonly string[],

@@ -373,10 +373,10 @@ export const SessionRowSchema = Schema.Union([
 export type SessionRow = typeof SessionRowSchema.Type;
 
 /**
- * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
- * it lives on. The publisher stamps the rest of the envelope
- * (`seq`, `commit`, `at`) under its permit; no caller passes them.
- * Parsing a draft removes caller-supplied envelope fields before storage.
+ * What a job appends (`Append`): the body plus the aggregate it lives on.
+ * The store stamps the rest of the envelope (`seq`, `commit`, `at`) as it
+ * appends; no caller passes them. Parsing a draft removes caller-supplied
+ * envelope fields before storage.
  */
 export type SessionRowDraft = typeof SessionRowDraftSchema.Type;
 

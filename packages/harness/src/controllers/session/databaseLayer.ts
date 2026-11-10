@@ -645,7 +645,12 @@ export const databaseLayer = (
             ),
           );
         },
-        readListing: () => query(decodedRows(READ_LISTING, [])),
+        readListing: () =>
+          query(
+            Effect.map(decodedRows(READ_LISTING, []), (rows) =>
+              rows.filter(isDisplayRow),
+            ),
+          ),
         readBlobs: (digests) => query(reader.blobs(digests)),
         readRunRecord: (id) =>
           query(
