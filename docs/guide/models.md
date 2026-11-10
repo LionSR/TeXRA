@@ -71,8 +71,11 @@ full capabilities.
 
 | Model                           | Use Case                       | Cost | Speed  |
 | :------------------------------ | :----------------------------- | :--- | :----- |
+| `google/gemini-4-argon`         | Most capable, 1M context       | $$$  | Medium |
 | `google/gemini-3.1-pro-preview` | Pro with reasoning, 1M context | $$$  | Medium |
 | `google/gemini-3.8-flash`       | Flash model with 1M context    | $$   | Fast   |
+
+Gemini 4 Argon (`google/gemini-4-argon`) is Google's most capable model for complex coding, agentic, math, and science work. Input, thinking, and output share a 1M-token window, and a single response can be up to 65,536 tokens. It thinks at `@low`, `@medium` (the default), or `@high` and does not take `@none`. It is billed at an introductory $2 / $10 per 1M tokens, with cached input at $0.10, until November 30, 2026, then $4 / $20. Caching is automatic, and Argon is not available on Google's Free tier.
 
 ## DeepSeek models
 
