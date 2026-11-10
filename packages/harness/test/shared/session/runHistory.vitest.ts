@@ -54,12 +54,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         },
       },
     };
-    const toolEnd = (callId: string): RunHistoryDraft => ({
-      type: 'tool.end',
-      aggregateId: AGGREGATE,
-      logId: callId,
-      status: 'completed',
-    });
     /** The batches of one turn, in order, up to and excluding the delivery. */
     const openTurn = (cell: RunCell) =>
       Effect.gen(function* () {
@@ -93,7 +87,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           // "not written", or every later `load` meets the orphan row.
           const written = yield* committed;
           const orphan = yield* cell
-            .append([turn.result('call-z'), toolEnd('call-z')])
+            .append([turn.result('call-z')])
             .pipe(Effect.flip);
           expect(refusalOf(orphan)?.reason).toBe('inconsistent');
           expect(yield* committed).toBe(written);
@@ -152,7 +146,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 ],
               },
             }),
-            toolEnd('call-a'),
           ]);
           const settledA = state.pendingResponse?.records['call-a']?.status;
           const file =

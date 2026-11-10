@@ -50,8 +50,9 @@ import type { RunRowState } from './runRowsShape';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 
 /** The rows `RunCell.append` commits: the run history rows, and the display
- *  rows a batch commits with them (a tool's card with its `tool.result`, a
- *  child's result with its boundary), which apart would be crash windows. */
+ *  rows a batch commits with them (the card of a call that ended before its
+ *  body started with its `tool.result`, a child's result with its boundary),
+ *  which apart would be crash windows. */
 export type RunHistoryDraft = Live<
   Extract<SessionRowDraft, { type: RunHistoryDraftType }>
 >;
@@ -194,7 +195,7 @@ export type RunState = RunRowState &
 /** Display rows a batch commits together with run history rows; the run
  *  state ignores them. */
 type CardRowType = CardType | ResultType | EndType | 'plugin.fact';
-type CardType = 'tool.start' | 'tool.end' | 'stage.start' | 'stream.end';
+type CardType = 'tool.start' | 'stage.start' | 'stream.end';
 type ResultType = 'run.report' | 'process.exit';
 type EndType = 'stage.end' | 'followup.closed'; // and what it closes
 /** The row types the run state reads, each with a handler in

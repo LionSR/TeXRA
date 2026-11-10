@@ -28,6 +28,11 @@ All notable changes to this project will be documented in this file.
   A transcript row names its stage as `stageId`, not `groupId`.
   A stage still open in a run whose process stopped reads as interrupted,
   not running.
+- **A tool call's card opens when the call starts.** In `texra run` NDJSON,
+  every call's `tool.start` record is written as the call starts running; a
+  quick tool's used to be written only with its `tool.end`. The progress view
+  and `texra chat` show the card from then on. SDK: `defineTool` takes no
+  `slow` option, which chose between the two.
 - **The compile-after-output settings are document-task settings.** The
   project settings that compile a document task's output, open the PDF and
   repair a failed compile are stored as `texra.documents.compileAfterOutput`,

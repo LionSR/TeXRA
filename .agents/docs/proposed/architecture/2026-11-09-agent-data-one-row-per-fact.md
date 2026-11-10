@@ -5,49 +5,53 @@ status: proposed
 
 # Agent 数据：一个事实只存一行，展示由推导产生
 
-这是一份评审后的设计提案，基线是 `main` 的 `db09959`。提案本身没有实现，也没有做原型；文中的数字都是对源码的静态统计。评审中发现的一个缺陷和几处过时陈述已在同一分支修掉，见 §8。范围是一次运行（run）的数据怎么存、怎么读，不含设置和其他当前值。
+这是一份评审后的设计提案，基线是 `main` 的 `db09959`。范围是一次运行（run）的数据怎么存、怎么读，不含设置和其他当前值。
+
+**进度。** 提案里的格式批已在同一分支落地（§5 的第 1、2 步）；规则二（§3.2）、三份过时的 implemented 说明和冻结时归零还没有做。正文各节写明哪些已经是现状、哪些仍是提议。实现时有两处和最初的提案不同，见 §3.1 的“和最初提案的两处不同”。
 
 与已定案规则的关系：
 
 - 按 [one fact, one representation](./2026-11-03-one-fact-one-representation.md) 的规则写：先按含义给事实命名并列出它的每一种表示，同一个 PR 里只留一种，保留一个事实之前先看同类项目存了什么。
 - 沿用 [one run model](../../implemented/architecture/2026-09-10-one-run-model.md) 的 R1：一个事实只写成一种行，派生值只有一个归约函数。
 - 不改 [Harness 1.0 PRD](./2026-10-28-harness-1-release-prd.md)“最小存储契约”的任何一条：沿用已记录的事实，不建第二套日志，保留存储词汇和原调用含义。
-- 和两处已定案的说法不同，都在正文里说明理由：[storage v1](../../implemented/architecture/2026-09-28-storage-v1-design.md) §10 的“卡片仍由 loop 写入”（§3.1），以及 one fact, one representation §G 落地时“存储的 provider 枚举由存储自己拥有并保持封闭”（§3.3，只作为待决问题提出）。
-- 落地时要随之改写的规范：`packages/harness/docs/spec.md` 的 §3.1 和 §4 的 W3、W4，`packages/harness/AGENTS.md` 的 “Event channels and cards”。
+- 和两处已定案的说法不同，都在正文里说明理由：[storage v1](../../implemented/architecture/2026-09-28-storage-v1-design.md) §10 的“卡片仍由 loop 写入”（§3.1），以及 one fact, one representation §G 落地时“存储的 provider 枚举由存储自己拥有并保持封闭”（§3.3）。负责人选择了更激进的做法，两处都已按本提案落地。
+- 随格式批改写的规范：`packages/harness/docs/spec.md` 的 §2.3、§3.1、§3.3 和 §4 的 W3、W4，`packages/harness/AGENTS.md` 的 “Event channels and cards”，以及对外指南 `docs/api/durable-protocol.md` 的写入点表。
 
 ## 结论
 
-**设计问题只有一个：行是按“谁读”分的（展示行和私有行），不是按“什么事实”分的。** 两边都需要的事实因此存成两行，再在读取时对齐；一次工具调用写 4 行，其中 2 行是为展示另写的。
+**设计问题只有一个：行是按“谁读”分的（展示行和私有行），不是按“什么事实”分的。** 两边都需要的事实因此存成两行，再在读取时对齐；基线上一次工具调用写 4 行，其中 2 行是为展示另写的。
 
 推荐的设计是两条规则，都不引入新的行词汇：
 
-1. **展示行只在没有执行行持有这个事实时才存。** 其余展示事件由一个函数从已提交的行推导，实时路径和冷读共用它。第一片是工具卡片。
-2. **一个主题一个归约函数。** “一个 run 的记录行说明了什么”只写一遍，放在 `shared/session/` 的纯函数里，由 store 的投影、视图和窄读取共用。
+1. **展示行只在没有执行行持有这个事实时才存。** 其余展示事件由一个函数从已提交的行推导，实时路径和冷读共用它。第一片是工具卡片，**已落地**。
+2. **一个主题一个归约函数。** “一个 run 的记录行说明了什么”只写一遍，放在 `shared/session/` 的纯函数里，由 store 的投影、视图和窄读取共用。**未做。**
 
-另有一个需要负责人重开既有决定才能动的问题：行里的 provider 枚举是封闭的，所以移除一个 provider 仍然要升行版本（§3.3）。
+行里封闭的 provider 枚举（§3.3）：存下来的 backend 已改成按字符串读，**已落地**；重试载荷里的 API key provider 仍然封闭。
 
 不推荐的两种设计：把行统一成“开/关”成对的 op 行（只是改名，且和 PRD 的决定冲突）；用可变的状态表当真相（和“历史是唯一真相”冲突）。对比见 §2。
 
-可以清除的过时设计见 §3.4。复读代码时还发现一个和本提案无关的缺陷，已在同一分支修复，见 §8。
+可以清除的过时设计见 §3.4，其中四项已清除。复读代码时还发现一个和本提案无关的缺陷，已在同一分支修复，见 §8。
 
 ## 1. 设计问题
 
+本节描述基线（`db09959`）上的状态。表里标了“已解决”的行，现状见 §3。
+
 ### 1.1 行按读者分，同一事实因此有两行
 
-`packages/harness/src/shared/schemas/sessionEvent.ts` 把 37 种行分成 26 种展示行和 11 种私有行，一行是否到达渲染端由它的类型决定（`isDisplayRow`）。从设计记录的先后看，展示词汇（trace）在前，运行历史是后来加上的执行真相；从那以后，展示行被一种一种地改成投影（`run.model`、`conversation.progress` 已退役，卡片输出和 `usage` 已改成投影，run 和 turn 不再是 stage）。这个过程停在了一半。按事实列出它现在的每一种表示：
+`packages/harness/src/shared/schemas/sessionEvent.ts` 把 37 种行分成 26 种展示行和 11 种私有行，一行是否到达渲染端由它的类型决定（`isDisplayRow`）。从设计记录的先后看，展示词汇（trace）在前，运行历史是后来加上的执行真相；从那以后，展示行被一种一种地改成投影（`run.model`、`conversation.progress` 已退役，卡片输出和 `usage` 已改成投影，run 和 turn 不再是 stage）。这个过程在基线上停在了一半。按事实列出基线上的每一种表示：
 
-| 事实               | 执行行                                    | 展示行                                                                | 现在怎么对齐                                                                                                                                                    |
-| ------------------ | ----------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 工具调用开始       | `tool.intent`（callId、attempt）          | `tool.start`（logId、toolName、实际执行的 input、card、section）      | 同一批提交：慢工具在 intent 那批，快工具在 result 那批（`cardRows`，`agent/runtime/loop/toolUseDispatch.ts:305-346`）                                           |
-| 工具调用结束       | `tool.result`                             | `tool.end`（logId、status、files）                                    | 读时把同批的 `tool.result` 填进 `tool.end`（`settleCards`，`controllers/session/rowReader.ts:370-398`）；分页因此必须停在批次边界（`databaseLayer.ts:155-164`） |
-| 一次计费的模型回合 | `model.message` response 的 `usage`       | `usage`                                                               | 已是投影（`projected_row`）：这一项已经只有一种存储表示                                                                                                         |
-| 模型输出的文本     | response 的 `turn.content`                | `stream.end.finalText`（正文和思考各一条）、`response.finalized.text` | 不对齐，各存一份（`agent/runtime/ModelInvoker.ts:348-365`）                                                                                                     |
-| 用户输入           | `followup.queued`、`model.message` append | `log`（`userMessage`）                                                | 不对齐，各存一份（`agent/trace/traceLogs.ts:160`）                                                                                                              |
-| 模型失败           | `model.message` failed 的 `error`         | `log`（error）、`run.end.error`、`request.opened` 的重试载荷          | 按值复制到四种行                                                                                                                                                |
+| 事实               | 执行行                                    | 展示行                                                                | 基线上怎么对齐                                                                        | 现状           |
+| ------------------ | ----------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------- |
+| 工具调用开始       | `tool.intent`（callId、attempt）          | `tool.start`（logId、toolName、实际执行的 input、card、section）      | 同一批提交：慢工具在 intent 那批，快工具在 result 那批（`cardRows`）                  | 已解决（§3.1） |
+| 工具调用结束       | `tool.result`                             | `tool.end`（logId、status、files）                                    | 读时把同批的 `tool.result` 填进 `tool.end`（`settleCards`）；分页因此必须停在批次边界 | 已解决（§3.1） |
+| 一次计费的模型回合 | `model.message` response 的 `usage`       | `usage`                                                               | 已是投影（`projected_row`）：这一项只有一种存储表示                                   | 基线上已解决   |
+| 模型输出的文本     | response 的 `turn.content`                | `stream.end.finalText`（正文和思考各一条）、`response.finalized.text` | 不对齐，各存一份（`agent/runtime/ModelInvoker.ts`）                                   | 未动           |
+| 用户输入           | `followup.queued`、`model.message` append | `log`（`userMessage`）                                                | 不对齐，各存一份（`agent/trace/traceLogs.ts`）                                        | 未动           |
+| 模型失败           | `model.message` failed 的 `error`         | `log`（error）、`run.end.error`、`request.opened` 的重试载荷          | 按值复制到四种行                                                                      | 未动           |
 
-三处旁证：
+基线上的三处旁证：
 
-- 代码自己的注释这样描述（`shared/schemas/traceEvent.ts:65-85`）：有运行历史的 run，`tool.end` 不存输出、`usage` 不存行；没有运行历史的 run（agent-CLI 子运行）两者都存。同一种行有两种含义，读取方要先知道这个 run 属于哪一类。
+- 代码自己的注释这样描述（`shared/schemas/traceEvent.ts`）：有运行历史的 run，`tool.end` 不存输出、`usage` 不存行；没有运行历史的 run（agent-CLI 子运行）两者都存。同一种行有两种含义，读取方要先知道这个 run 属于哪一类。
 - 规范为了让这两种表示保持一致，写了两条 MUST（`packages/harness/docs/spec.md` §4）：W3 要求慢工具的 `tool.start` 和 intent 同批提交，W4 要求 `tool.result` 和它的整张卡片同批提交，并且分别规定了慢工具、快工具、没有开始过的调用和结果未知的调用各写哪几行。这些规则只在卡片是另一行时才需要。
 - 规范说 `at` 只是信息性的（spec §2.2），但展示读取用“`at` 相等”判断批次边界，原因就是 `settleCards` 要在同一页里同时看到两行。
 
@@ -67,24 +71,24 @@ status: proposed
 
 没有 upcaster，所以每次升版都让已有的 run 变成只读。发布前这只是不方便；冻结之后就是用户的 run 不能续跑。
 
-其中一部分已经修掉：协议改成开放字符串之后（`StoredProtocolSchema`，#14476），移除 provider 不再升 `model.message` 和 `context.edit`。`run.config` 和 `request.opened` 里的 provider 枚举仍然封闭，这是有意的决定，见 §3.3。
+其中一部分已经修掉：协议改成开放字符串之后（`StoredProtocolSchema`，#14476），移除 provider 不再升 `model.message` 和 `context.edit`；本分支之后也不再升 `run.config`（§3.3）。`request.opened` 重试载荷里的 provider 枚举仍然封闭。
 
 ### 1.3 同一条记录规则写了几遍
 
-“一次 activation 会清掉上一次的 end 和 stop”这条规则现在有四个实现：
+“一次 activation 会清掉上一次的 end 和 stop”这条规则有四个实现：
 
-- `controllers/session/projections.ts:171-177`（`RECORD_STEPS`，store 的 `run_record` 投影）
-- `shared/session/sessionViewUpdate.ts:673-687`（视图）
-- `shared/session/runRowReads.ts:149-150`（`lifecycleOf`，input 读取）
-- `shared/session/runRowReads.ts:274`（`turnReceipt`，回执）
+- `controllers/session/projections.ts` 的 `RECORD_STEPS`（store 的 `run_record` 投影）
+- `shared/session/sessionViewUpdate.ts`（视图）
+- `shared/session/runRowReads.ts` 的 `lifecycleOf`（input 读取）
+- `shared/session/runRowReads.ts` 的 `turnReceipt`（回执）
 
-“detach 切断父边”有三个实现，“用户起的标题不被模型标题覆盖”有两个。T5（#14854）已经把 store 里的两份收成 `run_record` 一份，它点名的第三份（视图）和窄读取还在。
+“detach 切断父边”有三个实现，“用户起的标题不被模型标题覆盖”有两个。T5（#14854）已经把 store 里的两份收成 `run_record` 一份，它点名的第三份（视图）和窄读取还在。这一节的状态没有变，见 §3.2。
 
 ### 1.4 用《软件设计的哲学》的词说
 
 - **重复，两种表示。** 卡片行和调用行；四处 activation 规则。
 - **信息泄漏。** “这个 run 有没有运行历史”泄漏到了 `tool.end`、`usage`、`settleCards`、`displayRows` 和转录的归约里。
-- **特例和通用混在一起。** 快工具和慢工具的卡片在不同的批次打开；这是展示时机的特例，却写在提交路径和规范的 MUST 里。
+- **特例和通用混在一起。** 快工具和慢工具的卡片在不同的批次打开；这是展示时机的特例，却写在提交路径、规范的 MUST 和工具的公开选项（`slow`）里。
 - **时间分解。** 卡片按“什么时候显示”组织（开始一行、结束一行），而调用事实已经按同样的时刻各有一行。
 - **没有把错误定义掉。** W3 和 W4 规定的是“两行必须一起提交”。只有一行时，这类错误不存在。
 - **改动放大。** §1.2。
@@ -103,34 +107,35 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 
 ## 3. 推荐设计
 
-### 3.1 规则一：展示行只在没有执行行持有这个事实时才存
+### 3.1 规则一：展示行只在没有执行行持有这个事实时才存（工具卡片已落地）
 
-**机制。** 展示流的定义是一个函数：输入一条已提交的行，输出它产生的展示事件。展示种类的行原样返回；执行行返回它对应的展示事件；其余返回空。它推广的是现有的 `Database.displayRows`（`controllers/session/databaseLayer.ts:182-188`），发布者已经用它从内存里的已提交行算出实时批次（`agent/runtime/sessionEventsLayer.ts:181`）。冷读用同一个函数：读出展示种类的行和它们的来源行，解码后逐行映射。`projected_row` 留给来源行很重的种类当缓存（现在只有 `usage`）。
+**机制。** 展示流的定义是一个函数：输入一条已提交的行，输出它显示成什么。展示种类的行原样返回；调用行返回它的卡片事件；其余返回空。实现是 `controllers/session/rowReader.ts` 的 `callCard` 和 `controllers/session/databaseLayer.ts` 的 `shown`。发布者用它从内存里的已提交行算出实时批次（`Database.displayRows`），冷读（`readDisplay`、`readDisplayAggregate`、`readInputBatch`）读出展示种类的行和 `tool.intent`、`tool.result`，解码后逐行映射，所以实时和冷读不会不一致。`projected_row` 留给来源行很重的种类当缓存（现在只有 `usage`）。
 
-事件词汇不变。渲染端、NDJSON、SDK 事件流和 trace 导出看到的仍是 `tool.start`、`tool.end`、`usage`；变的只是这些事件在有运行历史的 run 上不再是存下来的行。
+事件词汇不变，事件的配对也不变。渲染端、NDJSON、SDK 事件流和 trace 导出看到的仍是成对的 `tool.start`、`tool.end`；变的是这些事件在有运行历史的 run 上不再是存下来的行。
 
-**一条硬约束：一条存储行最多产生一条转录事件。** 视图的转录按 `seq` 去重（`shared/session/sessionViewUpdate.ts:1011-1012`），共用一个 `seq` 的第二条转录事件会被丢掉。`Run.events` 背后的 `replayTrace` 原来也只按 `seq` 去重，并且已经因此丢过事件，见 §8。
+**一条硬约束：一条存储行最多产生一条转录事件。** 视图的转录按 `seq` 去重（`shared/session/sessionViewUpdate.ts` 的 `applyTranscriptRow`），共用一个 `seq` 的第二条转录事件会被丢掉。`Run.events` 背后的 `replayTrace` 原来也只按 `seq` 去重，并且已经因此丢过事件，见 §8。
 
-**第一片：工具卡片。**
+**工具卡片现在怎么存。**
 
-- `tool.intent` 并入 `tool.start` 的字段：logId、toolName、实际执行的 input、card、section。推导函数把它映射成 `tool.start`。PRD 的许可契约要求先持久化执行意图、再执行同一个操作；而调用体实际执行的 input（经过钩子改写之后的）现在只有 `tool.start` 直接记着，执行侧要从 `hook.outcome` 重建。pi-durable 的 intent 提交的也是最终参数。
-- `tool.result` 并入 logId。推导函数把它映射成 `tool.end`：状态来自 disposition，输出来自同一行，编辑过的文件来自同一行的 `result.edits`（今天也是这样算的，`toolUseDispatch.ts:587-596`）。一次没有开始过就结束、但今天有卡片的调用（被守卫拒绝、工具不可用）再带上 toolName 和 input，它的 `tool.end` 自己就能建卡片。
-- loop 不再写卡片行。`tool.start`、`tool.end` 这两种行只留给没有运行历史的 run（外部 agent 自己报告的调用）。
+- `tool.intent`（v2）带上卡片打开时要显示的字段：logId、toolName、调用体实际执行的 input（经过钩子改写之后的）、工具声明的 card、脚本的 section；脚本调用的 `stageId` 在行的顶层。`callCard` 把它映射成 `tool.start`。调用体实际执行的 input 原来只有 `tool.start` 直接记着；现在它在执行意图那一行上，和 PRD 的许可契约（先持久化执行意图、再执行同一个操作）以及 pi-durable 的做法一致。
+- `tool.result`（v5）带上它关闭的卡片的 logId；不显示卡片的调用（重复调用、脚本的宿主函数、从没开始过就被报告而不执行的调用）是 null。`callCard` 把它映射成 `tool.end`：状态来自结果的 status，输出来自同一行，编辑过的文件来自同一行的 `result.edits`。
+- loop 不再在调用行旁边写卡片行。每次已执行的工具调用从 4 行变成 2 行。
+- 没有运行历史的 run（外部 agent 自己报告的调用，`AgentTrace.openToolCard`）仍然存 `tool.start` 和 `tool.end`。
 
-由此删掉的：
+**和最初提案的两处不同。**
 
-- `cardRows` 和它的三处调用点上的开/关参数（`toolUseDispatch.ts:305-346, 368, 500, 604-611`）。
-- `settleCards`、`cardResult`，以及展示读取里为它多选的 `tool.result`（`rowReader.ts:60-67, 370-398`）。
-- 按 `at` 相等推断批次边界的 `DISPLAY_PAGE_END`（`databaseLayer.ts:155-164`）。每条展示事件只来自一行，分页可以停在任意一行。store review 的 F3 原本的修法是加一个 `batch` 列；这里是让“批次身份”不再被需要，`at` 也回到规范说的“只是信息性的”。
-- 规范里 W3 的卡片条款和 W4 里按慢、快、未开始、结果未知分别列出的卡片规则。
-- 每次已执行的工具调用从 4 行变成 2 行。
+1. **调用体没开始就结束的调用，仍然是一对事件。** 被守卫或钩子拒绝的调用，以及 run 里没有这个工具的调用，没有 intent。最初的提案让它的 `tool.result` 带上 toolName 和 input，推导出一条自足的 `tool.end`，代价是对外契约改变：按开始和结束配对的读者要多处理一种形状，按 `tool.start` 统计调用的读者会漏掉这些调用。实现时改成：loop 在结果那一批里、结果之前存一条 `tool.start` 行（`toolUseDispatch.ts` 的 `opening`），`tool.result` 照常推导出 `tool.end`。每个存储行仍然只产生一条事件，事件契约完全不变；这个事实也仍然只有一种表示（调用体开始过的在 intent 上，没开始过的在这一条 `tool.start` 上）。规范里因此留下一条同批提交的 MUST，只管这一种情形。
+2. **`slow` 这个工具选项删掉了。** 提案只说“快慢这个展示特例从提交路径和规范里消失”。落地后每张卡片都在调用体开始时打开，`slow` 只剩下“是否把工具打印的内容流到卡片上”一个用途，而会打印的四个工具本来都声明了 `slow`。所以流式输出改成对所有调用体已开始的调用生效，`ITool.slow` 和 `defineTool` 的 `slow` 选项连同九处声明一起删除。SDK 的示例（`packages/harness/example/acceptance.ts`）原来要声明 `slow: true` 才能在调用开始时看到卡片，现在不用。
 
-**和 storage v1 §10 的关系。** §10 决定输出只存一次、卡片仍由 loop 写入，给出的理由是没有工具侧的卡片、没有第二条追加路径。这两条在这里仍然成立，而且更强：卡片不是 loop 另外写的一行，而是 loop 的调用行本身。§10 拒绝的方案（两份都留、展示侧截断）也仍然被拒绝。
+**由此删掉的。**
 
-**一个要 UI 负责人定的选择。** 快工具的卡片现在在结果那一批才出现。并入后有两种做法：
+- `cardRows` 和它三处调用点上的开/关参数，`rows.ts` 里只为卡片存在的 `displayRow`。
+- `settleCards`、`cardResult`：推导只看一行，不再需要在同一批里找相邻的行。
+- 按 `at` 相等推断批次边界的分页逻辑。每条展示事件只来自一行，分页可以停在任意一行；`DISPLAY_PAGE_END` 现在只是“往后数 2000 行”。store review 的 F3 原本的修法是加一个 `batch` 列；这里是让“批次身份”不再被需要，`at` 也回到规范说的“只是信息性的”。
+- 规范里 W3 的慢工具卡片条款和 W4 里按慢、快、未开始、结果未知分别列出的卡片规则。
+- `ITool.slow`（上面第 2 点）。
 
-- intent 总是带展示字段，卡片在调用体开始时出现。快工具会多一条提前的 `tool.start`；“快慢”这个展示特例从提交路径和规范里消失。推荐这个。
-- intent 只在慢工具上带展示字段，快工具由自足的 `tool.end` 建卡片。出现时机和现在一样，但 NDJSON 上快工具不再有 `tool.start`。
+**和 storage v1 §10 的关系。** §10 决定输出只存一次、卡片仍由 loop 写入，给出的理由是没有工具侧的卡片、没有第二条追加路径。这两条仍然成立，而且更强：卡片不是 loop 另外写的一行，而是 loop 的调用行本身。§10 拒绝的方案（两份都留、展示侧截断）也仍然被拒绝。
 
 **其余展示行，没有逐个核对，不属于本提案要做的部分。**
 
@@ -143,7 +148,7 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 | `context.state`                          | 存，列表读它       | 不动：小，而且列表需要                                                                              |
 | 其余 `log`、`stage.*`、`process.output`  | 存                 | 不动：没有别的行持有                                                                                |
 
-### 3.2 规则二：一个主题一个归约函数
+### 3.2 规则二：一个主题一个归约函数（未做）
 
 `shared/session/runRows.ts` 已经是“运行状态和视图都读的行只处理一次”的地方，覆盖 5 种行（位置、请求、follow-up）。T5 把 run 的记录规则收进了 `controllers/session/projections.ts` 的 `RECORD_STEPS`，但 `controllers/` 在 `shared/` 上面，视图在 `shared/` 而且跑在浏览器里，够不着，所以它和两个窄读取仍各写了一遍。
 
@@ -154,73 +159,75 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 - 视图的 `applyRunEvent` 从它的结果取字段，不再自己判断这几条规则。
 - `lifecycleOf` 删除，`turnReceipt` 里那一行规则删除。
 
-这一片的收益比 §3.1 小：重复的是五条各两三行的规则，不是一整套机制。它值得做的理由是这些规则正是 one fact, one representation 记录的反复出错的那一类（停止、恢复、父边），而不是行数。
+这一片的收益比 §3.1 小：重复的是五条各两三行的规则，不是一整套机制。它值得做的理由是这些规则正是 one fact, one representation 记录的反复出错的那一类（停止、恢复、父边），而不是行数。它没有格式变化，不受冻结约束。
 
 之后可以再看一步，但不属于本提案的必做部分：`run_record` 和 `listing_entry` 为同样 14 种行各存了一份“最新一行的 commit”。冷视图如果从 `run_record` 初始化，`listing` 投影只需要保留未关闭的请求、未消费的输入和 `context.state`。
 
-**不做的一件事。** 不为“调用”另建共享的读模型。卡片改成由行自己推导之后，调用行只剩两个读者：loop 的运行状态（回答能否续跑）和历史查询（填给模型的表），它们回答的是不同的问题。把 `HistoryQuery.ts` 的 `callWrites` 提成共享函数只会有一个调用方，按 AGENTS.md 的规则（single-caller extractions are banned）不做。
+**不做的一件事。** 不为“调用”另建共享的读模型。卡片改成由行自己推导之后，调用行只有三个读者：loop 的运行状态（回答能否续跑）、历史查询（填给模型的表）和 `callCard`（显示成卡片），它们回答的是不同的问题。把 `HistoryQuery.ts` 的 `callWrites` 提成共享函数只会有一个调用方，按 AGENTS.md 的规则（single-caller extractions are banned）不做。
 
-### 3.3 待决问题：行里的封闭 provider 枚举
+### 3.3 行里的封闭 provider 枚举（backend 已落地）
 
-这一条和一个已落地的决定冲突，所以只提出问题，不列为规则。
-
-- **现状。** `run.config` 的 `binding.backend`（`shared/schemas/runInput.ts:51-54, 94-97`）和 `request.opened` 重试载荷里的 API key provider 是封闭枚举。移除 OpenRouter 和 Copilot 各升了一次 `run.config`，前者还升了一次 `request.opened`。
+- **基线。** `run.config` 的 `binding.backend` 和 `request.opened` 重试载荷里的 API key provider 是封闭枚举。移除 OpenRouter 和 Copilot 各升了一次 `run.config`，前者还升了一次 `request.opened`。
 - **既有决定。** one fact, one representation §G 落地时写明：存储的枚举（`ModelBackendSchema`、`ApiKeyProviderIdSchema`）由存储自己拥有并保持封闭，用编译期检查和 llm 的目录对齐；理由是 harness 以 caret 范围依赖 llm，目录在新版 llm 里变长时，不能在没有 harness 发布的情况下把存储的联合类型变宽。
-- **冲突在哪。** 这个理由保护的是“变长”。它的代价落在“变短”上：PRD 的日常变更检查之一是“更换或移除执行 backend……不为此更新多个历史事件版本”，对这两种行现在不成立。
-- **一个两头都顾的做法。** 写入方的类型保持封闭（harness 自己的列表，编译期检查不变），所以新版 llm 仍然不能让 harness 写出列表之外的值；读取方把已存的值当字符串读，不认识的 backend 在绑定时被拒绝续跑并说明原因。先例是缺插件的事实读作 `unavailable`（#14586）和 `StoredProtocolSchema`（#14476）。这正是 PRD 的要求：“旧调用是什么，就一直保存成什么；新代码能否继续它，另行判断。”
-- **是否重开由负责人定。** 现有证据只有两次移除。
+- **冲突在哪。** 这个理由保护的是“变长”。它的代价落在“变短”上：PRD 的日常变更检查之一是“更换或移除执行 backend……不为此更新多个历史事件版本”。
+- **已落地的做法，两头都顾。** 写入方的类型保持封闭（harness 自己的列表，编译期检查不变），所以新版 llm 仍然不能让 harness 写出列表之外的值。读取方把已存的 `binding.backend` 当字符串读（`shared/schemas/runInput.ts` 的 `RunBindingSchema`）；不认识的 backend 在下一次绑定时被按名字拒绝（`agent/runtime/modelAccess/routeDecision.ts` 的 `decideRoute`）。所以移除一个 provider 不再升 `run.config`：绑定在它上面的 run 仍然可读，只是不能在这个构建上续跑。先例是缺插件的事实读作 `unavailable`（#14586）和 `StoredProtocolSchema`（#14476）。这正是 PRD 的要求：“旧调用是什么，就一直保存成什么；新代码能否继续它，另行判断。”回归测试在 `packages/harness/test/controllers/session/rowCodec.vitest.ts`。
+- **没有动的一半。** `request.opened` 重试载荷里的 `ApiKeyProviderIdSchema` 仍然封闭。它描述的是一个待回答的请求向用户提供哪把 key，读者（各端的重试卡片）按枚举值取文案；按字符串读要给每个读者加“不认识的 provider”分支。请求是短命的，移除 provider 时还开着的重试请求很少，这里维持既有决定。
 
 模型失败按值存在四种行里。v16 之后它是 verdict，措辞归读者，形状已经比之前稳定；本提案不动它，只记录：下一次改它仍然会升四种行。
 
 ### 3.4 可以清除的过时设计
 
-| #   | 过时的设计                                                                                       | 证据                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 清除的代价                                                             |
-| --- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| 1   | 有运行历史的 run 上的卡片行                                                                      | §3.1                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 格式：`tool.intent`、`tool.result` 升版                                |
-| 2   | 每行的 `origin` 列、`OwnerId`、`ProcessIdentity`、`platform/defaults/nodeProcesses.ts`（215 行） | 只在 `databaseLayer.ts:629, 664` 写入；代码里没有读取方。它原本供 claim 的存活证明使用；ownership 那一片删掉了 `ProcessIdentity.owners` 和 claim，盖戳这一半留了下来。为了盖这个戳，每个进程在建 process layer 时要读一次 `/proc`（Linux）或起一次 `ps` / PowerShell（`controllers/session/sessionLayer.ts:362-367`）。pi-durable 没有任何主机名、pid 或进程身份。但它写在规范（spec §1、§2.2）和对外指南（`docs/api/durable-protocol.md`）里，剩下的用处是人工排查 | 格式：DDL 少一列；NDJSON 和 trace 的载荷少一个字段；规范和指南各改一处 |
-| 3   | `run.position` 的 `family`                                                                       | 只有一个值 `'toolUse'`（`shared/schemas/runHistoryEvent.ts:36`），唯一的写入是常量（`agent/runtime/loop/rows.ts:79`），唯一的读取是判空（`sessionViewUpdate.ts:749`）                                                                                                                                                                                                                                                                                               | 格式：`run.position` 升版                                              |
-| 4   | 按 `at` 相等推断批次边界                                                                         | 随第 1 项消失                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 无                                                                     |
-| 5   | 三份已过时的 implemented 说明（代码注释里的同类描述已改）                                        | single-owner liveness §2 和 §3、storage v1 §8 和 Q6、core concepts 的 Claim 和不变量 1，都还在描述 `owner_id`、claim 和多进程共享一个库；规范 §7 已经写明“没有 daemon，也没有 claim”。代码里十三处提到 claim 的注释已在同一分支改掉                                                                                                                                                                                                                                 | 无格式变化                                                             |
-| 6   | 冻结时归零：行版本号、17 个退役行种类、1 个退役插件事实                                          | 按 AGENTS.md，1.0 的格式还没有发布，`config/storage/frozen/` 也不存在；需要负责人确认没有已发布的构建写过这些版本                                                                                                                                                                                                                                                                                                                                                   | 需要负责人决定：现有的开发库在归零时会被整体拒绝一次                   |
+| #   | 过时的设计                                                                             | 状态                                                                                                                                                                                                                                                                                                        |
+| --- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 有运行历史的 run 上的卡片行                                                            | **已清除**（§3.1）。`tool.intent` 升到 v2，`tool.result` 升到 v5                                                                                                                                                                                                                                            |
+| 2   | 每行的 `origin` 列、`OwnerId`、`ProcessIdentity`、`platform/defaults/nodeProcesses.ts` | **已清除**，选的是整个删掉。它原本供 claim 的存活证明使用；ownership 那一片删掉了 claim，盖戳这一半留了下来，代码里没有读取方，却让每个进程在建 process layer 时读一次 `/proc` 或起一次 `ps` / PowerShell。DDL 少一列，schema 版本升到 104；NDJSON 和 trace 的行载荷里不再有 `origin`；规范和指南各改了一处 |
+| 3   | `run.position` 的 `family`                                                             | **已清除**。只有一个值 `'toolUse'`，唯一的写入是常量。读取方有两个，不是最初写的一个：视图的判空，以及 trace viewer 的位置标签（`packages/trace-viewer/src/main.ts`），后者现在不再显示它。`run.position` 升到 v5                                                                                           |
+| 4   | 按 `at` 相等推断批次边界                                                               | **已清除**，随第 1 项消失                                                                                                                                                                                                                                                                                   |
+| 5   | 三份已过时的 implemented 说明                                                          | **未做。** single-owner liveness §2 和 §3、storage v1 §8 和 Q6、core concepts 的 Claim 和不变量 1，都还在描述 `owner_id`、claim 和多进程共享一个库；规范 §7 已经写明“没有 daemon，也没有 claim”。代码里十三处提到 claim 的注释已在同一分支改掉。storage v1 §10 关于卡片的段落现在也过时了                   |
+| 6   | 冻结时归零：行版本号、17 个退役行种类、1 个退役插件事实                                | **未做，需要负责人决定。** 按 AGENTS.md，1.0 的格式还没有发布，`config/storage/frozen/` 也不存在；需要确认没有已发布的构建写过这些版本。现有的开发库在归零时会被整体拒绝一次                                                                                                                                |
 
-关于第 2 项的两种做法：整个删掉；或者保留这一列供人工排查，但只盖主机名和 pid，删掉进程启动时间的探测。后者不改格式，也去掉了每次启动的子进程。
-
-第 1、3 项（以及第 2 项，如果选择删掉）都是格式变更。按 PRD 推进顺序的规则（不可逆的先做，存储格式在冻结前一次做完），它们应当进同一个格式批，共用一次 golden 重生成。
+第 1 到 4 项是格式变更，按 PRD 推进顺序的规则（不可逆的先做，存储格式在冻结前一次做完）放在同一个格式批里，每一片各重生成一次 golden。
 
 已在别处记录、这里不重复的：全局库打开完整的事件库、`StoreMode` 的四个值、独占库上的 `retryBusy`、闭包参数包（store review F5）、没有前进步骤（F4）。不在此列的两项：当前值的 family 版本（PRD 已决定不引入 family 版本框架）；pre-1.0 的库整体移到 `.pre1`（storage v1 的 Q3 已决定）。
 
-## 4. 放弃什么
+## 4. 放弃了什么
 
-- 如果选推荐的做法，快工具的卡片会比现在早出现，NDJSON 上它的 `tool.start` 也更早。
-- 被守卫拒绝或工具不可用的调用，NDJSON 上只有一条自足的 `tool.end`，不再有成对的 `tool.start`。按开始和结束配对的外部读者要知道这一点。
-- 如果删掉 `origin`，NDJSON 和 trace 的行载荷里不再有它。仓库里没有依赖它的读者，但它是对外输出和规范的一部分，要随契约版本说明。
-- 冷读有运行历史的 run 的转录时，要解码 `tool.intent` 和 `tool.result` 两种行。今天已经解码 `tool.result`；多出来的是 intent，它是小行。
-- 行的 `seq` 变稀疏的程度会变（卡片不再占序号）。没有找到依赖序号连续的读者。
+- 快工具的卡片比以前早出现：调用体开始时就打开，NDJSON 上它的 `tool.start` 也更早。转录里卡片排在它的调用体写出的日志前面，脚本的 stage 排在它第一个调用的小节前面。已记入 CHANGELOG。
+- 调用体需要自己请求审批的快工具（例如文件编辑的审阅），卡片现在在审批请求之前打开，审批期间显示为进行中。慢工具原来就是这样。
+- NDJSON 和 trace 的行载荷里不再有 `origin`。仓库里没有依赖它的读者。
+- 冷读有运行历史的 run 的转录时，要解码 `tool.intent` 和 `tool.result` 两种行。以前已经解码 `tool.result`；多出来的是 intent，它带着调用的 input，大字符串按地址存在 blob 里。
+- 行更少了，`seq` 的取值随之变化。没有找到依赖具体序号的读者；golden 测试里一个写死的提交序号随重生成更新。
+- 这个构建之前写的 run 都读作“更早的构建写的”，只读、不能续跑。1.0 的格式还没有发布，这是既定规则。
 
-不放弃的：一个发布者、`RunCell.append` 是运行历史的唯一写入方、没有快照、恢复和实时是同一个归约函数、事件词汇、视图契约、历史查询的四张表。
+没有放弃的：一个发布者、`RunCell.append` 是运行历史的唯一写入方、没有快照、恢复和实时是同一个归约函数、事件词汇和事件的配对、视图契约、历史查询的四张表。
 
 ## 5. 顺序
 
-1. **修 §8 的缺陷。** 已在同一分支完成。
-2. **格式批（冻结前，一次重生成 golden）。** §3.4 的第 1、3 项，以及第 2 项和 §3.3（如果负责人决定做）。它们互不依赖，但共用一次重生成。规范的 W3、W4 和 AGENTS.md 的卡片段落在同一个 PR 里改写。
-3. **记录归约函数（§3.2）。** 没有格式变化，不受冻结约束。
-4. **注释和说明（第 5 项）。** 注释已在同一分支改完；三份 implemented 说明还没有动。
+1. **修 §8 的缺陷。** 已完成。
+2. **格式批。** 已完成：§3.4 的第 1 到 4 项和 §3.3 的 backend。
+3. **记录归约函数（§3.2）。** 未做。没有格式变化，不受冻结约束。
+4. **三份 implemented 说明（第 5 项）。** 未做。
 5. **冻结时归零（第 6 项）。** 只在冻结那一刻有意义，由负责人决定。
 
 ## 6. 验收标准
 
-- `cardRows`、`settleCards`、`cardResult`、`DISPLAY_PAGE_END` 在 `packages/harness/src` 里搜不到。
-- golden 库里有运行历史的 run 没有 `tool.start` 和 `tool.end` 行；它的转录和 NDJSON 仍然有这两种事件。
-- 规范 §4 里没有关于卡片和调用行同批提交的 MUST。
+已满足的：
+
+- `cardRows`、`settleCards`、`cardResult` 在 `packages/harness/src` 里搜不到；`DISPLAY_PAGE_END` 里没有 `at`。
+- golden 库里有运行历史的 run 没有 `tool.start` 和 `tool.end` 行（806 行变成 749 行，少的 57 行就是这些卡片行）；它们的卡片事件和基线逐条相同，只有出现的先后变了（Verified）。
+- 规范 §4 里关于卡片的 MUST 只剩一条：调用体没开始就结束的调用，它的 `tool.start` 和结果同批提交。
+- `platform/defaults/nodeProcesses.ts` 不存在；打开会话不再起 `ps` 或 PowerShell。
+- 这些片没有加新的单元测试，除了两个先失败后通过的回归测试（§8 的缺陷，§3.3 的 backend）；格式变更由 golden 和崩溃一致性回放覆盖。
+
+还没满足的（§3.2）：
+
 - “activation 清除 end 和 stop”只有一个实现：按 `'run.activate'` 搜索，处理它的归约只剩 `shared/session/` 里的那个纯函数和 `runState.ts`。
-- 如果删掉 `origin`：`platform/defaults/nodeProcesses.ts` 不存在；打开会话不再起 `ps` 或 PowerShell。
-- 按测试规则，这些片不加新的单元测试；格式变更由 golden 和崩溃一致性回放覆盖。
 
 ## 7. 风险和没有验证的部分
 
-- 没有做原型，也没有量过冷读的开销。卡片那一片落地时应当量一次长 run 的转录读取。
-- 卡片的映射必须满足“一条存储行最多一条转录事件”；被拒绝的调用因此只有一条 `tool.end`，这是对外可见的变化。
-- 快慢工具的展示时机是产品行为，需要 UI 负责人定。
+- 没有量过冷读的开销。卡片那一片多解码一种小行、少读两种行，预期持平或略好，但没有在长 run 上测过。
+- 桌面端的 Playwright E2E 没有在这个环境里跑。卡片出现得更早，如果有截图基线拍到了快工具卡片出现之前的画面，需要刷新。
+- 调用体没开始就结束的调用（被拒绝、工具不可用）在 golden 库里没有样本，也没有专门的回归测试；落地时用一个临时测试核对过它的事件和存储行，核对后删除（Verified）。
 - 视图的归约在浏览器里运行，§3.2 的纯函数不能引入非浏览器安全的依赖。
 - `origin` 是否有仓库外的读者（用户脚本读 NDJSON，或人工排查时直接查库）无法从仓库里确认。
 - §3.1 表里的其余展示行没有核对。
@@ -229,25 +236,30 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 
 和本提案无关。三项都已在同一分支修掉，各是一个提交：
 
-1. **`Run.events` 丢掉模型标题的 `usage` 事件。** 模型写的 `run.description` 带着它那次请求的计费用量，`displayRows` 为它再投影一条 `usage`，两条共用一个 `seq`（`controllers/session/projections.ts:291-307`）。`replayTrace` 原来把一个 `seq` 的第一行读完就当整个 `seq` 已读，所以先到的 `run.description` 占掉了它，后到的 `usage` 被丢掉。影响：只在给根 run 起标题的进程里出现（`processLayer` 提供 `LabelsRootRuns`）；从 `Run.events` 累加 `usage` 的读者会少算这一次请求；视图的总用量不受影响，它按 commit 而不是 `seq` 去重。修法：`replayTrace` 记下最新 `seq` 上已读的行种类（`controllers/session/runTrace.ts` 的 `kinds`）。一个 `seq` 上每种行最多一条（一条事件行，每种投影行一条），所以另一种行会被读到，重复送达的行仍然不会。回归测试在 `packages/harness/test/controllers/session/runTrace.vitest.ts`，修复前失败。
-2. **规范里的 schema 版本号过时。** `packages/harness/docs/spec.md` 写的是 “The store MUST carry … schema version 102”，代码是 103（`controllers/session/storeSchema.ts` 的 `SCHEMA_VERSION`）。已改成 103。同一段里“102 及以上”和“102 以下”说的是 1.0 基线，没有动。
-3. **`scripts/check-fact-spread.mjs` 的谓词表里还有 `ownedHere`。** 仓库里已经没有这个名字，其他被删掉的谓词都随删除离开了这张表。已从表里和 `packages/harness/AGENTS.md` 的示例里去掉。
+1. **`Run.events` 丢掉模型标题的 `usage` 事件。** 模型写的 `run.description` 带着它那次请求的计费用量，`displayRows` 为它再投影一条 `usage`，两条共用一个 `seq`（`controllers/session/projections.ts` 的 `usageRows`）。`replayTrace` 原来把一个 `seq` 的第一行读完就当整个 `seq` 已读，所以先到的 `run.description` 占掉了它，后到的 `usage` 被丢掉。影响：只在给根 run 起标题的进程里出现（`processLayer` 提供 `LabelsRootRuns`）；从 `Run.events` 累加 `usage` 的读者会少算这一次请求；视图的总用量不受影响，它按 commit 而不是 `seq` 去重。修法：`replayTrace` 记下最新 `seq` 上已读的行种类（`controllers/session/runTrace.ts` 的 `kinds`）。一个 `seq` 上每种行最多一条（一条事件行，每种投影行一条），所以另一种行会被读到，重复送达的行仍然不会。回归测试在 `packages/harness/test/controllers/session/runTrace.vitest.ts`，修复前失败。
+2. **规范里的 schema 版本号过时。** `packages/harness/docs/spec.md` 写的是 102，代码当时是 103。已改；删掉 `origin` 列之后两边都是 104。
+3. **`scripts/check-fact-spread.mjs` 的谓词表里还有 `ownedHere`。** 仓库里已经没有这个名字。已从表里和 `packages/harness/AGENTS.md` 的示例里去掉。
+
+另外，golden 测试里“聊天的最后一次模型响应”这个写死的提交序号在 `main` 上就指着响应后面那一行 `run.position`（差一行，测试仍然通过，因为那一行同样会被读作更早的构建或损坏）。随卡片那一片的重生成改成了响应行本身。
 
 ## Verified
 
-在 `main` 的 `db09959` 上核对。设计部分全部是读代码和 `grep`。§8 的修复跑过 `npm run typecheck`、`npm run lint`、`npm run format:check`、`npm run gate:docs` 的三个脚本、`node scripts/check-api-report.mjs` 和 `npm test`（253 个文件、569 个测试通过）：
+设计部分在 `main` 的 `db09959` 上读代码和 `grep` 核对。落地的每一片都跑过 `npm run gate`（lint、不变量、文档、typecheck、格式）和 `npm test`，并重生成 golden 库（`corepack pnpm --filter @texra-ai/cli run golden:store`）和 API 报告（`npm run docgen`）。
+
+卡片那一片另外核对了：
+
+- **卡片事件前后一致。** 改动前后各用一个临时测试（核对后删除）读出 golden 库里 18 个 run 的全部 `tool.start`、`tool.end` 和转录。每个 run 的卡片事件按多重集合比较完全相同（工具名、input、状态、输出、文件、stageId、section）；每张卡片的开始都在结束之前；转录的行除了由 `seq` 派生的 id 和时间以外相同。出现先后变了的地方都是快工具的卡片提前到了调用体开始时。
+- **没有 intent 的调用和重复调用。** 临时测试跑一次响应里的三个调用：一个 run 里没有的工具、一个编辑文件的工具、一个重复调用。结果：前者是一对事件（`tool.start`，然后是带着 `tool_unavailable` 的失败 `tool.end`）；编辑工具的 `tool.end` 带着去重后的文件；重复调用的结果 `logId` 是 null，没有卡片；实时事件和冷读的事件相同。
+- **分页。** 临时测试往一个库里写 4501 行，让一次调用的 intent 落在第一页的最后一行、结果落在第二页的第一行：`readDisplay(0)` 返回 4501 条，提交序号严格递增，卡片的开始和结束各一条。
+- **真实 CLI。** `corepack pnpm --filter @texra-ai/cli validate:run`（用真实的二进制跑运行、恢复、服务和 NDJSON 路径）通过。
+
+其余在基线上核对过、现在仍然成立的：
 
 - 37 种行、26 种展示行、11 种私有行：`shared/schemas/sessionEvent.ts` 的三个 union 和 `shared/schemas/rowVersions.ts` 的 `ROW_KINDS`。
-- 一次工具调用写的行，以及哪些调用有卡片：`agent/runtime/loop/toolUseDispatch.ts` 的 `commit`、`cardRows`、`bodyStarts`、`skipCall` 和结果提交；规范 §4 的 W3、W4 与代码一致。
-- `tool.end` 和 `usage` 在两类 run 上的不同含义：`shared/schemas/traceEvent.ts:65-85`。
-- 编辑过的文件可以从已存的结果推出：`SettledToolResultSchema` 保留 `edits`（`shared/schemas/toolResult.ts:256-265`）。
-- 读取 `tool.start`、`tool.end` 的地方都在展示事件一侧（转录、视图、`runTrace`、压缩活动投影）；写入只有 dispatch 和外部 agent 的 `openToolCard`。
-- 视图的转录按 `seq` 去重：`sessionViewUpdate.ts:1011-1012`；`tool.end` 找不到卡片时被忽略：`shared/session/transcriptUpdate.ts:200-203`。
-- `origin` 没有读取方：在 `packages/*/src` 里搜索行信封的 `.origin`，命中的都是别的字段（模型的 origin、转录行的 `origin === 'local'`）；`OwnerId`、`ProcessIdentity`、`processStartIdentity` 的全部使用点都在写入路径上。
-- `family` 的读写点：`rows.ts:79`、`runRows.ts:108`、`sessionViewUpdate.ts:749`。
+- 编辑过的文件可以从已存的结果推出：`SettledToolResultSchema` 保留 `edits`（`shared/schemas/toolResult.ts`），附件清洗不改它（`agent/core/tools/toolAttachmentExtraction.ts`）。
+- 读取 `tool.start`、`tool.end` 的地方都在展示事件一侧（转录、视图、`runTrace`、压缩活动投影）；会打印到卡片上的工具只有 `bash`、`script`、`self` 和 `agent`。
+- 视图的转录按 `seq` 去重；`tool.end` 找不到卡片时被忽略（`shared/session/transcriptUpdate.ts`）。
 - 版本升级次数：逐条读 `rowVersions.ts` 的注释后计数。
 - activation 规则的四个实现：按 `'run.activate'` 搜索后逐个读。
-- blob 地址只有一种算法：内联字符串和媒体都是 JSON 文本的 sha256（`utils/core/idHash.ts` 的 `blobAddress`）。
-- 行种类在 harness 之外只在五个文件里被点名，都是展示事件，没有私有行：`packages/trace-viewer/src/traceFrames.ts`（`run.start`、`run.position`）、`packages/cli/src/runtime/headless/executeCli.ts:243`（`request.decided`）、`sessionProgressSubscription.ts:127` 和 `taskAttach.ts:69`（过滤 debug 级的 `log`）、`packages/texra/src/tools/agentCli/agentCliShared.ts:259`（外部 agent 发出 `usage`）。
-- 已定案的决定：PRD“最小存储契约”和“实现前需要收敛的选择”；storage v1 §5、§10 和 §13；one run model §2 和 §3；one fact, one representation 的规则、§A 的“Who may run this run”行和 §G 的落地说明；规范 §2.2、§3、§4 和 §7；rulings ledger（没有关于 `origin`、卡片或 `family` 的裁决）；`refuted-candidates.json`（`STORE-context-blob-as-brought-blob`、`RUN-one-skip-signal`、`ROW-followup-closed-as-run-removed` 等与本提案不冲突）。
-- 没有核对的：git 历史（这个检出只有 51 个提交，无法确认各次升版的日期）；`release/0.40` 分支。
+- 已定案的决定：PRD“最小存储契约”和“实现前需要收敛的选择”；storage v1 §5、§10 和 §13；one run model §2 和 §3；one fact, one representation 的规则、§A 的“Who may run this run”行和 §G 的落地说明；规范 §2.2、§3、§4 和 §7；rulings ledger（没有关于 `origin`、卡片或 `family` 的裁决）；`.agents/docs/refuted-candidates.json`（没有和本提案冲突的条目）。
+- 没有核对的：git 历史（这个检出是浅克隆，无法确认各次升版的日期）；`release/0.40` 分支上只核对了 `slow` 选项在那里也存在。

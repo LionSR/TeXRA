@@ -242,11 +242,7 @@ describe('applyRunRows', () => {
             }),
             {
               type: 'tool.intent',
-              payload: {
-                origin: { kind: 'response', responseId: toolTurn.responseId },
-                callId: '__proto__',
-                attempt: 1,
-              },
+              payload: { ...toolTurn.intent.payload, callId: '__proto__' },
             },
           ),
         );

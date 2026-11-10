@@ -214,7 +214,7 @@ export const sessionInputsLayer = Layer.effect(
                     ...taken.map(({ through }) => through),
                   );
                   const rows = [
-                    ...caughtUp.events.filter(isDisplayRow),
+                    ...caughtUp.events,
                     ...taken.flatMap(({ rows }) =>
                       rows.filter((row) => row.commit > from && wanted(row)),
                     ),

@@ -330,9 +330,11 @@ const RunRecordEventDraftSchema = Schema.Union([
   durable('followup.closed', {}),
 ]);
 /**
- * The run history's private rows: the byte-exact conversation and the loop's durable state (its hooks'
- * outcomes included), read only by `applyRunRows` through `RunHistory`. Never
- * redacted, on a renderer's transport or in the cold listing.
+ * The run history's private rows: the byte-exact conversation and the loop's
+ * durable state (its hooks' outcomes included), read by `applyRunRows`
+ * through `RunHistory`. None reaches a renderer: a display read shows a
+ * call's `tool.intent` and `tool.result` as its tool card and a priced row
+ * as a `usage` row, never the row itself.
  */
 const RunHistoryEventDraftSchema = Schema.Union([
   durable('model.message', { payload: ModelMessagePayloadSchema }),

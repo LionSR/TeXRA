@@ -322,7 +322,11 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // model's window could not hold (an earlier build would refuse the trigger
   // as damaged).
   'context.edit': { version: 7, listing: 'none' },
-  'tool.intent': { ...V1, listing: 'none' },
+  // v2: the intent names the card its attempt opens (`logId`, `toolName`,
+  // the `input` the body runs on, the tool's `card`, a script's `section`),
+  // which a display read shows as the call's `tool.start`; the run loop
+  // stores no card row beside it (an earlier build's row would open no card).
+  'tool.intent': { version: 2, listing: 'none' },
   // v2: the guest's latest title is `section`, not `phase` (an earlier
   // build's row would fail as damaged).
   // v3: no `stageId`: a script's calls open under the stage its own card's
@@ -335,7 +339,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // records what that build's calls read).
   // v4: no `diagnostics`; an earlier build's row holding them would have
   // them silently dropped.
-  'tool.result': { version: 4, listing: 'none' },
+  // v5: the result names the card it closes (`logId`), which a display read
+  // shows as the call's `tool.end`; the run loop stores no card row beside
+  // it (an earlier build's row would close no card).
+  'tool.result': { version: 5, listing: 'none' },
   // v2: no `continuation`: goal mode is a script, and a waiting run never
   // continues itself (an earlier build's row names a plugin continuation this
   // build has none of).

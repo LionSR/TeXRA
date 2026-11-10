@@ -78,6 +78,7 @@ export const seedEditedFiles = (
           responseId,
           callId,
           attempt: 1,
+          logId: null,
           disposition: 'executed',
           duplicateOf: null,
           result: {

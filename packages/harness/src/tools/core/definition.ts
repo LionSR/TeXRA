@@ -42,7 +42,6 @@ export type DefineToolOptions<T, R = never> = Required<
     | 'scriptGlobal'
     | 'replay'
     | 'requiresApproval'
-    | 'slow'
     | 'describe'
   > & {
     /** Decodes the model's input into `T`. */

@@ -707,7 +707,6 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
 
 export const ExecutionsTool = defineTool({
   name: 'executions',
-  slow: true,
   scriptReturns:
     '{ columns: string[]; rows: (string | number | null)[][]; more: boolean } | ToolOutput',
   description: `View run history and manage live runs.

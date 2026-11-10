@@ -40,6 +40,7 @@ import {
   RunIdSchema,
   aggregateTarget,
   type AggregateId,
+  type DisplayRow,
   type RunParent,
   type SessionRow,
   type SessionRowDraft,
@@ -85,7 +86,7 @@ import {
 } from './rowCodec';
 import {
   AGGREGATE,
-  DISPLAY_READ_KINDS,
+  callCard,
   DISPLAY_READ_TYPES,
   PROJECTED_COLUMNS,
   PROJECTED_FROM,
@@ -93,7 +94,6 @@ import {
   READ_COMMITS,
   READ_RUN_RECORD,
   rowReader,
-  settleCards,
 } from './rowReader';
 import { isBusy, isDamaged, retryBusy } from './storeAside';
 import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
@@ -146,22 +146,18 @@ FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
 WHERE s.id IN (${AGGREGATE_LIST})
 `;
 
-/** Stored rows a display page reads before it runs on to its batch's end. */
+/** The stored rows one display page covers. */
 const DISPLAY_PAGE_ROWS = 2000;
 /** A run's aggregate `logical_id` column as the `RunId` it is. */
 const runIdOf = Schema.decodeUnknownSync(RunIdSchema);
 /** The `event` table's autoincrement sequence: a non-negative integer. */
 const EventSeqSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
-/** Where a display page after a commit ends: 2,000 stored rows on, run to
- *  the end of the batch the last one is in, as a card's `tool.end` and the
- *  settlement it projects from share one batch (`settleCards`) and a batch's
- *  rows share one `at`. No row, or a NULL `through`: the page runs to the
- *  end. Counted in rows, so a stretch of collected commits bounds nothing. */
-const DISPLAY_PAGE_END = `WITH last AS (SELECT "commit", at FROM event
-    WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1})
-  SELECT (SELECT e."commit" - 1 FROM event e
-    WHERE e."commit" > last."commit" AND e.at <> last.at
-    ORDER BY e."commit" LIMIT 1) AS through FROM last`;
+/** Where a display page after a commit ends: at the last of the stored rows
+ *  it covers. A page may end at any row, as each display row is shown from
+ *  one stored row. No row: the page runs to the end. Counted in rows, so a
+ *  stretch of collected commits bounds nothing. */
+const DISPLAY_PAGE_END = `SELECT "commit" AS through FROM event
+  WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1}`;
 
 /**
  * The one display union: the `event` rows of the types bound first, every
@@ -176,16 +172,17 @@ const displayUnion = (where: string, order: string, arm?: string) =>
     UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
     ${arm === undefined ? '' : `UNION ALL ${arm}`}
   ) WHERE ${where} ORDER BY ${order}`;
+/** What a display read shows of one decoded row: a display row itself, a
+ *  call row's tool card, nothing of any other private row. */
+const shown = (row: SessionRow): readonly DisplayRow[] =>
+  isDisplayRow(row) ? [row] : callCard(row);
 /** A committed batch's display rows, as a display read of its commits
- *  selects and settles them: the display kinds and tool results, each priced
- *  row's projected `usage` row after it, each card's output projected. */
+ *  returns them: what each row shows, then the `usage` row a priced one
+ *  projects. */
 const displayRows = (rows: readonly SessionRow[]) =>
-  settleCards(
-    rows.flatMap((row) => [
-      ...(DISPLAY_READ_KINDS.has(row.type) ? [row] : []),
-      ...usageRows(row),
-    ]),
-  ).filter(isDisplayRow);
+  rows
+    .flatMap((row) => [...shown(row), ...usageRows(row)])
+    .filter(isDisplayRow);
 
 /** How a store is opened: a project store, created if absent
  *  (`persistent`) or only opened (`existing`), is held exclusively by this
@@ -307,7 +304,6 @@ export const databaseLayer = (
       ) =>
         exec(statement, params).pipe(
           Effect.flatMap((rows) => reader.read(rows, whole)),
-          Effect.map(settleCards),
         );
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
@@ -701,7 +697,7 @@ export const databaseLayer = (
                 return [
                   [...rows, ...kept]
                     .sort((x, y) => x.commit - y.commit)
-                    .filter(isDisplayRow),
+                    .flatMap(shown),
                   through < top ? Option.some(through) : Option.none(),
                 ] as const;
               }),
@@ -752,7 +748,7 @@ export const databaseLayer = (
               DISPLAY_READ_TYPES,
               ...aggregateColumns(id),
               fromSeq,
-            ]).pipe(Effect.map((rows) => rows.filter(isDisplayRow))),
+            ]).pipe(Effect.map((rows) => rows.flatMap(shown))),
           ),
         aggregateState: (ids) => query(readState(ids)),
         readInputBatch: (ids, fromCommit, throughCommit, checkedIds) =>
@@ -766,7 +762,7 @@ export const databaseLayer = (
                 throughCommit,
               ]);
               return {
-                events,
+                events: events.flatMap(shown),
                 state: yield* readState(checkedIds),
                 damaged: yield* reader.damaged,
               };

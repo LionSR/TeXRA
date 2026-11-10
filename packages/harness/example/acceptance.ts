@@ -375,9 +375,6 @@ const signoffTool = defineTool({
   description:
     "Wait for the reviewer to sign off a round's verdict before the next round starts. Resolves once they have.",
   replay: 'safe',
-  // Its card opens when it starts, not when it ends: the kill below waits
-  // for a sign-off that has started and never ends.
-  slow: true,
   schema: Schema.Struct({
     verdict: Schema.String.annotate({
       description: 'The verdict to sign off, in a sentence.',

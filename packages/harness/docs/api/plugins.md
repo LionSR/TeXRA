@@ -615,7 +615,6 @@ type DefineToolOptions<T, R = never> = Required<
     | 'scriptGlobal'
     | 'replay'
     | 'requiresApproval'
-    | 'slow'
     | 'describe'
   > & {
     /** Decodes the model's input into `T`. */
@@ -971,9 +970,6 @@ interface ITool<E = Error, R = never> {
    * (`asksApproval`).
    */
   readonly requiresApproval?: true | 'inBody';
-  /** Its card opens before the call runs; a fast tool's opens and closes
-   *  with its settlement. */
-  readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
   readonly guard?: ToolGuard<never>;
   /**

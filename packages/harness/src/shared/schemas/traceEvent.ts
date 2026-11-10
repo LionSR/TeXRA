@@ -48,6 +48,13 @@ export const TraceRowFieldsSchema = Schema.Union([
     label: Schema.String,
   }),
   trace('stage.end', { id: Schema.String, status: RunOutcomeSchema }),
+  /**
+   * A call's card opens. A run with a run history stores this row only for
+   * a call that ends before its body starts (one its guard or a hook denied,
+   * a tool the run lacks); a call whose body starts shows its `tool.intent`
+   * as this row (`callCard`). A run without one (an agent-CLI child) stores
+   * every card's.
+   */
   trace('tool.start', {
     logId: Schema.String,
     toolName: Schema.String,
@@ -63,10 +70,10 @@ export const TraceRowFieldsSchema = Schema.Union([
     card: Schema.optional(ToolCardSchema),
   }),
   /**
-   * On a run with a run history the card stores no output: `result` is projected
-   * at read time from the `tool.result` it commits with and its `tool.start`
-   * input (`rowCodec.ts`), and `files` names what the call edited. A run
-   * without a run history (an agent-CLI child) stores `result` here.
+   * A call's card closes: `result` is its output and `files` names what it
+   * edited. A run with a run history stores none: a display read shows the
+   * call's `tool.result` as this row (`callCard`). A run without one (an
+   * agent-CLI child) stores it.
    */
   trace('tool.end', {
     logId: Schema.String,
