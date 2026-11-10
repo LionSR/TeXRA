@@ -3,8 +3,8 @@ import { Box, Text, useWindowSize } from 'ink';
 import {
   getModelLabel,
   getProposalFileGroups,
-  offeredGrant,
   type AgentProposalRequest,
+  type ApprovalBypassKind,
 } from '@texra-ai/harness/schemas';
 import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
@@ -31,6 +31,8 @@ import {
 interface AgentProposalProps {
   readonly availableRows?: number;
   readonly payload: AgentProposalRequest;
+  /** The run grant the request offers (`offeredGrant`). */
+  readonly grant: ApprovalBypassKind | null;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
@@ -243,7 +245,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       color={COLOR_ACCENT}
       title={title}
       kind="proposal"
-      grant={offeredGrant({ kind: 'proposal', data: props.payload })}
+      grant={props.grant}
       onDecide={props.onDecide}
     >
       <Box marginTop={1} flexDirection="column">

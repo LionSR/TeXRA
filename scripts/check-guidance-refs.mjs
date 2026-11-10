@@ -161,14 +161,16 @@ const EVENT_VOCABULARY_SOURCES = [
   'packages/harness/src/shared/session/agentEvent.ts',
 ];
 
-// A `run.position` row's `at` shares the rows' dotted shape
-// (`response.ready`), and guidance naming where a run stands cites it beside
-// the rows.
+// A `run.position` row's `at`, and the places inside a turn the run state
+// reads off other rows, share the rows' dotted shape (`turn.ready`,
+// `response.ready`), and guidance naming where a run stands cites them
+// beside the rows.
 const POSITION_VOCABULARY_SOURCES = [
   [
     'packages/harness/src/shared/schemas/runHistoryEvent.ts',
     /const PositionAtSchema = Schema\.Literals\(\[([^\]]*)\]\)/u,
   ],
+  ['packages/harness/src/shared/session/runState.ts', /type LoopAt =([^;]*);/u],
 ];
 
 /**

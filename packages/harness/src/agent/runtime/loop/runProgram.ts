@@ -26,7 +26,7 @@ import {
 import type { RunState } from '@shared/session/runState';
 
 import { AgentRun } from '../run/AgentRun';
-import { registryOf, Runs } from '../runRegistry';
+import { RunRegistry } from '../runRegistry';
 import type { BoundModel } from '../modelAccess/ModelAccess';
 import type { FollowUps } from '../FollowUps';
 
@@ -74,7 +74,7 @@ const foreignProtocol = (
  * all. A resume commits its activation, in one batch, and is refused when
  * the rows hold nothing to continue from. A fresh launch onto a run that
  * already holds history state is refused.
- * The caller opens a cell whose state has no phase.
+ * The caller opens a cell whose state has no position.
  */
 export const openRun = Effect.fn('runProgram.openRun')(function* (
   runId: RunId,
@@ -149,21 +149,21 @@ export const settleRun =
     /** The run's own input lease. */
     lease: FollowUps,
   ) =>
-  (exit: Exit.Exit<RunExit, Error>): Effect.Effect<void, never, Runs> => {
+  (
+    exit: Exit.Exit<RunExit, Error>,
+  ): Effect.Effect<void, never, RunRegistry> => {
     // The body's own value when it returned.
     const outcome = Exit.match(exit, {
       onSuccess: (value) => value.outcome,
       onFailure: outcomeFromCause,
     });
-    return Effect.flatMap(Runs, (service) =>
-      Effect.map(
-        registryOf(service).hasLiveDescendants(cell.runId),
-        (descendants) =>
-          lease.release(
-            outcome === RUN_OUTCOME.COMPLETED && !descendants
-              ? 'terminal'
-              : 'recoverable',
-          ),
+    return Effect.flatMap(RunRegistry, (runs) =>
+      Effect.map(runs.hasLiveDescendants(cell.runId), (descendants) =>
+        lease.release(
+          outcome === RUN_OUTCOME.COMPLETED && !descendants
+            ? 'terminal'
+            : 'recoverable',
+        ),
       ),
     );
   };

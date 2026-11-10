@@ -29,8 +29,10 @@
  *   [`PromptSection`](#promptsection),
  *   [`ProcessPluginLayer`](#processpluginlayer),
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
- *   [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
- *   and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
+ *   [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
+ *   decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
+ *   [`FactKind`](#factkind), and [`AgentBlock`](#agentblock)
+ *   ([`agentBlockOf`](#agentblockof)).
  */
 export {
   codemode,
@@ -65,6 +67,7 @@ export {
   type PromptSection,
   type RecipeChange,
   type RequestDecisionHook,
+  type RequestDecisionRecord,
   type SessionPluginLayer,
   type ToolTable,
 } from '@tools/toolTable';
@@ -178,11 +181,8 @@ export type {
   ProcessReport,
   ProcessTurn,
 } from '@agent/runtime/processRun';
-// The XML a child's settled turn delivers to its parent.
-export {
-  formatDelivery,
-  type ChildRunDelivery,
-} from '@agent/runtime/deliveryEnvelope';
+// What a process child's turn delivers to its parent, typed.
+export type { ChildRunDelivery } from '@shared/schemas';
 // A run's input as a plugin sends it, and how the send landed.
 export type {
   FollowUpFailureReason,

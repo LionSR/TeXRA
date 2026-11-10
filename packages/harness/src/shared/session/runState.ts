@@ -22,6 +22,7 @@ import {
   type JsonValue,
   type DeclinableUsageRoute,
   type OfferedTool,
+  type PositionAt,
   qualifyAggregateId,
   type ModelFailure,
   type RunId,
@@ -91,13 +92,29 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
 ) {}
 
 /**
+ * Where the loop stands: its newest `run.position`, or a row inside the
+ * turn that no position restates, `response.ready` from a `response` and
+ * `results.ready` from the `append` delivering its calls' results. A stop
+ * writes no position: the loop stops where it stands, so a resume
+ * continues from there. `turn.ready` is input consumed while waiting,
+ * still between turns; a `turn.end` that no `waiting` or `turn.begin`
+ * follows in its batch is the round loop's last round closed, the run
+ * concluded before its terminal row. A run's first position opens it: its
+ * opening batch's `turn.ready`, or a fork's `waiting`.
+ */
+type LoopAt = PositionAt | 'response.ready' | 'results.ready';
+
+/**
  * What the loop continues from. A plain type with no schema of its own,
  * because giving it one invites persisting it. Every field is derived
  * from the row that produced it.
  */
-export type RunState = RunRowState &
+export type RunState = Omit<RunRowState, 'at'> &
   RunFacts & {
     readonly commit: CommitOrdinal;
+    /** Where the loop stands ({@link LoopAt}); `null` until the opening
+     *  `run.position`: no row that needs an opened run comes before it. */
+    readonly at: LoopAt | null;
     /** The model the run is on: its newest `run.config`'s. */
     readonly modelId: string | null;
     /** The backend that config's `binding` names, as written; null before

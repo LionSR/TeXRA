@@ -79,7 +79,6 @@
   },
   "dependencies": {
     "diff": "catalog:",
-    "escape-string-regexp": "catalog:",
     "glob": "catalog:",
     "http-status-codes": "catalog:",
     "ignore": "catalog:",

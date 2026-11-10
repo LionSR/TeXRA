@@ -1279,6 +1279,8 @@ async function normalize(file, root) {
     );
   };
   const scrub = (value, key = '') => {
+    // A delivery's wall time, as its envelope reads it (`1.2s`).
+    if (key === 'wallTime' && typeof value === 'string') return '0s';
     if (typeof value === 'string') return scrubText(value);
     if (typeof value === 'number') return TIMING_KEYS.has(key) ? 0 : value;
     // A card's duration line is wall time as text. With its wall time zeroed

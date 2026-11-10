@@ -7,7 +7,7 @@ import { expect } from 'vitest';
 import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
 import {
   RunRegistry,
-  Runs,
+  SessionRunRegistry,
   type RunRegistryInit,
 } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -18,7 +18,6 @@ import {
   startAwaited,
   testRunFork,
   testRunInSession,
-  testRunPrograms,
 } from '@test/support/runHandleFixtures';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
@@ -45,14 +44,13 @@ const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 function createRegistry(
   session: Context.Context<SessionServices>,
   fork: RunRegistryInit['fork'],
-): RunRegistry {
-  return new RunRegistry({
+): SessionRunRegistry {
+  return new SessionRunRegistry({
     roots: Context.get(session, SessionRoots),
     log: Context.get(session, SessionLog),
     runsHere: () => {},
     inSession: (effect) => testRunInSession(Effect.provide(effect, session)),
     fork,
-    programs: testRunPrograms,
     wake: () => {},
   });
 }
@@ -118,7 +116,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
       () =>
         Effect.gen(function* () {
           const session = yield* defaultSession;
-          const runs = Context.get(session, Runs);
+          const runs = Context.get(session, RunRegistry);
           const rootRunId = yield* publishTestRunStart(session);
           const root = yield* Effect.forkChild(
             startAwaited(runs, rootRunId, Effect.never),

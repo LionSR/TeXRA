@@ -1,22 +1,22 @@
-// Host-neutral parsing/formatting for the child-run delivery-envelope XML
-// blocks whose tag vocabulary @shared/deliveryTags owns
-// (`DELIVERY_TAG_PATTERN`).
-// These blocks are queued follow-up messages addressed to the orchestrator
-// *model*, injected into the conversation as user turns.
+// Host-neutral presentation of a child run's delivery to its parent, and of
+// the delivery-envelope XML blocks whose tag vocabulary @shared/deliveryTags
+// owns (`DELIVERY_TAG_PATTERN`).
 //
-// A delivery or notice envelope is collapsed to a terse status line
-// (summarizeSubagentFollowup) once, when its recipient queues it, and stored as
-// the follow-up's `displayText`, which every surface shows. This module is
-// the single source of truth for the block parsing and entity decoding. It
-// intentionally has NO host imports (no vscode, no Ink/React) so the
-// browser-safe transcript entry can carry it.
+// A delivery travels typed (`ChildRunDelivery`, on its parent's
+// `followup.queued` row): every surface shows its summary, read from those
+// facts (`followUpDisplay`), and only its parent's model reads its envelope.
+// The XML is read here only where text carries an envelope: a host's notice
+// (an activity report) and an envelope a model echoes inside its own
+// streamed answer, collapsed to the same summary. This module intentionally
+// has NO host imports (no vscode, no Ink/React) so the browser-safe
+// transcript entry can carry it.
 
-import escapeRegExp from 'escape-string-regexp';
-import { Result, Schema } from 'effect';
-import { DELIVERY_TAG, DELIVERY_TAG_PATTERN } from '@shared/deliveryTags';
-import type { ScriptDeliverySummary } from '@shared/schemas';
-import { ScriptDeliverySummarySchema } from '@shared/schemas';
-import { escapeText } from '@shared/utils/xmlEscape';
+import { DELIVERY_FAMILY, DELIVERY_TAG_PATTERN } from '@shared/deliveryTags';
+import type {
+  ChildRunDelivery,
+  FollowUpContent,
+  ScriptDeliverySummary,
+} from '@shared/schemas';
 import { formatScriptTally } from '@shared/transcript/scriptCall';
 import {
   formatCompactDuration,
@@ -56,7 +56,10 @@ const EMBEDDED_DELIVERY_OPEN_RE = new RegExp(
 const EMBEDDED_DELIVERY_TAG_RE = new RegExp(
   `<(?:${DELIVERY_TAG_PATTERN})${TAG_NAME_END}`,
 );
-const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
+/** An envelope's opening tag's attributes (a value never holds `"`), and
+ *  each of them. */
+const OPEN_TAG_RE = /^<[\w-]+((?:\s+[\w-]+="[^"]*")*)/;
+const ATTRIBUTE_RE = /([\w-]+)="([^"]*)"/g;
 const RESULT_RESPONSE_PREVIEW_LINES = 12;
 const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
 
@@ -66,16 +69,8 @@ const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
  * delivery envelope". Leading whitespace is allowed because producers hand
  * blocks over untrimmed.
  */
-export function deliveryTagOf(text: string): string | undefined {
+function deliveryTagOf(text: string): string | undefined {
   return DELIVERY_TAG_RE.exec(text.trim())?.[1];
-}
-
-function followupText(text: unknown): string | undefined {
-  return typeof text === 'string' ? text : undefined;
-}
-
-function attr(xml: string, name: string): string | undefined {
-  return new RegExp(`(?:^|\\s)${escapeRegExp(name)}="([^"]*)"`).exec(xml)?.[1];
 }
 
 function innerTag(xml: string, tag: string): string | undefined {
@@ -88,8 +83,8 @@ function elementBody(xml: string, tag: string): string | undefined {
     ?.trim();
 }
 
-// `<message>` bodies are escapeText()'d by the producer; decode for display.
-// `&amp;` last so an escaped `&lt;` never double-decodes.
+// An envelope's bodies and attributes are escaped by its producer; decode
+// for display. `&amp;` last so an escaped `&lt;` never double-decodes.
 export function decodeXmlEntities(text: string): string {
   if (!text.includes('&')) return text;
   return text
@@ -100,7 +95,7 @@ export function decodeXmlEntities(text: string): string {
     .replaceAll('&amp;', '&');
 }
 
-/** Truncate an already-decoded result response for display in a status line. */
+/** Truncate a result's response for display in a status line. */
 function truncatedResultResponsePreview(response: string): string {
   const trimmed = response.trim();
   if (trimmed === '') return '';
@@ -123,36 +118,7 @@ function truncatedResultResponsePreview(response: string): string {
   return `${preview}\n… ${hidden}; open the subagent transcript for the full response`;
 }
 
-/** The envelopes that carry a `<script-summary>` element; every other tag's
- *  body is entity-escaped, so the element cannot appear in it. */
-const SUMMARIZED_TAGS: ReadonlySet<string> = new Set([
-  DELIVERY_TAG.scriptResult,
-  DELIVERY_TAG.scriptError,
-]);
-
-/**
- * Read the presentation-only facts attached to a script delivery, or
- * undefined for text that is not a script envelope carrying them. The raw
- * response remains intact for the invoking model and diagnostic inspection.
- * This string parse lives at the delivery boundary (the queued row's
- * `displayText` and the transcript row's typed summary), never at render
- * time: renderers receive the parsed summary carried beside the row text.
- */
-export function parseScriptDeliverySummary(
-  xml: string,
-): ScriptDeliverySummary | undefined {
-  const tag = deliveryTagOf(xml);
-  if (tag === undefined || !SUMMARIZED_TAGS.has(tag)) return undefined;
-  const rawSummary = innerTag(xml, 'script-summary');
-  if (!rawSummary) return undefined;
-  return Result.getOrUndefined(
-    Schema.decodeUnknownResult(
-      Schema.fromJsonString(ScriptDeliverySummarySchema),
-    )(decodeXmlEntities(rawSummary)),
-  );
-}
-
-/** Collapse a parsed script delivery summary to its transcript lines. The
+/** Collapse a script delivery's summary to its transcript lines. The
  *  tick is earned only by a run whose every call succeeded; a completed run
  *  with a failed, stopped, or unreached call says so in its marker too. */
 function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
@@ -182,116 +148,140 @@ function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
   ].join('\n');
 }
 
-/** The `<script-summary>` element a script's delivery carries, which
- *  {@link parseScriptDeliverySummary} reads back. */
-export function scriptSummaryElement(summary: ScriptDeliverySummary): string {
-  return `<script-summary>${escapeText(JSON.stringify(summary))}</script-summary>`;
-}
-
 /**
- * What a child-run delivery says, without its envelope: a result's
- * `<response>` or an error's `<message>`, decoded, else the envelope's
- * one-line summary (`summarizeSubagentFollowup`), as for a task's
- * result that lists only its files. Undefined for any text that is not a
- * result or error envelope. The one reading every surface uses to show an
- * `agent` call's answer, so no host prints the delivery XML.
+ * A delivery collapsed to a one-line (or, for a result, status + response)
+ * summary of its facts: a script's its summary's lines; a background
+ * command's its description, else its command, and how it ended; any
+ * other's its agent, else its family, with the start of its answer or its
+ * failure.
  */
-export function deliveredResponse(text: string): string | undefined {
-  const trimmed = text.trim();
-  const tag = deliveryTagOf(trimmed);
-  if (tag === undefined) return undefined;
-  let body: string | undefined;
-  if (tag.endsWith('-result')) body = innerTag(trimmed, 'response');
-  else if (tag.endsWith('-error')) body = innerTag(trimmed, 'message');
-  else return undefined;
-  return body ? decodeXmlEntities(body) : summarizeSubagentFollowup(trimmed);
-}
-
-/**
- * Collapse a subagent follow-up XML block into a one-line (or, for results,
- * status + response) human-readable summary. Returns `text` unchanged when it
- * is not a subagent block. Malformed non-string payloads render as a visible
- * placeholder instead of crashing status surfaces.
- */
-export function summarizeSubagentFollowup(text: unknown): string {
-  const normalized = followupText(text);
-  if (normalized === undefined) return EMPTY_FOLLOW_UP_SUMMARY;
-
-  const trimmed = normalized.trim();
-  const tag = deliveryTagOf(trimmed);
-  if (!tag) return normalized;
-
-  const summary = parseScriptDeliverySummary(trimmed);
-  if (summary) return formatScriptDeliverySummary(summary);
+function deliverySummary(delivery: ChildRunDelivery): string {
+  if (delivery.summary !== undefined)
+    return formatScriptDeliverySummary(delivery.summary);
+  const attribute = (name: string): string | undefined => {
+    const value = delivery.attributes?.find(
+      (attr) => attr.name === name,
+    )?.value;
+    return value == null ? undefined : String(value);
+  };
+  const { exit, message, wallTime } = delivery;
 
   // A background shell command (bashDelivery.ts) is named by the model's
-  // description, else its command, and judged by its exit code: it carries
+  // description, else its command, and judged by its exit: it carries
   // neither `agent` nor `status`.
-  if (
-    tag === DELIVERY_TAG.backgroundResult ||
-    tag === DELIVERY_TAG.backgroundError
-  ) {
+  if (delivery.family === DELIVERY_FAMILY.background) {
     // Model-written text reaches terminals: drop control characters so a
     // crafted description or command cannot emit escape sequences.
     const label = (name: string) =>
       stripControlCharacters(
-        decodeXmlEntities(attr(trimmed, name) ?? '').split('\n')[0] ?? '',
+        (attribute(name) ?? '').split('\n')[0] ?? '',
       ).trim();
-    const description = label('description');
-    const command = label('command');
-    const exitCode = innerTag(trimmed, 'exit-code');
     const failed =
-      tag === DELIVERY_TAG.backgroundError ||
-      (exitCode !== undefined && exitCode !== '0');
-    const message = innerTag(trimmed, 'message');
-    // A timeout or a lost exit status has only a synthetic code; name it.
+      message !== undefined || (exit !== undefined && exit.code !== 0);
+    // A timeout or a lost exit status has only a conventional code; name it.
     let outcome: string | undefined;
-    if (innerTag(trimmed, 'timed-out') !== undefined) outcome = 'timed out';
-    else if (innerTag(trimmed, 'no-exit-code') !== undefined)
-      outcome = 'no exit code';
-    else if (exitCode !== undefined) outcome = `exit ${exitCode}`;
-    const facts = [
-      `${failed ? '✗' : '✓'} ${description || `$ ${command || 'background command'}`}`,
+    if (exit?.timedOut) outcome = 'timed out';
+    else if (exit?.noExitCode) outcome = 'no exit code';
+    else if (exit !== undefined) outcome = `exit ${exit.code}`;
+    const head = [
+      `${failed ? '✗' : '✓'} ${label('description') || `$ ${label('command') || 'background command'}`}`,
       ...(failed && outcome !== undefined ? [outcome] : []),
-      ...(tag === DELIVERY_TAG.backgroundError ? ['failed'] : []),
-      innerTag(trimmed, 'wall-time'),
-    ].filter(Boolean);
-    const head = facts.join(' · ');
-    return message
-      ? `${head}\n${stripControlCharacters(decodeXmlEntities(message), ' ')}`
-      : head;
+      ...(message === undefined ? [] : ['failed']),
+      wallTime,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return message ? `${head}\n${stripControlCharacters(message, ' ')}` : head;
   }
 
-  // Result/error envelopes share one shape across families
-  // (deliveryEnvelope.ts's `formatDelivery`); one without an `agent`
-  // attribute is named by its family.
-  if (tag.endsWith('-result')) {
-    const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-result'.length);
-    const status = attr(trimmed, 'status') ?? 'completed';
-    const wall = innerTag(trimmed, 'wall-time');
-    const response = innerTag(trimmed, 'response');
-    const head = `✓ ${agent} ${status}${wall ? ` · ${wall}` : ''}`;
-    const preview = response
-      ? truncatedResultResponsePreview(decodeXmlEntities(response))
-      : '';
+  // Results and errors share one shape across families (`formatDelivery`);
+  // one without an `agent` attribute is named by its family.
+  const name = attribute('agent') ?? delivery.family;
+  const wall = wallTime ? ` · ${wallTime}` : '';
+  if (message === undefined) {
+    const head = `✓ ${name} ${attribute('status') ?? 'completed'}${wall}`;
+    const preview = truncatedResultResponsePreview(
+      delivery.output?.response ?? delivery.response ?? '',
+    );
     return preview ? `${head}\n${preview}` : head;
   }
+  const retryable = attribute('retryable') === 'true';
+  const head = `✗ ${name} failed${wall}${retryable ? ' (retryable)' : ''}`;
+  return message ? `${head}\n${message}` : head;
+}
 
-  if (tag.endsWith('-error')) {
-    const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-error'.length);
-    const wall = innerTag(trimmed, 'wall-time');
-    const message = innerTag(trimmed, 'message');
-    const retryable = attr(trimmed, 'retryable') === 'true';
-    const head = `✗ ${agent} failed${wall ? ` · ${wall}` : ''}${retryable ? ' (retryable)' : ''}`;
-    return message ? `${head}\n${decodeXmlEntities(message)}` : head;
+interface FollowUpDisplay {
+  readonly text: string;
+  /** A script delivery's facts, typed beside its summary. */
+  readonly scriptSummary?: ScriptDeliverySummary;
+}
+
+/** A follow-up as every surface shows it: a child's delivery as the summary
+ *  of its facts, a script's with its summary typed beside it, so no
+ *  renderer reads it from text; a message as its `displayText`, else its
+ *  text. */
+export function followUpDisplay(content: FollowUpContent): FollowUpDisplay {
+  if (!('delivery' in content))
+    return { text: content.displayText ?? content.text };
+  const { delivery } = content;
+  const text = deliverySummary(delivery);
+  return delivery.summary === undefined
+    ? { text }
+    : { text, scriptSummary: delivery.summary };
+}
+
+/**
+ * The facts of a delivery envelope found in text, read back as
+ * `formatDelivery` wrote them: its family, its attributes, and the elements
+ * a summary reads. A stored delivery is typed; only a model's echo of one
+ * comes as text.
+ */
+function echoedDelivery(xml: string, tag: string): ChildRunDelivery {
+  const attributes = [
+    ...(OPEN_TAG_RE.exec(xml)?.[1] ?? '').matchAll(ATTRIBUTE_RE),
+  ].map(([, name = '', value = '']) => ({
+    name,
+    value: decodeXmlEntities(value),
+  }));
+  const element = (name: string): string | undefined => {
+    const body = innerTag(xml, name);
+    return body === undefined ? undefined : decodeXmlEntities(body);
+  };
+  const code = innerTag(xml, 'exit-code');
+  return {
+    family: tag.slice(0, tag.lastIndexOf('-')),
+    runId: attributes.find(({ name }) => name === 'id')?.value ?? '',
+    attributes,
+    ...(code !== undefined && {
+      exit: {
+        code: Number(code),
+        timedOut: innerTag(xml, 'timed-out') !== undefined,
+        noExitCode: innerTag(xml, 'no-exit-code') !== undefined,
+      },
+    }),
+    wallTime: innerTag(xml, 'wall-time'),
+    response: element('response'),
+    ...(tag.endsWith('-error') && { message: element('message') ?? '' }),
+  };
+}
+
+/**
+ * The envelope `text` is, collapsed: an activity report to its first line, a
+ * delivery to the summary a stored one shows; any other text unchanged. For
+ * the text that carries one: a host's notice, and an envelope a model
+ * echoes.
+ */
+export function summarizeSubagentFollowup(text: string): string {
+  const trimmed = text.trim();
+  const tag = deliveryTagOf(trimmed);
+  if (tag === undefined) return text;
+  if (tag.endsWith('-activity')) {
+    // An activity envelope (`<family>-activity`) wraps a plain sanitized
+    // text body with no attribute schema: its first line.
+    const firstLine = elementBody(trimmed, tag)?.split('\n')[0]?.trim();
+    return firstLine || text;
   }
-
-  // Activity envelopes (`<family>-activity`) wrap a plain sanitized text
-  // body with no attribute schema, so surface its first line instead of the
-  // raw wrapper tags.
-  const body = elementBody(trimmed, tag);
-  const firstLine = body?.split('\n')[0]?.trim();
-  return firstLine || normalized;
+  return deliverySummary(echoedDelivery(trimmed, tag));
 }
 
 type IncompleteEmbeddedSubagentFollowup = {

@@ -2,10 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Effect, Option, Schema, Stream } from 'effect';
 
-import {
-  parseScriptDeliverySummary,
-  summarizeSubagentFollowup,
-} from '@shared/subagentFollowup';
+import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import {
   FollowUpRequestSchema,
   qualifyAggregateId,
@@ -14,7 +11,6 @@ import {
   type FollowUpSender,
   type RunId,
   type RunRelation,
-  type ScriptDeliverySummary,
 } from '@shared/schemas';
 import { type DatabaseReadFailed } from '@shared/session/database';
 import {
@@ -33,25 +29,6 @@ import type { WithBlobs } from '@shared/session/historyTurns';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { InboxItem } from './Inbox';
 
-interface FollowUpDisplay {
-  readonly text: string;
-  /** Typed script delivery facts logged beside the collapsed row text. */
-  readonly scriptSummary?: ScriptDeliverySummary;
-}
-
-/** A follow-up as its transcript row shows it: its `displayText`, else its
- *  text; a child's script delivery also carries its summary typed, so
- *  renderers never re-extract it from the text. */
-export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
-  const text = followUp.displayText ?? followUp.text;
-  const { from } = followUp;
-  const scriptSummary =
-    from.kind === 'run' && from.relation === 'child'
-      ? parseScriptDeliverySummary(followUp.text)
-      : undefined;
-  return scriptSummary ? { text, scriptSummary } : { text };
-}
-
 /** What the run was asked to do, joined from its instructing input. */
 export function userFollowUpInstruction(
   followUps: readonly FollowUpContent[],
@@ -66,28 +43,35 @@ export function userFollowUpInstruction(
 
 /** The `followup.queued` row one send writes, with the blobs its media
  *  brings: its id is the delivery id when the producer gave one, a run
- *  sender gets its relation to the recipient, a delivery or notice its
- *  `displayText`, and a host's notification waits for the turn's end. */
+ *  sender gets its relation to the recipient, a child's delivery keeps its
+ *  facts typed, a notice gets its envelope's summary as its `displayText`,
+ *  and a host's notification waits for the turn's end. */
 export function queuedRow(
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
   relationOf: (sender: RunId) => RunRelation,
 ): WithBlobs<Omit<QueuedFollowUp, 'commit'>> {
-  const { from: input, deliveryId, media, blobs, control, text } = item;
+  const { from: input, deliveryId, control } = item;
   const from: FollowUpSender =
     input.kind === 'run'
       ? { kind: 'run', runId: input.runId, relation: relationOf(input.runId) }
       : input;
-  // A delivery or notice shows its envelope's summary, decided once here; a
-  // person's own message is shown as typed.
-  const summary = from.kind === 'user' ? text : summarizeSubagentFollowup(text);
-  const displayText =
-    item.displayText ?? (summary === text ? undefined : summary);
   const holdUntil = hold ?? (from.kind === 'notification' ? 'turn' : undefined);
-  return {
+  const row = {
     followUpId: deliveryId ?? randomUUID(),
     ...(holdUntil ? { holdUntil } : {}),
     ...(control ? { control } : {}),
+  };
+  if ('delivery' in item)
+    return { ...row, content: { delivery: item.delivery, from } };
+  const { text, media, blobs } = item;
+  // A notice shows its envelope's summary, decided once here; a person's own
+  // message is shown as typed.
+  const summary = from.kind === 'user' ? text : summarizeSubagentFollowup(text);
+  const displayText =
+    item.displayText ?? (summary === text ? undefined : summary);
+  return {
+    ...row,
     ...(blobs !== undefined && { blobs }),
     content: {
       text,
@@ -172,7 +156,10 @@ export const sentBefore = Effect.fn('sentBefore')(function* (
   runId: RunId,
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
-  attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>,
+  attach?: Effect.Effect<
+    Pick<Extract<InboxItem, { readonly text: string }>, 'media' | 'blobs'>,
+    Error
+  >,
 ): Effect.fn.Return<boolean, Error, SessionLog> {
   const id = item.caller;
   if (id === undefined) return false;

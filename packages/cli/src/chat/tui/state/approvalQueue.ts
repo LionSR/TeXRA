@@ -14,6 +14,9 @@ import { Cause, Effect, absurd } from 'effect';
 
 import {
   attentionOf,
+  offeredGrant,
+  type AnsweredBy,
+  type ApprovalBypassKind,
   type RequestPayload,
   type RequestKind,
   type RunId,
@@ -74,6 +77,9 @@ export type SessionRequests = Pick<Session, 'request'>;
 
 export interface PendingApproval {
   readonly payload: TuiRequest;
+  /** The run grant the request offers (`offeredGrant`): the one that
+   *  answers it, none when a person answers it. */
+  readonly grant: ApprovalBypassKind | null;
   /** Answer this request on `surface`, which the view that renders the
    *  modal holds: this entry is a level of a module-level computed, so it
    *  has none of its own to close over. */
@@ -117,6 +123,8 @@ interface AttentionRequest {
   readonly kind: PendingRequestKind;
   /** The fact's payload; a staged presentation replaces it when there is one. */
   readonly payload: PendingApprovalFact['payload'];
+  /** Who answers it, as it opened. */
+  readonly answeredBy: AnsweredBy;
 }
 
 /**
@@ -183,6 +191,7 @@ export const attentionRequests = computed((): readonly AttentionRequest[] => {
       runId: pending.runId,
       kind: pending.payload.kind,
       payload: pending.payload,
+      answeredBy: pending.answeredBy,
     }));
   return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
 });
@@ -245,6 +254,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   if (!first) return undefined;
   return {
     payload: first.payload,
+    grant: offeredGrant(first.request),
     decide: (surface, decision) =>
       decideRequest(surface, first.request, first.payload, decision),
   };
@@ -352,7 +362,10 @@ function decideRequest(
 ): void {
   markDecided(request.requestId);
   const { runId } = request;
-  const arm = approvalDecisionArm(payload, decision);
+  const arm = approvalDecisionArm(
+    { payload, answeredBy: request.answeredBy },
+    decision,
+  );
   if ('runtime' in arm)
     issue(requests, runtime, runId, request.requestId, arm.runtime);
   else performHost(arm.host);

@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { formatDelivery } from '@texra-ai/harness/plugins';
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 
-// formatDelivery is the one builder behind every child-run delivery: the
+// formatDelivery is the one renderer of every child-run delivery: the
 // native subagent path, the background-bash path, workflow scripts, and the
 // agent-CLI tools (codex.ts, claudeAgent.ts).
 
@@ -12,7 +12,7 @@ describe('formatDelivery', () => {
   it('truncates the echoed prompt to 200 chars and escapes attrs/text', () => {
     const longPrompt = 'x'.repeat(250);
     const xml = formatDelivery({
-      tag: 'codex-result',
+      family: 'codex',
       runId: 'a&b"<c',
       prompt: `${longPrompt}<&"`,
       attributes: [{ name: 'thread-id', value: '<id&"' }],

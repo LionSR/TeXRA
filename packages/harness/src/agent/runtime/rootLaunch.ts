@@ -31,7 +31,7 @@ import { humanGrant } from './runApprovalQueue';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
-import { registryOf, Runs } from './runRegistry';
+import { RunRegistry, type Runs } from './runRegistry';
 import type { SessionHandleInit } from './SessionHandle';
 import type { Interactions } from './HostInteractions';
 import type { ProjectTools } from './loop/step';
@@ -43,6 +43,7 @@ import type { SessionRequests } from './requests';
  */
 export type SessionServices =
   | Runs
+  | RunRegistry
   | SessionLog
   | SessionViewAccess
   | Approvals
@@ -111,7 +112,7 @@ type RootLaunch = typeof StartOptionsSchema.Type &
 export const rootRun = Effect.fn('rootRun')(function* (
   launch: RootLaunch,
 ): Effect.fn.Return<CommitOrdinal, Error, SessionServices> {
-  const runs = yield* Runs;
+  const runs = yield* RunRegistry;
   const { runId, continues, approval } = launch;
   // A chat round takes the human grants of the round it continues, never
   // its launch limit: the round asks with the chat's policy now. A launch
@@ -136,7 +137,7 @@ export const rootRun = Effect.fn('rootRun')(function* (
   // The model (the helper model swap reads the enabled-model list and the
   // routing switches from this session's setting slots), the agent and its
   // tools resolve in the opening, each refused before any run is registered.
-  const { opened } = yield* registryOf(runs).start(runId, {
+  const { opened } = yield* runs.start(runId, {
     open: Effect.gen(function* () {
       const config = launch.helperModel
         ? yield* applyHelperModelPreference(launch.config, yield* SessionRoots)

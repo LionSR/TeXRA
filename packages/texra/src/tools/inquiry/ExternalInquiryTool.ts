@@ -285,7 +285,7 @@ const executeAsk = Effect.fn('executeAsk')(function* (
     transcript: manifest.turns,
   };
   // A request the call does not wait on: the decision hook answers it.
-  yield* requests.post(requestId, { ...INQUIRY_REQUEST, data: inquiry }).pipe(
+  yield* requests.post({ ...INQUIRY_REQUEST, data: inquiry }).pipe(
     Effect.mapError(
       (error) =>
         new Error(

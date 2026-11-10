@@ -526,7 +526,6 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
         kind: 'proposal',
         data: {
           requestId: 'req-task',
-          offersGrant: true,
           runId: CHILD,
           task: true,
           agent: 'correct',
@@ -539,6 +538,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           outputFiles: ['/paper/section2_correct.tex'],
         },
       },
+      answeredBy: 'superYolo',
     });
     const view = viewOf([
       ...buildScenario().pending.filter(

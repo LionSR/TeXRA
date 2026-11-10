@@ -1,15 +1,17 @@
 /**
- * How a run ends: the verdict of its fiber's exit, and the one end
- * ({@link endRun}) the run program's terminal reaches, which commits the
- * run's `run.end` and report in one transaction. Callers read that end.
+ * How a run ends: the verdict of its fiber's exit, and the one end both run
+ * programs commit ({@link commitEnd}), a native run's terminal
+ * ({@link endRun}) and a process child's (`processRun.ts`), which commits
+ * the run's `run.end` and report in one transaction. Callers read that end.
  */
 import { Cause, Clock, Effect, Exit } from 'effect';
 
 import { logSdkError } from '@agent/trace/traceLogs';
-import { endRunRows } from '@agent/storage/runLifecycle';
+import { endRunRows, type RunEnding } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
+import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import { SessionLog } from '@shared/session/runHistory';
 import {
@@ -68,17 +70,61 @@ function emptyReport(ctx: RunLaunch, outcome: RunOutcome): RunReport {
 }
 
 /**
+ * The one end both run programs commit, from the verdict each reached on
+ * its own (`ending`): rows the store refused (`log.lost`) fail the run
+ * unless a stop ended it, whoever ends it; the `run.end` commits in one
+ * transaction with everything the end decides (`endRunRows`), the report
+ * `report` builds for the outcome it commits among them; an end the store
+ * refused fails the fiber once, logged, and the run reads as interrupted
+ * at its next open; and a stop stays the fiber's exit once the end
+ * committed. Uninterruptible: a stop lands before this or after its row,
+ * never inside.
+ */
+export const commitEnd = Effect.fn('commitEnd')(function* (
+  exit: Exit.Exit<unknown, Error>,
+  ending: Omit<RunEnding, 'report'>,
+  report: (
+    outcome: RunOutcome,
+  ) => Effect.Effect<RunEnding['report'], Error, AgentRunServices>,
+): Effect.fn.Return<void, Error, AgentRunServices> {
+  const { runId } = ending;
+  const lost = yield* (yield* SessionLog).lost(runId);
+  const outcome =
+    lost !== undefined && ending.outcome !== RUN_OUTCOME.CANCELLED
+      ? RUN_OUTCOME.FAILED
+      : ending.outcome;
+  const ended = yield* endRunRows({
+    ...ending,
+    outcome,
+    error: lost ?? ending.error,
+    report: yield* report(outcome),
+  }).pipe(
+    Effect.tapError((unsaved) =>
+      logLifecycleWarning(`Run ${runId}: its end could not be saved`, {
+        runId,
+        error: unsaved,
+      }),
+    ),
+  );
+  const resolved = ended.end?.outcome ?? outcome;
+  yield* Effect.logDebug(`Task completed with outcome: ${resolved}`).pipe(
+    withLogChannel(CHANNEL),
+  );
+  // The run's stop is its fiber's interruption: the end commits, and the
+  // interruption stays the exit.
+  if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause))
+    return yield* Effect.failCause(exit.cause);
+}, Effect.uninterruptible);
+
+/**
  * The run program's terminal, the run's one terminal writer: every way the
  * flow exits (a result, a reported failure, an escaped exception, a stop)
  * reaches this exactly once, as the exit of the one masked region the
- * program runs in. The `run.end`
- * row commits in one transaction with everything the end decides
- * (`endRunRows`): a child's report with its parent's delivery among them
- * (`childEndReport`). An end the store refused fails the fiber once,
- * logged, and the run reads as interrupted at its next open. A root's
- * failure is logged here and raised as an `AgentError` once its end
- * committed; a child's rides its report. Uninterruptible: a stop lands
- * before this or after its row, never inside.
+ * program runs in. It ends the run through {@link commitEnd}, a child's
+ * report with its parent's delivery in the end's transaction
+ * (`childEndReport`). A root's failure is logged here and raised as an
+ * `AgentError` once its end committed; a child's rides its report.
+ * Uninterruptible, as that end is.
  */
 export const endRun = Effect.fn('endRun')(function* (
   ctx: RunLaunch,
@@ -145,59 +191,43 @@ export const endRun = Effect.fn('endRun')(function* (
           ...(error !== undefined && { failure: error }),
         };
   const log = yield* SessionLog;
-  // Rows the store refused fail the run unless a stop ended it, whoever
-  // ends it.
-  const lost = yield* log.lost(runId);
-  const failed =
-    lost !== undefined && verdict.outcome !== RUN_OUTCOME.CANCELLED;
-  const outcome = failed ? RUN_OUTCOME.FAILED : verdict.outcome;
-  // What the child tells its parent, from its report as the end resolves
-  // it; a report that cannot be built is the end's error, delivered as
-  // such rather than lost.
-  const report =
-    childResult === undefined
-      ? null
-      : yield* childEndReport(
-          ctx,
-          { ...childResult, outcome },
-          (yield* log.facts(runId))?.stop?.reason ?? null,
-          (yield* Clock.currentTimeMillis) - ctx.startedAt,
-        ).pipe(
-          Effect.catch((unbuilt) =>
-            Effect.as(
-              logLifecycleWarning(
-                `Run ${runId}: its report could not be built`,
-                {
-                  runId,
-                  error: unbuilt,
-                },
+  yield* commitEnd(
+    exit,
+    { runId, outcome: verdict.outcome, error, output: carried?.output },
+    // What the child tells its parent, from its report as the end resolves
+    // it; a report that cannot be built is the end's error, delivered as
+    // such rather than lost.
+    (outcome) =>
+      childResult === undefined
+        ? Effect.succeed(null)
+        : Effect.gen(function* () {
+            const record = yield* log.facts(runId);
+            const wallTimeMs = (yield* Clock.currentTimeMillis) - ctx.startedAt;
+            return yield* childEndReport(
+              ctx,
+              { ...childResult, outcome },
+              record,
+              wallTimeMs,
+            ).pipe(
+              Effect.catch((unbuilt) =>
+                Effect.as(
+                  logLifecycleWarning(
+                    `Run ${runId}: its report could not be built`,
+                    { runId, error: unbuilt },
+                  ),
+                  {
+                    family:
+                      ctx.config.script?.kind === 'background'
+                        ? DELIVERY_FAMILY.script
+                        : DELIVERY_FAMILY.subagent,
+                    runId,
+                    message: `The run ${runId} ended ${outcome}, but its report could not be built: ${unbuilt.message}`,
+                  },
+                ),
               ),
-              `The run ${runId} ended ${outcome}, but its report could not be built: ${unbuilt.message}`,
-            ),
-          ),
-        );
-  const ended = yield* endRunRows({
-    runId,
-    outcome,
-    error: lost ?? error,
-    output: carried?.output,
-    report,
-  }).pipe(
-    Effect.tapError((unsaved) =>
-      logLifecycleWarning(`Run ${runId}: its end could not be saved`, {
-        runId,
-        error: unsaved,
-      }),
-    ),
+            );
+          }),
   );
-  const resolved = ended.end?.outcome ?? outcome;
-  yield* Effect.logDebug(`Task completed with outcome: ${resolved}`).pipe(
-    withLogChannel(CHANNEL),
-  );
-  // The run's stop is its fiber's interruption: the end commits, and the
-  // interruption stays the exit.
-  if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause))
-    return yield* Effect.failCause(exit.cause);
   if (parentRunId === null && thrown !== undefined && error !== undefined)
     // A root run's failure. Once its `run.end` row committed, the
     // session's presenter shows that row (`presentTerminalResult`); a run

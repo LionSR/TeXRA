@@ -720,6 +720,24 @@
           "signature": "export function withPerKeyLane<Key, RefusalE = never>( lanes: PerKeyLanes<Key>, key: Key, refuseClaim?: (occupant: PerKeyLane | undefined) => RefusalE | undefined, ): <A, E, R>( self: Effect.Effect<A, E, R>, ) => Effect.Effect<A, E | RefusalE, R> {…}"
         }
       ]
+    },
+    {
+      "id": "RUN-turn-next-move-function",
+      "candidate": "the turn loop's next step as one pure, total function of the run state (nextTurnMove over the state, whether input is queued and the run's role), the loop a switch over its moves like ModelInvoker.invoke over nextAttempt, and finishCall's keep, derive, skip or run as a pure callMove the script door's finalizer shares (round-2 note, finding 1 step 2)",
+      "why": "Drafted against main at bbb6f012 and measured: the switch over nextTurnMove that keeps behavior is 338 lines against the 258 it replaces, and callMove about 76 against finishCall's 38-line decision block. Several turn ends are not facts of the run state but results of the effect just run: a dispatch whose result ends the turn (submit_output's endTurn is not kept after delivery), a text answer the turn policy finishes, a failed request with no overflow compaction, and the Stop hook's block. A pure function of the state decides those differently unless the last effect's result is fed back in, which is the cursor AGENTS.md rules out. The loop also still reads the position itself, because the model-switch check runs before every in-turn decision and never between turns, and the text policy and the request round must keep their effect order with no switch check between them. replayable decodes and logs, so callMove cannot be pure. nextAttempt works because an invocation's next move is a fact of its own rows; a turn's is not.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-10-harness-against-pi-durable-and-deepseek-round-2.md#1-where-the-loop-stands-three-ways",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/loop/runLoop.ts",
+          "symbol": "runToolUse",
+          "signature": "export const runToolUse = Effect.fn('toolUse.run')(function* ( start: ToolUseStart, opened: ToolUseOpening, ): Effect.fn.Return< RunReport, Error, TurnServices | ModelInvoker | Scope.Scope > {…}, Effect.scoped);"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts",
+          "symbol": "finishCall",
+          "signature": "const finishCall = Effect.fn('toolUse.finishCall')(function* ( call: Call, place: Pick<RunCallShape, 'script' | 'scriptCalls'>, ended = false, ): Effect.fn.Return<void, InvokeError, AgentRunServices> {…});"
+        }
+      ]
     }
   ]
 }

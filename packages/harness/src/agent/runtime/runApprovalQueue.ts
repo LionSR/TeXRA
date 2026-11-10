@@ -22,7 +22,11 @@ import {
   type ApprovalGrantSource,
   grantSource,
 } from '@shared/approvalBypassKind';
-import { bypassCovers, qualifyAggregateId, type RunId } from '@shared/schemas';
+import {
+  grantAnswering,
+  qualifyAggregateId,
+  type RunId,
+} from '@shared/schemas';
 import {
   Unavailable,
   type RequestError,
@@ -88,8 +92,10 @@ const grantsOn = (grants: ApprovalGrants, kind: ApprovalBypassKind): boolean =>
  * and whose grants follow its (`resolveBypass` over the grants as they
  * will be once `next` is recorded); decided in the transaction that
  * records the grant, so a person who answers "approve and stop asking"
- * answers what waits behind it too, down the tree. A request another
- * grant already covered, or one only a person answers, is left as it is.
+ * answers what waits behind it too, down the tree. A request is covered
+ * by the grant that answers it as it opens (its `answeredBy`), so a grant
+ * answers a waiting request exactly when it would have approved it at
+ * open; one only a person answers is left as it is.
  */
 const approvalsUnder = Effect.fn('approvalsUnder')(function* (
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
@@ -138,7 +144,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
       if (
         request.decision === null &&
         !(id === runId && requestId === except) &&
-        covering.some((kind) => bypassCovers(kind, request.payload))
+        grantAnswering((kind) => covering.includes(kind), request.answeredBy)
       )
         rows.push({
           type: 'request.decided',

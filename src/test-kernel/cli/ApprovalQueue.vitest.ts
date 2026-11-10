@@ -31,7 +31,7 @@ const RUN_B = Schema.decodeUnknownSync(RunIdSchema)('b0000b');
 function bashPayload(runId: RunId, requestId = `bash-${runId}`) {
   return {
     kind: 'bash',
-    data: { requestId, offersGrant: true, runId, command: 'echo ok' },
+    data: { requestId, runId, command: 'echo ok' },
   } satisfies TuiRequest;
 }
 
@@ -58,6 +58,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           runId: payload.data.runId,
           requestId: payload.data.requestId,
           payload,
+          answeredBy: 'bash' as const,
         })),
       },
     );

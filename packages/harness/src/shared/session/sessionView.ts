@@ -13,6 +13,7 @@ import { Schema } from 'effect';
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
+  AnsweredBySchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
   JsonValueSchema,
@@ -283,16 +284,18 @@ export function requestAnswerability(
   return 'resume';
 }
 
-/** A pending request: which run asks and the payload the UI shows. The list
- *  is a set keyed by `requestId`: opened without decided. */
+/** A pending request: which run asks, the payload the UI shows and who
+ *  answers it. The list is a set keyed by `requestId`: opened without
+ *  decided. */
 const PendingRequestSchema = Schema.Struct({
   runId: RunIdSchema,
   requestId: Schema.String,
   payload: RequestPayloadSchema,
+  answeredBy: AnsweredBySchema,
 });
 
-/** A run's queued follow-ups as a composer lists them (`displayText`, else
- *  `text`): a set keyed by `followUpId`, queued, unconsumed, in order. */
+/** A run's queued follow-ups as a composer lists them (`followUpDisplay`):
+ *  a set keyed by `followUpId`, queued, unconsumed, in order. */
 const QueuedFollowUpsSchema = Schema.Array(
   Schema.Struct({ followUpId: Schema.String, text: Schema.String }),
 );

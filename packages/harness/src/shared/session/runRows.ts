@@ -141,12 +141,13 @@ const copyMap = <V>(entries: ReadonlyMap<string, V>) => new Map(entries);
  * for the run yet: queued input and the loop's own position start it, while
  * a request or a consumption needs it and changes nothing without it. A
  * reader that keeps only the row state (`RunState`) passes only the rows
- * that change it. A reader applying a batch passes its `copies`, and the
- * containers the result carries are then the batch's own, changed in place
- * by later rows of the batch.
+ * that change it, and a position this never reads (the run state's also
+ * moves inside a turn). A reader applying a batch passes its `copies`, and
+ * the containers the result carries are then the batch's own, changed in
+ * place by later rows of the batch.
  */
 export function applyRunRow(
-  current: RunRowState | null,
+  current: Omit<RunRowState, 'at'> | null,
   row: Exclude<SharedRunRow, FollowUpRow>,
   copies?: BatchCopies,
 ): RunRowVerdict;
@@ -156,7 +157,7 @@ export function applyRunRow(
   copies?: BatchCopies,
 ): RunRowVerdict;
 export function applyRunRow(
-  current: SharedRunRows | RunRowState | null,
+  current: SharedRunRows | Omit<RunRowState, 'at'> | null,
   row: SharedRunRow,
   copies?: BatchCopies,
 ): RunRowVerdict {
@@ -191,6 +192,7 @@ export function applyRunRow(
       const requests = ownCopy(copies, current.requests, copyById);
       requests[row.requestId] = {
         payload: row.payload,
+        answeredBy: row.answeredBy,
         decision: null,
         decidedAt: null,
       };

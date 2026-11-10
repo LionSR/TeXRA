@@ -21,6 +21,7 @@ import {
   emptyRunEndOutput,
   type FollowUpContent,
   type FollowUpDisposition,
+  type FollowUpMessage,
   type JsonValue,
   qualifyAggregateId,
   type RunEnd,
@@ -172,10 +173,15 @@ function outputOf(
   return tool === STRUCTURED_OUTPUT_TOOL_NAME ? 'submitted' : null;
 }
 
-/** Input that asks the run to do something: its user's and its parent's. A
- *  child's report, another run's message and a host notice only inform it. */
-export const isInstruction = ({ from }: FollowUpContent): boolean =>
-  from.kind === 'user' || (from.kind === 'run' && from.relation === 'parent');
+/** Input that asks the run to do something: its user's and its parent's
+ *  messages. A child's report, another run's message and a host notice only
+ *  inform it. */
+export const isInstruction = (
+  content: FollowUpContent,
+): content is FollowUpMessage =>
+  !('delivery' in content) &&
+  (content.from.kind === 'user' ||
+    (content.from.kind === 'run' && content.from.relation === 'parent'));
 
 /** The row that consumes one follow-up, committed beside the rows that took
  *  it; its writer states why (`disposition`). */
@@ -240,6 +246,12 @@ type RunConfigRow = Extract<SessionRowDraft, { readonly type: 'run.config' }>;
 export interface Registration {
   readonly rows: readonly SessionRowDraft[];
   readonly start: Extract<SessionRowDraft, { type: 'run.start' }> | null;
+  /** Its configuration as a `run.config`, apart from `rows`, so the batch
+   *  that commits them records one: a run whose loop is not this
+   *  process's records this one (`registerRun`), as does a fork of a run
+   *  that never bound (`forkRun`); a launch that binds a model records its
+   *  own, with the binding (`openToolUse`). */
+  readonly config: RunConfigRow;
 }
 
 /** The row that titles `runId`: the model's summary, or the user's rename. */
@@ -255,8 +267,9 @@ export const descriptionRow = (
 });
 
 /** The rows that register a run, in commit order: a new run's (`born`)
- *  `run.start`, its configuration, its `run.activate` (a re-registration's with
- *  the grants it ends, `ended`), and the description it is born with. */
+ *  `run.start`, its `run.activate` (a re-registration's with the grants it
+ *  ends, `ended`), and the description it is born with; and its
+ *  configuration, for its first batch to record ({@link Registration}). */
 export function registrationDrafts(
   runId: RunId,
   config: RunConfigRow['config'],
@@ -281,13 +294,16 @@ export function registrationDrafts(
   };
   const rows: SessionRowDraft[] = [
     ...(born ? [start] : []),
-    { type: 'run.config', aggregateId: target, config },
     { type: 'run.activate', aggregateId: target },
     ...(born ? [] : ended),
   ];
   if (options.description !== undefined)
     rows.push(descriptionRow(runId, options.description, 'model'));
-  return { rows, start: born ? start : null };
+  return {
+    rows,
+    start: born ? start : null,
+    config: { type: 'run.config', aggregateId: target, config },
+  };
 }
 
 /** A resume's activation rows: its `run.activate`, the grants it ends

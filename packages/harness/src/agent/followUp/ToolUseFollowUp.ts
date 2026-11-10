@@ -4,7 +4,7 @@ import { Cause, Context, Effect, Exit } from 'effect';
 import { checkpointRefusal } from '@agent/storage/resumability';
 import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { type ResumeRefusal, type RunId } from '@shared/schemas';
@@ -17,6 +17,7 @@ import { Inbox, type InboxItem } from './Inbox';
 export type FollowUpServices =
   | Inbox
   | Runs
+  | RunRegistry
   | SessionLog
   | SessionViewAccess
   | Interactions;
@@ -25,16 +26,22 @@ export type FollowUpServices =
  *  caller's fiber ({@link runInbox}). */
 export const followUpServices = Effect.map(
   Effect.context<FollowUpServices>(),
-  Context.pick(Inbox, Runs, SessionLog, SessionViewAccess, Interactions),
+  Context.pick(
+    Inbox,
+    Runs,
+    RunRegistry,
+    SessionLog,
+    SessionViewAccess,
+    Interactions,
+  ),
 );
 
 /**
- * Why a submission could not be admitted, worded for the user by
- * {@link presentFollowUpResult}: the kind of a resume's refusal
- * (`ResumeRefusal`; a message to a run with no loop here is admitted only as
- * a resume would be, and `notResumable` there also covers a closed input, a
- * disposed session, or a message that does not wake the run), or one of the
- * message's alone:
+ * Why a submission could not be admitted, as {@link describeFollowUpFailure}
+ * words it: the kind of a resume's refusal (`ResumeRefusal`; a message to a
+ * run with no loop here is admitted only as a resume would be, and
+ * `notResumable` there also covers a closed input, a disposed session, or a
+ * message that does not wake the run), or one of the message's alone:
  *
  * - `readFailed`: the run's rows could not be read just now (a failing
  *   store), which says nothing about the run itself.
@@ -48,14 +55,14 @@ export type FollowUpFailureReason =
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
  * queue for its next turn (the resume the send started, or an explicit
- * one), or it was not admitted for a worded reason. A delivery the
+ * one), or it was not admitted, with the words that say why. A delivery the
  * admission boundary had already accepted is `sent`. A resume the input
  * started that the run refused is told by the resume itself.
  */
 export type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued' }
-  | { status: 'failed'; reason: FollowUpFailureReason };
+  | { status: 'failed'; message: string };
 
 /** How one input is delivered to a run. */
 export interface RunInboxSendOptions {
@@ -69,7 +76,10 @@ interface SubmitFollowUpOptions extends RunInboxSendOptions {
   readonly hold?: 'turn';
   /** The message's media, read in the run's send lane once the message is
    *  accepted, so a slow read never lets a later message commit first. */
-  readonly attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>;
+  readonly attach?: Effect.Effect<
+    Pick<Extract<InboxItem, { readonly text: string }>, 'media' | 'blobs'>,
+    Error
+  >;
   /** The keys the run resumes with if the message wakes it: the sending
    *  client's (`followUp.send`'s `apiKeys`), never another run's. */
   readonly apiKeys?: Readonly<Record<string, string>>;
@@ -99,10 +109,8 @@ export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
 export function presentFollowUpResult(
   result: SubmitFollowUpResult,
 ): { severity: 'none' } | { severity: 'warning'; message: string } {
-  if (result.status === 'failed') {
-    const message = describeFollowUpFailure(result.reason);
-    return { severity: 'warning', message };
-  }
+  if (result.status === 'failed')
+    return { severity: 'warning', message: result.message };
   return { severity: 'none' };
 }
 
@@ -121,7 +129,7 @@ export const REFUSED: { readonly failed: ResumeRefusal } = {
  */
 export const wakeRun = Effect.fn('wakeRun')(function* (
   runId: RunId,
-): Effect.fn.Return<void, never, Runs | SessionLog> {
+): Effect.fn.Return<void, never, Runs | RunRegistry | SessionLog> {
   // The store's answer, not the view's: the view trails the log, and a run
   // it has not applied yet would lose its wake.
   const facts = yield* (yield* SessionLog)
@@ -162,7 +170,7 @@ export const wakeRun = Effect.fn('wakeRun')(function* (
 export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
   runId: RunId,
   apiKeys: Readonly<Record<string, string>> = {},
-): Effect.fn.Return<boolean, never, Inbox | Runs | SessionLog> {
+): Effect.fn.Return<boolean, never, Inbox | Runs | RunRegistry | SessionLog> {
   const owed = yield* (yield* Inbox).owesResume(runId);
   if (owed === undefined) return false;
   // The wake's own keys, never the fiber's: the sender may be another
@@ -204,13 +212,17 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     if (yield* sentBefore(runId, item, hold, attach))
       return { status: 'sent' } as const;
     // A run that takes no input (a process run, a one-shot root) reads
-    // none, live or not: nothing would read the row.
+    // none, live or resumed: nothing would read the row.
     // Still the view's answer, and so unsettled: a run the view has not
     // loaded skips this check. The store's answer would always refuse an
     // ended one-shot root, which a later resume does read a message for
     // (`example/10-external-plugin.ts`); which of the two is meant is open.
     if (view.run(runId)?.takesFollowUps === false)
-      return { status: 'failed', reason: 'notResumable' } as const;
+      return {
+        status: 'failed',
+        message:
+          'This run ran once and takes no messages. Continue it as a fork, or start a new agent task.',
+      } as const;
     const live = runs.get(runId);
     if (live === undefined) {
       const rejection = yield* checkpointRefusal(runId).pipe(
@@ -223,7 +235,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
         ),
       );
       if (rejection !== null)
-        return { status: 'failed', reason: rejection.kind } as const;
+        return {
+          status: 'failed',
+          message: describeFollowUpFailure(rejection.kind),
+        } as const;
     }
     // A user's message to a run that is stopping continues it after the
     // stop: its row lands after the run's end, which the wake reads.
@@ -244,7 +259,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   // The sender is not its parent, its input is closed (deleted, or torn
   // down with nothing queued), or the session is disposed.
   if (landed.kind === 'refused')
-    return { status: 'failed', reason: landed.reason };
+    return {
+      status: 'failed',
+      message: describeFollowUpFailure(landed.reason),
+    };
   if (landed.kind === 'duplicate') return { status: 'sent' };
   // Whether the row wakes the run is the inbox's one reading
   // (`owesResume`), after the commit: a run live a moment ago may have

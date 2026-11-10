@@ -17,7 +17,6 @@ import {
   executionsWaitTimeoutSeconds,
   TOOL_RESULT_METADATA_FIELDS,
 } from '@shared/toolUse';
-import { deliveredResponse } from '@shared/subagentFollowup';
 import { executionsAction } from '@shared/tools/executionsDisplay';
 import {
   isMcpToolName,
@@ -57,8 +56,18 @@ function toStringArray(value: unknown): string[] | undefined {
   return value.filter(Predicate.isString);
 }
 
-/** The label of the section that carries an `agent` call's delivered answer. */
-const AGENT_ANSWER_LABEL = 'Result:';
+/**
+ * What a call's child answered (`agent`, `self`): the `response` of the run
+ * output its result's typed `value` carries, so no surface reads it from
+ * the delivery envelope its parent's model got. Undefined for a call that
+ * ran no child to its end (one sent to the background, a failure).
+ */
+export function childAnswer(output: unknown): string | undefined {
+  const value = Predicate.isObject(output) ? output.value : undefined;
+  return Predicate.isObject(value) && typeof value.response === 'string'
+    ? value.response
+    : undefined;
+}
 
 function textSection(label: string, body: string): ToolTextSection {
   return { kind: 'text', label, text: transcriptText(body) };
@@ -375,10 +384,10 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   );
   if (files) sections.push(files);
 
-  // The answer without its delivery envelope: the card never prints the
-  // `<subagent-result>` XML the parent's model reads.
-  const answer = deliveredResponse(ctx.outputText);
-  if (answer) sections.push(textSection(AGENT_ANSWER_LABEL, answer));
+  // The answer, typed: the card never prints the `<subagent-result>` XML
+  // the parent's model reads.
+  const answer = childAnswer(ctx.parsedOutput);
+  if (answer) sections.push(textSection('Result:', answer));
   return sections;
 }
 
@@ -588,10 +597,7 @@ export function dispatchSections(ctx: SectionContext): {
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
         (ctx.toolName === AGENT_TOOL_NAME &&
-          sections.some(
-            (section) =>
-              section.kind === 'text' && section.label === AGENT_ANSWER_LABEL,
-          )) ||
+          childAnswer(ctx.parsedOutput) !== undefined) ||
         (!ctx.failed && sections.some((section) => section.kind === 'diff')),
       ...(fileLinkKind ? { fileLinkKind } : {}),
     };

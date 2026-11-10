@@ -1,13 +1,11 @@
 import { Effect, Fiber, FiberSet, type Scope } from 'effect';
 
 // Local imports
-import {
-  registryOf,
-  type RunPrograms,
-  type RunRegistryInit,
-  type AgentRunServices,
+import type {
+  RunRegistry,
+  RunRegistryInit,
+  AgentRunServices,
 } from '@agent/runtime/runRegistry';
-import type { RunsShape } from '@agent/runtime/runs';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import type { RunId } from '@shared/schemas';
 
@@ -35,31 +33,16 @@ export const testRunFork: Effect.Effect<
 export const testRunInSession = ((effect) =>
   effect) as RunRegistryInit['inSession'];
 
-/** The run programs a test registry runs: the production ones, each read
- *  per call so a suite's own mock of its module is the program it reaches. */
-export const testRunPrograms: RunPrograms = {
-  executeAgent: (...args) =>
-    Effect.flatMap(
-      Effect.promise(() => import('@agent/runtime/executeAgent')),
-      (module) => module.executeAgent(...args),
-    ),
-  stop: (...args) =>
-    Effect.flatMap(
-      Effect.promise(() => import('@agent/storage/runLifecycle')),
-      (module) => module.stopRun(...args),
-    ),
-};
-
 /** A run started at `runs`' door with nothing to open, and awaited: the
  *  caller's interruption stops it. Its parent, when it has one, is the
  *  view's (`run.start` published first). */
 export function startAwaited<A, E, R extends AgentRunServices>(
-  runs: RunsShape,
+  runs: RunRegistry['Service'],
   runId: RunId,
   program: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | Error> {
   return Effect.flatMap(
-    registryOf(runs).start(runId, { open: Effect.void, run: () => program }),
+    runs.start(runId, { open: Effect.void, run: () => program }),
     ({ fiber }) =>
       Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
   );

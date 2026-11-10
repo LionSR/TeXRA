@@ -190,7 +190,6 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
     duplicateOf: 'call-a',
   }),
   toolTurn.delivery,
-  position('results.ready', 1),
   {
     type: 'run.position',
     payload: {
@@ -260,7 +259,7 @@ describe('applyRunRows', () => {
   ])('%s', (_name, check) => check());
 
   it('delivers the paid assistant turn once and derives usage from the rows', () => {
-    const state = stateOf(through(11));
+    const state = stateOf(through(10));
     expect(state?.messages.map((m) => m.role)).toEqual([
       'user',
       'assistant',

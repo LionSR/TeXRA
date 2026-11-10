@@ -86,15 +86,14 @@ const PositionAtSchema = Schema.Literals([
   'turn.ready',
   'turn.begin',
   'turn.end',
-  'response.ready',
-  'results.ready',
   'waiting',
 ]);
 export type PositionAt = typeof PositionAtSchema.Type;
 
 /** Where the loop stands (`at`, not "step": a step is one model call) and
- *  the turn it stands in: the one record of the loop's position, which the
- *  fold reads as `RunState.at` and projects to `RunView.position`. */
+ *  the turn it stands in, at each point no other row marks: the run state
+ *  reads it as `RunState.at` (inside a turn, the `response` and the
+ *  delivering `append` move it on), and the view as `RunView.position`. */
 export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
   turn: Schema.optional(

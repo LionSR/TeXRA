@@ -173,7 +173,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v5: no `holdUntil: 'generation'`: a child queues no progress notice, and
   // a host's notification is known by its sender (a v4 row holding it would
   // fail as damaged).
-  'followup.queued': { version: 5, listing: 'followup' },
+  // v6: a child's delivery carries its facts typed (`delivery`), rendered
+  // where the row becomes its parent's message, not its envelope's text and
+  // summary (a v5 delivery would read as a message, its facts untyped).
+  'followup.queued': { version: 6, listing: 'followup' },
   // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
   // it and fails to decode.
   // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
@@ -198,7 +201,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // offers the run grant of its kind (an earlier build's would fail to read).
   // v10: a retry carries its failure as the verdict (`failure`), not its
   // words and classification (`errorDetails`), and a host words it.
-  'request.opened': { version: 10, listing: 'request' },
+  // v11: who answers a request is its row's `answeredBy`, decided once as
+  // it opens, and no payload carries `offersGrant` (an earlier build's row
+  // names no answerer).
+  'request.opened': { version: 11, listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options.
   'request.decided': { version: 2, listing: 'request' },
@@ -212,7 +218,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // row would fail its check).
   // v5: no `family`: every run has the one loop, so the field said nothing
   // (an earlier build's row would have it silently dropped).
-  'run.position': { version: 5, listing: 'own' },
+  // v6: no `response.ready` or `results.ready`: the run state reads them off
+  // the `response` row and the delivering `append` (an earlier build's row
+  // would fail as damaged).
+  'run.position': { version: 6, listing: 'own' },
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both.
   // v3: a user message names its attached media by blob address (`media`),

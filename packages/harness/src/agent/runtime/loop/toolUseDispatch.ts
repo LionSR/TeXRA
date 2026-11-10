@@ -111,7 +111,7 @@ import {
   formatToolResultAsText,
 } from '../run/toolResultText';
 import { callRequests, guardedToolCall } from './toolGuard';
-import { appendRow, positionRow } from './rows';
+import { appendRow } from './rows';
 import type { AgentRunServices } from '../runRegistry';
 import type { StepTools } from './step';
 import type { InvokeError } from '../ModelInvoker';
@@ -948,11 +948,10 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
       }),
     );
   }
-  const delivered = yield* cell.append((state) => [
+  const delivered = yield* cell.append([
     appendRow(runId, [{ role: 'tool', results }], {
       sourceResponse: responseId,
     }),
-    positionRow(runId, state, 'results.ready'),
   ]);
   return { state: delivered, endTurn } satisfies DispatchOutcome;
 });

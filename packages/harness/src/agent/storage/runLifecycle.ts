@@ -8,6 +8,7 @@ import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { Inbox } from '@agent/followUp/Inbox';
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { consumedRows } from '@agent/runtime/loop/rows';
 import { SessionRoots } from '@platform/rootedFs';
 import {
@@ -15,6 +16,7 @@ import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
   qualifyAggregateId,
+  type ChildRunDelivery,
   type SessionRowDraft,
   type RunEnd,
   type RunEndOutput,
@@ -85,7 +87,8 @@ export const activationRows = Effect.fn('activationRows')(function* (
 });
 
 /** Register a run whose loop is not this process's (an agent CLI, bash)
- *  alone; a run this process's loop drives registers with its opening. */
+ *  alone, its configuration with it; a run this process's loop drives
+ *  registers with its opening. */
 export const registerRun = Effect.fn('registerRun')(function* (
   runId: RunId,
   record: RunRecord,
@@ -93,7 +96,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
 ): Effect.fn.Return<void, Error, OpenServices | RunHistory> {
   return yield* Effect.gen(function* () {
     const opens = yield* registrationRows(runId, record, options);
-    const rows = Effect.succeed(opens.rows);
+    const rows = Effect.succeed([...opens.rows, opens.config]);
     const born = opens.start !== null;
     const cell = yield* (yield* RunHistory).open(
       runId,
@@ -147,11 +150,12 @@ export interface RunEnding {
   readonly error?: RunEnd['error'];
   /** What the run produced; absent (empty) for a stop's end or a child. */
   readonly output?: RunEndOutput;
-  /** A child's report: the envelope its parent reads, kept as the run's
-   *  `run.report` and queued on the parent's input unless the parent's
-   *  call awaits the child (it reads the end itself) or the child was
-   *  detached. Null, or absent: nothing to report (a stop, a root). */
-  readonly report?: string | null;
+  /** A child's report: its delivery, kept rendered as the run's
+   *  `run.report` (the envelope its parent's model reads) and queued typed
+   *  on the parent's input unless the parent's call awaits the child (it
+   *  reads the report itself) or the child was detached. Null, or absent:
+   *  nothing to report (a stop, a root). */
+  readonly report?: ChildRunDelivery | null;
   /** Rows committed ahead of the end (a process run's exit). */
   readonly leading?: readonly UnfoldedDraft[];
 }
@@ -219,12 +223,12 @@ export const isDeliveryOf = (runId: RunId, followUpId: string): boolean =>
 const parentDelivery = Effect.fn('parentDelivery')(function* (
   runId: RunId,
   facts: RunRows,
-  text: string,
+  delivery: ChildRunDelivery,
 ): Effect.fn.Return<readonly RunInputDraft[], never, Inbox> {
   const parent = facts.parent;
   if (parent === null || parent.call?.awaited === true) return [];
   const item = {
-    text,
+    delivery,
     from: { kind: 'run', runId } as const,
     deliveryId: deliveryId(runId, facts),
   };
@@ -289,7 +293,7 @@ export const endIn = Effect.fn('endIn')(function* (
           {
             type: 'run.report' as const,
             aggregateId: target,
-            report: input.report,
+            report: formatDelivery(input.report),
           },
           ...(yield* parentDelivery(runId, facts, input.report)),
         ];

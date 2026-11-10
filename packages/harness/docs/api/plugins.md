@@ -32,8 +32,10 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`PromptSection`](#promptsection),
   [`ProcessPluginLayer`](#processpluginlayer),
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
-  [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
-  and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
+  [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
+  decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
+  [`FactKind`](#factkind), and [`AgentBlock`](#agentblock)
+  ([`agentBlockOf`](#agentblockof)).
 
 ## AGENT_TOOL_NAME
 
@@ -347,10 +349,19 @@ interface CallRequests {
   /** Open the request (or re-enter the standing one) and wait for its
    *  decision. The returned payload is the request actually answered,
    *  which on resume may differ from the proposal recomputed by the caller.
-   *  `blobs` are the strings the payload names by address, stored with its row. */
+   *  `blobs` are the strings the payload names by address, stored with its
+   *  row. `operation` is what a command (`bash`) asks permission for: the
+   *  shell's (`'bash'`, which the run's command grant answers) or another
+   *  tool's call (`'call'`, which only the delegated-work grant answers).
+   *  An edit, a plan or a proposal asks about its own kind; with the
+   *  call's hooks, the operation decides who answers the request, and a
+   *  request about none is a person's. */
   readonly open: <P extends RequestPayload>(
     payload: P,
-    blobs?: readonly DraftBlob[],
+    opening?: {
+      readonly blobs?: readonly DraftBlob[];
+      readonly operation?: 'bash' | 'call';
+    },
   ) => Effect.Effect<
     {
       readonly payload: Extract<RequestPayload, { kind: P['kind'] }>;
@@ -420,43 +431,10 @@ type ChildLaunch = {
 
 ## ChildRunDelivery
 
-One child-run delivery: the envelope's identity followed by the facts its
-driver selected. Every fact is optional; the body renders those present, in
-the fixed order declared below, so two drivers reporting the same fact
-always render it the same way and in the same place.
+A child run's report to its parent ({@link ChildRunDeliverySchema}).
 
 ```ts
-interface ChildRunDelivery {
-  /** Root element name (`subagent-result`, `background-error`, …). A
-   *  plugin's is `<family>-result` or `<family>-error`, `family` being
-   *  lowercase words joined by `-`: every render surface recognizes that
-   *  shape as a delivery, so a plugin registers no tag. */
-  readonly tag: string;
-  readonly runId: string;
-  /** Echoed prompt attribute, for a child that took a prompt; truncated before escaping. */
-  readonly prompt?: string;
-  /**
-   * Attributes rendered after id/prompt (`agent`, `status`, `thread-id`, …).
-   * Null/undefined values are dropped by the envelope.
-   */
-  readonly attributes?: readonly {
-    readonly name: string;
-    readonly value: string | number | boolean | null | undefined;
-  }[];
-  /** Pre-rendered wall-time body text (`1.2s`). */
-  readonly wallTime?: string;
-  /** Final assistant response as one inline element; empty → `(no response)`. */
-  readonly response?: string;
-  /** Token usage element; omitted when null/undefined. */
-  readonly usage?: {
-    readonly inputTokens: number;
-    readonly outputTokens: number;
-  } | null;
-  /** Pre-rendered fact lines appended after the shared elements. */
-  readonly lines?: readonly string[];
-  /** Failure text; its presence is what makes this delivery an error report. */
-  readonly message?: string;
-}
+type ChildRunDelivery = typeof ChildRunDeliverySchema.Type;
 ```
 
 ## ChildRuns
@@ -738,12 +716,11 @@ const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) =
 
 ## FollowUpFailureReason
 
-Why a submission could not be admitted, worded for the user by
-{@link presentFollowUpResult}: the kind of a resume's refusal
-(`ResumeRefusal`; a message to a run with no loop here is admitted only as
-a resume would be, and `notResumable` there also covers a closed input, a
-disposed session, or a message that does not wake the run), or one of the
-message's alone:
+Why a submission could not be admitted, as {@link describeFollowUpFailure}
+words it: the kind of a resume's refusal (`ResumeRefusal`; a message to a
+run with no loop here is admitted only as a resume would be, and
+`notResumable` there also covers a closed input, a disposed session, or a
+message that does not wake the run), or one of the message's alone:
 
 - `readFailed`: the run's rows could not be read just now (a failing
   store), which says nothing about the run itself.
@@ -767,15 +744,6 @@ tree. A run names only itself; the recipient's admission
 type FollowUpSenderInput =
   | Exclude<FollowUpSender, { readonly kind: 'run' }>
   | { readonly kind: 'run'; readonly runId: RunId };
-```
-
-## formatDelivery
-
-Build the `<...-result>` / `<...-error>` XML delivered to the parent's
-follow-up queue when a child run's turn settles.
-
-```ts
-function formatDelivery(delivery: ChildRunDelivery): string
 ```
 
 ## formatToolOutput
@@ -851,15 +819,21 @@ class HostCapabilities extends Context.Service<
 
 ## InboxItem
 
-One message a producer sends.
+One message a producer sends: a text, with what surfaces show instead
+(`displayText`) and a user's media (e.g. pasted images) with its blobs
+(`attachedMedia`); or a child's delivery to its parent, whose facts its
+row keeps typed.
 
 ```ts
-interface InboxItem {
-  readonly text: string;
-  readonly displayText?: string;
-  /** A user's media (e.g. pasted images) and its blobs (`attachedMedia`). */
-  readonly media?: QueuedFollowUp['content']['media'];
-  readonly blobs?: readonly DraftBlob[];
+type InboxItem = (
+  | {
+      readonly text: string;
+      readonly displayText?: string;
+      readonly media?: readonly StoredMedia[];
+      readonly blobs?: readonly DraftBlob[];
+    }
+  | { readonly delivery: ChildRunDelivery }
+) & {
   readonly from: FollowUpSenderInput;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
@@ -870,7 +844,7 @@ interface InboxItem {
    *  is its `sentFollowUpId`): a retry under it answers with the first
    *  send's receipt, another message under it fails `Conflict`. */
   readonly caller?: string;
-}
+};
 ```
 
 ## isTransientHttpStatus
@@ -1461,8 +1435,8 @@ What one process turn reports as it returns.
 
 ```ts
 interface ProcessReport {
-  /** The delivery its parent reads (`formatDelivery`). */
-  readonly report: string;
+  /** The delivery its parent reads, typed. */
+  readonly report: ChildRunDelivery;
   /** How a command exited, recorded as the run's `process.exit` row: a
    *  code other than 0 ends the run failed, its report still delivered. */
   readonly exit?: ProcessExit;
@@ -1485,7 +1459,7 @@ interface ProcessTurn {
    *  (`Effect.abortSignal`). */
   readonly run: Effect.Effect<ProcessReport, Error, PlatformServices>;
   /** The delivery of a turn that threw. */
-  readonly reportError: (error: Error) => string;
+  readonly reportError: (error: Error) => ChildRunDelivery;
 }
 ```
 
@@ -1557,26 +1531,38 @@ const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effe
 ## RequestDecisionHook
 
 A plugin's side of a decision on a pending request it opened (a
-`PluginRequest` naming it). The session runs it before the decision's row
-commits, under the request's decision lane, so a process that exits in
-between leaves the request pending and answerable rather than settled
-with nothing recorded. It may send a run of the session its input
-(`inbox`), and commit facts about its own aggregates, hung under the
-request's run (`commit`).
+`PluginRequest` naming it), run before the decision commits: what the
+plugin records outside the session's store, and what commits with the
+decision in its one checked transaction ({@link RequestDecisionRecord}).
+The outside record must be idempotent: an answer tried again after a
+failure, or raced by another, records nothing twice, and the second
+reads the first's. A process that exits before the transaction leaves
+the request pending and answerable.
 
 ```ts
 interface RequestDecisionHook {
   readonly record: (request: {
     readonly payload: PluginRequest;
     readonly decision: RequestDecision;
-    readonly inbox: (runId: RunId) => RunInbox;
-    readonly commit: (
-      facts: readonly (ToolFact & { readonly aggregate: string })[],
-    ) => Effect.Effect<
-      void,
-      LogWriteError | DatabaseReadFailed | PluginFactRejected
-    >;
-  }) => Effect.Effect<void, Error, GlobalValues>;
+  }) => Effect.Effect<RequestDecisionRecord, Error, GlobalValues>;
+}
+```
+
+## RequestDecisionRecord
+
+What commits with a plugin request's decision, in its transaction
+({@link RequestDecisionHook}).
+
+```ts
+interface RequestDecisionRecord {
+  /** Facts about the plugin's own aggregates, hung under the request's run
+   *  and checked in the transaction: one its kind refuses is logged and
+   *  left out. */
+  readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
+  /** The input the plugin sends a run of the session, admitted in the
+   *  transaction (one the run's closed input refuses is logged), the run
+   *  woken for it once that commits. */
+  readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
 }
 ```
 
@@ -1911,7 +1897,7 @@ interface StreamHandle {
 
 Three outcomes: the input reached a running loop, it waits in the run's
 queue for its next turn (the resume the send started, or an explicit
-one), or it was not admitted for a worded reason. A delivery the
+one), or it was not admitted, with the words that say why. A delivery the
 admission boundary had already accepted is `sent`. A resume the input
 started that the run refused is told by the resume itself.
 
@@ -1919,7 +1905,7 @@ started that the run refused is told by the resume itself.
 type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued' }
-  | { status: 'failed'; reason: FollowUpFailureReason };
+  | { status: 'failed'; message: string };
 ```
 
 ## TEMPLATE_INPUT_NAMES

@@ -49,10 +49,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         data: {
           requestId: 'req-1',
           command: 'ls',
-          offersGrant: true,
           runId: RUN,
         },
       },
+      answeredBy: 'bash',
     };
     /** The batches of one turn, in order, up to and excluding the delivery. */
     const openTurn = (cell: RunCell) =>

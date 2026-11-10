@@ -365,6 +365,8 @@ export {
   planSummaryLine,
   type PluginRequest,
   type RequestKind,
+  // Who answers a request: a person, or the run grant that answers it.
+  type AnsweredBy,
   type ProposalFileFields,
   qualifyAggregateId,
   factName,
@@ -411,6 +413,7 @@ export {
   type WorktreeInfo,
   ToolDependencyStatusSchema,
   type ToolDependencyStatus,
-  // The run grant a request offers, which every surface renders.
+  // The run grant a request offers: the one that answers it, which every
+  // surface renders.
   offeredGrant,
 } from '@shared/schemas';

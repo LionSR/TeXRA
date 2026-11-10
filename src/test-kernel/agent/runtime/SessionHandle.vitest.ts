@@ -16,7 +16,7 @@ import {
   JsonStore,
   nodeFileServices,
 } from '@texra-ai/harness/node';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
 import { Approvals } from '@shared/session/runHistory';
@@ -89,7 +89,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           yield* isolatedTestSession({
             dispose: () => {
               refusal = Effect.runSync(
-                registryOf(Context.get(session, Runs))
+                Context.get(session, RunRegistry)
                   .start(generateRunId(), {
                     open: Effect.void,
                     run: () => Effect.never,

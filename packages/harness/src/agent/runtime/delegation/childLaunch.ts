@@ -25,11 +25,7 @@ import {
 } from '@agent/runtime/executeAgent';
 import { openResume } from '@agent/runtime/resumeRun';
 import { RunCall } from '@agent/runtime/RunCall';
-import {
-  registryOf,
-  Runs,
-  type AgentRunServices,
-} from '@agent/runtime/runRegistry';
+import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
@@ -77,7 +73,7 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
   registration: RegisterRunOptions,
   options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools'> = {},
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const { opened } = yield* registryOf(yield* Runs).start(runId, {
+  const { opened } = yield* (yield* RunRegistry).start(runId, {
     open: executeAgent(definition, runId, {
       ...options,
       registration,
@@ -99,7 +95,7 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   parentRunId: RunId,
   options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const runs = registryOf(yield* Runs);
+  const runs = yield* RunRegistry;
   const { opened } = yield* runs.start(runId, {
     open: openResume(
       runs,
@@ -143,7 +139,7 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
   runId: RunId,
   start: Effect.Effect<unknown, Error, AgentRunServices>,
 ): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices> {
-  const runs = registryOf(yield* Runs);
+  const runs = yield* RunRegistry;
   yield* start;
   const live = runs.get(runId);
   if (live !== undefined)

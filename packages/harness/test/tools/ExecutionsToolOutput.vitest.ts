@@ -26,7 +26,7 @@ import {
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { validationModelLayer } from '@cli/runtime/models/validationModel';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { startAwaited } from '@test/support/runHandleFixtures';
@@ -222,7 +222,11 @@ layer(
           // Launched and admitted, its program not yet past its setup: the
           // window between `start` and the child's loop being under way.
           const launch = yield* Effect.forkChild(
-            startAwaited(Context.get(session, Runs), childId, Effect.never),
+            startAwaited(
+              Context.get(session, RunRegistry),
+              childId,
+              Effect.never,
+            ),
             { startImmediately: true },
           );
 

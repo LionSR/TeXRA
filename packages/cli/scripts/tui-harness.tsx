@@ -35,10 +35,14 @@ import {
   attachInteractions,
   Interactions,
 } from '@agent/runtime/HostInteractions';
-import { openRequest, SessionRequests } from '@agent/runtime/requests';
+import {
+  decisionOf,
+  openRequest,
+  SessionRequests,
+} from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
@@ -85,6 +89,7 @@ import {
   type ToolEditContent,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
+import type { RunHistoryDraft } from '@shared/session/runState';
 import { WORKSPACE_AGENTS_KEY } from '@agent/workspaceAgents/workspaceAgentsState';
 import { MODEL_SELECTION_KEY } from '@model/computeModelOptions';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
@@ -609,7 +614,7 @@ function holdRun(runId: RunId): void {
     runId,
     harnessRuntime.runSync(
       Effect.map(
-        registryOf(Context.get(harnessRuntimeSession, Runs)).start(runId, {
+        Context.get(harnessRuntimeSession, RunRegistry).start(runId, {
           open: Effect.void,
           run: () =>
             Effect.onInterrupt(Effect.never, () =>
@@ -935,8 +940,9 @@ function seedSubagentFollowupTranscript(): void {
       '</subagent-error>',
     ].join('\n'),
   ];
-  // The run's transcript stores a delivery as its queue wrote it: the
-  // envelope's summary (`FollowUpContent.displayText`), not the envelope.
+  // The run's transcript shows a delivery as its summary
+  // (`followUpDisplay`), never its envelope; built here from the envelope's
+  // text, which reads back to the same summary.
   for (const [index, text] of followups.entries()) {
     entries.push({
       id: `harness-subagent-followup-${index}`,
@@ -1018,7 +1024,6 @@ function makeBashApprovalPayload(index = 1) {
       index === 1 ? 'harness-bash-approval' : `harness-bash-approval-${index}`,
     command: BASH_APPROVAL_COMMAND,
     cwd: HARNESS_CWD,
-    offersGrant: true,
     runId: SHOW_SCRIPT_RUNNING
       ? RUNNING_SCRIPT_FIRST_AGENT_RUN_ID
       : HARNESS_RUN_ID,
@@ -1088,7 +1093,6 @@ function makeAgentProposalPayload(): AgentProposalRequest {
     instruction: AGENT_PROPOSAL_INSTRUCTION,
     memories: [],
     workingDirectory: HARNESS_CWD,
-    offersGrant: true,
     ...(SCRIPT_PROPOSAL
       ? {
           script: {
@@ -1108,9 +1112,14 @@ function makeAgentProposalPayload(): AgentProposalRequest {
   });
 }
 
-/** A finished `agent` call: its card's output is the delivery envelope the
- *  parent's model reads, which no surface prints. */
+/** A finished `agent` call: its card's output text is the delivery
+ *  envelope the parent's model reads, which no surface prints; the card
+ *  shows the answer its typed `value` carries. */
 function seedAgentResultTranscript(): void {
+  const answer = [
+    'Lemma 4 needs a bound on the error term.',
+    'The rest of chapter 2 reads cleanly.',
+  ].join('\n');
   seedRows(HARNESS_RUN_ID, [
     {
       id: 'agent-result-call',
@@ -1120,13 +1129,17 @@ function seedAgentResultTranscript(): void {
       data: {
         toolName: 'agent',
         input: { agentName: 'review', prompt: 'Review chapter 2.' },
-        output: [
-          '<subagent-result id="aaaa0009f10e" agent="review" status="completed">',
-          '<wall-time>2m 4s</wall-time>',
-          '<response>Lemma 4 needs a bound on the error term.',
-          'The rest of chapter 2 reads cleanly.</response>',
-          '</subagent-result>',
-        ].join('\n'),
+        output: {
+          output: [
+            '<subagent-result id="aaaa0009f10e" agent="review" status="completed">',
+            '<wall-time>124.0s</wall-time>',
+            '<response>',
+            answer,
+            '</response>',
+            '</subagent-result>',
+          ].join('\n'),
+          value: { response: answer, files: [], runId: 'aaaa0009f10e' },
+        },
         summary: "Completed 'review'",
         status: TOOL_CALL_STATUS.COMPLETED,
       },
@@ -1138,7 +1151,6 @@ function makeUserQuestionPayload(): UserQuestionRequest {
   return {
     requestId: 'harness-user-question',
     runId: HARNESS_RUN_ID,
-    offersGrant: false,
     context: USER_QUESTION_CONTEXT,
     questions: [
       {
@@ -1199,18 +1211,32 @@ function makeUserQuestionPayload(): UserQuestionRequest {
 }
 
 /** Open one request the way a run asks (`openRequest`): committed through
- *  the session's log, answered by the surface's `request.decided`. */
+ *  the session's log, answered by the surface's `request.decided`. The
+ *  harness's commands are the shell's, which its command grant answers. */
 const askHarness = (
   runId: RunId,
   payload: RequestPayload,
   blobs?: readonly DraftBlob[],
 ) =>
-  openRequest(runId, payload, {
-    ...(blobs && { blobs }),
-    commit: (rows) =>
-      session()
-        .log.transact((tx) => runStateAppend(tx.append)(rows))
-        .pipe(Effect.as(session().log.now())),
+  Effect.gen(function* () {
+    const asker = {
+      runId,
+      append: (rows: readonly RunHistoryDraft[]) => {
+        // Read before the batch commits: an answer lands above it.
+        const commit = session().log.now();
+        // cast: the door hands an asker with nothing beside its request
+        // only the request's rows, which the log stores as they are.
+        const drafts = rows as readonly SessionRowDraft[];
+        return session()
+          .log.transact((tx) => runStateAppend(tx.append)(drafts))
+          .pipe(Effect.as({ commit }));
+      },
+    };
+    const { answer, from } = yield* openRequest(asker, payload, {
+      ...(blobs && { blobs }),
+      ...(payload.kind === 'bash' && { operation: 'bash' }),
+    });
+    return answer ?? (yield* decisionOf(runId, payload.data.requestId, from));
   }).pipe(Effect.provide(harnessRuntimeSession));
 
 /** One request the way a run asks: `request.opened` on the run, the modal
@@ -1317,9 +1343,9 @@ seedRun(HARNESS_RUN_ID);
 focusRun(HARNESS_RUN_ID);
 rootRunId.set(HARNESS_RUN_ID);
 seedRows(HARNESS_RUN_ID, harnessInitialEntries());
-// Built as the run's inbox builds them (`queuedRow`), so a delivery carries
-// the summary (`displayText`) every surface shows and a message from the user
-// is kept as typed.
+// Built as the run's inbox builds them (`queuedRow`): a run's envelope text
+// carries the summary (`displayText`) every surface shows, and a message
+// from the user is kept as typed.
 publish(
   ...[
     ...QUEUED_FOLLOW_UPS.map((text) => ({
@@ -1496,7 +1522,6 @@ if (SHOW_EDIT_APPROVAL) {
       path: request.path,
       relativePath: request.path,
       sourceTool: request.sourceTool,
-      offersGrant: true,
       runId: request.runId,
       addedLines: lines.added,
       removedLines: lines.removed,
@@ -1951,9 +1976,9 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
         requestId: 'tree-approval',
         runId: waiting,
         command: 'ls',
-        offersGrant: true,
       },
     },
+    answeredBy: 'bash',
   });
   const view = viewOf([
     ...events,

@@ -252,11 +252,11 @@ export function buildScenario({ proposal = false } = {}) {
       kind: 'bash',
       data: {
         requestId: 'req-1',
-        offersGrant: true,
         runId: CHILD,
         command: 'ls',
       },
     },
+    answeredBy: 'bash',
   });
 
   // The child's own delegate: the dispatching tool row, then a grandchild
@@ -359,7 +359,6 @@ export function buildScenario({ proposal = false } = {}) {
         kind: 'proposal',
         data: {
           requestId: 'req-plan',
-          offersGrant: true,
           runId: ROOT,
           task: true,
           agent: 'review',
@@ -385,6 +384,7 @@ export function buildScenario({ proposal = false } = {}) {
           },
         },
       },
+      answeredBy: 'superYolo',
     });
   }
 
@@ -492,11 +492,11 @@ export function withWaitingGrandchild(): SessionView {
       kind: 'bash',
       data: {
         requestId: 'req-lint',
-        offersGrant: true,
         runId: GRANDCHILD,
         command: 'latexmk -pdf appendixB.tex',
       },
     },
+    answeredBy: 'bash',
   });
   return viewOf([
     ...inputs,

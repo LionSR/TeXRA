@@ -15,7 +15,6 @@ import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
 import { readRecipeResult } from '@agent/runtime/recipeResult';
-import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
@@ -188,8 +187,10 @@ export type ChildLaunch = {
 
 /**
  * One request shared by a script's `agent` calls and all its attempts
- * (attempt 0), recovered from rows after restart. A stop cancels it, and
- * the next request takes the next ordinal.
+ * (attempt 0), recovered from rows after restart: one still standing is
+ * joined on the one wait (`decisionOf`), a fresh one opens through the
+ * call's requests. A stop cancels it, and the next request takes the next
+ * ordinal.
  */
 const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   call: RunToolCall,
@@ -206,18 +207,7 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   const state = yield* (yield* RunHistory).load(runId);
   const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
   if (own?.request.decision === null)
-    // A session that closes first decides nothing: the next resume asks.
-    return yield* decisionOf(runId, own.requestId, from).pipe(
-      Effect.map((row) => row.decision),
-      Effect.catch((cause) =>
-        Effect.logWarning(
-          `The script's agent request ${own.requestId} closed without a decision; the call stays in flight and the next resume asks again.`,
-        ).pipe(
-          Effect.annotateLogs({ data: cause }),
-          Effect.andThen(Effect.interrupt),
-        ),
-      ),
-    );
+    return yield* decisionOf(runId, own.requestId, from);
   if (own !== null) return own.request.decision;
   const calls = yield* script.calls;
   return yield* call.requests
@@ -225,7 +215,6 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
       kind: 'proposal',
       data: {
         requestId: callRequestId(shared, raised + 1),
-        offersGrant: call.hook !== 'ask',
         runId,
         ...proposal,
         script: {
@@ -244,8 +233,9 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
     .pipe(Effect.map(({ decision }) => decision));
 });
 
-/** What an ended child becomes for its call: its envelope (a recipe's read
- *  through its block), or the error a script's `await` throws for it. */
+/** What an ended child becomes for its call: the report its end stored,
+ *  the envelope its parent's model reads (a recipe's read through its
+ *  block), or the error a script's `await` throws for it. */
 export const childResult = Effect.fn('AgentTool.childResult')(function* (
   call: RunToolCall,
   agentName: string,
@@ -265,14 +255,19 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error ? `: ${runEndErrorMessage(result.error)}` : '.'}`,
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
     );
-  const config = yield* getRunRecords(runId).readConfig();
+  const records = getRunRecords(runId);
+  // A child's end commits its report with its `run.end`: a completed child
+  // with none is a defect.
+  const report = yield* records.readReport();
+  if (report === null)
+    return yield* Effect.die(
+      new Error(`The agent run ${runId} completed without a report.`),
+    );
+  const config = yield* records.readConfig();
   const view = yield* (yield* SessionViewAccess).read([]);
   const recipe = yield* readRecipeResult(config, runId, call.env.roots);
   return {
-    ...executed(
-      formatSubagentDelivery(agentName, result, { runId, recipe }),
-      `Completed '${agentName}'`,
-    ),
+    ...executed(report, `Completed '${agentName}'`),
     value: toJsonValue({
       ...result.output,
       ...(recipe !== undefined && { changes: recipe.changes }),

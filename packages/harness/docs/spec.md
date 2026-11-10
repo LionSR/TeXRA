@@ -67,9 +67,10 @@ its kind is its `type` column.
   (`shared/schemas/runHistoryEvent.ts#DispatchFactsSchema`,
   `#ScriptCallPayloadSchema`).
 - **Request**: A decision that may wait on a person: a `request.opened` row,
-  closed by one `request.decided` row; an approval policy that answers at once
-  commits both in one batch (`shared/schemas/sessionEvent.ts#'request.opened'`,
-  `agent/runtime/requests.ts#policyDecidedRows`).
+  naming who answers it (`answeredBy`), closed by one `request.decided` row;
+  an approval policy that answers at once commits both in one batch
+  (`shared/schemas/sessionEvent.ts#'request.opened'`,
+  `agent/runtime/requests.ts#openRequest`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
   `RunState` the loop continues from
   (`shared/session/runState.ts#applyRunRows`).
@@ -379,7 +380,9 @@ also read by `applyRunRows`.
 - `run.removed` (folded: no): The deletion marker: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
 - `plugin.fact` (folded: no): A plugin's own kind; core never reads `value`.
-- `followup.queued` (folded: no): Input not taken yet, whole.
+- `followup.queued` (folded: no): Input not taken yet, whole: a message's
+  text, or a child's delivery with its facts typed, rendered as its envelope
+  where it becomes the run's message.
 - `followup.consumed` (folded: no): A queued follow-up was taken: delivered as a
   turn's message, answered by a tool, or retired as a control or with the run's
   end.
@@ -421,9 +424,8 @@ write points are normative:
 - **W1**, `model.message` `attempt`: for a turn, commits before the billed
   request leaves the process
   (`agent/runtime/ModelInvoker.ts#'ModelInvoker.attempt'`).
-- **W2**, `model.message` `response`: commits, with `run.position`
-  `response.ready`, before any tool call dispatches
-  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`;
+- **W2**, `model.message` `response`: commits before any tool call
+  dispatches (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`;
   `agent/runtime/loop/runLoop.ts#dispatchPendingResponse`).
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
@@ -456,7 +458,8 @@ usage rides the `context.edit` that lands it
 **W2.** A completed provider turn of a loop invocation (one invocation's answer;
 a loop turn may hold none, or several as the loop calls the model again after
 tool results) MUST commit once, as one `response` row with a fresh `responseId`,
-in the batch that moves the position to `response.ready`. It carries one
+which puts the loop at `response.ready` without a position of its own
+(`shared/session/turnRowHandlers.ts#'response.ready'`). It carries one
 dispatch fact per local call (`agent/runtime/run/tools.ts#dispatchFactsFor`)
 (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`,
 `shared/schemas/runHistoryEvent.ts#DispatchFactsSchema`). The loop MUST dispatch
@@ -496,8 +499,7 @@ to the response (`agent/runtime/loop/toolUseDispatch.ts#'toolUse.deliver'`). A
 delivery its settlements do not match is a defect
 (`agent/runtime/makeRunHistory.ts#'mismatched-delivery'`).
 
-**W5.** The positions are `turn.ready`, `turn.begin`, `response.ready`,
-`results.ready`, `turn.end` and `waiting`
+**W5.** The positions are `turn.ready`, `turn.begin`, `turn.end` and `waiting`
 (`shared/schemas/runHistoryEvent.ts#PositionAtSchema`). A `turn.end` position
 MUST carry an outcome, and every other position MUST NOT carry one
 (`shared/schemas/runHistoryEvent.ts#RunPositionPayloadSchema`). A run's end
@@ -518,10 +520,12 @@ unless the parent's call awaits it or the child was detached.
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
 commit a `failed` row whose `next` is the move after it; a call off the rows
 records none (`agent/runtime/run/modelCall.ts#callModel`)
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#failedRows`). A
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#commitFailed`). A
 `failed` row that asks MUST be
-preceded, in its batch, by the `request.opened` of its retry request
-(`agent/runtime/ModelInvoker.ts#failedRows`,
+preceded, in its batch, by the `request.opened` of its retry request, which
+opens at the one request door with the `failed` row beside it
+(`agent/runtime/ModelInvoker.ts#commitFailed`,
+`agent/runtime/requests.ts#openRequest`,
 `shared/session/turnRowHandlers.ts#a failed attempt asks`).
 
 ## 5. The fold
@@ -555,14 +559,18 @@ A run is opened by its first `run.position`. Run history rows without an opening
 position MUST fail the load as `inconsistent`
 (`agent/runtime/makeRunHistory.ts#'RunHistory.loaded'`).
 
-### 5.3 Where a run stands
+### 5.3 Where the loop stands
 
-The fold keeps the newest position as where the loop stands: between turns at
-`waiting` or `turn.end`, and inside a turn at any other, `turn.ready` being
-input taken for a turn that has not begun
-(`shared/session/runRowsShape.ts#RunRowState`). There is no halted position: a
-`run.end` is the halt, and a resume continues from the position the last
-`run.position` recorded (`shared/session/runRows.ts#applyRunRow`).
+The fold reads where the loop stands from its newest `run.position`, and inside
+a turn from the two rows no position restates: a `response` puts it at
+`response.ready`, and the `append` delivering that response's results at
+`results.ready` (`shared/session/runState.ts#LoopAt`,
+`shared/session/turnRowHandlers.ts#'results.ready'`). Between turns it stands
+at `turn.ready`, `waiting` or `turn.end`, and a run is waiting for input at
+`waiting` or `turn.end` (`agent/runtime/loop/runLoop.ts#parked`).
+
+There is no halted position: a `run.end` is the halt, and a resume continues
+from where the loop stood (`shared/session/runState.ts#RunState`).
 
 ### 5.4 The commit path
 
@@ -797,7 +805,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 ### 8.3 Protocol
 
 - A request's id is part of its payload
-  (`agent/runtime/requests.ts#payload.data.requestId`). A tool call's
+  (`agent/runtime/requests.ts#const { requestId } = payload.data`). A tool call's
   request id is derived from the response, call, attempt and ordinal, so a
   resumed attempt rejoins the request it left standing
   (`shared/session/inFlight.ts#callRequestId`).
@@ -806,13 +814,21 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/requests.ts#openRequest`); a grant turned on answers every
   open request it covers in the grant's own transaction
   (`agent/runtime/runApprovalQueue.ts#approvalsUnder`).
+- Who answers a request is decided once, as it opens, and stored as its
+  `answeredBy`: a person when a `PreToolUse` hook asked or the request asks
+  about no operation (a question, a retry, a plugin's request), else the grant
+  its operation takes (`agent/runtime/requests.ts#answererOf`, `#OPERATIONS`).
+  The policy's answer at open and a grant turned on while it waits both read
+  it, so a grant answers a waiting request exactly when it would have approved
+  it at open.
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
   (`agent/runtime/requests.ts#decideRequest`).
-- The asker waits on the committed `request.decided` row, read from the tail
-  (`agent/runtime/requests.ts#decisionOf`). If the session closes first, the
-  asker goes on as cancelled with no row written, and the request stays open
-  (`agent/runtime/requests.ts#ended without one`).
+- Every asker waits on the committed `request.decided` row, read from the
+  tail (`agent/runtime/requests.ts#decisionOf`). If the session closes first,
+  the wait decides nothing: the asking fiber is interrupted with no row
+  written, the request stays open, and the next resume asks again
+  (`agent/runtime/requests.ts#the session closed before it was decided`).
 - An interrupted asker writes nothing: the request a stopped or failed run
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#cancelledRequests`);
@@ -823,9 +839,12 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   block its caller is neither: no attempt re-enters it and it is not unbound; it
   stays open until its `request.decided` commits, or until `run.removed`
   closes the run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts#admit`). What its plugin's
-  decision hook does with the answer (the external inquiry delivers it as a
-  follow-up) is the plugin's.
+  (`controllers/session/SessionRequests.ts#admit`). Its plugin's decision
+  hook records an answer outside the store first, idempotently; the decision,
+  the facts the hook returns and the input it sends a run (the external
+  inquiry's follow-up) then commit in one checked transaction, after which
+  that run is woken (`agent/runtime/requests.ts#decideRequest`,
+  `controllers/session/SessionRequests.ts#wakeIfOwed`).
 
 ## 9. Crash guarantees
 
@@ -906,15 +925,15 @@ What survives at each commit point follows from sections 2 to 8:
 - `tool.result`: The settlement is reused; the call is not run again
   (`agent/runtime/loop/toolUseDispatch.ts#finishCall`).
 - **delivery `append`**: The loop continues to the next step from
-  `results.ready` (`shared/session/runRowsShape.ts#RunRowState`).
+  `results.ready` (`shared/session/turnRowHandlers.ts#'results.ready'`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
 - `run.end`: The lifecycle is over. A recipe task stays finished, and a
   resume answers `finished`
   (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
   conversation continues on a resume in a new lifecycle
-  (`shared/session/runActions.ts#continuesFromRows`), from the position its
-  last `run.position` kept (`shared/session/runRows.ts#applyRunRow`).
+  (`shared/session/runActions.ts#continuesFromRows`), from where its
+  rows left the loop (`shared/session/runState.ts#LoopAt`).
 
 These are guarantees about committed state. An external effect that finished
 before its result committed stays uncertain; I4 governs it, and the suite cannot
