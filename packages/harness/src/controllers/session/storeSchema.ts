@@ -30,7 +30,7 @@ import {
 const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
-const SCHEMA_VERSION = 103;
+const SCHEMA_VERSION = 104;
 /** The first stamp a released build wrote. Fixed for good: a store stamped
  *  below it is pre-1.0 and moved aside; one at or above it is kept. */
 const BASELINE_1_0 = 102;
@@ -78,7 +78,6 @@ const TABLES = [
     seq       INTEGER NOT NULL,
     type      TEXT NOT NULL,
     version   INTEGER NOT NULL CHECK (version >= 1),
-    origin    TEXT NOT NULL,
     at        INTEGER NOT NULL,
     data      TEXT NOT NULL,
     UNIQUE (aggregate, seq)
@@ -136,10 +135,6 @@ const ADDITIVE = [
     aggregate INTEGER PRIMARY KEY REFERENCES event_sequence(id) ON DELETE CASCADE,
     "commit"  INTEGER NOT NULL,
     usage     TEXT NOT NULL
-  ) STRICT`,
-  `CREATE TABLE IF NOT EXISTS run_record (
-    aggregate INTEGER PRIMARY KEY REFERENCES event_sequence(id) ON DELETE CASCADE,
-    record    TEXT NOT NULL
   ) STRICT`,
   `CREATE INDEX IF NOT EXISTS event_sequence_parent
     ON event_sequence(parent_id) WHERE parent_id IS NOT NULL`,

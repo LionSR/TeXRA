@@ -4,8 +4,8 @@
  * does not decode (damaged), or one an earlier build wrote at a lower
  * version. Those are found as reads meet them, and the
  * earlier build's rows all at once on the first `damaged`, since the listing
- * never reads a run's history. The tool cards' read-time output
- * (`settleCards`) is settled over the decoded rows.
+ * never reads a run's history. A display read shows a call's rows as its
+ * tool card (`callCard`).
  */
 import { zstdDecompressSync } from 'node:zlib';
 
@@ -16,7 +16,9 @@ import {
   DISPLAY_ROW_TYPES,
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
-  type AggregateId,
+  TOOL_CALL_STATUS,
+  type DisplayRow,
+  type FileListEntry,
   type JsonValue,
   type UnreadableRun,
   type RunId,
@@ -52,19 +54,18 @@ export const AGGREGATE =
  *  version. */
 export const PROJECTED_COLUMNS = `p."commit" AS "commit", s.kind AS kind,
   s.logical_id AS logicalId, e.seq AS seq, p.type AS type,
-  NULL AS version, e.origin AS origin, e.at AS at, p.data AS data`;
+  NULL AS version, e.at AS at, p.data AS data`;
 /** A projected row joined to its source row's envelope. */
 export const PROJECTED_FROM = `projected_row p
   JOIN event e ON e."commit" = p."commit"
   JOIN event_sequence s ON s.id = e.aggregate`;
-/** The kinds a display read selects: the display rows, and the settlements
- *  their tool cards' output is projected from (`settleCards`). */
-export const DISPLAY_READ_KINDS: ReadonlySet<string> = new Set([
+/** The kinds a display read selects, as the JSON list it binds: the display
+ *  rows, and the call rows it shows as tool cards (`callCard`). */
+export const DISPLAY_READ_TYPES = JSON.stringify([
   ...DISPLAY_ROW_TYPES,
+  'tool.intent',
   'tool.result',
 ]);
-/** {@link DISPLAY_READ_KINDS} as the JSON list a display read binds. */
-export const DISPLAY_READ_TYPES = JSON.stringify([...DISPLAY_READ_KINDS]);
 /** The listing (each aggregate's `listing_entry` rows and each run's spend
  *  on its newest priced row's envelope, in commit order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
  *  store is never `ANALYZE`d), each by its event's primary key. */
@@ -77,22 +78,30 @@ export const READ_LISTING = `SELECT * FROM (
   SELECT ${EVENT_COLUMNS} FROM ${LISTED}
   UNION ALL
   SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
-    e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
-    e.at AS at, u.usage AS data
+    e.seq AS seq, 'usage' AS type, NULL AS version, e.at AS at,
+    u.usage AS data
   FROM run_usage u
     JOIN event e ON e."commit" = u."commit"
     JOIN event_sequence s ON s.id = u.aggregate
 ) ORDER BY "commit"`;
 
-/** One open run's stored record (`run_record`): none for a run never
- *  started or closed by its deletion marker. */
-export const READ_RUN_RECORD = `SELECT r.record AS record FROM run_record r
-  JOIN event_sequence s ON s.id = r.aggregate
-  WHERE s.kind = ? AND s.logical_id = ? AND s.closed_by IS NULL
-    AND s.start_commit IS NOT NULL`;
-/** The rows at the commits bound as one `json_each` array. */
-export const READ_COMMITS = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-  WHERE e."commit" IN (SELECT value FROM json_each(?)) ORDER BY e."commit"`;
+/** The listing key of a run's first row a projection catch-up could not
+ *  read: a read of the run's listing or record selects the row, and so
+ *  meets it. */
+export const UNREAD_KEY = 'unread';
+/** The rows one open run's record is read from, in commit order: the newest
+ *  row of each record kind bound as a `json_each` array (each plugin fact,
+ *  each title's author), as the listing indexes them, and the run's unread
+ *  row. None for a run never started or closed by its deletion marker. */
+export const READ_RUN_RECORD = `SELECT ${EVENT_COLUMNS}
+  FROM listing_entry l CROSS JOIN event e ON e."commit" = l."commit"
+  ${EVENT_JOINS}
+  WHERE l.aggregate = (SELECT id FROM event_sequence
+      WHERE kind = ? AND logical_id = ? AND closed_by IS NULL
+        AND start_commit IS NOT NULL)
+    AND (l.key = '${UNREAD_KEY}'
+      OR e.type IN (SELECT value FROM json_each(?)))
+  ORDER BY e."commit"`;
 /** The blobs of the digests bound as one `json_each` array. */
 const READ_BLOBS = `SELECT digest, value FROM blob
   WHERE digest IN (SELECT value FROM json_each(?))`;
@@ -352,7 +361,6 @@ function bareStart(input: SqlRow): SessionRow | null {
     aggregateId: aggregateOf(row.kind, row.logicalId),
     seq: row.seq,
     commit: row.commit,
-    origin: row.origin,
     at: row.at,
     identity: { kind: 'agent', agent: 'unknown' },
     takesFollowUps: false,
@@ -362,37 +370,74 @@ function bareStart(input: SqlRow): SessionRow | null {
 }
 
 /**
- * The read-time projection of a tool card's output: a `tool.end` on a
- * run history stores no `result`; its output is the `tool.result` committed
- * just before it in the same batch (bar the card's `tool.start`). The card
- * keeps its `files`; the fold keeps the name and input it opened with.
+ * The tool card row a call row shows, on that row's envelope, or none: a
+ * `tool.intent` opens its call's card (`tool.start`), and a `tool.result`
+ * that names a card closes it (`tool.end`) with the call's output and the
+ * files it edited. A display read returns it in the call row's place, so a
+ * card is never stored beside the call it shows and each row shows at most
+ * one.
  */
-export function settleCards(
-  events: readonly SessionRow[],
-): readonly SessionRow[] {
-  const settled = new Map<AggregateId, SessionRow & { type: 'tool.result' }>();
-  return events.map((event) => {
-    if (event.type === 'tool.result') settled.set(event.aggregateId, event);
-    else if (event.type !== 'tool.start') {
-      const settlement = settled.get(event.aggregateId);
-      settled.delete(event.aggregateId);
-      if (event.type === 'tool.end' && event.result === undefined && settlement)
-        return { ...event, result: cardResult(settlement, event.files) };
-    }
-    return event;
-  });
-}
-
-function cardResult(
-  { payload }: SessionRow & { type: 'tool.result' },
-  files: Extract<SessionRow, { type: 'tool.end' }>['files'],
-): JsonValue {
-  const { status: _status, ...rest } = payload.result;
-  const output = { ...rest, ...(files?.length ? { editedFiles: files } : {}) };
-  return JSON.parse(
+export function callCard(row: SessionRow): readonly DisplayRow[] {
+  if (row.type !== 'tool.intent' && row.type !== 'tool.result') return [];
+  const { aggregateId, seq, commit, at, stageId } = row;
+  const envelope = {
+    aggregateId,
+    seq,
+    commit,
+    at,
+    ...(stageId === undefined ? {} : { stageId }),
+  };
+  if (row.type === 'tool.intent') {
+    const { logId, toolName, input, card, section, attempt } = row.payload;
+    return [
+      {
+        ...envelope,
+        type: 'tool.start',
+        logId,
+        toolName,
+        input,
+        ...(section === undefined ? {} : { section }),
+        ...(attempt > 1 ? { attempt } : {}),
+        ...(card === undefined ? {} : { card }),
+      },
+    ];
+  }
+  const { logId, result } = row.payload;
+  if (logId === null) return [];
+  const edited =
+    result.status === 'executed'
+      ? (result.edits ?? []).flatMap(({ path }) => (path ? [path] : []))
+      : [];
+  const files: FileListEntry[] = [...new Set(edited)].map((path) => ({
+    path,
+    ok: true,
+    source: 'tool',
+    sourceDisplay: 'Tool use',
+  }));
+  const { status: _status, ...rest } = result;
+  const output = {
+    ...rest,
+    ...(files.length > 0 ? { editedFiles: files } : {}),
+  };
+  // A stored result's optional keys may read `undefined`: the card's result
+  // is JSON, so they are dropped.
+  const json: JsonValue = JSON.parse(
     JSON.stringify({
       ...(Object.keys(output).length > 0 ? { output } : {}),
-      ...(files?.length ? { files } : {}),
+      ...(files.length > 0 ? { files } : {}),
     }),
   );
+  return [
+    {
+      ...envelope,
+      type: 'tool.end',
+      logId,
+      status:
+        result.status === 'error'
+          ? TOOL_CALL_STATUS.FAILED
+          : TOOL_CALL_STATUS.COMPLETED,
+      result: json,
+      ...(files.length > 0 ? { files } : {}),
+    },
+  ];
 }

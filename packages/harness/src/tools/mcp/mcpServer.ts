@@ -196,7 +196,6 @@ function mcpTool(
       // `type`, and a tool's arguments are always an object.
       parameters: { ...listed.inputSchema, type: 'object' },
     },
-    slow: true,
     // A server tool re-runs after an interruption only when its server calls
     // it read-only or idempotent: a repeat changes nothing either way.
     replay:

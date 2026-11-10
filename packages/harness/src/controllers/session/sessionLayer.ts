@@ -36,16 +36,11 @@ import { globalStorageFsLayer, SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import {
-  processStartIdentity,
-  processOwnerId,
-} from '@platform/defaults/nodeProcesses';
-import {
   nodePlatformServices,
   workspaceEnvironmentLayer,
 } from '@platform/defaults/nodePlatform';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { SessionCloseReport } from '@shared/schemas';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   Database,
   ProjectDatabases,
@@ -354,22 +349,11 @@ export function ownerProcessLayer(
     workspace,
   }: Omit<ProcessServicesOptions, 'plugins'>,
   table: ToolTable,
-): Layer.Layer<
-  RunServices | ToolCatalog | SessionOwner | ProjectDatabases | ProcessIdentity
-> {
+): Layer.Layer<RunServices | ToolCatalog | SessionOwner | ProjectDatabases> {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
   const catalog = pluginCatalogLayer(table, mcpConfigPathOf(storageRoot));
-  // Read once per build; an unreadable identity is undefined.
-  const identity = Layer.unwrap(
-    Effect.map(processStartIdentity, (s) =>
-      ProcessIdentity.layer(processOwnerId(s)),
-    ),
-  );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
-  const globalDatabase = globalDatabaseLayer(globalStorage).pipe(
-    Layer.provide(identity),
-    Layer.orDie,
-  );
+  const globalDatabase = globalDatabaseLayer(globalStorage).pipe(Layer.orDie);
   const services = Layer.mergeAll(
     secrets,
     // The follower registers each plugin's agent directory off the catalog.
@@ -382,7 +366,7 @@ export function ownerProcessLayer(
     Layer.sync(RouteRetries, makeRetryGate),
   ).pipe(
     Layer.provideMerge(appState.pipe(Layer.orDie)),
-    Layer.provideMerge(Layer.merge(identity, AppSignals.layer)),
+    Layer.provideMerge(AppSignals.layer),
   );
   return sessionOwnerLayer.pipe(
     Layer.provideMerge(SessionMap.layer),

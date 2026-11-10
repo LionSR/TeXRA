@@ -4,9 +4,8 @@
  * `sessionViewInput.ts`.
  *
  * Every durable arm rides one envelope: the aggregate it belongs to, its
- * per-aggregate `seq`, the store-local `commit` cursor, the writing `origin`
- * and the publish clock; its durable identity is its aggregate's `uid` and
- * its `seq`. The arms mirror the trace (`AgentEvent`) shapes field for field
+ * per-aggregate `seq`, the store-local `commit` cursor and the publish
+ * clock; its durable identity is its aggregate's `uid` and its `seq`. The arms mirror the trace (`AgentEvent`) shapes field for field
  * where the fold reads them, so a publisher translates by naming fields.
  *
  * One run owns one aggregate, `('run', runId)`:
@@ -23,7 +22,6 @@ import { Schema, Struct, Tuple } from 'effect';
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
-  OwnerIdSchema,
   aggregateTarget,
   qualifyAggregateId,
   type AggregateId,
@@ -78,9 +76,6 @@ export type CommitOrdinal = typeof CommitOrdinalSchema.Type;
 const envelope = {
   seq: SeqSchema,
   commit: CommitOrdinalSchema,
-  /** The process that appended the row (not the aggregate's claim holder);
-   *  null for the trace viewer's reconstruction, which has no writer. */
-  origin: Schema.NullOr(OwnerIdSchema),
   /** The publish clock in whole milliseconds: the store keeps it in an
    *  `INTEGER` column of a `STRICT` table, so the vocabulary states that
    *  rule here and the substrate restates it nowhere. */
@@ -162,8 +157,7 @@ export type RunParent = typeof RunParentSchema.Type;
 /**
  * Where a run's history came from, when not from its own launch: a fork
  * copies the model view of run `from` at its settled `seq` `at`. Resume is
- * not a provenance; it is the same run. (Not `origin`: the envelope's
- * `origin` is the process that wrote the row.)
+ * not a provenance; it is the same run.
  */
 const RunProvenanceSchema = Schema.Union([
   Schema.Struct({
@@ -309,7 +303,7 @@ const DisplayRowDraftSchema = Schema.Union([
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
   /**
-   * The loop's position: family, `at`, and coordinates. The one run-history
+   * The loop's position: `at`, and its coordinates. The one run-history
    * row renderers read: the fold derives the live phase from it (`waiting`
    * parks the run, any other position is running) and `RunView.position`
    * carries its coordinates; its five siblings below are run-history-private.
@@ -326,8 +320,8 @@ const DisplaySessionEventDraftSchema = Schema.Union([
   ...DisplayRowDraftSchema.members,
 ]);
 /** The run's private records, read by the runtime and never by a renderer
- *  (`isDisplayRow`). `followup.closed`: its input is closed until a
- *  claim reopens it or it activates again. */
+ *  (`isDisplayRow`). `followup.closed`: its input is closed until it
+ *  activates again. */
 const RunRecordEventDraftSchema = Schema.Union([
   durable('run.report', { report: Schema.NullOr(Schema.String) }),
   /** How a process run's command exited, written with its end; a stop
@@ -336,9 +330,11 @@ const RunRecordEventDraftSchema = Schema.Union([
   durable('followup.closed', {}),
 ]);
 /**
- * The run history's private rows: the byte-exact conversation and the loop's durable state (its hooks'
- * outcomes included), read only by `applyRunRows` through `RunHistory`. Never
- * redacted, on a renderer's transport or in the cold listing.
+ * The run history's private rows: the byte-exact conversation and the loop's
+ * durable state (its hooks' outcomes included), read by `applyRunRows`
+ * through `RunHistory`. None reaches a renderer: a display read shows a
+ * call's `tool.intent` and `tool.result` as its tool card and a priced row
+ * as a `usage` row, never the row itself.
  */
 const RunHistoryEventDraftSchema = Schema.Union([
   durable('model.message', { payload: ModelMessagePayloadSchema }),
@@ -379,7 +375,7 @@ export type SessionRow = typeof SessionRowSchema.Type;
 /**
  * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
  * it lives on. The publisher stamps the rest of the envelope
- * (`seq`, `commit`, `origin`, `at`) under its permit; no caller passes them.
+ * (`seq`, `commit`, `at`) under its permit; no caller passes them.
  * Parsing a draft removes caller-supplied envelope fields before storage.
  */
 export type SessionRowDraft = typeof SessionRowDraftSchema.Type;

@@ -116,7 +116,6 @@ export type {
   ModelAvailabilityKind,
   ModelBackend,
   NormalizedToolUse,
-  OwnerId,
   RequestPayload,
   Persona,
   ProposalFileGroup,

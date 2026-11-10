@@ -56,7 +56,6 @@ const sourceFiles = (tree) =>
 const PREDICATES = [
   'Cause.hasInterrupts',
   'Cause.squash',
-  'ownedHere',
   'readOnly',
   'parentId',
   'withPerKeyLane',

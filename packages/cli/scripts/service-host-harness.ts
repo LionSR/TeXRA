@@ -20,10 +20,8 @@ import { GlobalValues } from '@texra-ai/harness/host';
 import { nodePlatformServices } from '@texra-ai/harness/node';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   linkService,
   requestOnService,
@@ -43,7 +41,6 @@ const globalValues = Layer.effect(
   Effect.map(GlobalDatabase, (database) => database.values),
 ).pipe(
   Layer.provide(globalDatabaseLayer(resolveGlobalStoragePath(storageRoot))),
-  Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
   Layer.provide(nodePlatformServices),
   Layer.orDie,
 );

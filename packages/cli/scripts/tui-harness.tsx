@@ -663,13 +663,13 @@ function seedStanding(runId: RunId, standing: SeededStanding): void {
     publish({
       type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', at: 'waiting' },
+      payload: { at: 'waiting' },
     });
   } else {
     publish({
       type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
+      payload: { at: 'turn.begin', turn: 1 },
     });
   }
 }

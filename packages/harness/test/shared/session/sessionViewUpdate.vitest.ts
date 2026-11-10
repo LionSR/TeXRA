@@ -135,7 +135,7 @@ const toolTurn = toolUseTurn(RUN_HISTORY_RUN);
 /** Where the loop stands: its first position opens the run. */
 const position = (at: string, turn: number) => ({
   type: 'run.position',
-  payload: { family: 'toolUse', at, turn },
+  payload: { at, turn },
 });
 const message = (payload: Record<string, unknown>) => ({
   type: 'model.message',
@@ -159,7 +159,6 @@ const runHistoryRow = (
         ),
         seq: commit,
         commit,
-        origin: null,
         at: 0,
       }),
     ]),
@@ -173,7 +172,6 @@ const rowAccepted = (draft: Record<string, unknown>): boolean =>
       ...draft,
       seq: 1,
       commit: 1,
-      origin: null,
       at: 0,
     }),
   );
@@ -196,7 +194,6 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
   {
     type: 'run.position',
     payload: {
-      family: 'toolUse',
       at: 'turn.end',
       turn: 1,
       outcome: 'completed',
@@ -245,11 +242,7 @@ describe('applyRunRows', () => {
             }),
             {
               type: 'tool.intent',
-              payload: {
-                origin: { kind: 'response', responseId: toolTurn.responseId },
-                callId: '__proto__',
-                attempt: 1,
-              },
+              payload: { ...toolTurn.intent.payload, callId: '__proto__' },
             },
           ),
         );

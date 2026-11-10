@@ -197,7 +197,7 @@ export function makeRunTrace({
 /** The rows a trace event is stored as: every one but the chunk's. */
 const STORED_TRACE: ReadonlySet<string> = new Set(TRACE_ROW_TYPES);
 /** The columns the store adds to a trace event's row. */
-const ENVELOPE = ['aggregateId', 'seq', 'commit', 'origin', 'at'] as const;
+const ENVELOPE = ['aggregateId', 'seq', 'commit', 'at'] as const;
 
 /**
  * A run's trace read back from its session's view inputs, for every reader
@@ -243,8 +243,11 @@ export function replayTrace<E>(
     /** The inputs until `replay.complete`, which a watch can split over
      *  frames; null once read. */
     let history: SessionViewInput[] | null = [];
-    /** Rows at or below this `seq` are read, or precede the activation. */
+    /** Rows below this `seq` are read, or precede the activation; at it, the
+     *  rows of the kinds in `kinds` are. One `seq` can hold two rows: a
+     *  priced row and the `usage` row the store projects from it. */
     let seq = -1;
+    const kinds = new Set<DisplayRow['type']>();
     /** Each open stream's or card's text so far; null once it ended, when
      *  its final text or result holds the rest. */
     const text = new Map<string, string | null>();
@@ -266,8 +269,10 @@ export function replayTrace<E>(
     };
     /** A row of the run as the trace events it stands for. */
     const eventsOf = (row: DisplayRow): AgentEvent[] => {
-      if (row.seq <= seq) return [];
+      if (row.seq < seq || (row.seq === seq && kinds.has(row.type))) return [];
+      if (row.seq > seq) kinds.clear();
       seq = row.seq;
+      kinds.add(row.type);
       // Its end, the next activation, or the run's removal ends the read.
       ended ||= row.type === 'run.removed' || boundsLifecycle(row, runId);
       if (!STORED_TRACE.has(row.type)) return [];
@@ -311,14 +316,18 @@ export function replayTrace<E>(
       const read = history;
       history = null;
       // The lifecycle the reader's activation is in starts at its
-      // `run.activate`, whether or not it has ended since.
-      seq =
-        read.findLast(
-          (input): input is Extract<SessionViewInput, { _tag: 'event' }> =>
-            own(input) &&
-            input.event.commit <= activation &&
-            input.event.type === 'run.activate',
-        )?.event.seq ?? -1;
+      // `run.activate`, whether or not it has ended since. That row is read:
+      // the reader starts after it.
+      const start = read.findLast(
+        (input): input is Extract<SessionViewInput, { _tag: 'event' }> =>
+          own(input) &&
+          input.event.commit <= activation &&
+          input.event.type === 'run.activate',
+      )?.event;
+      if (start !== undefined) {
+        seq = start.seq;
+        kinds.add(start.type);
+      }
       return read.flatMap(readInput);
     };
     const over = Effect.exit(result).pipe(

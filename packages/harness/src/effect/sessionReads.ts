@@ -3,8 +3,7 @@
  * vocabulary: its view (levels, a fold reader's inputs, a cold fold, the
  * display rows), one run's committed records, the runs this process holds,
  * the user's run listing and its deletion, and the notices it presents. No
- * row type the run history keeps private, no store facet and no claim leaves
- * here.
+ * row type the run history keeps private and no store facet leaves here.
  */
 import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 

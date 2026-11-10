@@ -107,11 +107,10 @@ export class SessionInbox {
     this.port = port;
   }
 
-  /** Append one message to the run's input in one job under its claim:
-   *  refused, writing nothing, when the input is closed with no reader here
-   *  or another live process holds the run; a replay writes nothing. A row
-   *  no reader here takes is the sender's to wake the run for, when
-   *  {@link owesResume}. */
+  /** Append one message to the run's input in one job: refused, writing
+   *  nothing, when the input is closed with no reader here; a replay writes
+   *  nothing. A row no reader here takes is the sender's to wake the run
+   *  for, when {@link owesResume}. */
   send(
     runId: RunId,
     item: InboxItem,

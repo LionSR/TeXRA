@@ -28,12 +28,10 @@ import {
   StoredOriginSchema,
   StoredTurnSchema,
 } from './storedTurn';
+import { ToolCardSchema } from './toolCard';
 import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
 
 /* ------------------------------------------------------------------ ids */
-
-const RunFamilySchema = Schema.Literals(['toolUse']);
-export type RunFamily = typeof RunFamilySchema.Type;
 
 /**
  * One completed provider turn. Runtime-minted when the response row is
@@ -98,7 +96,6 @@ export type PositionAt = typeof PositionAtSchema.Type;
  *  the turn it stands in: the one record of the loop's position, which the
  *  fold projects to `RunState.phase` and `RunView.position`. */
 export const RunPositionPayloadSchema = Schema.Struct({
-  family: RunFamilySchema,
   at: PositionAtSchema,
   turn: Schema.optional(
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
@@ -130,9 +127,9 @@ const DispatchFactsSchema = Schema.Struct({
   /** The primary this call duplicates. A duplicate never executes and never
    *  reapplies its primary's effects. */
   duplicateOf: Schema.NullOr(CallIdSchema),
-  /** The call's card id, minted with the response: a slow tool's card opens
-   *  under it before the call runs, a fast tool's opens and closes with the
-   *  settlement, and a resumed settlement closes the same card. */
+  /** The call's card id, minted with the response: the card opens under it
+   *  when the call's body starts, and its result closes that card, a
+   *  resumed call's too. */
   logId: Schema.String.check(Schema.isMinLength(1)),
 });
 export type DispatchFacts = typeof DispatchFactsSchema.Type;
@@ -378,7 +375,9 @@ const ToolIntentOriginSchema = Schema.Union([
 ]);
 
 /** One call's body starts: committed after its PreToolUse hooks, guard and
- *  approval, so before it nothing of the attempt ran and after it the body may. */
+ *  approval, so before it nothing of the attempt ran and after it the body
+ *  may. It is also the call's card opening: a display read shows the row as
+ *  a `tool.start` of these fields, so no card row is stored beside it. */
 export const ToolIntentPayloadSchema = Schema.Struct({
   origin: ToolIntentOriginSchema,
   callId: CallIdSchema,
@@ -386,6 +385,18 @@ export const ToolIntentPayloadSchema = Schema.Struct({
    *  for a call whose saved and current declarations both say `safe`. An
    *  earlier approval never authorizes another attempt implicitly. */
   attempt: Schema.Int.check(Schema.isGreaterThan(0)),
+  /** The call's card id and tool, as its dispatch fact or `script.call`
+   *  names them: the row shows its card with no other row read. */
+  logId: Schema.String.check(Schema.isMinLength(1)),
+  toolName: Schema.String.check(Schema.isMinLength(1)),
+  /** What the body runs on: the issued input as the call's PreToolUse hooks
+   *  left it. */
+  input: JsonValueSchema,
+  /** The card the tool states for that input (`ToolDefinition.card`). */
+  card: Schema.optional(ToolCardSchema),
+  /** A script's call: the guest's latest `section()` title when it issued
+   *  the call (`script.call.section`). */
+  section: Schema.optional(Schema.String),
 });
 
 /* ------------------------------------------------------------ tool.result */
@@ -393,12 +404,19 @@ export const ToolIntentPayloadSchema = Schema.Struct({
 /**
  * One call's settlement: what it returned and the attachments captured with
  * it. What the call did to the run (the files it edited, that it ran) is
- * folded from these fields, never restated beside them.
+ * folded from these fields, never restated beside them, and so is what its
+ * card shows: a display read shows the row as the `tool.end` of `logId`,
+ * with this output and the files `result.edits` names.
  */
 export const ToolResultPayloadSchema = Schema.Struct({
   responseId: ResponseIdSchema,
   callId: CallIdSchema,
   attempt: Schema.Int.check(Schema.isGreaterThan(0)),
+  /** The card the result closes; null for a call that shows none: a
+   *  duplicate, a script's host function, and a call no body ever started
+   *  that is reported, not run (left untouched in a recovered response,
+   *  after the turn's end, or when its script ended). */
+  logId: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
   /** How the call ended, read as a fact, never matched from the English
    *  prose of an error message. */
   disposition: Schema.Literals(['executed', 'failed', 'skipped', 'duplicate']),

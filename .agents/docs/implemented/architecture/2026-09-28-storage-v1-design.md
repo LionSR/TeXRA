@@ -9,6 +9,14 @@ release step remains: the first release that promises its rows runs
 Owner ruling (2026-09-28): "we really should have the cleanest design before
 v1.0 because I don't want to rewrite this again."
 
+What the store does today is specified in
+[`packages/harness/docs/spec.md`](../../../../packages/harness/docs/spec.md),
+which is checked against the code; its tables are `storeSchema.ts`. This note
+owns the 1.0 decisions and their reasons (§13, and the alternatives each
+section rejects). Where a description here differs from the spec (the schema
+numbers, the DDL listing, the open sequence, the projections), the spec is
+right.
+
 ## Summary
 
 This is the session store's 1.0 format. From the first release on, the store
@@ -38,7 +46,7 @@ release shipped.
  projections      projectors (listing, usage, model)               (pure TS over decoded events)
                           ▲
  history &        SessionEvents inbox (one publisher) → Database.appendAll
- publisher        (seq, commit, claims, lifecycle edges, executes projector ops)
+ publisher        (seq, commit, lifecycle edges, executes projector ops)
                           ▲ typed drafts in, typed events out
  row codec        rowCodec.ts + rowVersions.ts                     (the only stored-shape knowledge)
                           ▲ column tuples
@@ -46,14 +54,14 @@ release shipped.
                   SQLite file (WAL)
 ```
 
-| Layer                   | Module (under `packages/harness/src/controllers/session/` unless noted)                                   | May know                                                                                                                             | Must not know                                                    |
-| ----------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| Physical store          | `storeSchema.ts`, `storeAside.ts`                                                                         | tables, columns, indexes, PRAGMAs, `SCHEMA_VERSION`, file moves                                                                      | any payload field; any row kind                                  |
-| Row codec               | `rowCodec.ts`, `rowReader.ts`; the registry in `packages/harness/src/shared/schemas/rowVersions.ts`       | `type` and `version` columns, the `data` JSON layout, blob externalization, the (kind, logical id) ↔ `AggregateId` mapping, the gate | SQL statements beyond its column lists; fold semantics           |
-| Run history / publisher | `Database.ts` (the one writer), `packages/harness/src/agent/runtime/SessionEvents.ts` (the one publisher) | envelopes (seq, commit, origin, at), claims, aggregate lifecycle edges, transactions                                                 | stored shapes: it hands drafts to the codec and gets events back |
-| Projections             | `projections.ts`                                                                                          | its own tables and versions; `listingKeyOf`, `pendingKeyOf`, `sumUsageStats`                                                         | `event.data`: it reads decoded events only                       |
-| Folds                   | `packages/harness/src/shared/session/{sessionViewUpdate,runState,transcriptUpdate}.ts`                    | payload fields                                                                                                                       | columns, versions, SQL                                           |
-| Current values          | `currentValues.ts`                                                                                        | `current_value`, `input_history`, family schemas                                                                                     | events                                                           |
+| Layer                   | Module (under `packages/harness/src/controllers/session/` unless noted)                                             | May know                                                                                                                             | Must not know                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Physical store          | `storeSchema.ts`, `storeAside.ts`                                                                                   | tables, columns, indexes, PRAGMAs, `SCHEMA_VERSION`, file moves                                                                      | any payload field; any row kind                                  |
+| Row codec               | `rowCodec.ts`, `rowReader.ts`; the registry in `packages/harness/src/shared/schemas/rowVersions.ts`                 | `type` and `version` columns, the `data` JSON layout, blob externalization, the (kind, logical id) ↔ `AggregateId` mapping, the gate | SQL statements beyond its column lists; fold semantics           |
+| Run history / publisher | `databaseLayer.ts` (the one writer), `packages/harness/src/agent/runtime/sessionEventsLayer.ts` (the one publisher) | envelopes (seq, commit, at), aggregate lifecycle edges, transactions                                                                 | stored shapes: it hands drafts to the codec and gets events back |
+| Projections             | `projections.ts`                                                                                                    | its own tables and versions; `listingKeyOf`, `pendingKeyOf`, `sumUsageStats`                                                         | `event.data`: it reads decoded events only                       |
+| Folds                   | `packages/harness/src/shared/session/{sessionViewUpdate,runState,transcriptUpdate}.ts`                              | payload fields                                                                                                                       | columns, versions, SQL                                           |
+| Current values          | `currentValues.ts`                                                                                                  | `current_value`, `input_history`, family schemas                                                                                     | events                                                           |
 
 **Two invariants.** Nothing above the codec sees a stored shape: no
 `'<type>.<N>'` string, no integer aggregate id, no `data` text, no `blob`
@@ -77,7 +85,7 @@ Two ratchets enforce them:
     store.
 - **`src/test-kernel/architecture/persistenceWriteBoundary.vitest.ts`.**
   - Every run history table (`event`, `event_sequence`, `event_blob`, `blob`,
-    `stored_kind`) and every projection table has one writer, `Database.ts`.
+    `stored_kind`) and every projection table has one writer, `databaseLayer.ts`.
   - `current_value` and `input_history` have their own single writer,
     `currentValues.ts`.
 
@@ -153,7 +161,6 @@ CREATE TABLE event_sequence (
   uid          TEXT NOT NULL UNIQUE,          -- durable identity across machines and incarnations
   seq          INTEGER NOT NULL CHECK (seq >= 1),
   start_commit INTEGER,                       -- commit of seq 1, set in the creating transaction
-  owner_id     TEXT,                          -- the claim (C5)
   parent_id    INTEGER REFERENCES event_sequence(id) ON DELETE CASCADE,
   closed_by    INTEGER,                       -- the tombstone's commit; NULL while open
   UNIQUE (kind, logical_id)
@@ -170,7 +177,6 @@ CREATE TABLE event (
   seq       INTEGER NOT NULL,
   type      TEXT NOT NULL,
   version   INTEGER NOT NULL CHECK (version >= 1),
-  origin    TEXT NOT NULL,
   at        INTEGER NOT NULL,
   data      TEXT NOT NULL,                              -- large strings as {"$b": digest}
   UNIQUE (aggregate, seq)
@@ -612,8 +618,11 @@ interface PluginArm {
 
 ## 8. Concurrency and host threading
 
-- **Busy wait.** The open keeps `busyTimeout: '5 seconds'` (the WAL ordering
-  needs it), then sets `busy_timeout = 25`.
+- **Busy wait.** A project store is held by the one process that opened it
+  (`locking_mode = EXCLUSIVE`): its open passes `busyTimeout: 0`, so a store
+  another process holds is refused at once, never waited for. The global
+  store, which processes share, opens with `busyTimeout: '5 seconds'` (the
+  WAL ordering needs it). Either then sets `busy_timeout = 25`.
   - Each transaction and read retries (`retryBusy`, `storeAside.ts`) only on
     `SQLITE_BUSY` and `SQLITE_LOCKED`.
   - The schedule is exponential from 5 ms, jittered, each sleep capped at 250
@@ -621,12 +630,9 @@ interface PluginArm {
   - Every transaction body is database-only, so re-running it is safe.
   - Other fibers run between attempts, so a lock another process holds never
     freezes the Electron main process or the extension host.
-- **Monotonic `observedCommit`.** Both the poll and the write path call
-  `SubscriptionRef.update(observedCommit, (c) => Math.max(c, commit))`, so a
-  poll that read the high-water mark before a local commit cannot set it
-  backwards.
-- **`data_version` polling** at 250 ms, one PRAGMA per tick per connection. The
-  alternatives were rejected:
+- **`data_version` polling** at 250 ms, one PRAGMA per tick, on the global
+  store alone: a project store has no other writer, and its holder learns
+  what it committed from its own publisher. The alternatives were rejected:
   - `sqlite3_update_hook` and commit hooks see only their own connection, and
     `node:sqlite` does not expose them.
   - `fs.watch` on `-wal` has no ordering, fires on checkpoints, and differs by
@@ -634,17 +640,12 @@ interface PluginArm {
     learn what changed.
   - A socket broadcast between processes is a second channel that can drift from
     the store.
-  - A background service is not the store's only process: the desktop and VS
-    Code windows run their tasks in `texra serve` when they reach it
-    (`packages/cli/src/runtime/cliService.ts`), but a headless `texra run`, an
-    SDK embedder and a window that cannot reach the service open the store
-    themselves, so the poll stays.
 - **Typed failures.** `DatabaseOpenFailed`, `DatabaseReadFailed` and
   `DatabaseWriteFailed` carry the store's path and the SQL cause; their message
   adds SQLite's own reason (`database is locked`). The gate and the codec raise
   `DatabaseStoreNewer`, `DatabaseRowCorrupt` and `DatabaseRowEarlier`. A row or
   draft that contradicts the store's own protocol is a defect (`invariant` in
-  `Database.ts`).
+  `databaseLayer.ts`).
 - **Worker thread: not taken.**
   - Every hot query uses an index, transactions are short and do no I/O, and the
     projections turn the heaviest statement (the listing's grouped JSON
@@ -655,50 +656,58 @@ interface PluginArm {
   - **Decided (Q5): the worker is deferred past 1.0.** It is taken only if a
     measured host event-loop stall attributable to the database exceeds 100 ms.
 
-## 9. Module split for `Database.ts`
+## 9. Module split for `databaseLayer.ts`
 
 The store splits by real owners only. Each module owns tables or a stored
 contract and has more than one consumer.
 
-| Module             | Owns                                                                                                                          |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `Database.ts`      | the connection, transactions, seq/commit/claims, lifecycle edges, deletion and collection, the reads, the `data_version` poll |
-| `storeSchema.ts`   | DDL, PRAGMAs, `SCHEMA_VERSION`, the open sequence, the pre-1.0 and corrupt moves, page reclaim                                |
-| `storeAside.ts`    | aside copies and their names, the busy retry, proving claim owners off the write lock, the damaged-file test                  |
-| `rowCodec.ts`      | encode, decode, upcast, blob externalization, aggregate id mapping, the store gate                                            |
-| `rowReader.ts`     | one connection's reader of selected rows, the runs it cannot open and why, and the tool cards' read-time output (§10)         |
-| `projections.ts`   | the three projectors, their tables' SQL, their versions and catch-up                                                          |
-| `currentValues.ts` | `current_value`, `input_history`, and the values' change feed                                                                 |
+| Module             | Owns                                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `databaseLayer.ts` | the connection, transactions, seq and commit, lifecycle edges, deletion and collection, the reads, the `data_version` poll |
+| `storeSchema.ts`   | DDL, PRAGMAs, `SCHEMA_VERSION`, the open sequence, the pre-1.0 and corrupt moves, page reclaim                             |
+| `storeAside.ts`    | aside copies and their names, the busy retry, the damaged-file test                                                        |
+| `rowCodec.ts`      | encode, decode, upcast, blob externalization, aggregate id mapping, the store gate                                         |
+| `rowReader.ts`     | one connection's reader of selected rows, the runs it cannot open and why, and the tool card a call's rows show (§10)      |
+| `projections.ts`   | the three projectors, their tables' SQL, their versions and catch-up                                                       |
+| `currentValues.ts` | `current_value`, `input_history`, and the values' change feed                                                              |
 
-- **The deletion lifecycle stays in `Database.ts`.** It writes `event_sequence`,
+- **The deletion lifecycle stays in `databaseLayer.ts`.** It writes `event_sequence`,
   and the write ratchet admits one writer. Moving it beside `deletionCleanup.ts`
   would make a second one.
 - **The aggregate graph is one function.** `edgesOf(draft)`, beside
   `referencedAggregates` in `sessionEvent.ts`, returns the parent to stamp
-  (`run.start`), reparenting and the borrowed claim (a `plugin.fact` on a
-  plugin-owned aggregate), and closure (`run.removed`). Reads and writes share
+  (`run.start`), reparenting (a `plugin.fact` on a plugin-owned aggregate),
+  and closure (`run.removed`). Reads and writes share
   that one statement of the graph.
 
 No module exists only to be called once.
 
 ## 10. Tool output stored once
 
-Decided (owner ruling Q1): tool output is stored once.
+Decided (owner ruling Q1): tool output is stored once. Since the agent-data
+format batch
+([one row per fact](../../proposed/architecture/2026-11-09-agent-data-one-row-per-fact.md))
+the whole card is, not only its output:
 
-- On a run with a run history, `tool.end` keeps `{logId, status, files}` and
-  stores no `result`.
-- The display read already selects the batch, and the `tool.result` rows commit
-  in the same transaction; a commit range never splits a transaction.
-- `settleCards` (`rowReader.ts`) fills the card's output from the `tool.result`
-  committed with it, and the run history row is dropped before anything leaves
-  the store. Renderers, the transcript fold and the history query store see the
-  card with its output; `tool.result` never reaches a transport.
+- On a run with a run history, a call's `tool.intent` names the card its
+  attempt opens (its id, tool, the input the body runs on, the card the tool
+  states) and its `tool.result` the card it closes. The run loop stores no
+  card row beside them.
+- `callCard` (`rowReader.ts`) shows a `tool.intent` as the card's `tool.start`
+  and a `tool.result` as its `tool.end`, with the call's output and the files
+  it edited. It reads one row at a time, so the display read and the
+  publisher's live batch share it, and a display page may end at any row.
+  Renderers, the transcript fold and the history query store see the card;
+  the call rows never reach a transport.
+- A call that ends before its body starts (denied, or its tool not in the
+  run) has no intent: its `tool.start` is stored, in its result's batch.
 - Runs without a run history (the agent-CLI children, whose cards
-  `TraceEmitter.openToolCard` writes) keep `result` on the card.
+  `TraceEmitter.openToolCard` writes) store both rows, `result` on the
+  `tool.end`.
 
-The card is still loop-owned: the run loop writes it, it commits in the
-settlement batch, and there is no tool-side card and no second append path.
-CLAUDE.md "One publisher, loop-owned cards" states the rule.
+There is still no tool-side card and no second append path: the card is the
+loop's own call rows. `packages/harness/AGENTS.md` "Event channels and cards"
+states the rule.
 
 Rejected: keeping both copies and capping `tool.end` at a display preview. Full
 output would then live only in a row renderers may not read.
@@ -760,10 +769,10 @@ constraints on the store.
 
 | #   | Question                               | Decision                                                                                                                                             | Where                       |
 | --- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| Q1  | Tool output stored twice               | Store it once. The `tool.end` card is filled from its `tool.result` at read time. The card stays loop-owned; only its output is projected.           | §10                         |
+| Q1  | Tool output stored twice               | Store it once. A call's card is read off its `tool.intent` and `tool.result`; the loop stores no card row beside them.                               | §10                         |
 | Q2  | Compatibility after 1.0                | From the 1.0 release on, released rows are read forever through upcasters, in the codec only. Before 1.0 the "no compatibility readers" rule stands. | §3; AGENTS.md at the freeze |
 | Q3  | What a pre-1.0 store keeps at the bump | Nothing. The whole store, `current_value` included, moves aside to `.pre1`, and the store starts fully clean.                                        | §3 open sequence            |
 | Q4  | Removing orphaned stores               | Only by an explicit `texra doctor --prune-storage`, never automatically.                                                                             | §7                          |
 | Q5  | Moving SQLite to a worker thread       | Deferred past 1.0. It is taken only if an event-loop reading shows a stall over the 100 ms budget.                                                   | §8                          |
-| Q6  | A daemon owning the store              | Refused (D4). The CLI or SDK process is the unattended runner; several processes share one store, each aggregate held by one claim.                  | §8; ledger                  |
+| Q6  | A daemon owning the store              | Refused (D4). The CLI or SDK process is the unattended runner; a project store is held by one process at a time, with no claim.                      | §8; ledger                  |
 | Q7  | Where a run's retained outputs live    | SQLite (D5). Files are for compiler scratch only.                                                                                                    | §10; ledger                 |

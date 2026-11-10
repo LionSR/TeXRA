@@ -7,8 +7,6 @@ import { Effect, Layer } from 'effect';
 import { GlobalDatabase } from '@texra-ai/harness/node';
 import { loadInputHistory } from '@cli/chat/tui/history/inputHistory';
 import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
@@ -22,7 +20,6 @@ const onGlobalDatabase = <A, E>(
   effect.pipe(
     Effect.provide(
       globalDatabaseLayer(storage).pipe(
-        Layer.provide(ProcessIdentity.layer(processOwnerId('vitest'))),
         Layer.provide(nodePlatformLayer),
         Layer.orDie,
       ),

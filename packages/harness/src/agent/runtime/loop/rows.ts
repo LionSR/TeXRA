@@ -21,7 +21,6 @@ import {
   type RunId,
   type RunInput,
   type RunOutcome,
-  type SessionRowDraft,
 } from '@shared/schemas';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
@@ -76,7 +75,6 @@ export function positionRow(
     type: 'run.position',
     aggregateId: qualifyAggregateId('run', runId),
     payload: {
-      family: 'toolUse',
       at,
       turn: state.turn,
       ...(outcome !== undefined && { outcome }),
@@ -131,20 +129,6 @@ export function configRow(
     config: { ...config, model },
     binding,
   };
-}
-
-/** Each case of a draft union keeps its own required fields. */
-type Unqualified<T> = T extends unknown ? Omit<T, 'aggregateId'> : never;
-
-/** A display row the loop commits atomically with a run history row: the card a
- *  tool call opens, closes, or both, in the batch that settles it. */
-export function displayRow(
-  runId: RunId,
-  draft: Unqualified<
-    Extract<SessionRowDraft, { type: 'tool.start' | 'tool.end' }>
-  >,
-): RunHistoryDraft {
-  return { ...draft, aggregateId: qualifyAggregateId('run', runId) };
 }
 
 /** The tool a script's run calls: `script`, whatever launched the run. */

@@ -203,9 +203,8 @@ function record(d: Draft, event: TraceRowFields): void {
       if (slot?.kind !== 'tool') return;
       const inProgress = event.status === TOOL_CALL_STATUS.IN_PROGRESS;
       if (inProgress && !ix.activeTools.has(event.logId)) return;
-      // On a run with a run history, the card's output is projected from its
-      // `tool.result` and names no tool, input or card: those are the ones
-      // its `tool.start` opened.
+      // The end carries the call's output and names no tool, input or card:
+      // those are the ones its `tool.start` opened.
       const result: Record<PropertyKey, unknown> = Predicate.isObject(
         event.result,
       )

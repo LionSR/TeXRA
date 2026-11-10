@@ -20,7 +20,6 @@ import {
   type CommitOrdinal,
   type HookOutcomes,
   type JsonValue,
-  type ModelBackend,
   type DeclinableUsageRoute,
   type OfferedTool,
   type PositionAt,
@@ -51,8 +50,9 @@ import type { RunRowState } from './runRowsShape';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 
 /** The rows `RunCell.append` commits: the run history rows, and the display
- *  rows a batch commits with them (a tool's card with its `tool.result`, a
- *  child's result with its boundary), which apart would be crash windows. */
+ *  rows a batch commits with them (the card of a call that ended before its
+ *  body started with its `tool.result`, a child's result with its boundary),
+ *  which apart would be crash windows. */
 export type RunHistoryDraft = Live<
   Extract<SessionRowDraft, { type: RunHistoryDraftType }>
 >;
@@ -74,7 +74,7 @@ type RunHistoryDraftType =
   | 'request.decided'
   | 'followup.queued'
   | 'followup.consumed'
-  | CardRowType;
+  | UnreadRowType;
 
 export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsistent>()(
   'RunHistoryInconsistent',
@@ -138,8 +138,9 @@ export type RunState = RunRowState &
     readonly phase: RunLoopPhase | null;
     /** The model the run is on: its newest `run.config`'s. */
     readonly modelId: string | null;
-    /** The backend that config's `binding` names; null before the run binds. */
-    readonly backend: ModelBackend | null;
+    /** The backend that config's `binding` names, as written; null before
+     *  the run binds. */
+    readonly backend: string | null;
     /** The failure that stopped the turn's invocation or that a person was
      *  asked about, until a response or the input of a new turn clears it. */
     readonly lastError: ModelFailure | null;
@@ -191,17 +192,22 @@ export type RunState = RunRowState &
     readonly hookOutcomes: HookOutcomes;
   };
 
-/** Display rows a batch commits together with run history rows; the run
- *  state ignores them. */
-type CardRowType = CardType | ResultType | EndType | 'plugin.fact';
-type CardType = 'tool.start' | 'tool.end' | 'stage.start' | 'stream.end';
-type ResultType = 'run.report' | 'process.exit';
-type EndType = 'stage.end' | 'followup.closed'; // and what it closes
+/** The rows a batch commits beside run history rows, which the run state
+ *  does not read: the card of a call that ended before its body started, a
+ *  stream's close, a run's report and process exit, its input's close, and
+ *  a plugin's fact. */
+type UnreadRowType =
+  | 'tool.start'
+  | 'stream.end'
+  | 'run.report'
+  | 'process.exit'
+  | 'followup.closed'
+  | 'plugin.fact';
 /** The row types the run state reads, each with a handler in
  *  `ROW_HANDLERS`. A run's input is not among them: the inbox reads it. */
 export type RunStateRowType = Exclude<
   SharedRunRow['type'] | RunHistoryDraft['type'] | 'run.activate',
-  CardRowType | 'followup.queued' | 'followup.consumed'
+  UnreadRowType | 'followup.queued' | 'followup.consumed'
 >;
 /** The drafts any job may commit without the run's cell: the ones the run
  *  state does not read (a run's input and the display rows above), and the
@@ -212,8 +218,8 @@ export type RunInputDraft = Exclude<
   { type: Exclude<RunStateRowType, 'run.end' | 'run.stop'> }
 >;
 
-/** The state a run starts from: every field at its zero, no family bound
- *  yet. The run program opens from this and stamps its family. */
+/** The state a run starts from: every field at its zero. The run program
+ *  opens from this. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunRowState(),
   commit,

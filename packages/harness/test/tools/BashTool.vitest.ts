@@ -83,7 +83,7 @@ async function parkRunWaiting(
       {
         type: 'run.position',
         aggregateId: qualifyAggregateId('run', runId),
-        payload: { family: 'toolUse', at: 'waiting' },
+        payload: { at: 'waiting' },
       },
     ]),
   );
