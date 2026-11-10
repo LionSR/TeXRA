@@ -201,9 +201,31 @@ export class RunRegistry implements RunsShape {
   /** The children one parent's detach covers: each run held here whose
    *  edge names the parent. */
   private childRunIds(parentRunId: RunId): Effect.Effect<readonly RunId[]> {
-    return Effect.filter(this.heldIds(), (id) =>
+    return this.heldWhere((id) =>
       Effect.map(this.attachedParent(id), (parent) => parent === parentRunId),
     );
+  }
+
+  /** The runs held here that `matches`, read from the store. The reads
+   *  yield, so a launch can arrive during them: the answer is read again
+   *  until it is of the runs held as it is given. */
+  private heldWhere(
+    matches: (runId: RunId) => Effect.Effect<boolean>,
+  ): Effect.Effect<readonly RunId[]> {
+    return Effect.suspend(() => {
+      const held = this.heldIds();
+      return Effect.flatMap(Effect.filter(held, matches), (matching) =>
+        this.heldSince(held)
+          ? Effect.succeed(matching)
+          : this.heldWhere(matches),
+      );
+    });
+  }
+
+  /** Whether the runs held here are still exactly `held`. */
+  private heldSince(held: readonly RunId[]): boolean {
+    const now = this.heldIds();
+    return now.length === held.length && now.every((id) => held.includes(id));
   }
 
   /** The run's attached parent, as the store holds it at this call (the
@@ -236,7 +258,7 @@ export class RunRegistry implements RunsShape {
    *  edges: an ended run between them hides none. What a stop covers, and
    *  what keeps a run's input open and its rows in place. */
   private heldUnder(runId: RunId): Effect.Effect<readonly RunId[]> {
-    return Effect.filter(this.heldIds(), (id) =>
+    return this.heldWhere((id) =>
       Effect.map(this.ancestorsOf(id), (line) => line.includes(runId)),
     );
   }
@@ -256,26 +278,44 @@ export class RunRegistry implements RunsShape {
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | RunLive, R> {
-    return Effect.flatMap(this.hasLiveDescendants(runId), (descendants) => {
-      if (this.liveRun(runId) !== undefined || descendants)
-        return Effect.fail(new RunLive({ runId }));
-      const held = this.busy.get(runId);
-      if (held !== undefined)
-        return Effect.andThen(
-          Deferred.await(held),
-          this.withInactiveRun(runId, operation),
-        );
-      const done = Deferred.makeUnsafe<void>();
-      this.busy.set(runId, done);
-      return operation.pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            this.busy.delete(runId);
-            Deferred.doneUnsafe(done, Effect.void);
-          }),
-        ),
+    return Effect.suspend(() => {
+      const held = this.heldIds();
+      return Effect.flatMap(this.hasLiveDescendants(runId), (descendants) =>
+        // From here to the exclusion nothing yields: a launch that arrived
+        // while the edges were read is checked again first.
+        this.heldSince(held)
+          ? this.excluding(runId, descendants, operation)
+          : this.withInactiveRun(runId, operation),
       );
     });
+  }
+
+  /** {@link withInactiveRun}'s step once its descendants are read: it
+   *  checks and takes the exclusion as it is called, so nothing yields
+   *  between the two. */
+  private excluding<A, E, R>(
+    runId: RunId,
+    descendants: boolean,
+    operation: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | RunLive, R> {
+    if (this.liveRun(runId) !== undefined || descendants)
+      return Effect.fail(new RunLive({ runId }));
+    const held = this.busy.get(runId);
+    if (held !== undefined)
+      return Effect.andThen(
+        Deferred.await(held),
+        this.withInactiveRun(runId, operation),
+      );
+    const done = Deferred.makeUnsafe<void>();
+    this.busy.set(runId, done);
+    return operation.pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          this.busy.delete(runId);
+          Deferred.doneUnsafe(done, Effect.void);
+        }),
+      ),
+    );
   }
 
   /** The stop asked of `runId` while its opening commits, if one was: an
