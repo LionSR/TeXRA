@@ -103,8 +103,11 @@ Done, eight of the ten sites:
 - `wakeRun`, `presentTerminalResult`, the hooks' session
   id and the child-output check read `SessionLog.facts`, whose `parent` is
   the attached edge.
-- A task's cost reads its children from the store: `SessionLog.children`,
-  the one new read (`event_sequence.parent_id`, already indexed).
+- A task's cost reads its children from `view.read` too. A first version
+  added a store query over `event_sequence.parent_id`; that column is
+  written only for a plugin's aggregates, never for a run, so the query
+  answered none and the cost lost every child. A review caught it; no suite
+  covers a task's cost total.
 - The run registry reads every parent edge from the store
   (`attachedParent` is an Effect), so a stop's cascade, a detach and the
   shutdown's roots no longer depend on what the view has applied. It holds

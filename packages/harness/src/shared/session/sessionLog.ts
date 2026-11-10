@@ -99,9 +99,6 @@ export interface SessionLogShape {
    *  requests and pending input left out: a `runRows` read holds those);
    *  null while the store holds no open run under the id. */
   facts(runId: RunId): Effect.Effect<RunRows | null, DatabaseReadFailed>;
-  /** The runs attached to `runId` as the store holds them (a detached
-   *  child is not among them), oldest first. */
-  children(runId: RunId): Effect.Effect<readonly RunId[], DatabaseReadFailed>;
   /** A run's display rows, its priced `usage` rows among them; empty when
    *  the run never existed or was removed. */
   display(

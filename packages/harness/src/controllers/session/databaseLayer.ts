@@ -91,7 +91,6 @@ import {
   PROJECTED_FROM,
   READ_LISTING,
   READ_COMMITS,
-  READ_CHILDREN,
   READ_RUN_RECORD,
   rowReader,
   settleCards,
@@ -757,12 +756,6 @@ export const databaseLayer = (
               ...aggregateColumns(id),
               fromSeq,
             ]).pipe(Effect.map((rows) => rows.filter(isDisplayRow))),
-          ),
-        readChildren: (id) =>
-          query(
-            Effect.map(exec(READ_CHILDREN, aggregateColumns(id)), (rows) =>
-              rows.map((row) => runIdOf(row.logicalId)),
-            ),
           ),
         aggregateState: (ids) => query(readState(ids)),
         readInputBatch: (ids, fromCommit, throughCommit, checkedIds) =>

@@ -9,6 +9,7 @@
  */
 import {
   Cause,
+  Exit,
   Clock,
   Context,
   Effect,
@@ -259,9 +260,16 @@ export const sessionOwnersLayer = (
             Effect.gen(function* () {
               // The parent its last batch delivered to, as the store holds
               // the edge: it outlives the run's fiber.
-              const parent = yield* runs.attachedParent(id);
+              const parent = yield* Effect.exit(runs.attachedParent(id));
               yield* wakeIfOwed(id);
-              if (parent !== null) yield* wakeIfOwed(parent);
+              if (Exit.isFailure(parent))
+                return yield* Effect.logWarning(
+                  `Run ${id}: its parent edge could not be read, so no parent is woken for its last delivery`,
+                ).pipe(
+                  Effect.annotateLogs({ data: Cause.squash(parent.cause) }),
+                  withLogChannel(CHANNEL),
+                );
+              if (parent.value !== null) yield* wakeIfOwed(parent.value);
             }).pipe(Effect.provideService(Runs, runs)),
           ),
       });

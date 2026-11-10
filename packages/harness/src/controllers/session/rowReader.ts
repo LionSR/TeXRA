@@ -90,12 +90,6 @@ export const READ_RUN_RECORD = `SELECT r.record AS record FROM run_record r
   JOIN event_sequence s ON s.id = r.aggregate
   WHERE s.kind = ? AND s.logical_id = ? AND s.closed_by IS NULL
     AND s.start_commit IS NOT NULL`;
-/** The open runs whose parent edge names the aggregate, oldest first. */
-export const READ_CHILDREN = `SELECT c.logical_id AS logicalId
-  FROM event_sequence c JOIN event_sequence p ON p.id = c.parent_id
-  WHERE p.kind = ? AND p.logical_id = ? AND p.closed_by IS NULL
-    AND c.kind = 'run' AND c.closed_by IS NULL
-  ORDER BY c.start_commit, c.id`;
 /** The rows at the commits bound as one `json_each` array. */
 export const READ_COMMITS = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
   WHERE e."commit" IN (SELECT value FROM json_each(?)) ORDER BY e."commit"`;

@@ -230,8 +230,10 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   const children =
     held.config && isTaskConfig(held.config)
       ? yield* Effect.forEach(
-          // The store's edges, not the view's, which trails the log.
-          yield* SessionLog.use((log) => log.children(runId)),
+          // The view rebuilt from the log at this call, not the current
+          // one, which trails it.
+          (yield* (yield* SessionViewAccess).read([])).runs.get(runId)
+            ?.childIds ?? [],
           (child) =>
             Effect.flatMap(
               SessionLog.use((log) => log.facts(child)),
