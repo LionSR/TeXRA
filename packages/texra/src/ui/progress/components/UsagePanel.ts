@@ -319,6 +319,8 @@ export class UsagePanel extends LitElement {
           <span id="usage-route-badge" class="run-summary__route">
             ${shown.badge.compactLabel}
           </span>`;
+      default:
+        return shown satisfies never;
     }
   }
 

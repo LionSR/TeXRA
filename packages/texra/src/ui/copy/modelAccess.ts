@@ -362,5 +362,7 @@ export function usageCostLabel(
       return `Included in ${shown.badge.label}`;
     case 'billed':
       return `${shown.amount} via ${shown.badge.label}`;
+    default:
+      return shown satisfies never;
   }
 }
