@@ -5,10 +5,9 @@
  */
 import { Schema, Struct } from 'effect';
 
-import { JsonObjectSchema } from '../protocol.js';
+import { CountSchema, JsonObjectSchema } from '../protocol.js';
 import { AnthropicRefusalCategorySchema } from '../turn.js';
 
-const CountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 /** A count the API may leave out or send as null. */
 const ReportedCountSchema = Schema.optional(Schema.NullOr(CountSchema));
 const RefusalSchema = Schema.Struct({

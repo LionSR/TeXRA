@@ -22,7 +22,11 @@ import {
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { envFlag } from '@texra-ai/harness/node';
-import { extractErrorMessage, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  extractErrorMessage,
+  formatResultCount,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settingsView/texraSettings';
 import type { AppState, ConfigProvider } from '@texra-ai/harness/host';
@@ -373,7 +377,7 @@ export const usageLogLayer = (
           const dropped = batch.entries.length - kept.length;
           if (dropped > 0) {
             yield* Effect.logDebug(
-              `Usage logging is disabled; dropped ${dropped} ${dropped === 1 ? 'entry' : 'entries'} without sending`,
+              `Usage logging is disabled; dropped ${formatResultCount(dropped, 'entry')} without sending`,
             ).pipe(withLogChannel(CHANNEL));
           }
           if (kept.length === 0) return;
