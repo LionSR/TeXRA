@@ -54,7 +54,7 @@ import {
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
-import { FakeHost, SessionGraph } from '@test/support/testKernel';
+import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -573,7 +573,7 @@ describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
                 return run.runId;
               }),
             );
-            const session = yield* sessions.open(roots, options);
+            const session = yield* TestSession.open(roots, options);
             const resumed = yield* session.resume(runId, { interactive: true });
             const end = yield* Effect.timeout(resumed.result, '20 seconds');
             expect(end.outcome).toBe('completed');
@@ -596,7 +596,7 @@ describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
         () =>
           Effect.gen(function* () {
             const { roots } = yield* FakeHost;
-            const session = yield* (yield* Sessions).open(roots, {
+            const session = yield* TestSession.open(roots, {
               persistent: true,
               host: {},
             });
