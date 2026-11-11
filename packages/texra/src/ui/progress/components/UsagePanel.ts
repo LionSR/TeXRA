@@ -16,7 +16,6 @@ import {
   type ContextStateData,
   type TokenUsageStats,
   formatCompactTokenCount,
-  formatCostUsd,
 } from '@texra-ai/harness/schemas';
 import {
   contextGaugeBand,
@@ -24,7 +23,7 @@ import {
 } from '@texra/shared/contextGauge';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens } from '@ui/styles';
-import { usageCostLabel, usageRouteBadge } from '@ui/copy/modelAccess';
+import { usageCost, usageCostLabel } from '@ui/copy/modelAccess';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 
 // Local imports - shared icons and utils
@@ -266,12 +265,11 @@ export class UsagePanel extends LitElement {
   private renderUsage(): TemplateResult | typeof nothing {
     if (!this.usage) return nothing;
 
-    const { cost } = this.usage;
     const ownShare = this.ownShareLabel();
     // prettier-ignore
     const costRoute = ownShare === undefined
-      ? this.renderCostRoute(cost)
-      : html`<span id="usage-cost" class="token-stat">${this.renderCostRoute(cost)}</span><wa-tooltip for="usage-cost" placement="top-end">${ownShare}</wa-tooltip>`;
+      ? this.renderCostRoute(this.usage)
+      : html`<span id="usage-cost" class="token-stat">${this.renderCostRoute(this.usage)}</span><wa-tooltip for="usage-cost" placement="top-end">${ownShare}</wa-tooltip>`;
     return html`
       <span class="run-summary__value">
         ${join(
@@ -301,32 +299,27 @@ export class UsagePanel extends LitElement {
   }
 
   /**
-   * The visible footer cost: a plain amount when the route carries no badge,
-   * the covering plan alone (`ChatGPT Pro`) for a subscription route that
-   * billed nothing, and the amount beside the route otherwise. The aria
-   * summary's shared {@link usageCostLabel} re-derives the same
-   * `subscription && cost === 0` predicate from `usageRouteBadge`, so
-   * changing a subscription route touches both.
+   * The visible footer cost, as {@link usageCost} decides it: the plain
+   * amount, the covering plan alone (`ChatGPT Pro`), or the amount beside
+   * the route's compact badge.
    */
-  private renderCostRoute(cost: number): TemplateResult {
-    const badge = usageRouteBadge(
-      this.usage?.usageRoute,
-      this.usage?.usagePlan,
-    );
-    if (!badge) return html`${formatCostUsd(cost)}`;
-
-    if (badge.subscription && cost === 0) {
-      return html`<span
-        id="usage-route-badge"
-        class="run-summary__route run-summary__route--covered"
-        >${badge.compactLabel}</span
-      >`;
+  private renderCostRoute(usage: TokenUsageStats): TemplateResult {
+    const shown = usageCost(usage);
+    switch (shown.kind) {
+      case 'amount':
+        return html`${shown.amount}`;
+      case 'covered':
+        return html`<span
+          id="usage-route-badge"
+          class="run-summary__route run-summary__route--covered"
+          >${shown.badge.compactLabel}</span
+        >`;
+      case 'billed':
+        return html`${shown.amount} ·
+          <span id="usage-route-badge" class="run-summary__route">
+            ${shown.badge.compactLabel}
+          </span>`;
     }
-
-    return html`${formatCostUsd(cost)} ·
-      <span id="usage-route-badge" class="run-summary__route">
-        ${badge.compactLabel}
-      </span>`;
   }
 
   private renderContext(): TemplateResult | typeof nothing {
