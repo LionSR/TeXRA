@@ -31,7 +31,7 @@ const tiers = [
       'anthropic/claude-fable-5-1',
       'anthropic/claude-opus-5-5',
       'openai/gpt-6.1-sol',
-      'google/gemini-3.1-pro-preview',
+      'google/gemini-4-argon',
     ],
   },
   {

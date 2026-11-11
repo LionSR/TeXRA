@@ -26,7 +26,7 @@ const rows = [
       'anthropic/claude-fable-5-1',
       'anthropic/claude-opus-5-5',
       'openai/gpt-6.1-sol',
-      'google/gemini-3.1-pro-preview',
+      'google/gemini-4-argon',
     ],
   },
   {
@@ -56,7 +56,7 @@ const rows = [
     use: 'Large documents',
     note: 'High-context models',
     models: [
-      'google/gemini-3.1-pro-preview',
+      'google/gemini-4-argon',
       'anthropic/claude-fable-5-1',
       'anthropic/claude-sonnet-5-5',
       'anthropic/claude-opus-5-5',
