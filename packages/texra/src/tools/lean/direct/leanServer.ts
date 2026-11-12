@@ -57,55 +57,46 @@ import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticForm
 import type { LeanServerInfo } from '../leanServerInfo';
 import {
   LeanFileUnreadable,
+  LspRangeSchema,
   type LeanDiagnostic,
-  type LeanFileProgressParams,
-  type LspDiagnostic,
-  type LspPublishDiagnosticsParams,
 } from '../leanTypes';
 
 const LOG_CHANNEL = 'lean.direct';
 
-const LspPositionSchema = Schema.Struct({
-  line: Schema.Finite,
-  character: Schema.Finite,
+const LspDiagnosticSchema = Schema.Struct({
+  range: LspRangeSchema,
+  message: Schema.String,
+  severity: Schema.optional(Schema.Finite),
+  source: Schema.optional(Schema.String),
 });
-
-const LspRangeSchema = Schema.Struct({
-  start: LspPositionSchema,
-  end: LspPositionSchema,
-});
+type LspDiagnostic = typeof LspDiagnosticSchema.Type;
 
 /** `textDocument/publishDiagnostics` as the server sends it. */
+const LspPublishDiagnosticsSchema = Schema.Struct({
+  uri: Schema.String,
+  diagnostics: Schema.Array(LspDiagnosticSchema),
+});
+type LspPublishDiagnosticsParams = typeof LspPublishDiagnosticsSchema.Type;
 const decodePublishDiagnostics = Schema.decodeUnknownResult(
-  Schema.Struct({
-    uri: Schema.String,
-    diagnostics: Schema.mutable(
-      Schema.Array(
-        Schema.Struct({
-          range: LspRangeSchema,
-          message: Schema.String,
-          severity: Schema.optional(Schema.Finite),
-          source: Schema.optional(Schema.String),
-        }),
-      ),
-    ),
-  }) satisfies Schema.Codec<LspPublishDiagnosticsParams, unknown>,
+  LspPublishDiagnosticsSchema,
 );
 
-/** Lean's `$/lean/fileProgress` as the server sends it. */
-const decodeFileProgress = Schema.decodeUnknownResult(
-  Schema.Struct({
-    textDocument: Schema.Struct({ uri: Schema.String, version: Schema.Finite }),
-    processing: Schema.mutable(
-      Schema.Array(
-        Schema.Struct({
-          range: LspRangeSchema,
-          kind: Schema.optional(Schema.Finite),
-        }),
-      ),
-    ),
-  }) satisfies Schema.Codec<LeanFileProgressParams, unknown>,
-);
+/**
+ * Lean's `$/lean/fileProgress` notification: the ranges of the document
+ * version still being elaborated. `kind` 1 (or absent) is processing, 2 a
+ * fatal error that will not finish; nothing processing means elaborated.
+ */
+const LeanFileProgressSchema = Schema.Struct({
+  textDocument: Schema.Struct({ uri: Schema.String, version: Schema.Finite }),
+  processing: Schema.Array(
+    Schema.Struct({
+      range: LspRangeSchema,
+      kind: Schema.optional(Schema.Finite),
+    }),
+  ),
+});
+type LeanFileProgressParams = typeof LeanFileProgressSchema.Type;
+const decodeFileProgress = Schema.decodeUnknownResult(LeanFileProgressSchema);
 
 const LEAN_LANGUAGE_ID = 'lean4';
 const HANDSHAKE_TIMEOUT = Duration.millis(15_000);

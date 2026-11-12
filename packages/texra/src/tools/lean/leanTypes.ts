@@ -102,11 +102,10 @@ const LspPositionSchema = Schema.Struct({
   character: Schema.Finite,
 });
 
-const LspRangeSchema = Schema.Struct({
+export const LspRangeSchema = Schema.Struct({
   start: LspPositionSchema,
   end: LspPositionSchema,
 });
-type LspRange = typeof LspRangeSchema.Type;
 
 const LspMarkedStringSchema = Schema.Union([
   Schema.String,
@@ -123,28 +122,6 @@ export const LspHoverSchema = Schema.Struct({
   range: Schema.optional(LspRangeSchema),
 });
 export type LspHover = typeof LspHoverSchema.Type;
-
-export interface LspDiagnostic {
-  range: LspRange;
-  message: string;
-  severity?: number;
-  source?: string;
-}
-
-export interface LspPublishDiagnosticsParams {
-  uri: string;
-  diagnostics: LspDiagnostic[];
-}
-
-/**
- * Lean's `$/lean/fileProgress` notification: the ranges of the document
- * version still being elaborated. `kind` 1 (or absent) is processing, 2 a
- * fatal error that will not finish; nothing processing means elaborated.
- */
-export interface LeanFileProgressParams {
-  textDocument: { uri: string; version: number };
-  processing: { range: LspRange; kind?: number }[];
-}
 
 // Lean tool contracts
 
