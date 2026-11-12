@@ -50,7 +50,7 @@
     "yaml": "catalog:"
   },
   "dependencies": {
-    "dockview": "8.8.3",
+    "dockview": "8.9.0",
     "node-pty": "^1.1.0"
   }
 }
