@@ -316,23 +316,53 @@ export function usageRouteBadge(
 }
 
 /**
- * One sentence stating what a usage record cost and who paid for it.
- *
- * Three outcomes: a subscription route with zero cost is stated as included in
- * the plan that covers it, a known route is billed "via" its payment name,
- * and an unknown route shows the bare amount. A caller that omits the line
- * for a session that never reached a model tests that itself.
+ * What a usage record's cost shows, decided once for every surface: a
+ * subscription route with zero cost is `covered` by its plan, a known route
+ * is `billed` through its payment name, and an unknown route is a bare
+ * `amount`. Each host renders the case in its own markup or words.
+ */
+type UsageCost =
+  | { readonly kind: 'amount'; readonly amount: string }
+  | { readonly kind: 'covered'; readonly badge: UsageRouteBadge }
+  | {
+      readonly kind: 'billed';
+      readonly amount: string;
+      readonly badge: UsageRouteBadge;
+    };
+
+/** Decide how a usage record's cost reads; see {@link UsageCost}. */
+export function usageCost({
+  cost,
+  usageRoute,
+  usagePlan,
+}: Pick<TokenUsageStats, 'cost' | 'usageRoute' | 'usagePlan'>): UsageCost {
+  const amount = formatCostUsd(cost);
+  const badge = usageRouteBadge(usageRoute, usagePlan);
+  if (!badge) return { kind: 'amount', amount };
+  if (badge.subscription && cost === 0) return { kind: 'covered', badge };
+  return { kind: 'billed', amount, badge };
+}
+
+/**
+ * One sentence stating what a usage record cost and who paid for it, as
+ * {@link usageCost} decides. A caller that omits the line for a session that
+ * never reached a model tests that itself.
  *
  * A covered call never says "free": the user is paying for the plan, and
  * "free" reads as "nothing paid for this".
  */
-export function usageCostLabel({
-  cost,
-  usageRoute,
-  usagePlan,
-}: Pick<TokenUsageStats, 'cost' | 'usageRoute' | 'usagePlan'>): string {
-  const badge = usageRouteBadge(usageRoute, usagePlan);
-  if (!badge) return formatCostUsd(cost);
-  if (badge.subscription && cost === 0) return `Included in ${badge.label}`;
-  return `${formatCostUsd(cost)} via ${badge.label}`;
+export function usageCostLabel(
+  usage: Pick<TokenUsageStats, 'cost' | 'usageRoute' | 'usagePlan'>,
+): string {
+  const shown = usageCost(usage);
+  switch (shown.kind) {
+    case 'amount':
+      return shown.amount;
+    case 'covered':
+      return `Included in ${shown.badge.label}`;
+    case 'billed':
+      return `${shown.amount} via ${shown.badge.label}`;
+    default:
+      return shown satisfies never;
+  }
 }
