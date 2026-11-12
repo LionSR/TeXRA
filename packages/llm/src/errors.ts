@@ -2,7 +2,7 @@
 import { Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
-import { ModelOriginSchema, TurnUsageSchema } from './protocol.js';
+import { CountSchema, ModelOriginSchema, TurnUsageSchema } from './protocol.js';
 import type { ApiKeyProviderId } from './providers/providerPlugins.js';
 
 // Local imports - canonical messages
@@ -106,9 +106,7 @@ export const ModelErrorFieldsSchema = Schema.Struct({
    * response stated it. The retry gate reads this instead of guessing a
    * backoff, so a rate limit waits exactly as long as it was told to.
    */
-  retryAfterMs: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
+  retryAfterMs: Schema.optional(CountSchema),
   /** What a failure that used up a quota used up: a plan, or the account's
    *  credit (`plan: null`). Such a failure is not retryable as it is: a
    *  retry carries the route's switch. */
@@ -117,9 +115,7 @@ export const ModelErrorFieldsSchema = Schema.Struct({
       plan: Schema.NullOr(PlanRouteSchema),
       /** The plan's tier as the provider names it (ChatGPT's `pro`). */
       planType: Schema.optional(Schema.String),
-      resetsInMs: Schema.optional(
-        Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-      ),
+      resetsInMs: Schema.optional(CountSchema),
     }),
   ),
   operation: Schema.optional(RemoteOperationSchema),

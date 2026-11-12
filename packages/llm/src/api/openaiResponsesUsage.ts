@@ -2,39 +2,32 @@
 import { Schema } from 'effect';
 
 // Local imports - canonical model contract
+import { CountSchema } from '../protocol.js';
 import type { TurnResult } from '../turn.js';
 
 /** One Responses usage receipt, as OpenAI and xAI report it. */
 export const ResponsesUsageSchema = Schema.Struct({
-  input_tokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  output_tokens: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  input_tokens: CountSchema,
+  output_tokens: CountSchema,
   // Zhipu reports no total.
-  total_tokens: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
+  total_tokens: Schema.optional(CountSchema),
   input_tokens_details: Schema.optional(
     Schema.NullOr(
       Schema.Struct({
-        cached_tokens: Schema.optional(
-          Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-        ),
+        cached_tokens: Schema.optional(Schema.NullOr(CountSchema)),
       }),
     ),
   ),
   output_tokens_details: Schema.optional(
     Schema.NullOr(
       Schema.Struct({
-        reasoning_tokens: Schema.optional(
-          Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-        ),
+        reasoning_tokens: Schema.optional(Schema.NullOr(CountSchema)),
       }),
     ),
   ),
   // xAI's final cost; only its receipts carry the key, and its
   // `output_tokens` exclude the reasoning tokens it bills on top.
-  cost_in_usd_ticks: Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-  ),
+  cost_in_usd_ticks: Schema.optional(Schema.NullOr(CountSchema)),
 });
 
 /**

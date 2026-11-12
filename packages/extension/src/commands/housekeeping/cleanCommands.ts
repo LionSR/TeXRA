@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness/plugins';
+import { pluralize } from '@texra-ai/harness/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   announce,
@@ -32,7 +33,7 @@ export const confirmCleanBuild = Effect.gen(function* () {
     ...listed.map((dir) => `${dir}/`),
     ...(more > 0 ? [`…and ${more} more`] : []),
   ].join('\n');
-  const noun = directories.length === 1 ? 'folder' : 'folders';
+  const noun = pluralize(directories.length, 'folder');
   const confirm = `Delete ${directories.length} ${noun}`;
   const confirmed = yield* announce(
     vscodeUi.confirm({

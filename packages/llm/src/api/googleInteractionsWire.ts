@@ -5,10 +5,9 @@
  */
 import { Schema, SchemaGetter, Struct } from 'effect';
 
-import { JsonObjectSchema } from '../protocol.js';
+import { CountSchema, JsonObjectSchema } from '../protocol.js';
 
 // SDK stream parsing does not validate the JSON values it returns.
-const CountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const WireTextSchema = Schema.Struct({
   type: Schema.Literal('text'),
   text: Schema.String,

@@ -3,6 +3,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -153,7 +154,7 @@ export function createReviewPane(): ReviewPaneController {
             </span>
           </div>
           <span class="desktop-review-file-count">
-            ${shown.size} ${shown.size === 1 ? 'file' : 'files'}
+            ${formatResultCount(shown.size, 'file')}
           </span>
         </header>
         <div class="desktop-review-layout">

@@ -9,6 +9,7 @@
  */
 import { Effect, Schema, SchemaGetter, Struct } from 'effect';
 
+import { CountSchema } from '../protocol.js';
 import { ResponsesUsageSchema } from './openaiResponsesUsage.js';
 import { UploadedSchema } from './uploadCache.js';
 import {
@@ -114,7 +115,7 @@ export type ResponseValue = typeof ResponseSchema.Type;
 /** What every streamed event carries: its type and sequence number. */
 export const EventSchema = Schema.Struct({
   type: Schema.String,
-  sequence_number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  sequence_number: CountSchema,
 });
 /** An event carrying the whole response snapshot. */
 export const ResponseEventSchema = EventSchema.mapFields(
@@ -125,7 +126,7 @@ export const ResponseEventSchema = EventSchema.mapFields(
 /** An event carrying one output item. */
 export const ItemEventSchema = EventSchema.mapFields(
   Struct.assign({
-    output_index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    output_index: CountSchema,
     item: OutputItemSchema,
   }),
 );
@@ -133,7 +134,7 @@ export const ItemEventSchema = EventSchema.mapFields(
 export const DeltaEventSchema = EventSchema.mapFields(
   Struct.assign({
     item_id: Schema.String.check(Schema.isMinLength(1)),
-    output_index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    output_index: CountSchema,
     delta: Schema.String,
     logprobs: Schema.optional(Schema.NullOr(Schema.Array(Schema.Never))),
   }),
@@ -148,7 +149,7 @@ export const WebSocketEnvelopeSchema = Schema.Struct({
 // An error event in the stream's own sequence, with no HTTP status.
 const SequencedWebSocketErrorSchema = Schema.Struct({
   type: Schema.Literal('error'),
-  sequence_number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  sequence_number: CountSchema,
   code: Schema.NullOr(Schema.String),
   message: Schema.String,
   param: Schema.NullOr(Schema.String),
@@ -191,9 +192,7 @@ export const WebSocketErrorSchema = Schema.Union([
  */
 const UploadedFileSchema = Schema.Struct({
   id: Schema.String.check(Schema.isMinLength(1)),
-  expires_at: Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-  ),
+  expires_at: Schema.optional(Schema.NullOr(CountSchema)),
 }).pipe(
   Schema.decodeTo(UploadedSchema, {
     decode: SchemaGetter.transform((file) => ({

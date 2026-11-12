@@ -3,6 +3,7 @@ import { Effect, Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import {
+  CountSchema,
   TurnProtocolSchema,
   ModelOriginSchema,
   sameModelOrigin,
@@ -206,7 +207,7 @@ export const MessageSchema = Schema.Union([
     role: Schema.Literal('tool'),
     results: Schema.Array(
       Schema.Struct({
-        callOrdinal: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+        callOrdinal: CountSchema,
         status: Schema.Literals(['success', 'error']),
         content: Schema.Array(InputPartSchema),
       }),
@@ -423,7 +424,7 @@ export const GoogleContinuationSchema = PrefixSchema.mapFields(
 );
 const ResponsesAnchorSchema = Schema.Struct({
   responseId: Schema.String.check(Schema.isMinLength(1)),
-  coveredItems: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  coveredItems: CountSchema,
 });
 export const ResponsesContinuationSchema = PrefixSchema.mapFields(
   Struct.assign({
