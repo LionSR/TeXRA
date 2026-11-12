@@ -75,6 +75,7 @@ export function defineSubscriptionAuthCommand(
       const services = yield* cliPlatform;
       const signInResult = yield* withCliAuthError(
         signInCliSubscription(
+          services,
           options.providerId,
           { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
           { writeProgress },
@@ -82,7 +83,6 @@ export function defineSubscriptionAuthCommand(
       );
       if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
 
-      yield* provider.setPreferSubscription(services, true);
       const account = signInResult.value;
       const payload = {
         authenticated: true,

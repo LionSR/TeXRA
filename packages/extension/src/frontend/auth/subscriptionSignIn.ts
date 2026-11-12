@@ -45,14 +45,6 @@ class SubscriptionSignInFailed extends Schema.TaggedError<SubscriptionSignInFail
   },
 ) {}
 
-/** The preference write's failure, after a sign-in that already succeeded. */
-class SubscriptionPreferenceUpdateFailed extends Schema.TaggedError<SubscriptionPreferenceUpdateFailed>()(
-  'SubscriptionPreferenceUpdateFailed',
-  {
-    cause: Schema.Defect(),
-  },
-) {}
-
 const externalOpener = new VscodeExternalOpener();
 
 /** How VS Code shows a subscription sign-in prompt. */
@@ -155,6 +147,7 @@ export function signInWithSubscription(
           // them) instead of failing with a bind error.
           transport: vscode.env.remoteName ? 'device' : 'auto',
           present: vscodePresenter(provider),
+          stores,
         }),
     ).pipe(
       // A transport defect is reported the same as its typed failure. An
@@ -169,14 +162,6 @@ export function signInWithSubscription(
       ),
     );
 
-    yield* provider
-      .setPreferSubscription(stores, true)
-      .pipe(
-        Effect.mapError(
-          (cause) => new SubscriptionPreferenceUpdateFailed({ cause }),
-        ),
-      );
-
     yield* showLoggedInfoMessage(
       `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
     );
@@ -190,11 +175,6 @@ export function signInWithSubscription(
               `${displayName} sign-in failed`,
               failure.cause,
             ).pipe(Effect.as(false)),
-      SubscriptionPreferenceUpdateFailed: (failure) =>
-        showLoggedErrorMessage(
-          `${displayName} sign-in succeeded but subscription preference update failed`,
-          failure.cause,
-        ).pipe(Effect.as(false)),
     }),
   );
 }

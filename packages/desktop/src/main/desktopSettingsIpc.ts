@@ -111,6 +111,7 @@ export function createDesktopSettingsIpc(
       return Effect.gen(function* () {
         const account = yield* provider.signIn({
           transport: 'auto',
+          stores: options.roots,
           present: {
             presentDeviceCode: (prompt) =>
               reportPresentation(
@@ -145,7 +146,6 @@ export function createDesktopSettingsIpc(
               ),
           },
         });
-        yield* provider.setPreferSubscription(options.roots, true);
         yield* bindings.dialogs.notify(
           'info',
           ACCOUNT_OUTCOME.signedInAs(displayName, account.label),

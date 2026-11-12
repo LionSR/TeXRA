@@ -68,6 +68,7 @@ interface CliSubscriptionSignOutResult {
 export const signInCliSubscription = Effect.fn(
   'subscriptionLogin.signInCliSubscription',
 )(function* (
+  stores: SettingsStores,
   providerId: SubscriptionProviderId,
   init: CliSubscriptionLoginTransportInit,
   options: CliSubscriptionLoginOptions,
@@ -108,6 +109,7 @@ export const signInCliSubscription = Effect.fn(
     // with a bare bind error and no link.
     transport: init.device ? 'device' : 'auto',
     present,
+    stores,
   });
 });
 

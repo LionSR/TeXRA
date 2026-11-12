@@ -128,31 +128,34 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     } satisfies CliModelAccessSelectionResult;
   }
 
+  // Signing in turns the preference on; an account already signed in only
+  // needs the preference.
   const status = yield* provider.getStatus();
   let accountLabel = status.label;
-  if (!status.signedIn) {
+  if (status.signedIn) {
+    yield* provider.setPreferSubscription(stores, true).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ModelAccessPreferenceFailed({
+            member: 'setPreferSubscription',
+            subscription: providerId,
+            message: `${displayName} subscription could not be enabled: ${toErrorMessage(cause)}`,
+            cause,
+          }),
+      ),
+    );
+  } else {
     const init = { device: false, noBrowser: false };
     const device =
       context != null && shouldUseSubscriptionDeviceCode(context, init);
     const account = yield* signInCliSubscription(
+      stores,
       providerId,
       { ...init, device },
       options,
     );
     accountLabel = account.label;
   }
-
-  yield* provider.setPreferSubscription(stores, true).pipe(
-    Effect.mapError(
-      (cause) =>
-        new ModelAccessPreferenceFailed({
-          member: 'setPreferSubscription',
-          subscription: providerId,
-          message: `${displayName} subscription could not be enabled: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    ),
-  );
   return {
     message: `${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`,
   } satisfies CliModelAccessSelectionResult;
