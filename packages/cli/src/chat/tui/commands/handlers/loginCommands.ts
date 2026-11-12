@@ -27,10 +27,7 @@ import {
   type CliLoginSlashArgs,
   type CliLogoutTarget,
 } from '@cli/runtime/models/loginOptions';
-import {
-  subscriptionProvider,
-  type SubscriptionProviderId,
-} from '@texra/controllers/modelAccess/subscriptionProviders';
+import { type SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 
 import {
@@ -56,8 +53,9 @@ export function loginStartMessage(args: CliLoginSlashArgs): string {
 
 /**
  * Subscription sign-in from the chat TUI, mirroring the sign-out in
- * `logoutLines` below: sign in with a copyable progress writer, flip the subscription
- * preference, then report the outcome in this surface's copy.
+ * `logoutLines` below: sign in with a copyable progress writer, which also
+ * turns on the subscription preference, then report the outcome in this
+ * surface's copy.
  */
 const loginToSubscription = Effect.fn('loginToSubscription')(function* (
   stores: SettingsStores,
@@ -65,10 +63,9 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
   args: CliSubscriptionLoginTransportInit,
   output: SlashCommandOutput,
 ) {
-  const account = yield* signInCliSubscription(providerId, args, {
+  const account = yield* signInCliSubscription(stores, providerId, args, {
     writeProgress: output.writeProgress,
   });
-  yield* subscriptionProvider(providerId).setPreferSubscription(stores, true);
   yield* emitAppSignal('modelAccessChanged', undefined);
   output.appendOutcome(
     SUBSCRIPTION_AUTH_COPY[providerId].signedInEnabled(account.label),

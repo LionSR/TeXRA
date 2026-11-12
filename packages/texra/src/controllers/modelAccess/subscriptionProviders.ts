@@ -87,6 +87,8 @@ type SubscriptionTransport = 'device' | 'auto';
 interface SubscriptionSignInOptions {
   readonly transport: SubscriptionTransport;
   readonly present: SubscriptionSignInPresenter;
+  /** Where the sign-in turns on the provider's subscription preference. */
+  readonly stores: SettingsStores;
 }
 
 /** One OAuth subscription provider, as every host consumes it. */
@@ -101,9 +103,12 @@ export interface SubscriptionProvider {
   /** Models the subscription unlocks ('OpenAI models', 'xAI models'). */
   readonly modelFamily: string;
   /**
-   * The sign-in program. A host runs it at its own edge (command, IPC or
-   * message handler), where its cancellation signal, if any, becomes fiber
-   * interruption. Failures are the transports' own; their `message` is the
+   * The sign-in program: the OAuth flow, then the provider's subscription
+   * preference turned on, so its models route to the account that was just
+   * signed in. A host runs it at its own edge (command, IPC or message
+   * handler), where its cancellation signal, if any, becomes fiber
+   * interruption. Failures are the transports' own, or the preference
+   * write's after a sign-in that succeeded; their `message` is the
    * user-facing text.
    */
   signIn(
@@ -249,6 +254,19 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
                 },
               ),
             );
+      yield* SubscriptionPreference.set(
+        descriptor.id,
+        options.stores,
+        true,
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new Error(
+              `Signed in with ${descriptor.displayName}, but its subscription could not be turned on: ${toErrorMessage(cause)}`,
+              { cause },
+            ),
+        ),
+      );
       return {
         signedIn: true,
         email: session.email,
