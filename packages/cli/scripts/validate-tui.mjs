@@ -36,7 +36,6 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parseArgs as parseCittyArgs } from 'citty';
 
@@ -107,8 +106,7 @@ const TWO_OPENAI_MODELS = [
   'openai/gpt-5.5-pro-2026-04-23',
 ].join('||');
 
-const dirname = path.dirname(fileURLToPath(import.meta.url));
-const CLI_ROOT = path.resolve(dirname, '..');
+const CLI_ROOT = path.resolve(import.meta.dirname, '..');
 const DEFAULT_HARNESS_RELATIVE_PATH = path.join(
   'dist',
   'bin',

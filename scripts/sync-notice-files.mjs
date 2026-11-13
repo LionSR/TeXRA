@@ -1,6 +1,5 @@
 import console from 'node:console';
 import { readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -14,10 +13,7 @@ import process from 'node:process';
 // third-party code from the app, so each hand-edits its own NOTICE.txt.
 // In `--check` mode this is the CI diff gate, failing when a copy has drifted out of sync with the root NOTICE.
 
-const rootDir = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const rootDir = path.resolve(import.meta.dirname, '..');
 
 /** Every package whose published artifact carries its own attribution copy. */
 const PACKAGE_NOTICES = [

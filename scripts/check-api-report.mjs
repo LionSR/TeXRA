@@ -23,7 +23,6 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import ts from 'typescript';
@@ -358,10 +357,7 @@ function apiReports(rootDir) {
   );
 }
 
-const rootDir = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const rootDir = path.resolve(import.meta.dirname, '..');
 const { values } = parseArgs({
   options: { write: { type: 'boolean', default: false } },
 });

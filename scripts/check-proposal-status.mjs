@@ -24,14 +24,13 @@
 // Dependency-free (bare Node) so it runs without installing anything.
 
 import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, relative, resolve } from 'node:path';
 
 import { walkFiles } from './walkFiles.mjs';
 
 const repoRoot = process.argv[2]
   ? resolve(process.argv[2])
-  : join(dirname(fileURLToPath(import.meta.url)), '..');
+  : join(import.meta.dirname, '..');
 const proposedRoot = join(repoRoot, '.agents', 'docs', 'proposed');
 
 /** Status values that name a lifecycle other than `proposed/`. */

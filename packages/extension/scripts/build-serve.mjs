@@ -6,11 +6,8 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 
-const extensionRoot = path.dirname(
-  path.dirname(fileURLToPath(import.meta.url)),
-);
+const extensionRoot = path.dirname(import.meta.dirname);
 const cliRoot = path.join(extensionRoot, '..', 'cli');
 const result = spawnSync(
   process.execPath,

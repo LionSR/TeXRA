@@ -5,7 +5,6 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { build } from 'esbuild';
@@ -18,10 +17,7 @@ import { build } from 'esbuild';
 // forbidden outright (native settings view). In `--check` mode this is the CI
 // diff gate: it fails when the committed manifest drifts from either source.
 
-const rootDir = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const rootDir = path.resolve(import.meta.dirname, '..');
 const packagePath = path.join(rootDir, 'packages', 'extension', 'package.json');
 const require = createRequire(import.meta.url);
 const bundleDir = await mkdtemp(

@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import {
   extensionManifestSnapshot,
@@ -9,10 +8,7 @@ import {
   reportCheckFailures,
 } from './extension-package-utils.mjs';
 
-const rootDir = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const rootDir = path.resolve(import.meta.dirname, '..');
 const packagePath = path.join(rootDir, 'packages', 'extension', 'package.json');
 const packageDir = path.dirname(packagePath);
 const vscodeIgnorePath = path.join(packageDir, '.vscodeignore');

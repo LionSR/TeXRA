@@ -17,16 +17,12 @@ import {
 import { spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { runTests } from '@vscode/test-electron';
 
 import { isolatedHomeEnv } from './isolated-home.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
-const repoRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const repoRoot = path.resolve(import.meta.dirname, '..');
 const extensionPath = path.join(repoRoot, 'packages/extension');
 
 const flag = process.argv.indexOf('--vscode');

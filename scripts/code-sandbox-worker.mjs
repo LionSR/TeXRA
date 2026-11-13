@@ -8,14 +8,13 @@
 // resolves a worker path at run time, so the extension's CJS bundle, the
 // CLI's single ESM file, the desktop's split ESM chunks and the desktop's
 // app.asar all start the same worker without a per-host lookup table.
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 import { build } from 'esbuild';
 
 import { buildIdentityDefine } from './build-identity.mjs';
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = resolve(import.meta.dirname, '..');
 export const CODE_SANDBOX_WORKER_ID = 'virtual:code-sandbox-worker';
 
 /**

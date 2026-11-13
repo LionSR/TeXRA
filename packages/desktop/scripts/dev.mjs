@@ -1,13 +1,12 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { setTimeout as scheduleTimeout } from 'node:timers';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const packageRoot = resolve(import.meta.dirname, '..');
 const electronPath = require('electron');
 const packageManagerCli = process.env.npm_execpath;
 const FORCE_STOP_DELAY_MS = 2_000;

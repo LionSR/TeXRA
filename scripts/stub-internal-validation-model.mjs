@@ -4,10 +4,9 @@
 // which serves no validation model, so the bundle carries neither the canned
 // output nor a gate the environment can open.
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const realModule = resolve(
-  dirname(fileURLToPath(import.meta.url)),
+  import.meta.dirname,
   '../packages/cli/src/runtime/models/validationModel.ts',
 );
 

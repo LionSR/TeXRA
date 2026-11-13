@@ -4,13 +4,12 @@
 // cannot hot-reload, so each rebuild prints a line saying to restart Electron.
 import * as esbuild from 'esbuild';
 import { rm, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 import { harnessBundleOptions } from '../../scripts/code-sandbox-worker.mjs';
 import { esmCjsGlobalsBanner } from '../../scripts/esm-cjs-globals-banner.mjs';
 
-const packageDir = dirname(fileURLToPath(import.meta.url));
+const packageDir = import.meta.dirname;
 const outdir = resolve(packageDir, 'dist/main');
 const watch = process.argv.includes('--watch');
 
