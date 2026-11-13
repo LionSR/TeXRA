@@ -15,7 +15,6 @@ import { Effect, FiberHandle, Scope } from 'effect';
 
 import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
-  type StateStore,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -45,10 +44,6 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import {
-  setFirstRunDone,
-  setOnboardingDeclined,
-} from '@texra/controllers/onboarding/onboardingFunnel';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type {
@@ -96,11 +91,10 @@ interface ExtensionHostRequestsOptions {
   readonly bridge: SessionBridge;
   readonly snapshot: HostSnapshotSource;
   /** What this window does for its project's runs. */
-  readonly window: WindowHost;
+  readonly window: Omit<WindowHost, 'filesWritten'>;
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
-  readonly globalState: StateStore;
   /** The process runtime the extension root holds; every request arm that
    *  settles an Effect runs it here. */
   readonly runtime: ProcessRuntime;
@@ -185,7 +179,7 @@ const openExportPath = (
 export const createExtensionHostRequests = Effect.fn(
   'createExtensionHostRequests',
 )(function* (options: ExtensionHostRequestsOptions) {
-  const { runSession, snapshot, globalState, runtime, roots } = options;
+  const { runSession, snapshot, runtime, roots } = options;
 
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(roots);
@@ -367,8 +361,6 @@ export const createExtensionHostRequests = Effect.fn(
         yield* signInWithSubscription(roots, 'chatgpt');
         yield* refreshAfterCredentialChange;
       }).pipe(withLogChannel(CHANNEL)),
-      // The snapshot follows the flags it reads.
-      skip: setOnboardingDeclined(globalState, true),
       runSetup: (launch) =>
         runHandler(
           'runSetupAssistant',
@@ -380,7 +372,6 @@ export const createExtensionHostRequests = Effect.fn(
             options.showProgressView(),
           ),
         ),
-      skipSetup: setFirstRunDone(globalState),
       openGettingStarted: runHandler(
         'openGettingStarted',
         openGettingStarted(options.extensionId),

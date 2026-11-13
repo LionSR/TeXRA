@@ -15,7 +15,7 @@ import {
 } from 'effect';
 
 import { AgentCatalog } from '@texra-ai/harness/host';
-import { withLogChannel, AppSignals } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   ensureError,
   toErrorMessage,
@@ -161,7 +161,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ) => Effect.Effect<void, Error, ProcessServices>,
     ) {
       const scope = yield* Scope.Scope;
-      const signals = yield* AppSignals;
       const catalog = yield* AgentCatalog;
       const draftRequests = yield* HostDraftRequests.make;
       const contentProvider = new BundledViewContentProvider(
@@ -264,18 +263,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                 scope,
               ),
               ...editor,
-              // What a service task wrote, told here as a task here tells
-              // it: the file decorations follow it.
-              filesWritten: (absolutePaths) =>
-                signals.emit('workspaceFilesWritten', {
-                  absolutePaths: [...absolutePaths],
-                }),
             },
             runtime,
             extensionPath: context.extensionPath,
             extensionId: context.extension.id,
             openSettings,
-            globalState,
             showConnectModel: () => onView((view) => view.showConnectModel()),
             showProgressView: () => onView((view) => view.showProgressView()),
             revealProgress: (config) =>
