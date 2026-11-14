@@ -252,7 +252,8 @@ Done, on the branch after PR 14927:
 - Row 1: a run's open step is a `Ref`.
 - Row 8: `withPerKeyLane` is a `Semaphore` per key in a counted map; the
   `Deferred` chain is gone. The agent catalog's one-key lane is a
-  `Semaphore(1)`. Still open in row 8: one map for the file writers.
+  `Semaphore(1)`. An approved edit and the desktop editor's save share one
+  lane per file (`withFileWriteLane`).
 
 Open: everything else in "Order". Three things the first pass learned:
 

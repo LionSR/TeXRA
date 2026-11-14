@@ -2597,6 +2597,15 @@ type WithBlobs<Draft> = Draft & {
 };
 ```
 
+## withFileWriteLane
+
+Run `self`, a read, decision and write of `file`, as the file's one
+writer in this process. `file` is absolute.
+
+```ts
+const withFileWriteLane: (file: string) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, FileSystem | R>
+```
+
 ## withPerKeyLane
 
 Run `self` holding `key`'s one permit. The exclusion, the queue and its

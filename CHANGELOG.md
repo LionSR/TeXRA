@@ -1785,6 +1785,11 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **An agent's edit and a save in the desktop editor no longer overwrite
+  each other.** Each checked the file and then wrote it with nothing
+  between them and the other writer, so one landing inside the other's
+  check and write was lost without a conflict. Both now take the file's one
+  write lane.
 - **Stop reaches the agents under a task that was just resumed.** A task
   woken by one of its background agents' results could be stopped while it
   was still starting up; its other agents then kept running after Stop.

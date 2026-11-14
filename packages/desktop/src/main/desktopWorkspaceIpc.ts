@@ -24,8 +24,7 @@ import {
   isPathWithin,
   OFFICE_EXTENSIONS,
   pathToLocationIn,
-  withPerKeyLane,
-  type PerKeyLane,
+  withFileWriteLane,
 } from '@texra-ai/harness/host';
 import {
   absentReason,
@@ -348,35 +347,33 @@ export function createDesktopWorkspaceIpc(
     return { kind: 'contents', contents } satisfies HostOutcome;
   });
 
-  // One save of a file at a time. Each save is its own request fiber, so v5's
-  // write could otherwise land after v6's and leave v5 on disk while the tab
-  // reads clean. The lane is keyed by the request's path and claimed before
-  // resolving it: keyed by the asynchronous canonical path, the later save
-  // could resolve first and overtake.
-  //
   // The disk is the one owner of what the file holds: a save carries what
   // the editor last read (`base`) and lands only while the file still holds
-  // it, checked on the same lane as the write. A run that rewrote the file
-  // meanwhile is answered `changedOnDisk` instead of overwritten; the
-  // editor asks whether to overwrite or reload. A file gone since the read
-  // is recreated, as a deleted file always was.
-  const writeLanes = new Map<string, PerKeyLane>();
+  // it. The check and the write hold the file's write lane, which an agent's
+  // approved edit of the same file holds too, so neither lands between the
+  // other's check and write. A run that rewrote the file meanwhile is
+  // answered `changedOnDisk` instead of overwritten; the editor asks
+  // whether to overwrite or reload. A file gone since the read is
+  // recreated, as a deleted file always was. Saves of one file arrive one
+  // at a time: the editor pane waits for each answer before the next.
   const writeFile = (path: string, contents: string, base: string | null) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const absolutePath = yield* isAgentDocumentTarget(path)
+      const absolutePath = yield* path.startsWith('texra-agent:')
         ? resolveAgentDocument(path, true)
         : resolveWorkspaceWritePath(options.getWorkspacePath(), path);
-      if (base !== null) {
-        const onDisk = yield* editorText(fs, absolutePath).pipe(
-          Effect.catchIf(absentReason, () => Effect.succeed(null)),
-        );
-        if (onDisk !== null && onDisk !== base)
-          return { kind: 'changedOnDisk' } satisfies HostOutcome;
-      }
-      yield* fs.writeFileString(absolutePath, contents);
-      return { kind: 'done' } satisfies HostOutcome;
-    }).pipe(withPerKeyLane(writeLanes, path));
+      return yield* Effect.gen(function* () {
+        if (base !== null) {
+          const onDisk = yield* editorText(fs, absolutePath).pipe(
+            Effect.catchIf(absentReason, () => Effect.succeed(null)),
+          );
+          if (onDisk !== null && onDisk !== base)
+            return { kind: 'changedOnDisk' } satisfies HostOutcome;
+        }
+        yield* fs.writeFileString(absolutePath, contents);
+        return { kind: 'done' } satisfies HostOutcome;
+      }).pipe(withFileWriteLane(absolutePath));
+    });
 
   /** A refused file request is the request's answer: the editor pane shows
    *  it. */
