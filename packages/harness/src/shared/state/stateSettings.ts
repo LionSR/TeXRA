@@ -389,31 +389,31 @@ export const GIT_MARK_COMMITS_SETTING = {
     'Attribute agent-authored git commits to the agent commit author so they are distinguishable from your own commits.',
 } as const satisfies SettingRow<boolean>;
 
+/**
+ * The identity agent-authored commits carry while commit marking is on. The
+ * harness names none: an app's catalog supplies its own (`settingsCatalog`'s
+ * `defaults`), and while neither the person nor the app names one, commits
+ * keep git's own identity. `.min(1)` so a blank value is rejected at the
+ * write boundary.
+ */
 export const GIT_AUTHOR_NAME_SETTING = {
   key: 'git.authorName',
   slot: 'repoState',
-  // `.min(1)` so a blank value is rejected at the write boundary and a
-  // blank read falls back (loudly) to the default identity.
-  schema: Schema.String.check(Schema.isMinLength(1)).pipe(
-    Schema.withDecodingDefault(Effect.succeed('texra-ai')),
-  ),
+  schema: Schema.UndefinedOr(Schema.String.check(Schema.isMinLength(1))),
   title: 'Agent commit author',
   description:
     'Author and committer name used for agent-authored commits when commit marking is enabled.',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string | undefined>;
 
+/** The email beside {@link GIT_AUTHOR_NAME_SETTING}, by the same rule. */
 export const GIT_AUTHOR_EMAIL_SETTING = {
   key: 'git.authorEmail',
   slot: 'repoState',
-  schema: Schema.String.check(Schema.isMinLength(1)).pipe(
-    Schema.withDecodingDefault(
-      Effect.succeed('texra-ai@users.noreply.github.com'),
-    ),
-  ),
+  schema: Schema.UndefinedOr(Schema.String.check(Schema.isMinLength(1))),
   title: 'Agent commit email',
   description:
     'Author and committer email used for agent-authored commits when commit marking is enabled.',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string | undefined>;
 
 export const GIT_WORKTREE_SUPPORT_SETTING = {
   key: 'git.worktreeSupport',

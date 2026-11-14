@@ -889,14 +889,22 @@ function getProposalFileGroups(
 
 ## GIT_AUTHOR_EMAIL_SETTING
 
+The email beside {@link GIT_AUTHOR_NAME_SETTING}, by the same rule.
+
 ```ts
-const GIT_AUTHOR_EMAIL_SETTING: { readonly key: "git.authorEmail"; readonly slot: "repoState"; readonly schema: withDecodingDefault<String, never>; readonly title: "Agent commit email"; readonly description: "Author and committer email used for agent-authored commits when commit marking is enabled."; }
+const GIT_AUTHOR_EMAIL_SETTING: { readonly key: "git.authorEmail"; readonly slot: "repoState"; readonly schema: UndefinedOr<String>; readonly title: "Agent commit email"; readonly description: "Author and committer email used for agent-authored commits when commit marking is enabled."; }
 ```
 
 ## GIT_AUTHOR_NAME_SETTING
 
+The identity agent-authored commits carry while commit marking is on. The
+harness names none: an app's catalog supplies its own (`settingsCatalog`'s
+`defaults`), and while neither the person nor the app names one, commits
+keep git's own identity. `.min(1)` so a blank value is rejected at the
+write boundary.
+
 ```ts
-const GIT_AUTHOR_NAME_SETTING: { readonly key: "git.authorName"; readonly slot: "repoState"; readonly schema: withDecodingDefault<String, never>; readonly title: "Agent commit author"; readonly description: "Author and committer name used for agent-authored commits when commit marking is enabled."; }
+const GIT_AUTHOR_NAME_SETTING: { readonly key: "git.authorName"; readonly slot: "repoState"; readonly schema: UndefinedOr<String>; readonly title: "Agent commit author"; readonly description: "Author and committer name used for agent-authored commits when commit marking is enabled."; }
 ```
 
 ## GIT_MARK_COMMITS_SETTING

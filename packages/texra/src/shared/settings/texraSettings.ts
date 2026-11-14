@@ -18,6 +18,8 @@ import { Effect, Schema } from 'effect';
 
 // Local imports
 import {
+  GIT_AUTHOR_EMAIL_SETTING,
+  GIT_AUTHOR_NAME_SETTING,
   HELPER_MODEL_SETTING,
   settingsCatalog,
   type SettingRow,
@@ -363,7 +365,11 @@ const DEFAULT_HELPER_MODEL = 'deepseek/deepseek-flash@none';
 const catalog: SettingsCatalog = settingsCatalog({
   namespace: 'texra',
   rows: [...TEXRA_UNSHOWN_ROWS, ...TEXRA_PLACED_ROWS],
-  defaults: { [HELPER_MODEL_SETTING.key]: DEFAULT_HELPER_MODEL },
+  defaults: {
+    [HELPER_MODEL_SETTING.key]: DEFAULT_HELPER_MODEL,
+    [GIT_AUTHOR_NAME_SETTING.key]: 'texra-ai',
+    [GIT_AUTHOR_EMAIL_SETTING.key]: 'texra-ai@users.noreply.github.com',
+  },
   curatedModels: CURATED_MODELS,
 });
 

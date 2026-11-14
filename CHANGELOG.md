@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: the harness names no agent commit identity.**
+  `GIT_AUTHOR_NAME_SETTING` and `GIT_AUTHOR_EMAIL_SETTING` read
+  `undefined` unless the person or the app's catalog (`settingsCatalog`'s
+  `defaults`) names one; with neither, an agent's commits keep git's own
+  identity. TeXRA's catalog keeps `texra-ai`.
 - **SDK: two app settings leave the harness catalog.**
   `GIT_COMMITS_TO_SHOW_SETTING` and `SOX_PATH_SETTING` are no longer
   exported; no harness code read them. TeXRA declares them in its own rows
