@@ -331,6 +331,28 @@ describe('applyRunRows', () => {
     expect(state?.structured).toEqual({ value: { a: 1 } });
   });
 
+  // A forced request that fails or is stopped leaves its nudge owed. The
+  // loop forces only for a nudge of the turn it stands in, so the nudge must
+  // keep the turn it was appended in once the next turn begins.
+  it('keeps a final-tool nudge on the turn it was appended in', () => {
+    const state = stateOf(
+      through(
+        9,
+        message({
+          kind: 'append',
+          sourceResponse: null,
+          messages: [
+            { role: 'user', content: [{ kind: 'text', text: 'submit' }] },
+          ],
+          reason: 'final-tool',
+        }),
+        position('turn.begin', 1),
+      ),
+    );
+    expect(state?.finalTool).toEqual({ turn: 0, owed: true });
+    expect(state?.turn).toBe(1);
+  });
+
   it('binds every row to the turn it describes', () => {
     const response = (calls: unknown) =>
       message({
