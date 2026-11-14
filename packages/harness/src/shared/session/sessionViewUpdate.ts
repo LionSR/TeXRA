@@ -320,7 +320,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     identity: event.identity,
     label,
     description: null,
-    descriptionBy: null,
     title: label,
     model: null,
     modelLabel: null,
@@ -740,7 +739,6 @@ function applyRunEvent(
         : {
             ...run,
             description: event.description,
-            descriptionBy: event.by,
             title: event.description || run.label,
           };
     case 'run.end':

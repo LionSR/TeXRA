@@ -81,8 +81,6 @@ const RunViewSchema = Schema.Struct({
   label: Schema.String,
   /** The run's title: the user's rename, else the AI one-liner. */
   description: Schema.NullOr(Schema.String),
-  /** Who wrote `description`: a user title outlives later model ones. */
-  descriptionBy: Schema.NullOr(Schema.Literals(['model', 'user'])),
   /** What every surface names the run by: `description`, else `label`. */
   title: Schema.String,
   model: Schema.NullOr(Schema.String),
