@@ -3,6 +3,7 @@
  */
 
 import {
+  DISPLAY_MATH_ENVIRONMENTS,
   GREEK_LETTER_CHARACTERS,
   UPPERCASE_GREEK_LETTER_CHARACTERS,
   withStarredForms,
@@ -254,13 +255,9 @@ const MATH_UNICODE_MAP: Record<string, string> = {
 
 // Math delimiters to search for: the environments, then display brackets.
 const MATH_DELIMITERS = [
-  ...[
-    ...withStarredForms(['equation', 'align']),
-    'aligned',
-    'multline',
-    'gather',
-    'cases',
-  ].map((name) => ({ start: `\\begin{${name}}`, end: `\\end{${name}}` })),
+  ...[...withStarredForms(DISPLAY_MATH_ENVIRONMENTS), 'aligned', 'cases'].map(
+    (name) => ({ start: `\\begin{${name}}`, end: `\\end{${name}}` }),
+  ),
   { start: '\\[', end: '\\]' },
   { start: '$$', end: '$$' },
 ];
