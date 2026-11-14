@@ -4,13 +4,12 @@ import { expect } from 'vitest';
 
 import {
   AgentConfigSchema,
-  emptyRunEndOutput,
   MESSAGE_TYPES,
   qualifyAggregateId,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { LOG_LEVELS } from '@shared/schemas';
+import { emptyRunEndOutput, LOG_LEVELS } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {

@@ -5,11 +5,11 @@ import { expect } from 'vitest';
 import {
   RunIdSchema,
   AgentConfigSchema,
-  emptyRunEndOutput,
   qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@texra-ai/harness/schemas';
+import { emptyRunEndOutput } from '@shared/schemas';
 import { deriveResumability } from '@agent/storage/resumability';
 import { positionRow } from '@agent/runtime/loop/rows';
 import type { SessionServices } from '@agent/runtime/rootLaunch';

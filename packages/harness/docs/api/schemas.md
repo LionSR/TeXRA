@@ -236,12 +236,6 @@ The kind separates lifecycles even when their logical ids coincide:
 type AggregateKind = typeof AggregateKindSchema.Type;
 ```
 
-## AggregateState
-
-```ts
-type AggregateState = typeof AggregateStateSchema.Type;
-```
-
 ## ALLOW_ORCHESTRATOR_KILL_SETTING
 
 ```ts
@@ -374,18 +368,6 @@ function attentionOf<View extends ReadSessionView>(
 
 ```ts
 type BashRequest = typeof BashRequestSchema.Type;
-```
-
-## blocksCaller
-
-Whether a request blocks the tool that opened it: every kind the harness
-opens does, and a plugin's request as it declares. One that does not
-leaves its run working; its plugin's decision hook delivers the answer to
-whichever process holds the run by then, so it stays open across every
-resume. The folds and the decision door all read this one predicate.
-
-```ts
-const blocksCaller: (payload: { readonly kind: "toolEdit"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly path: string; readonly relativePath: string; readonly sourceTool: string; readonly addedLines: number; readonly removedLines: number; readonly content: string; }; } | { readonly kind: "bash"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly command: string; readonly cwd?: string | undefined; }; } | { readonly kind: "retry"; readonly data: { readonly requestId: string; readonly operation: string; readonly failure: { readonly kind: "invalid-request" | "authentication" | "context-overflow" | "continuation-gone" | "transport" | "provider-rejection"; readonly message: string; readonly source: "model"; readonly status?: number | undefined; readonly partialText?: string | undefined; readonly requestId?: string | undefined; readonly quota?: { readonly plan: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | null; readonly planType?: string | undefined; readonly resetsInMs?: number | undefined; } | undefined; readonly provider?: string | undefined; } | { readonly message: string; readonly source: "route"; readonly session?: { readonly route: "chatgpt-subscription" | "xai-subscription"; readonly needsReauth: boolean; } | undefined; readonly provider?: string | undefined; readonly missingApiKey?: true | undefined; } | { readonly source: "interrupted"; readonly provider?: string | undefined; }; readonly runId: string & Brand<"RunId">; readonly model?: string | undefined; readonly credentialSwitch?: { readonly kind: "decline-route"; readonly route: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly provider: "xai" | "anthropic" | "openai" | "google" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; readonly automatic: boolean; } | { readonly kind: "new-key"; readonly provider: "xai" | "anthropic" | "openai" | "google" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; } | null | undefined; }; } | { readonly kind: "proposal"; readonly data: { readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly task: boolean; readonly script?: { readonly title: string | null; readonly source: string; readonly calls: readonly { readonly toolName: string; readonly preview: string; }[]; } | null | undefined; readonly workingDirectory?: string | null | undefined; readonly agentSource?: "plugin" | "custom" | "builtIn" | "inline" | null | undefined; readonly persona?: { readonly name: string; readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; } | null | undefined; readonly rootUserInstruction?: string | null | undefined; readonly options?: { readonly [x: string]: Json; } | null | undefined; }; } | { readonly kind: "planApproval"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly plan: { readonly objective: string; }; }; } | { readonly kind: "userQuestion"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly questions: readonly { readonly options: readonly { readonly label: string; readonly description?: string | null | undefined; }[]; readonly question: string; readonly header?: string | null | undefined; readonly multiSelect?: boolean | null | undefined; readonly allowFreeText?: boolean | null | undefined; }[]; readonly context?: string | null | undefined; }; } | { readonly kind: "plugin"; readonly plugin: string; readonly blocksCaller: boolean; readonly answers: readonly ("retry" | "approve" | "approve_and_goal" | "submit" | "answer" | "skip")[]; readonly data: { readonly [x: string]: Json; readonly requestId: string; readonly runId: string & Brand<"RunId">; }; }) => boolean
 ```
 
 ## Cancelled
@@ -644,14 +626,6 @@ type DispatchFacts = typeof DispatchFactsSchema.Type;
 type DisplayRow = typeof DisplayRowSchema.Type;
 ```
 
-## emptyRunEndOutput
-
-The output of a run that ended before its flow produced one.
-
-```ts
-function emptyRunEndOutput(): RunEndOutput
-```
-
 ## ensureError
 
 Coerce any thrown value, or the `Cause` of a failed Effect, to an Error
@@ -659,12 +633,6 @@ instance.
 
 ```ts
 function ensureError(err: unknown): Error
-```
-
-## ErrorLogData
-
-```ts
-type ErrorLogData = typeof ErrorLogDataSchema.Type;
 ```
 
 ## escapeAttr
@@ -770,12 +738,6 @@ row or a prompt line. The full path stays on `absolutePath`.
 
 ```ts
 function fileLocationShortDisplayPath(location: FileLocation): string
-```
-
-## FollowUpContent
-
-```ts
-type FollowUpContent = typeof FollowUpContentSchema.Type;
 ```
 
 ## FollowUpSender
@@ -1063,18 +1025,6 @@ const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globa
 type HookEvent = typeof HookEventSchema.Type;
 ```
 
-## HumanInputDecision
-
-Whether a human-input request may be shown, or why it settles denied.
-
-```ts
-type HumanInputDecision =
-  | 'present'
-  | {
-      readonly deny: 'yolo-no-human' | 'policy' | 'unpresentable';
-    };
-```
-
 ## InlinePersona
 
 An inline persona as an embedder writes it (before defaults).
@@ -1235,14 +1185,6 @@ const KIMI_CODE_PREFER_SETTING: { readonly key: "kimiCode.prefer"; readonly slot
 
 ```ts
 type LaunchApproval = typeof LaunchApprovalSchema.Type;
-```
-
-## LaunchNotice
-
-A refused launch's notice ({@link LaunchNoticeSchema}).
-
-```ts
-type LaunchNotice = typeof LaunchNoticeSchema.Type;
 ```
 
 ## LaunchNoticeSchema
@@ -1685,14 +1627,6 @@ interface ProposalFileGroup {
 }
 ```
 
-## PROVIDER_ENDPOINT_SETTINGS
-
-The providers' custom-endpoint rows, in catalog order.
-
-```ts
-const PROVIDER_ENDPOINT_SETTINGS: readonly [{ readonly id: "openai"; readonly key: "endpoint.openai"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }, { readonly id: "anthropic"; readonly key: "endpoint.anthropic"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }, { readonly id: "google"; readonly key: "endpoint.google"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }, { readonly id: "xai"; readonly key: "endpoint.xai"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }, { readonly id: "deepseek"; readonly key: "endpoint.deepseek"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }, { readonly id: "moonshot"; readonly key: "endpoint.moonshot"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }, { readonly id: "dashscope"; readonly key: "endpoint.dashscope"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }, { readonly id: "minimax"; readonly key: "endpoint.minimax"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }, { readonly id: "glm"; readonly key: "endpoint.glm"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }, { readonly id: "meta"; readonly key: "endpoint.meta"; readonly schema: withDecodingDefault<String, never>; readonly title: `${string} endpoint`; readonly description: `Custom base URL for ${string} API requests. Leave empty to use the default endpoint.`; readonly slot: "globalState"; }]
-```
-
 ## providerEndpointSetting
 
 A provider's custom-endpoint row, if it offers one.
@@ -1973,16 +1907,6 @@ it), or `notResumable` (it was deleted, or its input is closed).
 const ResumeRefusalSchema: Union<readonly [Struct<{ readonly kind: Literal<"finished">; }>, Struct<{ readonly kind: Literal<"blocked">; readonly blocker: Literals<readonly ["agentMissing", "pluginOff", "pluginUntrusted"]>; readonly name: String; }>, Struct<{ readonly kind: Literal<"unusableCheckpoint">; }>, Struct<{ readonly kind: Literal<"earlierBuild">; readonly cause: String; }>, Struct<{ readonly kind: Literal<"pluginUnavailable">; readonly plugin: String; readonly cause: String; }>, Struct<{ readonly kind: Literal<"notResumable">; }>]>
 ```
 
-## RetryApprovalDecision
-
-```ts
-type RetryApprovalDecision =
-  | 'present'
-  | {
-      readonly deny: 'yolo-retry' | 'credential' | 'policy' | 'unpresentable';
-    };
-```
-
 ## RetryRequest
 
 ```ts
@@ -2057,17 +1981,6 @@ function runBypasses<Id>(
 ): Readonly<Record<ApprovalBypassKind, boolean>>
 ```
 
-## RunChanged
-
-A run's removal found a later lifetime of the run than the one its
-request read (it ended and started again since); nothing was written.
-
-```ts
-class RunChanged extends Schema.TaggedError<RunChanged>()('RunChanged', {
-  aggregateId: AggregateIdSchema,
-})
-```
-
 ## RunEndError
 
 Why a run ended failed ({@link RunEndErrorSchema}).
@@ -2083,12 +1996,6 @@ A run's failure in plain words: a model failure's verdict worded
 
 ```ts
 function runEndErrorMessage(error: RunEndError): string
-```
-
-## RunEndOutput
-
-```ts
-type RunEndOutput = typeof RunEndOutputSchema.Type;
 ```
 
 ## RunEndSchema
@@ -2670,16 +2577,6 @@ const toJsonValue: (value: unknown) => Json
 type TokenUsageStats = typeof TokenUsageStatsSchema.Type;
 ```
 
-## TOOL_CALL_STATUS
-
-The one status of a tool call: carried by `tool.end`, folded onto the
-card, and read by every renderer. A failed call is `failed`; there is no
-side-channel error flag beside it.
-
-```ts
-const TOOL_CALL_STATUS: { readonly IN_PROGRESS: "in_progress"; readonly COMPLETED: "completed"; readonly FAILED: "failed"; }
-```
-
 ## TOOL_PATH_PROTECTION_SETTING
 
 Keep file-oriented tools inside the active working directory unless the
@@ -2830,12 +2727,6 @@ class Unavailable extends Schema.TaggedError<Unavailable>()(
   'Unavailable',
   { runId: RunIdSchema, reason: Schema.String },
 )
-```
-
-## UnreadableRun
-
-```ts
-type UnreadableRun = typeof UnreadableRunSchema.Type;
 ```
 
 ## usageLimitMessage

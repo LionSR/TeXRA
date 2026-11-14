@@ -10,7 +10,6 @@ import {
   AgentConfigSchema,
   type ApprovalGrants,
   type DisplayRow,
-  emptyRunEndOutput,
   type LocalRuntimeState,
   MESSAGE_TYPES,
   qualifyAggregateId,
@@ -19,7 +18,7 @@ import {
   RunIdSchema,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import type { RunParent } from '@shared/schemas';
+import { emptyRunEndOutput, type RunParent } from '@shared/schemas';
 import {
   makeSessionViewUpdater,
   type SessionViewUpdater,
