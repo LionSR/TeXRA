@@ -17,6 +17,7 @@ import {
   INSTRUCTION_ACTION,
   type InstructionAction,
 } from '@ui/copy/instructionActions';
+import type { DesktopSpawn } from './desktopWindows.js';
 
 // Button labels for the instruction dialog below. Desktop has one settings
 // home (Settings tab), so SET_API_KEY opens it directly rather than the
@@ -41,35 +42,40 @@ function inProject(project: string | undefined, detail?: string) {
 
 export function createDesktopDialogs(
   window: BrowserWindow,
+  /** The window's fibers, where a notice waits for its dismissal. */
+  spawn: DesktopSpawn,
   actions: {
     /** Open the guide page a refusal names. */
     openGuide(docsPage: string): void;
     dispatchInstructionAction(action: InstructionAction): void;
   },
 ) {
-  /** A message box nobody answers or waits for; one that cannot be shown
-   *  (its window gone) is logged at warn. */
+  /** A message box nobody answers or waits for, held by the window; one
+   *  that cannot be shown (its window gone) is logged at warn. */
   const notify = (
     level: NoticeLevel,
     message: string,
     project?: string,
   ): Effect.Effect<void> =>
-    Effect.tryPromise({
-      try: () =>
-        dialog.showMessageBox(window, {
-          type: level,
-          message,
-          ...inProject(project),
-        }),
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((cause) =>
-        Effect.logWarning(
-          `A desktop ${level} dialog could not be shown: ${cause.message}`,
-        ).pipe(withLogChannel('desktop')),
+    Effect.sync(() =>
+      spawn(
+        Effect.tryPromise({
+          try: () =>
+            dialog.showMessageBox(window, {
+              type: level,
+              message,
+              ...inProject(project),
+            }),
+          catch: ensureError,
+        }).pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning(
+              `A desktop ${level} dialog could not be shown: ${cause.message}`,
+            ).pipe(withLogChannel('desktop')),
+          ),
+          Effect.asVoid,
+        ),
       ),
-      Effect.forkDetach,
-      Effect.asVoid,
     );
   return {
     notify,
