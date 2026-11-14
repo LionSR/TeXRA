@@ -1815,12 +1815,13 @@ prompt: |
  * Threshold compaction end to end: at a 1% threshold, a long first message
  * puts the conversation over it. The message starts a task in the service,
  * which takes messages as a chat's run does (a headless `texra run` takes
- * none). The chat that resumes it runs a turn whose request waits for the
- * summary of the whole history, the turn's message included, and sends
- * only that (the reply names the summary and nothing before it); the turn
- * after is under the threshold and adds its message (the reply names the
- * summary and the new message). The store's `context.edit` rows are kept
- * as the artifact.
+ * none). A threshold summary leaves the newest exchange as it is, so the
+ * chat that resumes it runs a turn with nothing older to summarize, which
+ * sends the whole history (the reply names the first message); the turn
+ * after waits for the summary of the three messages before its own
+ * exchange and sends the summary with that exchange (the reply names the
+ * summary and the new message only). The store's `context.edit` rows are
+ * kept as the artifact.
  */
 async function validateThresholdCompaction() {
   const cwd = makeScratch('texra-cli-compaction-');
@@ -1860,7 +1861,7 @@ async function validateThresholdCompaction() {
       await observed.close();
     }
     const replies = [
-      'Model saw: [Previous conversation summary]',
+      'First message | Second message',
       'Earlier turns, summarized. | Third message',
     ];
     await project.chat(
@@ -1883,7 +1884,7 @@ async function validateThresholdCompaction() {
         edits[0].cause === 'compaction' &&
         edits[0].trigger === 'context-limit' &&
         JSON.parse(edits[0].range).to === 3,
-      `the summary should land as one edit of the three messages the second turn's request held (artifact: ${artifactPath})`,
+      `the summary should land as one edit of the three messages before the third turn's exchange (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);

@@ -115,7 +115,17 @@ const summarize = Effect.fn('compaction.summarize')(function* (
   reason: Reason,
 ): Effect.fn.Return<Summary | null> {
   const { logger, bound } = input;
-  const conversation = state.messages;
+  // A threshold summary leaves the newest exchange as it is: the last
+  // assistant message and what follows it (the results of its calls, or the
+  // input that came after), which the model has not answered yet and reads
+  // whole. A `/compact` and an overflow summarize everything.
+  const answered = state.messages.findLastIndex(
+    ({ role }) => role === 'assistant',
+  );
+  const conversation =
+    reason === 'threshold'
+      ? state.messages.slice(0, Math.max(answered, 0))
+      : state.messages;
   if (conversation.length <= 2) {
     if (reason !== 'threshold') {
       logger.debug('Conversation too short for compaction, skipping');
@@ -249,7 +259,8 @@ const land = Effect.fn('compaction.land')(function* (
 });
 
 /**
- * Summarize the whole history and land the summary, on the caller's fiber:
+ * Summarize the history (`summarize` says how much of it) and land the
+ * summary, on the caller's fiber:
  * a `/compact`'s answers ride the edit; an overflow's closes the failed
  * request. The state is unchanged when the history is too short to
  * summarize, or the summary attempt failed (logged and shown, never a stop).
