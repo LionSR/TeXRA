@@ -32,6 +32,7 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
@@ -105,7 +106,12 @@ function parsePath(path: string): { dir: string; basename: string } {
 
 @customElement('file-list')
 export class FileList extends LitElement {
-  static override styles = [designTokens, commonViewStyles, fileListStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    lineChangeStatsStyles,
+    fileListStyles,
+  ];
 
   /** The run whose files these are; every verb names it. */
   @property({ attribute: false }) runId: RunId | null = null;

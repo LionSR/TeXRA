@@ -22,16 +22,13 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - styles
-import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
+import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
-  static override styles = [
-    BaseRequestPanel.styles,
-    toolEditRequestPanelStyles,
-  ];
+  static override styles = [BaseRequestPanel.styles, lineChangeStatsStyles];
 
   protected override renderAsk(): TemplateResult {
     const { relativePath, path } = this.permission.data;
