@@ -127,7 +127,7 @@ export const DocumentReviewTool = defineTool({
     );
     const prompt = parts.join('\n\n');
     return {
-      ...executed(prompt, `Review of revision ${revision + 1}`),
+      ...executed(prompt, `${formatRoundLabel(revision)} review`),
       value: { prompt },
     };
   }),

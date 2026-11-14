@@ -507,7 +507,7 @@ export const DocumentDiffTool = defineTool({
     ];
     let summary = `${diffs.length} diffs`;
     if (notRun !== null) {
-      lines = [`No diffs for revision ${revision + 1}: ${notRun}.`];
+      lines = [`${formatRoundLabel(revision)} has no diffs: ${notRun}.`];
       summary = 'No diffs ran';
     } else if (entries.length > 0) {
       lines = [
