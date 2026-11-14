@@ -283,6 +283,7 @@ export {
   formatCompactDuration,
   formatCompactTokenCount,
   formatCostUsd,
+  formatResetDuration,
   formatResultCount,
   pluralize,
   previewLabel,
@@ -297,6 +298,7 @@ export {
 export {
   modelFailureMessage,
   runEndErrorMessage,
+  usageLimitMessage,
   usedUpPlanOf,
   type RunEndError,
   type UsedUpPlan,

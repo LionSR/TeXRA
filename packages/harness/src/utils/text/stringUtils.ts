@@ -21,6 +21,20 @@ export function formatCompactDuration(durationMs: number): string {
 }
 
 /**
+ * A coarse wait (`1d 20h`, `20h 22m`, `5m`), as a used-up plan's reset is
+ * worded: two units at most, whole minutes, and no minutes once it reaches a
+ * day (`pretty-ms` would back-fill a zero hour with them, `1d 58m`); under a
+ * minute is `less than a minute`.
+ */
+export function formatResetDuration(durationMs: number): string {
+  const wholeMinutes = Math.floor(Math.max(0, durationMs) / 60_000);
+  if (wholeMinutes === 0) return 'less than a minute';
+  const flooredMinutes =
+    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
+  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
+}
+
+/**
  * Format token counts for compact usage displays.
  *
  * Token displays intentionally stay raw until they exceed 4096, the common

@@ -6,7 +6,7 @@ import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageWindow,
 } from '@texra/shared/model/subscriptionUsage';
-import { formatResetDuration } from '@ui/copy/format';
+import { formatResetDuration } from '@texra-ai/harness/schemas';
 
 const STALE_AFTER_MS = 2 * 60_000;
 
