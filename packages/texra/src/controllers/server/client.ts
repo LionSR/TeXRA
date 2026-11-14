@@ -537,6 +537,20 @@ export interface ServiceLink<Client = ServiceClient> {
   readonly refusalTold: Ref.Ref<boolean>;
 }
 
+/** The service's client through `link` now; a link that holds none fails
+ *  with why (its `away`). A reconnect needs nothing of the caller: its next
+ *  call takes it. */
+export const linkedClient = <Client>(
+  link: ServiceLink<Client>,
+): Effect.Effect<Client, Error> =>
+  Effect.flatMap(link.client.get, (client) =>
+    client === null
+      ? Effect.flatMap(SubscriptionRef.get(link.away), (away) =>
+          Effect.fail(new Error(away)),
+        )
+      : Effect.succeed(client),
+  );
+
 /** Why `link` holds no service now, at each change: its `away` while its
  *  client is null, null while it holds one. What a window's banner says. */
 export const linkOutage = (

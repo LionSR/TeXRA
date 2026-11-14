@@ -49,6 +49,7 @@ import type {
 import {
   isOlder,
   linkService,
+  linkedClient,
   probeRecordedService,
   spawnService,
   type ServiceConnection,
@@ -340,15 +341,8 @@ export const linkCliService = Effect.fn('linkCliService')(function* (
     : linked.success;
 });
 
-/** The service's client through `link`, for one connection's use; a link
- *  that holds none now fails with why. */
+/** {@link linkedClient} in the shape the chat's `/tasks` takes. */
 export const linkClient = (
   link: ServiceLink,
 ): Effect.Effect<Pick<ServiceConnection, 'client'>, Error> =>
-  Effect.flatMap(link.client.get, (client) =>
-    client === null
-      ? Effect.flatMap(SubscriptionRef.get(link.away), (away) =>
-          Effect.fail(new Error(away)),
-        )
-      : Effect.succeed({ client }),
-  );
+  Effect.map(linkedClient(link), (client) => ({ client }));

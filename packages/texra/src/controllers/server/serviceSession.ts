@@ -55,6 +55,7 @@ import { attachWindowHost } from './windowHost';
 import {
   WINDOW_OUTDATED,
   environmentApiKeys,
+  linkedClient,
   requestOnService,
   type ServiceClient,
   type ServiceLink,
@@ -70,21 +71,22 @@ import type {
   TranscriptSubscription,
 } from '@texra-ai/harness/transcript';
 
-/** The service's client now; `offline` words a call made while the link
- *  holds none, with why it holds none (`ServiceLink.away`). A reconnect
- *  needs nothing here: the next call takes it. */
+/** A call through `link`'s client now; `offline` words a call made while
+ *  the link holds none, with why it holds none. */
 const callService = <A, E>(
   link: ServiceLink,
   offline: (reason: string) => E,
   use: (client: ServiceClient) => Effect.Effect<A, E>,
 ): Effect.Effect<A, E> =>
-  Effect.flatMap(link.client.get, (client) =>
-    client === null
-      ? Effect.flatMap(SubscriptionRef.get(link.away), (reason) =>
-          Effect.fail(offline(reason)),
-        )
-      : use(client),
+  linkedClient(link).pipe(
+    Effect.mapError((away) => offline(away.message)),
+    Effect.flatMap(use),
   );
+
+/** A call that reached no answer, a lost link or a failed transport, as
+ *  the window's user reads it. */
+const unanswered = (reason: string) =>
+  `The TeXRA service did not answer: ${reason}`;
 
 /** A call the service answers or fails as the session's own `Error`: the
  *  service's refusal as the class it failed with, a transport failure or
@@ -95,12 +97,12 @@ const asked = <A>(
 ): Effect.Effect<A, Error> =>
   callService(
     link,
-    (reason) => new Error(`The TeXRA service did not answer: ${reason}`),
+    (reason) => new Error(unanswered(reason)),
     (client) =>
       use(client).pipe(
         Effect.mapError((error) =>
           Predicate.isTagged(error, 'RpcClientError')
-            ? new Error(`The TeXRA service did not answer: ${error.message}`)
+            ? new Error(unanswered(error.message))
             : error,
         ),
       ),
@@ -138,7 +140,7 @@ export const serviceProjectState = (
             failed(
               error._tag === 'ProjectStateFailed'
                 ? error.message
-                : `The TeXRA service did not answer: ${error.message}`,
+                : unanswered(error.message),
               error,
             ),
           ),
@@ -418,9 +420,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           Effect.mapError((error) => {
             switch (error._tag) {
               case 'RpcClientError':
-                return new Rejected({
-                  reason: `The TeXRA service did not answer: ${error.message}`,
-                });
+                return new Rejected({ reason: unanswered(error.message) });
               case 'Invalid':
               case 'Internal':
                 return new Rejected({ reason: requestErrorText(error) });
