@@ -20,3 +20,19 @@ export function createPatterns<T>(
 export function generateBackslashFixes(commands: string[]): PatternDict {
   return createPatterns(commands, (cmd) => [[`\\\\${cmd}`, `\\${cmd}`]]);
 }
+
+/**
+ * Rewrites the legacy font switches around one letter to the math font
+ * command of the same name. Example: {\rm X} -> \mathrm{X}
+ */
+export function generateLegacyFontFixes(
+  letters: string[],
+  switches: string[],
+): PatternDict {
+  return createPatterns(letters, (letter) =>
+    switches.map((name): [string, string] => [
+      `{\\${name} ${letter}}`,
+      `\\math${name}{${letter}}`,
+    ]),
+  );
+}
