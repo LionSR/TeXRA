@@ -193,7 +193,7 @@ export type FollowUpDisposition = typeof FollowUpDispositionSchema.Type;
 
 /** A run this process cannot continue until its agent, or its agent's
  *  plugin, is back: a fact about this build's catalog, never a row's. */
-export const ResumeBlockedSchema = Schema.Struct({
+const ResumeBlockedSchema = Schema.Struct({
   kind: Schema.Literal('blocked'),
   blocker: Schema.Literals(['agentMissing', 'pluginOff', 'pluginUntrusted']),
   /** The agent or plugin it names. */

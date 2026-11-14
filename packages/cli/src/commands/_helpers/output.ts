@@ -26,6 +26,18 @@ interface CliResult {
   readonly text: string;
 }
 
+/** A command's own result record: itself in JSON, a `result` record naming
+ *  the command in NDJSON. */
+export const commandResult = (
+  command: string,
+  result: Readonly<Record<string, unknown>>,
+  text: string,
+): CliResult => ({
+  json: result,
+  ndjson: { kind: 'result', result: { command, ...result } },
+  text,
+});
+
 /**
  * Single home for the `json` / `ndjson` / `text` switch every headless command
  * repeats. Pass the already-formatted value for each format; the active

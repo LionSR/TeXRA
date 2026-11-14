@@ -12,7 +12,7 @@ import {
   type AgentConfig,
   type AgentSource,
 } from '@texra-ai/harness/schemas';
-import type { TeamPreset } from '@texra/shared/agentTeams';
+import { launchableTeams, type TeamPreset } from '@texra/shared/agentTeams';
 import type { TeamOptionData } from '@texra/shared/pickerOptions';
 import {
   findTeamPreset,
@@ -156,16 +156,12 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
     });
 }
 
-/** The catalog's launchable teams: every preset but the setup starter. */
-const launchable = (presets: readonly TeamPreset[]): TeamPreset[] =>
-  presets.filter((preset) => !preset.setupOnly);
-
 export function loadTeamOptions<T extends TeamCatalogAgent>(
   ports: Omit<TeamRunOptions<T>, 'agentOverride'> & {
     presets: readonly TeamPreset[];
   },
 ): TeamOptionData[] {
-  return buildTeamOptions(planTeamRuns(launchable(ports.presets), ports));
+  return buildTeamOptions(planTeamRuns(launchableTeams(ports.presets), ports));
 }
 
 type TeamLaunchResolution =
@@ -183,7 +179,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(
     presets: readonly TeamPreset[];
   },
 ): TeamLaunchResolution {
-  const preset = findTeamPreset(launchable(args.presets), args.teamId);
+  const preset = findTeamPreset(launchableTeams(args.presets), args.teamId);
   if (!preset) return { status: 'unknown-team' };
 
   const plan = planTeamRun(preset, args);

@@ -248,11 +248,9 @@ export const createExtensionHostRequests = Effect.fn(
             patch: { commit: parsed.commitHash },
           });
         } else {
-          yield* Effect.forkDetach(
-            vscodeUi.notify(
-              'info',
-              `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
-            ),
+          yield* vscodeUi.notify(
+            'info',
+            `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
           );
         }
         const sourceLocation = pathToLocationIn(
@@ -271,11 +269,9 @@ export const createExtensionHostRequests = Effect.fn(
             paths: [parsed.sourcePath],
           } satisfies HostOutcome;
         }
-        yield* Effect.forkDetach(
-          vscodeUi.notify(
-            'info',
-            `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
-          ),
+        yield* vscodeUi.notify(
+          'info',
+          `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
         );
       }
     }

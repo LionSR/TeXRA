@@ -112,6 +112,43 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
     );
 
     it.effect(
+      'stops the children of a run that is stopped while it opens',
+      () =>
+        Effect.gen(function* () {
+          const session = yield* defaultSession;
+          const runs = Context.get(session, RunRegistry);
+          // A parent with rows and a background child running under it, as
+          // when a child's delivery resumes a parent that had ended.
+          const parentId = yield* publishTestRunStart(session);
+          const childId = yield* publishTestRunStart(session, undefined, {
+            parent: parentId,
+          });
+          const child = yield* Effect.forkChild(
+            startAwaited(runs, childId, Effect.never),
+            { startImmediately: true },
+          );
+          const opened = yield* Deferred.make<void>();
+          const parent = yield* Effect.forkChild(
+            runs.start(parentId, {
+              open: Deferred.await(opened),
+              run: () => Effect.never,
+            }),
+            { startImmediately: true },
+          );
+          expect(yield* runs.stop(parentId, 'user')).toBe(true);
+          yield* Deferred.succeed(opened, undefined);
+          yield* Fiber.await(parent);
+          yield* runs.awaitDrained(childId).pipe(
+            Effect.timeoutOrElse({
+              duration: '2 seconds',
+              orElse: () => Effect.die(new Error('The child was not stopped')),
+            }),
+          );
+          yield* Fiber.await(child);
+        }),
+    );
+
+    it.effect(
       "refuses a child under a stopped parent from the stop's row on (issue #12442)",
       () =>
         Effect.gen(function* () {

@@ -184,11 +184,6 @@ export const INTERACTIVE_GLOBAL_ARGS: Omit<
   color: GLOBAL_ARGS.color,
 };
 
-export const INTERACTIVE_AGENT_GLOBAL_ARGS = {
-  ...INTERACTIVE_GLOBAL_ARGS,
-  ...SKILL_SOURCE_ARGS,
-} as const;
-
 /**
  * Commands that necessarily own the terminal and therefore reject the
  * headless-only globals with the explicit "interactive command" usage error

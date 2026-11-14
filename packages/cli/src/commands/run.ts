@@ -48,7 +48,7 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
 import {
-  AGENT_RUN_GLOBAL_ARGS,
+  SKILL_SOURCE_ARGS,
   collectCommonAgentRunFlags,
   optionalStringFlagValue,
   optString,
@@ -459,7 +459,7 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
 export const headlessRunCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run an agent headlessly' },
   args: {
-    ...AGENT_RUN_GLOBAL_ARGS,
+    ...SKILL_SOURCE_ARGS,
     agent: {
       type: 'positional',
       required: true,

@@ -84,7 +84,7 @@ export interface CliExecuteOptions {
   readonly runId?: RunId;
 }
 
-export type CliConfigExecuteResult =
+type CliConfigExecuteResult =
   | {
       readonly ok: true;
       readonly result: CliRunResult;

@@ -32,7 +32,7 @@ export const EventInputSchema = Schema.TaggedStruct('event', {
  * a no-op, a `from: 0` chunk replaces the row, and two adjacent chunks merge
  * into one exactly. Never durable, never a seq.
  */
-export const TextChunkSchema = Schema.TaggedStruct('chunk', {
+const TextChunkSchema = Schema.TaggedStruct('chunk', {
   runId: RunIdSchema,
   rowId: Schema.String,
   from: NonNegativeIntSchema,
@@ -58,7 +58,7 @@ export const RunNoticeSchema = Schema.Union([
 ]);
 
 /** A run this build cannot open, and why. */
-export const UnreadableRunSchema = Schema.Struct({
+const UnreadableRunSchema = Schema.Struct({
   runId: RunIdSchema,
   reason: RunUnreadableSchema,
 });
@@ -92,7 +92,7 @@ export type TranscriptSubscription =
  * aggregate absent from `present` no longer exists. `unreadable` names the
  * runs the same read found this build cannot open.
  */
-export const ExistenceReconciliationSchema = Schema.Struct({
+const ExistenceReconciliationSchema = Schema.Struct({
   checkedAggregateIds: Schema.Array(AggregateIdSchema),
   present: Schema.Array(AggregateIdSchema),
   unreadable: Schema.Array(UnreadableRunSchema),

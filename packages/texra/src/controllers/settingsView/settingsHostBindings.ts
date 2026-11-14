@@ -129,7 +129,7 @@ export function settingsPresentation(
   inputs: PubSub.PubSub<SettingsInput>,
 ): SettingsPresentation {
   const shown = (level: NoticeLevel, message: string) =>
-    Effect.asVoid(Effect.forkDetach(bindings.dialogs.notify(level, message)));
+    bindings.dialogs.notify(level, message);
   const alert = (message: string) =>
     Effect.andThen(
       Effect.logError(message).pipe(withLogChannel(SETTINGS_LOG_CHANNEL)),

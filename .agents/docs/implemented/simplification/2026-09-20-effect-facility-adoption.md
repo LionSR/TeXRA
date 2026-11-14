@@ -60,13 +60,9 @@ replace any; they belong to the observability plane, not here.
 
 ## 3. Not re-proposed
 
-`withPerKeyLane` onto `Semaphore` (a later claimant can enter first when a
-fiber yields before joining the Semaphore's queue; the lane keeps claim
-order), `ModelRetryGate` onto `Schedule` (a
-cross-fiber circuit breaker; `Schedule` is per-fiber), the `SessionEvents`
-inbox (already `Queue` and `SubscriptionRef`), and
-`packages/harness/src/tools/timeouts.ts` (already `Effect.timeoutOrElse` and
-`Schedule`). These are the first things an autonomous agent will suggest;
+`ModelRetryGate` onto `Schedule` (a cross-fiber circuit breaker; `Schedule`
+is per-fiber) and `packages/harness/src/tools/timeouts.ts` (already
+`Effect.timeoutOrElse` and `Schedule`). These are the first things an autonomous agent will suggest;
 `config/ratchets/refuted-candidates.json` makes them machine-refused.
 
 The platform config providers onto an Effect `ConfigProvider` (design panel,

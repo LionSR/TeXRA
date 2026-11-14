@@ -19,7 +19,7 @@ import {
   Result,
   Schema,
   ScopedRef,
-  SynchronizedRef,
+  Ref,
 } from 'effect';
 
 import type { FollowUpBatch } from '@agent/followUp/FollowUpReader';
@@ -465,6 +465,6 @@ export type StepHooks = ReturnType<typeof stepHooks>;
 /** The hooks of `run`'s current step; none before its first step opens. */
 export const hooksOf = (run: AgentRunShape) =>
   Effect.map(
-    SynchronizedRef.get(run.steps),
+    Ref.get(run.steps),
     (open) => open?.tools.hooks ?? stepHooks(run, new Map(), null),
   );

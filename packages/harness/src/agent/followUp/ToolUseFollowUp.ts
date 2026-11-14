@@ -13,27 +13,13 @@ import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import { Inbox, type InboxItem } from './Inbox';
 
 /** What a follow-up's admission and its wake read of the session. */
-export type FollowUpServices =
+type FollowUpServices =
   | Inbox
   | Runs
   | RunRegistry
   | SessionLog
   | SessionViewAccess
   | Interactions;
-
-/** The caller's {@link FollowUpServices}, for a run's inbox kept past the
- *  caller's fiber ({@link runInbox}). */
-export const followUpServices = Effect.map(
-  Effect.context<FollowUpServices>(),
-  Context.pick(
-    Inbox,
-    Runs,
-    RunRegistry,
-    SessionLog,
-    SessionViewAccess,
-    Interactions,
-  ),
-);
 
 /**
  * Why a submission could not be admitted, as {@link describeFollowUpFailure}
@@ -46,10 +32,7 @@ export const followUpServices = Effect.map(
  *   store), which says nothing about the run itself.
  * - `notParent`: the sender is not the run's parent.
  */
-export type FollowUpFailureReason =
-  | ResumeRefusal['kind']
-  | 'readFailed'
-  | 'notParent';
+type FollowUpFailureReason = ResumeRefusal['kind'] | 'readFailed' | 'notParent';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
@@ -126,7 +109,7 @@ export const REFUSED: { readonly failed: ResumeRefusal } = {
  * row waits for the next explicit resume; an owning parent is followed; a
  * run the store no longer holds is not resumed. Never fails.
  */
-export const wakeRun = Effect.fn('wakeRun')(function* (
+const wakeRun = Effect.fn('wakeRun')(function* (
   runId: RunId,
 ): Effect.fn.Return<void, never, Runs | RunRegistry | SessionLog> {
   // The store's answer, not the view's: the view trails the log, and a run
@@ -287,7 +270,7 @@ export interface RunInbox {
 }
 
 /** `runId`'s input on the session whose services are `session`
- *  ({@link followUpServices}). */
+ *  ({@link FollowUpServices}). */
 export const runInbox = (
   runId: RunId,
   session: Context.Context<FollowUpServices>,

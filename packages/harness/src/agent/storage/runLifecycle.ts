@@ -161,13 +161,13 @@ export interface RunEnding {
 
 /** The `run.end` the store holds once the transaction committed, and
  *  whether this call wrote it (an earlier end of the lifecycle stands). */
-export interface EndedRun {
+interface EndedRun {
   readonly end: Omit<RunEnd, 'usage'> | null;
   readonly wrote: boolean;
 }
 
 /** What a run's end reads of its session. */
-export type EndServices = SessionLog | Inbox | RunHistory;
+type EndServices = SessionLog | Inbox | RunHistory;
 
 /** The caller's {@link EndServices}, for the end's transaction job. Picked
  *  when asked: the inbox's module and this one import each other. */
@@ -262,7 +262,7 @@ const parentDelivery = Effect.fn('parentDelivery')(function* (
  * rows this build cannot load ends unloaded, with a warning, requests
  * uncancelled.
  */
-export const endIn = Effect.fn('endIn')(function* (
+const endIn = Effect.fn('endIn')(function* (
   tx: Pick<SessionTransaction, 'append'>,
   input: RunEnding,
   leading: readonly UnfoldedDraft[] = [],

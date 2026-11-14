@@ -142,12 +142,6 @@ interface ContextManagementRow extends TranscriptRowBase {
 }
 ```
 
-## decodeXmlEntities
-
-```ts
-function decodeXmlEntities(text: string): string
-```
-
 ## dispatchedChildren
 
 The runs `run` launched that are not a script's calls: what its dispatch
@@ -995,9 +989,8 @@ interface WebSearchRow extends TranscriptRowBase {
 A runtime whose `runFork` reports a fiber's failure or defect on exit.
 `Fiber.addObserver` fires on every exit, including fibers a
 caller later `Fiber.join`s, so a joined failure is logged here and still
-delivered to the joiner. A success stays silent, as does an exit made of
-interrupts alone or of interrupts beside Effect's end-of-stream `Done`.
-`runPromise` and `runSync` hand their exits to the caller already.
+delivered to the joiner. `runPromise` and `runSync` hand their exits to
+the caller already.
 
 ```ts
 function withForkFailureReporting<R, ER>(

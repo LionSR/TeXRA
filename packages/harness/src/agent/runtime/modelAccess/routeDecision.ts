@@ -155,11 +155,13 @@ export const admitSwitch = Effect.fn('admitSwitch')(
       declinedRoutes,
       mode: selected.request.mode,
     });
-    yield* decideReasoning(
-      selected.config,
-      selected.request,
-      settings.reasoningLevels[selected.config.ref],
-      decision.route,
+    yield* Effect.fromResult(
+      decideReasoning(
+        selected.config,
+        selected.request,
+        settings.reasoningLevels[selected.config.ref],
+        decision.route,
+      ),
     );
     return null;
   },

@@ -65,14 +65,12 @@ export type {
 export { runActionRefusal } from '@shared/session/runActions';
 // What makes the views read-only all the way down.
 export type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-// What a session store's reads answer with: an aggregate's state, a CLI
-// input-history row, the refusals, and the notice of a store moved aside
-// on open.
+// What a session store's reads answer with: a CLI input-history row, the
+// refusal of a closed aggregate, and the notice of a store moved aside on
+// open.
 export type {
-  AggregateState,
   DatabaseAggregateClosed,
   InputHistoryRecord,
-  RunChanged,
   SessionStoreMovedAside,
 } from '@shared/session/database';
 // Where a run stands, the pair of `RunView` fields a renderer reads.
@@ -94,11 +92,9 @@ export type {
   DeclinableUsageRoute,
   DispatchFacts,
   DisplayRow,
-  ErrorLogData,
   ExternalFileLocation,
   FileListEntry,
   FileLocation,
-  FollowUpContent,
   FollowUpSender,
   HookEvent,
   InlinePersona,
@@ -106,7 +102,6 @@ export type {
   JsonValue,
   LoadedMediaMetadata,
   LocalRuntimeState,
-  UnreadableRun,
   LogicalId,
   LogLevel,
   MediaAttachmentKind,
@@ -145,8 +140,7 @@ export type {
   WorkspaceFileLocation,
 } from '@shared/schemas';
 export { ResumeRefusalSchema } from '@shared/schemas';
-// The approval policy: its values, default, persisted key and tolerant
-// parse, and the denial a run that may not ask reports.
+// The approval policy: its values, defaults, schema and tolerant parse.
 export {
   APPROVAL_POLICIES,
   APPROVAL_POLICY_DEFAULT,
@@ -154,8 +148,6 @@ export {
   ApprovalPolicySchema,
   parseApprovalPolicy,
   type ApprovalPolicy,
-  type HumanInputDecision,
-  type RetryApprovalDecision,
 } from '@shared/approvalPolicy';
 // The approvals a run may skip, and how a run's own and inherited grants
 // resolve against the policy.
@@ -257,15 +249,14 @@ export {
 } from '@shared/state/stateSettings';
 // What a `ConfigProvider` (root) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@shared/config/settings';
-// The providers' custom-endpoint rows and China-region toggles, and a
-// provider's own, if it has them.
+// The providers' custom-endpoint and China-region rows, and a provider's
+// own, if it has them.
 export {
   DASHSCOPE_REGION_SETTING,
   GLM_ENDPOINT_SETTING,
   GLM_REGION_SETTING,
   MINIMAX_REGION_SETTING,
   MOONSHOT_REGION_SETTING,
-  PROVIDER_ENDPOINT_SETTINGS,
   providerEndpointSetting,
   providerRegionSetting,
 } from '@shared/state/providerSettings';
@@ -322,12 +313,10 @@ export {
   AgentScanIssueSchema,
   AgentSourceSchema,
   type BashRequest,
-  blocksCaller,
   type ContextStateData,
   CredentialSwitchSchema,
   type DiffStats,
   DiffStatsSchema,
-  emptyRunEndOutput,
   fileLocationAddressPath,
   fileLocationDisplayPath,
   FileLocationSchema,
@@ -347,7 +336,6 @@ export {
   isPlainAgentIdentity,
   isTaskConfig,
   JsonValueSchema,
-  type LaunchNotice,
   LaunchNoticeSchema,
   NonNegativeIntSchema,
   listingTypeOf,
@@ -377,7 +365,6 @@ export {
   RequestShowErrorPayloadSchema,
   type RetryRequest,
   RUN_OUTCOME,
-  type RunEndOutput,
   RunEndSchema,
   runIdentityDisplayName,
   runIdentityName,
@@ -403,7 +390,6 @@ export {
   sumUsageStats,
   toJsonValue,
   type TokenUsageStats,
-  TOOL_CALL_STATUS,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,
   type UserQuestionRequest,

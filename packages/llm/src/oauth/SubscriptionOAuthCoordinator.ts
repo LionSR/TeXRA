@@ -322,23 +322,47 @@ export class SubscriptionOAuthCoordinator<
     );
   });
 
-  /** Exchange `previous`'s refresh token and store the session it buys; a
-   *  fatal refusal deletes the stored one, which the lock holds unchanged. */
+  /**
+   * Exchange `previous`'s refresh token and store the session it buys.
+   *
+   * The lock holds the stored session unchanged against this process only.
+   * The credential file is shared by every host, so a fatal refusal can
+   * mean another process spent the token first: the session it stored is
+   * then the live one, and this call adopts it. A refused session that is
+   * still the stored one is deleted.
+   */
   private readonly refresh = Effect.fn('SubscriptionOAuthCoordinator.refresh')(
     function* (this: SubscriptionOAuthCoordinator<S>, previous: S) {
-      const tokens = yield* refreshOAuthTokens(
+      const exchange = yield* refreshOAuthTokens(
         this.policy.tokenEndpoint,
         previous.refreshToken,
         previous.clientId ?? this.policy.tokenEndpoint.clientId,
       ).pipe(
         Effect.mapError(grantFailure),
-        Effect.tapError((error) =>
-          error.kind === 'fatal'
-            ? this.secrets.delete(this.policy.secretKey)
-            : Effect.void,
+        // A success is the tokens; a failure here is the session to adopt.
+        Effect.map((tokens) => Result.succeed(tokens)),
+        Effect.catchIf(
+          (error) => error.kind === 'fatal',
+          (error) =>
+            Effect.gen({ self: this }, function* () {
+              // A stored session that cannot be read is no session to
+              // adopt; the delete below reports a store that cannot be
+              // reached.
+              const stored = yield* this.loadSession().pipe(
+                Effect.catch(() => Effect.succeed(null)),
+              );
+              if (
+                stored !== null &&
+                stored.refreshToken !== previous.refreshToken
+              )
+                return Result.fail(stored);
+              yield* this.secrets.delete(this.policy.secretKey);
+              return yield* Effect.fail(error);
+            }),
         ),
       );
-      const session = yield* this.buildSession(tokens, previous);
+      if (Result.isFailure(exchange)) return exchange.failure;
+      const session = yield* this.buildSession(exchange.success, previous);
       yield* this.store(session);
       return session;
     },

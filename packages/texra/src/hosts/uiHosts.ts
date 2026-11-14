@@ -101,9 +101,9 @@ export interface InputField {
  *
  * Every member is an `Effect`. A notice never fails: a host that could not
  * show it logs the cause at warn, since a run or a page must not fail
- * because a toast did not appear. It finishes when the host's call does (VS
- * Code's toast when it is dismissed), so a caller that must not wait forks
- * it. A confirmation or an input the host could not present fails with
+ * because a toast did not appear. It finishes once the host was asked to
+ * show it, never when the person dismisses it, so no caller forks it. A
+ * confirmation or an input the host could not present fails with
  * {@link HostFailed}; the user's own answer, a dismissal included, is a value.
  * Interrupting the fiber that waits on an input closes it where the host has
  * a cancellation channel (VS Code's input box) and detaches from it where it

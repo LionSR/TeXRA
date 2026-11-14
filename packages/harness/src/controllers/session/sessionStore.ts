@@ -48,7 +48,7 @@ import { TextChunkSource } from './sessionSources';
 /** What the session layer composes a session from, beside the handle. The
  *  store is the one owner of the session's publisher: nothing else reaches
  *  its transactions. */
-export interface SessionStore {
+interface SessionStore {
   readonly log: SessionLogShape;
   /** The publisher's detached door: for a producer with no fiber to wait on
    *  (the inbox's own sends, an interrupted request's cancellation). */

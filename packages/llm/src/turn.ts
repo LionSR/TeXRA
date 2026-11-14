@@ -151,79 +151,69 @@ const AnthropicControlsSchema = Schema.Struct({
   effort: EffortSchema,
   cache: CacheSchema,
 });
+type Binding = typeof BindingSchema.Type;
+
 /**
- * A protocol binding and its defaults, as `bindModel` builds it; never
- * decoded, so it states the shape only. A null default `temperature` or
- * `maxOutputTokens` is a route that takes none.
+ * A protocol binding and its defaults, as `bindModel` builds it. A null
+ * default `temperature` or `maxOutputTokens` is a route that takes none.
  */
-/** Whether a configuration's protocol may run a turn in the background. */
-export const BackgroundCapabilitySchema = Schema.Literals([
-  'supported',
-  'unsupported',
-]);
-const ModelConfigurationSchema = Schema.Union([
-  BindingSchema.mapFields(
-    Struct.assign({
-      protocol: Schema.Literal('google-interactions'),
-      background: BackgroundCapabilitySchema,
-      defaults: GoogleControlsSchema.mapFields(Struct.omit(['toolChoice'])),
-    }),
-  ),
-  BindingSchema.mapFields(
-    Struct.assign({
-      protocol: Schema.Literal('openai-responses'),
-      background: BackgroundCapabilitySchema,
+export type ModelConfiguration =
+  | (Binding & {
+      readonly protocol: 'google-interactions';
+      readonly defaults: Omit<typeof GoogleControlsSchema.Type, 'toolChoice'>;
+    })
+  | (Binding & {
+      readonly protocol: 'openai-responses';
+      /** The route runs a turn in the background. */
+      readonly background: boolean;
       /** The route takes input files; a document is refused locally otherwise. */
-      supportsDocumentInput: Schema.Boolean,
-      allowedReasoningEfforts: Schema.Array(ReasoningEffortLevelSchema),
+      readonly supportsDocumentInput: boolean;
+      readonly allowedReasoningEfforts: ReadonlyArray<
+        typeof ReasoningEffortLevelSchema.Type
+      >;
       /**
        * A chained request carries no `instructions`: the route reuses the
        * stored response's own and refuses both together (xAI). The prefix
        * fingerprint already pins the system prompt a continuation covers.
        */
-      continuationInheritsInstructions: Schema.Boolean,
+      readonly continuationInheritsInstructions: boolean;
       /** The route takes `tool_choice` naming one function, not only `auto`. */
-      supportsForcedToolChoice: Schema.Boolean,
-      /** OpenAI's own endpoint (the API or a ChatGPT plan): it routes its prompt
-       *  cache by `prompt_cache_key` and takes `developer` messages mid-run. */
-      openaiEndpoint: Schema.Boolean,
+      readonly supportsForcedToolChoice: boolean;
       /**
        * `openai` sends OpenAI's full request surface; `chatgpt` sends it with
        * function tools inside the plan's namespace; `compatible` omits what
        * the vendor Responses endpoints do not take: the encrypted-reasoning
        * `include`, `strict` on tools, and a `store` that is only the default.
        */
-      requestDialect: Schema.Literals(['openai', 'compatible', 'chatgpt']),
-      defaults: ResponsesControlsSchema.mapFields(
-        Struct.omit(['toolChoice', 'promptCacheKey']),
-      ),
-    }),
-  ),
-  BindingSchema.mapFields(
-    Struct.assign({
-      protocol: Schema.Literal('anthropic-messages'),
+      readonly requestDialect: 'openai' | 'compatible' | 'chatgpt';
+      readonly defaults: Omit<
+        typeof ResponsesControlsSchema.Type,
+        'toolChoice' | 'promptCacheKey'
+      >;
+    })
+  | (Binding & {
+      readonly protocol: 'anthropic-messages';
       /** The model takes mid-conversation `role: "system"` messages. */
-      supportsSystemMessages: Schema.Boolean,
-      defaults: AnthropicControlsSchema.mapFields(Struct.omit(['toolChoice'])),
-    }),
-  ),
-]);
-export type ModelConfiguration = typeof ModelConfigurationSchema.Type;
+      readonly supportsSystemMessages: boolean;
+      readonly defaults: Omit<
+        typeof AnthropicControlsSchema.Type,
+        'toolChoice'
+      >;
+    });
 
 /**
- * Whether a configuration admits background work: Responses and Google mark
- * it, and Google retrieves a background result through server-side state.
- * The one answer: a protocol model carries its `background` member exactly
- * when this holds, and the binding reports that member.
+ * Whether a configuration admits background work: a Responses route that
+ * runs it, and Google, which retrieves a background result through
+ * server-side state. The one answer: a protocol model carries its
+ * `background` member exactly when this holds, and the binding reports that
+ * member.
  */
 export function backgroundCapable(configuration: ModelConfiguration): boolean {
   switch (configuration.protocol) {
     case 'openai-responses':
-      return configuration.background === 'supported';
+      return configuration.background;
     case 'google-interactions':
-      return (
-        configuration.background === 'supported' && configuration.defaults.store
-      );
+      return configuration.defaults.store;
     case 'anthropic-messages':
       return false;
   }

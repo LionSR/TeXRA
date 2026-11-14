@@ -33,7 +33,7 @@ import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
-import type { Dialogs, NoticeLevel } from '@texra/hosts/uiHosts';
+import type { Dialogs } from '@texra/hosts/uiHosts';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
@@ -87,13 +87,8 @@ export function latexdiffVerbs(parts: {
   readonly session: Session;
   readonly notify: Dialogs['notify'];
 }) {
-  const { host, roots, session } = parts;
+  const { host, roots, session, notify } = parts;
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
-
-  /** A notice the request does not wait on: a VS Code toast answers only
-   *  when it is dismissed. */
-  const notify = (level: NoticeLevel, message: string) =>
-    Effect.forkDetach(parts.notify(level, message));
 
   /** A generated diff opens; a failed one is refused with its message. */
   const open = <E extends Error, R>(diff: Effect.Effect<string, E, R>) =>

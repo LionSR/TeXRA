@@ -36,7 +36,7 @@ export function createDesktopWindowHost(options: {
   const { window, runtime, spawn, bridge } = options;
   const post = (message: unknown): void => bridge.postToRenderer(message);
 
-  const dialogs = createDesktopDialogs(window, {
+  const dialogs = createDesktopDialogs(window, spawn, {
     openGuide: (docsPage) => openExternalInBackground(texraGuideUrl(docsPage)),
     dispatchInstructionAction: (action) => dispatchInstructionAction(action),
   });

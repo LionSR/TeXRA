@@ -10,7 +10,7 @@ import { Effect, FileSystem } from 'effect';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
 import { mergeEditOnto } from '@tools/unifiedDiff';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { withFileWriteLane } from '@utils/files/fileWriteLane';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
@@ -34,32 +34,6 @@ export class ApprovedEditConflictError extends ToolError {
 }
 
 /**
- * One process-wide lane per file for the read, merge and write of an
- * approved edit: the approval wait can take minutes while parallel runs edit
- * the same files. Keyed by the file's real path (a new file's nearest
- * existing ancestor's, joined with the rest), so a symlink and its target
- * meet on one lane; `withPerKeyLane` deletes a lane once idle.
- */
-const approvedWriteLanes = new Map<string, PerKeyLane>();
-
-function realPathOf(
-  fs: FileSystem.FileSystem,
-  file: string,
-): Effect.Effect<string> {
-  const parent = nodePath.dirname(file);
-  return fs.realPath(file).pipe(
-    // Only the lane key: whatever the I/O fails on, the write reports.
-    Effect.catch(() =>
-      parent === file
-        ? Effect.succeed(file)
-        : realPathOf(fs, parent).pipe(
-            Effect.map((dir) => nodePath.join(dir, nodePath.basename(file))),
-          ),
-    ),
-  );
-}
-
-/**
  * Reconcile approved content with the current workspace file. The caller's
  * result records the write (`edits`), which is what a later edit of the
  * file requires in the run's rows.
@@ -67,8 +41,9 @@ function realPathOf(
  * The path is written through its own view of the filesystem: a
  * workspace-relative path through the session's confined `WorkspaceFs` view,
  * an already-absolute one (an external root, a worktree) through the process
- * `FileSystem`. The read, the merge and the write hold the file's lane,
- * and a merge that fails is an
+ * `FileSystem`. The read, the merge and the write hold the file's lane
+ * (`withFileWriteLane`, shared with every other writer of it), and a merge
+ * that fails is an
  * {@link ApprovedEditConflictError} rather than a write of the approved
  * content over the concurrent change.
  */
@@ -89,10 +64,6 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       : yield* WorkspaceFs;
     const fs = workspace ?? (yield* FileSystem.FileSystem);
     const file = workspace ? yield* workspace.resolve(path) : path;
-    const lane = yield* realPathOf(
-      yield* FileSystem.FileSystem,
-      nodePath.resolve(file),
-    );
     return yield* Effect.gen(function* () {
       const exists = yield* entryExists(fs, path);
       // All content is already LF-normalized at the FS read boundary,
@@ -121,7 +92,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
         yield* fs.makeDirectory(nodePath.dirname(path), { recursive: true });
       yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
       return { appliedContent };
-    }).pipe(withPerKeyLane(approvedWriteLanes, lane));
+    }).pipe(withFileWriteLane(file));
   },
 );
 

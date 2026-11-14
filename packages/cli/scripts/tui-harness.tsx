@@ -29,7 +29,7 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import { Secrets } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
@@ -41,6 +41,7 @@ import {
   SessionRequests,
 } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
+import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';

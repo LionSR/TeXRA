@@ -24,6 +24,8 @@ import {
   type ProcessRuntime,
   type ProcessServices,
   type GlobalValues,
+  type ScopedFork,
+  scopedFork,
   withProcessServices,
   StateStores,
   ToolAvailability,
@@ -178,6 +180,16 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // any of those; the task pill's item is owned solely by
   // `context.subscriptions` (`taskStatusBar`), matching the setup pill.
   yield* Effect.addFinalizer(() => runtime.disposeEffect);
+  // Every VS Code callback of the activation starts its work here: the
+  // activation scope's close ends it before the runtime goes, and a
+  // callback after deactivation starts nothing.
+  const activationScope = yield* Scope.Scope;
+  const fork = yield* withProcessServices(
+    managed,
+    scopedFork<ProcessServices | Sessions>().pipe(
+      Effect.provideService(Scope.Scope, activationScope),
+    ),
+  );
   const projectScope = yield* Scope.make();
   // The window's session closes before the project state it reads.
   yield* Effect.addFinalizer(() =>
@@ -204,7 +216,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         defaultNodeStorageRoot(),
         workspaceRoot,
         (message) => {
-          runtime.runFork(
+          fork(
             Effect.logWarning(message).pipe(
               withLogChannel(EXTENSION_CHANNEL),
               Effect.andThen(vscodeUi.notify('warning', message)),
@@ -228,8 +240,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const notice = vscode.env.isTelemetryEnabled
         ? yield* telemetryNoticeIfDue(roots.config)
         : null;
-      if (notice) yield* Effect.forkDetach(vscodeUi.notify('info', notice));
-      return { runtime, roots, hosts: yield* HostWindows, reached };
+      if (notice) yield* vscodeUi.notify('info', notice);
+      return { runtime, fork, roots, hosts: yield* HostWindows, reached };
     }),
   );
 });
@@ -351,8 +363,11 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
-    const { runtime, roots } = yield* initVscodePlatform(context, undefined);
-    registerWelcomeView(context, runtime);
+    const { runtime, fork, roots } = yield* initVscodePlatform(
+      context,
+      undefined,
+    );
+    registerWelcomeView(context, fork);
     for (const [id, command] of Object.entries(NO_FOLDER_COMMANDS)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(id, () =>
@@ -374,7 +389,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // A folder's window is a client of the one background service, so its
   // tasks keep running when it closes and other windows and terminals see
   // them. Decided once: a reconnect never re-enters it.
-  const { runtime, roots, hosts, reached } = yield* initVscodePlatform(
+  const { runtime, fork, roots, hosts, reached } = yield* initVscodePlatform(
     context,
     workspaceRoot,
     {
@@ -389,7 +404,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, runtime, roots, hosts, reached).pipe(
+    activateWorkspace(context, runtime, fork, roots, hosts, reached).pipe(
       Effect.provideService(Scope.Scope, activationScope),
     ),
   );
@@ -404,6 +419,8 @@ const activateExtension = Effect.fn('activateExtension')(function* (
 const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
+  /** The activation's run function for VS Code callbacks. */
+  fork: ScopedFork<ProcessServices | Sessions>,
   roots: WorkspaceRoots,
   hosts: Context.Service.Shape<typeof HostWindows>,
   /** The background service, as the activation reached it once. */
@@ -417,8 +434,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const windowSession: GuiSession = yield* openProjectSession(
     roots,
     reached,
-    (message) =>
-      Effect.asVoid(Effect.forkDetach(vscodeUi.notify('warning', message))),
+    (message) => vscodeUi.notify('warning', message),
   ).pipe(Effect.provideService(HostWindows, hosts));
   const { session } = windowSession;
 
@@ -470,6 +486,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     context,
     progressViewProvider,
     runtime,
+    fork,
     roots,
     session,
   );
@@ -479,7 +496,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this program, which logs a failed
-  // refresh instead of letting it become an unhandled rejection.
+  // refresh instead of letting it become an unhandled rejection. A change
+  // VS Code reports after deactivation probes nothing.
   const refreshToolAvailabilityLogged = (trigger: string) =>
     Effect.flatMap(ToolAvailability, (availability) =>
       availability.refresh(roots),
@@ -495,13 +513,13 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      runtime.runFork(refreshToolAvailabilityLogged('extension change'));
+      fork(refreshToolAvailabilityLogged('extension change'));
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
     // gates the GitHub PR subscription tool group. ProgressViewProvider owns
     // the ordered workspace-storage and native-config replacement.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      runtime.runFork(refreshToolAvailabilityLogged('workspace folder change'));
+      fork(refreshToolAvailabilityLogged('workspace folder change'));
     }),
   );
   // Activation-lifetime listeners run in the activation scope, which ends

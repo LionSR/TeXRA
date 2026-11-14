@@ -552,12 +552,15 @@ export function createChatSessionController(
           if (isTaskConfig(config)) {
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`);
             yield* endWithout(CliExitCode.Success);
-            yield* Effect.forkDetach(
+            // Owned by the process's shutdown scope, as the chat's own
+            // resume is: an exit interrupts a resume still on its way.
+            yield* Effect.forkIn(
               resumeTask(id).pipe(
                 Effect.catch((refusal) =>
                   Effect.sync(() => appendLocalRequestRefusal(refusal, id)),
                 ),
               ),
+              shutdownScope,
             );
             return;
           }

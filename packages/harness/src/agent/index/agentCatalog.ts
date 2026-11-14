@@ -13,6 +13,7 @@ import {
   Layer,
   type PlatformError,
   Schema,
+  Semaphore,
 } from 'effect';
 
 import { LaunchRefused } from '@common/errors/agentErrors';
@@ -44,7 +45,6 @@ import {
 import { ToolRegistry } from '@tools/toolTable';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
 import { scanDirectory } from './agentYamlScanner';
 import {
@@ -346,13 +346,10 @@ export class AgentCatalog extends Context.Service<
         changePending: false,
         teamMembers: Context.get(services, AgentDirectories).teamMembers,
       };
-      // Every load enters one lane: a fiber that arrives while a load runs
-      // waits for it, and a failed scan fails only its own caller.
-      const onLoadLane = withPerKeyLane(
-        new Map<string, PerKeyLane>(),
-        'agentCatalogLoad',
-      );
-      const refresh = onLoadLane(
+      // One load at a time: a fiber that arrives while a load runs waits for
+      // it, and a failed scan fails only its own caller.
+      const loads = yield* Semaphore.make(1);
+      const refresh = loads.withPermit(
         scanInto(state).pipe(
           Effect.provide(services),
           Effect.tap(() =>
@@ -368,7 +365,7 @@ export class AgentCatalog extends Context.Service<
         ),
       );
       const settled = Effect.suspend(() =>
-        state.changePending ? refresh : onLoadLane(Effect.void),
+        state.changePending ? refresh : loads.withPermit(Effect.void),
       );
       const reads = catalogReads(state);
       const { list, get, newerBuiltIn } = reads;

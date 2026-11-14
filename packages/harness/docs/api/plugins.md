@@ -710,25 +710,6 @@ Files and the shell: every agent needs them. An app passes the filter
 const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) => Plugin
 ```
 
-## FollowUpFailureReason
-
-Why a submission could not be admitted, as {@link describeFollowUpFailure}
-words it: the kind of a resume's refusal (`ResumeRefusal`; a message to a
-run with no loop here is admitted only as a resume would be, and
-`notResumable` there also covers a closed input, a disposed session, or a
-message that does not wake the run), or one of the message's alone:
-
-- `readFailed`: the run's rows could not be read just now (a failing
-  store), which says nothing about the run itself.
-- `notParent`: the sender is not the run's parent.
-
-```ts
-type FollowUpFailureReason =
-  | ResumeRefusal['kind']
-  | 'readFailed'
-  | 'notParent';
-```
-
 ## FollowUpSenderInput
 
 Who a producer says a follow-up is from. Runs talk as a graph: any run may

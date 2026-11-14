@@ -20,19 +20,6 @@
       ]
     },
     {
-      "id": "EFF-ADOPT-per-key-lane-semaphore",
-      "candidate": "withPerKeyLane onto an Effect Semaphore",
-      "why": "Re-checked on Effect 4.1.0. Semaphore no longer barges (4.0.7), but take, takeScoped and withPermit are Effects that join its queue one evaluation after the lane map's count would be taken, and the fiber can yield in between (Scheduler.shouldYield at MaxOpsBeforeYield, 2048 by default), so a fiber that claimed later enters first: a one-permit Semaphore per lane did so at 2 of 2101 claim offsets at the default budget and in about half of 150 six-fiber runs at budgets 8 and 13, the Deferred chain never. The chain swaps its tail in the step that claims, so writes of one key keep their call order (jsonStore, fileSecrets, the follow-up send lane). Re-checked 2026-11-14 after the conditional claim (refuseClaim) lost its last caller and was deleted: the ordering evidence stands alone. The same yield point was a defect in the chain itself (an interruption between the claim and the registration of its release left the lane claimed for good); the claim is now one uninterruptible step, which a Semaphore-backed lane would need as well for its map count. An RcMap of semaphores would own the lane map each caller passes, needs a Scope to build (nine maps are module-level), and answers get as an Effect. The lane maps prune themselves, so making them services is a pure net-add.",
-      "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
-      "symbols": [
-        {
-          "file": "packages/harness/src/utils/core/perKeyQueue.ts",
-          "symbol": "withPerKeyLane",
-          "signature": "export function withPerKeyLane<Key>( lanes: PerKeyLanes<Key>, key: Key, ): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {…}"
-        }
-      ]
-    },
-    {
       "id": "EFF-ADOPT-retry-gate-schedule",
       "candidate": "ModelRetryGate onto Schedule",
       "why": "The gate is a cross-fiber circuit breaker shared by every call on a route; Schedule is per-fiber.",

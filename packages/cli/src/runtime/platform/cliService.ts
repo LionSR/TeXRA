@@ -41,10 +41,11 @@ import { openLocalSession } from '@texra/controllers/session/openProjectSession'
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import { type ServiceInfo } from '@texra/controllers/server/protocol';
-import type {
-  ServiceLoad,
-  ServiceProject,
-  ServiceProjects,
+import {
+  runsAtWork,
+  type ServiceLoad,
+  type ServiceProject,
+  type ServiceProjects,
 } from '@texra/controllers/server/service';
 import {
   isOlder,
@@ -218,11 +219,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     yield* Effect.forkScoped(
       Stream.runForEach(
         session.view.changes.pipe(
-          Stream.map((view) =>
-            [...view.runs.values()].some(
-              (run) => run.holder === 'here' && run.position !== 'waiting',
-            ),
-          ),
+          Stream.map(() => runsAtWork(session) > 0),
           Stream.changes,
         ),
         follow,

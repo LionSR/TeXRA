@@ -30,6 +30,7 @@ ruling and argues against it explicitly.
 | Liveness and single ownership of a run                                  | [single owner liveness and one fold](./implemented/architecture/2026-09-20-single-owner-liveness-and-one-fold.md)                    |
 | One fact, one representation: stop, resume and neighbours               | [one fact, one representation](./proposed/architecture/2026-11-03-one-fact-one-representation.md)                                    |
 | Root designs behind the red flags, Effect-native targets                | [root designs, Effect-native](./proposed/architecture/2026-11-05-root-designs-effect-native.md)                                      |
+| Concurrency: locks, queues, lifetimes and waits                         | [nothing held across a wait](./proposed/architecture/2026-11-14-nothing-held-across-a-wait.md)                                       |
 | Red flags outside the harness core; the order of what remains           | [red flags round 2 and the order](./proposed/architecture/2026-11-07-red-flags-round-2-and-order.md)                                 |
 | The red flags left, ordered by unknown unknowns first; round-3 packages | [red flags round 3, the plan](./proposed/architecture/2026-11-07-red-flags-round-3-plan.md)                                          |
 | Run-to-run messaging, subagent reports                                  | [session messaging](./implemented/architecture/2026-09-25-session-messaging.md)                                                      |

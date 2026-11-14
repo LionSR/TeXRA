@@ -10,7 +10,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { Effect, SynchronizedRef } from 'effect';
+import { Effect, Ref } from 'effect';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
@@ -150,7 +150,7 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
   });
   const [facts] = dispatchFactsFor(
     [{ callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME, argumentsText }],
-    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
+    (yield* Ref.get(run.steps))?.tools.registry,
     run.logger,
   );
   if (facts === undefined)

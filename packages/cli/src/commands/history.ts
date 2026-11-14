@@ -55,7 +55,6 @@ const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
       ? formatCliHistoryText(visibleEntries)
       : 'No history yet. Runs appear here after you start an agent.',
   });
-  return CliExitCode.Success;
 });
 
 const runHistoryShow = Effect.fn('runHistoryShow')(function* (
@@ -80,7 +79,6 @@ const runHistoryShow = Effect.fn('runHistoryShow')(function* (
     ndjson: cliHistoryDetailNdjsonRecord(details),
     text: formatCliHistoryDetailsText(details),
   });
-  return CliExitCode.Success;
 });
 
 /**
@@ -119,7 +117,7 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
       return CliExitCode.Usage;
     }
     writeRawStdout(formatChatAsMarkdown(exportResult.exportInput));
-    return CliExitCode.Success;
+    return;
   }
 
   const page = yield* traceHtml(
@@ -164,7 +162,6 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
   );
   if (page === null) return CliExitCode.Usage;
   writeRawStdout(page.html);
-  return CliExitCode.Success;
 });
 
 const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
@@ -241,7 +238,6 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
 const historyListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List stored tasks' },
   args: {
-    ...GLOBAL_ARGS,
     limit: {
       type: 'string',
       alias: 'n',
@@ -269,7 +265,6 @@ const historyListCommand = defineCliCommand({
 const historyShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one stored task' },
   args: {
-    ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,
@@ -308,7 +303,6 @@ const historyShowCommand = defineCliCommand({
 const historyDeleteCommand = defineCliCommand({
   meta: { name: 'delete', description: 'Delete stored tasks' },
   args: {
-    ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: false,
