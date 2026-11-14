@@ -103,8 +103,8 @@ import {
   replayable,
   SKIPPED_AFTER_END_TURN,
   SKIPPED_NOT_STARTED,
+  SKIPPED_OUTCOME_UNKNOWN,
   skippedByScriptEnd,
-  unknownOutcome,
 } from '../run/tools';
 import {
   formatAttachmentSummary,
@@ -374,9 +374,9 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   }
   if (
     entered.mayHaveRun &&
-    !(yield* replayable(fact, step.registry, input, logger, entered.attempt))
+    !(yield* replayable(fact, step.registry, input, logger))
   ) {
-    yield* skipCall(call, status, unknownOutcome(entered.attempt));
+    yield* skipCall(call, status, SKIPPED_OUTCOME_UNKNOWN);
     return;
   }
   const { attempt } = entered;

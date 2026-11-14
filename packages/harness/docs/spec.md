@@ -348,9 +348,9 @@ A run's record (`SessionLog.facts`) is stored nowhere: it is the newest row of
 each record kind, which the listing projection already indexes, applied in
 commit order by the one statement of the record's rules
 (`controllers/session/rowReader.ts#READ_RUN_RECORD`,
-`shared/session/runRowReads.ts#recordAfter`). The input read, a follow-up's
-receipt and the session view apply that same function to the rows they hold
-(`shared/session/runRowReads.ts#RUN_ROW_READS`, `#turnReceipt`,
+`shared/session/runRowReads.ts#recordAfter`). The input read and the session
+view apply that same function to the rows they hold
+(`shared/session/runRowReads.ts#RUN_ROW_READS`,
 `shared/session/sessionViewUpdate.ts#applyRunEvent`). A record row a projection
 catch-up could not decode is listed as its run's unread row, so the record's
 read fails on it and never answers without it
@@ -911,11 +911,10 @@ What survives at each commit point follows from sections 2 to 8:
   by nobody (open, or cancelled by a stop or a resume), the call was waiting
   on it: it runs again from its start and asks again
   (`shared/session/inFlight.ts#resumedAttempt`). Otherwise it is re-run only if
-  both the stored and the current tool declare `replay: 'safe'`, the stored
-  arguments validate, and it has not started three times already; else settled
-  as outcome unknown, naming spent starts as the reason
-  (`agent/runtime/loop/toolUseDispatch.ts#skipCall`,
-  `agent/runtime/run/tools.ts#replayable`, `#unknownOutcome`).
+  both the stored and the current tool declare `replay: 'safe'` and the stored
+  arguments validate, however often it started before; else settled as outcome
+  unknown (`agent/runtime/loop/toolUseDispatch.ts#skipCall`,
+  `agent/runtime/run/tools.ts#replayable`).
 - `tool.result`: The settlement is reused; the call is not run again
   (`agent/runtime/loop/toolUseDispatch.ts#finishCall`).
 - **delivery `append`**: The loop continues to the next step from

@@ -99,8 +99,7 @@ export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
   turn: Schema.optional(Schema.NullOr(NonNegativeIntSchema)),
   /** A `turn.end`'s: how the turn ended, `completed` with its answer or
-   *  `failed` without one, which a follow-up's receipt reads. The run's
-   *  own end is its `run.end` row. */
+   *  `failed` without one. The run's own end is its `run.end` row. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
 }).check(
   Schema.makeFilter((p) => (p.at === 'turn.end') === (p.outcome != null), {
