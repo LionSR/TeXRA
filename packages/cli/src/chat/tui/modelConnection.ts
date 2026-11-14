@@ -9,7 +9,6 @@ import { Effect, Latch, Result } from 'effect';
 import { type RunModelDecisionReason } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { setCliHelperModel } from '@cli/runtime/platform/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -147,7 +146,6 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
       appendLocalErrorTranscript(toErrorMessage(selection.failure));
     } else {
       patchSessionMeta({ model: selection.success.model });
-      yield* setCliHelperModel(stores.globalState, selection.success.model);
       appendLocalNotice(`Model connected: ${selection.success.model}.`);
     }
     if (setupAgent && context.session.canStartRootRun()) {

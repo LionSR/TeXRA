@@ -40,10 +40,7 @@ import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
 import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
-import {
-  cliPlatform,
-  setCliHelperModel,
-} from '@cli/runtime/platform/initPlatform';
+import { cliPlatform } from '@cli/runtime/platform/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -234,10 +231,6 @@ export async function runChat(
                   CHAT_STARTUP_MODEL_RECOVERY,
                 ),
               },
-            ).pipe(
-              Effect.tap((selection) =>
-                setCliHelperModel(services.globalState, selection.model),
-              ),
             )
           : Effect.succeed({ model: defaults.model, notice: undefined }),
       );

@@ -43,7 +43,6 @@ import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
 } from '@cli/runtime/models/modelAccess';
-import { setCliHelperModel } from '@cli/runtime/platform/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import {
@@ -614,7 +613,6 @@ export function createChatSessionController(
             return yield* Effect.fail(
               new Error(`Run ${run.runId} has no configuration to resume`),
             );
-          yield* setCliHelperModel(stores.globalState, adoptedConfig.model);
           yield* adoptRunConfig(adoptedConfig, 'history');
           clearLocalTranscript();
           // The transcript and the work plan are the view's: the TUI
@@ -651,7 +649,7 @@ export function createChatSessionController(
       }),
     );
 
-  /** Adopt a resumed run's configuration and helper model. A failure is the
+  /** Adopt a resumed run's configuration. A failure is the
    *  chat's own line (the TUI's log sink is silent): the run goes on, but the
    *  chat's model and settings may not be the run's. */
   const adoptRunRecord = (runId: RunId) =>
@@ -660,7 +658,6 @@ export function createChatSessionController(
       if (!config)
         return yield* Effect.fail(new Error('it has no stored configuration'));
       yield* adoptRunConfig(config, 'history');
-      yield* setCliHelperModel(stores.globalState, config.model);
     }).pipe(
       Effect.catch((error) =>
         Effect.sync(() =>
@@ -771,7 +768,6 @@ export function createChatSessionController(
             ),
           },
         );
-        yield* setCliHelperModel(stores.globalState, selection.model);
         return {
           agent: meta.agent,
           agentSource: meta.agentSource,
