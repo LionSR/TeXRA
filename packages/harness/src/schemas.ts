@@ -383,6 +383,7 @@ export {
   RunIdSchema,
   RunRecordFieldsSchema,
   RunOutcomeSchema,
+  RunPositionSchema,
   RunResultSchema,
   type ProcessExit,
   type RunResult,

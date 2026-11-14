@@ -2130,6 +2130,16 @@ const RunOutcomeSchema: Enum<{ readonly COMPLETED: "completed"; readonly CANCELL
 type RunPosition = typeof RunPositionSchema.Type;
 ```
 
+## RunPositionSchema
+
+Where a run's loop stands: `ready` takes an activation (none yet, or its
+last one ended), `running` is inside a turn, `waiting` between turns. How
+it ended is the separate `RunOutcome`.
+
+```ts
+const RunPositionSchema: Literals<readonly ["ready", "running", "waiting"]>
+```
+
 ## RunRecord
 
 The canonical run configuration (`RunRecordFieldsSchema`, the `run.config`

@@ -22,11 +22,8 @@ import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { launchTeamId } from '@texra/shared/teamLaunch';
 import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
-import {
-  runStatus,
-  runStatusLabel,
-  type RunStatusKey,
-} from '@ui/copy/runStatus';
+import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
+import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
 
 import {
   formatCliHistoryAgentLabel,
