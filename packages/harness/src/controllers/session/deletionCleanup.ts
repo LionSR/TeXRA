@@ -120,7 +120,7 @@ const removeRunDirectories: (
 type RemovalMarker = Extract<SessionRow, { type: 'run.removed' }>;
 
 /** The session's deletion collector ({@link deletionCollector}). */
-export interface DeletionCollector {
+interface DeletionCollector {
   /** One pass over the markers the store holds pending: those an earlier
    *  session committed and did not collect (the session runs it at open). */
   readonly pending: Effect.Effect<void>;

@@ -62,7 +62,6 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
   RunChanged,
-  type SessionOpenError,
 } from '@shared/session/database';
 import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
@@ -183,18 +182,11 @@ const displayRows = (rows: readonly SessionRow[]) =>
  *  (`persistent`) or only opened (`existing`), is held exclusively by this
  *  process for the connection's life; the `global` store is shared across
  *  processes and polled for their commits; `ephemeral` runs in memory. */
-export type StoreMode = 'persistent' | 'existing' | 'ephemeral' | 'global';
+type StoreMode = 'persistent' | 'existing' | 'ephemeral' | 'global';
 
 /** Why a project store did not open: another process holds it. */
 export const STORE_HELD_MESSAGE =
   'Another TeXRA process holds this project; close it there first.';
-
-/** Whether a session failed to open because another process holds its
- *  project store: what a service that replaces a retiring one waits out. */
-export const storeHeld = (error: SessionOpenError): boolean =>
-  error._tag === 'DatabaseOpenFailed' &&
-  error.cause instanceof Error &&
-  error.cause.message === STORE_HELD_MESSAGE;
 
 export const databaseLayer = (
   mode: StoreMode,

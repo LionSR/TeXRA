@@ -46,7 +46,7 @@ export const InPublisherJob = Context.Reference<boolean>(
 
 /** `failed` hears a detached job's own failure, a failed commit's
  *  included. */
-export interface JobOptions {
+interface JobOptions {
   readonly failed?: (error: unknown) => void;
 }
 
