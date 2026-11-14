@@ -5,7 +5,7 @@ status: proposed
 
 # 程序，不是 agent：小内核和 theorist 的程序插件
 
-基线：`main` 的 `221c02a`（2026-11-14）。路径相对仓库根。度量用 `wc -l`
+基线：`main` 的 `d173e42`（2026-11-14）。路径相对仓库根。度量用 `wc -l`
 和 `grep`，"现状的度量"一节给出可复核的数字。本文是设计的当前状态，不是
 讨论的记录；负责人的裁决集中在"决定记录"，2026-11-14 这次改写相对
 11-06 版改了什么列在"修订记录"。
@@ -33,6 +33,9 @@ launch form 的选项表。**数量是症状，单位是病因。** 这个诊断
 - **产品是内核加几个 theorist 插件。** "AI theorist"不是 `assistant.yaml`，
   也不是一个 team：它是开着的那些插件各自带来的程序、工具和一段 prompt。
   聊天是内核的模型循环，没有 agent 文件。
+- **用户不从目录里挑。** 让人在三十个 agent 里选是不行的（负责人
+  2026-11-14）。默认就是聊天，不选任何东西就能开始；picker 里除了聊天只
+  有开着的插件带的十来个程序，新增一个要过棘轮。
 
 这不是一个新方向。仓库里已经有三处"run 是一段程序"：goal 策略是一个脚本
 模块（`packages/harness/src/tools/plan/goalScript.ts`），document task 的
@@ -41,27 +44,27 @@ recipe 是一段内联 JS（`packages/texra/src/agent/output/documentRecipe.ts`�
 `scriptModules` 出货。它们各自特例化了同一个东西，各有一条启动路径。提案
 把它们合成"插件的程序，按名启动"这一件事。
 
-## 现状的度量（`221c02a`）
+## 现状的度量（`d173e42`）
 
-| 事实                                            | 数字                                  | 来源                                                                                                                                            |
-| ----------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| bundled agent 文件                              | 35（顶层 33，`write/` 2），3524 行    | `find packages/extension/resources/agents -name '*.yaml'`                                                                                       |
-| 其中 document task（带 `task:` 块）             | 15，工具全 0，轮数 1 或 2             | `grep -l '^task:'`                                                                                                                              |
-| 插件随包目录                                    | lean4 987 行，multi-agent 305 行      | `packages/extension/resources/plugins/`：lean4 是 5 个 agent（609 行）加 5 个 skill，multi-agent 是 1 个 skill                                  |
-| bundled skills                                  | 9 个 `SKILL.md`，目录 593 行          | `packages/extension/resources/skills/`                                                                                                          |
-| team：预设、启动、CLI、标签页、`apply_team`     | 1650 行（8 个文件）                   | `agentTeams.ts`、`agent/teams/`、`teamCatalogPorts.ts`、`packages/cli/src/commands/team.ts`、`cliTeams.ts`、`TeamsTab.ts`、`ApplyTeamTool.ts`   |
-| workspace 选择和 agent 设置页                   | 618 + 890 + 690 行                    | harness `agent/workspaceAgents/` 和它的 schema；设置页前端的 Agents、Skills 标签页和选择面板；后端 `settingsAgentCommands.ts` 和 catalog 控制器 |
-| agent 索引（扫描、customize 副本、插件 agent）  | 1549 + 264 行                         | `packages/harness/src/agent/index/`、`tools/agentCatalogFollower.ts`                                                                            |
-| skills 子系统                                   | 1447 + 107 + 94 行                    | `packages/harness/src/skills/`、三个 skill schema、`packages/cli/src/commands/skills.ts`                                                        |
-| documents 插件（工具、recipe、task 块、选项表） | 2271 行                               | `packages/texra/src/tools/documents/` 1837、`documentRecipe.ts` 164、`packages/texra/src/shared/plugins/documents.ts` 270                       |
-| 插件                                            | 19 个：harness 内置 6，app 13         | `harnessBuiltins`（`packages/harness/src/tools/builtinPlugins.ts`）、`texraPlugins`（`packages/texra/src/tools/registry.ts`）                   |
-| `Plugin` 的字段                                 | 13                                    | `packages/harness/src/tools/plugins.ts`                                                                                                         |
-| 带 `scriptModules` 的插件；带 `prompt` 段的插件 | 2（goal、documents）；3               | `grep scriptModules`；`memory-workflow`、`core`、`documents`                                                                                    |
-| 一个插件的程序今天的启动路径                    | 3 条                                  | host 表单经 `documentTaskConfig`；模型经 `document_task` 工具；`plan` 工具经 `launchBackgroundScript(goalScript(…))`                            |
-| 读"这个 run 是不是 task"的地方                  | 约 20 个源文件，另 11 个读视图        | `isTaskConfig`、`recipeBlockOf`、`script.kind`（`packages/harness/src/shared/schemas/runRecords.ts`）；另 11 个文件读 `RunView.recipe`          |
-| harness 公开导出                                | 752：root 36、host 161、node 48、其余 | `config/api-reports/*.md` 的 `Exports:` 行（plugins 134、schemas 299、transcript 74）                                                           |
-| harness、app 源码                               | 80458、81235 行                       | `packages/{harness,texra}/src` 的 `.ts`、`.tsx`                                                                                                 |
-| 工具定义；工具代码                              | 约 50 个；31502 行                    | `grep -c 'defineTool('` 得 52；`packages/texra/src/tools` 19003，`packages/harness/src/tools` 12499                                             |
+| 事实                                            | 数字                                  | 来源                                                                                                                                                                       |
+| ----------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| bundled agent 文件                              | 35（顶层 33，`write/` 2），3524 行    | `find packages/extension/resources/agents -name '*.yaml'`                                                                                                                  |
+| 其中 document task（带 `task:` 块）             | 15，工具全 0，轮数 1 或 2             | `grep -l '^task:'`                                                                                                                                                         |
+| 插件随包目录                                    | lean4 987 行，multi-agent 305 行      | `packages/extension/resources/plugins/`：lean4 是 5 个 agent（609 行）加 5 个 skill，multi-agent 是 1 个 skill                                                             |
+| bundled skills                                  | 9 个 `SKILL.md`，目录 593 行          | `packages/extension/resources/skills/`                                                                                                                                     |
+| team：预设、启动、CLI、标签页、`apply_team`     | 1647 行（8 个文件）                   | `agentTeams.ts`、`agent/teams/`、`teamCatalogPorts.ts`、`packages/cli/src/commands/team.ts`、`cliTeams.ts`、`TeamsTab.ts`、`ApplyTeamTool.ts`                              |
+| workspace 选择和 agent 设置页                   | 618 + 890 + 689 行                    | harness `agent/workspaceAgents/` 和它的 schema；设置页前端的 Agents、Skills 标签页和选择面板；后端 `settingsAgentCommands.ts` 和 catalog 控制器                            |
+| agent 索引（扫描、customize 副本、插件 agent）  | 1549 + 264 行                         | `packages/harness/src/agent/index/`、`tools/agentCatalogFollower.ts`                                                                                                       |
+| skills 子系统                                   | 1447 + 107 + 92 行                    | `packages/harness/src/skills/`、三个 skill schema、`packages/cli/src/commands/skills.ts`                                                                                   |
+| documents 插件（工具、recipe、task 块、选项表） | 2271 行                               | `packages/texra/src/tools/documents/` 1837、`documentRecipe.ts` 164、`packages/texra/src/shared/plugins/documents.ts` 270                                                  |
+| 插件                                            | 19 个：harness 内置 6，app 13         | `harnessBuiltins`（`packages/harness/src/tools/builtinPlugins.ts`）、`texraPlugins`（`packages/texra/src/tools/registry.ts`）                                              |
+| `Plugin` 的字段                                 | 13                                    | `packages/harness/src/tools/plugins.ts`                                                                                                                                    |
+| 带 `scriptModules` 的插件；带 `prompt` 段的插件 | 2（goal、documents）；3               | `grep scriptModules`；`memory-workflow`、`core`、`documents`                                                                                                               |
+| 一个插件的程序今天的启动路径                    | 3 条                                  | host 表单经 `documentTaskConfig`；模型经 `document_task` 工具；`plan` 工具经 `launchBackgroundScript(goalScript(…))`                                                       |
+| 读"这个 run 是不是 task"的地方                  | 22 个源文件                           | `isTaskConfig`、`recipeBlockOf`、`script.kind`（`packages/harness/src/shared/schemas/runRecords.ts`），含定义和再导出；视图上另有一份 `RunView.recipe`，进度视图的组件读它 |
+| harness 公开导出                                | 754：root 36、host 163、node 48、其余 | `config/api-reports/*.md` 的 `Exports:` 行（plugins 134、schemas 299、transcript 74）                                                                                      |
+| harness、app 源码                               | 80570、81378 行                       | `packages/{harness,texra}/src` 的 `.ts`、`.tsx`                                                                                                                            |
+| 工具定义；工具代码                              | 52 个；31505 行                       | 19 个插件的工具表之和，`grep 'defineTool('` 也得 52；`packages/texra/src/tools` 19003，`packages/harness/src/tools` 12502                                                  |
 
 35 个文件按做的事分簇：审稿 10 个（读 LaTeX 写批注，只有视角不同）、改稿
 7 个、研究 6 个（共享同一段"Mathematical Communication"样板）、编排 3 个
@@ -186,9 +189,9 @@ host      extension、desktop、cli            三个壳
 customize 副本、skill、team、delegation scope、workspace 选择、task 块、
 recipe。
 
-"小"在这里指内核认识的名词和公开面，不指行数。harness 的 80458 行里，大
-头是持久化协议本身：`agent/runtime` 19221、`shared/session` 7135、
-`controllers`（SQLite 存储）6536，本提案不动它们。本提案从 harness 拿走的
+"小"在这里指内核认识的名词和公开面，不指行数。harness 的 80570 行里，大
+头是持久化协议本身：`agent/runtime` 19220、`shared/session` 7135、
+`controllers`（SQLite 存储）6550，本提案不动它们。本提案从 harness 拿走的
 是约 4500 行 app 词汇和 `./host` 入口上为它们而设的导出（见"删除清单"）。
 把内置插件从内核目录里搬出去是另一件事，见"负责人问题"4。
 
@@ -226,7 +229,12 @@ interface Plugin {
   次聊天此刻会被 offer 的那些，加上它自己的插件和它 `requires` 的插件的
   工具，不看开关（今天 task 的"工具不受开关影响"就是这一条）。程序是固
   定的代码，它调什么写在源码里；能收窄的是它启动的 `agent()`，那是代码
-  里的一个 `tools` 列表。
+  里的一个 `tools` 列表。`requires` 今天只检查表里有没有那个插件，这里
+  让它多回答一件事：它的程序用得到谁的工具。
+- 工具定义上换一个事实。今天的 `launchesTasks` 删；换成"这个工具只在自
+  己插件的程序里有意义"（`document_context` 这一类，读的是程序 run 自己
+  的状态），这样的工具不进聊天的默认工具集（"聊天不是一个 agent"一
+  节）。
 - `injectedWhen` 的一半理由是"agent 没声明这个工具也给它"；agent 的工具声
   明消失后，这个字段只剩"跟着一个设置开关"这一半，留到删 agent 文件那一
   期再看它是否还要。
@@ -357,8 +365,13 @@ run.program  { program: '<插件>:<名字>', args, conversation? }      插件�
   的段里，插件没开就没有那几句，不必再写"when available"。通用的部分
   （你在哪、什么时候写脚本、什么时候启动一个程序）是 app 的 `core` 插件
   的段，40 行以内；这个插件和它的段今天就在（`TEX_INSTRUCTIONS`）。
-- **工具** = 开着的插件的全部工具。这就是 `assistant.yaml` 今天手抄的那
-  37 个名字。
+- **工具** = 开着的插件对聊天开放的工具。19 个插件共 52 个工具，
+  `assistant.yaml` 手抄了其中 37 个；没抄的 15 个恰好是三类：setup 的 8
+  个（只给 setup 那次对话）、documents 里只供它的程序调用的 6 个
+  （`document_context` 到 `document_propose`）、和 `self`（只在脚本里有
+  意义）。所以默认集合不用抄：一个工具默认对聊天开放，除非它的定义说它
+  只属于自己插件的程序；一次给了 `tools` 列表的 `start`（setup、
+  `agent()` 的子运行）拿到的就是那张列表。
 - **可启动的程序** = 开着的插件的 `programs`，和工具声明并列出现在脚本声
   明里（`packages/harness/src/tools/codemode/declarations.ts` 加一段）。
 
@@ -423,10 +436,13 @@ commands、agents、MCP server 和 hooks，不能带脚本模块。之后它带�
   器的约定，内核拿到的仍是值。
 - **信任用已有的那一套。** 安装式插件的信任按内容摘要记在用户的全局状态
   里：启用时列出它带的东西让人审阅，改了任何文件摘要就变，插件整体收
-  回，直到重新审阅。程序进这份清单（名字和描述，源码可看）。于是"有名
-  字的程序"都是受信的：内置的随应用出货，安装的过了这次审阅；不受信的
-  插件什么都不加载，所以不存在"在 picker 里但不可信"的第三类，也就不需
-  要 `author` 字段和按启动的审批。
+  回，直到重新审阅。程序进这份清单（名字和描述，源码可看）。于是 picker
+  里没有不受信的东西：内置的随应用出货，安装的过了这次审阅，不受信的插
+  件什么都不加载。`author` 字段和按启动的审批都不需要。
+- **待遇比内置的少一项。** 目录插件的程序和内置的一样，启动和它的
+  `agent()` 子运行随那次审阅批准；但它的文件列表照模型脚本那样解析（工
+  作区和它的子 run 的存储之内），不"按写的通过"。一次审阅不该换来读工
+  作区外任意路径。这个差别从"它是哪个插件的"推出，不另存。
 - **项目自己的程序是一个按路径引用的插件。** 安装式插件已经支持本地路
   径；项目的 `.texra/programs/` 就是这样一个插件。信任记录在用户的全局状
   态里，仓库不能给自己授权（裁决 D6）：克隆一个仓库，它的程序在 Plugins
@@ -464,7 +480,8 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
   这样的 run 的工具不受开关影响、`agent()` 随启动批准、文件列表"按写的通
   过"、不激活 skill。之后这些待遇给"以一个按名的程序打开的 run"，因为有
   名字就意味着它的插件被加载了，被加载就意味着它是随应用出货的或者过了
-  内容审阅的。
+  内容审阅的。三档各自从"这段代码是谁的"推出：内置插件的程序拿全部待
+  遇；目录插件的程序少"文件按写的通过"一项；模型写的脚本一项都没有。
 - **模型写的脚本不变。** 内联的代码是模型的：它的 `agent()` 走 Q5 的一次
   脚本请求（展示源码，批准即覆盖整段），文件列表照模型脚本解析。
 - **审批不加新东西。** 程序里的嵌套调用走和今天完全相同的 per-call 程序
@@ -599,6 +616,11 @@ paper.tex`。
 
 ### 启动面
 
+用户不挑 agent。launch form 今天默认选中 `orchestrator`，列表是
+workspace 选择放行的那些 agent（全开是 35 个加插件的 5 个，team 存在就
+是为了把它砍短）；之后默认是 chat，不选任何东西就能开始，要什么在聊天
+里说，由模型启动对应的程序。
+
 picker 列 chat 和开着的插件的程序，仅此。`launchTarget: 'agent' | 'team'`、
 `selectedTeamId`、`agent` 字段和五个选项字段删。`texra run <程序 | chat>`
 一个命令，`--print` 照旧，`texra chat` 照旧，`texra team`、`texra agents`、
@@ -719,14 +741,14 @@ host 到点 `start`；脚本 24 小时的墙钟上限不变。
 
 ## 删除清单
 
-| 删什么                                                                                                        | 行数（量于 `221c02a`） | 留什么                            |
+| 删什么                                                                                                        | 行数（量于 `d173e42`） | 留什么                            |
 | ------------------------------------------------------------------------------------------------------------- | ---------------------- | --------------------------------- |
 | 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、bundled skills                                     | 3524 + 1292 + 593      | 12 个程序文件和各插件的 prompt 段 |
 | harness：agent 索引、catalog follower、workspace 选择、skills、`AgentBlock` 和 `recipeResult`、persona schema | 约 4500                | 无                                |
-| team：预设、启动、CLI、标签页、`apply_team`                                                                   | 1650                   | 无                                |
-| agent 设置页（前端和后端）                                                                                    | 1580                   | Plugins 页多一列程序              |
+| team：预设、启动、CLI、标签页、`apply_team`                                                                   | 1647                   | 无                                |
+| agent 设置页（前端和后端）                                                                                    | 1579                   | Plugins 页多一列程序              |
 | documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成      | 约 1000 of 2271        | 文档工具本身和 `revise`           |
-| CLI：`texra agents`、`texra skills`（`team` 已计入上面）                                                      | 370                    | `texra run`                       |
+| CLI：`texra agents`、`texra skills`（`team` 已计入上面）                                                      | 363                    | `texra run`                       |
 | 新增：`modules`/`programs` 和按名启动、脚本声明里的程序、`revise`、12 个程序文件、目录插件的程序加载          | 约 +900                |                                   |
 
 净减约 1.3 到 1.4 万行，其中约 5400 行是提示词和 skill 文本。新增比
@@ -757,11 +779,12 @@ types 命令。
 5. **裁决 "Adaptive document workflows are not planned"（2026-09-06）**。
    见"document task 的归宿"末段。
 6. **安装式插件带程序**（新）。PRD 的能力矩阵写"安装式 manifest…不承诺原
-   生脚本模块"，裁决 D11 写仓库外的插件是 MCP、hooks 和数据，不加载第三
-   方代码。本提案让目录插件带沙箱里的程序：它不是原生代码，没有环境权
-   限，效果只经过它的 run 被 offer 的工具，而同一个受信插件的 hooks 和
-   MCP server 今天已经能起本地进程。要负责人确认这算 D11 的"数据"多带一
-   种，而不是它拒绝的 code plugin。
+   生脚本模块"；裁决 D11 写仓库外的插件靠 hooks 和数据扩展，code plugin
+   等到有一个具名的插件做不成 MCP 加 hooks 加数据时再建；核心概念的
+   Plugin 一行写"不加载第三方代码"。本提案让目录插件带沙箱里的程序：它
+   不是原生代码，没有环境权限，效果只经过它的 run 被 offer 的工具，而同
+   一个受信插件的 hooks 和 MCP server 今天已经能起本地进程。要负责人确
+   认这算 D11 的"数据"多带一种，而不是它推后的 code plugin。
 
 两处比 11-06 版更贴近已有裁决：
 
@@ -902,6 +925,9 @@ history 的行。
 
 - "core 比较小而美，然后有一些 theorists 的 program plugin。"本文按"负
   责人问题"1 的读法重写；读法本身待确认。
+- "搞 30 个 agent 让用户选肯定是不行的。"启动面默认是聊天，picker 不列
+  agent（"启动面"一节）。
+- 文档要对上最新的 `main`：基线和度量取自 `d173e42`。
 
 ## 修订记录
 
@@ -918,7 +944,7 @@ history 的行。
   `texra tasks types` 和沙箱的 `type: 'module'` 入口不再需要。
 - 改口从六处仍是六处：工作区 import 不再提前、team 那一条因 D9 原样成立
   而降级，新增"安装式插件带程序"。
-- 度量在 `221c02a` 重量；两处引用已漂移并改正（`needsWake` 现在在
+- 度量在 `d173e42` 重量；两处引用已漂移并改正（`needsWake` 现在在
   `FollowUpReader.ts`，`AgentBlock.result` 的调用者是三处）。
 
 **2026-11-06，无上下文审稿后的修正**（仍然成立的部分已并入正文）：goal 用
@@ -943,12 +969,12 @@ history 的行。
 
 ## Verified
 
-在 `221c02a` 上：
+在 `d173e42` 上：
 
 - `find packages/extension/resources/agents -name '*.yaml' | wc -l` 得 35，
   共 3524 行；`grep -l '^task:'` 得 15。
 - 各目录行数如"现状的度量"表（`wc -l`）；`config/api-reports/*.md` 的
-  `Exports:` 行为 36、161、48、134、299、74。
+  `Exports:` 行为 36、163、48、134、299、74。
 - `packages/harness/src/tools/plugins.ts` 的 `Plugin` 有 13 个字段；
   `scriptModules` 只有 `goal` 和 `documents` 两处；`texraPlugins` 列 19
   个插件。
@@ -975,7 +1001,10 @@ history 的行。
   `script.kind === 'recipe'`；`readRecipeResult` 有三个调用者。
 - `documentState.ts` 经 `AgentCatalog` 读 task 块；`documentTools.ts` 的轮
   数取 `docs.task.requests.length`。
-- `assistant.yaml` 92 行，列 37 个工具。
+- `assistant.yaml` 92 行，列 37 个工具；19 个插件的工具表共 52 个，没
+  列的 15 个是 setup 的 8 个、documents 的 `document_context`、
+  `document_extract`、`document_compile`、`document_diff`、
+  `document_review`、`document_propose` 和 codemode 的 `self`。
 - codemode 文档的裁决 Q2、Q3、Q5、Q7、Q8、Q10 和 "code mode stays
   domain-free"；"Still open" 第二轮的评测表。
 - 裁决台账的 D6、D9、D10、D11 和 "Adaptive document workflows are not
