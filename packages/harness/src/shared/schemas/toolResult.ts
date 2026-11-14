@@ -117,7 +117,9 @@ const ToolFactSchema = Schema.Struct({
 /** A fact a tool's call states about its run (`ToolFactSchema`). */
 export type ToolFact = typeof ToolFactSchema.Type;
 
-const ExecutedToolResultSchema = Schema.Struct({
+/** An executed result as its `tool.result` row stores it, but for `files`
+ *  (inline bytes from the tool, blob addresses in the row). */
+const ExecutedResultFieldsSchema = Schema.Struct({
   status: Schema.Literal('executed'),
   /** Detailed output from the tool */
   output: Schema.optional(Schema.String),
@@ -134,8 +136,6 @@ const ExecutedToolResultSchema = Schema.Struct({
   reads: Schema.optional(
     Schema.Array(Schema.String.check(Schema.isMinLength(1))),
   ),
-  /** File attachments (may contain binary data) */
-  files: Schema.optional(Schema.Array(ToolFileAttachmentSchema)),
   /** What a script's `await` gets for this call in place of
    *  `{ output, summary }`: a tool whose answer is data, not prose. */
   value: Schema.optional(JsonValueSchema),
@@ -144,18 +144,27 @@ const ExecutedToolResultSchema = Schema.Struct({
   reuseKey: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   /** The call whose result this one took under its `reuseKey`. */
   reusedFrom: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
-  /** Follow-ups queued on the calling run that this result answers (a
-   *  child's report a wait returned): consumed in the call's settlement
-   *  batch, so they leave the run's input only with the result. Not stored
-   *  on the result. */
-  consumedFollowUps: Schema.optional(
-    Schema.Array(Schema.String.check(Schema.isMinLength(1))),
-  ),
-  /** Facts about the call's run, committed beside its `tool.result` as
-   *  `plugin.fact` rows; never stored on the result itself. */
-  facts: Schema.optional(Schema.Array(ToolFactSchema)),
   ...ToolResultSharedFields,
 });
+
+/** What a tool returns: the stored fields, its attachments, and what its
+ *  call commits beside the result. */
+const ExecutedToolResultSchema = ExecutedResultFieldsSchema.mapFields(
+  Struct.assign({
+    /** File attachments (may contain binary data) */
+    files: Schema.optional(Schema.Array(ToolFileAttachmentSchema)),
+    /** Follow-ups queued on the calling run that this result answers (a
+     *  child's report a wait returned): consumed in the call's settlement
+     *  batch, so they leave the run's input only with the result. Not stored
+     *  on the result. */
+    consumedFollowUps: Schema.optional(
+      Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+    ),
+    /** Facts about the call's run, committed beside its `tool.result` as
+     *  `plugin.fact` rows; never stored on the result itself. */
+    facts: Schema.optional(Schema.Array(ToolFactSchema)),
+  }),
+);
 
 const ErrorToolResultSchema = Schema.Struct({
   status: Schema.Literal('error'),
@@ -258,9 +267,7 @@ const SettledFileSchema = ToolFileAttachmentSchema.pipe(
   Schema.decodeTo(SettledFileMetadataSchema),
 );
 export const SettledToolResultSchema = Schema.Union([
-  ExecutedToolResultSchema.mapFields(
-    Struct.omit(['files', 'consumedFollowUps', 'facts']),
-  ).mapFields(
+  ExecutedResultFieldsSchema.mapFields(
     Struct.assign({
       files: Schema.optional(Schema.Array(SettledFileSchema)),
     }),
