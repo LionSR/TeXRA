@@ -73,7 +73,7 @@ export const MATH_OPERATORS = [
  * The math environments the replacement rules and the latexdiff clean-up
  * handle. Each of them picks its subset from this one vocabulary.
  */
-export type MathEnvironment =
+type MathEnvironment =
   | 'equation'
   | 'align'
   | 'aligned'

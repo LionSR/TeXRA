@@ -7,7 +7,7 @@ export type ReplacementFunction = (
   ...groups: (string | undefined)[]
 ) => string;
 
-export type ReplacementValue = string | ReplacementFunction;
+type ReplacementValue = string | ReplacementFunction;
 
 /**
  * Regex-based substitution; patterns may be a replacement string or callback.
