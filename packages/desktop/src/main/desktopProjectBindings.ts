@@ -8,10 +8,8 @@
 import { homedir } from 'node:os';
 
 import {
-  Cause,
   Effect,
   Exit,
-  Layer,
   Queue,
   Scope,
   Stream,
@@ -19,7 +17,6 @@ import {
 } from 'effect';
 
 import {
-  workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
   ToolAvailability,
@@ -69,9 +66,6 @@ interface ProjectBinding {
   readonly present: Notices;
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
   readonly browserViews: DesktopBrowserViews;
-  /** The project's `.env` over the process's: every question about this
-   *  project's models (its catalogs, its banners) is answered under it. */
-  readonly env: Layer.Layer<never>;
   /** The binding's lifetime; closing it releases everything above. */
   readonly scope: Scope.Closeable;
 }
@@ -81,11 +75,6 @@ export interface ProjectBindings {
   /** The binding of the project the window shows. */
   active(): ProjectBinding | undefined;
   all(): readonly ProjectBinding[];
-  /** Run `op` on every binding's snapshot source, each under its project's
-   *  own environment. */
-  eachSnapshot<E, R>(
-    op: (snapshot: ProjectBinding['snapshot']) => Effect.Effect<void, E, R>,
-  ): Effect.Effect<void, E, R>;
   /** Bind a project that opened and release one that closed. */
   readonly sync: Effect.Effect<void, never, ProcessServices>;
   /** Release every binding: a navigation destroys the document's request
@@ -310,8 +299,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         (attached) => attached.close,
       ).pipe(Effect.orDie);
       yield* Effect.addFinalizer(() => release);
-      const env = workspaceEnvironmentLayer(project.root);
-      yield* Effect.forkScoped(Effect.provide(snapshot.refresh, env));
+      yield* Effect.forkScoped(snapshot.refresh);
       return {
         project,
         bridge,
@@ -321,7 +309,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         present,
         workspace,
         browserViews,
-        env,
       };
     });
 
@@ -349,26 +336,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       get: (key) => bindings.get(key),
       active,
       all: () => [...bindings.values()],
-      eachSnapshot: (op) =>
-        Effect.forEach(
-          [...bindings.values()],
-          // One project's failure (its unreadable `.env`) is that project's:
-          // logged, and never stops the others' refresh.
-          (b) =>
-            Effect.provide(op(b.snapshot), b.env).pipe(
-              Effect.catchCause((cause) =>
-                Cause.hasInterruptsOnly(cause)
-                  ? Effect.failCause(cause)
-                  : Effect.logWarning(
-                      `The project ${b.project.root ?? b.project.key} did not refresh: ${Cause.pretty(cause)}`,
-                    ),
-              ),
-            ),
-          {
-            concurrency: 'unbounded',
-            discard: true,
-          },
-        ),
       sync: Effect.gen(function* () {
         const open = new Map(
           [projects.fallback(), ...projects.list()].map(
