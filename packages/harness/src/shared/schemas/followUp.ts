@@ -155,7 +155,7 @@ export type FollowUpContent = typeof FollowUpContentSchema.Type;
 export const FollowUpRequestSchema = Schema.Struct({
   content: FollowUpContentSchema,
   /** When the row may be read; the rules are `readableMessages`. */
-  holdUntil: Schema.optional(Schema.Literals(['instruction', 'turn'])),
+  holdUntil: Schema.optional(Schema.Literal('turn')),
   /** A request of the run's own, consumed by the batch that applies it. */
   control: Schema.optional(
     Schema.Union([
