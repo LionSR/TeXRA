@@ -17,6 +17,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { writeLogLine } from '@logger/logSink';
 
 import {
   qualifyAggregateId,
@@ -137,11 +138,20 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
         'Session presenter stopped before settling',
       ),
     );
+    const applyNow = yield* FiberSet.makeRuntime<never, void, never>();
     const trace = makeRunTrace({
       storage,
       events,
       text: chunks.ref,
-      run: yield* FiberSet.makeRuntime<never, void, never>(),
+      run: (update) => {
+        // An update that awaited is still running: a `stream.end` published
+        // next would close on text that misses it.
+        if (applyNow(update).pollUnsafe() === undefined)
+          writeLogLine(
+            'sessionStore',
+            'A transient text update did not finish in its call; a stream may close on text that misses it',
+          );
+      },
       closed,
     });
     // The text a committed row closes is dropped as its batch is published.

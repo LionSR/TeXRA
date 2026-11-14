@@ -352,6 +352,24 @@ describe('session events and view', () => {
     }).pipe(Effect.provide(graph([runStartRow, waiting, requested]))),
   );
 
+  it.effect('commits a detached job before the call returns', () =>
+    Effect.gen(function* () {
+      const events = yield* SessionEvents;
+      const before = events.head();
+      events.detach((append) =>
+        runStateAppend(append)([
+          {
+            type: 'run.position',
+            aggregateId: qualifyAggregateId('run', RUN),
+            payload: { at: 'turn.begin', turn: 1 },
+          },
+        ]),
+      );
+      // The synchronous door's order is the call: nothing is left queued.
+      expect(events.head()).toBeGreaterThan(before);
+    }).pipe(Effect.provide(graph([runStartRow]))),
+  );
+
   it.effect('runs no job that reached the publisher after it closed', () =>
     Effect.gen(function* () {
       // The step budget decides where the scheduler first takes the
