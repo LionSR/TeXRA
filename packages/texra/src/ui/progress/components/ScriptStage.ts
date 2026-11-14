@@ -9,7 +9,6 @@
  */
 
 // Third-party imports
-import { absurd } from 'effect';
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -20,13 +19,15 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 import { requestErrorText } from '@ui/copy/requestErrors';
+import { statusGlyph, type StatusLook } from '@ui/copy/runStatus';
 import {
   SCRIPT_CALL_STATUS_LABEL,
+  SCRIPT_CALL_STATUS_LOOK,
   scriptCallSummary,
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
-import { terminalStatusIcon } from '@ui/wa/statusIcons';
+import { toneStyles } from '@ui/styles/toneStyles';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
@@ -44,33 +45,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 /** The row menu's one item: stop the call's child run. */
 const STOP_AGENT = 'stop-agent';
-
-function statusIcon(
-  status: ScriptCallView['status'],
-): Parameters<typeof waIcon>[0] {
-  switch (status) {
-    case 'queued':
-      return 'circle-dot';
-    case 'running':
-      return terminalStatusIcon('running');
-    case 'interrupted':
-      // As an interrupted compaction reads: nothing runs it until Resume.
-      return 'circle-exclamation';
-    case 'finished':
-      return terminalStatusIcon('completed');
-    case 'reused':
-      // A result an earlier call produced: nothing ran this time.
-      return 'clock-rotate-left';
-    case 'skipped':
-    case 'cancelled':
-    case 'not run':
-      return terminalStatusIcon('cancelled');
-    case 'failed':
-      return terminalStatusIcon('failed');
-    default:
-      return absurd(status);
-  }
-}
 
 const scriptStageStyles = css`
   :host {
@@ -120,22 +94,7 @@ const scriptStageStyles = css`
     display: inline-flex;
     flex: 0 0 auto;
     font-size: 12px;
-    color: var(--wa-color-text-quiet);
-  }
-
-  .status-running .row-icon,
-  .status-finished .row-icon,
-  .status-reused .row-icon {
-    color: var(--wa-color-success-on-quiet);
-  }
-
-  .status-failed .row-icon {
-    color: var(--wa-color-danger-on-quiet);
-  }
-
-  .status-interrupted .row-icon,
-  .needs-you .row-icon {
-    color: var(--wa-color-warning-on-quiet);
+    color: var(--tone-color);
   }
 
   .row-label {
@@ -205,7 +164,7 @@ const scriptStageStyles = css`
 
 @customElement('script-stage')
 export class ScriptStage extends LitElement {
-  static override styles = [designTokens, scriptStageStyles];
+  static override styles = [designTokens, toneStyles, scriptStageStyles];
 
   @property({ attribute: false }) stage!: ScriptStageView;
   @property({ attribute: false }) view!: SessionView;
@@ -281,11 +240,14 @@ export class ScriptStage extends LitElement {
       child === undefined
         ? undefined
         : this.surface.runs.get(child.id)?.rejected;
+    // A call waiting on the user reads as a run waiting on the user does.
+    const look: StatusLook = call.needsYou
+      ? { tone: 'warning' }
+      : SCRIPT_CALL_STATUS_LOOK[call.status];
     return html`<div
       class=${classMap({
         row: true,
-        [`status-${call.status.replace(' ', '-')}`]: true,
-        'needs-you': call.needsYou,
+        [`tone-${look.tone}`]: true,
         'is-linked': target !== undefined,
       })}
       role="listitem"
@@ -304,7 +266,7 @@ export class ScriptStage extends LitElement {
       }
     >
       <span class="row-icon"
-        >${waIcon(call.needsYou ? 'circle-dot' : statusIcon(call.status), {
+        >${waIcon(statusGlyph(look), {
           label: SCRIPT_CALL_STATUS_LABEL[call.status],
         })}</span
       >

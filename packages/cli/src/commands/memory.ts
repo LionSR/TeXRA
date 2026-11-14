@@ -19,7 +19,7 @@ import { emitCliResult } from './_helpers/output';
 const runMemoryList = Effect.fn('runMemoryList')(function* () {
   const services = yield* cliPlatform;
   // Pass the full list to `formatCliMemoryList`; it owns truncation (the
-  // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
+  // `Memories (N):` total and `… N more rows` overflow line) and JSON/NDJSON
   // consumers should see every memory, not a capped slice.
   const items = yield* withSessionFs(services.roots, MemoryStore.list);
 

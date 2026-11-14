@@ -2129,9 +2129,9 @@ const SCENARIOS = [
       HARNESS_NESTED_CHILDREN: '1',
     },
     keys: ['\t'],
-    // leanSolver sits idle between turns: it has delivered, so it counts
-    // as finished, not running.
-    expect: ['[4 total · 3 running · 1 finished]'],
+    // leanSolver sits idle between turns: it has delivered, so it does
+    // not count as running.
+    expect: ['[4 agents · 3 running]'],
     unexpect: ['● localChecker', '● strategy', '● reviewer'],
   },
   {

@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
 
 import { envFlag } from '@texra-ai/harness/node';
-import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import {
   fetchJsonStringField,
   UPDATE_CHECK_SKIP_ENV,
+  recordUpdateCheck,
   runDailyUpdateCheck,
 } from '@texra/utils/system/updateCheck';
 
@@ -67,7 +67,7 @@ export const checkForDesktopUpdate = Effect.fn('checkForDesktopUpdate')(
     notify,
   }: CheckForDesktopUpdateOptions) {
     if (!isPackaged || (yield* envFlag(UPDATE_CHECK_SKIP_ENV))) return;
-    yield* runDailyUpdateCheck({
+    const found = yield* runDailyUpdateCheck({
       currentVersion,
       host: 'desktop',
       fetchLatest: fetchLatestDesktopRelease().pipe(
@@ -76,7 +76,20 @@ export const checkForDesktopUpdate = Effect.fn('checkForDesktopUpdate')(
           refreshed: release !== undefined,
         })),
       ),
-      notify: (version) => notify({ version }),
-    }).pipe(Effect.provide(updateCheckRecordsLayer));
+    });
+    if (found === undefined) return;
+    const { latest } = found;
+    // The notice is a dialog, announced once per release: the release it
+    // announced is recorded before an interruption can lose it.
+    if (latest !== undefined && found.lastNotifiedVersion !== latest)
+      yield* Effect.uninterruptible(
+        notify({ version: latest }).pipe(
+          Effect.andThen(
+            recordUpdateCheck('desktop', { lastNotifiedVersion: latest }),
+          ),
+        ),
+      );
+    // A stamp that is not saved fails the check.
+    yield* found.recordChecked;
   },
 );

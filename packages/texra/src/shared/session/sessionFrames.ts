@@ -32,6 +32,7 @@ import {
   RuntimeCommandSchema,
   RunIdSchema,
   StoredMediaSchema,
+  NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
@@ -47,7 +48,7 @@ import { LaunchPatchSchema } from './surface';
 
 /** The workspace root that keys the layer maps, on every message. */
 const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
-const GenerationSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const GenerationSchema = NonNegativeIntSchema;
 const RequestIdSchema = Schema.String.check(Schema.isMinLength(1));
 
 export type EventInput = typeof EventInputSchema.Type;

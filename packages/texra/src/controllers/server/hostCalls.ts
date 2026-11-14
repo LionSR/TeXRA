@@ -7,7 +7,7 @@
  * A call's result enters the run's history only through the tool result
  * that used it.
  */
-import { Schema } from 'effect';
+import { type Duration, Schema } from 'effect';
 
 import {
   ApprovalPolicySchema,
@@ -19,20 +19,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
-
-/** What a window can do for a run. `notices` covers the runtime's notices
- *  and its approval-policy denials, which a window with `emit` presents;
- *  `filesWritten` the files a task wrote, which a window with a file tree
- *  follows. */
-const HOST_CAPABILITIES = [
-  'readDiagnostics',
-  'addCriticism',
-  'openPdf',
-  'notices',
-  'filesWritten',
-] as const;
-export const HostCapabilitySchema = Schema.Literals(HOST_CAPABILITIES);
-export type HostCapability = typeof HostCapabilitySchema.Type;
 
 const position = Schema.Struct({ line: Schema.Int, character: Schema.Int });
 const GenericDiagnosticSchema = Schema.Struct({
@@ -72,7 +58,7 @@ const NoticeSchema = Schema.Union([
 ]);
 export type Notice = typeof NoticeSchema.Type;
 
-/** One call of the service on a window. */
+/** One call of the service on a window, by kind. */
 const HostCallSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('readDiagnostics'),
@@ -87,7 +73,9 @@ const HostCallSchema = Schema.Union([
     location: FileLocationSchema,
     preserveFocus: Schema.Boolean,
   }),
-  Schema.Struct({ kind: Schema.Literal('notice'), notice: NoticeSchema }),
+  // The runtime's notices and its approval-policy denials, which a window
+  // with `emit` presents.
+  Schema.Struct({ kind: Schema.Literal('notices'), notice: NoticeSchema }),
   // Files a task of the project wrote past the editor's own write path, as
   // the service's announcer heard them from the task's rows.
   Schema.Struct({
@@ -97,22 +85,35 @@ const HostCallSchema = Schema.Union([
 ]);
 export type HostCall = typeof HostCallSchema.Type;
 
-/** The capability each call needs of the window it goes to. */
-export const CALL_CAPABILITY: Readonly<
-  Record<HostCall['kind'], HostCapability>
-> = {
-  readDiagnostics: 'readDiagnostics',
-  addCriticism: 'addCriticism',
-  openPdf: 'openPdf',
-  notice: 'notices',
-  filesWritten: 'filesWritten',
-};
+/** What a window can do for a run: each kind of call is the capability a
+ *  window offers to be sent it. */
+export const HostCapabilitySchema = Schema.Literals(
+  HostCallSchema.members.map((member) => member.fields.kind.literal),
+);
+export type HostCapability = HostCall['kind'];
 
-/** What each call answers with, when it answers with a value. */
-export const CallResultSchemas = {
-  readDiagnostics: Schema.Array(GenericDiagnosticSchema),
-  addCriticism: Schema.Boolean,
-} as const;
+/** The calls a run waits on: what each answers with, and how long a run
+ *  waits for it. A diagnostics read may build the document first, so it
+ *  waits longest. Every other call is told and not answered. */
+export const ANSWERED = Object.freeze({
+  readDiagnostics: Object.freeze({
+    result: Schema.Array(GenericDiagnosticSchema),
+    within: '2 minutes',
+  }),
+  addCriticism: Object.freeze({
+    result: Schema.Boolean,
+    within: '10 seconds',
+  }),
+  openPdf: Object.freeze({ result: Schema.Null, within: '30 seconds' }),
+} as const) satisfies Partial<
+  Record<
+    HostCall['kind'],
+    {
+      readonly result: Schema.Codec<unknown, unknown>;
+      readonly within: Duration.Input;
+    }
+  >
+>;
 
 /** A frame of `host.attach`: the attachment's id first, then the calls. */
 export const HostAttachFrameSchema = Schema.Union([
@@ -123,10 +124,9 @@ export const HostAttachFrameSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('call'),
     id: Schema.String,
+    /** Answered with `host.answer` when its kind is one a run waits on
+     *  ({@link ANSWERED}); a notice or a file notification is told. */
     call: HostCallSchema,
-    /** Whether a run waits for the answer: a notice or a file notification
-     *  is told and not answered. */
-    awaited: Schema.Boolean,
   }),
 ]);
 export type HostAttachFrame = typeof HostAttachFrameSchema.Type;

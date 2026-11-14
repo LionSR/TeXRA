@@ -43,7 +43,7 @@ import type { Sessions } from '@texra-ai/harness';
 
 /** What a host decides about its process: its name and host-only plugin
  *  inputs (as `texraPlugins` takes them), and the facts below. */
-export interface TexraProcessHost extends Omit<
+interface TexraProcessHost extends Omit<
   Parameters<typeof texraPlugins>[0],
   'editors'
 > {

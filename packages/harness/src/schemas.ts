@@ -273,14 +273,18 @@ export {
 } from '@shared/state/providerSettings';
 
 // Text primitives: grapheme-safe truncation (plain, whitespace-collapsed, or
-// at the preview width), a text's content lines and their count, and
+// at the preview width), a clipped list, a text's content lines and their
+// count, and
 // control characters stripped so untrusted text cannot inject terminal
 // escapes.
 export {
+  collapseWhitespace,
   countLines,
+  formatClippedList,
   formatCompactDuration,
   formatCompactTokenCount,
   formatCostUsd,
+  formatResetDuration,
   formatResultCount,
   pluralize,
   previewLabel,
@@ -295,6 +299,7 @@ export {
 export {
   modelFailureMessage,
   runEndErrorMessage,
+  usageLimitMessage,
   usedUpPlanOf,
   type RunEndError,
   type UsedUpPlan,
@@ -346,7 +351,7 @@ export {
   JsonValueSchema,
   type LaunchNotice,
   LaunchNoticeSchema,
-  LineCountSchema,
+  NonNegativeIntSchema,
   listingTypeOf,
   type McpToolOutput,
   MESSAGE_TYPES,

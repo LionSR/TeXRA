@@ -1,4 +1,7 @@
-import { stripControlCharacters } from '@texra-ai/harness/schemas';
+import {
+  collapseWhitespace,
+  stripControlCharacters,
+} from '@texra-ai/harness/schemas';
 import cliTruncate from 'cli-truncate';
 import sliceAnsi from 'slice-ansi';
 import stringWidth from 'string-width';
@@ -41,7 +44,7 @@ export function truncateSummaryToWidth(
   text: string,
   maxColumns: number,
 ): string {
-  return truncateToWidth(text.replaceAll(/\s+/g, ' ').trim(), maxColumns);
+  return truncateToWidth(collapseWhitespace(text), maxColumns);
 }
 
 /**

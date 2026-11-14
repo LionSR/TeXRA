@@ -18,8 +18,9 @@ import {
   latexdiffDisplayName,
   type LatexdiffEntry,
 } from '@texra/shared/plugins/documentOutputs';
-import type { IconName } from '@ui/wa/iconNames';
+import { statusGlyph, type StatusLook } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { toneStyles } from '@ui/styles/toneStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers
@@ -28,16 +29,14 @@ import { buildDetailsSummary } from '../formatters/htmlBuilders';
 // Local imports - styles
 import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
 
-/** Status wa-icon name lookup for latexdiff entries. */
-const LATEXDIFF_STATUS_ICONS: Record<LatexdiffEntry['status'], IconName> = {
-  ok: 'check',
-  failed: 'circle-exclamation',
-};
-
-/** Screen-reader labels for the otherwise icon-only result status. */
-const LATEXDIFF_STATUS_LABELS: Record<LatexdiffEntry['status'], string> = {
-  ok: 'Comparison succeeded',
-  failed: 'Comparison failed',
+/** How an entry's status is painted, and its screen-reader label: the
+ *  status is otherwise icon-only. */
+const LATEXDIFF_STATUS: Record<
+  LatexdiffEntry['status'],
+  StatusLook & { readonly label: string }
+> = {
+  ok: { tone: 'success', label: 'Comparison succeeded' },
+  failed: { tone: 'danger', label: 'Comparison failed' },
 };
 
 @customElement('latexdiff-results')
@@ -45,6 +44,7 @@ export class LatexdiffResults extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    toneStyles,
     bannerDetailsWaDetailsStyles,
     css`
       :host {
@@ -83,6 +83,10 @@ export class LatexdiffResults extends LitElement {
       .arrow {
         flex-shrink: 0;
       }
+
+      .status-icon {
+        color: var(--tone-color);
+      }
     `,
   ];
 
@@ -117,7 +121,7 @@ export class LatexdiffResults extends LitElement {
 
   private renderEntry(entry: LatexdiffEntry, index: number): TemplateResult {
     const displayName = latexdiffDisplayName(entry);
-    const statusLabel = LATEXDIFF_STATUS_LABELS[entry.status];
+    const status = LATEXDIFF_STATUS[entry.status];
     const baseLabel =
       entry.baseRound === null
         ? displayName
@@ -127,7 +131,7 @@ export class LatexdiffResults extends LitElement {
     const entryId = `latexdiff-entry-${index}`;
     return html`
       <li id=${entryId} class="detail-item">
-        ${waIcon(LATEXDIFF_STATUS_ICONS[entry.status], { label: statusLabel })}
+        ${waIcon(statusGlyph(status), { label: status.label, className: `status-icon tone-${status.tone}` })}
         ${this.renderFileLink(entry.base.absolutePath, baseLabel, `Open base file: ${baseLabel}`)}
         ${waIcon('arrow-right', { className: 'arrow' })}
         ${this.renderFileLink(

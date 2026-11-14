@@ -113,7 +113,7 @@ function buildAcceptSuccessMessage(
  * (`workspaceFilesWritten`), so no host re-implements them. `E` is the
  * failure the host's own notification can report.
  */
-export interface CommitAcceptedFilePorts<E = never> {
+interface CommitAcceptedFilePorts<E = never> {
   showInfo: (message: string) => Effect.Effect<void, E>;
 }
 

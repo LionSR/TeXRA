@@ -1,4 +1,5 @@
 import type { SessionTitleState } from '@texra-ai/harness/schemas';
+import { runStatusLabel } from '@ui/copy/runStatus';
 
 /**
  * Host-specific vocabulary and density for one title surface. A terminal tab
@@ -27,8 +28,8 @@ export const NATIVE_WINDOW_TITLE: SessionTitleStyle = Object.freeze({
   separator: ' · ',
   marker: Object.freeze({
     idle: undefined,
-    running: 'Running',
-    approval: 'Approval needed',
+    running: runStatusLabel('running'),
+    approval: runStatusLabel('waitingOnUser'),
   }),
 });
 

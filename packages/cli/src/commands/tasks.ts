@@ -18,6 +18,7 @@ import {
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
   environmentApiKeys,
+  linkedClient,
   requestOnService,
   type ServiceClient,
 } from '@texra/controllers/server/client';
@@ -31,7 +32,7 @@ import {
   launchApprovalNotice,
   projectApprovalPolicy,
 } from '../runtime/platform/cliContext';
-import { isLinked, linkClient } from '../runtime/platform/cliService';
+import { isLinked } from '../runtime/platform/cliService';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
@@ -83,7 +84,7 @@ function findTask(client: ServiceClient, id: string) {
  *  holds none fails with why. */
 const serviceClient = Effect.flatMap(cliPlatform, ({ service }) =>
   isLinked(service)
-    ? linkClient(service)
+    ? linkedClient(service)
     : Effect.fail(new Error(service.none)),
 );
 
@@ -93,7 +94,7 @@ function requestTask<R extends RuntimeCommand>(
   request: (runId: RunId) => R,
 ) {
   return Effect.gen(function* () {
-    const { client } = yield* serviceClient;
+    const client = yield* serviceClient;
     const task = yield* findTask(client, id);
     const outcome = yield* requestOnService(
       client,
@@ -125,7 +126,7 @@ const listCommand = defineCliCommand({
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('run')(function* () {
-    const { client } = yield* serviceClient;
+    const client = yield* serviceClient;
     const tasks = yield* client['tasks.list']({ all: false });
     yield* emitCliResult({
       json: tasks,
@@ -155,7 +156,7 @@ const attachCommand = defineCliCommand({
           '`texra tasks attach` prints text or NDJSON (`--output-format ndjson`), not JSON.',
       });
     return Effect.gen(function* () {
-      const { client } = yield* serviceClient;
+      const client = yield* serviceClient;
       const task = yield* findTask(client, ctx.args.id);
       const outcome = yield* attachTask(client, task, {
         format: context.outputFormat === 'ndjson' ? 'ndjson' : 'text',
@@ -235,7 +236,7 @@ const startCommand = defineCliCommand({
     };
     const config =
       yield* Schema.decodeUnknownEffect(AgentConfigSchema)(payload);
-    const { runId } = yield* Effect.flatMap(linkClient(link), ({ client }) =>
+    const { runId } = yield* Effect.flatMap(linkedClient(link), (client) =>
       client['task.start']({
         workspace: context.cwd,
         start: {

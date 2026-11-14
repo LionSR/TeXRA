@@ -7,6 +7,7 @@ import {
   type ToolEditContent,
   type ToolEditRequest,
   type UserQuestionRequest,
+  formatClippedList,
   formatHunkLines,
 } from '@texra-ai/harness/schemas';
 import { hiddenRowsText } from '@cli/tui/overflowText';
@@ -110,16 +111,13 @@ function equalLines(
   );
 }
 
-/** `label: a, b, +N more`, bounded to `maxFiles` names. */
+/** `label: a, b +N more`, bounded to `maxFiles` names. */
 export function formatAgentProposalFileGroup(
   label: string,
   files: readonly string[],
   maxFiles = AGENT_PROPOSAL_FILE_GROUP_MAX_FILES,
 ): string {
-  const visibleFiles = files.slice(0, maxFiles);
-  const hiddenCount = files.length - visibleFiles.length;
-  const suffix = hiddenCount > 0 ? `, +${hiddenCount} more` : '';
-  return `${label}: ${visibleFiles.join(', ')}${suffix}`;
+  return `${label}: ${formatClippedList(files, maxFiles)}`;
 }
 
 /** An agent the call defines: its name and tools, then its prompt. */

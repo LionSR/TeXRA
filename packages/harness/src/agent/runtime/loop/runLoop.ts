@@ -454,9 +454,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }
       // A summary the turn started lands before the turn ends.
       state = yield* compaction.landPending(cell);
-      // The turn's trace rows are queued ahead of the boundary: the
-      // barrier lets the open streams `waiting` closes count every one.
-      yield* log.settled;
       // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
       // closes open streams and is the rest a resume's receipt reads), and
       // a Stop hook's block or input already queued.

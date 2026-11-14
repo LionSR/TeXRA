@@ -47,8 +47,8 @@ export interface SessionTransaction {
  * {@link publish}.
  */
 export interface SessionLogShape {
-  /** One transaction, run as the next job of the session's publisher and
-   *  returned once the view applied it: a batch of rows, or a job that reads
+  /** One transaction on the session's publisher, returned once the view
+   *  applied it: a batch of rows, or a job that reads
    *  committed rows and appends what depends on them with no other write
    *  between. A refusal wrote nothing, comes back typed, never retried. */
   transact(
@@ -64,12 +64,10 @@ export interface SessionLogShape {
   /** The first row of `runId` the store refused, taken, as its `run.end`
    *  error. */
   lost(runId: RunId): Effect.Effect<RunEnd['error'] | undefined>;
-  /** What closes `runId`'s open streams; read in a publisher job or after
-   *  {@link settled}. */
+  /** What closes `runId`'s open streams, every published row counted. */
   closure(runId: RunId): StreamClosure[];
-  /** A barrier: every job enqueued before it has run, the view applied it, and
-   *  the terminal-result presenter read the view's tail past it. A refused
-   *  detached row is heard by its writer. */
+  /** The view applied every row committed so far, and the terminal-result
+   *  presenter read the view's tail past it. */
   readonly settled: Effect.Effect<void>;
   /** The current commit ordinal: where a new reader starts its {@link tail}. */
   now(): CommitOrdinal;

@@ -1,6 +1,6 @@
 // Local imports
-import { GREEK_LETTERS } from './constants';
-import { NonRegexRuleSet, RegexRuleSet } from './types';
+import { LETTERS, UPPERCASE_LETTERS } from './constants';
+import type { RegexRuleSet } from './types';
 import {
   createPatterns,
   generateBackslashFixes,
@@ -18,7 +18,7 @@ import {
  */
 function generateDecoratorShortcuts(
   decorator: string,
-  letters: string[],
+  letters: readonly string[],
   prefix: string,
 ): PatternDict {
   return createPatterns(letters, (letter) => [
@@ -187,31 +187,20 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
 
   // Greek Letters (Bold): bold Greek letters with \b prefix
   // prettier-ignore
-  const commonGreekSet = new Set(['alpha', 'beta', 'gamma', 'epsilon', 'eta', 'theta', 'mu', 'nu', 'omega', 'phi', 'sigma', 'xi', 'zeta']);
-  const commonGreekLetters = GREEK_LETTERS.filter((letter) =>
-    commonGreekSet.has(letter),
-  );
-  // prettier-ignore
-  const greekBoldLetters = [...commonGreekLetters, 'chi', 'pi', 'varphi', 'Sigma', 'lambda', 'Gamma', 'Lambda'];
+  const greekBoldLetters = 'alpha beta gamma epsilon zeta eta theta mu nu xi sigma phi omega chi pi varphi Sigma lambda Gamma Lambda'.split(' ');
 
   // Math font letter sets
-  const upperLetters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
   const mathbbLetters = [...'CEINPQRTV'];
-  // 'f' stays out of lowerLetters: the MANUAL '\mathbf{f}' -> '\bbf'
-  // special case keeps '\bf' (KaTeX's legacy bold switch) out of max-style
-  // output.
-  const lowerLetters = [...'abcdeghjnpqrsuvwxyz'];
-  const mathbfUpperLetters = [...'ABCDEFGIJKMQRUVWXYZ'];
-  const alphabetLetters = [
-    ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
-  ];
+  // 'f' stays out of the lowercase mathbf letters: the MANUAL
+  // '\mathbf{f}' -> '\bbf' special case keeps '\bf' (KaTeX's legacy bold
+  // switch) out of max-style output.
+  const mathbfLetters = [...'abcdeghjnpqrsuvwxyzABCDEFGIJKMQRUVWXYZ'];
 
   const legacyFontSwitches = ['rm', 'bf', 'cal'];
 
   // Tilde variables
   const tildeLetters = [...'xzpqBFJMPTZ'];
-  const tildeLettersMathbf = [...'axpvwz'];
-  const tildeLettersMathbfUppercase = [...'MTX'];
+  const tildeLettersMathbf = [...'axpvwzMTX'];
   const tildeLettersMathcal = [...'HQSW'];
   const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(' ');
   const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(' ');
@@ -302,37 +291,27 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     '\\bar{H}^{\\text{eff}}': '\\bar{\\effH}',
     '\\barH^{\\text{eff}}': '\\bar{\\effH}',
     // Mathcal: \mathcal{X} -> \cX
-    ...generateDecoratorShortcuts('mathcal', upperLetters, 'c'),
+    ...generateDecoratorShortcuts('mathcal', UPPERCASE_LETTERS, 'c'),
     // Mathbb: \mathbb{X} -> \eX
     ...generateDecoratorShortcuts('mathbb', mathbbLetters, 'e'),
-    // Mathbf lowercase: \mathbf{x} -> \bx
-    ...generateDecoratorShortcuts('mathbf', lowerLetters, 'b'),
-    // Mathbf uppercase: \mathbf{X} -> \bX
-    ...generateDecoratorShortcuts('mathbf', mathbfUpperLetters, 'b'),
+    // Mathbf: \mathbf{x} -> \bx, \mathbf{X} -> \bX
+    ...generateDecoratorShortcuts('mathbf', mathbfLetters, 'b'),
     // Legacy font switches: {\rm X} -> \mathrm{X}, and the braced spelling
     // {\rm{X}} -> \mathrm{X}
-    ...generateLegacyFontFixes(alphabetLetters, legacyFontSwitches),
+    ...generateLegacyFontFixes(LETTERS, legacyFontSwitches),
     ...createPatterns(legacyFontSwitches, (name) =>
-      alphabetLetters.map((letter): [string, string] => [
+      LETTERS.map((letter): [string, string] => [
         `{\\${name}{${letter}}}`,
         `\\math${name}{${letter}}`,
       ]),
     ),
     // Tilde variables: \tilde{x} -> \tx, \tilde{B} -> \tB
     ...generateDecoratorShortcuts('tilde', tildeLetters, 't'),
-    // Tilde with mathbf lowercase: \tilde{\mathbf{x}} -> \tbx
+    // Tilde with mathbf: \tilde{\mathbf{x}} -> \tbx, \tilde{\mathbf{M}} -> \tbM
     ...generateNestedDecoratorShortcuts(
       'tilde',
       'mathbf',
       tildeLettersMathbf,
-      't',
-      'b',
-    ),
-    // Tilde with mathbf uppercase: \tilde{\mathbf{M}} -> \tbM
-    ...generateNestedDecoratorShortcuts(
-      'tilde',
-      'mathbf',
-      tildeLettersMathbfUppercase,
       't',
       'b',
     ),
@@ -367,9 +346,7 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       boldsymbol: true,
     }),
     // Bold backslash fixes: \\ba -> \ba (lowercase), \\bA -> \bA (uppercase)
-    ...generateBackslashFixes(
-      [...lowerLetters, ...mathbfUpperLetters].map((letter) => `b${letter}`),
-    ),
+    ...generateBackslashFixes(mathbfLetters.map((letter) => `b${letter}`)),
     ...createPatterns(functionNames, (name) => [
       [`\\${name}_`, `${name}_`],
       [`\\${name}^`, `${name}^`],
@@ -500,8 +477,9 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   antiIto: 'anti-Ito',
 };
 
-export const MAX_STYLE_REPLACEMENTS: NonRegexRuleSet = {
-  patterns: { ...MAX_AUTO_PATTERNS, ...MAX_MANUAL_PATTERNS },
+export const MAX_STYLE_REPLACEMENTS: PatternDict = {
+  ...MAX_AUTO_PATTERNS,
+  ...MAX_MANUAL_PATTERNS,
 };
 
 // prettier-ignore
@@ -615,7 +593,6 @@ export function restoreLatexSectionSign(text: string): string {
 }
 
 export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'gms',
   patterns: {
     // Spell words with the following preﬁxes solid and not hyphenated: anti, co, counter, extra, inter, intra, macro, micro, multi, non, over, post, pre, pro, pseudo, psycho, re, semi, socio, sub, trans.
@@ -663,9 +640,5 @@ export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
     // --- End of custom word list based \cref{fig:...} replacements ---
 
     '\\(see\\s+\\\\cref\\{(fig:[^,}]+)\\}\\)': '(see Figure~\\ref{$1})',
-
-    // Next step
-    // \KL[|] -> \\KL[\|]
-    // get _ or - in the equation labels consistent.
   },
 };

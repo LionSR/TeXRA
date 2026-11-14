@@ -174,12 +174,12 @@ Option 2 is the proposed target; option 3 is recorded, not proposed.
 ### Evidence needed first
 
 There is no count today. Each step logs a `debug` line ("Recovered documents
-from ...") through the run's trace, with no structured field naming the
-step, and nothing aggregates them. Before retiring anything:
+from ...") through the run's trace, and since stage 1 landed (below) that
+line carries a `recoveryStep` field in its data payload (`document-tags`,
+`filename-headers`, `unlabeled-fences`, `documentclass-block`,
+`content-similarity`), so a stored trace says which step fired; nothing
+aggregates them yet. Before retiring anything:
 
-- add one structured field (the step that produced the documents) to the
-  existing log line, or to the round record beside `missingOutputs`, so a
-  stored run says which step fired;
 - run the bundled document agents (`polish`, `correct`, `ocr`,
   `paper2slide` under `packages/extension/resources/agents/`) across the
   supported model routes and count step 1 through 5 hits;
@@ -200,7 +200,9 @@ agents are unaffected in format because the envelope is not theirs to write.
 
 ### Staged plan
 
-1. Record which step fired (one field, no behavior change).
+1. Record which step fired (one field, no behavior change). Landed: the
+   `recoveryStep` field of each "Recovered" debug line in
+   `replyDocuments.ts`.
 2. Collect counts over the bundled agents and routes; attach the table to
    this note.
 3. Add the single re-request to the recipe behind the same counts: confirm
@@ -227,10 +229,11 @@ without new evidence.
   them also add to `missing`, and one reads files while four are plain. A
   list needs a step type, a shared result shape and Effect wrappers on the
   plain steps, and removes four `!documents` conditions: more elements, same
-  order. Section 2 removes steps instead. One smaller lead: the bare
-  `\documentclass` step calls `documentsByTags` a second time only to reach
-  its fallback, which parses the tags again and repeats a debug line;
-  calling the fallback directly changes log output.
+  order. Section 2 removes steps instead. The smaller lead, the bare
+  `\documentclass` step calling `documentsByTags` a second time only to
+  reach its fallback, is done: the step calls `bareLatexDocument` directly,
+  so the tags are parsed once and the "No documents found" debug line is
+  no longer repeated.
 - **The max-style `\rho` equilibrium entries**
   (`packages/texra/src/replacement/maxRules.ts`). Their comment called them
   inert. The engine applies the longest pattern first, so they run before

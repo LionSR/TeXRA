@@ -17,15 +17,17 @@
  *   exit once the running tasks end (`drain: true`, the upgrade path).
  * - `tasks.list`: every task in every project this storage root holds.
  * - `task.watch`: a project's session feed (a stream of `EventsFrame`s)
- *   for one `Subscribe`, the frames the webview bridge already carries.
+ *   from a cursor, with the transcripts named, the frames the webview
+ *   bridge already carries.
  * - `task.request`: one `RuntimeCommand` (send, approve, stop, fork, a
  *   model switch, a pending tool edit's preview, …).
  * - `task.start` / `task.resume`: launch or continue a task in the service,
  *   answered with the run and the activation the window's handle is for;
  *   `task.result`: that activation's stored end (`Run.result`).
  * - `session.view` / `session.listRuns` / `session.deleteRuns` and the
- *   `records.*` procedures: `Session`'s store reads and deletion, one
- *   procedure per member, answered from the service's own session.
+ *   `records.*` procedures ({@link RUN_RECORDS}): `Session`'s store reads and
+ *   deletion, one procedure per member, answered from the service's own
+ *   session.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  * - `state.get` / `state.set`: the project's state store, which a window
@@ -33,10 +35,10 @@
  */
 import { hash } from 'node:crypto';
 
-import { Schema, Struct } from 'effect';
+import { type Effect, Schema, Struct } from 'effect';
 import { Rpc, RpcGroup, RpcSchema } from 'effect/rpc';
 
-import { LaunchRefused } from '@texra-ai/harness';
+import { LaunchRefused, type RunRecords } from '@texra-ai/harness';
 import {
   AgentConfigSchema,
   AgentRunListingEntrySchema,
@@ -52,6 +54,7 @@ import {
   RuntimeCommandSchema,
   SessionViewSchema,
   StartRequestSchema,
+  NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
 import { RunStatusKeySchema } from '@texra/shared/session/runStatusKey';
 import {
@@ -93,9 +96,9 @@ export const ServiceInfoSchema = Schema.Struct({
   /** Where clients connect: the Unix socket path. */
   socket: Schema.String,
   startedAt: Schema.Int.check(Schema.isGreaterThan(0)),
-  clients: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  clients: NonNegativeIntSchema,
   /** Tasks this service is running now, across its projects. */
-  running: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  running: NonNegativeIntSchema,
   /** A drain is in progress: no new task starts here. */
   draining: Schema.Boolean,
 });
@@ -173,6 +176,66 @@ const StoredStateSchema = Schema.Struct({
 /** The project a call addresses: its folder, as the client spells it. */
 const workspace = Schema.String;
 
+/**
+ * `Session.records(runId)`, one procedure per member named `records.<member>`
+ * (`records.readConfig`): what each answers with. A run the store does not
+ * hold reads as absent, as it does there.
+ */
+export const RUN_RECORDS = Object.freeze({
+  exists: Schema.Boolean,
+  readConfig: Schema.NullOr(AgentConfigSchema),
+  readReport: Schema.NullOr(Schema.String),
+  readRunEnd: Schema.NullOr(RunEndSchema),
+  readResult: Schema.NullOr(RunResultSchema),
+  readWorkspaceFiles: Schema.Array(RunWorkspaceFileSchema),
+  readSkills: Schema.Array(Schema.String),
+  readResumable: Schema.Boolean,
+  readRejection: Schema.NullOr(ResumeRefusalSchema),
+  /** The run's conversation as every conversation view renders it. */
+  readConversation: Schema.Array(ExportNodeSchema),
+  /** What the HTML transcript export reads: the run's display rows and its
+   *  record (`assembleTrace`), or why it has none. */
+  readTrace: Schema.Union([
+    Schema.Struct({
+      status: Schema.Literal('ok'),
+      // A `TraceDocument`: the run's display rows, in commit order.
+      trace: Schema.Struct({
+        runId: RunIdSchema,
+        events: Schema.Array(DisplayRowSchema),
+      }),
+      record: RunRecordFieldsSchema,
+    }),
+    Schema.Struct({
+      status: Schema.Literals(['config_missing', 'streamLogs_missing']),
+    }),
+  ]),
+}) satisfies {
+  readonly [K in keyof RunRecords]: Schema.Codec<
+    Effect.Success<RunRecords[K]>,
+    unknown
+  >;
+};
+type RecordMember = keyof typeof RUN_RECORDS;
+const recordPayload = { workspace, runId: RunIdSchema };
+/** The procedure of each member of {@link RUN_RECORDS}. */
+export type RecordRpc = {
+  readonly [K in RecordMember]: Rpc.Rpc<
+    `records.${K}`,
+    Schema.Struct<typeof recordPayload>,
+    (typeof RUN_RECORDS)[K],
+    typeof TaskRecordsFailed
+  >;
+}[RecordMember];
+// cast: `Rpc.make` over a computed tag types it `string`; each entry is
+// the `RecordRpc` of its member by construction.
+const RECORD_RPCS = Struct.keys(RUN_RECORDS).map((member) =>
+  Rpc.make(`records.${member}`, {
+    payload: recordPayload,
+    success: RUN_RECORDS[member],
+    error: TaskRecordsFailed,
+  }),
+) as ReadonlyArray<RecordRpc>;
+
 /** The procedures, in one group. */
 export const TexraRpcs = RpcGroup.make(
   Rpc.make('service.hello', {
@@ -186,10 +249,13 @@ export const TexraRpcs = RpcGroup.make(
     success: Schema.Array(TaskSummarySchema),
   }),
   Rpc.make('task.watch', {
-    // `workspace` names the project; the frames name the session.
+    // `workspace` names the project; the frames name the session. The
+    // watch is one ordered stream, so it takes no generation.
     payload: {
       workspace,
-      subscribe: SubscribeSchema.mapFields(Struct.omit(['session'])),
+      subscribe: SubscribeSchema.mapFields(
+        Struct.pick(['debug', 'cursor', 'aggregates']),
+      ),
     },
     success: EventsFrameSchema,
     error: TaskFailed,
@@ -261,79 +327,7 @@ export const TexraRpcs = RpcGroup.make(
     }),
     error: TaskFailed,
   }),
-  // `Session.records(runId)`, a procedure per member: a run the store does
-  // not hold reads as absent, as it does there.
-  Rpc.make('records.exists', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Boolean,
-    error: TaskRecordsFailed,
-  }),
-  Rpc.make('records.config', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.NullOr(AgentConfigSchema),
-    error: TaskRecordsFailed,
-  }),
-  Rpc.make('records.report', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.NullOr(Schema.String),
-    error: TaskRecordsFailed,
-  }),
-  Rpc.make('records.runEnd', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.NullOr(RunEndSchema),
-    error: TaskRecordsFailed,
-  }),
-  Rpc.make('records.result', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.NullOr(RunResultSchema),
-    error: TaskRecordsFailed,
-  }),
-  Rpc.make('records.workspaceFiles', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Array(RunWorkspaceFileSchema),
-    error: TaskRecordsFailed,
-  }),
-  Rpc.make('records.skills', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Array(Schema.String),
-    error: TaskRecordsFailed,
-  }),
-  Rpc.make('records.resumable', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Boolean,
-    error: TaskRecordsFailed,
-  }),
-  Rpc.make('records.rejection', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.NullOr(ResumeRefusalSchema),
-    error: TaskRecordsFailed,
-  }),
-  /** The run's conversation as every conversation view renders it. */
-  Rpc.make('records.conversation', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Array(ExportNodeSchema),
-    error: TaskRecordsFailed,
-  }),
-  /** What the HTML transcript export reads: the run's display rows and its
-   *  record (`assembleTrace`), or why it has none. */
-  Rpc.make('records.trace', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Union([
-      Schema.Struct({
-        status: Schema.Literal('ok'),
-        // A `TraceDocument`: the run's display rows, in commit order.
-        trace: Schema.Struct({
-          runId: RunIdSchema,
-          events: Schema.Array(DisplayRowSchema),
-        }),
-        record: RunRecordFieldsSchema,
-      }),
-      Schema.Struct({
-        status: Schema.Literals(['config_missing', 'streamLogs_missing']),
-      }),
-    ]),
-    error: TaskRecordsFailed,
-  }),
+  ...RECORD_RPCS,
   Rpc.make('host.attach', {
     payload: {
       workspace,

@@ -36,8 +36,7 @@ import {
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { InfoPane } from './panes/InfoPane';
-import { WorkPlanReader } from './panes/WorkPlanReader';
-import { TranscriptReader } from './panes/TranscriptReader';
+import { TranscriptReader, WorkPlanReader } from './panes/ReaderPane';
 import { ScriptStagePopup } from './panes/ScriptStagePopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
@@ -287,8 +286,7 @@ export function App(props: AppProps): React.JSX.Element {
               // queued behind this one. A form that already lost the slot can
               // still run this from an in-flight operation, and the owner ignores
               // that close rather than unmounting whatever took its place, which
-              // would leave a host dialog's fiber with no form to answer it and
-              // its lane permit held for the session.
+              // would leave a host dialog's fiber with no form to answer it.
               closeActiveForm(foregroundForm);
             }, availableRows)}
           </Fragment>

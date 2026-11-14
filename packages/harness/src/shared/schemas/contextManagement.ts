@@ -1,6 +1,6 @@
 import { Schema, Struct } from 'effect';
 
-import { TokenCountSchema } from './usage';
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 const ContextManagementAction = Schema.Literals([
   'compaction',
@@ -13,7 +13,7 @@ const ContextManagementAction = Schema.Literals([
 const PositiveTokenCountSchema = Schema.Int.check(Schema.isGreaterThan(0));
 
 const ContextManagementDataBaseSchema = Schema.Struct({
-  tokensBefore: TokenCountSchema,
+  tokensBefore: NonNegativeIntSchema,
   contextWindow: PositiveTokenCountSchema,
   utilizationBefore: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
   details: Schema.optional(Schema.String),
@@ -35,7 +35,7 @@ const TokensFreedDataSchema = ContextManagementDataBaseSchema.mapFields(
       'clear_thinking',
       'truncation',
     ]),
-    tokensAfter: TokenCountSchema,
+    tokensAfter: NonNegativeIntSchema,
     utilizationAfter: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
   }),
 );
@@ -72,7 +72,7 @@ export type CompactionActivityOutcome = Exclude<
 >;
 
 export const ContextStateDataSchema = Schema.Struct({
-  inputTokens: TokenCountSchema,
+  inputTokens: NonNegativeIntSchema,
   contextWindow: PositiveTokenCountSchema,
   utilizationPercent: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
 });

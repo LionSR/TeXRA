@@ -25,6 +25,7 @@ import {
   formatResultCount,
 } from '@texra-ai/harness/schemas';
 import type { ToolEditTuiRequest } from '../state/approvalQueue';
+import { formatLineChanges } from '@ui/copy/format';
 
 const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
@@ -67,7 +68,8 @@ function toolEditDiffRowsBudget({
 export function ToolEditRequest(
   props: ToolEditRequestProps,
 ): React.JSX.Element {
-  const title = `Apply edit to ${props.payload.data.relativePath}?`;
+  const { data } = props.payload;
+  const title = `Apply edit to ${data.relativePath}?`;
   return (
     <ConfirmCard
       color={COLOR_HINT}
@@ -90,9 +92,8 @@ export function ToolEditRequest(
       ) : (
         <>
           <Text dimColor>
-            +{props.payload.data.addedLines} / −
-            {props.payload.data.removedLines} · source:{' '}
-            {props.payload.data.sourceTool}
+            {formatLineChanges(data.addedLines, data.removedLines)} · source:{' '}
+            {data.sourceTool}
           </Text>
           <Text color={COLOR_WARNING}>
             Preview unavailable: {props.payload.tui.reason}
@@ -169,7 +170,7 @@ function ToolEditDiff({
   return (
     <>
       <Text dimColor>
-        +{data.addedLines} / −{data.removedLines} ·{' '}
+        {formatLineChanges(data.addedLines, data.removedLines)} ·{' '}
         {formatResultCount(hunks.length, 'hunk')} · source: {data.sourceTool}
       </Text>
       <Box marginY={compactDiffLayout ? 0 : 1} flexDirection="column">
