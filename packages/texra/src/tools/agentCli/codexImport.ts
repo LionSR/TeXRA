@@ -15,9 +15,6 @@
  *
  * 3. `openCodexClient()` — a client over that binary, with the environment
  *    the CLI may see.
- *
- * 4. `getCodexConfig()` — the same lazy access for `codexConfig`, which the
- *    tool-registration path must not pull in eagerly.
  */
 
 import * as path from 'node:path';
@@ -169,7 +166,3 @@ export const openCodexClient = Effect.fn('codex.openClient')(function* () {
   });
   return { codex, codexPath };
 });
-
-/** Lazy accessor for codexConfig.ts exports: Node's module cache answers
- *  every call after the first. */
-export const getCodexConfig = Effect.promise(() => import('./codexConfig.js'));
