@@ -78,32 +78,21 @@ const writeRoundOutput = Effect.fn('replyDocuments.writeRoundOutput')(
 /** Global version of DOCUMENT_NAME_REGEX for counting matches */
 const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
 
-function documentsByTags(
+/** The recovery step that produced a reply's documents, logged as the
+ *  `recoveryStep` field of its "Recovered" line so step hits can be
+ *  counted across runs. */
+type RecoveryStep =
+  | 'document-tags'
+  | 'filename-headers'
+  | 'unlabeled-fences'
+  | 'documentclass-block'
+  | 'content-similarity';
+
+const logRecovered = (
   logger: AgentTrace,
-  outputContent: string,
-  preferredName?: string,
-): NamedDocument[] | null {
-  const tagged = extractDocuments(outputContent, OUTPUT_DOCUMENTS_TAG);
-  if (tagged) {
-    logger.debug(
-      `Recovered ${OUTPUT_DOCUMENTS_TAG} from document tags (${formatResultCount(tagged.length, 'document')})`,
-    );
-    return tagged;
-  }
-  // A bare `\documentclass` block is one document, and only a reply
-  // expected to hold one has a name to give it.
-  const bare = preferredName
-    ? bareLatexDocument(outputContent, preferredName)
-    : undefined;
-  if (bare) {
-    logger.debug(
-      `Recovered ${OUTPUT_DOCUMENTS_TAG} from \\documentclass block (1 document)`,
-    );
-    return [bare];
-  }
-  logger.debug(`No ${OUTPUT_DOCUMENTS_TAG} found in output file`);
-  return null;
-}
+  recoveryStep: RecoveryStep,
+  message: string,
+): void => logger.debug(message, { data: { recoveryStep } });
 
 const latexFences = (logger: AgentTrace, outputContent: string): string[] =>
   collectLatexFencedBlocks(outputContent, {
@@ -160,7 +149,9 @@ const documentsBySimilarity = Effect.fn('replyDocuments.bySimilarity')(
     );
     if (documents.length === 0) return null;
 
-    logger.debug(
+    logRecovered(
+      logger,
+      'content-similarity',
       `Recovered ${OUTPUT_DOCUMENTS_TAG} by matching unlabeled fenced ` +
         `blocks against the original input files (${formatResultCount(documents.length, 'document')})`,
     );
@@ -222,7 +213,16 @@ export const extractReplyDocuments = Effect.fn('replyDocuments.extract')(
       { tag: OUTPUT_DOCUMENT_TAG, container: OUTPUT_DOCUMENTS_TAG },
     );
 
-    let documents = documentsByTags(logger, cdataWrapped);
+    let documents = extractDocuments(cdataWrapped, OUTPUT_DOCUMENTS_TAG);
+    if (documents) {
+      logRecovered(
+        logger,
+        'document-tags',
+        `Recovered ${OUTPUT_DOCUMENTS_TAG} from document tags (${formatResultCount(documents.length, 'document')})`,
+      );
+    } else {
+      logger.debug(`No ${OUTPUT_DOCUMENTS_TAG} found in output file`);
+    }
 
     if (!documents) {
       documents = extractFilenameHeaderDocuments(rawOutputContent, {
@@ -230,7 +230,9 @@ export const extractReplyDocuments = Effect.fn('replyDocuments.extract')(
         expected,
       });
       if (documents) {
-        logger.debug(
+        logRecovered(
+          logger,
+          'filename-headers',
           `Recovered ${OUTPUT_DOCUMENTS_TAG} from filename headers (${formatResultCount(documents.length, 'document')})`,
         );
         if (expected.names.length > 1) {
@@ -264,7 +266,9 @@ export const extractReplyDocuments = Effect.fn('replyDocuments.extract')(
         : fencedBlocks;
       if (blocks.length > 0) {
         documents = [{ name: sole, content: blocks.join('\n\n') }];
-        logger.debug(
+        logRecovered(
+          logger,
+          'unlabeled-fences',
           `Recovered ${OUTPUT_DOCUMENTS_TAG} from ` +
             `unlabeled fenced blocks under ${sole} (${formatResultCount(blocks.length, 'block')})`,
         );
@@ -278,7 +282,15 @@ export const extractReplyDocuments = Effect.fn('replyDocuments.extract')(
       // The name keeps its relative path — getExtractedDocOutputFileName
       // preserves subdirectories so `Draft/Draft1.tex` lands at the right
       // workspace location instead of collapsing to the round root.
-      documents = documentsByTags(logger, cdataWrapped, sole);
+      const bare = bareLatexDocument(cdataWrapped, sole);
+      if (bare) {
+        documents = [bare];
+        logRecovered(
+          logger,
+          'documentclass-block',
+          `Recovered ${OUTPUT_DOCUMENTS_TAG} from \\documentclass block (1 document)`,
+        );
+      }
     }
 
     if (!documents && expected.rewritesInputs && expected.names.length > 1) {
