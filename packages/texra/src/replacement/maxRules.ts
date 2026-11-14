@@ -1,6 +1,6 @@
 // Local imports
 import { GREEK_LETTERS } from './constants';
-import { NonRegexRuleSet, RegexRuleSet } from './types';
+import type { RegexRuleSet } from './types';
 import {
   createPatterns,
   generateBackslashFixes,
@@ -500,8 +500,9 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   antiIto: 'anti-Ito',
 };
 
-export const MAX_STYLE_REPLACEMENTS: NonRegexRuleSet = {
-  patterns: { ...MAX_AUTO_PATTERNS, ...MAX_MANUAL_PATTERNS },
+export const MAX_STYLE_REPLACEMENTS: PatternDict = {
+  ...MAX_AUTO_PATTERNS,
+  ...MAX_MANUAL_PATTERNS,
 };
 
 // prettier-ignore
@@ -615,7 +616,6 @@ export function restoreLatexSectionSign(text: string): string {
 }
 
 export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'gms',
   patterns: {
     // Spell words with the following preﬁxes solid and not hyphenated: anti, co, counter, extra, inter, intra, macro, micro, multi, non, over, post, pre, pro, pseudo, psycho, re, semi, socio, sub, trans.

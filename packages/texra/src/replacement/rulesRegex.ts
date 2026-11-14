@@ -79,7 +79,6 @@ const expandEquationMacro: ReplacementFunction = (
 };
 
 export const EQUATION_MACRO_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'gm',
   patterns: {
     // Require macros to be on their own line so inline uses like "foo \\be bar"
@@ -91,7 +90,6 @@ export const EQUATION_MACRO_REPLACEMENTS: RegexRuleSet = {
 };
 
 export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     [FENCED_LATEX_BLOCK_PATTERN_MULTILINE]: convertFencedLatexBlock,
@@ -101,7 +99,6 @@ export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexRuleSet = {
 
 // Parentheses sizing standardization
 export const PARENTHESES_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     // ===== Small delimiter normalization =====
@@ -139,7 +136,6 @@ export const PARENTHESES_REPLACEMENTS: RegexRuleSet = {
 
 // LaTeX inline math formatting fixes
 export const INLINE_MATH_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     // ===== Convert \( \) to $ $ =====
@@ -164,7 +160,6 @@ export const INLINE_MATH_REPLACEMENTS: RegexRuleSet = {
 
 // Context-aware personal style conversions
 export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     // Temporarily protect \mathrm{Tr} inside command definitions
@@ -315,7 +310,6 @@ function difCommandMarker(cmd: string): string {
 
 // Latexdiff markup fixes using regex
 export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'gs',
   patterns: {
     // Collapse redundant blank lines / spaces between a closing brace and \end{...}%DIFAUXCMD
@@ -358,7 +352,6 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = {
 };
 
 export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     // Swap order of superscript and subscript in integrals/sums/products to ensure subscript comes first

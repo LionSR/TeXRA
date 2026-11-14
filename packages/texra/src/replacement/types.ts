@@ -10,23 +10,13 @@ export type ReplacementFunction = (
 export type ReplacementValue = string | ReplacementFunction;
 
 /**
- * A rule set carries patterns only. Its category name is the key it sits
- * under in the engine's rule table, which is typed over
- * `@texra/shared/constants/replacementCategories` — so a rule set cannot name
- * itself something the config does not accept, and the name is not restated
- * beside the rules.
+ * Regex-based substitution; patterns may be a replacement string or callback.
+ * Plain string rule sets are bare `Record<string, string>` tables. A rule
+ * set's category name is the key it sits under in the engine's rule table, so
+ * neither kind restates its name or its kind beside the rules.
  */
-
-/** Plain string substitutions, from each key to its value, as a category
- *  declares them; the engine decides the order they run in. */
-export interface NonRegexRuleSet {
-  patterns: Record<string, string>;
-}
-
-/** Regex-based substitution; patterns may be a replacement string or callback. */
 export interface RegexRuleSet {
   patterns: Record<string, ReplacementValue>;
-  isRegex: true;
   /** Regex flags such as 'g'. */
   flags: string;
 }
